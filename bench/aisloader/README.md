@@ -59,17 +59,17 @@ This command will perform a performance test consisting of 50% PUT and 50% GET r
   >Actual run duration: 10.313689487s
 
   | Time | OP | Count | Total Bytes | Latency(min, avg, max) |	Throughput | Error |
-  | ---- | ---- | ---- | ---- | ---- | ---- | ---- |     
-  | 11:23:06 | Put | 18 | 7.35GB | 398.57ms &emsp; 1.55s &emsp; 3.40s | 664.83MB | 0 |       
-  | 11:23:06 | Get | 15 | 5.19GB | 85.10ms &emsp; 267.73ms &emsp; 586.19ms | 470.15MB | 0 |        
-  | 11:23:06 | CFG | 0  | 0B | 0.00ms &emsp; 0.00ms &emsp; 0.00ms | 0B | 0 |        
+  | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+  | 11:23:06 | Put | 18 | 7.35GB | 398.57ms &emsp; 1.55s &emsp; 3.40s | 664.83MB | 0 |
+  | 11:23:06 | Get | 15 | 5.19GB | 85.10ms &emsp; 267.73ms &emsp; 586.19ms | 470.15MB | 0 |
+  | 11:23:06 | CFG | 0  | 0B | 0.00ms &emsp; 0.00ms &emsp; 0.00ms | 0B | 0 |
 >  11:23:06 Clean up ... <br>
 >  11:23:06 Clean up done
 
-***Warning:*** Performance tests puts a heavy load on your computer, and could cause your computer to crash. Please save your work.
+***Warning:*** Performance tests generate a heavy load on your local system, please save your work.
 
-## Dry Run Performance Tests
-AIStore also offers deployment of the the cluster in two modes: AIS_NODISKIO and AIS_NOTNETIO.
+## Dry-Run Performance Tests
+AIStore support two variations of "dry" deployment: AIS_NODISKIO and AIS_NOTNETIO.
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
@@ -77,10 +77,10 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 /aistore/ais$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
-**Note:**These are passed in either as environment variables or command line arugments when deploying the AIStore clusters.
+**Note:**These are passed in either as environment variables or command line arguments when deploying the AIStore clusters.
 
 | CLI Argument | Environment Variable | Default Value | Behaviour |
-| ------------ | ------ | ------ | ------------- | ------------ |
+| ------------ | ------ | ------ | ------------- |
 | nodiskio | AIS_NODISKIO | `false` | If `true` - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests, it reads the request's body to `/dev/null`. <br> Valid values are `true` or `1`, and `false` or `0`. |
 | nonetio | AIS_NOTNETIO | `false` | If `true` - disables HTTP read and write. For GET requests, a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, AIStore reads the data from in-memory object and saves the data to disks. <br> Valid values are `true` or `1`, and `false` or `0`. |
 | dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. <br> Default value is '8m' - the size of an object is 8 megabytes |
