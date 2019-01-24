@@ -1514,6 +1514,10 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		t.Fatalf("Not all disabled mountpaths were enabled")
 	}
 
+	tutils.Logf("Waiting for local bucket %s appears on all targets\n", m.bucket)
+	err = tutils.WaitForLocalBucket(m.proxyURL, m.bucket, true /*exists*/)
+	tutils.CheckFatal(err, t)
+
 	// Put and read random files
 	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)

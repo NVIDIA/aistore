@@ -16,6 +16,7 @@ import (
 
 const (
 	registerTimeout = time.Minute * 2
+	bucketTimeout   = time.Minute // wait for bucket is available on all targets
 )
 
 var (

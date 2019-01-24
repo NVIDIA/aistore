@@ -914,3 +914,31 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	}
 	return m
 }
+
+// waitForLocalBucket wait until all targets have local bucket created or deleted
+func WaitForLocalBucket(proxyURL, name string, exists bool) error {
+	baseParams := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return err
+	}
+	to := time.Now().Add(bucketTimeout)
+	for _, s := range smap.Tmap {
+	loop_bucket:
+		for {
+			pubURL := s.URL(cmn.NetworkPublic)
+			bucketExists, err := DoesLocalBucketExist(pubURL, name)
+			if err != nil {
+				return err
+			}
+			if bucketExists == exists {
+				break loop_bucket
+			}
+			if time.Now().After(to) {
+				return fmt.Errorf("wait for local bucket timed out, target = %s", pubURL)
+			}
+			time.Sleep(time.Second)
+		}
+	}
+	return nil
+}
