@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"syscall"
 )
 
@@ -63,10 +64,10 @@ func IsIOError(err error) bool {
 	}
 }
 
-// Check if the request should be retried after a server returned an error.
+// Check if a given error is a broken-pipe one
 // The code is partially borrowed from go-<version>/src/os/pipe_test.go and
 // added conversion from net.OpError
-func ShouldRetry(err error) bool {
+func IsErrBrokenPipe(err error) bool {
 	if uerr, ok := err.(*url.Error); ok {
 		err = uerr
 	}
@@ -77,7 +78,12 @@ func ShouldRetry(err error) bool {
 		err = serr.Err
 	}
 
-	return err == syscall.EPIPE || err == syscall.ECONNREFUSED
+	isBrokenPipe := err == syscall.EPIPE
+	if !isBrokenPipe {
+		isBrokenPipe = strings.Contains(err.Error(), "broken pipe")
+	}
+
+	return isBrokenPipe
 }
 
 //===========================================================================

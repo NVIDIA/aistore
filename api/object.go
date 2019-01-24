@@ -238,7 +238,7 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 				}
 			}
 		}
-		if cmn.ShouldRetry(err) {
+		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(httpRetrySleep)
 				fmt.Printf("   retrying %d...\n", i+1)
