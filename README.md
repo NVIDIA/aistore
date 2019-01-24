@@ -100,6 +100,11 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 AIStore runs on commodity Linux machines with no special requirements on the hardware. The implication is that the number of possible (optimal and not-so-optimal) deployment options is practically unlimited. This section covers the bare minimum - the "Hello, World" of the AIStore deployment, if you will.
 
+### Local Containerized (Docker)
+
+AIStore is deployable using [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It allows for multi-container deployment of AIStore clusters which allows for single or multiple network communication. To get started with AIStore and Docker, see: [Getting started with Docker](docker/README.md)
+
+
 ### Local Non-containerized
 
 If [Go](https://golang.org/dl/) is already installed, getting started with AIStore takes no more than a minute and entails:
@@ -211,6 +216,7 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 - [Experimental](docs/experimental.md)
 
 ## Selected Package READMEs
+- [Package `docker`](docker/README.md)
 - [Package `cluster`](cluster/README.md)
 - [Package `api`](api/README.md)
 - [Package `authn`](authn/README.md)

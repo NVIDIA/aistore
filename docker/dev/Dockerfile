@@ -43,6 +43,16 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 ARG CLDPROVIDER
 ENV CLD $CLDPROVIDER
 
+# Dry Run 
+ARG NODISKIO
+ENV NODISK $NODISKIO
+
+ARG NONETIO
+ENV NONET $NONETIO
+
+ARG DRYOBJSIZE
+ENV OBJSIZE $DRYOBJSIZE
+
 ARG TARGETS
 ENV TARGETCNT $TARGETS
 COPY ais.json $CONFFILE
@@ -52,8 +62,8 @@ EXPOSE 8080 9080 10080
 ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
 RUN echo "\
-cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go \n \
-cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
+cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go  \n \
+cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT"]
+CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $NONET $OBJSIZE"]

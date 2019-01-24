@@ -77,3 +77,6 @@ venv.bak/
 
 # Rope project settings
 .ropeproject
+
+# Bench
+bench/dfcloader/dfcloader.exe

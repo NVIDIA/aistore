@@ -23,7 +23,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +39,8 @@ const (
 	opGet
 	opConfig
 
-	myName = "loader"
+	myName        = "loader"
+	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 )
 
 type (
@@ -108,6 +108,13 @@ var (
 	statsdC              statsd.Client
 	getPending           int64
 	putPending           int64
+
+	ip   string
+	port string
+
+	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
+	dockerHostIP = envVars["PRIMARYHOSTIP"]                // Host IP of primary cluster
+	dockerPort   = envVars["PORT"]
 )
 
 func parseCmdLine() (params, error) {
@@ -117,8 +124,8 @@ func parseCmdLine() (params, error) {
 	)
 
 	// Command line options
-	ip := flag.String("ip", "localhost", "IP address for proxy server")
-	port := flag.Int("port", 8080, "Port number for proxy server")
+	flag.StringVar(&ip, "ip", "localhost", "IP address for proxy server")
+	flag.StringVar(&port, "port", "8080", "Port number for proxy server")
 	flag.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
 	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	flag.BoolVar(&p.isLocal, "local", true, "True if using local bucket")
@@ -219,8 +226,16 @@ func parseCmdLine() (params, error) {
 			}
 		}
 	}
+	// For Dry-Run on Docker
+	if tutils.DockerRunning() && ip == "localhost" {
+		ip = dockerHostIP
+	}
 
-	p.proxyURL = "http://" + *ip + ":" + strconv.Itoa(*port)
+	if tutils.DockerRunning() && port == "8080" {
+		port = dockerPort
+	}
+
+	p.proxyURL = "http://" + ip + ":" + port
 	p.putSizeUpperBound *= 1024
 	return p, nil
 }
