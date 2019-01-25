@@ -2,23 +2,42 @@
 
 AIStore (AIS for short) is a built from scratch storage solution for AI applications. At its core, it's open-source object storage with extensions tailored for AI and, specifically, for petascale deep learning.
 
-As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and contorl primitives to access objects and create, destroy, list, and configure buckets that contain those objects.
+As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and contorl primitives to read and write objects and create, destroy, list, and configure buckets that contain those objects.
 
-AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
+## AIS Design Philosophy
+AIS is a *specialized* storage system. The design philosophy behind AIS is based on the simple truth that AI datasets are pre-sharded. More exactly, AI datasets (in particular, very large datasets) are pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
 
->> The terms *gateway* and *proxy* are used interchangeably throughout this README and other sources in the repository.
+The corollary of this statement is two-fold:
 
-Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on any commodity hardware and pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
+- Breaking objects into pieces (often called chunks but also slices, segments, fragments, and blocks) and the related functionality does not necessarily belong to an AI-optimized storage system per se;
+- Instead of breaking the objects in pieces (and then reassembling them with the help of a carefully maintained metadata), the storage system must better focus on providing assistance to simplify and accelerate dataset transformations.
 
-A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, and in particular, the fact that client <=> storage traffic has *no-extra-hops*: it's a direct path between the requesting client and the storage target that stores (or will store) the data.
+## Key Concepts and Diagrams
+In this section: high-level diagrams that introduce key concepts, the architecture, and possible deployment options.
 
-<img src="docs/images/ais-overview-mp.png" alt="AIStore overview" width="400">
+AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
+
+> The terms *gateway* and *proxy* are used interchangeably throughout this README and other sources in the repository.
+
+Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on any commodity hardware with pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
+
+The diagram depicting AIS clustered node follows below and makes the point to emphasize that gateways and storage targets can be colocated in a single machine (or a VM) but not necessarily:
+
+<img src="docs/images/ais-host-20-block.png" alt="One AIS machine" width="400">
 
 AIS can be deployed as a self-contained standalone persistent storage cluster and/or as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction on a per-bucket basis based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
->> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets**.
+If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
->> Cloud-based and local buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
+<img src="docs/images/ais-rack-20-block.png" alt="One rack" width="400">
+
+Finally, AIS target provides a number of storage services with [S3-like RESTful API](docs/http_api.md) on top and a MapReduce layer that we call [dSort](#dsort).
+
+<img src="docs/images/ais-target-20-block.png" alt="AIS target block diagram" width="400">
+
+> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets**.
+
+> Cloud-based and local buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
 
 ## Table of Contents
 - [Overview](#overview)
@@ -40,7 +59,13 @@ AIS can be deployed as a self-contained standalone persistent storage cluster an
 ## Overview
 All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
-<img src="docs/images/ais-get-flow.png" alt="AIStore GET flow" width="640">
+<img src="docs/images/dp-schematics-direct.png" alt="Datapath schematics" width="400">
+
+> MDS in the diagram above stands for the metadata server(s) or service(s).
+
+In the picture, a client on the left side makes an I/O request which is then fully serviced by the *left* target - one of the nodes in the AIS cluster (not shown). Symmetrically, the *right* client engages with the *right* AIS target for its own GET or PUT object transaction. In each case, the entire transaction is executed via a single TCP session that connects the requesting client directly to one of the clustered nodes. As far as the datapath is concerned, there are no extra hops in the line of communications.
+
+> For detailed read and write sequence diagrams, please refer to [this readme](docs/datapath.md).
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 
@@ -68,7 +93,7 @@ The (quickly growing) list of services includes (but is not limited to):
 * performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
->> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
+> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
 
 Most notably, AIStore provides [dSort](dsort/README.md) - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
@@ -94,7 +119,7 @@ $ apt-get install attr
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
->> If disabled, please make sure to enable xattrs in your Linux kernel configuration.
+> If disabled, please make sure to enable xattrs in your Linux kernel configuration.
 
 ## Getting Started
 
@@ -136,9 +161,9 @@ Enter your choice:
 3
 ```
 
->> Docker and K8s based deployments are described elsewhere in the documentation.
+> Docker and K8s based deployments are described elsewhere in the documentation.
 
->> To enable optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
+> To enable optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
 
 Finally, the `go test` (above) will create a local bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
