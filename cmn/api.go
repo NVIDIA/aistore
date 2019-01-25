@@ -80,36 +80,48 @@ const (
 )
 
 // Header Key enum
+// Constant values conventions:
+// - the constant equals the path of a value in cmn.BucketProps structure
+// - if a property is a root one, then the constant is just a lowercased propery name
+// - if a property is nested, then its value is propertie's parent and propery
+//	 name separated with a dash
+// Note: only constants from sections 'tiering' and 'bucket props' can used by
+// in set single bucket property request.
 const (
-	HeaderCloudProvider = "CloudProvider" // from Cloud Provider enum
-	HeaderVersioning    = "Versioning"    // Versioning state for a bucket: "enabled"/"disabled"
+	HeaderCloudProvider = "cloud_provider" // from Cloud Provider enum
+	HeaderVersioning    = "versioning"     // Versioning state for a bucket: "enabled"/"disabled"
+
 	// tiering
-	HeaderNextTierURL = "NextTierURL" // URL of the next tier in a AIStore multi-tier environment
-	HeaderReadPolicy  = "ReadPolicy"  // Policy used for reading in a AIStore multi-tier environment
-	HeaderWritePolicy = "WritePolicy" // Policy used for writing in a AIStore multi-tier environment
+	HeaderNextTierURL = "next_tier_url" // URL of the next tier in a AIStore multi-tier environment
+	HeaderReadPolicy  = "read_policy"   // Policy used for reading in a AIStore multi-tier environment
+	HeaderWritePolicy = "write_policy"  // Policy used for writing in a AIStore multi-tier environment
+
 	// bucket props
-	HeaderBucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
-	HeaderBucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
-	HeaderBucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
-	HeaderBucketValidateRange   = "BucketValidateRange"   // Byte range validation policy used for objects in the bucket
-	HeaderBucketLRULowWM        = "LRULowWM"              // Capacity usage low water mark
-	HeaderBucketLRUHighWM       = "LRUHighWM"             // Capacity usage high water mark
-	HeaderBucketAtimeCacheMax   = "LRUAtimeCacheMax"      // Maximum Number of Entires in the Cache
-	HeaderBucketDontEvictTime   = "LRUDontEvictTime"      // Enforces an eviction-free time period between [atime, atime+dontevicttime]
-	HeaderBucketCapUpdTime      = "LRUCapUpdTime"         // Minimum time to update the capacity
-	HeaderBucketLRUEnabled      = "LRUEnabled"            // LRU is run on a bucket only if this field is true
-	HeaderBucketCopies          = "Copies"                // # local copies
+	HeaderBucketChecksumType    = "cksum_config-checksum"                   // Checksum type used for objects in the bucket
+	HeaderBucketValidateColdGet = "cksum_config-validate_checksum_cold_get" // Cold get validation policy used for objects in the bucket
+	HeaderBucketValidateWarmGet = "cksum_config-validate_checksum_warm_get" // Warm get validation policy used for objects in the bucket
+	HeaderBucketValidateRange   = "cksum_config-enable_read_range_checksum" // Byte range validation policy used for objects in the bucket
+	HeaderBucketLRULowWM        = "lru_props-lowwm"                         // Capacity usage low water mark
+	HeaderBucketLRUHighWM       = "lru_props-highwm"                        // Capacity usage high water mark
+	HeaderBucketAtimeCacheMax   = "lru_props-atime_cache_max"               // Maximum Number of Entires in the Cache
+	HeaderBucketDontEvictTime   = "lru_props-dont_evict_time"               // Enforces an eviction-free time period between [atime, atime+dontevicttime]
+	HeaderBucketCapUpdTime      = "lru_props-capacity_upd_time"             // Minimum time to update the capacity
+	HeaderBucketLRUEnabled      = "lru_props-lru_enabled"                   // LRU is run on a bucket only if this field is true
+	HeaderBucketCopies          = "mirror-copies"                           // # local copies
+	HeaderBucketMirrorThresh    = "mirror-mirror_util_thresh"               // utilizations are considered equivalent when below this threshold
+	HeaderBucketMirrorEnabled   = "mirror-mirror_enabled"                   // will only generate local copies when set to true
+	HeaderBucketECEnabled       = "ec_config-enabled"                       // EC is on for a bucket
+	HeaderBucketECMinSize       = "ec_config-objsize_limit"                 // Objects under MinSize copied instead of being EC'ed
+	HeaderBucketECData          = "ec_config-data_slices"                   // number of data chunks for EC
+	HeaderBucketECParity        = "ec_config-parity_slices"                 // number of parity chunks for EC/copies for small files
+
 	// object meta
-	HeaderObjCksumType    = "ObjCksumType" // Checksum Type (xxhash, md5, none)
-	HeaderObjCksumVal     = "ObjCksumVal"  // Checksum Value
-	HeaderObjAtime        = "ObjAtime"     // Object access time
-	HeaderObjReplicSrc    = "ObjReplicSrc" // In replication PUT request specifies the source target
-	HeaderObjSize         = "ObjSize"      // Object size (bytes)
-	HeaderObjVersion      = "ObjVersion"   // Object version/generation - local or Cloud
-	HeaderBucketECEnabled = "ECEnabled"    // EC is on for a bucket
-	HeaderBucketECMinSize = "ECMinSize"    // Objects under MinSize copied instead of being EC'ed
-	HeaderBucketECData    = "ECData"       // number of data chunks for EC
-	HeaderBucketECParity  = "ECParity"     // number of parity chunks for EC/copies for small files
+	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
+	HeaderObjAtime     = "ObjAtime"     // Object access time
+	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
+	HeaderObjSize      = "ObjSize"      // Object size (bytes)
+	HeaderObjVersion   = "ObjVersion"   // Object version/generation - local or Cloud
 )
 
 // URL Query "?name1=val1&name2=..."

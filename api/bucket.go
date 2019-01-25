@@ -33,6 +33,25 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 	return err
 }
 
+// SetBucketProp API
+//
+// Set a single propertie of a bucket, using the bucket name, and the bucket property's name and value to be set.
+// The function converts a property to a string to simplify route selection(it is
+// either single string value or entire bucket property structure) and to avoid
+// a lot of type reflexlection checks.
+// Validation of the properties passed in is performed by AIStore Proxy.
+func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{}) error {
+	strValue := fmt.Sprintf("%v", value)
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Name: prop, Value: strValue})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}
+
 // ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
@@ -106,6 +125,12 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 	mirror := cmn.MirrorConf{}
 	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
 		mirror.Copies = b
+	}
+	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
+		mirror.MirrorEnabled = b
+	}
+	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketMirrorThresh), 10, 32); err == nil {
+		mirror.MirrorUtilThresh = n
 	}
 
 	ecprops := cmn.ECConf{}

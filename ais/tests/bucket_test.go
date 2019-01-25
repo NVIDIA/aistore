@@ -154,3 +154,108 @@ func TestListObjects(t *testing.T) {
 		}
 	}
 }
+
+func TestBucketSingleProp(t *testing.T) {
+	const (
+		dataSlices      = 3
+		paritySlices    = 4
+		objLimit        = 300 * cmn.KiB
+		mirrorThreshold = 15
+	)
+	var (
+		bucket     = t.Name() + "Bucket"
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	tutils.Logf("Changing bucket %q properties...\n", bucket)
+	// Enabling EC should set default value for number of slices if it is 0
+	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECEnabled, true); err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if !p.ECEnabled {
+			t.Error("EC was not enabled")
+		}
+		if p.DataSlices != 2 {
+			t.Errorf("Number of data slices is incorrect: %d (expected 2)", p.DataSlices)
+		}
+		if p.ParitySlices != 2 {
+			t.Errorf("Number of parity slices is incorrect: %d (expected 2)", p.DataSlices)
+		}
+	}
+
+	// Enabling mirroring should set default value for number of copies if it is 0
+	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorEnabled, true); err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if !p.MirrorEnabled {
+			t.Error("Mirroring was not enabled")
+		}
+		if p.Copies != 2 {
+			t.Errorf("Number of copies is incorrect: %d (expected 2)", p.Copies)
+		}
+	}
+
+	// Change a few more bucket properties
+	err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECData, dataSlices)
+	if err == nil {
+		err = api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECParity, paritySlices)
+	}
+	if err == nil {
+		err = api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECMinSize, objLimit)
+	}
+	if err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if p.DataSlices != dataSlices {
+			t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.DataSlices)
+		}
+		if p.ParitySlices != paritySlices {
+			t.Errorf("Number of parity slices was not changed to %d. Current value %d", paritySlices, p.ParitySlices)
+		}
+		if p.ECObjSizeLimit != objLimit {
+			t.Errorf("Minimal EC object size was not changed to %d. Current value %d", objLimit, p.ECObjSizeLimit)
+		}
+	}
+
+	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorThresh, mirrorThreshold); err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if p.MirrorUtilThresh != mirrorThreshold {
+			t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.MirrorUtilThresh)
+		}
+	}
+
+	// Disable EC
+	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECEnabled, false); err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if p.ECEnabled {
+			t.Error("EC was not disabled")
+		}
+	}
+
+	// Disable Mirroring
+	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorEnabled, false); err != nil {
+		t.Error(err)
+	} else {
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+		tutils.CheckFatal(err, t)
+		if p.MirrorEnabled {
+			t.Error("Mirroring was not disabled")
+		}
+	}
+}

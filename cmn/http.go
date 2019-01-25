@@ -125,6 +125,20 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 	http.Error(w, errMsg, status)
 }
 
+func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {
+	b, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		errDetails = fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				errDetails = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+	}
+	return b, errDetails, err
+}
+
 func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	getErrorLine := func() string {
 		if _, file, line, ok := runtime.Caller(2); ok {
@@ -134,18 +148,9 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 		return ""
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, errstr, err := ReadBytes(r)
 	if err != nil {
-		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
-		s += getErrorLine()
-
-		InvalidHandlerDetailed(w, r, s)
+		InvalidHandlerDetailed(w, r, errstr)
 		return err
 	}
 

@@ -366,6 +366,23 @@ func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	return HashToStr(xx), ""
 }
 
+func ParseIntRanged(str string, base, bits int, low, high int64) (int64, error) {
+	Assert(low <= high)
+	v, err := strconv.ParseInt(str, base, bits)
+	if err != nil {
+		return low, err
+	}
+
+	if v < low || v > high {
+		if low == high {
+			return low, fmt.Errorf("Only %d is supported", low)
+		}
+		return low, fmt.Errorf("It must be between %d and %d", low, high)
+	}
+
+	return v, nil
+}
+
 //===========================================================================
 //
 // local (config) save and restore - NOTE: caller is responsible to serialize

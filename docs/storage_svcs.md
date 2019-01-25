@@ -76,6 +76,11 @@ Example of setting bucket properties:
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}, "ec_config": {"enabled": true, "data": 4, "parity": 2}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
+To change ony one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the sinlge set property API. Example of disabling EC:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec_config-enabled", "value":"false"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
 #### Limitations
 
 In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
@@ -97,6 +102,11 @@ Finally, all accumulated redundant content can be (asynchronously) destroyed at 
 
 ```shell
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"erasecopies"}' http://localhost:8080/v1/buckets/abc
+```
+
+To change ony one mirroring property without touching other bucket properties, use the sinlge set property API. Example of disabling mirroring:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "mirror-mirror_enabled", "value":"false"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
 >> The `curl` example above uses gateway's URL `localhost:8080` and bucket named `abc` as an example...
