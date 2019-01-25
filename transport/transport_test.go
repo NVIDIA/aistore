@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -156,7 +157,7 @@ func Example_Mux() {
 		}
 		// fmt.Printf("%s...\n", string(object[:16])) // FIXME
 	}
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 
 	transport.SetMux("n1", mux)
 
@@ -194,7 +195,7 @@ func Test_OneStream(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 
 	transport.SetMux("n1", mux)
 
@@ -206,7 +207,7 @@ func Test_OneStream(t *testing.T) {
 }
 
 func Test_CancelStream(t *testing.T) {
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 	network := "nc"
 	transport.SetMux(network, mux)
 
@@ -269,7 +270,7 @@ func Test_MultiStream(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 	tutils.Logf("Duration %v\n", duration)
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 	transport.SetMux("n1", mux)
 
 	ts := httptest.NewServer(mux)
@@ -324,7 +325,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	var streams []*transport.Stream
 	for idx := 0; idx < 10; idx++ {
 		network := fmt.Sprintf("network-%d", idx)
-		mux := http.NewServeMux()
+		mux := mux.NewServeMux()
 		transport.SetMux(network, mux)
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
@@ -353,7 +354,7 @@ func Test_MultipleNetworks(t *testing.T) {
 }
 
 func Test_OnSendCallback(t *testing.T) {
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 
 	transport.SetMux("n1", mux)
 
@@ -421,7 +422,7 @@ func Test_ObjAttrs(t *testing.T) {
 		},
 	}
 
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 	transport.SetMux("n1", mux)
 	ts := httptest.NewServer(mux)
 	defer ts.Close()

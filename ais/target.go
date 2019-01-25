@@ -140,7 +140,7 @@ type (
 		ecmanager      *ecManager
 
 		streams struct {
-			rebalance *cluster.StreamBundle
+			rebalance *transport.StreamBundle
 		}
 	}
 )
@@ -310,7 +310,7 @@ func (t *targetrunner) setupStreams() error {
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
 		MaxIdleConnsPerHost:   ncpu,
 	}}
-	t.streams.rebalance = cluster.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, ncpu)
+	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, ncpu)
 	return nil
 }
 

@@ -1,28 +1,23 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package transport
 
 import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/transport"
 )
 
-const (
-	Targets = iota
-	Proxies
-	AllNodes
-)
 const (
 	closeFin = iota
 	closeStop
@@ -30,23 +25,23 @@ const (
 
 type (
 	StreamBundle struct {
-		sowner     Sowner
-		smap       *Smap // current Smap
+		sowner     cluster.Sowner
+		smap       *cluster.Smap // current Smap
 		smaplock   *sync.Mutex
-		lsnode     *Snode // local Snode
+		lsnode     *cluster.Snode // local Snode
 		client     *http.Client
 		network    string
 		trname     string
 		streams    unsafe.Pointer // points to bundle (below)
-		extra      transport.Extra
+		extra      Extra
 		rxNodeType int // receiving nodes: [Targets, ..., AllNodes ] enum above
 		multiplier int // optionally, greater than 1 number of streams per destination (with round-robin selection)
 	}
-	Stats map[string]*transport.Stats // by DaemonID
+	BundleStats map[string]*Stats // by DaemonID
 	//
 	// private types to support multiple streams to the same destination with round-robin selection
 	//
-	stsdest []*transport.Stream // STreams to the Same Destination (stsdest)
+	stsdest []*Stream // STreams to the Same Destination (stsdest)
 	robin   struct {
 		stsdest stsdest
 		i       int64
@@ -54,28 +49,20 @@ type (
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 )
 
-var (
-	debug bool
-)
-
-func init() {
-	debug = os.Getenv("AIS_STREAM_DEBUG") != ""
-}
-
 //
 // API
 //
 
-func NewStreamBundle(sowner Sowner, lsnode *Snode, cl *http.Client, network, trname string,
-	extra *transport.Extra, ntype int, multiplier ...int) (sb *StreamBundle) {
+func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Client, network, trname string,
+	extra *Extra, ntype int, multiplier ...int) (sb *StreamBundle) {
 	if !cmn.NetworkIsKnown(network) {
 		glog.Errorf("Unknown network %s, expecting one of: %v", network, cmn.KnownNetworks)
 	}
-	cmn.Assert(ntype == Targets || ntype == Proxies || ntype == AllNodes)
+	cmn.Assert(ntype == cluster.Targets || ntype == cluster.Proxies || ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &StreamBundle{
 		sowner:     sowner,
-		smap:       &Smap{},
+		smap:       &cluster.Smap{},
 		smaplock:   &sync.Mutex{},
 		lsnode:     lsnode,
 		client:     cl,
@@ -119,11 +106,11 @@ func (sb *StreamBundle) Close(gracefully bool) {
 //   or use Send() with a slice of nodes for destinations.
 //
 
-func (sb *StreamBundle) SendV(hdr transport.Header, reader cmn.ReadOpenCloser, cb transport.SendCallback, nodes ...*Snode) (err error) {
+func (sb *StreamBundle) SendV(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback, nodes ...*cluster.Snode) (err error) {
 	return sb.Send(hdr, reader, cb, nodes)
 }
 
-func (sb *StreamBundle) Send(hdr transport.Header, reader cmn.ReadOpenCloser, cb transport.SendCallback, nodes []*Snode) (err error) {
+func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback, nodes []*cluster.Snode) (err error) {
 	var (
 		prc     *int64 // completion refcount (optional)
 		streams = sb.get()
@@ -181,7 +168,7 @@ func (sb *StreamBundle) Send(hdr transport.Header, reader cmn.ReadOpenCloser, cb
 
 // implements cluster.Slistener interface. registers with cluster.SmapListeners
 
-var _ Slistener = &StreamBundle{}
+var _ cluster.Slistener = &StreamBundle{}
 
 func (sb *StreamBundle) String() string {
 	return sb.lsnode.DaemonID + "=>" + sb.network + "/" + sb.trname
@@ -217,9 +204,9 @@ func (sb *StreamBundle) apply(action int) {
 
 // TODO: collect stats from all (stsdest) STreams to the Same Destination, and possibly
 //       aggregate averages actross them.
-func (sb *StreamBundle) GetStats() Stats {
+func (sb *StreamBundle) GetStats() BundleStats {
 	streams := sb.get()
-	stats := make(Stats, len(streams))
+	stats := make(BundleStats, len(streams))
 	for id, robin := range streams {
 		s := robin.stsdest[0]
 		tstat := s.GetStats()
@@ -242,8 +229,8 @@ func (sb *StreamBundle) get() (bun bundle) {
 	return
 }
 
-func (sb *StreamBundle) sendOne(robin *robin, hdr transport.Header, reader cmn.ReadOpenCloser,
-	cb transport.SendCallback, prc *int64, reopen bool) (err error) {
+func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenCloser,
+	cb SendCallback, prc *int64, reopen bool) (err error) {
 	var (
 		i       int
 		reader2 io.ReadCloser = reader
@@ -272,21 +259,21 @@ func (sb *StreamBundle) resync() {
 	}
 	cmn.Assert(smap.Version > sb.smap.Version)
 
-	var old, new []NodeMap
+	var old, new []cluster.NodeMap
 	switch sb.rxNodeType {
-	case Targets:
-		old = []NodeMap{sb.smap.Tmap}
-		new = []NodeMap{smap.Tmap}
-	case Proxies:
-		old = []NodeMap{sb.smap.Pmap}
-		new = []NodeMap{smap.Pmap}
-	case AllNodes:
-		old = []NodeMap{sb.smap.Tmap, sb.smap.Pmap}
-		new = []NodeMap{smap.Tmap, smap.Pmap}
+	case cluster.Targets:
+		old = []cluster.NodeMap{sb.smap.Tmap}
+		new = []cluster.NodeMap{smap.Tmap}
+	case cluster.Proxies:
+		old = []cluster.NodeMap{sb.smap.Pmap}
+		new = []cluster.NodeMap{smap.Pmap}
+	case cluster.AllNodes:
+		old = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
+		new = []cluster.NodeMap{smap.Tmap, smap.Pmap}
 	default:
 		cmn.Assert(false)
 	}
-	added, removed := nodeMapDelta(old, new)
+	added, removed := cluster.NodeMapDelta(old, new)
 
 	obundle := sb.get()
 	l := len(added) - len(removed)
@@ -304,7 +291,7 @@ func (sb *StreamBundle) resync() {
 		toURL := si.URL(sb.network) + cmn.URLPath(cmn.Version, cmn.Transport, sb.trname) // NOTE: destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {
-			ns := transport.NewStream(sb.client, toURL, &sb.extra)
+			ns := NewStream(sb.client, toURL, &sb.extra)
 			if sb.multiplier > 1 {
 				glog.Infof("%s: added new stream %s(%d) => %s://%s", sb, ns, k, id, toURL)
 			} else {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
@@ -45,7 +46,7 @@ func Test_Bundle(t *testing.T) {
 		network      = cmn.NetworkIntraData
 		trname       = "bundle"
 	)
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 
 	smap.Tmap = make(cluster.NodeMap, 100)
 	for i := 0; i < 10; i++ {
@@ -79,7 +80,7 @@ func Test_Bundle(t *testing.T) {
 
 	random := newRand(time.Now().UnixNano())
 	multiplier := int(random.Int63()%13) + 4
-	sb := cluster.NewStreamBundle(sowner, &lsnode, httpclient, network, trname, nil, cluster.Targets, multiplier)
+	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient, network, trname, nil, cluster.Targets, multiplier)
 
 	size, num, prevsize := int64(0), 0, int64(0)
 

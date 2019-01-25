@@ -55,8 +55,8 @@ type (
 
 		dOwner *dataOwner // data slice manager
 
-		reqBundle  *cluster.StreamBundle // a stream bundle to send lightweight requests
-		respBundle *cluster.StreamBundle // a stream bungle to transfer data between targets
+		reqBundle  *transport.StreamBundle // a stream bundle to send lightweight requests
+		respBundle *transport.StreamBundle // a stream bungle to transfer data between targets
 	}
 )
 
@@ -114,9 +114,9 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 	}}
 
 	extraReq := transport.Extra{IdleTimeout: idleTime, Callback: cbReq}
-	runner.reqBundle = cluster.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, 4)
+	runner.reqBundle = transport.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, 4)
 	extraResp := transport.Extra{IdleTimeout: idleTime, Callback: nil}
-	runner.respBundle = cluster.NewStreamBundle(smap, si, client, netResp, RespStreamName, &extraResp, cluster.Targets, 4)
+	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, &extraResp, cluster.Targets, 4)
 
 	// create all runners but do not start them until Run is called
 	availablePaths, disabledPaths := fs.Mountpaths.Get()

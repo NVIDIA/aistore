@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/tutils"
@@ -34,7 +35,7 @@ func Test_OneStream10G(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 	network := "np"
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 	trname := "10G"
 
 	transport.SetMux(network, mux)
@@ -117,7 +118,7 @@ func Test_CompletionCount(t *testing.T) {
 	var (
 		numSent, numCompleted, numReceived int64
 		network                            = "n2"
-		mux                                = http.NewServeMux()
+		mux                                = mux.NewServeMux()
 	)
 
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {

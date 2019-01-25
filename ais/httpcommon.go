@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -160,7 +161,7 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 
 type netServer struct {
 	s   *http.Server
-	mux *http.ServeMux
+	mux *mux.ServeMux
 }
 
 type httprunner struct {
@@ -253,18 +254,18 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		Timeout:   config.Timeout.DefaultLong, // longTimeout
 	}
 	h.publicServer = &netServer{
-		mux: http.NewServeMux(),
+		mux: mux.NewServeMux(),
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
 	if config.Net.UseIntraControl {
 		h.intraControlServer = &netServer{
-			mux: http.NewServeMux(),
+			mux: mux.NewServeMux(),
 		}
 	}
 	h.intraDataServer = h.publicServer // by default intra data net is the same as public
 	if config.Net.UseIntraData {
 		h.intraDataServer = &netServer{
-			mux: http.NewServeMux(),
+			mux: mux.NewServeMux(),
 		}
 	}
 

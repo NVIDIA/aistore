@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xoshiro256"
 )
@@ -57,7 +58,7 @@ const cleanupTimeout = time.Minute
 //
 //====================
 var (
-	muxers   map[string]*http.ServeMux // "mux" stands for HTTP request multiplexer
+	muxers   map[string]*mux.ServeMux // "mux" stands for HTTP request multiplexer
 	handlers map[string]map[string]*handler
 	mu       *sync.Mutex
 	debug    bool
@@ -65,7 +66,7 @@ var (
 
 func init() {
 	mu = &sync.Mutex{}
-	muxers = make(map[string]*http.ServeMux)
+	muxers = make(map[string]*mux.ServeMux)
 	handlers = make(map[string]map[string]*handler)
 	debug = os.Getenv("AIS_STREAM_DEBUG") != ""
 }
@@ -74,7 +75,7 @@ func init() {
 // API
 //
 
-func SetMux(network string, x *http.ServeMux) {
+func SetMux(network string, x *mux.ServeMux) {
 	if !cmn.NetworkIsKnown(network) {
 		glog.Warningf("Unknown network %s, expecting one of: %v", network, cmn.KnownNetworks)
 	}
@@ -113,6 +114,27 @@ func Register(network, trname string, callback Receive) (path string, err error)
 		glog.Errorf("Warning: re-registering transport handler '%s'", trname)
 	}
 	handlers[network][trname] = h
+	mu.Unlock()
+	return
+}
+
+func Unregister(network, trname string) (err error) {
+	mu.Lock()
+	mux, ok := muxers[network]
+	if !ok {
+		err = fmt.Errorf("failed to unregister path /%s: network %s is unknown", trname, network)
+		mu.Unlock()
+		return
+	}
+
+	path := cmn.URLPath(cmn.Version, cmn.Transport, trname)
+	if _, ok := handlers[network][trname]; !ok {
+		err = fmt.Errorf("failed to unregister unknown path /%s", trname)
+		mu.Unlock()
+		return
+	}
+	delete(handlers[network], trname)
+	mux.Unhandle(path)
 	mu.Unlock()
 	return
 }

@@ -13,6 +13,12 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const (
+	Targets = iota
+	Proxies
+	AllNodes
+)
+
 // interface to Get current cluster-map instance
 // (for implementation, see ais/clustermap.go)
 type Sowner interface {
@@ -147,7 +153,7 @@ func mapsEq(a, b NodeMap) bool {
 // can be used as destination selectors - see the DestSelector typedef
 //
 
-func nodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
+func NodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
 	added, removed = make(NodeMap), make(NodeMap)
 	for i, mold := range old {
 		mnew := new[i]

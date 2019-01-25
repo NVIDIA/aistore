@@ -19,7 +19,7 @@ A stream preserves ordering: the objects posted for sending will get *completed*
 | Registering receive callback | An API to establish the one-to-one correspondence between the stream sender and the stream receiver | For instance, to register the same receive callback `foo` with two different HTTP endpoints named "ep1" and "ep2", we could call `transport.Register("n1", "ep1", foo)` and `transport.Register("n1", "ep2", foo)`, where `n1` is an http request multiplexer ("muxer") that corresponds to one of the documented networking options - see [README, section Networking](README.md). The transport will then be calling `foo()` to separately deliver the "ep1" stream to the "ep1" endpoint and "ep2" - to, respectively, "ep2". Needless to say that a per-endpoint callback is also supported and permitted. To allow registering endpoints to different http request multiplexers, one can change network parameter `transport.Register("different-network", "ep1", foo)` |
 | Object-has-been-sent callback (not to be confused with the Receive callback above) | A function or a method of the following signature: `SendCallback func(Header, io.ReadCloser, error)`, where `transport.Header` and `io.ReadCloser` represent the object that has been transmitted and error is the send error or nil | This callback can optionally be defined on a) per-stream basis (via NewStream constructor) and/or b) for a given object that is being sent (for instance, to support some sort of batch semantics). Note that object callback *overrides* the per-stream one: when (object callback) is defined i.e., non-nil, the stream callback is ignored and skipped.<br/><br/>**BEWARE:**<br/>Latency of this callback adds to the latency of the entire stream operation on the send side. It is critically important, therefore, that user implementations do not take extra locks, do not execute system calls and, generally, return as soon as possible. |
 | Header-only objects | Header-only (data-less) objects are supported - when there's no data to send (that is, when the `transport.Header.Dsize` field is set to zero), the reader (`io.ReadCloser`) is not required and the corresponding argument in the the `Send()` API can be set to nil | Header-only objects can be used to implement L6 control plane over streams, where the header's `Opaque` field gets utilized to transfer the entire (control message's) payload |
-| Stream bundle | A higher-level (cluster level) API to aggregate multiple streams and broadcast objects replicas to all or some of the established nodes of the cluster while aggregating completions and preserving FIFO ordering | *Stream bundle* is provided by the `cluster` package; a [README](../cluster/README.md) is available there as well |
+| Stream bundle | A higher-level (cluster level) API to aggregate multiple streams and broadcast objects replicas to all or some of the established nodes of the cluster while aggregating completions and preserving FIFO ordering | `transport.NewStreamBundle(smap, si, client, cmn.NetworkPublic, "path-name", &extra, cluster.Targets, 4)` |
 
 ## Closing and completions
 
@@ -92,17 +92,7 @@ Back to the registration. On the HTTP receiving side, the call to `Register` tra
 ```go
 mux.HandleFunc(path, mycallback)
 ```
-where mux is `http.ServeMux` that corresponds to the named network ("public", in this example), and path is a URL path ending with "/myapp".
-
-**BEWARE**
-
->> HTTP request multiplexer matches the URL of each incoming request against a list of registered paths and calls the handler for the path that most closely matches the URL.
-
->> That is why registering a new endpoint with a given network (and its per-network multiplexer) should not be done concurrently with traffic that utilizes this same network.
-
->> The limitation is rooted in the fact that, when registering, we insert an entry into the `http.ServeMux` private map of all its URL paths. This map is protected by a private mutex and is read-accessed to route HTTP requests...
-
-PS. Notice the comment in regards to the stream and object callbacks above as well.
+where mux is `mux.ServeMux` (fork of `net/http` package) that corresponds to the named network ("public", in this example), and path is a URL path ending with "/myapp".
 
 ## On the wire
 
@@ -152,6 +142,53 @@ On the receive side, the `EndpointStats` map contains all the `transport.Stats` 
 
 For usage examples and details, please see tests in the package directory.
 
+## Stream Bundle
+
+Stream bundle (`transport.StreamBundle`) in this package is motivated by the need to broadcast and multicast continuously over a set of long-lived TCP sessions. The scenarios in storage clustering include intra-cluster replication and erasure coding, rebalancing (upon *target-added* and *target-removed* events) and MapReduce-generated flows, and more.
+
+In each specific case, a given clustered node needs to maintain control and/or data flows between itself and multiple other clustered nodes, where each of the flows would be transferring large numbers of control and data objects, or parts of thereof.
+
+The provided implementation aggregates transport streams. A stream (or, a `transport.Stream`) asynchronously transfers *objects* between two HTTP endpoints, whereby an object is defined as a combination of `transport.Header` and an ([io.ReadCloser](https://golang.org/pkg/io/#ReadCloser)) interface. The latter may have a variety of well-known implementations: file, byte array, scatter-gather list of buffers, etc.
+
+The important distinction, though, is that while transport streams are devoid of any clustering "awareness", a *stream bundle* is fully integrated with a cluster. Internally, the implementation utilizes cluster-level abstractions, such as a *node* (`cluster.Snode`), a *cluster map* (`cluster.Smap`), and more.
+
+The provided API includes `StreamBundle` constructor that allows to establish streams between the local node and (a) all storage argets, (b) all gateways, or (c) all nodes in the cluster - in one shot:
+
+```
+NewStreamBundle(
+  sowner	cluster.Sowner,		// Smap (cluster map) owner interface
+  lsnode	*cluster.Snode,		// local node
+  cl		*http.Client,	// http client
+  network	string,		// network, one of `cmn.KnownNetworks`
+  trname	string,		// transport endpoint name
+  extra		*Extra, // additional stream control parameters
+  ntype 	int,		// destination type: all targets, ..., all nodes
+  multiplier	...int,		// number of streams per destination, with subsequent round-robin selection
+)
+```
+
+### A note on connection establishment and termination
+
+>> For each of the invidual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
+
+>> The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
+
+### API
+
+The two main API methods are `Send` and `SendV`:
+
+* to broadcast via all established streams, use `SendV()` and omit the last argument;
+* otherwise, use `SendV()` with the destinations specified as a comma-separated list, or
+* use `Send()` with a list of nodes on the receive side.
+
+Other provided APIs include terminating all contained streams - gracefully or instanteneously via `Close`, and more.
+
+Finally, there are two important facts to remember:
+
+* When streaming an object to multiple destinations, `StreamBundle` may call `reader.Open()` multiple times as well. For N object replicas (or N identical notifications) over N streams, the original reader (provided via `Send` or `SendV` - see above) will get reopened (N-1) times.
+
+* Completion callback (`transport.SendCallback`), if provided, is getting called only once per object, independently of the number of the object replicas sent to multiple destinations. The callback is invoked by the completion handler of the very last object replica (for more on completion handling.
+
 ## Testing
 
 * To run all tests while redirecting log to STDERR:
@@ -174,9 +211,6 @@ For more examples, please see tests in the package directory.
 | AIS_STREAM_DEBUG | Enable inline assertions and verbose tracing |
 | AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
 
-## See also
-
-* [Stream Bundle](../cluster/README.md)
 
 
 

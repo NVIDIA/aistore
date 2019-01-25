@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
@@ -127,7 +128,7 @@ func (ec *extractCreatorMock) MetadataSize() int64    { return 0 }
 
 type targetMock struct {
 	daemonID  string
-	mux       *http.ServeMux
+	mux       *mux.ServeMux
 	s         *http.Server
 	controlCh chan error
 	managers  *ManagerGroup
@@ -170,7 +171,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetMock {
 }
 
 func (t *targetMock) setHandlers(handlers map[string]http.HandlerFunc) {
-	mux := http.NewServeMux()
+	mux := mux.NewServeMux()
 	for path, handler := range handlers {
 		mux.HandleFunc(path, handler)
 	}

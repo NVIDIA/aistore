@@ -240,7 +240,6 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 
 ## Selected Package READMEs
 - [Package `docker`](docker/README.md)
-- [Package `cluster`](cluster/README.md)
 - [Package `api`](api/README.md)
 - [Package `authn`](authn/README.md)
 - [Package `memsis`](memsis/README.md)

@@ -271,6 +271,52 @@ func (m *Manager) initStreams() error {
 	return nil
 }
 
+func (m *Manager) cleanupStreams() error {
+	config := cmn.GCO.Get()
+	reqNetwork := cmn.NetworkIntraControl
+	if !config.Net.UseIntraControl {
+		reqNetwork = cmn.NetworkPublic
+	}
+	// Responses to the other targets are objects that is why we want to use
+	// intraData network.
+	respNetwork := cmn.NetworkIntraData
+	if !config.Net.UseIntraData {
+		respNetwork = cmn.NetworkPublic
+	}
+
+	if len(m.streams.request) > 0 {
+		trname := fmt.Sprintf("dsort-%s-recv_req", m.ManagerUUID)
+		if err := transport.Unregister(reqNetwork, trname); err != nil {
+			return err
+		}
+	}
+
+	if len(m.streams.response) > 0 {
+		trname := fmt.Sprintf("dsort-%s-recv_resp", m.ManagerUUID)
+		if err := transport.Unregister(respNetwork, trname); err != nil {
+			return err
+		}
+	}
+
+	if len(m.streams.shards) > 0 {
+		trname := fmt.Sprintf("dsort-%s-shard", m.ManagerUUID)
+		if err := transport.Unregister(respNetwork, trname); err != nil {
+			return err
+		}
+	}
+
+	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
+		for _, streamPool := range streamPoolArr {
+			streamPool.Stop()
+		}
+	}
+
+	m.streams.request = nil
+	m.streams.response = nil
+	m.streams.shards = nil
+	return nil
+}
+
 // cleanup removes all memory allocated and removes all files created during sort run.
 //
 // PRECONDITION: manager must be not in progress state (either actual finish or abort).
@@ -288,14 +334,10 @@ func (m *Manager) cleanup() {
 
 	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
-	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
-		for _, streamPool := range streamPoolArr {
-			streamPool.Stop()
-		}
+	if err := m.cleanupStreams(); err != nil {
+		glog.Error(err)
 	}
-	m.streams.request = nil
-	m.streams.response = nil
-	m.streams.shards = nil
+
 	m.streamWriters.writers = nil
 
 	m.recManager.Cleanup()
