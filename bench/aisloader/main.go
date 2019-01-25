@@ -82,6 +82,7 @@ type (
 		readLenStr        string // read length / to test range read
 		readOff           int64  // read offset \
 		readLen           int64  // read length / to test range read
+		randomize         bool
 
 		// bucket-related options
 		bPropsStr string
@@ -97,17 +98,17 @@ type (
 )
 
 var (
-	runParams            params
-	nonDeterministicRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-	workOrders           chan *workOrder
-	workOrderResults     chan *workOrder
-	intervalStats        sts
-	accumulatedStats     sts
-	allObjects           []string // All objects created under virtual directory myName
-	statsPrintHeader     = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
-	statsdC              statsd.Client
-	getPending           int64
-	putPending           int64
+	runParams        params
+	rnd              = rand.New(rand.NewSource(1234))
+	workOrders       chan *workOrder
+	workOrderResults chan *workOrder
+	intervalStats    sts
+	accumulatedStats sts
+	allObjects       []string // All objects created under virtual directory myName
+	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
+	statsdC          statsd.Client
+	getPending       int64
+	putPending       int64
 
 	ip   string
 	port string
@@ -149,10 +150,15 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
 	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset")
 	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length (0 - read the entire object)")
+	flag.BoolVar(&p.randomize, "randomize", false, "Determines if the random source should be nondeterministic")
 
 	flag.Parse()
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
 	p.usingFile = p.readerType == tutils.ReaderTypeFile
+
+	if p.randomize {
+		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
 
 	// Sanity check
 	if p.maxSize < p.minSize {
@@ -611,7 +617,7 @@ func newPutWorkOrder() *workOrder {
 	if runParams.maxSize == runParams.minSize {
 		size = runParams.minSize
 	} else {
-		size = nonDeterministicRand.Intn(runParams.maxSize-runParams.minSize) + runParams.minSize
+		size = rnd.Intn(runParams.maxSize-runParams.minSize) + runParams.minSize
 	}
 
 	putPending++
@@ -620,7 +626,7 @@ func newPutWorkOrder() *workOrder {
 		bucket:   runParams.bucket,
 		isLocal:  runParams.isLocal,
 		op:       opPut,
-		objName:  myName + "/" + tutils.FastRandomFilename(nonDeterministicRand, 32),
+		objName:  myName + "/" + tutils.FastRandomFilename(rnd, 32),
 		size:     int64(size * 1024),
 	}
 }
@@ -637,7 +643,7 @@ func newGetWorkOrder() *workOrder {
 		bucket:   runParams.bucket,
 		isLocal:  runParams.isLocal,
 		op:       opGet,
-		objName:  allObjects[nonDeterministicRand.Intn(n)],
+		objName:  allObjects[rnd.Intn(n)],
 	}
 }
 
@@ -654,7 +660,7 @@ func newWorkOrder() {
 	if runParams.getConfig {
 		wo = newGetConfigWorkOrder()
 	} else {
-		if nonDeterministicRand.Intn(99) < runParams.putPct {
+		if rnd.Intn(99) < runParams.putPct {
 			wo = newPutWorkOrder()
 		} else {
 			wo = newGetWorkOrder()
