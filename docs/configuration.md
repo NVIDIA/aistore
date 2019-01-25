@@ -18,11 +18,13 @@ and
 
 <img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
 
-As shown above, the `test_fspaths` section of the configuration corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development. 
+As shown above, the `test_fspaths` section of the configuration corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
 
 In production we use the an alternative configuration called `fspaths`: the section of the [config](ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem. 
 
->> The terms `fspath` (aka `filesystem path`) and `mountpath` are used interchangeably throughout AIStore docs and sources. When `fspath` configuration is enabled, the 1-to-1 relationship between configured `mountpaths` and local filesystems is enforced and validated at all times.
+> Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
+
+> The terms `fspath` (aka `filesystem path`) and `mountpath` are used interchangeably throughout AIStore docs and sources. When `fspath` configuration is enabled, the 1-to-1 relationship between configured `mountpaths` and local filesystems is enforced and validated at all times.
 
 An example of 12 fspaths (and 12 local filesystems) follows below:
 
@@ -89,4 +91,4 @@ All the 3 (three) networking options are enumerated [here](cmn/network.go).
 
 ### Reverse proxy
 
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the version 2.0, this functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `netconfig`. To eliminate HTTP redirects, simply set the `rproxy` value to `target` (`rproxy`: `target`).
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the version 2.0, this functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `netconfig`. For further details, please refer to [this readme](docs/rproxy.md).

@@ -35,9 +35,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 <img src="docs/images/ais-target-20-block.png" alt="AIS target block diagram" width="400">
 
-> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets**.
-
-> Cloud-based and local buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
+> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets**. Cloud-based and local buckets support the same API with minor exceptions (only local buckets can be renamed, for instance). AIStore *local buckets* are totally distributed, content-wise, across the entire AIS cluster. All the [supported storage services](docs/storage_svcs.md) equally apply to both sorts of buckets.
 
 ## Table of Contents
 - [Overview](#overview)

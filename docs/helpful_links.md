@@ -1,6 +1,14 @@
 ## Table of Contents
+- [Deep Learning](#deep-learning)
 - [Helpful Links: Go](#helpful-links-go)
 - [Helpful Links: AWS](#helpful-links-aws)
+- [Helpful Links: GCP](#helpful-links-gcp)
+
+## Deep Learning
+
+- [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968)
+- [The Effects of Hyperparameters on SGD Training of Neural Networks](https://arxiv.org/abs/1508.02788)
+- [Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer](https://arxiv.org/abs/1701.06538)
 
 ## Helpful Links: Go
 
@@ -21,3 +29,8 @@
 
 * [AWS S3 Tutorial For Beginners](https://www.youtube.com/watch?v=LfBn5Y1X0vE)
 
+## Helpful Links: GCP
+
+* [Command-line interface for Google Cloud Platform](https://cloud.google.com/sdk/)
+
+* [Cloud Storage: Quickstart Using the Console](https://cloud.google.com/storage/docs/quickstart-console)
