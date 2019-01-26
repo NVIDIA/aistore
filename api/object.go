@@ -8,10 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
@@ -215,33 +213,9 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 
 	resp, err := baseParams.Client.Do(req)
 	if err != nil {
-		// TODO: experimental. Some tests that do high load on server fail with
-		// 'broken pipe'. Retry helps but we need to make it more generic than
-		// just fixing tests. First, we need to be sure that we catch the
-		// correct error and retry here help. If it helps, the code block
-		// below will be removed, as well as all Printf's
-		{
-			// duplicate the error to avoid modifying the original error
-			ecopy := err
-			if !cmn.IsErrConnectionRefused(err) {
-				fmt.Printf("Request failed with error: %v (%T)\n", ecopy, ecopy)
-				if uerr, ok := ecopy.(*url.Error); ok {
-					fmt.Printf("  The internal error is: %v (%T)\n", uerr.Err, uerr.Err)
-					ecopy = uerr
-				}
-				if nerr, ok := ecopy.(*net.OpError); ok {
-					fmt.Printf("  The internal error is: %v (%T)\n", nerr.Err, nerr.Err)
-					ecopy = nerr
-				}
-				if serr, ok := ecopy.(*os.SyscallError); ok {
-					fmt.Printf("  The internal error is: %v (%T)\n", serr.Err, serr.Err)
-				}
-			}
-		}
 		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(httpRetrySleep)
-				fmt.Printf("   retrying %d...\n", i+1)
 				resp, err = baseParams.Client.Do(req)
 			}
 		}
