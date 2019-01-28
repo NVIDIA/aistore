@@ -334,9 +334,11 @@ func (m *Manager) cleanup() {
 
 	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
-	if err := m.cleanupStreams(); err != nil {
-		glog.Error(err)
-	}
+	// TODO: stream cleanup should be done only when we know that all other targets
+	// have also finished dSort.
+	// if err := m.cleanupStreams(); err != nil {
+	// 	glog.Error(err)
+	// }
 
 	m.streamWriters.writers = nil
 
