@@ -130,6 +130,10 @@ type Manager struct {
 		mu      sync.Mutex
 		writers map[string]*streamWriter
 	}
+	finishedAck struct {
+		mu sync.Mutex
+		m  map[string]struct{} // finished acks: daemonID -> ack
+	}
 
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
@@ -153,7 +157,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	once.Do(initOnce)
 
 	m.ctx = ctx
-	targetCount := m.ctx.smap.Get().CountTargets()
+	smap := m.ctx.smap.Get()
+	targetCount := smap.CountTargets()
 	m.rs = rs
 	m.Metrics = newMetrics(rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
@@ -209,6 +214,14 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.streams.request = make(map[string]*StreamPool, 100)
 	m.streams.response = make(map[string]*StreamPool, 100)
 	m.streams.shards = make(map[string]*StreamPool, 100)
+
+	// Fill ack map with current daemons. Once the finished ack is received from
+	// another daemon we will remove it from the map until len(ack) == 0 (then
+	// we will know that all daemons have finished operation).
+	m.finishedAck.m = make(map[string]struct{}, smap.CountTargets())
+	for sid := range smap.Tmap {
+		m.finishedAck.m[sid] = struct{}{}
+	}
 
 	m.setInProgressTo(true)
 	m.setAbortedTo(false)
@@ -334,12 +347,6 @@ func (m *Manager) cleanup() {
 
 	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
-	// TODO: stream cleanup should be done only when we know that all other targets
-	// have also finished dSort.
-	// if err := m.cleanupStreams(); err != nil {
-	// 	glog.Error(err)
-	// }
-
 	m.streamWriters.writers = nil
 
 	m.recManager.Cleanup()
@@ -347,6 +354,22 @@ func (m *Manager) cleanup() {
 	m.extractCreator = nil
 	extract.FreeMemory()
 	m.client = nil
+
+	if !m.aborted() {
+		m.updateFinishedAck(m.ctx.node.DaemonID)
+	}
+}
+
+// finalCleanup is invoked only when all the target confirmed finishing the
+// dSort operations. To ensure that finalCleanup is not invoked before regular
+// cleanup is finished, we also ack ourselves.
+func (m *Manager) finalCleanup() {
+	if err := m.cleanupStreams(); err != nil {
+		glog.Error(err)
+	}
+	m.finishedAck.m = nil
+
+	Managers.persist(m.ManagerUUID)
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -360,7 +383,10 @@ func (m *Manager) abort() {
 		m.waitForFinish()
 	}
 
-	go m.cleanup()
+	go func() {
+		m.cleanup()
+		m.finalCleanup() // on abort always perform final cleanup
+	}()
 }
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
@@ -392,6 +418,17 @@ func (m *Manager) setExtractCreator() (err error) {
 	}
 
 	return nil
+}
+
+// updateFinishedAck marks daemonID as finished. If all daemons ack then the
+// finalCleanup is dispatched in separate goroutine.
+func (m *Manager) updateFinishedAck(daemonID string) {
+	m.finishedAck.mu.Lock()
+	delete(m.finishedAck.m, daemonID)
+	if len(m.finishedAck.m) == 0 {
+		go m.finalCleanup()
+	}
+	m.finishedAck.mu.Unlock()
 }
 
 // incrementReceived increments number of received records batches. Also puts
@@ -443,7 +480,7 @@ func (m *Manager) decrementRef(by int64) {
 		m.lock()
 		if !m.inProgress() {
 			m.unlock()
-			go Managers.persist(m.ManagerUUID, true /*cleanup*/)
+			go m.cleanup()
 			return
 		}
 		m.unlock()

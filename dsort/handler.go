@@ -209,6 +209,8 @@ func SortHandler(w http.ResponseWriter, r *http.Request) {
 		abortSortHandler(w, r)
 	case cmn.Metrics:
 		metricsHandler(w, r)
+	case cmn.FinishedAck:
+		finishedAckHandler(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid path")
 	}
@@ -257,8 +259,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 // 2. participateInRecordDistribution
 // 3. distributeShardRecords
 func startSortHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid method: %s", r.Method))
+	if !checkInvalidMethod(w, r, http.MethodPost) {
 		return
 	}
 	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Start)
@@ -286,7 +287,7 @@ func (m *Manager) startDSort() {
 		if !m.aborted() {
 			glog.Warning("broadcasting abort to other targets")
 			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
-			broadcast(http.MethodDelete, path, nil, ctx.smap.Get().Tmap)
+			broadcast(http.MethodDelete, path, nil, ctx.smap.Get().Tmap, ctx.node)
 		}
 	}
 
@@ -294,6 +295,10 @@ func (m *Manager) startDSort() {
 		errHandler(err)
 		return
 	}
+
+	glog.Info("broadcasting finished ack to other targets")
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.FinishedAck, m.ManagerUUID, m.ctx.node.DaemonID)
+	broadcast(http.MethodPut, path, nil, ctx.smap.Get().Tmap, ctx.node)
 }
 
 // shardsHandler is the handler for the HTTP endpoint /v1/sort/shards.
@@ -301,9 +306,7 @@ func (m *Manager) startDSort() {
 // of the incoming request body. The shard is then sent to the correct target in the cluster as per HRW.
 func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			s := fmt.Sprintf("invalid method: %s for %s, should be POST", r.Method, r.URL.String())
-			cmn.InvalidHandlerWithMsg(w, r, s)
+		if !checkInvalidMethod(w, r, http.MethodPost) {
 			return
 		}
 		apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Shards)
@@ -340,9 +343,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 // []Records from the request body, along with some related state variables.
 func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			s := fmt.Sprintf("invalid method: %s to %s, should be POST", r.Method, r.URL.String())
-			cmn.InvalidHandlerDetailed(w, r, s)
+		if !checkInvalidMethod(w, r, http.MethodPost) {
 			return
 		}
 		apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Records)
@@ -405,9 +406,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 // A valid DELETE to this endpoint aborts currently running sort job and cleans
 // up the state.
 func abortSortHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		s := fmt.Sprintf("invalid method: %s to %s, should be DELETE", r.Method, r.URL.String())
-		cmn.InvalidHandlerWithMsg(w, r, s)
+	if !checkInvalidMethod(w, r, http.MethodDelete) {
 		return
 	}
 	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Abort)
@@ -424,16 +423,12 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dsortManager.abort()
-	// No need to perform cleanup since abort already scheduled one.
-	go Managers.persist(managerUUID, false /*cleanup*/)
 }
 
 // metricsHandler is the handler called for the HTTP endpoint /v1/sort/metrics.
 // A valid GET to this endpoint sends response with sort metrics.
 func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		s := fmt.Sprintf("invalid method: %s to %s, should be GET", r.Method, r.URL.String())
-		cmn.InvalidHandlerWithMsg(w, r, s)
+	if !checkInvalidMethod(w, r, http.MethodGet) {
 		return
 	}
 	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Metrics)
@@ -464,7 +459,29 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func broadcast(method, path string, body []byte, nodes cluster.NodeMap) []response {
+// finishedAckHandler is the handler called for the HTTP endpoint /v1/sort/finished-ack.
+// A valid PUT to this endpoint acknowledges that daemonID has finished dSort operation.
+func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkInvalidMethod(w, r, http.MethodPut) {
+		return
+	}
+	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, cmn.Sort, cmn.FinishedAck)
+	if err != nil {
+		return
+	}
+
+	managerUUID, daemonID := apiItems[0], apiItems[1]
+	dsortManager, exists := Managers.Get(managerUUID)
+	if !exists {
+		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		return
+	}
+
+	dsortManager.updateFinishedAck(daemonID)
+}
+
+func broadcast(method, path string, body []byte, nodes cluster.NodeMap, ignore ...*cluster.Snode) []response {
 	client := http.DefaultClient
 	responses := make([]response, len(nodes))
 
@@ -508,7 +525,14 @@ func broadcast(method, path string, body []byte, nodes cluster.NodeMap) []respon
 	}
 
 	idx := 0
+outer:
 	for _, node := range nodes {
+		for _, ignoreNode := range ignore {
+			if ignoreNode.Equals(node) {
+				continue outer
+			}
+		}
+
 		wg.Add(1)
 		go call(idx, node)
 		idx++
@@ -516,6 +540,15 @@ func broadcast(method, path string, body []byte, nodes cluster.NodeMap) []respon
 	wg.Wait()
 
 	return responses
+}
+
+func checkInvalidMethod(w http.ResponseWriter, r *http.Request, expected string) bool {
+	if r.Method != expected {
+		s := fmt.Sprintf("invalid method: %s to %s, should be %s", r.Method, r.URL.String(), expected)
+		cmn.InvalidHandlerWithMsg(w, r, s)
+		return false
+	}
+	return true
 }
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {

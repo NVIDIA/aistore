@@ -85,7 +85,7 @@ func (mg *ManagerGroup) Get(managerUUID string) (*Manager, bool) {
 //
 // When error occurs during moving manager to persistent storage, manager is not
 // removed from memory.
-func (mg *ManagerGroup) persist(managerUUID string, cleanupRequired bool) {
+func (mg *ManagerGroup) persist(managerUUID string) {
 	mg.mtx.Lock()
 	manager, exists := mg.managers[managerUUID]
 	if !exists {
@@ -110,8 +110,4 @@ cleanup:
 	// waiting for cleanup to finish - otherwise we would block on
 	// ManagerGroup.Get.
 	mg.mtx.Unlock()
-
-	if cleanupRequired {
-		manager.cleanup()
-	}
 }

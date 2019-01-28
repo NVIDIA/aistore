@@ -316,13 +316,14 @@ const (
 	Mountpaths = "mountpaths"
 
 	// dsort
-	Init    = "init"
-	Sort    = "sort"
-	Start   = "start"
-	Abort   = "abort"
-	Metrics = "metrics"
-	Records = "records"
-	Shards  = "shards"
+	Init        = "init"
+	Sort        = "sort"
+	Start       = "start"
+	Abort       = "abort"
+	Metrics     = "metrics"
+	Records     = "records"
+	Shards      = "shards"
+	FinishedAck = "finished-ack"
 )
 const (
 	XactionStatusInProgress = "InProgress"
