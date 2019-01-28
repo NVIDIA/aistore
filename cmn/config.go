@@ -365,12 +365,14 @@ type KeepaliveTrackerConf struct {
 	IntervalStr string        `json:"interval"` // keepalives are sent(target)/checked(promary proxy) every interval
 	Interval    time.Duration `json:"-"`
 	Name        string        `json:"name"`   // "heartbeat", "average"
-	Factor      int           `json:"factor"` // "average" only
+	Factor      uint8         `json:"factor"` // only average
 }
 
 type KeepaliveConf struct {
-	Proxy  KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
-	Target KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+	Proxy         KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
+	Target        KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+	RetryFactor   uint8                `json:"retry_factor"`
+	TimeoutFactor uint8                `json:"timeout_factor"`
 }
 
 //==============================

@@ -29,9 +29,6 @@ import (
 const (
 	requestBufSizeGlobal = 800
 	requestBufSizeFS     = 200
-	httpTimeout          = time.Second * 30
-	statsInterval        = time.Second * 10
-	downloadTimeout      = time.Minute * 5 // time to wait for remote target sends its slice or metafile
 	idleTime             = time.Second * 5
 )
 
@@ -421,7 +418,8 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 		r.unregWriter(uname)
 		return err
 	}
-	if sw.wg.WaitTimeout(downloadTimeout) {
+	c := cmn.GCO.Get()
+	if sw.wg.WaitTimeout(c.Timeout.SendFile) {
 		r.unregWriter(uname)
 		return fmt.Errorf("Timed out waiting for %s is read", uname)
 	}
@@ -496,7 +494,8 @@ func (r *XactEC) Run() (err error) {
 	for _, mpr := range r.joggers {
 		go mpr.run()
 	}
-	tck := time.NewTicker(statsInterval)
+	conf := cmn.GCO.Get()
+	tck := time.NewTicker(conf.Periodic.StatsTime)
 	lastAction := time.Now()
 
 	// as of now all requests are equal. Some may get throttling later

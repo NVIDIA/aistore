@@ -178,7 +178,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 	if err := lctx.yieldTerm(); err != nil {
 		return 0, err
 	}
-	if capCheck >= capCheckInterval {
+	if capCheck >= capCheckThresh {
 		capCheck = 0
 		usedpct, ok := ios.GetFSUsedPercentage(lctx.bckTypeDir)
 		lctx.throttle = false

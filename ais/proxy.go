@@ -31,7 +31,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const tokenStart = "Bearer"
+const (
+	internalPageSize = 10000 // number of objects in a page for internal call between target and proxy to get atime/iscached
+
+	tokenStart = "Bearer"
+)
 
 type ClusterMountpathsRaw struct {
 	Targets map[string]jsoniter.RawMessage `json:"targets"`
@@ -1318,8 +1322,8 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		pageSize = msg.GetPageSize
 	}
 
-	if pageSize > MaxPageSize {
-		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, MaxPageSize)
+	if pageSize > maxPageSize {
+		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, maxPageSize)
 	}
 
 	smap := p.smapowner.get()
@@ -1401,8 +1405,8 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	if err != nil {
 		return
 	}
-	if msg.GetPageSize > MaxPageSize {
-		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, MaxPageSize)
+	if msg.GetPageSize > maxPageSize {
+		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, maxPageSize)
 	}
 
 	// first, get the cloud object list from a random target

@@ -181,7 +181,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
 		return
 	}
-	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, MaxHeaderSize)}
+	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, maxHeaderSize)}
 	for {
 		var stats *Stats
 		objReader, sessid, hl64, err := it.next()

@@ -309,7 +309,7 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 		if time.Since(pollstarted) > deadline {
 			break
 		}
-		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(keepaliveRetryDuration(config))
 	}
 
 	return ok
@@ -336,7 +336,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		res := t.call(args)
 		// retry once
 		if res.err == context.DeadlineExceeded {
-			args.timeout = config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
+			args.timeout = keepaliveTimeoutDuration(config) * 2
 			res = t.call(args)
 		}
 
@@ -356,7 +356,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 			break
 		}
 
-		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(keepaliveRetryDuration(config))
 	}
 
 	// Phase 2: Wait to ensure any rebalancing on neighbor has kicked in.
@@ -392,7 +392,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		}
 
 		glog.Infof("waiting for rebalance: %v", si.PublicNet.DirectURL)
-		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(keepaliveRetryDuration(config))
 	}
 }
 
@@ -417,7 +417,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		go func(si *cluster.Snode) {
 			ok := t.pingTarget(
 				si,
-				config.Timeout.CplaneOperation*keepaliveTimeoutFactor,
+				keepaliveTimeoutDuration(config),
 				config.Rebalance.DestRetryTime,
 			)
 			if !ok {

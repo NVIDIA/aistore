@@ -110,14 +110,16 @@ cat > $CONFFILE <<EOL
 	"keepalivetracker": {
 		"proxy": {
 			"interval": "10s",
-			"name": "heartbeat",
-			"factor": 3
+			"name":     "heartbeat",
+			"factor":   3
 		},
 		"target": {
 			"interval": "10s",
-			"name": "heartbeat",
-			"factor": 3
-		}
+			"name":     "heartbeat",
+			"factor":   3
+		},
+		"retry_factor":   5,
+		"timeout_factor": 3
 	}
 }
 EOL

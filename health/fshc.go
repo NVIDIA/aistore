@@ -22,8 +22,8 @@ import (
 
 const (
 	fshcNameTemplate = "AIS-TMP"
-	fshcFileSize     = 10 * 1024 * 1024 // size of temporary file
-	fshcMaxFileList  = 100              // maximum number of files to read by Readdir
+	fshcFileSize     = 10 * cmn.MiB // size of temporary file which will test writing and reading the mountpath
+	fshcMaxFileList  = 100          // maximum number of files to read by Readdir
 )
 
 // When an IO error is triggered, it runs a few tests to make sure that the

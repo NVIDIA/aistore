@@ -96,7 +96,7 @@ type (
 // interfaces
 //
 //===========
-const initialBucketListSize = 512
+const initialBucketListSize = 128
 
 type cloudif interface {
 	listbucket(ctx context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int)

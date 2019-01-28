@@ -21,9 +21,6 @@ import (
 )
 
 const (
-	keepaliveRetryFactor   = 5
-	keepaliveTimeoutFactor = 2
-
 	someError  = "error"
 	stop       = "stop"
 	register   = "register"
@@ -102,6 +99,26 @@ type KeepaliveTracker interface {
 	// TimedOut returns true if it is determined that a message has not been received from a server
 	// soon enough so it is consider that the server is down
 	TimedOut(id string) bool
+}
+
+func keepaliveRetryDuration(cs ...*cmn.Config) time.Duration {
+	var c *cmn.Config
+	if len(cs) > 0 {
+		c = cs[0]
+	} else {
+		c = cmn.GCO.Get()
+	}
+	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
+}
+
+func keepaliveTimeoutDuration(cs ...*cmn.Config) time.Duration {
+	var c *cmn.Config
+	if len(cs) > 0 {
+		c = cs[0]
+	} else {
+		c = cmn.GCO.Get()
+	}
+	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.TimeoutFactor)
 }
 
 func newTargetKeepaliveRunner(t *targetrunner) *targetKeepaliveRunner {
@@ -322,7 +339,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 	var (
 		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)
-		ticker  = time.NewTicker(cmn.GCO.Get().Timeout.CplaneOperation * keepaliveRetryFactor)
+		ticker  = time.NewTicker(keepaliveRetryDuration())
 	)
 	defer ticker.Stop()
 	for {
@@ -377,7 +394,7 @@ func (k *keepalive) Run() error {
 				ticker.Stop()
 				return nil
 			case someError:
-				if time.Since(lastCheck) >= cmn.GCO.Get().Timeout.CplaneOperation*keepaliveRetryFactor {
+				if time.Since(lastCheck) >= keepaliveRetryDuration() {
 					lastCheck = time.Now()
 					glog.Infof("keepalive triggered by err: %v", sig.err)
 					if stopped := k.k.doKeepalive(); stopped {
@@ -404,7 +421,7 @@ func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID
 	glog.Infof("daemon -> primary proxy keepalive failed, err: %v, status: %d", err, s)
 
 	var i int
-	ticker := time.NewTicker(cmn.GCO.Get().Timeout.CplaneOperation * keepaliveRetryFactor)
+	ticker := time.NewTicker(keepaliveRetryDuration())
 	defer ticker.Stop()
 	for {
 		select {
@@ -572,7 +589,7 @@ func (hb *HeartBeatTracker) TimedOut(id string) bool {
 type AverageTracker struct {
 	ch      chan struct{}
 	rec     map[string]averageTrackerRecord
-	factor  int
+	factor  uint8
 	statsdC *statsd.Client
 }
 
@@ -587,7 +604,7 @@ func (rec *averageTrackerRecord) avg() int64 {
 }
 
 // newAverageTracker returns an AverageTracker.
-func newAverageTracker(factor int, statsdC *statsd.Client) *AverageTracker {
+func newAverageTracker(factor uint8, statsdC *statsd.Client) *AverageTracker {
 	a := &AverageTracker{
 		rec:     make(map[string]averageTrackerRecord),
 		ch:      make(chan struct{}, 1),

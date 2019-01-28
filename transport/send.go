@@ -28,7 +28,7 @@ import (
 
 // transport defaults
 const (
-	MaxHeaderSize  = 1024
+	maxHeaderSize  = 1024
 	lastMarker     = cmn.MaxInt64
 	defaultIdleOut = time.Second
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
@@ -201,7 +201,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.lastCh = make(chan struct{}, 1)
 	s.stopCh = make(chan struct{}, 1)
 	s.postCh = make(chan struct{}, 1)
-	s.maxheader = make([]byte, MaxHeaderSize)
+	s.maxheader = make([]byte, maxHeaderSize)
 	s.time.idle = time.NewTimer(s.time.idleOut)
 	s.time.idle.Stop()
 	atomic.StoreInt64(&s.lifecycle, expired) // initiate HTTP/TCP session upon arrival of the very first object and *not* earlier
@@ -609,7 +609,7 @@ exit:
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
 	if debug {
-		cmn.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-12*sizeofI64)
+		cmn.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < maxHeaderSize-12*sizeofI64)
 	}
 	l = sizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
@@ -675,7 +675,7 @@ func (s *Stream) addIdle(beg time.Time) { atomic.AddInt64(&s.stats.IdleDur, int6
 func (s *Stream) dryrun() {
 	buf := make([]byte, cmn.KiB*32)
 	scloser := ioutil.NopCloser(s)
-	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, MaxHeaderSize)}
+	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, maxHeaderSize)}
 	for {
 		objReader, _, _, err := it.next()
 		if objReader != nil {

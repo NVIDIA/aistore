@@ -115,7 +115,7 @@ func (r *Trunner) Init() {
 
 	config := cmn.GCO.Get()
 	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
-	r.timecounts.logLimit = cmn.DivCeil(int64(logsTotalSizeCheckTime), int64(config.Periodic.StatsTime))
+	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
 
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
@@ -124,7 +124,7 @@ func (r *Trunner) Init() {
 func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
 	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
-	r.timecounts.logLimit = cmn.DivCeil(int64(logsTotalSizeCheckTime), int64(newConf.Periodic.StatsTime))
+	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(newConf.Periodic.StatsTime))
 }
 
 func (r *Trunner) GetWhatStats() ([]byte, error) {

@@ -39,8 +39,8 @@ import (
 
 // LRU defaults/tunables
 const (
-	minEvictThresh   = cmn.MiB
-	capCheckInterval = cmn.MiB * 256 // capacity checking "interval"
+	minEvictThresh = 10 * cmn.MiB
+	capCheckThresh = 256 * cmn.MiB // capacity checking threshold, when exceeded may result in lru throttling
 )
 
 type (

@@ -48,9 +48,8 @@ import (
 )
 
 const (
-	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
-	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
-	maxBytesInMem    = 256 * cmn.KiB
+	maxPageSize   = 64 * 1024     // max number of objects in a page (warning logged if requested page size exceeds this limit)
+	maxBytesInMem = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
 
 	// GET: when object is missing and rebalance is running we schedule couple of retries.
 	restoreMissingRetries   = 10

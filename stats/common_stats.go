@@ -22,7 +22,7 @@ import (
 //
 //==============================
 
-const logsTotalSizeCheckTime = time.Hour * 3
+const logsMaxSizeCheckTime = time.Hour // how often we check if logs have exceeded the limit
 
 const (
 	KindCounter = "counter"

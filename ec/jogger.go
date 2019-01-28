@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -381,7 +381,8 @@ func (c *jogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*M
 		c.freeSGL(slices)
 		return nil, nil, err
 	}
-	if wgSlices.WaitTimeout(downloadTimeout) {
+	conf := cmn.GCO.Get()
+	if wgSlices.WaitTimeout(conf.Timeout.SendFile) {
 		glog.Errorf("Timed out waiting for %s/%s slices", req.LOM.Bucket, req.LOM.Objname)
 	}
 	return slices, idToNode, nil
@@ -778,7 +779,8 @@ func (c *jogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Me
 		return nil, nil, err
 	}
 
-	if metaWG.WaitTimeout(downloadTimeout) {
+	conf := cmn.GCO.Get()
+	if metaWG.WaitTimeout(conf.Timeout.SendFile) {
 		glog.Errorf("Timed out waiting for %s/%s metafiles", req.LOM.Bucket, req.LOM.Objname)
 	}
 
