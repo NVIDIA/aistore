@@ -1199,6 +1199,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cl
 		req: reqArgs{
 			method: http.MethodPost,
 			header: header,
+			base:   dinfo.URL(cmn.NetworkPublic),
 			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 			query:  query,
 			body:   actionMsgBytes,

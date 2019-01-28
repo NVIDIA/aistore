@@ -2,14 +2,16 @@ version: '3'
 services:
   proxy:
     networks:
-        public:
-        internal_control:
-        internal_data:
+      - public
+      - docker_default
+      - internal_control
+      - internal_data
   target:
     networks:
-        public:
-        internal_control:
-        internal_data:
+      - public
+      - docker_default
+      - internal_control
+      - internal_data
 networks:
   internal_control:
     driver: bridge
@@ -17,13 +19,13 @@ networks:
       driver: default
       config:
         -
-          subnet: ${INT_CONTROL_SUBNET}
+          subnet: ${INT_CONTROL_SUBNET:-172.5.1.0/24}
   internal_data:
     driver: bridge
     ipam:
       driver: default
       config:
         -
-          subnet: ${INT_DATA_SUBNET}
+          subnet: ${INT_DATA_SUBNET:-172.5.2.0/24}
 
 

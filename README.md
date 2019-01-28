@@ -259,7 +259,8 @@ AIStore runs on commodity Linux machines with no special hardware requirements.
 
 > It is expected, though, that all AIS target machines are identical, hardware-wise.
 
-The implication is that the number of possible deployment options is practically unlimited. This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
+The implication is that the number of possible deployment options is practically unlimited.
+This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
 
 ### Local non-Containerized
 
@@ -323,7 +324,29 @@ The 2nd option to run AIS on your local machine requires [Docker](https://docs.d
 
 > AIS 2.0 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
 
-To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md)
+To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
+
+
+#### Docker playground
+
+In [docker playground](docker/dev/playground) you can find scripts which download different datasets (eg. MNIST and subset of ImageNet).
+The datasets are downloaded using [Downloader](docs/experimental.md#Downloader) which will save objects directly to the AIS cluster.
+During the download you can monitor the statistics:
+ * number of requests made,
+ * number of requests failed,
+ * number of bytes transferred.
+We hope that this super simple but yet verbose presentation will showcase capabilities and monitoring tools for AIS.
+
+Here is how you can play with the playground script (in this example AIS will download ImageNet):
+
+```shell
+$ cd path_to/docker/dev
+$ ./deploy_docker.sh -d=2 -p=4 -t=4 -c=1 -grafana -nocloud # start 4 proxies and 4 targets
+$ ./playground/download_imagenet.sh # download some of ImageNet images into AIS and show stats
+$ # once Downloader will save the files...
+$ ./playground/stress_get.sh imagenet # do gets on saved files (requires jq command)
+$ ./stop_docker.sh -l # stop docker 
+```
 
 ### Local Kubernetes
 

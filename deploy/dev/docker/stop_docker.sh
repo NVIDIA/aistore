@@ -89,7 +89,7 @@ done
 determine_config
 
 if [ "$CLUSTER_CNT" -gt 1 ]; then
-    echo Removing connections between clusters ...
+    echo "Removing connections between clusters..."
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
         for ((i=0; i<${CLUSTER_CNT}; i++)); do
@@ -106,18 +106,23 @@ if [ "$CLUSTER_CNT" -gt 1 ]; then
 fi
 
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
-    PUB_NET="172.5$((0 + ($i * 3))).0"
-    PUB_SUBNET="${PUB_NET}.0/24"
-    INT_CONTROL_NET="172.5$((1 + ($i * 3))).0"
-    INT_CONTROL_SUBNET="${INT_CONTROL_NET}.0/24"
-    INT_DATA_NET="172.5$((2 + ($i * 3))).0"
-    INT_DATA_SUBNET="${INT_DATA_NET}.0/24"
-    export PUB_SUBNET=$PUB_SUBNET
-    export INT_CONTROL_SUBNET=$INT_CONTROL_SUBNET
-    export INT_DATA_SUBNET=$INT_DATA_SUBNET
+    export PUB_SUBNET="172.5$((0 + ($i * 3))).0.0/24"
+    export INT_CONTROL_SUBNET="172.5$((1 + ($i * 3))).0.0/24"
+    export INT_DATA_SUBNET="172.5$((2 + ($i * 3))).0.0/24"
     if [ "$remove_images" = TRUE ]; then
         docker-compose -p ais${i} -f $composer_file down -v --rmi all --remove-orphans
     else 
         docker-compose -p ais${i} -f $composer_file down -v --remove-orphans
     fi
 done
+
+if [ "$remove_images" = TRUE ]; then
+    docker-compose -f $composer_file down -v --rmi all --remove-orphans
+else 
+    docker-compose -f $composer_file down -v --remove-orphans
+fi
+
+echo "Removing volumes..."
+docker volume prune -f
+echo "Removing volumes folders (requires sudo)..."
+sudo rm -rf /tmp/ais/ /tmp/docker_ais/

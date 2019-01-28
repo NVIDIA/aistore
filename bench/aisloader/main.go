@@ -75,6 +75,7 @@ type (
 		usingFile         bool
 		tmpDir            string // only used when usingFile is true
 		loaderID          int    // when multiple of instances of loader running on the same host
+		statsdIP          string
 		statsdPort        int
 		batchSize         int    // batch is used for bootstraping(list) and delete
 		getConfig         bool   // true if only run get proxy config request
@@ -144,7 +145,8 @@ func parseCmdLine() (params, error) {
 		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", tutils.ReaderTypeSG,
 			tutils.ReaderTypeFile, tutils.ReaderTypeInMem, tutils.ReaderTypeRand))
 	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
-	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
+	flag.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
+	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
 	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
@@ -372,8 +374,7 @@ func main() {
 		return
 	}
 
-	statsdC, err = statsd.New("localhost", runParams.statsdPort,
-		fmt.Sprintf("aisloader.%s-%d", host, runParams.loaderID))
+	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, fmt.Sprintf("aisloader.%s-%d", host, runParams.loaderID))
 	if err != nil {
 		fmt.Println("Failed to connect to statd, running without statsd")
 	}

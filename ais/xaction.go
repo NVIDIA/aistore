@@ -431,7 +431,7 @@ func (xs *xactions) renewDownloader(t *targetrunner, bucket string) (xdl *downlo
 		return
 	}
 	id := xs.uniqueid()
-	xdl = downloader.NewDownloader(t, fs.Mountpaths, id, kind, bucket)
+	xdl = downloader.NewDownloader(t, t.statsif, fs.Mountpaths, id, kind, bucket)
 	xs.add(xdl)
 	go xdl.Run()
 	xs.Unlock()

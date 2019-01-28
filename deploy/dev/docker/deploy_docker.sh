@@ -13,6 +13,7 @@ usage() {
     echo "  -p=NUM or --proxy=NUM         : where NUM is the number of proxies"
     echo "  -s or --single                : use a single network"
     echo "  -t=NUM or --target=NUM        : where NUM is the number of targets"
+    echo "  -grafana                      : starts Graphite and Grafana containers"
     echo "  -nodiskio=BOOL                : run Dry-Run mode with disk IO is disabled (default = false)"
     echo "  -nonetio=BOOL                 : run Dry-Run mode with network IO is disabled (default = false)"
     echo "  -dryobjsize=SIZE              : size of an object when a source is a 'fake' one."
@@ -67,6 +68,7 @@ save_setup() {
     echo "PORT=$PORT" >> $setup_file
     echo "PORT_INTRA_CONTROL=$PORT_INTRA_CONTROL" >> $setup_file
     echo "PORT_INTRA_DATA=$PORT_INTRA_DATA" >> $setup_file
+    echo "GRAFANA=$GRAFANA" >> $setup_file
     echo "Finished saving setup"
 }
 
@@ -96,7 +98,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
 fi
 
 mkdir -p /tmp/docker_ais
-USE_AWS=0
+CLOUD=0
 CLUSTER_CNT=0
 PROXY_CNT=0
 TARGET_CNT=0
@@ -109,15 +111,13 @@ setup_file="/tmp/docker_ais/deploy.env"
 aws_env="";
 os="ubuntu"
 
+GRAFANA=false
+
 # Indicate which dry-run mode the cluster is running on
-DRYRUN=""
+DRYRUN=0
 NODISKIO=false
 NONETIO=false
 DRYOBJSIZE="8m"
-
-# Graphite Server from Docker/Prod
-GRAPHITE_PORT=2003
-GRAPHITE_SERVER="52.41.234.112"
 
 for i in "$@"
 do
@@ -125,7 +125,17 @@ case $i in
     -a=*|--aws=*)
         aws_env="${i#*=}"
         shift # past argument=value
-        USE_AWS=1
+        CLOUD=1
+        ;;
+
+    -g|--gcp)
+        CLOUD=2
+        shift # past argument
+        ;;
+    
+    -nocloud)
+        CLOUD=3
+        shift # past argument
         ;;
 
     -c=*|--cluster=*)
@@ -146,10 +156,6 @@ case $i in
         FS_LIST="${i#*=}"
         TESTFSPATHCOUNT=0
         shift # past argument=value
-        ;;
-    -g|--gcp)
-        USE_AWS=2
-        shift # past argument
         ;;
 
     -h|--help)
@@ -187,6 +193,11 @@ case $i in
         shift # past argument=value
         ;;
 
+    -grafana)
+        GRAFANA=true
+        shift # past argument
+        ;;
+
     -nodiskio=*|--nodiskio=*)
         NODISKIO="${i#*=}"
         if $NODISKIO; then 
@@ -216,58 +227,29 @@ esac
 done
 
 
-if [ "$DRYRUN" = "" ]; then
-    echo "Select"
-    echo " 1: Use no disk io (Dry Run)"
-    echo " 2: Use no network io (Dry Run)"
-    echo "Enter the mode you want:"
-    echo "Note: No input will result in using the default (normal) mode"
-    read DRYRUN
 
-    if  [ -z "$DRYRUN" ]; then
-        echo "Setting to normal mode"
-        NODISKIO=false
-        NONETIO=false
-        DRYRUN=0
-    elif [ $DRYRUN -eq 1 ]; then
-        NODISKIO=true
-        NONETIO=false
-        DRYRUN=1
-    elif [ $DRYRUN -eq 2 ]; then
-        NODISKIO=false
-        NONETIO=true
-        DRYRUN=2
-    else 
-        echo "Not a valid entry. Exiting..."
-        exit 1
-    fi
-
-    if [ $DRYRUN -eq 0 ]; then
-        DRYOBJSIZE="8m"
-    else 
-        echo "Configure Dry Run object size (default is '8m' - 8 megabytes):"
-        echo "Note: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB"
-        echo "No input will result in using the default size"
-        read DRYOBJSIZE
-        is_size $DRYOBJSIZE
-    fi
-
+if [ $DRYRUN -ne 0 ]; then
+    echo "Configure Dry Run object size (default is '8m' - 8 megabytes):"
+    echo "Note: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB"
+    echo "No input will result in using the default size"
+    read DRYOBJSIZE
+    is_size $DRYOBJSIZE
 fi
 
-
-if [ $USE_AWS -eq 0 ]; then
+if [ $CLOUD -eq 0 ]; then
     echo Select
     echo  1: Use AWS
     echo  2: Use GCP
-    echo "Enter your provider choice (1 or 2):"
-    read USE_AWS
-    is_number $USE_AWS
-    if [ $USE_AWS -ne 1 ] && [ $USE_AWS -ne 2 ]; then
+    echo  3: No cloud provider
+    echo "Enter your provider choice (1, 2 or 3):"
+    read CLOUD
+    is_number $CLOUD
+    if [ $CLOUD -ne 1 ] && [ $CLOUD -ne 2 ] && [ $CLOUD -ne 3 ]; then
         echo "Not a valid entry. Exiting..."
         exit 1
     fi
 
-    if [ $USE_AWS -eq 1 ]; then
+    if [ $CLOUD -eq 1 ]; then
         echo "Enter the location of your AWS configuration and credentials files:"
         echo "Note: No input will result in using the default aws dir (~/.aws/)"
         read aws_env
@@ -279,7 +261,7 @@ if [ $USE_AWS -eq 0 ]; then
 
 fi
 
-if [ $USE_AWS -eq 1 ]; then
+if [ $CLOUD -eq 1 ]; then
     if [ -z "$aws_env" ]; then
         echo -a is a required parameter.Provide the path for aws.env file
         usage
@@ -312,9 +294,12 @@ if [ $USE_AWS -eq 1 ]; then
     sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
     sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
     sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
-else
+elif [ $CLOUD -eq 2 ]; then
     CLDPROVIDER="gcp"
-    echo "" > $LOCAL_AWS
+    touch $LOCAL_AWS
+else
+    CLDPROVIDER=""
+    touch $LOCAL_AWS
 fi
 
 if [ "$CLUSTER_CNT" -eq 0 ]; then
@@ -423,6 +408,17 @@ PORT=8080
 PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
 
+if [ "$GRAFANA" == true ]; then
+    GRAPHITE_PORT=2003
+    GRAPHITE_SERVER="graphite"
+    docker network create docker_dev
+    docker-compose -f ${composer_file} up --build -d graphite
+    docker-compose -f ${composer_file} up --build -d grafana
+else
+    GRAPHITE_PORT=2003
+    GRAPHITE_SERVER="localhost"
+fi
+
 # Setting the IP addresses for the containers
 echo "Network type: ${network}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
@@ -501,12 +497,12 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     for ((j=1; j<=${TARGET_CNT}; j++)); do
         export HOST_CONTAINER_PATH=/tmp/ais/c${i}_target_${j}
         mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale target=${j} --no-recreate
+        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale target=${j}  --scale grafana=0 --scale graphite=0 --no-recreate
     done
     for ((j=2; j<=${PROXY_CNT}; j++)); do
         export HOST_CONTAINER_PATH=/tmp/ais/c${i}_proxy_${j}
         mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale proxy=${j} --scale target=$TARGET_CNT --no-recreate
+        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale proxy=${j} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
     done
 done
 
@@ -519,12 +515,10 @@ if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
         for ((i=0; i<${CLUSTER_CNT}; i++)); do
-            if [[ $container_name != ais${i}_* ]] ;
-            then
+            if [[ $container_name != ais${i}_* ]]; then
                 echo Connecting $container_name to $ais${i}_public
                 docker network connect ais${i}_public $container_id
-                if [[ $container_name == *"_target_"* ]] ;
-                then
+                if [[ $container_name == *"_target_"* ]]; then
                     echo Connecting $container_name to $ais${i}_internal_data
                     docker network connect ais${i}_internal_data $container_id
                 fi
@@ -533,7 +527,12 @@ if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
     done
 fi
 
-#Consider moving these to a folder instead of deleting - for future reference
+if [ "$GRAFANA" == true ]; then
+    # Set up Graphite datasource
+    curl -d '{"name":"Graphite","type":"graphite","url":"http://graphite:80","access":"proxy","basicAuth":false,"isDefault":true}' -H "Content-Type: application/json" -X POST http://admin:admin@localhost:3000/api/datasources > /dev/null 2>&1
+fi
+
+# Consider moving these to a folder instead of deleting - for future reference
 rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
 docker ps
 

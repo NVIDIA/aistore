@@ -16,7 +16,7 @@ import (
 )
 
 //
-// NOTE Naming Convention: "*.n" - counter, "*.μs" - latency, "*.size" - size (in bytes)
+// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes)
 //
 
 type (
@@ -51,17 +51,15 @@ func (p *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal
 func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &p.Tracker) }
 
 //
-// NOTE naming convention: ".n" for the count and ".μs" for microseconds
+// NOTE naming convention: ".n" for the count and ".µs" for microseconds
 //
 func (s *ProxyCoreStats) doAdd(name string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.Assert(ok, "Invalid stats name '"+name+"'")
 	if v.kind == KindLatency {
 		if strings.HasSuffix(name, ".µs") {
-			nroot := strings.TrimSuffix(name, ".μs")
-			s.StatsdC.Send(nroot,
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+			nroot := strings.TrimSuffix(name, ".µs")
+			s.StatsdC.Send(nroot, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		}
 		v.Lock()
 		v.numSamples++
@@ -70,10 +68,8 @@ func (s *ProxyCoreStats) doAdd(name string, val int64) {
 		v.Value += val
 		v.Unlock()
 	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
-		nameLatency := strings.TrimSuffix(name, "n") + "μs"
-		if _, ok = s.Tracker[nameLatency]; !ok {
-			s.StatsdC.Send(name, metric{statsd.Counter, name, val})
-		}
+		nroot := strings.TrimSuffix(name, ".n")
+		s.StatsdC.Send(nroot, metric{statsd.Counter, "count", val})
 		v.Lock()
 		v.Value += val
 		v.Unlock()

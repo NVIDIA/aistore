@@ -10,6 +10,9 @@ package statsd
 import (
 	"fmt"
 	"net"
+	"strings"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // MetricType is the type of statsd metric
@@ -77,23 +80,36 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 		return
 	}
 
-	var t string
+	var (
+		t, v   string
+		packet string
+	)
+
+	// NOTE: ":" is not allowed since it will be treated as value eg. in case daemonID is in form NUMBER:NUMBER
+	bucket = strings.Replace(bucket, ":", "_", -1)
 
 	for _, m := range metrics {
 		switch m.Type {
 		case Timer:
+			v = fmt.Sprintf("%v", m.Value)
 			t = "ms"
 		case Counter:
-			t = "c"
+			v = fmt.Sprintf("+%v", m.Value)
+			t = "g"
 		case Gauge:
+			v = fmt.Sprintf("%v", m.Value)
 			t = "g"
 		default:
-			t = ""
-			// Do nothing
-			// Hopefully the caller will notice he/she's stats won't show up in Graphite or Datadog, etc
+			cmn.Assert(false, m.Type)
 		}
-		if t != "" {
-			c.conn.Write([]byte(fmt.Sprintf("%s.%s.%s:%v|%s", c.prefix, bucket, m.Name, m.Value, t)))
+
+		if packet != "" {
+			packet += "\n"
 		}
+		packet += fmt.Sprintf("%s.%s.%s:%s|%s", c.prefix, bucket, m.Name, v, t)
+	}
+
+	if packet != "" {
+		c.conn.Write([]byte(packet))
 	}
 }

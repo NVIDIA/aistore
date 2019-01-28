@@ -1,26 +1,33 @@
 version: '3'
 services:
+  graphite:
+    image: graphiteapp/graphite-statsd
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
   proxy:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         - GOBASE=${GOPATH}
-        - TARGETS=${TARGET_CNT:-1000}
-        - CLDPROVIDER=${CLDPROVIDER}
-        - NODISKIO=${NODISKIO}
-        - NONETIO=${NONETIO}
-        - DRYOBJSIZE=${DRYOBJSIZE}
+        - TARGETS=${TARGET_CNT-1000}
+        - CLDPROVIDER=${CLDPROVIDER-}
+        - NODISKIO=${NODISKIO-false}
+        - NONETIO=${NONETIO-false}
+        - DRYOBJSIZE=${DRYOBJSIZE-8MB}
     networks:
-        public:
+      - public
+      - docker_default
     environment:
       - ROLE=proxy
-      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY}
+      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY-false}
     env_file:
       - /tmp/docker_ais/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - ${HOST_CONTAINER_PATH}:/tmp/ais
+      - ${HOST_CONTAINER_PATH-}:/tmp/ais
   target:
     build:
       context: .
@@ -28,24 +35,27 @@ services:
       args:
         - GOBASE=${GOPATH}
         - TARGETS=${TARGET_CNT:-1000}
-        - CLDPROVIDER=${CLDPROVIDER}
-        - NODISKIO=${NODISKIO}
-        - NONETIO=${NONETIO}
-        - DRYOBJSIZE=${DRYOBJSIZE}
+        - CLDPROVIDER=${CLDPROVIDER-}
+        - NODISKIO=${NODISKIO-false}
+        - NONETIO=${NONETIO-false}
+        - DRYOBJSIZE=${DRYOBJSIZE-8MB}
     networks:
-        public:
+      - public
+      - docker_default
     environment:
       - ROLE=target
     env_file:
       - /tmp/docker_ais/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - ${HOST_CONTAINER_PATH}:/tmp/ais
+      - ${HOST_CONTAINER_PATH-}:/tmp/ais
 networks:
+  docker_default:
+    external: true
   public:
     driver: bridge
     ipam:
       driver: default
       config:
         -
-          subnet: ${PUB_SUBNET}
+          subnet: ${PUB_SUBNET:-172.5.0.0/24}

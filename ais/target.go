@@ -305,6 +305,7 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.PutLatency, stats.KindLatency)
 	t.statsif.Register(stats.GetColdCount, stats.KindCounter)
 	t.statsif.Register(stats.GetColdSize, stats.KindCounter)
+	t.statsif.Register(stats.GetThroughput, stats.KindCounter)
 	t.statsif.Register(stats.LruEvictSize, stats.KindCounter)
 	t.statsif.Register(stats.LruEvictCount, stats.KindCounter)
 	t.statsif.Register(stats.TxCount, stats.KindCounter)
@@ -319,12 +320,17 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.ErrCksumSize, stats.KindCounter)
 	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
 	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
+	// rebalance
 	t.statsif.Register(stats.RebalGlobalCount, stats.KindCounter)
 	t.statsif.Register(stats.RebalLocalCount, stats.KindCounter)
 	t.statsif.Register(stats.RebalGlobalSize, stats.KindCounter)
 	t.statsif.Register(stats.RebalLocalSize, stats.KindCounter)
+	// replication
 	t.statsif.Register(stats.ReplPutCount, stats.KindCounter)
 	t.statsif.Register(stats.ReplPutLatency, stats.KindLatency)
+	// download
+	t.statsif.Register(stats.DownloadSize, stats.KindCounter)
+	t.statsif.Register(stats.DownloadLatency, stats.KindLatency)
 }
 
 // stop gracefully
@@ -791,6 +797,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		buf         []byte
 		rangeReader io.ReadSeeker
 		reader      io.Reader
+		written     int64
 		err         error
 		errstr      string
 	)
@@ -876,8 +883,9 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}
 
-	written, err := io.CopyBuffer(w, reader, buf)
 	if !dryRun.network {
+		written, err = io.CopyBuffer(w, reader, buf)
+	} else {
 		written, err = io.CopyBuffer(ioutil.Discard, reader, buf)
 	}
 	if err != nil {
@@ -904,7 +912,10 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}
 
 	delta := time.Since(started)
-	t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
+	t.statsif.AddMany(
+		stats.NamedVal64{Name: stats.GetThroughput, Val: int64(float64(written) / delta.Seconds())},
+		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
+	)
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
@@ -2206,7 +2217,6 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 
 // TODO: this function is for now unused because replication does not work
 func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replicaSrc string) (errstr string) {
-
 	var (
 		started = time.Now()
 		islocal = t.bmdowner.get().IsLocal(bucket)

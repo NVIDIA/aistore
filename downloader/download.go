@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 // =============================== Summary ====================================
@@ -120,13 +121,14 @@ type (
 		cmn.NamedID
 		cmn.XactDemandBase
 
+		t          cluster.Target
+		mountpaths *fs.MountedFS
+		stats      stats.Tracker
+
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
 		downloadCh chan *task
-
 		joggers    map[string]*jogger // mpath -> jogger
-		mountpaths *fs.MountedFS
-		T          cluster.Target
 	}
 )
 
@@ -157,7 +159,7 @@ type (
 	// task embeds cmn.XactBase, but it is not part of the targetrunner's xactions member
 	// variable. Instead, Downloader manages the lifecycle of the extended action.
 	task struct {
-		t cluster.Target
+		parent *Downloader
 		*request
 
 		sync.Mutex
@@ -291,13 +293,14 @@ func (d *Downloader) removeJogger(mpath string) {
 /*
  * Downloader constructors
  */
-func NewDownloader(t cluster.Target, f *fs.MountedFS, id int64, kind, bucket string) (d *Downloader) {
+func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind, bucket string) (d *Downloader) {
 	return &Downloader{
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
 		downloadCh:     make(chan *task),
 		joggers:        make(map[string]*jogger, 8),
-		T:              t,
+		t:              t,
+		stats:          stats,
 		mountpaths:     f,
 		XactDemandBase: *cmn.NewXactDemandBase(id, kind, bucket),
 	}
@@ -324,7 +327,7 @@ func (d *Downloader) init() {
 
 func (d *Downloader) Run() error {
 	glog.Infof("Starting %s", d.Getname())
-	d.T.GetFSPRG().Reg(d)
+	d.t.GetFSPRG().Reg(d)
 	d.init()
 Loop:
 	for {
@@ -363,7 +366,7 @@ Loop:
 
 // Stop terminates the downloader
 func (d *Downloader) Stop(err error) {
-	d.T.GetFSPRG().Unreg(d)
+	d.t.GetFSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
 	for _, jogger := range d.joggers {
 		jogger.stop()
@@ -379,7 +382,7 @@ func (d *Downloader) Stop(err error) {
 func (d *Downloader) Download(body *cmn.DlBody) (resp string, err error, statusCode int) {
 	d.IncPending()
 	t := &task{
-		t: d.T,
+		parent: d,
 		request: &request{
 			action:     taskDownload,
 			link:       body.Link,
@@ -439,7 +442,7 @@ func (d *Downloader) Status(body *cmn.DlBody) (resp string, err error, statusCod
  */
 
 func (d *Downloader) dispatchDownload(t *task) {
-	lom := &cluster.LOM{T: d.T, Bucket: t.bucket, Objname: t.objname}
+	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.objname}
 	errstr := lom.Fill(cluster.LomFstat)
 	if errstr != "" {
 		t.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
@@ -466,7 +469,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 }
 
 func (d *Downloader) dispatchCancel(req *request) {
-	lom := &cluster.LOM{T: d.T, Bucket: req.bucket, Objname: req.objname}
+	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
 	errstr := lom.Fill(cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
@@ -508,7 +511,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 }
 
 func (d *Downloader) dispatchStatus(req *request) {
-	lom := &cluster.LOM{T: d.T, Bucket: req.bucket, Objname: req.objname}
+	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
 	errstr := lom.Fill(cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
@@ -612,7 +615,7 @@ func (j *jogger) stop() {
 
 func (t *task) download() {
 	t.Lock()
-	lom := &cluster.LOM{T: t.t, Bucket: t.bucket, Objname: t.objname}
+	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.objname}
 	if errstr := lom.Fill(cluster.LomFstat); errstr != "" {
 		t.abort(errors.New(errstr))
 		t.Unlock()
@@ -648,6 +651,7 @@ func (t *task) download() {
 	if glog.V(4) {
 		glog.Infof("Starting download for %v", t)
 	}
+	started := time.Now()
 	response, err := httpClient.Do(requestWithContext)
 	if err != nil {
 		t.abort(err)
@@ -668,11 +672,15 @@ func (t *task) download() {
 		},
 	}
 
-	if err := t.t.Receive(postFQN, progressReader, lom); err != nil {
+	if err := t.parent.t.Receive(postFQN, progressReader, lom); err != nil {
 		t.abort(err)
 		return
 	}
 
+	t.parent.stats.AddMany(
+		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize},
+		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(started))},
+	)
 	t.finishedCh <- nil
 }
 
@@ -685,6 +693,7 @@ func (t *task) cancel() {
 }
 
 func (t *task) abort(err error) {
+	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 	t.finishedCh <- err
 }
 

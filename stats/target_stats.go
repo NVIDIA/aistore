@@ -24,13 +24,14 @@ import (
 )
 
 //
-// NOTE Naming Convention: "*.n" - counter, "*.μs" - latency, "*.size" - size (in bytes)
+// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes), "*.tps" - throughput
 //
 
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount     = "get.cold.n"
 	GetColdSize      = "get.cold.size"
+	GetThroughput    = "get.tps"
 	LruEvictSize     = "lru.evict.size"
 	LruEvictCount    = "lru.evict.n"
 	TxCount          = "tx.n"
@@ -48,11 +49,14 @@ const (
 	RebalGlobalSize  = "reb.global.size"
 	RebalLocalSize   = "reb.local.size"
 	ReplPutCount     = "repl.n"
+	DownloadSize     = "dl.size"
+
 	// KindLatency
-	PutLatency      = "put.μs"
-	GetRedirLatency = "get.redir.μs"
-	PutRedirLatency = "put.redir.μs"
+	PutLatency      = "put.µs"
+	GetRedirLatency = "get.redir.µs"
+	PutRedirLatency = "put.redir.µs"
 	ReplPutLatency  = "repl.µs"
+	DownloadLatency = "dl.µs"
 )
 
 //
@@ -309,17 +313,25 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
 	}
-	// target only
 	if v.kind == KindLatency {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
 	}
+	// target only
 	if strings.HasSuffix(name, ".size") {
 		nroot := strings.TrimSuffix(name, ".size")
 		s.StatsdC.Send(nroot,
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Counter, "bytes", val})
+			metric{Type: statsd.Counter, Name: "bytes", Value: val},
+			metric{Type: statsd.Counter, Name: "count", Value: 1},
+		)
 	}
+	if strings.HasSuffix(name, ".tps") {
+		nroot := strings.TrimSuffix(name, ".tps")
+		s.StatsdC.Send(nroot,
+			metric{Type: statsd.Gauge, Name: "throughput", Value: val},
+		)
+	}
+
 	v.Lock()
 	v.Value += val
 	v.Unlock()

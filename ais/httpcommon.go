@@ -1187,7 +1187,7 @@ func (h *httprunner) initStatsD(daemonStr string) (err error) {
 	suffix := strings.Replace(h.si.DaemonID, ":", "_", -1)
 	h.statsdC, err = statsd.New("localhost", 8125, daemonStr+"."+suffix)
 	if err != nil {
-		glog.Infoln("Failed to connect to StatsD daemon")
+		glog.Infof("Failed to connect to StatsD daemon: %v", err)
 	}
 	return
 }

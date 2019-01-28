@@ -33,28 +33,30 @@ const (
 // Stats common to ProxyCoreStats and targetCoreStats
 const (
 	// KindCounter
-	GetCount       = "get.n"
-	PutCount       = "put.n"
-	PostCount      = "pst.n"
-	DeleteCount    = "del.n"
-	RenameCount    = "ren.n"
-	ListCount      = "lst.n"
-	ErrCount       = "err.n"
-	ErrGetCount    = "err.get.n"
-	ErrDeleteCount = "err.delete.n"
-	ErrPostCount   = "err.post.n"
-	ErrPutCount    = "err.put.n"
-	ErrHeadCount   = "err.head.n"
-	ErrListCount   = "err.list.n"
-	ErrRangeCount  = "err.range.n"
+	GetCount         = "get.n"
+	PutCount         = "put.n"
+	PostCount        = "pst.n"
+	DeleteCount      = "del.n"
+	RenameCount      = "ren.n"
+	ListCount        = "lst.n"
+	ErrCount         = "err.n"
+	ErrGetCount      = "err.get.n"
+	ErrDeleteCount   = "err.delete.n"
+	ErrPostCount     = "err.post.n"
+	ErrPutCount      = "err.put.n"
+	ErrHeadCount     = "err.head.n"
+	ErrListCount     = "err.list.n"
+	ErrRangeCount    = "err.range.n"
+	ErrDownloadCount = "err.dl.n"
+
 	// KindLatency
-	GetLatency          = "get.μs"
-	ListLatency         = "lst.μs"
-	KeepAliveMinLatency = "kalive.μs.min"
-	KeepAliveMaxLatency = "kalive.μs.max"
-	KeepAliveLatency    = "kalive.μs"
+	GetLatency          = "get.µs"
+	ListLatency         = "lst.µs"
+	KeepAliveMinLatency = "kalive.µs.min"
+	KeepAliveMaxLatency = "kalive.µs.max"
+	KeepAliveLatency    = "kalive.µs"
 	// KindSpecial
-	Uptime = "up.μs.time"
+	Uptime = "up.µs.time"
 )
 
 //
@@ -171,6 +173,7 @@ func (tracker statsTracker) registerCommonStats() {
 	tracker.register(ErrHeadCount, KindCounter, true)
 	tracker.register(ErrListCount, KindCounter, true)
 	tracker.register(ErrRangeCount, KindCounter, true)
+	tracker.register(ErrDownloadCount, KindCounter, true)
 	//
 	tracker.register(Uptime, KindSpecial, true)
 }
