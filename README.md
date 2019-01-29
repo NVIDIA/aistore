@@ -106,7 +106,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](docs/http_api.md). The generated package will cover the entire functionality of the API.
 
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. It is used to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml).
+> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml).
 
 To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package). 
 
