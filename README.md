@@ -46,6 +46,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [Fast Tier](#fast-tier)
     - [Other Services](#other-services)
     - [dSort](#dsort)
+    - [Python Client](#python-client)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
     - [Local Non-containerized](#local-non-containerized)
@@ -101,7 +102,7 @@ DSort “views” AIS objects as named shards that comprise archived key/value d
 
 By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. Which ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
-### python client
+### Python Client
 
 [OpenAPI Generator](https://github.com/openapitools/openapi-generator) provides a way to generate a python client package for simplified integration with the RESTful API. The user can, after following a few simple steps, import it to start communicating with the [RESTful API](docs/http_api.md). The package works by providing an easy-to-use interface, that covers the entire functionality of the RESTful API.
 
