@@ -104,13 +104,68 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 ### Python Client
 
-[OpenAPI Generator](https://github.com/openapitools/openapi-generator) provides a way to generate a python client package for simplified integration with the RESTful API. The user can, after following a few simple steps, import it to start communicating with the [RESTful API](docs/http_api.md). The package works by providing an easy-to-use interface, that covers the entire functionality of the RESTful API.
+AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](docs/http_api.md). The generated package will cover the entire functionality of the API.
 
-To get started with the python client package, you will need to first follow [the instructions for generating the python package with OpenAPI Generator](swagger/README.md#how-to-generate-package). This creates a python package from an [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml), which should fully describe the RESTful API. Should you have any difficulty generating the python client package using OpenAPI Generator, please open a ticket, and we will provide assistance. 
+> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. It is used to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml).
 
-Once the package is generated, it can be [installed with pip following these instrutions](swagger/README.md#how-to-install), and then you will be ready to use the package to communicate the RESTful API.
+To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package). 
 
-A complete guide on how to use the python client package can be found [here](swagger/README.md#how-to-use-package).
+1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
+    
+    ```shell
+    wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
+    ```
+
+2. Run the following commands:
+
+    ```shell
+    cd <path_to_repo>
+    java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/rest-api-specification.yaml -g python -o ./python-client/
+    ```
+
+3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
+
+4. Install required Python packages using `pip` and requirement files located in `python-client` directory:
+
+    ```shell
+    pip install -r python-client/requirements.txt
+    pip install -r python-client/test-requirements.txt
+    ```
+
+These steps should produce the python client package, which will be located [here](python-client).
+
+Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
+
+Once the package is generated, it can be installed as follows, these commands can also be found [here](swagger/README.md#how-to-install).
+
+```shell
+cd <path_to_repo>/python-client
+pip uninstall openapi_client #uninstalls any previous versions
+pip install .
+```
+
+Now you're ready to import the package in python and use it to communicate with AIS.
+
+For example, this script will display a map of your AIS cluster.
+
+```shell
+import openapi_client
+#Some aliases for functions in the package
+openapi_models = openapi_client.models
+openapi_params = openapi_models.InputParameters
+openapi_actions = openapi_models.Actions
+
+configuration = openapi_client.Configuration()
+configuration.debug = False
+proxy_url = 'localhost:8080' #Change this to the ip of any proxy in your AIS cluster, ex: 172.50.0.2:8080
+configuration.host = 'http://%s/v1/' % proxy_url
+proxyClient = openapi_client.ApiClient(configuration)
+
+daemon_api = openapi_client.api.daemon_api.DaemonApi(proxyClient)
+print(daemon_api.get(openapi_models.GetWhat.SMAP))
+```
+
+There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](swagger/README.md#how-to-use-package).
 
 ## Prerequisites
 

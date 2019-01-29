@@ -54,9 +54,7 @@ const (
 	atimeGet   = "get"
 )
 
-//================================= Global Variables ==========================================
-// atimeSyncTime is used to determine how often flushes occur.
-var atimeSyncTime = time.Minute * 1
+var atimeSyncTime = time.Minute * 2 // TODO: adjust at runtime
 
 //
 // API types
