@@ -177,7 +177,7 @@ First, create an api instance `bucketAPI = openapi_client.api.bucket_api.BucketA
 | Evict a range of objects | `bucketAPI.delete('mybucket', openapi_params(openapi_actions.EVICT, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
 | Get bucket props (proxy) | `bucketAPI.get_properties_with_http_info('mybucket')[2]` | dict |
 
-<a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the local buckets, this causes the cloud property to be the empty array
+<a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the local buckets, this causes the `cloud` property to be the empty array
 
 <a name="ftb2">2</a>: See the [List Bucket section](../docs/list_bucket.md#list-bucket) for details. 
 
