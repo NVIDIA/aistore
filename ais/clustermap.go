@@ -318,16 +318,16 @@ func (sls *smaplisteners) Unreg(sl cluster.Slistener) {
 	sls.Lock()
 	l := len(sls.listeners)
 	for k := 0; k < l; k++ {
-		if sls.listeners[k] == sl {
-			if k < l-1 {
-				copy(sls.listeners[k:], sls.listeners[k+1:])
-			}
-			sls.listeners[l-1] = nil
-			sls.listeners = sls.listeners[:l-1]
-			sls.Unlock()
-			glog.Infof("unregistered smap-listener %s", sl)
-			return
+		if sls.listeners[k] != sl {
+			continue
 		}
+
+		sls.listeners[k] = sls.listeners[l-1]
+		sls.listeners[l-1] = nil
+		sls.listeners = sls.listeners[:l-1]
+		sls.Unlock()
+		glog.Infof("unregistered smap-listener %s", sl)
+		return
 	}
 	sls.Unlock()
 	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))

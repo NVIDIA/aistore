@@ -66,7 +66,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
-	targetOrder := randomTargetOrder(s, m.ctx.smap.Get().Tmap)
+	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	glog.V(4).Infof("final target in targetOrder => URL: %s, Daemon ID: %s",
 		targetOrder[len(targetOrder)-1].PublicNet.DirectURL, targetOrder[len(targetOrder)-1].DaemonID)
 
@@ -120,7 +120,6 @@ func (m *Manager) start() (err error) {
 func (m *Manager) extractLocalShards() (err error) {
 	var (
 		mem                 = sigar.Mem{}
-		smap                = m.ctx.smap.Get()
 		maxMemoryToUse      = uint64(0)
 		totalExtractedCount = uint64(0)
 	)
@@ -208,7 +207,7 @@ ExtractAllShards:
 				defer m.releaseExtractGoroutineSema()
 
 				shardName := m.rs.InputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.InputFormat.DigitCount, i) + m.rs.InputFormat.Suffix + m.rs.Extension
-				si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, smap)
+				si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
 				if errStr != "" {
 					return errors.New(errStr)
 				}
@@ -373,7 +372,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	metrics.CreatedCnt++
 	metrics.Unlock()
 
-	si, errStr := cluster.HrwTarget(s.Bucket, s.Name, m.ctx.smap.Get())
+	si, errStr := cluster.HrwTarget(s.Bucket, s.Name, m.smap)
 	if errStr != "" {
 		return errors.New(errStr)
 	}
@@ -628,10 +627,9 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		baseURL         string
 		ext             = m.fileExtension
 		wg              = &sync.WaitGroup{}
-		smap            = m.ctx.smap.Get()
-		errCh           = make(chan error, smap.CountTargets())
-		shardsToTarget  = make(map[string][]*extract.Shard, smap.CountTargets())
-		numLocalRecords = make(map[string]int, smap.CountTargets())
+		errCh           = make(chan error, m.smap.CountTargets())
+		shardsToTarget  = make(map[string][]*extract.Shard, m.smap.CountTargets())
+		numLocalRecords = make(map[string]int, m.smap.CountTargets())
 	)
 
 	if maxSize <= 0 {
@@ -640,7 +638,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
 	}
 
-	for _, d := range smap.Tmap {
+	for _, d := range m.smap.Tmap {
 		numLocalRecords[d.URL(cmn.NetworkIntraData)] = 0
 		shardsToTarget[d.URL(cmn.NetworkIntraData)] = nil
 	}
@@ -658,14 +656,14 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 		if m.extractCreator.UsingCompression() {
 			daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
-			baseURL = m.ctx.smap.Get().Tmap[daemonID].URL(cmn.NetworkIntraData)
+			baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
 		} else {
 			// If output shards are not compressed, there will always be less
 			// data sent over the network if the shard is constructed on the
 			// correct HRW target as opposed to constructing it on the target
 			// with optimal file content locality and then sent to the correct
 			// target.
-			si, errStr := cluster.HrwTarget(m.rs.Bucket, shard.Name, smap)
+			si, errStr := cluster.HrwTarget(m.rs.Bucket, shard.Name, m.smap)
 			if errStr != "" {
 				return errors.New(errStr)
 			}

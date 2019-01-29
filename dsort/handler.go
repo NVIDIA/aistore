@@ -148,6 +148,10 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	allMetrics := make(map[string]*Metrics, len(targets))
 	for _, resp := range responses {
+		if resp.statusCode == http.StatusNotFound {
+			// Probably new target which does not know anything about this dsort op.
+			continue
+		}
 		if resp.err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, resp.err.Error(), resp.statusCode)
 			return
@@ -437,7 +441,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, exists := Managers.Get(managerUUID)
+	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
@@ -498,8 +502,9 @@ func broadcast(method, path string, body []byte, nodes cluster.NodeMap, ignore .
 		req, err := http.NewRequest(method, url+path, buffer)
 		if err != nil {
 			responses[idx] = response{
-				si:  node,
-				err: err,
+				si:         node,
+				err:        err,
+				statusCode: http.StatusInternalServerError,
 			}
 			return
 		}
@@ -510,17 +515,19 @@ func broadcast(method, path string, body []byte, nodes cluster.NodeMap, ignore .
 		resp, err := client.Do(req)
 		if err != nil {
 			responses[idx] = response{
-				si:  node,
-				err: err,
+				si:         node,
+				err:        err,
+				statusCode: resp.StatusCode,
 			}
 			return
 		}
 		out, err := ioutil.ReadAll(resp.Body)
 
 		responses[idx] = response{
-			si:  node,
-			res: out,
-			err: err,
+			si:         node,
+			res:        out,
+			err:        err,
+			statusCode: resp.StatusCode,
 		}
 	}
 

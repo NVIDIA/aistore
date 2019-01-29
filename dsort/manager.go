@@ -57,6 +57,8 @@ var (
 		}
 		go mem.Run()
 	}
+
+	_ cluster.Slistener = &Manager{}
 )
 
 type dsortContext struct {
@@ -71,6 +73,7 @@ type dsortContext struct {
 type progressState struct {
 	inProgress bool
 	aborted    bool
+	cleaned    int32
 	wg         *sync.WaitGroup
 	// doneCh is closed when the job is aborted so that goroutines know when
 	// they need to stop.
@@ -91,8 +94,9 @@ type Manager struct {
 	ManagerUUID string   `json:"manager_uuid"`
 	Metrics     *Metrics `json:"metrics"`
 
-	mu  sync.Mutex
-	ctx dsortContext
+	mu   sync.Mutex
+	ctx  dsortContext
+	smap *cluster.Smap
 
 	recManager         *extract.RecordManager
 	shardManager       *extract.ShardManager
@@ -158,9 +162,12 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// time some manager will be initialized.
 	once.Do(initOnce)
 
+	// smap, nameLocker setup
 	m.ctx = ctx
-	smap := m.ctx.smap.Get()
-	targetCount := smap.CountTargets()
+	m.smap = m.ctx.smap.Get()
+	m.ctx.smap.Listeners().Reg(m)
+	targetCount := m.smap.CountTargets()
+
 	m.rs = rs
 	m.Metrics = newMetrics(rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
@@ -220,8 +227,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
 	// we will know that all daemons have finished operation).
-	m.finishedAck.m = make(map[string]struct{}, smap.CountTargets())
-	for sid := range smap.Tmap {
+	m.finishedAck.m = make(map[string]struct{}, targetCount)
+	for sid := range m.smap.Tmap {
 		m.finishedAck.m[sid] = struct{}{}
 	}
 
@@ -338,6 +345,10 @@ func (m *Manager) cleanupStreams() error {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
+	if !atomic.CompareAndSwapInt32(&m.state.cleaned, 0, 1) {
+		return // do not clean if already scheduled
+	}
+
 	m.lock()
 	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
@@ -357,6 +368,8 @@ func (m *Manager) cleanup() {
 	extract.FreeMemory()
 	m.client = nil
 
+	m.ctx.smap.Listeners().Unreg(m)
+
 	if !m.aborted() {
 		m.updateFinishedAck(m.ctx.node.DaemonID)
 	}
@@ -366,11 +379,14 @@ func (m *Manager) cleanup() {
 // dSort operations. To ensure that finalCleanup is not invoked before regular
 // cleanup is finished, we also ack ourselves.
 func (m *Manager) finalCleanup() {
+	if !atomic.CompareAndSwapInt32(&m.state.cleaned, 1, 2) {
+		return // do not clean if already scheduled
+	}
+
 	if err := m.cleanupStreams(); err != nil {
 		glog.Error(err)
 	}
 	m.finishedAck.m = nil
-
 	Managers.persist(m.ManagerUUID)
 }
 
@@ -535,7 +551,7 @@ func (m *Manager) setInProgressTo(inProgress bool) {
 func (m *Manager) setAbortedTo(aborted bool) {
 	if aborted {
 		// If not finished and not yet aborted we should mark that we will wait.
-		if m.inProgress() && !m.state.aborted {
+		if m.inProgress() && !m.aborted() {
 			close(m.state.doneCh)
 			m.state.wg.Add(1)
 		}
@@ -645,7 +661,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 	}
 
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		fromNode := m.ctx.smap.Get().Tmap[string(hdr.Opaque)]
+		fromNode := m.smap.GetTarget(string(hdr.Opaque))
 		if err != nil {
 			errHandler(err, hdr, fromNode)
 			return
@@ -796,7 +812,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 					Objname: pathToContents,
 					Opaque:  []byte(m.ctx.node.DaemonID),
 				}
-				toNode = m.ctx.smap.Get().Tmap[daemonID]
+				toNode = m.smap.GetTarget(daemonID)
 			)
 
 			if m.Metrics.extended {
@@ -916,4 +932,20 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 
 	close(errCh)
 	return n, <-errCh
+}
+
+// SmapChanged implements Slistener interface
+func (m *Manager) SmapChanged() {
+	newSmap := m.ctx.smap.Get()
+	// check if some target has been removed - abort in case it does
+	for sid := range m.smap.Tmap {
+		if newSmap.GetTarget(sid) == nil {
+			go m.abort() // FIXME: once the smap notification logic will change we could remove `go`
+			return
+		}
+	}
+}
+
+func (m *Manager) String() string {
+	return m.ManagerUUID
 }

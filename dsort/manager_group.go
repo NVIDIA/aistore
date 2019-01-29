@@ -55,13 +55,20 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 }
 
 // Get gets manager with given mangerUUID. When manager with given uuid does not
-// exists, it looks for it in presistent storage and returns it if found. Returns
-// false if does not exist, true otherwise.
-func (mg *ManagerGroup) Get(managerUUID string) (*Manager, bool) {
+// exists and user requested persisted lookup, it looks for it in presistent
+// storage and returns it if found. Returns false if does not exist, true
+// otherwise.
+func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
+	var allowPersisted bool
+
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
+	if len(ap) > 0 {
+		allowPersisted = ap[0]
+	}
+
 	manager, exists := mg.managers[managerUUID]
-	if !exists {
+	if !exists && allowPersisted {
 		config := cmn.GCO.Get()
 		db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
 		if err != nil {

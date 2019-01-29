@@ -76,7 +76,7 @@ var _ = Describe("ManagerGroup", func() {
 		ctx.smap = newTestSmap("target")
 		ctx.node = ctx.smap.Get().Tmap["target"]
 
-		It("should persist manager when requested", func() {
+		It("should persist manager but not return by default", func() {
 			m, err := mgrp.Add("uuid")
 			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
 			m.init(rs)
@@ -86,6 +86,20 @@ var _ = Describe("ManagerGroup", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			mgrp.persist("uuid")
 			m, exists := mgrp.Get("uuid")
+			Expect(exists).To(BeFalse())
+			Expect(m).To(BeNil())
+		})
+
+		It("should persist manager and return it when requested", func() {
+			m, err := mgrp.Add("uuid")
+			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
+			m.init(rs)
+			m.unlock()
+			m.setInProgressTo(false)
+
+			Expect(err).ShouldNot(HaveOccurred())
+			mgrp.persist("uuid")
+			m, exists := mgrp.Get("uuid", true /*allowPersisted*/)
 			Expect(exists).To(BeTrue())
 			Expect(m).ToNot(BeNil())
 			Expect(m.ManagerUUID).To(Equal("uuid"))
