@@ -19,7 +19,7 @@ At startup AIStore daemons, both targets and gateways, try to UDP-ping their res
 
 If StatsD daemon is *not* listening on the local 8125, the local AIS target (or proxy) will then run without StatsD, and the corresponding stats won't be captured and won't be visualized.
 
-> For details on all StatsD-supported backends, prease refer to [this document](https://github.com/etsy/statsd/blob/master/docs/backend.md).
+> For details on all StatsD-supported backends, please refer to [this document](https://github.com/etsy/statsd/blob/master/docs/backend.md).
 
 ## Conventions
 
@@ -30,7 +30,7 @@ All AIS metric names (or simply, metrics) are logged and reported to the StatsD/
 * `aisproxy.<daemon_id>`
 * `aistarget.<daemon_id>`
 or
-* `aisloader.<ip>.<loader_id>`
+* `aisloader.<hostname>-<id>`
 
 and `metric_type` is `ms` for time duration, `c` for a counter, and `g` for a gauge.
 
@@ -92,10 +92,6 @@ AIS target metrics include **all** of the proxy metrics (see above), plus the fo
 
 > For the most recently updated list of counters, please refer to [the source](../stats/target_stats.go)
 
-A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:
-
-![Target metrics](images/target-statsd-grafana.png)
-
 ### AIS loader metrics
 
 AIS loader generates metrics for 3 (three) types of requests:
@@ -112,21 +108,22 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 | Name | Comment |
 | --- | --- |
-| `aisloader.<ip>.<loader_id>.get.pending.<value>` | number of unfinished GET requests waiting in a queue (updated after every completed request) |
-| `aisloader.<ip>.<loader_id>.get.count.1` | total number of requests |
-| `aisloader.<ip>.<loader_id>.get.error.1` | total number of failed requests |
-| `aisloader.<ip>.<loader_id>.get.throughput.<value>` | total size of received objects |
-| `aisloader.<ip>.<loader_id>.get.latency.<value>` | request latency = (request initialized, data transfer successfully completes) |
-| `aisloader.<ip>.<loader_id>.get.latency.proxyconn.<value>` | (request started, connected to a proxy) |
-| `aisloader.<ip>.<loader_id>.get.latency.proxy.<value>` | (connected to proxy, proxy redirected) |
-| `aisloader.<ip>.<loader_id>.get.latency.targetconn.<value>` | (proxy redirected, connected to target) |
-| `aisloader.<ip>.<loader_id>.get.latency.target.<value>` | (connected to target, target responded) |
-| `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>` | (target responded, data transfer completed) |
-| `aisloader.<ip>.<loader_id>.get.latency.proxyheader.<value>` | (proxy makes a connection, proxy finishes writing headers to the connection) |
-| `aisloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>` | (proxy finishes writing headers, proxy completes writing request to the connection) |
-| `aisloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>` | (proxy finishes writing request to a connection, proxy gets the first bytes of the response) |
-| `aisloader.<ip>.<loader_id>.get.latency.targetheader.<value>` | (target makes a connection, target finishes writing headers to the connection) |
-| `aisloader.<ip>.<loader_id>.get.latency.targetrequest.<value>` | (target finishes writing headers, target completes writing request to the connection) |
+| `aisloader.<hostname>-<id>.get.pending.<value>` | number of unfinished GET requests waiting in a queue (updated after every completed request) |
+| `aisloader.<hostname>-<id>.get.count.1` | total number of requests |
+| `aisloader.<hostname>-<id>.get.error.1` | total number of failed requests |
+| `aisloader.<hostname>-<id>.get.throughput.<value>` | total size of received objects |
+| `aisloader.<hostname>-<id>.get.latency.<value>` | request latency = (request initialized, data transfer successfully completes) |
+| `aisloader.<hostname>-<id>.get.latency.proxyconn.<value>` | (request started, connected to a proxy) |
+| `aisloader.<hostname>-<id>.get.latency.proxy.<value>` | (connected to proxy, proxy redirected) |
+| `aisloader.<hostname>-<id>.get.latency.targetconn.<value>` | (proxy redirected, connected to target) |
+| `aisloader.<hostname>-<id>.get.latency.target.<value>` | (connected to target, target responded) |
+| `aisloader.<hostname>-<id>.get.latency.posthttp.<value>` | (target responded, data transfer completed) |
+| `aisloader.<hostname>-<id>.get.latency.proxyheader.<value>` | (proxy makes a connection, proxy finishes writing headers to the connection) |
+| `aisloader.<hostname>-<id>.get.latency.proxyrequest.<value>` | (proxy finishes writing headers, proxy completes writing request to the connection) |
+| `aisloader.<hostname>-<id>.get.latency.proxyresponse.<value>` | (proxy finishes writing request to a connection, proxy gets the first bytes of the response) |
+| `aisloader.<hostname>-<id>.get.latency.targetheader.<value>` | (target makes a connection, target finishes writing headers to the connection) |
+| `aisloader.<hostname>-<id>.get.latency.targetrequest.<value>` | (target finishes writing headers, target completes writing request to the connection) |
+| `aisloader.<hostname>-<id>.get.latency.targetresponse.<value>` | (target finishes writing request, proxy gets the first bytes of the response) |
 
 #### PUT object
 
@@ -134,21 +131,22 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 | Name | Comment |
 | --- | --- |
-| `aisloader.<ip>.<loader_id>.put.pending.<value>` | number of unfinished PUT requests waiting in a queue (updated after every completed request) |
-| `aisloader.<ip>.<loader_id>.put.count.1` | total number of requests |
-| `aisloader.<ip>.<loader_id>.put.error.1` | total number of failed requests |
-| `aisloader.<ip>.<loader_id>.put.throughput.<value>` | total size of objects PUT into a bucket |
-| `aisloader.<ip>.<loader_id>.put.latency.<value>` | request latency = (request initialized, data transfer successfully complete) |
-| `aisloader.<ip>.<loader_id>.put.latency.proxyconn.<value>` | (request started, connected to proxy) |
-| `aisloader.<ip>.<loader_id>.put.latency.proxy.<value>` | (connected to proxy, proxy redirected) |
-| `aisloader.<ip>.<loader_id>.put.latency.targetconn.<value>` | (proxy redirected, connected to target) |
-| `aisloader.<ip>.<loader_id>.put.latency.target.<value>` | (connected to target, target responded) |
-| `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>` | (target responded, data transfer completed) |
-| `aisloader.<ip>.<loader_id>.put.latency.proxyheader.<value>` | (proxy makes a connection, proxy finishes writing headers) |
-| `aisloader.<ip>.<loader_id>.put.latency.proxyrequest.<value>` | (proxy finishes writing headers, proxy completes writing request) |
-| `aisloader.<ip>.<loader_id>.put.latency.proxyresponse.<value>` | (proxy finishes writing request, proxy gets the first bytes of the response) |
-| `aisloader.<ip>.<loader_id>.put.latency.targetheader.<value>` | (target makes a connection, target finishes writing headers) |
-| `aisloader.<ip>.<loader_id>.put.latency.targetrequest.<value>` | (target finishes writing headers, target completes writing request) |
+| `aisloader.<hostname>-<id>.put.pending.<value>` | number of unfinished PUT requests waiting in a queue (updated after every completed request) |
+| `aisloader.<hostname>-<id>.put.count.1` | total number of requests |
+| `aisloader.<hostname>-<id>.put.error.1` | total number of failed requests |
+| `aisloader.<hostname>-<id>.put.throughput.<value>` | total size of objects PUT into a bucket |
+| `aisloader.<hostname>-<id>.put.latency.<value>` | request latency = (request initialized, data transfer successfully complete) |
+| `aisloader.<hostname>-<id>.put.latency.proxyconn.<value>` | (request started, connected to proxy) |
+| `aisloader.<hostname>-<id>.put.latency.proxy.<value>` | (connected to proxy, proxy redirected) |
+| `aisloader.<hostname>-<id>.put.latency.targetconn.<value>` | (proxy redirected, connected to target) |
+| `aisloader.<hostname>-<id>.put.latency.target.<value>` | (connected to target, target responded) |
+| `aisloader.<hostname>-<id>.put.latency.posthttp.<value>` | (target responded, data transfer completed) |
+| `aisloader.<hostname>-<id>.put.latency.proxyheader.<value>` | (proxy makes a connection, proxy finishes writing headers) |
+| `aisloader.<hostname>-<id>.put.latency.proxyrequest.<value>` | (proxy finishes writing headers, proxy completes writing request) |
+| `aisloader.<hostname>-<id>.put.latency.proxyresponse.<value>` | (proxy finishes writing request, proxy gets the first bytes of the response) |
+| `aisloader.<hostname>-<id>.put.latency.targetheader.<value>` | (target makes a connection, target finishes writing headers) |
+| `aisloader.<hostname>-<id>.put.latency.targetrequest.<value>` | (target finishes writing headers, target completes writing request) |
+| `aisloader.<hostname>-<id>.put.latency.targetresponse.<value>` | (target finishes writing request, proxy gets the first bytes of the response) |
 
 #### Read cluster configuration
 
@@ -156,7 +154,11 @@ All latency metrics are in milliseconds, all sizes are always in bytes.
 
 | Name | Comment |
 | --- | --- |
-| `aisloader.<ip>.<loader_id>.getconfig.count.1` | total number of requests to read cluster settings |
-| `aisloader.<ip>.<loader_id>.getconfig.latency.<value>` | request latency = (read configuration request started, configuration received) |
-| `aisloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>` | (read configuration request started, connection to a proxy is made) |
-| `aisloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>` | (connection to a proxy is made, proxy redirected the request) |
+| `aisloader.<hostname>-<id>.getconfig.count.1` | total number of requests to read cluster settings |
+| `aisloader.<hostname>-<id>.getconfig.latency.<value>` | request latency = (read configuration request started, configuration received) |
+| `aisloader.<hostname>-<id>.getconfig.latency.proxyconn.<value>` | (read configuration request started, connection to a proxy is made) |
+| `aisloader.<hostname>-<id>.getconfig.latency.proxy.<value>` | (connection to a proxy is made, proxy redirected the request) |
+
+A somewhat outdated example of how these metrics show up in the Grafana dashboard follows:
+
+![AIS loader metrics](images/aisloader-statsd-grafana.png)

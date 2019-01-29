@@ -29,7 +29,6 @@ import (
 const (
 	requestBufSizeGlobal = 800
 	requestBufSizeFS     = 200
-	idleTime             = time.Second * 5
 )
 
 type (
@@ -110,9 +109,9 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 		MaxIdleConnsPerHost:   ncpu,
 	}}
 
-	extraReq := transport.Extra{IdleTimeout: idleTime, Callback: cbReq}
+	extraReq := transport.Extra{Callback: cbReq}
 	runner.reqBundle = transport.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, 4)
-	extraResp := transport.Extra{IdleTimeout: idleTime, Callback: nil}
+	extraResp := transport.Extra{}
 	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, &extraResp, cluster.Targets, 4)
 
 	// create all runners but do not start them until Run is called
