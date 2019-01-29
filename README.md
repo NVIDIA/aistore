@@ -13,7 +13,7 @@ The corollary of this statement is two-fold:
 - Instead of breaking the objects in pieces (and then reassembling them with the help of a carefully maintained metadata), the storage system must better focus on providing assistance to simplify and accelerate dataset transformations.
 
 ## Key Concepts and Diagrams
-In this section: high-level diagrams that introduce key concepts, the architecture, and possible deployment options.
+In this section: high-level diagrams that introduce key concepts and architecture, as well as possible deployment options.
 
 AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
 
@@ -21,11 +21,11 @@ AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gatew
 
 Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on any commodity hardware with pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
-The diagram depicting AIS clustered node follows below and makes the point to emphasize that gateways and storage targets can be colocated in a single machine (or a VM) but not necessarily:
+The diagram depicting AIS clustered node follows below, and makes the point that gateways and storage targets can be colocated in a single machine (or a VM) but not necessarily:
 
 <img src="docs/images/ais-host-20-block.png" alt="One AIS machine" width="400">
 
-AIS can be deployed as a self-contained standalone persistent storage cluster and/or as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction on a per-bucket basis based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
+AIS can be deployed as a self-contained standalone persistent storage cluster - and/or as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction on a per-bucket basis based on the monitored capacity and configurable high/low watermarks (see [LRU](docs/storage_svcs.md#lru)). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
 If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
@@ -55,7 +55,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 - [Selected Package READMEs](#selected-package-readmes)
 
 ## Overview
-All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
+In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
 <img src="docs/images/dp-schematics-direct.png" alt="Datapath schematics" width="400">
 
@@ -222,20 +222,20 @@ $ make rmcache
 Alternatively, run `make clean` to delete AIStore binaries and all (locally accumulated) AIStore data.
 
 ## Guides and References
-- [List/Range Operations](docs/batch.md)
-- [Object checksums: brief theory of operations](docs/checksum.md)
+- [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
+- [Object Checksums: Brief Theory of Operations](docs/checksum.md)
 - [Configuration](docs/configuration.md)
-- [Datapath](docs/datapath.md)
+- [Datapath: Read and Write Sequence Diagrams](docs/datapath.md)
 - [Highly Available Control Plane](docs/ha.md)
 - [How to Benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
 - [Joining a Cluster](docs/join_cluster.md)
-- [List Bucket](docs/list_bucket.md)
-- [Metrics with StatsD](docs/metrics.md)
-- [Performance](docs/performance.md)
-- [Rebalancing](docs/rebalance.md)
+- [List-Bucket operation](docs/list_bucket.md)
+- [Statistics, Collected Metrics, Visualization](docs/metrics.md)
+- [Performance Tuning and Performance Testing](docs/performance.md)
+- [Rebalancing (of the stored content in presence of a variety of events)](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
-- [Extended Actions (xactions)](docs/xaction.md)
+- [Extended Actions](docs/xaction.md)
 - [Experimental](docs/experimental.md)
 
 ## Selected Package READMEs

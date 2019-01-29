@@ -1,9 +1,9 @@
 ## Table of Contents
 - [Metrics with StatsD](#metrics-with-statsd)
-    - [Proxy metrics](#proxy-metrics)
-    - [Target Metrics](#target-metrics)
-    - [Disk Metrics](#disk-metrics)
-    - [Keepalive Metrics](#keepalive-metrics)
+    - [Proxy metrics: IO counters](#proxy-metrics-io-counters)
+    - [Proxy metrics: error counters](#proxy-metrics-error-counters)
+    - [Proxy metrics: latencies](#proxy-metrics-latencies)
+    - [Target metrics](#target-metrics)
     - [AIS Loader Metrics](#ais-loader-metrics)
 
 ## Metrics with StatsD
@@ -22,83 +22,90 @@ where `prefix` is one of: `aisproxy.<daemon_id>`, `aistarget.<daemon_id>`, or `a
 
 Metrics that AIStore generates are named and grouped as follows:
 
-### Proxy metrics
+### Proxy metrics: IO counters
 
-* `aisproxy.<daemon_id>.get.count.1|c`
-* `aisproxy.<daemon_id>.get.latency.<value>|ms`
-* `aisproxy.<daemon_id>.put.count.1|c`
-* `aisproxy.<daemon_id>.put.latency.<value>|ms`
-* `aisproxy.<daemon_id>.delete.count.1|c`
-* `aisproxy.<daemon_id>.list.count.1|c`
-* `aisproxy.<daemon_id>.list.latency.<value>|ms`
-* `aisproxy.<daemon_id>.rename.count.1|c`
-* `aisproxy.<daemon_id>.cluster_post.count.1|c`
+All collected/tracked *counters* are 64-bit cumulative integers that continuously increment with each event that they (respectively) track.
+
+| Name | Comment |
+| --- | --- |
+| `aisproxy.<daemon_id>.get` | number of GET object requests |
+| `aisproxy.<daemon_id>.put` | number of PUT object requests |
+| `aisproxy.<daemon_id>.del` | number of DELETE object requests |
+| `aisproxy.<daemon_id>.lst` | number of LIST bucket requests |
+| `aisproxy.<daemon_id>.ren` | ... RENAME ... |
+| `aisproxy.<daemon_id>.pst` | ... POST ... |
+
+### Proxy metrics: error counters
+
+| Name | Comment |
+| --- | --- |
+| `aisproxy.<daemon_id>.err` | Total number of errors |
+| `aisproxy.<daemon_id>.err.get` | Number of GET object errors |
+| `aisproxy.<daemon_id>.err.put` | Number of PUT object errors |
+| `aisproxy.<daemon_id>.err.head` | Number of HEAD object errors |
+| `aisproxy.<daemon_id>.err.delete` | Number of DELETE object errors |
+| `aisproxy.<daemon_id>.err.list` | Number of LIST bucket errors |
+| `aisproxy.<daemon_id>.err.range` | ... RANGE ... |
+| `aisproxy.<daemon_id>.err.post` | ... POST ... |
+
+> For the most recently updated list of counters, please refer to [the source](stats/common_stats.go)
+
+### Proxy metrics: latencies
+
+All request latencies are reported to the StatsD/Graphite **in milliseconds**. Note that the same values are periodically (default=10s) logged in microseconds.
+
+| Name | Comment |
+| --- | --- |
+| `aisproxy.<daemon_id>.get` | GET object latency |
+| `aisproxy.<daemon_id>.lst` | LIST bucket latency |
+| `aisproxy.<daemon_id>.kalive` | Keep-Alive (roundtrip) latency |
 
 ### Target Metrics
 
-* `aistarget.<daemon_id>.get.count.1|c`
-* `aistarget.<daemon_id>.get.latency.<value>|ms`
-* `aistarget.<daemon_id>.get.cold.count.1|c`
-* `aistarget.<daemon_id>.get.cold.bytesloaded.<value>|c`
-* `aistarget.<daemon_id>.get.cold.vchanged.<value>|c`
-* `aistarget.<daemon_id>.get.cold.bytesvchanged.<value>|c`
-* `aistarget.<daemon_id>.put.count.1|c`
-* `aistarget.<daemon_id>.put.latency.<value>|ms`
-* `aistarget.<daemon_id>.delete.count.1|c`
-* `aistarget.<daemon_id>.list.count.1|c`
-* `aistarget.<daemon_id>.list.latency.<value>|ms`
-* `aistarget.<daemon_id>.rename.count.1|c`
-* `aistarget.<daemon_id>.evict.files.1|c`
-* `aistarget.<daemon_id>.evict.bytes.<value>|c`
-* `aistarget.<daemon_id>.rebalance.receive.files.1|c`
-* `aistarget.<daemon_id>.rebalance.receive.bytes.<value>|c`
-* `aistarget.<daemon_id>.rebalance.send.files.1|c`
-* `aistarget.<daemon_id>.rebalance.send.bytes.<value>|c`
-* `aistarget.<daemon_id>.error.badchecksum.xxhash.count.1|c`
-* `aistarget.<daemon_id>.error.badchecksum.xxhash.bytes.<value>|c`
-* `aistarget.<daemon_id>.error.badchecksum.md5.count.1|c`
-* `aistarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
+AIS target metrics include **all** of the proxy metrics (see above), plus the following:
 
-Example of how these metrics show up in a grafana dashboard:
+| Name | Comment |
+| --- | --- |
+| `aisproxy.<daemon_id>.get.cold` | number of cold-GET object requests |
+| `aisproxy.<daemon_id>.get.cold.size` | cold GET cumulative size (in bytes) |
+| `aisproxy.<daemon_id>.lru.evict` | number of LRU-evicted objects |
+| `aisproxy.<daemon_id>.tx` | number of objects sent by the target |
+| `aisproxy.<daemon_id>.tx.size` | cumulative size (in bytes) of all transmitted objects |
+| `aisproxy.<daemon_id>.rx` |  number of objects received by the target |
+| `aisproxy.<daemon_id>.rx.size` | cumulative size (in bytes) of all the received objects |
+
+> For the most recently updated list of counters, please refer to [the source](stats/target_stats.go)
+
+Example of how these metrics show up in a Grafana dashboard:
 
 ![Target metrics](images/target-statsd-grafana.png)
 
-### Disk Metrics
-
-* `aistarget.<daemon_id>.iostat_*.gauge.<value>|g`
-
-### Keepalive Metrics
-
-* `<prefix>.keepalive.heartbeat.<id>.delta.<value>|g`
-* `<prefix>.keepalive.heartbeat.<id>.count.1|c`
-* `<prefix>.keepalive.average.<id>.delta.<value>|g`
-* `<prefix>.keepalive.average.<id>.count.1|c`
-* `<prefix>.keepalive.average.<id>.reset.1|c`
-
 ### AIS Loader Metrics
 
-* `aisloader.<ip>.<loader_id>.get.pending.<value>|g`
-* `aisloader.<ip>.<loader_id>.get.count.1|c`
-* `aisloader.<ip>.<loader_id>.get.latency.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.throughput.<value>|c`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxy.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.target.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyheader.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetheader.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetrequest.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetresponse.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.error.1|c`
-* `aisloader.<ip>.<loader_id>.put.pending.<value>|g`
-* `aisloader.<ip>.<loader_id>.put.count.<value>|g`
-* `aisloader.<ip>.<loader_id>.put.latency.<value>|,s`
-* `aisloader.<ip>.<loader_id>.put.throughput.<value>|c`
-* `aisloader.<ip>.<loader_id>.put.error.1|c`
-* `aisloader.<ip>.<loader_id>.getconfig.count.1|c`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
+| Name | Comment |
+| --- | --- |
+| `aisloader.<ip>.<loader_id>.get.pending.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.count.1` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.throughput.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.proxyconn.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.proxy.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.targetconn.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.target.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.proxyheader.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.targetheader.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.targetrequest.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.latency.targetresponse.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.get.error.1` | ... |
+| `aisloader.<ip>.<loader_id>.put.pending.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.put.count.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.put.latency.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.put.throughput.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.put.error.1` | ... |
+| `aisloader.<ip>.<loader_id>.getconfig.count.1` | ... |
+| `aisloader.<ip>.<loader_id>.getconfig.latency.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>` | ... |
+| `aisloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>` | ... |
