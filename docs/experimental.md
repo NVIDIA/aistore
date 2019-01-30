@@ -13,7 +13,7 @@ There are features, capabilities and modules that we designate as _experimental_
 
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. AIStore WebDAV server is a reverse proxy (with interoperable WebDAV on the front and AIStore's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
 
-For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
+For information on how to run it and details, please refer to the [WebDAV README](../webdav/README.md).
 
 ### Multi-tiering
 
@@ -55,4 +55,4 @@ The picture below illustrates some of the aspects of replication service as far 
 
 ### Authentication
 
-Please see [AuthN documentation](authn/README.md).
+Please see [AuthN documentation](../authn/README.md).

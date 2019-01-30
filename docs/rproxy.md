@@ -1,6 +1,6 @@
 ### AIStore as an HTTP proxy
 
-1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](ais/setup/config.sh) prior to deployment.
+1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](../ais/setup/config.sh) prior to deployment.
 2. Set the environment variable `http_proxy` (supported by most UNIX systems) to the primary proxy URL of your AIStore cluster.
 
 ```shell

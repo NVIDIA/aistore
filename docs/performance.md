@@ -126,7 +126,7 @@ AIStore's primary goal is to scale with clustered drives. Therefore, the choice 
 
 ## Performance testing
 
-[AIStore load generator](docs/howto_benchmark.md) is a built-in tool to test performance. However, it won't show which local subsystem - disk or network - could be a bottleneck. AIStore provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then AIStore uses the environment variable.
+[AIStore load generator](../docs/howto_benchmark.md) is a built-in tool to test performance. However, it won't show which local subsystem - disk or network - could be a bottleneck. AIStore provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then AIStore uses the environment variable.
 
 If any kind of IO is disabled then AIStore sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
 

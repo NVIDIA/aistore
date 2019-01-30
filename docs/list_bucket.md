@@ -33,7 +33,7 @@ This request will produce an output that (in part) may look as follows:
 
 <img src="images/ais-ls-subdir.png" alt="AIStore list directory" width="440">
 
-For many more examples, please refer to the [test sources](ais/tests/) in the repository.
+For many more examples, please refer to the [test sources](../ais/tests/) in the repository.
 
 ### Example: Listing all pages
 
