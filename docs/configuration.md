@@ -20,7 +20,7 @@ and
 
 As shown above, the `test_fspaths` section of the configuration corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development.
 
-In production we use the an alternative configuration called `fspaths`: the section of the [config](ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem. 
+In production we use an alternative configuration called `fspaths`: the section of the [config](ais/setup/config.sh) that includes a number of local directories, whereby each directory is based on a different local filesystem.
 
 > Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules are enforced: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
 
@@ -56,8 +56,13 @@ Both a proxy and a storage target support the same set of runtime options but a 
 | validate_checksum_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
 | validate_checksum_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
 | checksum | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
+| enable_read_range_checksum | false | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
 | versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
+| validate_version_warm_get | false | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
 | fschecker_enabled | true | Enables and disables filesystem health checker (FSHC) |
+| mirror_enabled | false | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
+| mirror_burst_buffer | 512 | the maximum length of queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
+| mirror_util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
 
 ### Managing filesystems
 
@@ -73,11 +78,11 @@ To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` a
 
 ### Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL cerificate and key files respectively (see [AIStore configuration](ais/setup/config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](ais/setup/config.sh)).
 
 ### Filesystem Health Checker
 
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fschecker" of the [configuration](ais/setup/config.sh).
+Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](ais/setup/config.sh).
 
 When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
 
