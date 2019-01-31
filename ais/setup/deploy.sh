@@ -51,17 +51,12 @@ PROXYURL="http://localhost:$PORT"
 if $USE_HTTPS; then
 	PROXYURL="https://localhost:$PORT"
 fi
-LOGLEVEL=${LOGLEVEL:-3} # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/ais$NEXT_TIER"
 #### Authentication setup #########
 SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
 AUTHENABLED="${AUTHENABLED:-false}"
 AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
 AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
-NON_ELECTABLE=false
-MIRROR_ENABLED=false
-MIRROR_UTIL_THRESH=20
-IOSTAT_TIME="2s"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -69,7 +64,7 @@ IOSTAT_TIME="2s"
 #
 ###################################
 CONFDIR="$HOME/.ais$NEXT_TIER"
-TESTFSPATHCOUNT=1
+TEST_FSPATH_COUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
 	echo "Error: TCP port $PORT is not open (check if AIStore is already running)"
@@ -126,7 +121,7 @@ read testfspathcnt
 if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$testfspathcnt' is not a number"; exit 1
 fi
-TESTFSPATHCOUNT=$testfspathcnt
+TEST_FSPATH_COUNT=$testfspathcnt
 
 # If not specified, CLDPROVIDER it will be empty and build
 # will not include neither AWS nor GCP. As long as CLDPROVIDER
@@ -160,6 +155,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 for (( c=$START; c<=$END; c++ ))
 do
 	CONFDIR="$HOME/.ais$NEXT_TIER$c"
+	INSTANCE=$c
 	mkdir -p $CONFDIR
 	CONFFILE="$CONFDIR/ais.json"
 	LOGDIR="$LOGROOT/$c/log"
@@ -205,7 +201,7 @@ fi
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-	CONFDIR="$HOME/.ais$NEXT_TIER$c"
+	CONFDIR="$HOME/.ais${NEXT_TIER}$c"
 	CONFFILE="$CONFDIR/ais.json"
 
 	PROXY_PARAM="-config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2"
@@ -214,7 +210,7 @@ do
 	then
 		CMD=$EXE
 	else
-		CMD="$EXE -coverageTest -test.coverprofile ais$c.cov -test.outputdir $LOGROOT"
+		CMD="$EXE -coverageTest -test.coverprofile ais${c}.cov -test.outputdir $LOGROOT"
 	fi
 
 	if [ $c -eq 0 ]

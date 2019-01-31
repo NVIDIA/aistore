@@ -27,5 +27,3 @@ networks:
       config:
         -
           subnet: ${INT_DATA_SUBNET:-172.5.2.0/24}
-
-

@@ -59,10 +59,7 @@ valid_log_file_type() {
 
 # container_name_to_folder converts a container name to its respective log directory
 container_name_to_folder() {
-    temp_container_name=$1
-    temp_container_name="${temp_container_name:2}"
-    temp_container_name="/tmp/ais/$temp_container_name/log/"
-    directories=("${directories[@]}" "$temp_container_name")
+    directories=("${directories[@]}" "/tmp/ais/$1/log/")
 }
 
 # get_container_names gets the container names of all ais containers
@@ -76,7 +73,8 @@ get_container_names() {
                 echo Invalid container name format
                 exit 1
             fi
-            container_name_to_folder $container_name
+            id=`docker ps | grep $container_name | awk '{print $1}'` # get id of container
+            container_name_to_folder $id
         fi
     done
 }
@@ -230,7 +228,6 @@ else
     container_name_to_folder $container
 fi
 
-
 ################# Determine Log Files #################
 declare -a files=()
 for dir in "${directories[@]}"
@@ -238,7 +235,7 @@ do
     file_path_join $dir $log_file_name
 done
 
-if [ ${files[@]} -eq 0 ]; then
+if [ ${#files[@]} -eq 0 ]; then
     echo No valid log files found. Exiting...
 else
     command="$commandPrefix ${files[@]}"

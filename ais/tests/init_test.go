@@ -69,8 +69,8 @@ var (
 	usingFile                bool   // True if using file as reader backing
 
 	envVars        = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
-	primaryHostIP  = envVars["PRIMARYHOSTIP"]                // Host IP of primary cluster
-	nextTierHostIP = envVars["NEXTTIERHOSTIP"]               // IP of the next tier cluster
+	primaryHostIP  = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
+	nextTierHostIP = envVars["NEXT_TIER_HOST_IP"]            // IP of the next tier cluster
 	port           = envVars["PORT"]
 )
 

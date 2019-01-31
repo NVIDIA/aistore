@@ -42,40 +42,65 @@ is_size() {
     fi
 }
 
+save_env() {
+    echo "Public network: ${PUB_SUBNET}"
+    echo "Internal control network: ${INT_CONTROL_SUBNET}"
+    echo "Internal data network: ${INT_DATA_SUBNET}"
+    export PUB_SUBNET=${PUB_SUBNET}
+    export INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}
+    export INT_DATA_SUBNET=${INT_DATA_SUBNET}
+
+    echo "" > ${TMP_ENV}
+    echo "QUICK=${QUICK}" >> ${TMP_ENV}
+    echo "TARGET_CNT=${TARGET_CNT:-1000}" >> ${TMP_ENV}
+    echo "CLDPROVIDER=${CLDPROVIDER-}" >> ${TMP_ENV}
+    echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${TMP_ENV}
+    echo "FSPATHS=${FSPATHS}" >> ${TMP_ENV}
+
+    echo "NODISKIO=${NODISKIO-false}" >> ${TMP_ENV}
+    echo "NONETIO=${NONETIO-false}" >> ${TMP_ENV}
+    echo "DRYOBJSIZE=${DRYOBJSIZE-8m}" >> ${TMP_ENV}
+
+    echo "PROXYURL=http://${PUB_NET}.2:${PORT}" >> ${TMP_ENV}
+    echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}
+    echo "INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}" >> ${TMP_ENV}
+    echo "INT_DATA_SUBNET=${INT_DATA_SUBNET}" >> ${TMP_ENV}
+    echo "IPV4LIST=${IPV4LIST}" >> ${TMP_ENV}
+    echo "IPV4LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL}" >> ${TMP_ENV}
+    echo "IPV4LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA}" >> ${TMP_ENV}
+}
+
 save_setup() {
-    echo "" > $setup_file
+    echo "" > ${SETUP_FILE}
     echo "Saving setup"
-    echo "CLUSTER_CNT=$CLUSTER_CNT" >> $setup_file
-    echo "PROXY_CNT=$PROXY_CNT" >> $setup_file
-    echo "TARGET_CNT=$TARGET_CNT" >> $setup_file
-    echo "network=$network" >> $setup_file
+    echo "CLUSTER_CNT=$CLUSTER_CNT" >> ${SETUP_FILE}
+    echo "PROXY_CNT=$PROXY_CNT" >> ${SETUP_FILE}
+    echo "TARGET_CNT=$TARGET_CNT" >> ${SETUP_FILE}
+    echo "NETWORK=${NETWORK}" >> ${SETUP_FILE}
 
-    echo "CLDPROVIDER=$CLDPROVIDER" >> $setup_file
-    echo "aws_env=$aws_env" >> $setup_file
-    echo "USE_AWS=$USE_AWS" >> $setup_file
+    echo "CLOUD=$CLOUD" >> ${SETUP_FILE}
 
-    echo "DRYRUN"=$DRYRUN >> $setup_file
-    echo "NODISKIO"=$NODISKIO >> $setup_file
-    echo "NONETIO"=$NONETIO >> $setup_file
-    echo "DRYOBJSIZE"=$DRYOBJSIZE >> $setup_file
+    echo "DRYRUN"=$DRYRUN >> ${SETUP_FILE}
+    echo "NODISKIO"=$NODISKIO >> ${SETUP_FILE}
+    echo "NONETIO"=$NONETIO >> ${SETUP_FILE}
+    echo "DRYOBJSIZE"=$DRYOBJSIZE >> ${SETUP_FILE}
 
-    echo "FS_LIST=$FS_LIST" >> $setup_file
-    echo "TESTFSPATHCOUNT=$TESTFSPATHCOUNT" >> $setup_file
-    echo "FSPATHS=$FSPATHS" >> $setup_file
+    echo "FS_LIST=$FS_LIST" >> ${SETUP_FILE}
+    echo "TEST_FSPATH_COUNT=${TEST_FSPATH_COUNT}" >> ${SETUP_FILE}
+    echo "FSPATHS=$FSPATHS" >> ${SETUP_FILE}
 
-    echo "PRIMARYHOSTIP=$PRIMARYHOSTIP" >> $setup_file
-    echo "NEXTTIERHOSTIP=$NEXTTIERHOSTIP" >> $setup_file
+    echo "PRIMARY_HOST_IP=${PRIMARY_HOST_IP}" >> ${SETUP_FILE}
+    echo "NEXT_TIER_HOST_IP=${NEXT_TIER_HOST_IP}" >> ${SETUP_FILE}
 
-    echo "PORT=$PORT" >> $setup_file
-    echo "PORT_INTRA_CONTROL=$PORT_INTRA_CONTROL" >> $setup_file
-    echo "PORT_INTRA_DATA=$PORT_INTRA_DATA" >> $setup_file
-    echo "GRAFANA=$GRAFANA" >> $setup_file
+    echo "PORT=$PORT" >> ${SETUP_FILE}
+    echo "PORT_INTRA_CONTROL=$PORT_INTRA_CONTROL" >> ${SETUP_FILE}
+    echo "PORT_INTRA_DATA=$PORT_INTRA_DATA" >> ${SETUP_FILE}
     echo "Finished saving setup"
 }
 
 get_setup() {
-    if [ -f $"$setup_file" ]; then
-        source $setup_file
+    if [ -f $"${SETUP_FILE}" ]; then
+        source ${SETUP_FILE}
     else
         echo "No setup configuration found for your last docker deployment. Exiting..."
         exit 1
@@ -93,18 +118,17 @@ deploy_mode() {
 }
 
 deploy_quickstart() {
+    DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    cp $DIR/../../../ais/setup/config.sh config.sh
+    
     QS_AWSDIR=${1:-'~/.aws/'}
     QS_AWSDIR="${QS_AWSDIR/#\~/$HOME}"
     if docker ps | grep ais-quickstart > /dev/null 2>&1; then
         echo "Terminating old instance of quickstart cluster ..."
         ./stop_docker.sh -qs
     fi
-    # Need dummy files to make Dockerfile quiet
-    echo "" > ais.json
-    echo "" > collectd.conf
-    echo "" > statsd.conf
     echo "Building Docker image ..."
-    docker build -t -q ais-quickstart --build-arg GOBASE=/go . > /dev/null 2>&1
+    docker build -q -t ais-quickstart --build-arg GOBASE=/go --build-arg QUICK=quick .
     if [ ! -d "$QS_AWSDIR" ]; then
         echo "AWS credentials not found (tests may not work!) ..."
         docker run -di ais-quickstart:latest
@@ -115,8 +139,8 @@ deploy_quickstart() {
     echo "SSH into container ..."
     container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
     docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
-    rm ais.json collectd.conf statsd.conf
-    exit 1
+
+    rm -rf config.sh
 }
 
 
@@ -125,19 +149,20 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   exit 1
 fi
 
-mkdir -p /tmp/docker_ais
 CLOUD=0
 CLUSTER_CNT=0
 PROXY_CNT=0
 TARGET_CNT=0
 FS_LIST=""
-TESTFSPATHCOUNT=0
-network=""
-LOCAL_AWS="/tmp/docker_ais/aws.env"
-setup_file="/tmp/docker_ais/deploy.env"
+TEST_FSPATH_COUNT=1
+NETWORK=""
+AWS_ENV=""
 
-aws_env="";
-os="ubuntu"
+mkdir -p /tmp/docker_ais
+LOCAL_AWS="/tmp/docker_ais/aws.env"
+SETUP_FILE="/tmp/docker_ais/deploy.env"
+TMP_ENV="/tmp/docker_ais/tmp.env"
+touch ${TMP_ENV}
 
 GRAFANA=false
 
@@ -151,7 +176,7 @@ for i in "$@"
 do
 case $i in
     -a=*|--aws=*)
-        aws_env="${i#*=}"
+        AWS_ENV="${i#*=}"
         shift # past argument=value
         CLOUD=1
         ;;
@@ -160,7 +185,7 @@ case $i in
         CLOUD=2
         shift # past argument
         ;;
-
+    
     -nocloud)
         CLOUD=3
         shift # past argument
@@ -169,20 +194,20 @@ case $i in
     -c=*|--cluster=*)
         CLUSTER_CNT="${i#*=}"
         is_number $CLUSTER_CNT
-        network="multi"
+        NETWORK="multi"
         shift # past argument=value
         ;;
 
     -d=*|--directories=*)
-        TESTFSPATHCOUNT="${i#*=}"
-        is_number $TESTFSPATHCOUNT
+        TEST_FSPATH_COUNT="${i#*=}"
+        is_number $TEST_FSPATH_COUNT
         FS_LIST=""
         shift # past argument=value
         ;;
 
     -f=*|--filesystems=*)
         FS_LIST="${i#*=}"
-        TESTFSPATHCOUNT=0
+        TEST_FSPATH_COUNT=0
         shift # past argument=value
         ;;
 
@@ -198,7 +223,7 @@ case $i in
         ;;
 
     -m|--multi)
-        network="multi"
+        NETWORK="multi"
         shift # past argument
         ;;
 
@@ -210,13 +235,12 @@ case $i in
 
     -qs=*|--quickstart=*|-qs|--quickstart)
         deploy_quickstart "${i#*=}"
-        break
-        shift
+        exit 1
         ;;
 
     -s|--single)
-        if [ "$network" != "multi" ]; then
-            network="single"
+        if [ "${NETWORK}" != "multi" ]; then
+            NETWORK="single"
         fi
         shift # past argument=value
         ;;
@@ -261,7 +285,6 @@ esac
 done
 
 
-
 if [ $DRYRUN -ne 0 ]; then
     echo "Configure Dry Run object size (default is '8m' - 8 megabytes):"
     echo "Note: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB"
@@ -271,10 +294,10 @@ if [ $DRYRUN -ne 0 ]; then
 fi
 
 if [ $CLOUD -eq 0 ]; then
-    echo Select
-    echo  1: Use AWS
-    echo  2: Use GCP
-    echo  3: No cloud provider
+    echo "Select"
+    echo " 1: Use AWS"
+    echo " 2: Use GCP"
+    echo " 3: No cloud provider"
     echo "Enter your provider choice (1, 2 or 3):"
     read CLOUD
     is_number $CLOUD
@@ -289,21 +312,20 @@ if [ $CLOUD -eq 0 ]; then
         read aws_env
 
         if [ -z "$aws_env" ]; then
-            aws_env="~/.aws/"
+            AWS_ENV="~/.aws/"
         fi
     fi
-
 fi
 
 if [ $CLOUD -eq 1 ]; then
-    if [ -z "$aws_env" ]; then
-        echo -a is a required parameter.Provide the path for aws.env file
+    if [ -z "$AWS_ENV" ]; then
+        echo -a is a required parameter. Provide the path for aws.env file
         usage
     fi
     CLDPROVIDER="aws"
     # to get proper tilde expansion
-    aws_env="${aws_env/#\~/$HOME}"
-    temp_file="$aws_env/credentials"
+    AWS_ENV="${AWS_ENV/#\~/$HOME}"
+    temp_file="${AWS_ENV}/credentials"
     if [ -f $"$temp_file" ]; then
         cp $"$temp_file"  ${LOCAL_AWS}
     else
@@ -314,7 +336,7 @@ if [ $CLOUD -eq 1 ]; then
     # By default, the region field is found in the aws config file.
     # Sometimes it is found in the credentials file.
     if [ $(cat "$temp_file" | grep -c "region") -eq 0 ]; then
-        temp_file="$aws_env/config"
+        temp_file="${AWS_ENV}/config"
         if [ -f $"$temp_file" ] && [ $(cat $"$temp_file" | grep -c "region") -gt 0 ]; then
             grep region "$temp_file" >> ${LOCAL_AWS}
         else
@@ -341,17 +363,17 @@ if [ "$CLUSTER_CNT" -eq 0 ]; then
     read CLUSTER_CNT
     is_number $CLUSTER_CNT
     if [ "$CLUSTER_CNT" -gt 1 ]; then
-        network="multi"
+        NETWORK="multi"
     fi
 fi
 
-if [[ -z "${network// }" ]]; then
+if [[ -z "${NETWORK// }" ]]; then
 	echo Enter s for single network configuration or m for multi-network configuration..
-    read networkConfig
-	if [ "$networkConfig" = "s" ]; then
-        network="single"
-    elif [ $networkConfig = 'm' ] ; then
-        network="multi"
+    read network_config
+	if [ "$network_config" = "s" ]; then
+        NETWORK="single"
+    elif [ $network_config = 'm' ] ; then
+        NETWORK="multi"
     else
         echo Valid network configuration was not supplied.
         usage
@@ -374,7 +396,7 @@ if [ "$PROXY_CNT" -eq 0 ]; then
 fi
 
 FSPATHS="\"\":\"\""
-if [ "$FS_LIST" = "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
+if [ "$FS_LIST" = "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     echo Select
     echo  1: Local cache directories
     echo  2: Filesystems
@@ -383,8 +405,8 @@ if [ "$FS_LIST" = "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
     is_number $cachesource
     if [ $cachesource -eq 1 ]; then
        echo Enter number of local cache directories:
-       read TESTFSPATHCOUNT
-       is_number $TESTFSPATHCOUNT
+       read TEST_FSPATH_COUNT
+       is_number $TEST_FSPATH_COUNT
     elif [ $cachesource -eq 2 ]; then
        echo Enter filesystem info in comma separated format ex: /tmp/ais1,/tmp/ais:
        read FS_LIST
@@ -394,7 +416,7 @@ if [ "$FS_LIST" = "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
     fi
 fi
 
-if [ "$FS_LIST" != "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
+if [ "$FS_LIST" != "" ] && [ "$TEST_FSPATH_COUNT" -eq 0 ]; then
     FSPATHS=""
     IFS=',' read -r -a array <<< "$FS_LIST"
     for element in "${array[@]}"
@@ -405,42 +427,12 @@ if [ "$FS_LIST" != "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
 fi
 
 composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"
-if [ "$network" = "multi" ]; then
+if [ "${NETWORK}" = "multi" ]; then
     composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
 fi
 
-PWD=$(pwd)
-DIR=$(dirname "${BASH_SOURCE[0]}")
-DIR="${PWD}/${DIR}"
-echo $DIR
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-if [ "${PWD##*/}" != "docker" ]; then
-    cd $DIR
-fi
-
-SERVICENAME="ais"
-LOGDIR="/tmp/ais/log"
-LOGLEVEL="3"
-USE_HTTPS="false"
-NON_ELECTABLE="false"
-AUTHENABLED="false"
-CONFFILE_STATSD="statsd.conf"
-CONFFILE_COLLECTD="collectd.conf"
-###################################
-#
-# fspaths config is used if and only if test_fspaths.count == 0
-# existence of each fspath is checked at runtime
-#
-###################################
-TESTFSPATHROOT="/tmp/ais/"
-c=0
-
-START=0
-END=$TARGET_CNT
-
-PORT=8080
-PORT_INTRA_CONTROL=9080
-PORT_INTRA_DATA=10080
+cp $DIR/../../../ais/setup/config.sh config.sh
 
 if [ "$GRAFANA" == true ]; then
     GRAPHITE_PORT=2003
@@ -453,8 +445,12 @@ else
     GRAPHITE_SERVER="localhost"
 fi
 
+PORT=8080
+PORT_INTRA_CONTROL=9080
+PORT_INTRA_DATA=10080
+
 # Setting the IP addresses for the containers
-echo "Network type: ${network}"
+echo "Network type: ${NETWORK}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
     PUB_NET="172.5$((0 + ($i * 3))).0"
     PUB_SUBNET="${PUB_NET}.0/24"
@@ -464,13 +460,11 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     INT_DATA_SUBNET="${INT_DATA_NET}.0/24"
 
     if [ $i -eq 0 ]; then
-        PRIMARYHOSTIP="${PUB_NET}.2"
+        PRIMARY_HOST_IP="${PUB_NET}.2"
     fi
     if [ $i -eq 1 ]; then
-        NEXTTIERHOSTIP="${PUB_NET}.2"
+        NEXT_TIER_HOST_IP="${PUB_NET}.2"
     fi
-
-    PROXYURL="http://${PUB_NET}.2:${PORT}"
 
     IPV4LIST=""
     IPV4LIST_INTRA_CONTROL=""
@@ -483,7 +477,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
         IPV4LIST=${IPV4LIST::-1} # remove last ","
     fi
 
-    if [ "$network" = "multi" ]; then
+    if [ "${NETWORK}" = "multi" ]; then
         # IPV4LIST_INTRA
         for j in `seq 2 $((($TARGET_CNT + $PROXY_CNT + 1) * $CLUSTER_CNT))`; do
             IPV4LIST_INTRA_CONTROL="${IPV4LIST_INTRA_CONTROL}${INT_CONTROL_NET}.$j,"
@@ -497,23 +491,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
         IPV4LIST_INTRA_DATA=${IPV4LIST_INTRA_DATA::-1} # remove last ","
     fi
 
-    echo "Public network: ${PUB_SUBNET}"
-    echo "Internal control network: ${INT_CONTROL_SUBNET}"
-    echo "Internal data network: ${INT_DATA_SUBNET}"
-    export PUB_SUBNET=$PUB_SUBNET
-    export INT_CONTROL_SUBNET=$INT_CONTROL_SUBNET
-    export INT_DATA_SUBNET=$INT_DATA_SUBNET
-    export TARGET_CNT=$TARGET_CNT
-    export CLDPROVIDER=$CLDPROVIDER
-    export MIRROR_ENABLED=false
-    export MIRROR_UTIL_THRESH=20
-    export IOSTAT_TIME="2s"
-    export NODISKIO=$NODISKIO
-    export NONETIO=$NONETIO
-    export DRYOBJSIZE=$DRYOBJSIZE
-
-    CONFFILE="ais.json"
-    source $DIR/../../../ais/setup/config.sh
+    save_env
 
     echo Stopping running clusters...
     docker-compose -p ais${i} -f ${composer_file} down
@@ -522,29 +500,18 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     docker-compose -p ais${i} -f ${composer_file} build
 
     echo Starting Primary Proxy
-    export HOST_CONTAINER_PATH=/tmp/ais/c${i}_proxy_1
-    mkdir -p $HOST_CONTAINER_PATH
-    AIS_PRIMARYPROXY=TRUE docker-compose -p ais${i} -f ${composer_file} up --build -d proxy
+    AIS_PRIMARYPROXY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
     sleep 5 # give primary proxy some room to breath
 
     echo Starting cluster ..
-    for ((j=1; j<=${TARGET_CNT}; j++)); do
-        export HOST_CONTAINER_PATH=/tmp/ais/c${i}_target_${j}
-        mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale target=${j}  --scale grafana=0 --scale graphite=0 --no-recreate
-    done
-    for ((j=2; j<=${PROXY_CNT}; j++)); do
-        export HOST_CONTAINER_PATH=/tmp/ais/c${i}_proxy_${j}
-        mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale proxy=${j} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
-    done
+    docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
 done
 
 sleep 5
-# Records all environment variables into $setup_file
+# Records all environment variables into ${SETUP_FILE}
 save_setup
 
-if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
+if [ "$CLUSTER_CNT" -gt 1 ] && [ "${NETWORK}" = "multi" ]; then
     echo Connecting clusters together...
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
@@ -567,7 +534,7 @@ if [ "$GRAFANA" == true ]; then
 fi
 
 # Consider moving these to a folder instead of deleting - for future reference
-rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
+rm config.sh
 docker ps
 
 deploy_mode

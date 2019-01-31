@@ -12,43 +12,35 @@ services:
       dockerfile: Dockerfile
       args:
         - GOBASE=${GOPATH}
-        - TARGETS=${TARGET_CNT-1000}
-        - CLDPROVIDER=${CLDPROVIDER-}
-        - NODISKIO=${NODISKIO-false}
-        - NONETIO=${NONETIO-false}
-        - DRYOBJSIZE=${DRYOBJSIZE-8MB}
     networks:
       - public
       - docker_default
     environment:
       - ROLE=proxy
-      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY-false}
+      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY:-}
     env_file:
+      - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - ${HOST_CONTAINER_PATH-}:/tmp/ais
+      - /tmp/ais:/tmp/ais
   target:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         - GOBASE=${GOPATH}
-        - TARGETS=${TARGET_CNT:-1000}
-        - CLDPROVIDER=${CLDPROVIDER-}
-        - NODISKIO=${NODISKIO-false}
-        - NONETIO=${NONETIO-false}
-        - DRYOBJSIZE=${DRYOBJSIZE-8MB}
     networks:
       - public
       - docker_default
     environment:
       - ROLE=target
     env_file:
+      - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - ${HOST_CONTAINER_PATH-}:/tmp/ais
+      - /tmp/ais:/tmp/ais
 networks:
   docker_default:
     external: true

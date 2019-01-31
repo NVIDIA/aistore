@@ -1,13 +1,13 @@
 cat > $CONFFILE <<EOL
 {
-	"confdir":                	"$CONFDIR",
-	"cloudprovider":		"${CLDPROVIDER}",
+	"confdir":       "${CONFDIR}",
+	"cloudprovider": "${CLDPROVIDER}",
 	"mirror": {
-		"copies":		2,
-		"mirror_burst_buffer":	512,
-		"mirror_util_thresh":	${MIRROR_UTIL_THRESH},
-		"mirror_optimize_put":	false,
-		"mirror_enabled": 	${MIRROR_ENABLED}
+		"copies":              2,
+		"mirror_burst_buffer": 512,
+		"mirror_util_thresh":  ${MIRROR_UTIL_THRESH:-20},
+		"mirror_optimize_put": false,
+		"mirror_enabled":      ${MIRROR_ENABLED:-false}
 	},
 	"readahead": {
 		"rahobjectmem":		1048576,
@@ -17,14 +17,14 @@ cat > $CONFFILE <<EOL
 		"rahenabled":		false
 	},
 	"log": {
-		"logdir":		"$LOGDIR",
-		"loglevel": 		"${LOGLEVEL}",
-		"logmaxsize": 		4194304,
-		"logmaxtotal":		67108864
+		"logdir":      "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",
+		"loglevel":    "${LOGLEVEL:-3}",
+		"logmaxsize":  4194304,
+		"logmaxtotal": 67108864
 	},
 	"periodic": {
 		"stats_time":		"10s",
-		"iostat_time":		"${IOSTAT_TIME}",
+		"iostat_time":		"${IOSTAT_TIME:-2s}",
 		"retry_sync_time":	"2s"
 	},
 	"timeout": {
@@ -37,10 +37,10 @@ cat > $CONFFILE <<EOL
 		"startup_time":		"1m"
 	},
 	"proxyconfig": {
-		"non_electable":	${NON_ELECTABLE},
-		"primary_url":		"${PROXYURL}",
-		"original_url": 	"${PROXYURL}",
-		"discovery_url": 	"${DISCOVERYURL}"
+		"non_electable": ${NON_ELECTABLE:-false},
+		"primary_url":   "${PROXYURL}",
+		"original_url":  "${PROXYURL}",
+		"discovery_url": "${DISCOVERYURL}"
 	},
 	"lru_config": {
 		"lowwm":		75,
@@ -49,8 +49,8 @@ cat > $CONFFILE <<EOL
 		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
-		"lru_local_buckets": false,
-		"lru_enabled":  	true
+		"lru_local_buckets": 	false,
+		"lru_enabled":		true
 	},
 	"xaction_config":{
 	    "disk_util_low_wm":      20,
@@ -75,19 +75,19 @@ cat > $CONFFILE <<EOL
 		$FSPATHS
 	},
 	"test_fspaths": {
-		"root":			"/tmp/ais$NEXT_TIER/",
-		"count":		$TESTFSPATHCOUNT,
-		"instance":		$c
+		"root":     "${TEST_FSPATH_ROOT:-/tmp/ais$NEXT_TIER/}",
+		"count":    ${TEST_FSPATH_COUNT:-0},
+		"instance": ${INSTANCE:-0}
 	},
 	"netconfig": {
 		"ipv4":               "${IPV4LIST}",
 		"ipv4_intra_control": "${IPV4LIST_INTRA_CONTROL}",
-		"ipv4_intra_data":     "${IPV4LIST_INTRA_DATA}",
+		"ipv4_intra_data":    "${IPV4LIST_INTRA_DATA}",
 		"l4": {
 			"proto":              "tcp",
-			"port":	              "${PORT}",
-			"port_intra_control": "${PORT_INTRA_CONTROL}",
-			"port_intra_data":    "${PORT_INTRA_DATA}"
+			"port":	              "${PORT:-8080}",
+			"port_intra_control": "${PORT_INTRA_CONTROL:-9080}",
+			"port_intra_data":    "${PORT_INTRA_DATA:-10080}"
 		},
 		"http": {
 			"proto":		"http",
@@ -96,7 +96,7 @@ cat > $CONFFILE <<EOL
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
 			"max_num_targets":	16,
-			"use_https":		${USE_HTTPS}
+			"use_https":		${USE_HTTPS:-false}
 		}
 	},
 	"fshc": {
@@ -105,8 +105,8 @@ cat > $CONFFILE <<EOL
 		"fshc_error_limit":	2
 	},
 	"auth": {
-		"secret": "$SECRETKEY",
-		"enabled": $AUTHENABLED,
+		"secret":  "$SECRETKEY",
+		"enabled": ${AUTHENABLED:-false},
 		"creddir": "$CREDDIR"
 	},
 	"keepalivetracker": {
@@ -128,8 +128,8 @@ EOL
 
 cat > $CONFFILE_STATSD <<EOL
 {
-	graphitePort: ${GRAPHITE_PORT},
-	graphiteHost: "${GRAPHITE_SERVER}"
+	graphitePort: ${GRAPHITE_PORT:-2003},
+	graphiteHost: "${GRAPHITE_SERVER:-localhost}"
 }
 EOL
 
@@ -162,8 +162,8 @@ LoadPlugin write_graphite
 
 <Plugin write_graphite>
 	<Node "graphiting">
-		Host "${GRAPHITE_SERVER}"
-		Port "${GRAPHITE_PORT}"
+		Host "${GRAPHITE_SERVER:-localhost}"
+		Port "${GRAPHITE_PORT:-2003}"
 		Protocol "tcp"
 		LogSendErrors true
 		StoreRates true

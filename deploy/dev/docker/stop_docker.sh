@@ -1,6 +1,6 @@
 #!/bin/bash
-name=`basename "$0"`
-setup_file="/tmp/docker_ais/deploy.env"
+NAME=`basename "$0"`
+SETUP_FILE="/tmp/docker_ais/deploy.env"
 
 usage() {
     echo "============================================== Usage: =============================================="
@@ -8,8 +8,8 @@ usage() {
     echo "$name -s or --single              --> to stop a single network docker configuration"
     echo "$name -m or --multi               --> to stop a multi network docker configuration"
     echo "$name -c=NUM or--clustered=NUM    --> to stop multiple cluster docker configuration with NUM clusters"
-    echo "$name -l or --last                --> Uses your last saved docker configuration defined in $setup_file to stop docker"
     echo "$name -qs or --quickstart         --> stop the quickstart docker AIS deployment"
+    echo "$name -l or --last                --> Uses your last saved docker configuration defined in ${SETUP_FILE} to stop docker"
     echo "Note adding the --rmi flag to any of the commands above will also removes images."
     echo "Note providing multiple flags will result in the last flag taking precedence."
     echo
@@ -23,8 +23,8 @@ is_number() {
 }
 
 get_setup() {
-    if [ -f $"$setup_file" ]; then
-        source $setup_file
+    if [ -f $"${SETUP_FILE}" ]; then
+        source ${SETUP_FILE}
     else
         echo "No setup configuration found for your last docker deployment. Exiting..."
         exit 1
@@ -32,9 +32,9 @@ get_setup() {
 }
 
 determine_config() {
-    if [ "$network" == "single" ]; then
+    if [ "${NETWORK}" == "single" ]; then
         composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"
-    elif [ "$network" == "multi" ]; then
+    elif [ "${NETWORK}" == "multi" ]; then
         composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
     else
         echo "ERROR: No docker configuration selected."
@@ -57,25 +57,30 @@ if ! [ -x "$(command -v docker-compose)" ]; then
 fi
 
 CLUSTER_CNT=1
-network=""
-remove_images=FALSE
+NETWORK=""
+REMOVE_IMAGES=false
 for i in "$@"
 do
 case $i in
     -c=*|--clustered=*)
         CLUSTER_CNT="${i#*=}"
         is_number CLUSTER_CNT
-        network="multi"
+        NETWORK="multi"
         shift # past argument=value
         ;;
 
     -l|--last)
         get_setup
+        shift
+        ;;
+
+    -s|--single)
+        NETWORK="single"
         shift # past argument=value
         ;;
 
     -m|--multi)
-        network="multi"
+        NETWORK="multi"
         shift # past argument=value
         ;;
 
@@ -85,7 +90,7 @@ case $i in
         ;;
 
     --rmi)
-        remove_images=TRUE
+        REMOVE_IMAGES=true
         shift # past argument=value
         valid_log_file_type $LOG_TYPE
         ;;
@@ -109,11 +114,9 @@ if [ "$CLUSTER_CNT" -gt 1 ]; then
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
         for ((i=0; i<${CLUSTER_CNT}; i++)); do
-            if [[ $container_name != ais${i}_* ]] ;
-            then
+            if [[ $container_name != ais${i}_* ]]; then
                 docker network disconnect -f ais${i}_public $container_id
-                if [[ $container_name == *"_target_"* ]] ;
-                then
+                if [[ $container_name == *"_target_"* ]]; then
                     docker network disconnect -f ais${i}_internal_data $container_id
                 fi
             fi
@@ -125,7 +128,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export PUB_SUBNET="172.5$((0 + ($i * 3))).0.0/24"
     export INT_CONTROL_SUBNET="172.5$((1 + ($i * 3))).0.0/24"
     export INT_DATA_SUBNET="172.5$((2 + ($i * 3))).0.0/24"
-    if [ "$remove_images" = TRUE ]; then
+    if [ "$REMOVE_IMAGES" == true ]; then
         docker-compose -p ais${i} -f $composer_file down -v --rmi all --remove-orphans
     else
         docker-compose -p ais${i} -f $composer_file down -v --remove-orphans
@@ -141,4 +144,4 @@ fi
 echo "Removing volumes..."
 docker volume prune -f
 echo "Removing volumes folders (requires sudo)..."
-sudo rm -rf /tmp/ais/ /tmp/docker_ais/
+sudo rm -rf /tmp/ais/ 

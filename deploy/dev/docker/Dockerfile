@@ -26,57 +26,37 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   pip install awscli
 
 # Setting ENV variables
-ENV GOLANG_VERSION 1.11
-ENV CONFFILE /etc/ais/ais.json
+ENV GOLANG_VERSION 1.11.5
 
 # Reassign arguments to environment variables so run.sh can use them
 ARG GOBASE
 ENV GOPATH $GOBASE
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/ais
-
-RUN mkdir /etc/ais
-RUN mkdir /usr/nvidia
 
 # Installing go
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
-  tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
+  tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
-ARG CLDPROVIDER
-ENV CLD $CLDPROVIDER
+# Install statsd
+RUN git clone https://github.com/etsy/statsd.git
 
-#Quickstart
+ENV CONFDIR /etc/ais
+ENV CONFFILE ${CONFDIR}/ais.json
+ENV CONFFILE_COLLECTD ${CONFDIR}/collectd.conf
+ENV CONFFILE_STATSD ${CONFDIR}/statsd.conf
+
+ENV MOUNTPATH /tmp/ais
+RUN mkdir -p ${CONFDIR}
+
 ARG QUICK
+ENV QUICK=${QUICK}
 
-# Dry Run
-ARG NODISKIO
-ENV NODISK $NODISKIO
-
-ARG NONETIO
-ENV NONET $NONETIO
-
-ARG DRYOBJSIZE
-ENV OBJSIZE $DRYOBJSIZE
-
-ARG TARGETS
-ENV TARGETCNT $TARGETS
-COPY ais.json $CONFFILE
+COPY config.sh config.sh
+COPY entrypoint/entrypoint.sh entrypoint.sh
 
 EXPOSE 8080 9080 10080
 
-COPY statsd.conf /statsd.conf
-RUN git clone https://github.com/etsy/statsd.git
-
-ENV VERSION `git rev-parse --short HEAD`
-ENV BUILD `date +%FT%T%z`
-RUN if [ -n "$QUICK" ]; then echo "go get -u -v github.com/NVIDIA/aistore/ais && /bin/bash"> /run/run.sh ; \
-else echo "\
-exec node /statsd/stats.js /statsd.conf 2>&1 | tee -a /var/log/statsd.log & \n \
-cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go  \n \
-cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
-> /run/run.sh ; fi
-RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $NONET $OBJSIZE"]
+ENTRYPOINT ["sh", "-c", "/entrypoint.sh"]

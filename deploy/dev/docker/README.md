@@ -161,7 +161,7 @@ Useful script variables:
 | PORT | 8080 | HTTP port for public API |
 | PORT_INTRA_CONTROL | 9080 | HTTP port for internal control plane API (for multiple networks case) |
 | PORT_INTRA_DATA | 10080 | HTTP port for internal data plane API (for multiple networks case) |
-| TESTFSPATHROOT | `/tmp/ais/` | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
+| TEST_FSPATH_ROOT | `/tmp/ais/` | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
 
 ## Running tests in Docker environment
 
@@ -185,8 +185,8 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](/bench/aisloader/README.md)
 
-
 ## Utility Scripts
+
 ### `logs.sh`
 To quickly view the logs of all running containers, use the following command:
 ```
@@ -198,12 +198,6 @@ $ ./logs.sh -c=container_name -t=a
 ```
 Refer to the `logs.sh` script for more details about its usage.
 
-### `del_old_images.sh`
-Every new deployment builds a new Docker image. The new image replaces the old one. The old one becomes obsolete and gets name `<none>`. Use the following script to delete all obsolete and unused Docker images:
-```
-$ ./del_old_images.sh
-```
-
 ### `get_ip_addresses.sh`
 If you want to quickly get the ip addresses of each container of all clusters, use the following script:
 ```
@@ -211,12 +205,14 @@ $ ./get_ip_addresses.sh
 ```
 * Note: The port numbers for the ip addresses for each container will be 8080, 9080, 10080 by default for the public, intra control and intra data networks respectively.
 
-### `container_shell.sh`
-To open an interactive shell for a daemon with container name CONTAINER_NAME, use the following script:
+### Prune docker
+
+To prune old docker containers, images and networks you can use:
+
+```bash
+$ docker kill $(docker ps -q) # in case you want to kill ALL containers
+$ docker system prune -f
 ```
-$ ./container_logs.sh CONTAINER_NAME
-```
-* Note: The command currently defaults to open the `/tmp/ais/log` working directory. To view the list of running containers and obtain a container name, use the command: `docker ps`
 
 ### Accessing These Scripts From Anywhere
 Add the following to the end of your `~/.profile`:

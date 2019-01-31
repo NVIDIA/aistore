@@ -81,7 +81,7 @@ DOCKER_HOST_IP=""
 # existence of each fspath is checked at runtime
 #
 ###################################
-TESTFSPATHROOT="/tmp/ais/"
+TEST_FSPATH_ROOT="/tmp/ais/"
 
 echo Enter number of target servers:
 read TARGET_CNT
@@ -201,23 +201,11 @@ fi
 kubectl create secret generic aws-credentials --from-file=$LOCAL_AWS
 
 CONFFILE="ais.json"
-c=0
 CONFFILE_STATSD="statsd.conf"
 CONFFILE_COLLECTD="collectd.conf"
-MIRROR_UTIL_THRESH=20
-MIRROR_ENABLED=false
-IOSTAT_TIME="2s"
-USE_HTTPS=false
-NON_ELECTABLE=false
-AUTHENABLED=false
 
 export CONFDIR=/aisconfig
 export PROXYURL="http://${HOST}:${PORT}"
-export MIRROR_UTIL_THRESH=$MIRROR_UTIL_THRESH
-export IOSTAT_TIME=$IOSTAT_TIME
-export USE_HTTPS=$USE_HTTPS
-export NON_ELECTABLE=$NON_ELECTABLE
-export AUTHENABLED=$AUTHENABLED
 export DOCKER_HOST_IP=$DOCKER_HOST_IP
 echo $DIR
 source $DIR/../../../ais/setup/config.sh
