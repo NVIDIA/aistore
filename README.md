@@ -39,7 +39,8 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 ## Table of Contents
 - [Overview](#overview)
-    - [Limitations](#limitations)
+    - [Open Format](#open-format)
+    - [Existing Datasets](#existing-datasets)
     - [Data Protection](#data-protection)
     - [Scale-Out](#scale-out)
     - [HA](#ha)
@@ -47,6 +48,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [Other Services](#other-services)
     - [dSort](#dsort)
     - [Python Client](#python-client)
+    - [AIS Limitations](#ais-limitations)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
     - [Local Non-containerized](#local-non-containerized)
@@ -68,17 +70,71 @@ In the picture, a client on the left side makes an I/O request which is then ful
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 
-### Limitations
-There are no limitations whatsoever on object and bucket sizes, numbers of objects and buckets, numbers of gateways and storage targets in a single AIS cluster.
+### Open Format
+
+As of the v2.0, AIS targets utilize local Linux filesystems - examples including (but not limited to) xfs, ext4, and openzfs. User data is stored *as is* without any alteration. AIS on-disk format is, therefore, fully defined by the local filesystem chosen at AIS deployment time. The implication is that you can access your data with and without AIS, and without any need to *convert* or *export/import*, etc.
+
+> Your own data is [unlocked](https://en.wikipedia.org/wiki/Vendor_lock-in) and immediately available at all times.
+
+### Existing Datasets
+
+One common way to start making use of AIStore includes the two most basic steps:
+
+1. Populate AIS with an existing dataset
+2. Read and write this dataset directly from/to AIStore
+
+To this end, AIS provides 4 (four) easy ways to accomplish the first step:
+
+1. [Cold GET](#cold-get)
+2. [Prefetch](#prefetch)
+3. [Internet Downloader](#internet-downloader)
+4. [Reverse Proxy](#reverse-proxy)
+
+More precisely:
+
+#### Cold GET
+If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](docs/http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
+
+> As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
+
+> AIS executes *cold GET* from the Cloud if and only if the object is not stored (by AIS), **or** the object has a bad checksum, **or** the object's version is outdated.
+
+In all other cases, AIS will service the GET request without going to Cloud.
+
+#### Prefetch
+
+Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given Cloud bucket, as described in [this readme](docs/batch.md).
+
+#### Internet Downloader
+
+But what if the dataset exists in the form of (vanilla) HTTP/HTTPS URLs? If this is the case, use [downloader](downloader/README.md) - the integrated tool that can populate AIStore directly from the Internet.
+
+#### Reverse Proxy
+
+Finally, AIS can be designated as HTTP reverse proxy via the `http_proxy` environment supported by most UNIX systems:
+
+```shell
+$ export http_proxy=<AIS proxy IPv4 or hostname>
+```
+
+Executing this command on the client side will have an effect of redirecting all client-issued HTTP(S) requests to the AIS proxy/gateway, with subsequent execution (transparently from the client perspective).
+
+> *Reverse proxy* functionality to (transparently) work with Internet locations is currently under development.
+
+> Separately, AIS supports a special mode of operation where an AIS gateway serves as a reverse proxy vis-à-vis AIS targets. The corresponding use case includes supporting kernel-based clients with a preference for single (or very few) persistent connection(s) to the storage. Related [configuration](ais/setup/config.sh) is called `rproxy`. Needless to say, this mode of operation will clearly have performance implications.
 
 ### Data Protection
-AIS [supports](docs/storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
+AIS [supports](docs/storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](docs/storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
 
 ### Scale-Out
-The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design. Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
+The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design.
+
+> AIS cluster capability to **scale-out is truly unlimited**. The real-life limitations can only be imposed by the environment - capacity of a given Data Center, for instance.
+
+Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
 
 ### HA
-AIS features a [highly-available control plane](docs/ha.md) where all gateways are absolutely identical in terms of their data and control plane APIs. Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
+AIS features a [highly-available control plane](docs/ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](docs/http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
@@ -86,15 +142,15 @@ As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its 
 ### Other Services
 
 The (quickly growing) list of services includes (but is not limited to):
-* health monitoring and recovery
-* range read
-* dry-run (to measure raw network and disk performance)
+* [health monitoring and recovery](health/fshc.md)
+* [range read](docs/http_api.md)
+* [dry-run (to measure raw network and disk performance)](docs/performance.md#performance-testing)
 * performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
 > As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
 
-Most notably, AIStore provides [dSort](dsort/README.md) - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
+Most notably, AIStore provides **[dSort](dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
 ### dSort
 
@@ -108,10 +164,10 @@ AIStore provides an easy way to generate a python client package for simplified 
 
 > Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml).
 
-To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package). 
+To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package).
 
 1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
-    
+
     ```shell
     wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
     ```
@@ -150,7 +206,7 @@ For example, this script will display a map of your AIS cluster.
 
 ```shell
 import openapi_client
-#Some aliases for functions in the package
+# Some aliases for functions in the package
 openapi_models = openapi_client.models
 openapi_params = openapi_models.InputParameters
 openapi_actions = openapi_models.Actions
@@ -166,6 +222,16 @@ print(daemon_api.get(openapi_models.GetWhat.SMAP))
 ```
 
 There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](swagger/README.md#how-to-use-package).
+
+### AIS Limitations
+There are no designed-in limitations on the:
+
+* object sizes
+* total number of objects and buckets in AIS cluster
+* number of objects in a single AIS bucket
+* numbers of gateways and storage targets in AIS cluster
+
+Ultimately, limit on the object size may be imposed by the local filesystem of choice and the physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center. But as far as AIS itself, it does not impose any limitations whatsoever.
 
 ## Prerequisites
 
@@ -302,6 +368,7 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 - [Rebalancing (of the stored content in presence of a variety of events)](docs/rebalance.md)
 - [Storage Services](docs/storage_svcs.md)
 - [Extended Actions](docs/xaction.md)
+- [Internet Downloader](downloader/README.md)
 - [Experimental](docs/experimental.md)
 
 ## Selected Package READMEs

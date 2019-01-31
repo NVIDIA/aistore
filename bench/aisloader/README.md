@@ -1,4 +1,4 @@
-# AIS Loader 
+# AIS Loader
 `aisloader` is a command-line tool that is included with AIS and that can be immediately used to generate load and evaluate cluster performance.
 
 ## Setup
@@ -14,7 +14,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-port` - Port number for proxy server
  - `-statsinterval` - Interval to show stats in seconds; 0 = disabled
  - `-bucket` - Bucket name
- - `-local` - True if using local bucket 
+ - `-local` - true for local bucket, false otherwise
  - `-duration` - How long to run the test; 0 = Unbounded
  - `-numworkers` - Number of go routines sending requests in parallel
  - `-pctput` - Percentage of put request (0% - 100%, remaining is allocated for GET)
@@ -29,7 +29,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-statsdport` - UDP port number for local statsd server
  - `-batchsize` - List and delete batch size
  - `-getconfig` - True if send get proxy config requests only
- 
+
 ### Examples
 
 ```sh
@@ -56,7 +56,7 @@ This command will perform a performance test consisting of 50% PUT and 50% GET r
     "cleanup": true
   }
   ```
-  >Actual run duration: 10.313689487s
+  > Actual run duration: 10.313689487s
 
   | Time | OP | Count | Total Bytes | Latency(min, avg, max) |	Throughput | Error |
   | ---- | ---- | ---- | ---- | ---- | ---- | ---- |

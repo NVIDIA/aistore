@@ -5,7 +5,7 @@ It is a well-known fact that some of the most popular AI datasets have Internet 
 
 Given that fact, it is only natural to ask the follow-up question: how to work with those datasets? And what happens if the dataset in question is *larger* than a single host? Meaning, what happens if it is large enough to warrant (and require) a distributed storage system?
 
-Meet **AIS downloader** - an integrated part of the AIStore. AIStore cluster can be quickly deployed locally to the compute clients, and the **downloader** can be then used to quickly populate a specified (distributed) AIS bucket with the objects from a given Internet location.
+Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluster can be quickly deployed locally to the compute clients, and the **downloader** can be then used to quickly populate a specified (distributed) AIS bucket with the objects from a given Internet location.
 
 ## Download Request
 
