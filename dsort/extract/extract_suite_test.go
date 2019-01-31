@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDSort(t *testing.T) {
+func TestExtract(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "DSort Extract Suite")
 }

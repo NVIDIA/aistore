@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
 package cluster_test
 
@@ -17,8 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/memsys"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -35,10 +32,6 @@ const (
 	bucketCloudB = "LOM_TEST_Cloud_2"
 )
 
-var (
-	tMock targetMock
-)
-
 var _ = Describe("LOM", func() {
 	cmn.CreateDir(mpath)
 	cmn.CreateDir(mpath2)
@@ -50,28 +43,24 @@ var _ = Describe("LOM", func() {
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	tMock = targetMock{
-		b: bownerMock{BMD: cluster.BMD{
-			LBmap: map[string]*cmn.BucketProps{
-				//Map local buckets here refrenced by test lom
-				bucketLocalA: &cmn.BucketProps{
-					CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumNone},
-				},
-				bucketLocalB: &cmn.BucketProps{
-					LRUConf:   cmn.LRUConf{LRUEnabled: true},
-					CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumXXHash},
-				},
+	tMock := cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
+		LBmap: map[string]*cmn.BucketProps{
+			//Map local buckets here refrenced by test lom
+			bucketLocalA: &cmn.BucketProps{
+				CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumNone},
 			},
-			CBmap: map[string]*cmn.BucketProps{
-				//Map cloud buckets here refrenced by test lom
-				bucketCloudA: &cmn.BucketProps{},
-				bucketCloudB: &cmn.BucketProps{},
+			bucketLocalB: &cmn.BucketProps{
+				LRUConf:   cmn.LRUConf{LRUEnabled: true},
+				CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumXXHash},
 			},
-			Version: 1,
-		}},
-		//test cases are responsible for preparing this as needed
-		r: nil,
-	}
+		},
+		CBmap: map[string]*cmn.BucketProps{
+			//Map cloud buckets here refrenced by test lom
+			bucketCloudA: &cmn.BucketProps{},
+			bucketCloudB: &cmn.BucketProps{},
+		},
+		Version: 1,
+	}})
 
 	BeforeEach(func() {
 		os.RemoveAll(mpath)
@@ -281,8 +270,8 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Atimestr).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
-				setupMockRunner()
-				defer teardownMockRunner()
+				setupMockRunner(tMock)
+				defer teardownMockRunner(tMock)
 
 				localFqn := filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, bucketLocalB, testObjectName)
 				createTestFile(localFqn, 0)
@@ -484,13 +473,15 @@ var _ = Describe("LOM", func() {
 //
 // HELPERS
 //
-func setupMockRunner() {
-	tMock.r = atime.NewRunner(fs.Mountpaths, ios.NewIostatRunner())
-	go tMock.r.Run()
+
+func setupMockRunner(t *cluster.TargetMock) {
+	t.Atime = atime.NewRunner(fs.Mountpaths, ios.NewIostatRunner())
+	go t.Atime.Run()
 }
-func teardownMockRunner() {
-	tMock.r.Stop(errors.New(""))
-	tMock.r = nil
+
+func teardownMockRunner(t *cluster.TargetMock) {
+	t.Atime.Stop(errors.New(""))
+	t.Atime = nil
 }
 
 func createTestFile(fqn string, size int) {
@@ -515,24 +506,3 @@ func getTestFileHash(fqn string) (hash string) {
 	Expect(errstr).To(BeEmpty())
 	return
 }
-
-//
-// MOCKS
-//
-type bownerMock struct{ cluster.BMD }
-
-func (r bownerMock) Get() *cluster.BMD { return &r.BMD }
-
-type targetMock struct {
-	b bownerMock
-	r *atime.Runner
-}
-
-func (n targetMock) IsRebalancing() bool           { return false }
-func (n targetMock) RunLRU()                       {}
-func (n targetMock) PrefetchQueueLen() int         { return 0 }
-func (n targetMock) Prefetch()                     {}
-func (n targetMock) GetBowner() cluster.Bowner     { return n.b }
-func (n targetMock) FSHC(err error, path string)   {}
-func (n targetMock) GetAtimeRunner() *atime.Runner { return n.r }
-func (n targetMock) GetMem2() *memsys.Mem2         { return memsys.Init() }

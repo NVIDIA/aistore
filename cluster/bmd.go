@@ -4,7 +4,19 @@
  */
 package cluster
 
-import "github.com/NVIDIA/aistore/cmn"
+import (
+	"github.com/NVIDIA/aistore/cmn"
+)
+
+var (
+	_ Bowner = &BownerMock{}
+)
+
+// interface to Get current bucket-metadata instance
+// (for implementation, see ais/bucketmeta.go)
+type Bowner interface {
+	Get() (bmd *BMD)
+}
 
 // - BMD represents buckets (that store objects) and associated metadata
 // - BMD (instance) can be obtained via Bowner.Get()
@@ -14,6 +26,10 @@ type BMD struct {
 	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
 	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their AIStore-only metadata
 	Version int64                       `json:"version"` // version - gets incremented on every update
+}
+
+type BownerMock struct {
+	BMD
 }
 
 func (m *BMD) IsLocal(bucket string) bool {
@@ -40,8 +56,4 @@ func (m *BMD) LRUenabled(bucket string) bool {
 	return p.LRUEnabled
 }
 
-// interface to Get current bucket-metadata instance
-// (for implementation, see ais/bucketmeta.go)
-type Bowner interface {
-	Get() (bucketmd *BMD)
-}
+func (r BownerMock) Get() *BMD { return &r.BMD }

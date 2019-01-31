@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	Managers *ManagerGroup = NewManagerGroup()
+	Managers = NewManagerGroup()
 )
 
 // ManagerGroup abstracts multiple dsort managers into single struct.

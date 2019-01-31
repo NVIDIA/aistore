@@ -62,6 +62,7 @@ var (
 type dsortContext struct {
 	smap       cluster.Sowner
 	node       *cluster.Snode
+	t          cluster.Target
 	nameLocker cluster.NameLocker
 }
 
@@ -142,9 +143,10 @@ type Manager struct {
 // a contentPath aka recordPath and fullPath.
 type contentPathFunc func(string, string) (string, string)
 
-func RegisterNode(smap cluster.Sowner, snode *cluster.Snode, nameLocker cluster.NameLocker) {
+func RegisterNode(smap cluster.Sowner, snode *cluster.Snode, t cluster.Target, nameLocker cluster.NameLocker) {
 	ctx.smap = smap
 	ctx.node = snode
+	ctx.t = t
 	ctx.nameLocker = nameLocker
 }
 

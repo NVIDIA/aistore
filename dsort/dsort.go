@@ -226,6 +226,10 @@ ExtractAllShards:
 					m.releaseExtractSema()
 					return newAbortError(m.ManagerUUID)
 				}
+				if m.ctx.t.OOS() {
+					m.releaseExtractSema()
+					return errors.New("out of space")
+				}
 
 				m.ctx.nameLocker.Lock(uname, false)
 				f, err := os.Open(fqn)
@@ -342,6 +346,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	m.acquireCreateSema()
+	if m.ctx.t.OOS() {
+		m.releaseCreateSema()
+		return errors.New("out of space")
+	}
+
 	shardFile, err = cmn.CreateFile(workFQN)
 	if err != nil {
 		return fmt.Errorf("failed to create new shard file, err: %v", err)
