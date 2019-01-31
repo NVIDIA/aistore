@@ -131,16 +131,16 @@ type (
 		rtnamemap      *rtnamemap
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
-		clusterStarted int64
-		regstate       regstate // registration state - the state of being registered (with the proxy), or maybe not
+		clusterStarted int32
+		oos            int32 // out of space
 		fsprg          fsprungroup
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
 		ecmanager      *ecManager
-
-		streams struct {
+		streams        struct {
 			rebalance *transport.StreamBundle
 		}
+		regstate regstate // the state of being registered with the primary proxy, or maybe not
 	}
 )
 
@@ -413,6 +413,18 @@ func (t *targetrunner) unregister() (int, error) {
 
 // implements cluster.Target interfaces
 var _ cluster.Target = &targetrunner{}
+
+func (t *targetrunner) OOS(oos ...bool) bool {
+	if len(oos) > 0 {
+		var v int32
+		if oos[0] {
+			v = 2019
+		}
+		atomic.StoreInt32(&t.oos, v)
+		return v != 0
+	}
+	return atomic.LoadInt32(&t.oos) != 0
+}
 
 func (t *targetrunner) IsRebalancing() bool {
 	_, running := t.xactions.isAbortedOrRunningRebalance()
@@ -969,6 +981,10 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT
 	if !t.verifyProxyRedirection(w, r, bucket, objname, cmn.Objects) {
+		return
+	}
+	if t.OOS() {
+		t.invalmsghdlr(w, r, "OOS")
 		return
 	}
 
@@ -3371,7 +3387,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	}
 
 	glog.Infof("receiveSmap: newtargetid=%s", newtargetid)
-	if atomic.LoadInt64(&t.clusterStarted) != 0 {
+	if atomic.LoadInt32(&t.clusterStarted) != 0 {
 		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction
 		return
 	}
@@ -3386,7 +3402,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 		glog.Infoln("waiting for cluster startup to resume rebalance...")
 		for {
 			time.Sleep(time.Second)
-			if atomic.LoadInt64(&t.clusterStarted) != 0 {
+			if atomic.LoadInt32(&t.clusterStarted) != 0 {
 				break
 			}
 		}
@@ -3428,7 +3444,7 @@ func (t *targetrunner) pollClusterStarted() {
 			break
 		}
 	}
-	atomic.StoreInt64(&t.clusterStarted, 1)
+	atomic.StoreInt32(&t.clusterStarted, 1)
 	glog.Infoln("cluster started up")
 }
 

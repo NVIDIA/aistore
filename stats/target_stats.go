@@ -61,10 +61,10 @@ const (
 type (
 	Trunner struct {
 		statsRunner
-		TargetRunner cluster.Target         `json:"-"`
-		Riostat      *ios.IostatRunner      `json:"-"`
-		Core         *targetCoreStats       `json:"core"`
-		Capacity     map[string]*fscapacity `json:"capacity"`
+		T        cluster.Target         `json:"-"`
+		Riostat  *ios.IostatRunner      `json:"-"`
+		Core     *targetCoreStats       `json:"core"`
+		Capacity map[string]*fscapacity `json:"capacity"`
 		// inner state
 		timecounts struct {
 			capLimit, capIdx int64 // update capacity: time interval counting
@@ -149,7 +149,7 @@ func (r *Trunner) log() (runlru bool) {
 	// 2. capacity
 	r.timecounts.capIdx++
 	if r.timecounts.capIdx >= r.timecounts.capLimit {
-		runlru = r.UpdateCapacity()
+		runlru = r.UpdateCapacityOOS()
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
 			b, err := jsoniter.Marshal(fsCapacity)
@@ -167,17 +167,14 @@ func (r *Trunner) log() (runlru bool) {
 }
 
 func (r *Trunner) housekeep(runlru bool) {
-	var (
-		t      = r.TargetRunner
-		config = cmn.GCO.Get()
-	)
+	var config = cmn.GCO.Get()
 	if runlru && config.LRU.LRUEnabled {
-		go t.RunLRU()
+		go r.T.RunLRU()
 	}
 
 	// Run prefetch operation if there are items to be prefetched
-	if t.PrefetchQueueLen() > 0 {
-		go t.Prefetch()
+	if r.T.PrefetchQueueLen() > 0 {
+		go r.T.Prefetch()
 	}
 
 	// keep total log size below the configured max
@@ -249,9 +246,15 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 	}
 }
 
-func (r *Trunner) UpdateCapacity() (runlru bool) {
-	availableMountpaths, _ := fs.Mountpaths.Get()
-	if len(availableMountpaths) == 0 {
+func (r *Trunner) UpdateCapacityOOS() (runlru bool) {
+	var (
+		avgUsed                int64
+		config                 = cmn.GCO.Get()
+		availableMountpaths, _ = fs.Mountpaths.Get()
+		l                      = len(availableMountpaths)
+		oos                    = r.T.OOS()
+	)
+	if l == 0 {
 		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
 		return
 	}
@@ -264,12 +267,28 @@ func (r *Trunner) UpdateCapacity() (runlru bool) {
 		}
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
-		if fsCap.Usedpct >= cmn.GCO.Get().LRU.HighWM {
+		if fsCap.Usedpct >= config.LRU.HighWM {
 			runlru = true
 		}
+		avgUsed += fsCap.Usedpct
 	}
-
 	r.Capacity = capacities
+	// handle out-of-space
+	avgUsed /= int64(l)
+	if oos && avgUsed < config.LRU.HighWM {
+		r.T.OOS(false)
+		r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+		glog.Infof("OOS resolved: avg used = %d%% < (hwm %d%%) across %d mountpath(s)",
+			avgUsed, config.LRU.HighWM, l)
+		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
+		glog.Infof("PUTs are allowed to proceed, next capacity check in %v", t)
+	} else if !oos && avgUsed > config.LRU.OOS {
+		r.T.OOS(true)
+		r.timecounts.capLimit = cmn.MinI64(r.timecounts.capLimit, 2)
+		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", avgUsed, config.LRU.OOS, l)
+		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
+		glog.Warningf("OOS: disallowing new PUTs and checking capacity every %v", t)
+	}
 	return
 }
 

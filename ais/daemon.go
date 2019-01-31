@@ -217,7 +217,7 @@ func aisinit(version, build string) {
 		t := &targetrunner{}
 		t.initSI()
 		ctx.rg.add(t, xtarget)
-		ts := &stats.Trunner{TargetRunner: t} // iostat below
+		ts := &stats.Trunner{T: t} // iostat below
 		ts.Init()
 		ctx.rg.add(ts, xstorstats)
 		_ = t.initStatsD("aistarget")
@@ -255,7 +255,7 @@ func aisinit(version, build string) {
 				glog.Fatal(err)
 			}
 		}
-		ts.UpdateCapacity() // goes after fs.Mountpaths.Init
+		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init
 
 		iostat := ios.NewIostatRunner()
 		ctx.rg.add(iostat, xiostat)

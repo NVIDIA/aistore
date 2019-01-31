@@ -45,6 +45,7 @@ cat > $CONFFILE <<EOL
 	"lru_config": {
 		"lowwm":		75,
 		"highwm":		90,
+		"out_of_space":		95,
 		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",

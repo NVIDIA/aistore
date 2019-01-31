@@ -112,6 +112,9 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	cmn.Assert(lom.Fqn != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
+	if lom.T.OOS() {
+		return errors.New("OOS") // out of space
+	}
 	if !lom.Bprops.ECEnabled {
 		return nil
 	}

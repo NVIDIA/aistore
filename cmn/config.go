@@ -238,11 +238,19 @@ type ProxyConf struct {
 }
 
 type LRUConf struct {
-	// LowWM: Self-throttling mechanisms are suspended if disk utilization is below LowWM
+	// LowWM: used capacity low-watermark (% of total local storage capacity)
 	LowWM int64 `json:"lowwm"`
 
-	// HighWM: Self-throttling mechanisms are fully engaged if disk utilization is above HighWM
+	// HighWM: used capacity high-watermark (% of total local storage capacity)
+	// NOTE:
+	// - LRU starts evicting objects when the currently used capacity (used-cap) gets above HighWM
+	// - and keeps evicting objects until the used-cap gets below LowWM
+	// - while self-throttling itself in accordance with target utilization
 	HighWM int64 `json:"highwm"`
+
+	// Out-of-Space: if exceeded, the target starts failing new PUTs and keeps
+	// failing them until its local used-cap gets back below HighWM (see above)
+	OOS int64 `json:"out_of_space"`
 
 	// AtimeCacheMax represents the maximum number of entries
 	AtimeCacheMax int64 `json:"atime_cache_max"`
@@ -495,8 +503,8 @@ func validateConfig(config *Config) (err error) {
 		return fmt.Errorf(badfmt, config.Rebalance.DestRetryTimeStr, err)
 	}
 
-	hwm, lwm := lru.HighWM, lru.LowWM
-	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+	hwm, lwm, oos := lru.HighWM, lru.LowWM, lru.OOS
+	if hwm <= 0 || lwm <= 0 || oos <= 0 || hwm < lwm || oos < hwm || lwm > 100 || hwm > 100 || oos > 100 {
 		return fmt.Errorf("Invalid LRU configuration %+v", lru)
 	}
 	if mirror.MirrorUtilThresh < 0 || mirror.MirrorUtilThresh > 100 || mirror.MirrorBurst < 0 {

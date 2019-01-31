@@ -15,6 +15,7 @@ import (
 // For implementations, please refer to ais/target.go
 
 type Target interface {
+	OOS(oos ...bool) bool
 	IsRebalancing() bool
 	RunLRU()
 	PrefetchQueueLen() int
