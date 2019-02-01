@@ -85,6 +85,7 @@ deploy_next_tier:
 
 # Target for linters
 LINT_DIRS=$(shell find ../ -type d | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
+MISSPELL_DIRS=$(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 
 .PHONY: lint fmt fmt-fix spell spell-fix cyclo
 
@@ -98,7 +99,7 @@ lint:
 	@echo "Checking others..."
 	@$(GOPATH)/bin/gometalinter --disable-all --enable=golint --enable=errcheck --enable=staticcheck $(LINT_DIRS)
 
-fmt:
+fmt-check:
 	@go get -u golang.org/x/tools/cmd/goimports
 	@$(GOPATH)/bin/goimports -d $(LINT_DIRS)  1>&2
 
@@ -106,14 +107,13 @@ fmt-fix:
 	@go get -u golang.org/x/tools/cmd/goimports
 	@$(GOPATH)/bin/goimports -w $(LINT_DIRS)  1>&2
 
-spell:
-	@go get -u github.com/alecthomas/gometalinter
+spell-check:
 	@go get -u github.com/client9/misspell/cmd/misspell
-	@$(GOPATH)/bin/gometalinter --disable-all --enable=misspell $(LINT_DIRS)
-
+	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell $(dir);)
+	
 spell-fix:
 	@go get -u github.com/client9/misspell/cmd/misspell
-	@$(foreach dir,$(LINT_DIRS),$(GOPATH)/bin/misspell -w $(dir);)
+	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell -w $(dir);)
 
 cyclo:
 	@go get github.com/fzipp/gocyclo

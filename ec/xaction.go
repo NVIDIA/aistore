@@ -226,7 +226,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			glog.Errorf("Failed to receive data for %s: %v", iReq.Sender, err)
 		}
 
-		// object or slice recieved
+		// object or slice received
 	case reqPut:
 		if glog.V(4) {
 			glog.Infof("Response from %s, %s", iReq.Sender, uname)
@@ -270,7 +270,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {
-				glog.Infof("Got slice responce from %s (#%d of %s/%s)",
+				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, hdr.Bucket, hdr.Objname)
 			}
 			objFQN, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, isLocal)
@@ -280,7 +280,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			}
 		} else {
 			if glog.V(4) {
-				glog.Infof("Got replica responce from %s (%s/%s)",
+				glog.Infof("Got replica response from %s (%s/%s)",
 					iReq.Sender, hdr.Bucket, hdr.Objname)
 			}
 			objFQN, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, isLocal)

@@ -240,7 +240,7 @@ func NewMountedFS() *MountedFS {
 }
 
 // Init prepares and adds provided mountpaths. Also validates the mountpaths
-// for duplication and availablity.
+// for duplication and availability.
 func (mfs *MountedFS) Init(fsPaths []string) error {
 	if len(fsPaths) == 0 {
 		// (usability) not to clutter the log with backtraces when starting up and validating config
@@ -258,13 +258,13 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 
 // Add adds new mountpath to the target's mountpaths.
 func (mfs *MountedFS) Add(mpath string) error {
-	seperator := string(filepath.Separator)
+	separator := string(filepath.Separator)
 	for _, bucket := range []string{cmn.LocalBs, cmn.CloudBs} {
-		invalidMpath := seperator + bucket
+		invalidMpath := separator + bucket
 		if strings.HasSuffix(mpath, invalidMpath) {
 			return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
 		}
-		invalidMpath += seperator
+		invalidMpath += separator
 		if strings.Contains(mpath, invalidMpath) {
 			return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
 		}

@@ -55,7 +55,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 }
 
 // Get gets manager with given mangerUUID. When manager with given uuid does not
-// exists and user requested persisted lookup, it looks for it in presistent
+// exists and user requested persisted lookup, it looks for it in persistent
 // storage and returns it if found. Returns false if does not exist, true
 // otherwise.
 func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
@@ -87,7 +87,7 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 }
 
 // persist removes manager from manager group (memory) and moves all information
-// about it to presistent storage (file). This operation allows for later access
+// about it to persistent storage (file). This operation allows for later access
 // of old managers (including managers' metrics).
 //
 // When error occurs during moving manager to persistent storage, manager is not

@@ -2057,7 +2057,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
 // Checks if the directory should be processed by cache list call
 // Does checks:
 //  - Object name must start with prefix (if it is set)
-//  - Object name is not in early processed directories by the previos call:
+//  - Object name is not in early processed directories by the previous call:
 //    paging support
 func (ci *allfinfos) processDir(fqn string) error {
 	if len(fqn) <= ci.rootLength {

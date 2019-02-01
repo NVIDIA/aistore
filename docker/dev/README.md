@@ -26,7 +26,7 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-a=AWS_DIR` or `--aws=AWS_DIR`   : to use AWS, where AWS_DIR is the location of AWS configuration and credential files
 * `-c=NUM` or `--cluster=NUM`       : where NUM is the number of clusters
 * `-d=NUM` or `--directories=NUM`   : where NUM is the number of local cache directories
-* `-f=LIST` or `--filesystems=LIST` : where LIST is a comma seperated list of filesystems
+* `-f=LIST` or `--filesystems=LIST` : where LIST is a comma separated list of filesystems
 * `-g` or `--gcp`                   : to use GCP
 * `-h` or `--help`                  : show usage
 * `-l` or `--last`                  : redeploy using the arguments from the last AIS Docker deployment

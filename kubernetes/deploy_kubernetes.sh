@@ -92,7 +92,7 @@ then
 fi
 if [ $cachesource -eq 2 ]
 then
-   echo Enter filesystem info in comma seperated format ex: /tmp/ais1,/tmp/ais:
+   echo Enter filesystem info in comma separated format ex: /tmp/ais1,/tmp/ais:
    read fsinfo
    fspath=""
    IFS=',' read -r -a array <<< "$fsinfo"

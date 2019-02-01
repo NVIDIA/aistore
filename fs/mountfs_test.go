@@ -17,7 +17,7 @@ func TestAddNonExistingMountpath(t *testing.T) {
 	mfs := NewMountedFS()
 	err := mfs.Add("/nonexistingpath")
 	if err == nil {
-		t.Error("adding non-existing mountpath succeded")
+		t.Error("adding non-existing mountpath succeeded")
 	}
 
 	assertMountpathCount(t, mfs, 0, 0)
@@ -92,7 +92,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 
 	err = mfs.Add("/tmp")
 	if err == nil {
-		t.Error("adding already added mountpath succeded")
+		t.Error("adding already added mountpath succeeded")
 	}
 
 	assertMountpathCount(t, mfs, 1, 0)
@@ -102,7 +102,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 	mfs := NewMountedFS()
 	err := mfs.Remove("/nonexistingpath")
 	if err == nil {
-		t.Error("removing non-existing mountpath succeded")
+		t.Error("removing non-existing mountpath succeeded")
 	}
 
 	assertMountpathCount(t, mfs, 0, 0)

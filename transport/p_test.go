@@ -162,7 +162,7 @@ func Test_CompletionCount(t *testing.T) {
 			break
 		}
 	}
-	// collect all pending completions untill timeout
+	// collect all pending completions until timeout
 	started := time.Now()
 	for atomic.LoadInt64(&numCompleted) < numSent {
 		time.Sleep(time.Millisecond * 10)

@@ -26,7 +26,7 @@ func init() {
 		fmt.Print(err)
 		return
 	}
-	fmt.Println("initalized random buffer")
+	fmt.Println("initialized random buffer")
 }
 
 func CreateTar(w io.Writer, start, end, size, digits int) {

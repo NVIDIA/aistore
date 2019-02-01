@@ -128,7 +128,7 @@ $ aisloader -bucket=abc -pctput=100 -totalputsize=16348 -cleanup=false
 $ aisloader -bucket=abc -duration 1h -pctput=0 -cleanup=true
 ```
 
-The first line in this example above fills the bucket "abc" with 16MiB of random data. The second - uses existing data to test read perfomance for 1 hour, and then removes all data.
+The first line in this example above fills the bucket "abc" with 16MiB of random data. The second - uses existing data to test read performance for 1 hour, and then removes all data.
 
 If you just need to cleanup old data prior to running a test, run the loader with 0 (zero) total put size and zero duration:
 
@@ -148,7 +148,7 @@ Before starting a test, it is possible to set `mirror` or `EC` properties on a b
 
 > For background on local mirroring and erasure coding (EC), please see [storage services](../docs/storage_svcs.md).
 
-To achive that, use the option `-bprops`. For example:
+To achieve that, use the option `-bprops`. For example:
 
 ```shell
 $ aisloader -bucket=abc -pctput=0 -cleanup=false -duration 10s -bprops='{"mirror": {"copies": 2, "mirror_enabled": false, "mirror_util_thresh": 5}, "ec_config": {"enabled": false, "data_slices": 2, "parity_slices": 2}}'

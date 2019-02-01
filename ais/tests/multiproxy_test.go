@@ -116,10 +116,10 @@ func clusterHealthCheck(t *testing.T, smapBefore cluster.Smap) {
 	if tutils.DockerRunning() {
 		pCnt, tCnt := tutils.ContainerCount()
 		if pCnt != len(smapAfter.Pmap) {
-			t.Fatalf("Some proxy conatiners crashed: expected %d, found %d containers", len(smapAfter.Pmap), pCnt)
+			t.Fatalf("Some proxy containers crashed: expected %d, found %d containers", len(smapAfter.Pmap), pCnt)
 		}
 		if tCnt != len(smapAfter.Tmap) {
-			t.Fatalf("Some target conatiners crashed: expected %d, found %d containers", len(smapAfter.Tmap), tCnt)
+			t.Fatalf("Some target containers crashed: expected %d, found %d containers", len(smapAfter.Tmap), tCnt)
 		}
 		return
 	}
@@ -489,7 +489,7 @@ func majorityTargetMapVersionMismatch(t *testing.T) {
 		}, t, proxyURL)
 }
 
-// targetMapVersionMismatch updates map verison of a few targets, kill the primary proxy
+// targetMapVersionMismatch updates map version of a few targets, kill the primary proxy
 // wait for the new leader to come online
 func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
 	smap := getClusterMap(t, proxyURL)
@@ -882,7 +882,7 @@ func getPID(port string) (string, error) {
 		return "", fmt.Errorf("Error executing LSOF command: %v", err)
 	}
 
-	// The output of 'lsof' might contain extra message in the begining like this one:
+	// The output of 'lsof' might contain extra message in the beginning like this one:
 	// lsof: WARNING: can't stat() webdav file system /Volumes/10.2.161.46
 	//       Output information may be incomplete.
 	// Skip lines before first appearance of "COMMAND"

@@ -879,7 +879,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// forbid changing EC properites if EC is already enabled (for now)
+		// forbid changing EC properties if EC is already enabled (for now)
 		if bprops.ECEnabled && nprops.ECEnabled &&
 			(bprops.ParitySlices != nprops.ParitySlices ||
 				bprops.DataSlices != nprops.DataSlices ||
@@ -1189,7 +1189,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh
 				entry.Status = newEntry.Status
 				// Status not OK means the object is temporarily misplaced and
 				// the object cannot be marked as cached.
-				// Such objects will retreive data from Cloud on GET request
+				// Such objects will retrieve data from Cloud on GET request
 				entry.IsCached = newEntry.Status == cmn.ObjStatusOK
 			}
 		}
@@ -2704,13 +2704,13 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 		}
 
 		// data slices + parity slices + original object
-		requried := props.DataSlices + props.ParitySlices + 1
+		required := props.DataSlices + props.ParitySlices + 1
 		targetCnt := len(p.smapowner.get().Tmap)
-		if targetCnt < requried {
+		if targetCnt < required {
 			return fmt.Errorf(
 				"It requires %d targets to use %d data and %d parity slices"+
 					"The cluster has only %d targets",
-				requried, props.DataSlices, props.ParitySlices, targetCnt)
+				required, props.DataSlices, props.ParitySlices, targetCnt)
 		}
 	}
 

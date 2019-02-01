@@ -9,7 +9,7 @@ package atime
 //        go test -v -logtostderr=true -duration 2m -run=Test_AtimeReadWriteStress
 // NOTE: If the duration flag is not present, the default will be 30s.
 //
-// 2. To simulate flushing mechanincs that occur in atime.go, set the flushFreq flag. By default,
+// 2. To simulate flushing mechanic that occur in atime.go, set the flushFreq flag. By default,
 // flushing occurs ever 3 minutes (thus the duration flag must be set to greater than 3 minutes to
 // see the effects of flushing). This will simulate a very high watermark by default (99.94)
 //        go test -v -logtostderr=true -duration 5m -flushFreq 180s -run=Test_AtimeReadWriteStress

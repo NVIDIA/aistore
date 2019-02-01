@@ -89,7 +89,7 @@ Secondly, only local buckets are currently supported. Both limitations will be r
 
 ### Local mirroring and load balancing
 
-Unlike erasure coding (above) that takes special care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](../ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored on a local filesystems that are different from those that store the original. In other words, a mirrorred bucket will survive a loss of any (one) local drive.
+Unlike erasure coding (above) that takes special care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](../ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored on a local filesystems that are different from those that store the original. In other words, a mirrored bucket will survive a loss of any (one) local drive.
 
 >> The last statement is especially true when local filesystems are non-redundant. As a side, note that AIS storage targets can be deployed to utilize Linux LVMs that (themselves) provide a variety of RAID/mirror schemas.
 

@@ -224,7 +224,7 @@ func (c *jogger) copyMissingReplicas(lom *cluster.LOM, sgl *memsys.SGL, metadata
 	}
 
 	// if any target lost its replica send the replica to it, and free allocated
-	// memory on complition
+	// memory on completion
 	// Otherwise just free allocated memory and return immediately
 	if len(daemons) == 0 {
 		sgl.Free()

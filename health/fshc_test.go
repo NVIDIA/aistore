@@ -72,7 +72,7 @@ func TestFSCheckerMain(t *testing.T) {
 		t.Error("Failed to create fshc")
 	}
 
-	// intial state = 2 availble FSes - must pass
+	// initial state = 2 available FSes - must pass
 	availablePaths, disabledPaths := fshc.mountpaths.Get()
 	if len(availablePaths) != 3 || len(disabledPaths) != 1 {
 		t.Errorf("Invalid number of mountpaths at start: %v - %v",

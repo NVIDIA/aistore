@@ -14,7 +14,7 @@
 // 2. AuthN server is enabled and everything is set up
 //    - AIS reads userID from HTTP request header: 'Authorization: Bearer <token>'.
 //    - A user credentials is loaded for the userID
-//      AWS: credentials are loaded from INI-file in memory. File must include the folowing lines:
+//      AWS: credentials are loaded from INI-file in memory. File must include the following lines:
 //       region = AWSREGION
 //       aws_access_key_id = USERACCESSKEY
 //       aws_secret_access_key = USERSECRETKEY
@@ -220,7 +220,7 @@ func (a *authManager) extractTokenData(token string) (*authRec, error) {
 	auth, ok := a.tokens[token]
 	if !ok || auth == nil {
 		if auth, err = decryptToken(token); err != nil {
-			glog.Errorf("Invalid token was recieved: %s", token)
+			glog.Errorf("Invalid token was received: %s", token)
 			return nil, fmt.Errorf("Invalid token")
 		}
 		a.tokens[token] = auth

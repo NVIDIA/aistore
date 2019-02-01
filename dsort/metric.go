@@ -87,7 +87,7 @@ type LocalExtraction struct {
 	// ExtractedRecordCnt describes number of records extracted from all shards.
 	ExtractedRecordCnt int `json:"extracted_record_count"`
 	// ExtractedToDiskCnt describes number of shards extracted to the disk. To
-	// compute the number shards extracted to memory just substract it from
+	// compute the number shards extracted to memory just subtract it from
 	// ExtractedCnt.
 	ExtractedToDiskCnt int `json:"extracted_to_disk_count"`
 	// ExtractedToDiskSize describes uncompressed size of extracted shards to disk

@@ -984,12 +984,12 @@ components:
           example: "-ubyte.gz"
         start:
           type: integer
-          description: The index of the first object in the object space to be downloaded. Defualt is 0 if not provided.
+          description: The index of the first object in the object space to be downloaded. Default is 0 if not provided.
           example: "5"
           minimum: 0
         end:
           type: integer
-          description: The upper bound of the range of objects to be downloaded in the object space. Defualt is 0 if not provided.
+          description: The upper bound of the range of objects to be downloaded in the object space. Default is 0 if not provided.
           example: "75"
           minimum: 0
         step:

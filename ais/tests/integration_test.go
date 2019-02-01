@@ -1669,7 +1669,7 @@ func assertClusterState(m *metadata) {
 	if targetCount != m.originalTargetCount ||
 		proxyCount != m.originalProxyCount {
 		m.t.Errorf(
-			"cluster state is not preserverd. targets (before: %d, now: %d); proxies: (before: %d, now: %d)",
+			"cluster state is not preserved. targets (before: %d, now: %d); proxies: (before: %d, now: %d)",
 			targetCount, m.originalTargetCount,
 			proxyCount, m.originalProxyCount,
 		)

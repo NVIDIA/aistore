@@ -238,7 +238,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, Fqn: localFqn}
 				Expect(lom.Fill(cluster.LomFstat)).To(BeEmpty())
 
-				//TODO: Keep in mind that having both is redundent and should be updated when one is removed
+				//TODO: Keep in mind that having both is redundant and should be updated when one is removed
 				Expect(lom.DoesNotExist).To(BeTrue())
 				Expect(lom.Exists()).To(BeFalse())
 			})

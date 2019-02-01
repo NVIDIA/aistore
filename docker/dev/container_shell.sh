@@ -5,7 +5,7 @@ if [ $# -eq 1 ] && [[ $1 == "ais"* ]] ; then
     echo "Opening an interactive bash shell for container" $1
 else
     echo "Incorrect usage, example usage:       ./container_logs.sh CONTAINER_NAME"
-    echo "To view all containters, execute:     docker ps"
+    echo "To view all containers, execute:     docker ps"
     exit 1  
 fi
 

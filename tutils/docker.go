@@ -167,7 +167,7 @@ func RestartContainer(cid string) error {
 	return cmd.Run()
 }
 
-// DisconnectContainer diconnects specific containerID from all networks.
+// DisconnectContainer disconnects specific containerID from all networks.
 // Returns all networks from which has been disconnected.
 func DisconnectContainer(containerID string) ([]string, error) {
 	networks, err := containerNetworkList(containerID)

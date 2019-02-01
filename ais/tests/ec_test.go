@@ -1007,7 +1007,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	// PUT objects twice to make thier version 2
+	// PUT objects twice to make their version 2
 	for j := 0; j < 2; j++ {
 		for i := 0; i < numFiles; i++ {
 			objName := fmt.Sprintf(objPatt, i)

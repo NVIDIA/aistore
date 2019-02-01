@@ -123,7 +123,7 @@ First, ensure that you have followed [the instructions for installing the packag
 
 2. For each proxy or target url that you want to communcate with, create an api client.
     ```shell
-    #Initalize the configuration object
+    #Initialize the configuration object
     configuration = openapi_client.Configuration()
     configuration.debug = False
     

@@ -5,7 +5,7 @@ usage() {
     echo "  -a=AWS_DIR or --aws=AWS_DIR   : to use AWS, where AWS_DIR is the location of AWS configuration and credential files"
     echo "  -c=NUM or --cluster=NUM       : where NUM is the number of clusters"
     echo "  -d=NUM or --directories=NUM   : where NUM is the number of local cache directories"
-    echo "  -f=LIST or --filesystems=LIST : where LIST is a comma seperated list of filesystems"
+    echo "  -f=LIST or --filesystems=LIST : where LIST is a comma separated list of filesystems"
     echo "  -g or --gcp                   : to use GCP"
     echo "  -h or --help                  : show usage"
     echo "  -l or --last                  : redeploy using the arguments from the last ais docker deployment"
@@ -367,7 +367,7 @@ if [ "$FS_LIST" = "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
        read TESTFSPATHCOUNT
        is_number $TESTFSPATHCOUNT
     elif [ $cachesource -eq 2 ]; then
-       echo Enter filesystem info in comma seperated format ex: /tmp/ais1,/tmp/ais:
+       echo Enter filesystem info in comma separated format ex: /tmp/ais1,/tmp/ais:
        read FS_LIST
     else
         echo "Not a valid entry. Exiting..."

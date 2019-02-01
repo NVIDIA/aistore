@@ -99,7 +99,7 @@ func newPrimary() *proxyrunner {
 // newTransportServer creates a http test server to simulate a proxy or a target, it is used to test the
 // transport of mets sync, which is making sync calls, retry failed calls, etc. it doesn't involve the actual
 // content of the meta data received.
-// newTransportServer's http handler calls the sync funtion which decide how to respond to the sync call,
+// newTransportServer's http handler calls the sync function which decide how to respond to the sync call,
 // counts number of times sync call received, sends result to the result channel on each sync (error or
 // no error), completes the http request with the status returned by the sync function.
 func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- transportData) *httptest.Server {
@@ -389,7 +389,7 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 }
 
 // refused tests the connection-refused scenario
-// it has two test cases: one wih a short delay to let metasyncer handle it immediately,
+// it has two test cases: one with a short delay to let metasyncer handle it immediately,
 // the other with a longer delay so that metasyncer times out
 // retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {

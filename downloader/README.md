@@ -91,8 +91,8 @@ Name | Type | Description | Optional?
 **base** | **string** | The base URL of the object that will be used to formulate the download url |
 **prefix** | **string** | Is the first thing appended to the base string to formulate the download url | Yes
 **suffix** | **string** | the suffix follows the object index to formulate the download url of the object being downloaded. | Yes
-**start** | **int** | The index of the first object in the object space to be downloaded. Defualt is 0 if not provided. | Yes
-**end** | **int** | The upper bound of the range of objects to be downloaded in the object space. Defualt is 0 if not provided. | Yes
+**start** | **int** | The index of the first object in the object space to be downloaded. Default is 0 if not provided. | Yes
+**end** | **int** | The upper bound of the range of objects to be downloaded in the object space. Default is 0 if not provided. | Yes
 **step** | **int** | Used to download every nth object (where n = step) in the object space starting from start and ending at end. Default is 1 if not provided. | Yes
 **digit_count** | **int** | Used to ensure that each key coforms to n digits (where n = digit_count). Basically prepends as many 0s as needed. i.e. if n == 4, then the key 45 will be 0045 and if n == 5, then key 45 wil be 00045. Not providing this field will mean no 0s are prepended to any index in the key space. | Yes
 
