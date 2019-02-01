@@ -1,5 +1,5 @@
 ## Disclaimer
-> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`dev/deploy/docker`](../docker).
+> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](../docker).
 
 ##  Kubeadm: Deploying AIStore in a Single Node Cluster
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple single node cluster with one proxy and any number of targets.
