@@ -2984,16 +2984,26 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		hashes              []hash.Hash
 	)
 
-	if !roi.cold && roi.lom.Cksumcfg.Checksum != cmn.ChecksumNone && (!roi.migrated || roi.lom.Cksumcfg.ValidateClusterMigration) {
+	if !roi.cold && roi.lom.Cksumcfg.Checksum != cmn.ChecksumNone {
 		checkCksumType = roi.lom.Cksumcfg.Checksum
 		cmn.Assert(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
 
-		saveHash = xxhash.New64()
-		hashes = []hash.Hash{saveHash}
+		if !roi.migrated || roi.lom.Cksumcfg.ValidateClusterMigration {
+			saveHash = xxhash.New64()
+			hashes = []hash.Hash{saveHash}
 
-		// if sender provided checksum we need to ensure that it is correct
-		if expectedCksum = roi.cksumToCheck; expectedCksum != nil {
-			checkHash = saveHash
+			// if sender provided checksum we need to ensure that it is correct
+			if expectedCksum = roi.cksumToCheck; expectedCksum != nil {
+				checkHash = saveHash
+			}
+		} else {
+			// If migration validation is not required we can just take
+			// calculated checksum by some other node (from which we received
+			// the object). If not present we need to calculate it.
+			if roi.lom.Nhobj = roi.cksumToCheck; roi.lom.Nhobj == nil {
+				saveHash = xxhash.New64()
+				hashes = []hash.Hash{saveHash}
+			}
 		}
 	} else if roi.cold {
 		// by default we should calculate xxhash and save it together with file

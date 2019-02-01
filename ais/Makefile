@@ -51,6 +51,8 @@ devrefresh:
 .PHONY: build
 
 build:
+	VERSION=`git rev-parse --short HEAD`
+	BUILD=`date +%FT%T%z`
 	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" setup/ais.go
 
 
