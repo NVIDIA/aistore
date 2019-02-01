@@ -1,9 +1,9 @@
 SHELL := /bin/bash
 
 # Build version and flags
-VERSION := 1.0.0
-BUILD := `git rev-parse HEAD`
-LDFLAGS=-ldflags "-X=main.version=$(VERSION) -X=main.build=$(BUILD)"
+VERSION=$(shell git rev-parse --short HEAD)
+BUILD=$(shell date +%FT%T%z)
+LDFLAGS=-ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'"
 
 REPOPATH=src/github.com/NVIDIA
 DEVPATH=src/gitlab-master.nvidia.com/aistorage/
@@ -51,9 +51,7 @@ devrefresh:
 .PHONY: build
 
 build:
-	VERSION=`git rev-parse --short HEAD`
-	BUILD=`date +%FT%T%z`
-	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
+	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/ais.go
 
 
 # Target for cleaning deployment
