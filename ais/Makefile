@@ -53,7 +53,7 @@ devrefresh:
 build:
 	VERSION=`git rev-parse --short HEAD`
 	BUILD=`date +%FT%T%z`
-	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" setup/ais.go
+	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
 
 
 # Target for cleaning deployment
