@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -314,6 +315,49 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
 	p.invalmsghdlr(w, r, s)
+}
+
+// Used for redirecting ReverseProxy GCP/AWS GET request to target
+func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	if err != nil {
+		return
+	}
+	bucket, objname := apitems[0], apitems[1]
+	if !p.validatebckname(w, r, bucket) {
+		return
+	}
+	smap := p.smapowner.get()
+	si, errstr := hrwTarget(bucket, objname, smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+	pReq, err := http.NewRequest(r.Method, redirecturl, r.Body)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	for header, values := range r.Header {
+		for _, value := range values {
+			pReq.Header.Add(header, value)
+		}
+	}
+
+	pRes, err := p.httpclient.Do(pReq)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if pRes.StatusCode >= http.StatusBadRequest {
+		p.invalmsghdlr(w, r, "Failed to read object", pRes.StatusCode)
+		return
+	}
+	io.Copy(w, pRes.Body)
+	pRes.Body.Close()
 }
 
 // GET /v1/objects/bucket-name/object-name
@@ -2110,19 +2154,60 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if baseURL == cmn.GCS_URL && r.Method == http.MethodGet {
-		s := cmn.RESTItems(r.URL.Path)
-		if len(s) == 2 {
-			r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects) + r.URL.Path
-			p.httpobjget(w, r)
-			return
-		} else if len(s) == 1 {
-			r.URL.Path = cmn.URLPath(cmn.Version, cmn.Buckets) + r.URL.Path
-			p.httpbckget(w, r)
+	if glog.V(4) {
+		glog.Infof("RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
+	}
+
+	// Make it work as a transparent proxy if we are not able to cache the requested object.
+	// Caching is available only for GET HTTP requests to GCS either via
+	// http://www.googleapi.com/storage or http://storage.googleapis.com
+	if r.Method != http.MethodGet || (baseURL != cmn.GCS_URL && baseURL != cmn.GCS_URL_ALT) {
+		p.rproxy.cloud.ServeHTTP(w, r)
+		return
+	}
+
+	s := cmn.RESTItems(r.URL.Path)
+	if baseURL == cmn.GCS_URL_ALT {
+		// remove redundant items from URL path to make it AIS-compatible
+		// original looks like:
+		//    http://www.googleapis.com/storage/v1/b/<bucket>/o/<object>
+		if glog.V(4) {
+			glog.Infof("JSON GCP request for object: %v", s)
+		}
+
+		if len(s) < 4 {
+			p.invalmsghdlr(w, r, "Invalid object path", http.StatusBadRequest)
 			return
 		}
+		if s[0] != "storage" || s[2] != "b" {
+			p.invalmsghdlr(w, r, "Invalid object path", http.StatusBadRequest)
+			return
+		}
+		s = s[3:]
+		// remove 'o' if it exists
+		if len(s) > 1 && s[1] == "o" {
+			s = append(s[:1], s[2:]...)
+		}
+
+		r.URL.Path = cmn.URLPath(s...)
+		if glog.V(4) {
+			glog.Infof("Updated JSON URL Path: %s", r.URL.Path)
+		}
+	} else {
+		// original url looks like - no cleanup required:
+		//    http://storage.googleapis.com/<bucket>/<object>
+		if glog.V(4) {
+			glog.Infof("XML GCP request for object: %v", s)
+		}
 	}
-	p.rproxy.cloud.ServeHTTP(w, r)
+
+	if len(s) > 1 {
+		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects) + r.URL.Path
+		p.objGetRProxy(w, r)
+	} else if len(s) == 1 {
+		r.URL.Path = cmn.URLPath(cmn.Version, cmn.Buckets) + r.URL.Path
+		p.httpbckget(w, r)
+	}
 }
 
 // gets target info

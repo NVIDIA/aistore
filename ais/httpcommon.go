@@ -164,6 +164,49 @@ type netServer struct {
 	mux *mux.ServeMux
 }
 
+// Override muxer ServeHTTP to support proxying HTTPS requests. Clients
+// initiates all HTTPS requests with CONNECT method instead of GET/PUT etc
+func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodConnect {
+		server.mux.ServeHTTP(w, r)
+		return
+	}
+
+	// TODO: add support for caching HTTPS requests
+	dest_conn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	// First, send that everything is OK. Trying to write a header after
+	// hijacking generates a warning and nothing works
+	w.WriteHeader(http.StatusOK)
+	// Second, hijack the connection. A kind of man-in-the-middle attack
+	// Since this moment this function is responsible of HTTP connection
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "Client does not support hijacking", http.StatusInternalServerError)
+		return
+	}
+	client_conn, _, err := hijacker.Hijack()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	}
+
+	// Third, start transparently sending data between source and destination
+	// by creating a tunnel between them
+	transfer := func(destination io.WriteCloser, source io.ReadCloser) {
+		io.Copy(destination, source)
+		source.Close()
+		destination.Close()
+	}
+
+	// NOTE: it looks like double closing both connections.
+	// Need to check how the tunnel works
+	go transfer(dest_conn, client_conn)
+	go transfer(client_conn, dest_conn)
+}
+
 type httprunner struct {
 	cmn.Named
 	publicServer          *netServer
@@ -184,8 +227,18 @@ type httprunner struct {
 
 func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	config := cmn.GCO.Get()
+
+	// Optimization: use "slow" HTTP handler only if the cluster works in Cloud
+	// reverse proxy mode. Without the optimization every HTTP request would
+	// waste time by getting and reading global configuration, string
+	// comparison and branching
+	var httpHandler http.Handler = server.mux
+	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
+		httpHandler = server
+	}
+
 	if config.Net.HTTP.UseHTTPS {
-		server.s = &http.Server{Addr: addr, Handler: server.mux, ErrorLog: logger}
+		server.s = &http.Server{Addr: addr, Handler: httpHandler, ErrorLog: logger}
 		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)
@@ -195,7 +248,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	} else {
 		// Support for h2c is transparent using h2c.NewHandler, which implements a lightweight
 		// wrapper around server.mux.ServeHTTP to check for an h2c connection.
-		server.s = &http.Server{Addr: addr, Handler: h2c.NewHandler(server.mux, &http2.Server{}), ErrorLog: logger}
+		server.s = &http.Server{Addr: addr, Handler: h2c.NewHandler(httpHandler, &http2.Server{}), ErrorLog: logger}
 		if err := server.s.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)

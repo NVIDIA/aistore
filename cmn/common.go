@@ -52,7 +52,8 @@ const (
 	NotSupported = "not supported yet"
 	NoMountpaths = "no mountpaths"
 
-	GCS_URL = "http://storage.googleapis.com"
+	GCS_URL     = "http://storage.googleapis.com"
+	GCS_URL_ALT = "http://www.googleapis.com"
 )
 
 type (
@@ -108,13 +109,13 @@ func S2B(s string) (int64, error) {
 	s = strings.ToUpper(s)
 	for k, v := range toBiBytes {
 		if ns := strings.TrimSuffix(s, k); ns != s {
-			i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
-			return v * i, err
+			f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
+			return int64(float64(v) * f), err
 		}
 	}
 	ns := strings.TrimSuffix(s, "B")
-	i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
-	return i, err
+	f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
+	return int64(f), err
 }
 
 func B2S(b int64, digits int) string {

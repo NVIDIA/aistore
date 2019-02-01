@@ -349,6 +349,7 @@ type L4Conf struct {
 type HTTPConf struct {
 	Proto         string `json:"proto"`              // http or https
 	RevProxy      string `json:"rproxy"`             // RevProxy* enum
+	RevProxyCache bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
 	Key           string `json:"server_key"`         // HTTPS: openssl key
 	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
