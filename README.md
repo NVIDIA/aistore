@@ -257,7 +257,7 @@ AIStore runs on commodity Linux machines with no special requirements on the har
 
 ### Local Containerized (Docker)
 
-AIStore is deployable using [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It allows for multi-container deployment of AIStore clusters which allows for single or multiple network communication. To get started with AIStore and Docker, see: [Getting started with Docker](docker/README.md)
+AIStore is deployable using [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It allows for multi-container deployment of AIStore clusters which allows for single or multiple network communication. To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md)
 
 
 ### Local Non-containerized
@@ -372,7 +372,7 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 - [Experimental](docs/experimental.md)
 
 ## Selected Package READMEs
-- [Package `docker`](docker/README.md)
+- [Package `docker`](docs/docker_main.md)
 - [Package `api`](api/README.md)
 - [Package `authn`](authn/README.md)
 - [Package `memsis`](memsis/README.md)
