@@ -2,7 +2,7 @@
 
 ## Introduction
 
-AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (docker/dev directory) and quick start (docker/quick_start directory).
+AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (`deploy/dev/docker` directory) and quick start (`deploy/quickstart/docker` directory).
 
 ### Development Mode
 
@@ -48,6 +48,7 @@ It’s OK if apt-get reports that none of these packages are installed.
     ``` shell
     $ sudo apt-get install docker-ce
     ```
+    **Note:** For version `16.04` and up, `docker-ce` is not in the default Ubuntu repository. See [this guide](https://docs.docker.com/v17.09/engine/installation/linux/docker-ce/ubuntu/#install-docker-ce-1) for `docker-ce` installation.
 5. Verify that Docker CE is installed correctly by running the "hello-world" image.
     ```shell
     $ sudo docker run hello-world
@@ -101,7 +102,7 @@ Example:
 $ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment scripts in [`docker/dev`](dev/README.md) and [`docker/quick_start`](quick_start/README.md).
+3. To deploy AIStore, refer to the deployment scripts in [`deploy/dev/docker`](../deploy/dev/docker/README.md) and [deploy/quickstart/docker`](../deploy/quickstart/docker/README.md).
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands
@@ -139,7 +140,7 @@ To view docker logs, use `docker logs <container_name>`. Example:
 ```
 Note:
 * You can obtain the container name by running command `docker ps`
-* The `docker/dev` directory has a more comprehensive script named `logs.sh` to view logs
+* The `deploy/dev/docker/` directory has a more comprehensive script named `logs.sh` to view logs
 
 ### SSH Into a Container
 
@@ -148,7 +149,7 @@ Note:
 ```
 Note:
 * In production mode, the logs are expected to be in `/var/log/ais/`.By default (development mode) the logs are under `tmp/ais/log`
-* The `docker/dev` directory has a script named `container_shell.sh` that does the same thing
+* The `deploy/dev/docker/` directory has a script named `container_shell.sh` that does the same thing
 
 ### List Docker Images
 ```

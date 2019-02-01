@@ -1,25 +1,34 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: aistarget
+  name: aisprimaryproxy
 spec:
   selector:
     matchLabels:
-      app: aistarget-app
+       app: aisproxy-app
+       primaryproxy: "true"
   replicas: 1
   template:
     metadata:
       labels:
-        app: aistarget-app
+        app: aisproxy-app
+        primaryproxy: "true"
     spec:
-      hostNetwork: true
       containers:
-      - name: aistarget
-        image: quay.io/nvidia/ais
+      - name: aisproxy
+        image: docker.io/aistorage/ais:v1.3
         imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /v1/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
         env:
          - name: ROLE
-           value: "target"
+           value: "proxy"
+         - name: AIS_PRIMARYPROXY
+           value: "TRUE"
         volumeMounts:
          - name: ais-config
            mountPath: /etc/ais/ais.json
@@ -32,14 +41,14 @@ spec:
            subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
-         - name: ais-fs
-           mountPath: /usr/nvidia/data
          - name: ais-log
            mountPath: /tmp/
+         - name: ais-localbucket
+           mountPath: /usr/nvidia/
         ports:
-          - containerPort: 8081
+          - containerPort: 8080
       nodeSelector:
-          nodename: target
+          nodename: ais
       volumes:
         - name: ais-config
           configMap:
@@ -53,11 +62,39 @@ spec:
         - name: aws-credentials
           secret:
             secretName: aws-credentials
-        - name: ais-fs
-          hostPath:
-            path: /ais
-            type: Directory
         - name: ais-log
           hostPath:
             path: /tmp
             type: Directory
+        - name: ais-localbucket
+          hostPath:
+            path: /usr/nvidia/
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: aisprimaryservice
+spec:
+  ports:
+  - port: 8080
+    nodePort: 31337
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: aisproxy-app
+    primaryproxy: "true"
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: aistargetservice
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: aistarget-app
+  type: ClusterIP

@@ -25,5 +25,7 @@ RUN python get-pip.py
 RUN pip install awscli
 RUN rm -rf go$GOLANG_VERSION.linux-amd64.tar.gz
 
+EXPOSE 8080
+
 RUN go get -u -v github.com/NVIDIA/aistore/ais && cd $WORKDIR
 WORKDIR $WORKDIR

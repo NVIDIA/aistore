@@ -1,22 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: aisprimaryproxy
+  name: aisproxy
 spec:
   selector:
     matchLabels:
        app: aisproxy-app
+       primaryproxy: "false"
   replicas: 1
   template:
     metadata:
       labels:
         app: aisproxy-app
+        primaryproxy: "false"
     spec:
       hostNetwork: true
       containers:
       - name: aisproxy
-        image: quay.io/nvidia/ais
-        imagePullPolicy: Always
+        image: docker.io/aistorage/ais:v1.3
+        #imagePullPolicy: Always
         livenessProbe:
           httpGet:
             path: /v1/health
@@ -26,8 +28,6 @@ spec:
         env:
          - name: ROLE
            value: "proxy"
-         - name: AIS_PRIMARYPROXY
-           value: "TRUE"
         volumeMounts:
          - name: ais-config
            mountPath: /etc/ais/ais.json

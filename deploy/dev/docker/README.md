@@ -5,9 +5,9 @@ Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deplo
 
 ## Requirements
 
->Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](../README.md)
+>Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](docs/docker_main.md)
 
-[`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker attaches `$GOPATH/src` directory to a container, so the container at start builds new binaries from the current sources.
+[`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker uses the `$GOPATH/src` directory as a bind mount for the container. The container at start builds new binaries from the current sources.
 
 For the *i*th cluster, AIStore creates three networks: ais${i}\_public, ais${i}\_internal\_control, and ais${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (`-m` argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the Docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the Docker public and replication networks of other clusters to allow for multi-tiering and replication.
 
@@ -115,7 +115,7 @@ Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}`
 
 ## Extra configuration
 
-It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container. To fix this you can tune up variables in [deployment script](docker/dev/deploy_docker.sh).
+It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container (default is `172.50.0.0/24` subnet). To fix this you can tune up variables in [deployment script](deploy/dev/docker/deploy_docker.sh).
 
 Useful script variables:
 
@@ -187,8 +187,8 @@ $ ./container_logs.sh CONTAINER_NAME
 ### Accessing These Scripts From Anywhere
 Add the following to the end of your `~/.profile`:
 ```
-if [ -d "$GOPATH/src/github.com/NVIDIA/aistore/docker/dev" ] ; then
-  PATH="$PATH:$GOPATH/src/github.com/NVIDIA/aistore/docker/dev"
+if [ -d "$GOPATH/src/github.com/NVIDIA/aistore/deploy/dev/docker" ] ; then
+  PATH="$PATH:$GOPATH/src/github.com/NVIDIA/aistore/deploy/dev/docker"
 fi
 ```
 After that, execute the following to update your $PATH variable:

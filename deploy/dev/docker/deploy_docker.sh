@@ -385,9 +385,9 @@ if [ "$FS_LIST" != "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
     FSPATHS=${FSPATHS#","}
 fi
 
-composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml"
+composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml"
 if [ "$network" = "multi" ]; then
-    composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.multinet.yml"
+    composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/deploy/dev/docker/docker-compose.multinet.yml"
 fi
 
 PWD=$(pwd)
@@ -483,7 +483,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export DRYOBJSIZE=$DRYOBJSIZE
 
     CONFFILE="ais.json"
-    source $DIR/../../ais/setup/config.sh
+    source $DIR/../../../ais/setup/config.sh
 
     echo Stopping running clusters...
     docker-compose -p ais${i} -f ${composer_file} down

@@ -1,6 +1,6 @@
 ## Getting started quickly with AIStore using Docker
 
-This guide will help you set up a containerized, one-proxy, one-target deployment of AIStore within seconds. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](../README.md)
+This guide will help you set up a containerized, one-proxy, one-target deployment of AIStore within seconds. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](docs/docker_main.md)
 
 1. `docker pull aistorage/ais-quick-start`
 2. `docker run -di aistorage/ais-quick-start`

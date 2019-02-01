@@ -20,11 +20,12 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   python get-pip.py &&\
   pip install awscli
 
+
 # Setting ENV variables
 ENV GOLANG_VERSION 1.11
 ENV CONFFILE /etc/ais/ais.json
 
-# Reassign argumets to environment variables so run.sh can use them
+# Reassign arguments to environment variables so run.sh can use them
 ARG GOBASE
 ENV GOPATH $GOBASE
 ENV GOBIN $GOPATH/bin
@@ -33,9 +34,11 @@ ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/ais
 
 RUN mkdir /etc/ais
 RUN mkdir /usr/nvidia
+RUN mkdir -p $GOPATH/src/github.com/NVIDIA
 
 # Installing go
-RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+RUN mkdir -p "$GOPATH/bin"
+RUN chmod -R 777 "$GOPATH"
 RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
@@ -57,10 +60,13 @@ ARG TARGETS
 ENV TARGETCNT $TARGETS
 COPY ais.json $CONFFILE
 
-EXPOSE 8080 9080 10080
+EXPOSE 8080
 
 ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
+
+RUN cd $GOPATH/src/github.com/NVIDIA && git clone https://github.com/NVIDIA/aistore.git && cd $WORKDIR
+
 RUN echo "\
 cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go  \n \
 cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \

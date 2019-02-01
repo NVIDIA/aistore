@@ -1,31 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: aisproxy
+  name: aistarget
 spec:
   selector:
     matchLabels:
-       app: aisproxy-app
+      app: aistarget-app
   replicas: 1
   template:
     metadata:
       labels:
-        app: aisproxy-app
+        app: aistarget-app
     spec:
-      hostNetwork: true
       containers:
-      - name: aisproxy
-        image: quay.io/nvidia/ais
+      - name: aistarget
+        image: docker.io/aistorage/ais:v1.3
         imagePullPolicy: Always
-        livenessProbe:
-          httpGet:
-            path: /v1/health
-            port: 8081
-          initialDelaySeconds: 20
-          periodSeconds: 10
         env:
          - name: ROLE
-           value: "proxy"
+           value: "target"
         volumeMounts:
          - name: ais-config
            mountPath: /etc/ais/ais.json
@@ -38,14 +31,14 @@ spec:
            subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
+         - name: ais-fs
+           mountPath: /usr/nvidia/data
          - name: ais-log
            mountPath: /tmp/
-         - name: ais-localbucket
-           mountPath: /usr/nvidia/
         ports:
-          - containerPort: 8081
+          - containerPort: 8080
       nodeSelector:
-          nodename: proxy
+          nodename: ais
       volumes:
         - name: ais-config
           configMap:
@@ -59,11 +52,11 @@ spec:
         - name: aws-credentials
           secret:
             secretName: aws-credentials
+        - name: ais-fs
+          hostPath:
+            path: /ais
+            type: Directory
         - name: ais-log
           hostPath:
             path: /tmp
-            type: Directory
-        - name: ais-localbucket
-          hostPath:
-            path: /usr/nvidia/
             type: Directory
