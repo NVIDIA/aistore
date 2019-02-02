@@ -21,6 +21,10 @@ import (
 const (
 	closeFin = iota
 	closeStop
+
+	// IntraBundleMultiplier is used for intra-cluster workloads when each
+	// target talks to each other target: dSort, EC.
+	IntraBundleMultiplier = 4
 )
 
 type (

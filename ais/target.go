@@ -311,7 +311,8 @@ func (t *targetrunner) setupStreams() error {
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
 		MaxIdleConnsPerHost:   ncpu,
 	}}
-	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, ncpu)
+	// TODO: stream bundle multiplier (currently default) should be adjustable at runtime (#253)
+	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets)
 	return nil
 }
 

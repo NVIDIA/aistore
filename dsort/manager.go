@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -273,12 +272,11 @@ func (m *Manager) initStreams() error {
 		return err
 	}
 
-	streamCount := runtime.NumCPU() + 1 // stream count per target
 	for _, si := range ctx.smap.Get().Tmap {
 		m.streams.request[si.DaemonID] = NewStreamPool(2)
-		m.streams.response[si.DaemonID] = NewStreamPool(streamCount)
-		m.streams.shards[si.DaemonID] = NewStreamPool(streamCount)
-		for i := 0; i < streamCount; i++ {
+		m.streams.response[si.DaemonID] = NewStreamPool(transport.IntraBundleMultiplier)
+		m.streams.shards[si.DaemonID] = NewStreamPool(transport.IntraBundleMultiplier)
+		for i := 0; i < transport.IntraBundleMultiplier; i++ {
 			url := si.IntraControlNet.DirectURL + reqPath
 			m.streams.request[si.DaemonID].Add(NewStream(url))
 

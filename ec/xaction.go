@@ -110,9 +110,8 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 	}}
 
 	extraReq := transport.Extra{Callback: cbReq}
-	runner.reqBundle = transport.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, 4)
-	extraResp := transport.Extra{}
-	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, &extraResp, cluster.Targets, 4)
+	runner.reqBundle = transport.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, transport.IntraBundleMultiplier)
+	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, nil, cluster.Targets, transport.IntraBundleMultiplier)
 
 	// create all runners but do not start them until Run is called
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
