@@ -276,7 +276,7 @@ func (lom *LOM) UpdateAtime(at time.Time) {
 		return
 	}
 	ratime := lom.T.GetAtimeRunner()
-	ratime.Touch(lom.Fqn, at)
+	ratime.Touch(lom.ParsedFQN.MpathInfo.Path, lom.Fqn, at)
 }
 
 // IncObjectVersion increments the current version xattrs and returns the new value.

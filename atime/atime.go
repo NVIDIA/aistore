@@ -196,18 +196,13 @@ func (r *Runner) Stop(err error) {
 // Touch requests an access time update for a given object. If not specified,
 // the current time will be used. Note LRU must be enabled on the corresponding
 // bucket.
-func (r *Runner) Touch(fqn string, setTime ...time.Time) {
-	mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
-	if mpathInfo == nil {
-		return
-	}
+func (r *Runner) Touch(mpath, fqn string, setTime ...time.Time) {
 	var t time.Time
 	if len(setTime) == 1 {
 		t = setTime[0]
 	} else {
 		t = time.Now()
 	}
-	mpath := mpathInfo.Path
 	request := &atimeRequest{
 		accessTime:  t,
 		fqn:         fqn,

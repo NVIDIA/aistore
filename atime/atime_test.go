@@ -22,11 +22,11 @@ const (
 var (
 	riostat     *ios.IostatRunner
 	statsPeriod = time.Second
+	mpath       = "/tmp"
 )
 
 func init() {
 	fs.Mountpaths = fs.NewMountedFS()
-	mpath := "/tmp"
 	fs.Mountpaths.Add(mpath)
 
 	updateTestConfig(statsPeriod)
@@ -34,7 +34,6 @@ func init() {
 }
 
 func TestAtimerunnerStop(t *testing.T) {
-	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
 	atimer := NewRunner(fs.Mountpaths, riostat)
@@ -45,7 +44,7 @@ func TestAtimerunnerStop(t *testing.T) {
 
 	waitCh := make(chan struct{})
 	go func() {
-		atimer.Touch(fileName)
+		atimer.Touch(mpath, fileName)
 		waitCh <- struct{}{}
 	}()
 
@@ -58,7 +57,6 @@ func TestAtimerunnerStop(t *testing.T) {
 }
 
 func TestAtimerunnerTouch(t *testing.T) {
-	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
 	atimer := NewRunner(fs.Mountpaths, riostat)
@@ -67,7 +65,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	timeBeforeTouch := time.Now()
-	atimer.Touch(fileName)
+	atimer.Touch(mpath, fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
@@ -104,7 +102,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	go atimer.Run()
 	time.Sleep(50 * time.Millisecond)
 
-	atimer.Touch(fileName)
+	atimer.Touch(mpath, fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 	if len(atimer.joggers) != 0 {
 		t.Error("No files must be present in the map when the file's bucket has LRU Disabled")
@@ -116,10 +114,10 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
-	atimer.ReqAddMountpath("/tmp")
+	atimer.ReqAddMountpath(mpath)
 
 	fileName := "test"
-	atimer.Touch(fileName)
+	atimer.Touch(mpath, fileName)
 	time.Sleep(50 * time.Millisecond) // wait for per-mpath jogger to process
 	if len(atimer.joggers) != 1 {
 		t.Error("One jogger should be present because one mountpath was added")
@@ -137,7 +135,6 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 // TestAtimerunnerMultipleTouchSameFile touches the same
 // file belonging to a local bucket where LRU is enabled multiple times.
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
-	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
 	atimer := NewRunner(fs.Mountpaths, riostat)
@@ -145,7 +142,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
 
-	atimer.Touch(fileName)
+	atimer.Touch(mpath, fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One jogger and one file must be present in the atimemap")
@@ -160,7 +157,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	// Make sure that the access time will be a little different
 	time.Sleep(50 * time.Millisecond)
 
-	atimer.Touch(fileName)
+	atimer.Touch(mpath, fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
 	atimeResponse = <-atimer.Atime(fileName, "")
@@ -178,7 +175,6 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 }
 
 func TestAtimerunnerTouchMultipleFile(t *testing.T) {
-	mpath := "/tmp"
 	fileName1 := "/tmp/cloud/bck1/fqn1"
 	fileName2 := "/tmp/local/bck2/fqn2"
 
@@ -187,7 +183,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
 
-	atimer.Touch(fileName1)
+	atimer.Touch(mpath, fileName1)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
@@ -197,7 +193,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 		t.Errorf("File [%s] is not present in atime map", fileName1)
 	}
 
-	atimer.Touch(fileName2)
+	atimer.Touch(mpath, fileName2)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 2 {
 		t.Error("Two files must be present in the map")
@@ -213,7 +209,6 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 
 // TestAtimerunnerGetNumberItemsToFlushSimple tests the number of items to flush.
 func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
-	mpath := "/tmp"
 	fileName1 := "/tmp/local/bck1/fqn1"
 	fileName2 := "/tmp/cloud/bck2/fqn2"
 
@@ -230,8 +225,8 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// When the initial capacity was not achieved, function should return 0
-	atimer.Touch(fileName1)
-	atimer.Touch(fileName2)
+	atimer.Touch(mpath, fileName1)
+	atimer.Touch(mpath, fileName2)
 	time.Sleep(time.Millisecond) // wait for runner to process
 
 	n := atimer.joggers[mpath].num2flush()

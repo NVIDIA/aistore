@@ -590,16 +590,11 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket, objname    string
-		errstr             string
-		rangeOff, rangeLen int64
-		lom                *cluster.LOM
-		started            time.Time
-		config             = cmn.GCO.Get()
-		versioncfg         = &config.Ver
-		ct                 = t.contextWithAuth(r)
-		errcode            int
-		coldget, vchanged  bool
+		errcode    int
+		started    time.Time
+		config     = cmn.GCO.Get()
+		versioncfg = &config.Ver
+		ct         = t.contextWithAuth(r)
 	)
 	//
 	// 1. start, init lom, readahead
@@ -609,76 +604,87 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname = apitems[0], apitems[1]
+	bucket, objname := apitems[0], apitems[1]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	query := r.URL.Query()
-	rangeOff, rangeLen, errstr = t.offsetAndLength(query)
+	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
+		t.statsif.Add(stats.GetRedirLatency, redirDelta)
+	}
+
+	rangeOff, rangeLen, errstr := t.offsetAndLength(query)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	lom = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (doesnotexist|misplaced -> ok, other)
+	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
+	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (does_not_exist|misplaced -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if !dryRun.disk && lom.Exists() {
-		if x := query.Get(cmn.URLParamReadahead); x != "" { // FIXME
-			t.readahead.ahead(lom.Fqn, rangeOff, rangeLen)
-			return
+
+	if lom.Mirror.MirrorEnabled {
+		if errstr = lom.Fill(cluster.LomCopy); errstr != "" {
+			// Log error but don't abort get operation, it is not critical.
+			glog.Error(errstr)
 		}
 	}
+
+	// FIXME:
+	// if !dryRun.disk && lom.Exists() {
+	// 	if x := query.Get(cmn.URLParamReadahead); x != "" {
+	// 		t.readahead.ahead(lom.Fqn, rangeOff, rangeLen)
+	// 		return
+	// 	}
+	// }
+
 	if glog.V(4) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom, pid)
-	}
-	if redelta := t.redirectLatency(started, query); redelta != 0 {
-		t.statsif.Add(stats.GetRedirLatency, redelta)
 	}
 	if errstr, errcode = t.IsBucketLocal(bucket, lom.Bucketmd, query, lom.Bislocal); errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	//
-	// 2. under lock: versioning, checksum, restore from cluster
-	//
-	t.rtnamemap.Lock(lom.Uname, false)
 
-	if lom.Exists() {
+	// 2. under lock: versioning, checksum, restore from cluster
+	t.rtnamemap.Lock(lom.Uname, false)
+	coldGet := !lom.Exists()
+
+	if !coldGet {
 		if errstr = lom.Fill(cluster.LomVersion | cluster.LomCksum); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname, false)
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
+	}
 
-		// does not exist in the local bucket: restore from neighbors
-		// Need to check if dryrun is enabled to stop from getting LOM
-	} else if lom.Bislocal && !dryRun.disk && !dryRun.network {
-		if errstr, errcode = t.restoreObjLocalBucket(lom, r); errstr == "" {
-			t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, false)
+	// Need to check if dryrun is enabled to stop from getting LOM.
+	if coldGet && lom.Bislocal && !dryRun.disk && !dryRun.network {
+		// Does not exist in the local bucket: restore from neighbors.
+		if errstr, errcode = t.restoreObjLocalBucket(lom, r); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname, false)
+			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
+		t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, false)
 		t.rtnamemap.Unlock(lom.Uname, false)
-		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
 
-	coldget = lom.DoesNotExist
-	if !coldget && !lom.Bislocal { // exists && cloud-bucket: check ver if requested
+	if !coldGet && !lom.Bislocal { // exists && cloud-bucket: check ver if requested
 		if versioncfg.ValidateWarmGet && (lom.Version != "" && versioningConfigured(lom.Bislocal)) {
-			if vchanged, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
+			if coldGet, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
 				t.rtnamemap.Unlock(lom.Uname, false)
 				t.invalmsghdlr(w, r, errstr, errcode)
 				return
 			}
-			coldget = vchanged
 		}
 	}
+
 	// checksum validation, if requested
-	if !coldget && lom.Cksumcfg.ValidateWarmGet {
+	if !coldGet && lom.Cksumcfg.ValidateWarmGet {
 		errstr = lom.Fill(cluster.LomCksum | cluster.LomCksumPresentRecomp | cluster.LomCksumMissingRecomp)
 		if lom.Badchecksum {
 			glog.Errorln(errstr)
@@ -690,17 +696,16 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 			}
-			coldget = true
+			coldGet = true
 		} else if errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname, false)
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
 	}
-	//
+
 	// 3. coldget
-	//
-	if coldget && !dryRun.disk && !dryRun.network {
+	if coldGet && !dryRun.disk && !dryRun.network {
 		t.rtnamemap.Unlock(lom.Uname, false)
 		if errstr, errcode := t.getCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
@@ -708,7 +713,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 4. finally
-	t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, coldget)
+	t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, coldGet)
 	t.rtnamemap.Unlock(lom.Uname, false)
 }
 
@@ -790,10 +795,10 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 }
 
 //
-// 4. read local, write http (note: coldget() keeps the read lock if successful)
+// 4. read local, write http (note: coldGet() keeps the read lock if successful)
 //
 func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lom *cluster.LOM, started time.Time,
-	rangeOff, rangeLen int64, coldget bool) {
+	rangeOff, rangeLen int64, coldGet bool) {
 	var (
 		file        *os.File
 		sgl         *memsys.SGL
@@ -801,10 +806,8 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		buf         []byte
 		rangeReader io.ReadSeeker
 		reader      io.Reader
-		written     int64
 		err         error
 		errstr      string
-		fqn         = lom.Fqn
 	)
 	defer func() {
 		// rahfcacher.got()
@@ -853,7 +856,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
 	}
-	fqn = lom.ChooseMirror()
+	fqn := lom.ChooseMirror()
 	file, err = os.Open(fqn)
 	if err != nil {
 		if os.IsPermission(err) {
@@ -868,9 +871,10 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}
 	if rangeLen == 0 {
 		reader = file
-		buf, slab = gmem2.AllocFromSlab2(lom.Size)
+		// No need to allocate buffer for whole object (it might be very large).
+		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size, cmn.MiB))
 	} else {
-		buf, slab = gmem2.AllocFromSlab2(rangeLen)
+		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(rangeLen, cmn.MiB))
 		if cksumRange {
 			var cksum string
 			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
@@ -887,9 +891,8 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}
 
+	written, err := io.CopyBuffer(w, reader, buf)
 	if !dryRun.network {
-		written, err = io.CopyBuffer(w, reader, buf)
-	} else {
 		written, err = io.CopyBuffer(ioutil.Discard, reader, buf)
 	}
 	if err != nil {
@@ -904,12 +907,12 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		return
 	}
 
-	if !coldget {
+	if !coldGet {
 		lom.UpdateAtime(started)
 	}
 	if glog.V(4) {
 		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
-		if coldget {
+		if coldGet {
 			s += " (cold)"
 		}
 		glog.Infoln(s)
@@ -2265,7 +2268,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	cmn.Assert(roi.lom != nil)
 
 	// optimize out if the checksums do match
-	if roi.lom.Exists() {
+	if roi.lom.Exists() && roi.cksumToCheck != nil {
 		if errstr := roi.lom.Fill(cluster.LomCksum); errstr == "" {
 			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumToCheck) {
 				glog.Infof("Existing %s is valid: PUT is a no-op", roi.lom)
@@ -2279,8 +2282,8 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 		return err, http.StatusInternalServerError
 	}
 
-	// commit
 	if !dryRun.disk && !dryRun.network {
+		// commit
 		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
@@ -2361,7 +2364,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 }
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
-	if dryRun.disk || !lom.Mirror.MirrorEnabled {
+	if !lom.Mirror.MirrorEnabled || dryRun.disk {
 		return
 	}
 

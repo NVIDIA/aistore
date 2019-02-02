@@ -67,8 +67,8 @@ func touchFakeFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int) {
 	start := time.Now()
 	for j := 0; j < numFiles/2; j++ {
 		numStr := strconv.Itoa(j)
-		r.Touch(fqn1 + numStr)
-		r.Touch(fqn2 + numStr)
+		r.Touch(mpath, fqn1+numStr)
+		r.Touch(mpath, fqn2+numStr)
 	}
 	Logf("%v to touch %d files in %s\n", time.Since(start), numFiles, mpath)
 }
@@ -78,8 +78,8 @@ func touchRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duratio
 	fileRange := numFiles / 2
 	for start := time.Now(); time.Since(start) < duration; {
 		numStr := strconv.Itoa(rand.Intn(fileRange))
-		r.Touch(fqn1 + numStr)
-		r.Touch(fqn2 + numStr)
+		r.Touch(mpath, fqn1+numStr)
+		r.Touch(mpath, fqn2+numStr)
 		numTouches += 2
 	}
 	Logf("Mpath: %q. Touched %d files.\n", mpath, numTouches)
