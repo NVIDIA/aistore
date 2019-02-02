@@ -83,11 +83,42 @@ deploy_next_tier:
 	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
 
 
+# Target for tests
+.PHONY: test-envcheck test-short test-long test-run test
+
+test-envcheck:
+ifeq ($(BUCKET),)
+	$(error missing environment variable: BUCKET="bucketname")
+endif
+ifneq ($(shell hash docker && docker container ls | grep ais),)
+	@echo "AIStore running on docker..."
+else ifneq ($(shell ps aux | grep -v -e 'grep' | grep bin/ais),)
+	@echo "AIStore running locally..."
+else
+	$(warning AIStore not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized))
+	@echo -n "continue? [y/N] " && read ans && [ $${ans:-N} == y ]
+endif
+
+test-short: test-envcheck
+	@CHECK="test-short" BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+
+test-long: test-envcheck
+	@CHECK="test-long" BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+
+test-run: test-envcheck #runs tests matching a specific regex
+ifeq ($(RE),)
+	$(error missing environment variable: RE="testnameregex")
+endif
+	@CHECK="test-run" RE=$(RE) BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+
+test: test-envcheck spell-check fmt-check lint-install lint test-short #main preflight test
+
+
 # Target for linters
 LINT_DIRS := $(shell find ../ -type d | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 MISSPELL_DIRS := $(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 
-.PHONY: lint lint-install fmt fmt-fix spell spell-fix cyclo
+.PHONY: lint lint-install fmt-check fmt-fix spell-check spell-fix cyclo
 
 lint-install:
 	@go get -u github.com/alecthomas/gometalinter
@@ -99,22 +130,19 @@ LINT_VET_IGNORE := -composites=false
 LINT_IGNORE := "(should have comment|comment on exported)"
 
 lint:
-	@echo "Checking vet..."
-	@$(foreach dir,$(LINT_DIRS),go tool vet $(LINT_VET_IGNORE) $(dir);)
-	@echo "Checking others..."
-	@$(GOPATH)/bin/gometalinter --exclude=$(LINT_IGNORE) --disable-all --enable=golint --enable=errcheck --enable=staticcheck $(LINT_DIRS)
+	@CHECK="lint" LINT_VET_IGNORE=$(LINT_VET_IGNORE) LINT_IGNORE=$(LINT_IGNORE) LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh
 
 fmt-check:
 	@go get -u golang.org/x/tools/cmd/goimports
-	@$(GOPATH)/bin/goimports -d $(LINT_DIRS)  1>&2
+	@CHECK="fmt" LINT_DIRS="$(LINT_DIRS)" $(SHELL) ./setup/preflight_check.sh
 
 fmt-fix:
 	@go get -u golang.org/x/tools/cmd/goimports
-	@$(GOPATH)/bin/goimports -w $(LINT_DIRS)  1>&2
+	@$(GOPATH)/bin/goimports -w $(LINT_DIRS)
 
 spell-check:
 	@go get -u github.com/client9/misspell/cmd/misspell
-	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell $(dir);)
+	@CHECK="spell" MISSPELL_DIRS="$(MISSPELL_DIRS)" $(SHELL) ./setup/preflight_check.sh
 
 spell-fix:
 	@go get -u github.com/client9/misspell/cmd/misspell
