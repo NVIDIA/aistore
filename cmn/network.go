@@ -5,8 +5,12 @@
 package cmn
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
+	"time"
 )
 
 const (
@@ -15,7 +19,18 @@ const (
 	NetworkIntraData    = "intra_data"
 )
 
-var KnownNetworks = [3]string{NetworkPublic, NetworkIntraControl, NetworkIntraData}
+var (
+	KnownNetworks = []string{NetworkPublic, NetworkIntraControl, NetworkIntraData}
+)
+
+type (
+	ClientArgs struct {
+		DialTimeout      time.Duration
+		Timeout          time.Duration
+		IdleConnsPerHost int
+		UseHTTPS         bool
+	}
+)
 
 func NetworkIsKnown(net string) bool {
 	return net == NetworkPublic || net == NetworkIntraControl || net == NetworkIntraData
@@ -32,4 +47,43 @@ func ParsePort(p string) (int, error) {
 	}
 
 	return port, nil
+}
+
+func NewTransport(args ClientArgs) *http.Transport {
+	var (
+		dialTimeout      = args.DialTimeout
+		idleConnsPerHost = args.IdleConnsPerHost
+		defaultTransport = http.DefaultTransport.(*http.Transport)
+	)
+
+	if dialTimeout == 0 {
+		dialTimeout = 30 * time.Second
+	}
+
+	transport := &http.Transport{
+		Proxy: defaultTransport.Proxy,
+		DialContext: (&net.Dialer{
+			Timeout:   dialTimeout,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		MaxIdleConnsPerHost:   idleConnsPerHost,
+		MaxIdleConns:          0, // no limit
+	}
+	if args.UseHTTPS {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	return transport
+}
+
+func NewClient(args ClientArgs) *http.Client {
+	transport := NewTransport(args)
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   args.Timeout,
+	}
+	return client
 }

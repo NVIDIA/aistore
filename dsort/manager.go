@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -174,27 +173,10 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// Set extract creator depending on extension provided by the user
 	m.setExtractCreator()
 
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	m.client = &http.Client{
-		Transport: &http.Transport{
-			// defaults
-			Proxy: defaultTransport.Proxy,
-			// Such long timeouts are dictated by the fact that unmarshaling
-			// records can tak a long time, even couple of minutes.
-			DialContext: (&net.Dialer{
-				Timeout:   300 * time.Second,
-				KeepAlive: 300 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-			ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-			TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-			// custom
-			MaxIdleConnsPerHost: 1000,
-			MaxIdleConns:        0, // Zero means no limit
-		},
-		Timeout: 30 * time.Minute,
-	}
+	m.client = cmn.NewClient(cmn.ClientArgs{
+		DialTimeout: 5 * time.Minute,
+		Timeout:     30 * time.Minute,
+	})
 
 	m.fileExtension = rs.Extension
 	m.received.count = int32(0)

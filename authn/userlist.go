@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -17,8 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/json-iterator/go"
+	jwt "github.com/dgrijalva/jwt-go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -50,26 +49,6 @@ type (
 	}
 )
 
-func createHTTPClient() *http.Client {
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	transport := &http.Transport{
-		// defaults
-		Proxy: defaultTransport.Proxy,
-		DialContext: (&net.Dialer{ // defaultTransport.DialContext,
-			Timeout:   30 * time.Second, // must be reduced & configurable
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-		// custom
-		MaxIdleConnsPerHost: defaultTransport.MaxIdleConnsPerHost,
-		MaxIdleConns:        defaultTransport.MaxIdleConns,
-	}
-	return &http.Client{Transport: transport, Timeout: conf.Timeout.Default}
-}
-
 // Creates a new user manager. If user DB exists, it loads the data from the
 // file and decrypts passwords
 func newUserManager(dbPath string, proxy *proxy) *userManager {
@@ -77,11 +56,14 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		err   error
 		bytes []byte
 	)
+	client := cmn.NewClient(cmn.ClientArgs{
+		Timeout: conf.Timeout.Default,
+	})
 	mgr := &userManager{
 		Path:   dbPath,
 		Users:  make(map[string]*userInfo, 10),
 		tokens: make(map[string]*tokenInfo, 10),
-		client: createHTTPClient(),
+		client: client,
 		proxy:  proxy,
 	}
 	if _, err = os.Stat(dbPath); err != nil {

@@ -7,32 +7,11 @@
 package dsort
 
 import (
-	"net"
-	"net/http"
-	"runtime"
 	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/transport"
 )
-
-func newClient(conns int) *http.Client {
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	client := &http.Client{Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          1000,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		MaxIdleConnsPerHost:   conns,
-	}}
-	return client
-}
 
 type StreamPool struct {
 	roundRobinIdx int64
@@ -63,8 +42,8 @@ func (sp *StreamPool) Stop() {
 
 func NewStream(url string) *transport.Stream {
 	extra := &transport.Extra{
-		IdleTimeout: time.Minute * 5,
+		IdleTimeout: time.Second * 30,
 	}
-	client := newClient(runtime.NumCPU()*2 + 1)
+	client := transport.NewDefaultClient()
 	return transport.NewStream(client, url, extra)
 }

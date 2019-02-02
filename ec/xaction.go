@@ -10,10 +10,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,22 +91,7 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 		}
 	}
 
-	ncpu := runtime.NumCPU()
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	client := &http.Client{Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          1000,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		MaxIdleConnsPerHost:   ncpu,
-	}}
-
+	client := transport.NewDefaultClient()
 	extraReq := transport.Extra{Callback: cbReq}
 	runner.reqBundle = transport.NewStreamBundle(smap, si, client, netReq, ReqStreamName, &extraReq, cluster.Targets, transport.IntraBundleMultiplier)
 	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, nil, cluster.Targets, transport.IntraBundleMultiplier)

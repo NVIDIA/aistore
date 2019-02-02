@@ -7,7 +7,6 @@ package ais
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -291,21 +290,17 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 
 func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 	h.statsif = s
-	// http client
-	perhost := targetMaxIdleConnsPer
-	if isproxy {
-		perhost = proxyMaxIdleConnsPer
-	}
 
 	config := cmn.GCO.Get()
-	h.httpclient = &http.Client{
-		Transport: h.createTransport(perhost, 0),
-		Timeout:   config.Timeout.Default, // defaultTimeout
-	}
-	h.httpclientLongTimeout = &http.Client{
-		Transport: h.createTransport(perhost, 0),
-		Timeout:   config.Timeout.DefaultLong, // longTimeout
-	}
+	h.httpclient = cmn.NewClient(cmn.ClientArgs{
+		Timeout:  config.Timeout.Default,
+		UseHTTPS: config.Net.HTTP.UseHTTPS,
+	})
+	h.httpclientLongTimeout = cmn.NewClient(cmn.ClientArgs{
+		Timeout:  config.Timeout.DefaultLong,
+		UseHTTPS: config.Net.HTTP.UseHTTPS,
+	})
+
 	h.publicServer = &netServer{
 		mux: mux.NewServeMux(),
 	}
@@ -386,30 +381,6 @@ func (h *httprunner) initSI() {
 	}
 
 	h.si = newSnode(daemonID, config.Net.HTTP.Proto, publicAddr, intraControlAddr, intraDataAddr)
-}
-
-func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	transport := &http.Transport{
-		// defaults
-		Proxy: defaultTransport.Proxy,
-		DialContext: (&net.Dialer{ // defaultTransport.DialContext,
-			Timeout:   30 * time.Second, // must be reduced & configurable
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-		// custom
-		MaxIdleConnsPerHost: perhost,
-		MaxIdleConns:        0, // Zero means no limit
-	}
-	if cmn.GCO.Get().Net.HTTP.UseHTTPS {
-		glog.Warningln("HTTPS for inter-cluster communications is not yet supported and should be avoided")
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-	return transport
 }
 
 func (h *httprunner) run() error {

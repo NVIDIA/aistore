@@ -117,8 +117,10 @@ func (p *proxyrunner) Run() error {
 
 	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.rproxy.cloud = &httputil.ReverseProxy{
-			Director:  func(r *http.Request) {},
-			Transport: p.createTransport(0, 0), // default idle connections per host, unlimited idle total
+			Director: func(r *http.Request) {},
+			Transport: cmn.NewTransport(cmn.ClientArgs{
+				UseHTTPS: config.Net.HTTP.UseHTTPS,
+			}),
 		}
 	}
 
@@ -1012,7 +1014,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
 		cmn.Assert(err == nil, err)
 		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
-		p.rproxy.p.Transport = p.createTransport(proxyMaxIdleConnsPer, 0)
+		p.rproxy.p.Transport = cmn.NewTransport(cmn.ClientArgs{
+			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
+		})
 	}
 	p.rproxy.Unlock()
 	if len(body) > 0 {
@@ -1036,7 +1040,9 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 		uparsed, err := url.Parse(tsi.PublicNet.DirectURL)
 		cmn.Assert(err == nil, err)
 		rproxy = httputil.NewSingleHostReverseProxy(uparsed)
-		rproxy.Transport = p.createTransport(targetMaxIdleConnsPer, 0)
+		rproxy.Transport = cmn.NewTransport(cmn.ClientArgs{
+			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
+		})
 		p.rproxy.tmap[tsi.DaemonID] = rproxy
 	}
 	p.rproxy.Unlock()

@@ -152,6 +152,12 @@ type (
 
 var nopRC = &nopReadCloser{}
 
+func NewDefaultClient() *http.Client {
+	return cmn.NewClient(cmn.ClientArgs{
+		IdleConnsPerHost: 1000,
+	})
+}
+
 //
 // API: methods
 //
