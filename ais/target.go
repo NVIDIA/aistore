@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/ais/util/readers"
 	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -830,7 +829,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	// loopback if disk IO is disabled
 	if dryRun.disk {
 		if !dryRun.network {
-			rd := readers.NewRandReader(dryRun.size)
+			rd := newDryReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
 				// NOTE: Cannot return invalid handler because it will be double header write
 				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
@@ -2942,7 +2941,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		return
 	}
 	if dryRun.network {
-		reader = readers.NewRandReader(dryRun.size)
+		reader = newDryReader(dryRun.size)
 	}
 	if !dryRun.disk {
 		if file, err = cmn.CreateFile(roi.workFQN); err != nil {

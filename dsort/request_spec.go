@@ -160,48 +160,47 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS := &ParsedRequestSpec{}
 	if rs.Bucket == "" {
 		return parsedRS, errMissingBucket
-	} else {
-		parsedRS.Bucket = rs.Bucket
 	}
+	parsedRS.Bucket = rs.Bucket
+
 	parsedRS.IsLocalBucket = rs.IsLocalBucket
 
-	if parsedInput, err := parseInputFormat(rs.IntputFormat); err != nil {
+	var err error
+
+	parsedRS.InputFormat, err = parseInputFormat(rs.IntputFormat)
+	if err != nil {
 		return nil, err
-	} else {
-		parsedRS.InputFormat = parsedInput
 	}
+
 	parsedRS.IgnoreMissingFiles = rs.IgnoreMissingFiles
 
 	if !validateExtension(rs.Extension) {
 		return nil, errInvalidExtension
-	} else {
-		parsedRS.Extension = rs.Extension
 	}
+	parsedRS.Extension = rs.Extension
 
 	if rs.OutputShardSize <= 0 {
 		return nil, errNegOutputShardSize
-	} else {
-		parsedRS.OutputShardSize = rs.OutputShardSize
 	}
-	if parsedOutput, err := parseOutputFormat(rs.OutputFormat); err != nil {
+	parsedRS.OutputShardSize = rs.OutputShardSize
+
+	parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat)
+	if err != nil {
 		return nil, err
-	} else {
-		parsedRS.OutputFormat = parsedOutput
 	}
 
-	if parsedAlgorithm, err := parseAlgorithm(rs.Algorithm); err != nil {
+	parsedRS.Algorithm, err = parseAlgorithm(rs.Algorithm)
+	if err != nil {
 		return nil, errInvalidAlgorithm
-	} else {
-		parsedRS.Algorithm = parsedAlgorithm
 	}
 
 	if rs.MaxMemUsage == "" {
 		rs.MaxMemUsage = "80%" // default value
 	}
-	if parsedMemUsage, err := parseMemUsage(rs.MaxMemUsage); err != nil {
+
+	parsedRS.MaxMemUsage, err = parseMemUsage(rs.MaxMemUsage)
+	if err != nil {
 		return nil, err
-	} else {
-		parsedRS.MaxMemUsage = parsedMemUsage
 	}
 
 	if rs.ExtractConcLimit < 0 {

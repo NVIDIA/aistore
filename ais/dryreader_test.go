@@ -3,14 +3,14 @@
  *
  */
 
-package readers
+package ais
 
 import (
 	"io"
 	"testing"
 )
 
-func TestRandReaderEmptyFile(t *testing.T) {
+func TestDryReaderEmptyFile(t *testing.T) {
 	var (
 		chunkSize = 36 * 1024
 		buf       = make([]byte, chunkSize)
@@ -18,7 +18,7 @@ func TestRandReaderEmptyFile(t *testing.T) {
 		n         int
 	)
 
-	emptyReader := NewRandReader(0)
+	emptyReader := newDryReader(0)
 	n, err = emptyReader.Read(buf)
 	if n != 0 {
 		t.Errorf("Empty file - read %d bytes", n)
@@ -29,7 +29,7 @@ func TestRandReaderEmptyFile(t *testing.T) {
 }
 
 // read a file by chunks - a file size is greater than chunk size
-func TestRandReaderBigFile(t *testing.T) {
+func TestDryReaderBigFile(t *testing.T) {
 	var (
 		chunkSize = 36 * 1024
 		buf       = make([]byte, chunkSize)
@@ -38,7 +38,7 @@ func TestRandReaderBigFile(t *testing.T) {
 		fileSize  = 64 * 1024
 	)
 
-	readerChunks := NewRandReader(int64(fileSize))
+	readerChunks := newDryReader(int64(fileSize))
 	n, err = readerChunks.Read(buf)
 	if err != nil {
 		t.Errorf("First read failed: %v", err)
@@ -57,7 +57,7 @@ func TestRandReaderBigFile(t *testing.T) {
 }
 
 // read a chunk bigger than the file
-func TestRandReaderSmallFile(t *testing.T) {
+func TestDryReaderSmallFile(t *testing.T) {
 	var (
 		chunkSize = 36 * 1024
 		buf       = make([]byte, chunkSize)
@@ -66,7 +66,7 @@ func TestRandReaderSmallFile(t *testing.T) {
 		fileSize  = 16 * 1024
 	)
 
-	readerChunks := NewRandReader(int64(fileSize))
+	readerChunks := newDryReader(int64(fileSize))
 	n, err = readerChunks.Read(buf)
 	if err != nil {
 		t.Errorf("Read failed: %v", err)
@@ -81,7 +81,7 @@ func TestRandReaderSmallFile(t *testing.T) {
 }
 
 // read the file with a size of a chunk
-func TestRandReaderExactSize(t *testing.T) {
+func TestDryReaderExactSize(t *testing.T) {
 	var (
 		chunkSize = 36 * 1024
 		buf       = make([]byte, chunkSize)
@@ -90,7 +90,7 @@ func TestRandReaderExactSize(t *testing.T) {
 		fileSize  = chunkSize
 	)
 
-	readerChunks := NewRandReader(int64(fileSize))
+	readerChunks := newDryReader(int64(fileSize))
 	n, err = readerChunks.Read(buf)
 	if err != nil {
 		t.Errorf("Read failed: %v", err)

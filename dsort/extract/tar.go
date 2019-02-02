@@ -179,7 +179,7 @@ func (t *tarExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 	}
 }
 
-func NewTarExtractCreator(gzipped bool) *tarExtractCreator {
+func NewTarExtractCreator(gzipped bool) ExtractCreator {
 	return &tarExtractCreator{
 		gzipped: gzipped,
 	}
