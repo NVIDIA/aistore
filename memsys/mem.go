@@ -293,7 +293,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	// 3. validate and compute free memory "low watermark"
 	m, f := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
-		err = fmt.Errorf("Insufficient free memory %s, minimum required %s", f, m)
+		err = fmt.Errorf("insufficient free memory %s, minimum required %s", f, m)
 		if !ignorerr {
 			panic(err)
 		}
@@ -508,24 +508,24 @@ func (r *Mem2) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
 		if minfree, err = cmn.S2B(a); err != nil {
-			return fmt.Errorf("Cannot parse AIS_MINMEM_FREE '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_FREE '%s'", a)
 		}
 		r.MinFree = uint64(minfree)
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_TOTAL"); a != "" {
 		if r.MinPctTotal, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("Cannot parse AIS_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_TOTAL '%s'", a)
 		}
 		if r.MinPctTotal < 0 || r.MinPctTotal > 100 {
-			return fmt.Errorf("Invalid AIS_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("invalid AIS_MINMEM_PCT_TOTAL '%s'", a)
 		}
 	}
 	if a := os.Getenv("AIS_MINMEM_PCT_FREE"); a != "" {
 		if r.MinPctFree, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("Cannot parse AIS_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("cannot parse AIS_MINMEM_PCT_FREE '%s'", a)
 		}
 		if r.MinPctFree < 0 || r.MinPctFree > 100 {
-			return fmt.Errorf("Invalid AIS_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE '%s'", a)
 		}
 	}
 	if a := os.Getenv("AIS_MEM_DEBUG"); a != "" {
@@ -727,7 +727,8 @@ func (s *Slab2) _alloc() (buf []byte) {
 	if s.usespool {
 		x := s.l2cache.Get()
 		if x != nil {
-			buf = x.([]byte)
+			pbuf := x.(*[]byte)
+			buf = *pbuf
 			atomic.AddInt64(&s.stats.Hits, 1)
 			return
 		}
@@ -782,7 +783,9 @@ func (s *Slab2) grow(cnt int) bool {
 			if x == nil {
 				break
 			}
-			s.put = append(s.put, x.([]byte))
+			pbuf := x.(*[]byte)
+			buf := *pbuf
+			s.put = append(s.put, buf)
 		}
 		if cnt == 0 {
 			return false
@@ -805,7 +808,7 @@ func (s *Slab2) _free(buf []byte) {
 		}
 		s.put = append(s.put, buf)
 	} else if s.usespool {
-		s.l2cache.Put(buf)
+		s.l2cache.Put(&buf)
 	}
 }
 
@@ -828,7 +831,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 			lput--
 			if s.usespool && todepth > 0 && freed < sizetoGC/4 { // Heu #8
 				buf := s.put[lput]
-				s.l2cache.Put(buf)
+				s.l2cache.Put(&buf)
 			}
 			s.put[lput] = nil
 			freed += s.bufsize

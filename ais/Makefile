@@ -84,20 +84,25 @@ deploy_next_tier:
 
 
 # Target for linters
-LINT_DIRS=$(shell find ../ -type d | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
-MISSPELL_DIRS=$(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
+LINT_DIRS := $(shell find ../ -type d | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
+MISSPELL_DIRS := $(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 
-.PHONY: lint fmt fmt-fix spell spell-fix cyclo
+.PHONY: lint lint-install fmt fmt-fix spell spell-fix cyclo
 
-lint:
+lint-install:
 	@go get -u github.com/alecthomas/gometalinter
 	@go get -u golang.org/x/lint/golint
 	@go get -u github.com/kisielk/errcheck
 	@go get -u honnef.co/go/tools/cmd/staticcheck
+
+LINT_VET_IGNORE := -composites=false
+LINT_IGNORE := "(should have comment|comment on exported)"
+
+lint:
 	@echo "Checking vet..."
-	@$(foreach dir,$(LINT_DIRS),go tool vet $(dir);)
+	@$(foreach dir,$(LINT_DIRS),go tool vet $(LINT_VET_IGNORE) $(dir);)
 	@echo "Checking others..."
-	@$(GOPATH)/bin/gometalinter --disable-all --enable=golint --enable=errcheck --enable=staticcheck $(LINT_DIRS)
+	@$(GOPATH)/bin/gometalinter --exclude=$(LINT_IGNORE) --disable-all --enable=golint --enable=errcheck --enable=staticcheck $(LINT_DIRS)
 
 fmt-check:
 	@go get -u golang.org/x/tools/cmd/goimports
@@ -110,7 +115,7 @@ fmt-fix:
 spell-check:
 	@go get -u github.com/client9/misspell/cmd/misspell
 	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell $(dir);)
-	
+
 spell-fix:
 	@go get -u github.com/client9/misspell/cmd/misspell
 	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell -w $(dir);)
@@ -131,7 +136,7 @@ cpuprof:
 	@go test -v -run=XXX -bench=. -count 10 -cpuprofile=/tmp/cpu.prof
 
 flamegraph: cpuprof
-	@go tool pprof -http ":6060" /tmp/cpu.prof 
+	@go tool pprof -http ":6060" /tmp/cpu.prof
 
 code-coverage:
 	@./setup/code_coverage.sh

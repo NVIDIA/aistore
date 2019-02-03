@@ -59,9 +59,25 @@ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 
 #### Maximum open files
 
-To ensure that AIStore works properly you probably need to increase the default number of open files.
-To check current setting you can use `ulimit -n`.
-We advise to set it to at least `100'000`.
+To ensure that AIStore works properly you probably need to increase the default number of open files. To check current setting you can use `ulimit -n`.
+
+> It is strongly recommended to raise ulimit to at least `100,000`.
+
+Here're the (example) settings that we use for development:
+
+```shell
+# tail /etc/security/limits.conf
+#ftp             hard    nproc           0
+#ftp             -       chroot          /ftp
+#@student        -       maxlogins       4
+
+root             hard    nofile          999999
+root             soft    nofile          999999
+ubuntu           hard    nofile          999999
+ubuntu           soft    nofile          999999
+
+# End of file
+```
 
 ### Storage
 

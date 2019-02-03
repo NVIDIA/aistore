@@ -97,11 +97,11 @@ func (z *SGL) ComputeHash() uint64 {
 }
 
 func (z *SGL) Read(b []byte) (n int, err error) {
-	n, err, z.roff = z.readAtOffset(b, z.roff)
+	n, z.roff, err = z.readAtOffset(b, z.roff)
 	return
 }
 
-func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64) {
+func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error) {
 	roff = roffin
 	if roff >= z.woff {
 		err = io.EOF
@@ -170,7 +170,7 @@ func (r *Reader) Open() (io.ReadCloser, error) { return NewReader(r.z), nil }
 func (r *Reader) Close() error { return nil }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
-	n, err, r.roff = r.z.readAtOffset(b, r.roff)
+	n, r.roff, err = r.z.readAtOffset(b, r.roff)
 	return
 }
 
@@ -218,7 +218,7 @@ func (r *SliceReader) Read(b []byte) (n int, err error) {
 		err = io.EOF
 	}
 
-	n, _, offout = r.z.readAtOffset(b, offin)
+	n, offout, _ = r.z.readAtOffset(b, offin)
 	r.roff = offout - r.soff
 	return
 }

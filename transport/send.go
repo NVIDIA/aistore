@@ -150,7 +150,10 @@ type (
 	nopReadCloser struct{}
 )
 
-var nopRC = &nopReadCloser{}
+var (
+	nopRC      = &nopReadCloser{}
+	background = context.Background()
+)
 
 func NewDefaultClient() *http.Client {
 	return cmn.NewClient(cmn.ClientArgs{
@@ -216,8 +219,9 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	if extra != nil && extra.Ctx != nil {
 		ctx = extra.Ctx
 	} else {
-		ctx, _ = context.WithCancel(context.Background())
+		ctx = background
 	}
+
 	atomic.StoreInt64(&s.time.start, time.Now().UnixNano())
 	s.term.reason = new(string)
 
@@ -453,7 +457,9 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 	if request, err = http.NewRequest(http.MethodPut, s.toURL, s); err != nil {
 		return
 	}
-	request = request.WithContext(ctx)
+	if ctx != background {
+		request = request.WithContext(ctx)
+	}
 	s.Numcur, s.Sizecur = 0, 0
 	if bool(glog.V(4)) || debug {
 		glog.Infof("%s: Do", s)

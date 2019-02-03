@@ -254,7 +254,7 @@ func (c *jogger) copyMissingReplicas(lom *cluster.LOM, sgl *memsys.SGL, metadata
 func (c *jogger) restoreReplicated(req *Request, meta *Metadata, nodes map[string]*Metadata) error {
 	var writer *memsys.SGL
 	// try read a replica from targets one by one until the replica is got
-	for node, _ := range nodes {
+	for node := range nodes {
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
 		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).marshal()
 		if err != nil {
@@ -485,11 +485,11 @@ func (c *jogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, i
 // * idToNode - a map of targets that already contain a slice (SliceID <-> target)
 func (c *jogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*memsys.SGL, idToNode map[int]string) error {
 	sliceCnt := meta.Data + meta.Parity
-	nodeToId := make(map[string]int, len(idToNode))
+	nodeToID := make(map[string]int, len(idToNode))
 	emptyNodes := make([]string, 0)
 	// transpose SliceID <-> DaemonID map for faster lookup
 	for k, v := range idToNode {
-		nodeToId[v] = k
+		nodeToID[v] = k
 	}
 
 	// generate the list of targets that should have a slice and find out
@@ -502,7 +502,7 @@ func (c *jogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*mems
 		if t.DaemonID == c.parent.si.DaemonID {
 			continue
 		}
-		if _, ok := nodeToId[t.DaemonID]; ok {
+		if _, ok := nodeToID[t.DaemonID]; ok {
 			continue
 		}
 		emptyNodes = append(emptyNodes, t.DaemonID)
@@ -574,7 +574,7 @@ func (c *jogger) restoreEncoded(req *Request, meta *Metadata, nodes map[string]*
 
 	// unregister all SGLs from a list of waiting slices for the data to come
 	freeWriters := func() {
-		for k, _ := range nodes {
+		for k := range nodes {
 			uname := unique(k, req.LOM.Bucket, req.LOM.Objname)
 			c.parent.unregWriter(uname)
 		}

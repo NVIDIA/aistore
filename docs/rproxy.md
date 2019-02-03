@@ -1,20 +1,39 @@
-### AIStore as an HTTP proxy
+## AIS as HTTP(S) proxy: modes of operation
 
-1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](../ais/setup/config.sh) prior to deployment.
-2. Set the environment variable `http_proxy` for HTTP requests and/or `https_proxy` for HTTPS requests (supported by most UNIX systems) to the primary proxy URL of your AIStore cluster.
+As HTTP(S) proxy, AIS currently supports two distinct (and very different) modes of operation:
 
-```shell
-$ export http_proxy=<PRIMARY-PROXY-URL>
-```
+* proxy-ing 3rd party (Cloud-based) object storage
+* proxy-ing AIS targets
 
-When these two are set, AIStore will act as a reverse proxy for your outgoing HTTP requests.
+Most of this README describes the first mode of operation that can be further referred to as "cloud".
 
-### Caching
+## AIS as HTTP(S) proxy vis-à-vis 3rd party object storages
 
-AIS executes cold GETs if and only if the designated object is not stored (by the AIS), or the object has a bad checksum, or the object's version is outdated. The next GET calls to the same object reads data from local storage increasing performance.
+AIS can be designated as HTTP(S) proxy vis-à-vis 3rd party object storages. As of the v2.0, this mode of operation is limited to Google Cloud Storage (GCS) and requires two settings:
 
+1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment:
+   ```shell
+   $ export http_proxy=<AIS PROXY URL>
+   ```
+2. AIS configuration: set `rproxy=cloud` in the [configuration](../ais/setup/config.sh):
+   ```json
+      "http": {
+           "proto":                "http",
+           "rproxy":               "cloud",
+           "rproxy_cache":         true,
+           ...
+      }
+   ```
 
-First call to Google Cloud Storage(GCS):
+### First cold GET followed by multiple warm GETs
+
+AIS executes cold GET if and only when the designated object is not stored (by the AIS), **or** the object has a bad checksum, **or** the object's version is outdated. All subsequent GET calls will be terminated by the AIS itself.
+
+Following are two concrete GET commands to retrieve a given named object from a GCS bucket called (in the example) `gcp-public-data-landsat`.
+
+Note that the GET URLs are formatted as per the GCS guidelines and **unmodified**. Note also the difference in time it takes to execute the first (*cold*) GET versus subsequent (*warm*) ones:
+
+The first call to Google Cloud Storage(GCS):
 
 ```shell
 curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
@@ -24,7 +43,7 @@ curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/04
 
 ```
 
-Next calls to GCS:
+The second GET of the same object:
 
 ```shell
 curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/040/021/LT80400212013126LGN01/LT80400212013126LGN01_B10.TIF
@@ -33,24 +52,46 @@ curl -L -X GET http://storage.googleapis.com/gcp-public-data-landsat/LT08/PRE/04
  100 60.9M    0 60.9M    0     0   402M      0 --:--:-- --:--:-- --:--:--  403M
 ```
 
-Read speed increased from 20M/sec to 400M/sec.
+GET performance increased from 20M/sec to 400M/sec.
 
 ### GCS requests
 
-When caching objects, AIStore supports two URL schemas for HTTP requests to GCS: XML API and JSON API URLs. Below are examples of requesting the same object using different schemas. AIStore treats both types of URLs in the same way. It results in that the object is downloaded and cached by the first request, and then all following JSON and XML API requests receives the object from local storage.
+When caching objects, AIStore supports **two URL schemas** for HTTP requests to GCS:
 
-XML API:
+* XML API
+* JSON API
+
+Below are the examples of requesting the same object using these two schemas. AIStore handles both types of URLs the same way: the requested object is downloaded and cached upon the first request; all the subsequent JSON (and XML) API requests will retrive the object from the AIS storage.
+
+Example XML API:
 
 ```shell
 curl -L -X GET http://storage.googleapis.com/gcp-public/LT08/PRE/B10.TIF
 ```
 
-JSON API:
+Example JSON API:
 
 ```shell
 curl -L -X GET http://www.googleapis.com/storage/v1/b/gcp-public/o/LT08%2FPRE%2fB10.TIF
 ```
 
-### Caching limitations
+### v2.0 caching limitations
 
-As of version 2.0 AIStore supports caching only for HTTP GET requests to GCS. HTTPS requests to GCS and requests to other Cloud providers are not cached.
+* HTTPS: AIStore handles HTTPS requests transparently and without caching. In other words, as of the AIS v2.0, every HTTPS GET will be a *cold* GET.
+* GCS: As far as transparent caching, AIStore currently supports only Google Cloud Storage.
+
+## AIS as HTTP(S) proxy vis-à-vis AIS targets
+
+AIS supports a second (and special) mode whereby an AIS gateway serves as a **reverse proxy vis-à-vis AIS targets**.
+
+The corresponding use case entails [configuring `rproxy=target`](../ais/setup/config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
+```json
+   "http": {
+        "proto":                "http",
+        "rproxy":               "target",
+        "rproxy_cache":         true,
+        ...
+      }
+```
+
+Needless to say, this mode of operation will clearly have performance implications.

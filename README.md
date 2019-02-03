@@ -85,14 +85,14 @@ One common way to start making use of AIStore includes the two most basic steps:
 
 To this end, AIS provides 4 (four) easy ways to accomplish the first step:
 
-1. [Cold GET](#cold-get)
-2. [Prefetch](#prefetch)
-3. [Internet Downloader](#internet-downloader)
-4. [Reverse Proxy](#reverse-proxy)
+1. [Cold GET](#existing-datasets-cold-get)
+2. [Prefetch](#existing-datasets-batch-prefetch)
+3. [Internet Downloader](#existing-datasets-internet-downloader)
+4. [Reverse Proxy](#existing-datasets-reverse-proxy)
 
 More precisely:
 
-#### Cold GET
+#### Existing Datasets: Cold GET
 If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](docs/http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
 > As far as supported S3-like backends, AIS currently supports Amazon S3 and Google Cloud.
@@ -101,27 +101,30 @@ If the dataset in question is accessible via S3-like object API, start working w
 
 In all other cases, AIS will service the GET request without going to Cloud.
 
-#### Prefetch
+#### Existing Datasets: Batch Prefetch
 
 Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given Cloud bucket, as described in [this readme](docs/batch.md).
 
-#### Internet Downloader
+#### Existing Datasets: Internet Downloader
 
 But what if the dataset exists in the form of (vanilla) HTTP/HTTPS URLs? If this is the case, use [downloader](downloader/README.md) - the integrated tool that can populate AIStore directly from the Internet.
 
-#### Reverse Proxy
+#### Existing Datasets: Reverse Proxy
 
-Finally, AIS can be designated as HTTP reverse proxy via the `http_proxy` environment supported by most UNIX systems:
+Finally, AIS can be designated as HTTP proxy vis-à-vis 3rd party object storages. As of the v2.0, this mode of operation is limited to Google Cloud Storage (GCS) and requires two things:
+
+1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
+2. AIS configuration: set `rproxy=cloud` in the [configuration](ais/setup/config.sh)
+
+Note that `http_proxy` is supported by most UNIX systems and is recognized by most (but not all) HTTP clients:
 
 ```shell
 $ export http_proxy=<AIS proxy IPv4 or hostname>
 ```
 
-Executing this command on the client side will have an effect of redirecting all client-issued HTTP(S) requests to the AIS proxy/gateway, with subsequent execution (transparently from the client perspective).
+In combination, these two settings have an effect of redirecting all **unmodified** client-issued HTTP(S) requests to the AIS proxy/gateway with subsequent execution transparently from the client perspective.
 
-> *Reverse proxy* functionality to (transparently) work with Internet locations is currently under development.
-
-> Separately, AIS supports a special mode of operation where an AIS gateway serves as a reverse proxy vis-à-vis AIS targets. The corresponding use case includes supporting kernel-based clients with a preference for single (or very few) persistent connection(s) to the storage. Related [configuration](ais/setup/config.sh) is called `rproxy`. Needless to say, this mode of operation will clearly have performance implications.
+Further details and examples are available [in this readme](docs/rproxy.md).
 
 ### Data Protection
 AIS [supports](docs/storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon [erasure coding](docs/storage_svcs.md#erasure-coding) - thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
@@ -235,16 +238,15 @@ Ultimately, limit on the object size may be imposed by the local filesystem of c
 
 ## Prerequisites
 
-* Linux (with sysstat and attr packages, and kernel 4.x or later)
+* Linux (with gcc, sysstat and attr packages, and kernel 4.x or later)
 * [Go 1.10 or later](https://golang.org/dl/)
-* Extended attributes (xattrs)
+* Extended attributes (xattrs - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account
 
-Some Linux distributions do not include sysstat and/or attr packages - to install, use `apt-get` (Debian), `yum` (RPM), or other applicable package management tool, e.g.:
+Depending on your Linux distribution you may or may not have `gcc`, `sysstat`, and/or `attr` packages - to install, use `apt-get` (Debian), `yum` (RPM), or other applicable package management tool, e.g.:
 
 ```shell
 $ apt-get install sysstat
-$ apt-get install attr
 ```
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
@@ -351,7 +353,7 @@ $ make kill
 $ make rmcache
 ```
 
-Alternatively, run `make clean` to delete AIStore binaries and all (locally accumulated) AIStore data.
+Alternatively, run `make clean` to delete AIStore binaries and all the data that AIS had accumulated in your machine.
 
 ## Guides and References
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)

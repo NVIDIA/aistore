@@ -1,8 +1,7 @@
+// Package tutils provides common low-level utilities for all aistore unit and integration tests
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
 //
 //  FIXME -- FIXME: split and transform it into the: a) client API and b) test utilities
 //  FIXME -- FIXME: the client API must then move into the api package
