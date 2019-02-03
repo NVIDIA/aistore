@@ -6,10 +6,6 @@
  */
 package ais
 
-const (
-	notEnabledAWS = "AWS cloud is not enabled in this build"
-)
-
 type (
 	awsimpl struct { // mock
 		emptyCloud
@@ -17,4 +13,4 @@ type (
 	}
 )
 
-func newAWSProvider(t *targetrunner) *awsimpl { return &awsimpl{emptyCloud{notEnabledAWS}, t} }
+func newAWSProvider(t *targetrunner) *awsimpl { return &awsimpl{emptyCloud{}, t} }

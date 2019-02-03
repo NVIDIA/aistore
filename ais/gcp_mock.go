@@ -6,10 +6,6 @@
  */
 package ais
 
-const (
-	notEnabledGCP = "GCP cloud is not enabled in this build"
-)
-
 type (
 	gcpimpl struct { // mock
 		emptyCloud
@@ -17,4 +13,4 @@ type (
 	}
 )
 
-func newGCPProvider(t *targetrunner) *gcpimpl { return &gcpimpl{emptyCloud{notEnabledGCP}, t} }
+func newGCPProvider(t *targetrunner) *gcpimpl { return &gcpimpl{emptyCloud{}, t} }

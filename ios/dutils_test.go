@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 func init() {
@@ -21,32 +21,12 @@ func init() {
 }
 
 func TestGetDiskFromFileSystem(t *testing.T) {
-	path := "/"
+	path := "/tmp"
 	fileSystem, err := fs.Fqn2fsAtStartup(path)
 	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
 	disks := fs2disks(fileSystem)
-	if len(disks) == 0 {
-		t.Errorf("Invalid FS disks: [%s]", fileSystem)
-	}
-
-	path = "/tmp"
-	fileSystem, err = fs.Fqn2fsAtStartup(path)
-	if err != nil {
-		t.Errorf("Invalid FS for path: [%s]", path)
-	}
-	disks = fs2disks(fileSystem)
-	if len(disks) == 0 {
-		t.Errorf("Invalid FS disks: [%s]", fileSystem)
-	}
-
-	path = "/home"
-	fileSystem, err = fs.Fqn2fsAtStartup(path)
-	if err != nil {
-		t.Errorf("Invalid FS for path: [%s]", path)
-	}
-	disks = fs2disks(fileSystem)
 	if len(disks) == 0 {
 		t.Errorf("Invalid FS disks: [%s]", fileSystem)
 	}

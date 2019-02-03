@@ -1105,7 +1105,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 
 	var fileName string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() && info.Name() == "cloud" {
+		if info == nil || (info.IsDir() && info.Name() == "cloud") {
 			return filepath.SkipDir
 		}
 		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bucketName, ChecksumWarmValidateStr)) {
