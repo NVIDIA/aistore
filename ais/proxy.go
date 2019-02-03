@@ -696,7 +696,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 	if ok {
 		delta := time.Since(started)
 		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
-		if glog.V(3) {
+		if glog.V(4) {
 			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
 				glog.Infof("LIST: %s, page %s, %d µs", lbucket, pagemarker, lat)

@@ -18,7 +18,7 @@ type (
 	}
 	// FIXME: redundant vs. XactBase
 	XactionDetails struct {
-		Id        int64     `json:"id"`
+		ID        int64     `json:"id"`
 		Kind      string    `json:"kind"`
 		Bucket    string    `json:"bucket"`
 		StartTime time.Time `json:"startTime"`

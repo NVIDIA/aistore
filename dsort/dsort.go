@@ -506,7 +506,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 	var (
 		i           int
 		d           *cluster.Snode
-		dummyTarget *cluster.Snode = nil // dummy target is represented as nil value
+		dummyTarget *cluster.Snode // dummy target is represented as nil value
 	)
 
 	// Metrics

@@ -179,9 +179,8 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 			bytes, err := ioutil.ReadAll(r.Body)
 			if err == nil {
 				return 0, "", fmt.Errorf("Bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
-			} else {
-				return 0, "", fmt.Errorf("Bad status %d from %s, err: %v", r.StatusCode, src, err)
 			}
+			return 0, "", fmt.Errorf("Bad status %d from %s, err: %v", r.StatusCode, src, err)
 		}
 
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)

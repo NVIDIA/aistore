@@ -264,7 +264,7 @@ func (t *targetrunner) Run() error {
 	getfshealthchecker().SetDispatcher(t)
 
 	ec.Init()
-	t.ecmanager = NewECM(t)
+	t.ecmanager = newECM(t)
 
 	aborted, _ := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted {
@@ -1861,9 +1861,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 			if !os.IsNotExist(r.err) {
 				t.fshc(r.err, r.failedPath)
 				return nil, fmt.Errorf("Failed to read %s", r.failedPath)
-			} else {
-				continue
 			}
+			continue
 		}
 
 		pageSize = r.infos.limit
@@ -2309,16 +2308,17 @@ func (roi *recvObjInfo) commit() (errstr string, errCode int) {
 
 func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 	if !roi.lom.Bislocal && !roi.migrated {
-		if file, err := os.Open(roi.workFQN); err != nil {
+		file, err := os.Open(roi.workFQN)
+		if err != nil {
 			errstr = fmt.Sprintf("Failed to open %s err: %v", roi.workFQN, err)
 			return
-		} else {
-			cmn.Assert(roi.lom.Nhobj != nil)
-			roi.lom.Version, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Nhobj)
-			file.Close()
-			if errstr != "" {
-				return
-			}
+		}
+
+		cmn.Assert(roi.lom.Nhobj != nil)
+		roi.lom.Version, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Nhobj)
+		file.Close()
+		if errstr != "" {
+			return
 		}
 	}
 
@@ -2839,7 +2839,7 @@ func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
 			status = cmn.XactionStatusInProgress
 		}
 		details := stats.XactionDetails{ // FIXME: redundant vs XactBase
-			Id:        xaction.ID(),
+			ID:        xaction.ID(),
 			Kind:      xaction.Kind(),
 			Bucket:    xaction.Bucket(),
 			StartTime: xaction.StartTime(),

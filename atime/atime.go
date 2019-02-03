@@ -230,12 +230,12 @@ func (r *Runner) Atime(fqn, mpath string, customRespCh ...chan *Response) (respo
 		responseCh = make(chan *Response, 1)
 	}
 	if mpath == "" {
-		if mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn); mpathInfo == nil {
+		mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
+		if mpathInfo == nil {
 			responseCh <- &Response{AccessTime: time.Time{}, Ok: false} // mpath does not exist
 			return responseCh
-		} else {
-			mpath = mpathInfo.Path
 		}
+		mpath = mpathInfo.Path
 	}
 	request := &atimeRequest{
 		responseCh:  responseCh,

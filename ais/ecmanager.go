@@ -32,7 +32,7 @@ type ecManager struct {
 
 var ECM *ecManager
 
-func NewECM(t *targetrunner) *ecManager {
+func newECM(t *targetrunner) *ecManager {
 	config := cmn.GCO.Get()
 	netReq, netResp := cmn.NetworkIntraControl, cmn.NetworkIntraData
 	if !config.Net.UseIntraControl {

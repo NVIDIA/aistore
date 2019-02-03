@@ -8,7 +8,7 @@ package stats
 import (
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -180,17 +180,19 @@ func (r *Trunner) housekeep(runlru bool) {
 	// keep total log size below the configured max
 	r.timecounts.logIdx++
 	if r.timecounts.logIdx >= r.timecounts.logLimit {
-		go r.removeLogs(config.Log.MaxTotal)
+		go r.removeLogs(config)
 		r.timecounts.logIdx = 0
 	}
 }
 
-func (r *Trunner) removeLogs(maxtotal uint64) {
-	config := cmn.GCO.Get()
+// TODO: move to common_stats and reuse for proxy
+func (r *Trunner) removeLogs(config *cmn.Config) {
+	var maxtotal = int64(config.Log.MaxTotal)
 	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
-		return // ignore error
+		_ = cmn.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
+		return
 	}
 	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
 	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
@@ -211,17 +213,18 @@ func (r *Trunner) removeLogs(maxtotal uint64) {
 				infos = append(infos, logfi)
 			}
 		}
-		if tot > int64(maxtotal) {
-			if len(infos) <= 1 {
-				glog.Errorf("GC logs: %s, total %d for type %s, max %d", config.Log.Dir, tot, logtype, maxtotal)
-				continue
-			}
-			r.removeOlderLogs(tot, int64(maxtotal), infos)
+		if tot > maxtotal {
+			r.removeOlderLogs(tot, maxtotal, config.Log.Dir, logtype, infos)
 		}
 	}
 }
 
-func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileInfo) {
+func (r *Trunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
+	l := len(filteredInfos)
+	if l <= 1 {
+		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)
+		return
+	}
 	fiLess := func(i, j int) bool {
 		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
 	}
@@ -229,8 +232,9 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 		glog.Infof("GC logs: started")
 	}
 	sort.Slice(filteredInfos, fiLess)
-	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
-		logfqn := path.Join(cmn.GCO.Get().Log.Dir, logfi.Name())
+	filteredInfos = filteredInfos[:l-1] // except the last = current
+	for _, logfi := range filteredInfos {
+		logfqn := filepath.Join(logdir, logfi.Name())
 		if err := os.Remove(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)

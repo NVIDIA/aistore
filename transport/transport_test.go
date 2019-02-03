@@ -78,7 +78,7 @@ func init() {
 	Mem2 = memsys.Init()
 }
 
-func Example_Headers() {
+func Example_headers() {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -145,7 +145,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	stream.Send(hdr, sgl2, nil)
 }
 
-func Example_Mux() {
+func Example_mux() {
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
@@ -240,6 +240,7 @@ func Test_CancelStream(t *testing.T) {
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
+	var canceled bool
 	for time.Since(now) < duration {
 		hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
@@ -252,12 +253,17 @@ func Test_CancelStream(t *testing.T) {
 			prevsize = size
 			if num > 10 && random.Int63()%3 == 0 {
 				cancel()
+				canceled = true
 				tutils.Logln("Canceling...")
 				break
 			}
 		}
 	}
 	time.Sleep(time.Second)
+	if !canceled {
+		cancel()
+		tutils.Logln("Delayed cancelation...")
+	}
 	termReason, termErr := stream.TermInfo()
 	stats := stream.GetStats()
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",

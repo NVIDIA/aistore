@@ -54,15 +54,15 @@ func similarFileName(bucketName string, objNum int) string {
 
 // Duplicated on purpose to avoid dependency on any AIStore code.
 func randNodeId(randGen *rand.Rand) string {
-	randIp := ""
+	randIP := ""
 	for i := 0; i < 3; i++ {
-		randIp += strconv.Itoa(randGen.Intn(255)) + "."
+		randIP += strconv.Itoa(randGen.Intn(255)) + "."
 	}
-	randIp += strconv.Itoa(randGen.Intn(255))
-	cksum := xxhash.ChecksumString32S(randIp, xxHashSeed)
-	nodeId := strconv.Itoa(int(cksum & 0xfffff))
+	randIP += strconv.Itoa(randGen.Intn(255))
+	cksum := xxhash.ChecksumString32S(randIP, xxHashSeed)
+	nodeID := strconv.Itoa(int(cksum & 0xfffff))
 	randPort := strconv.Itoa(randGen.Intn(65535))
-	return nodeId + ":" + randPort
+	return nodeID + ":" + randPort
 }
 
 func randNodeIds(numNodes int, randGen *rand.Rand) []node {

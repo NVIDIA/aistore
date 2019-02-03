@@ -486,9 +486,8 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 			if s.sendoff.obj.hdr.ObjAttrs.Size == 0 { // when the object is header-only
 				s.eoObj(nil)
 				return
-			} else {
-				return s.sendData(b)
 			}
+			return s.sendData(b)
 		}
 		return s.sendHdr(b)
 	}

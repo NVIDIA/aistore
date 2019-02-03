@@ -51,9 +51,9 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [AIS Limitations](#ais-limitations)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-    - [Local Non-containerized](#local-non-containerized)
-    - [Tips](#tips)
-    - [Helpful Links](docs/helpful_links.md)
+    - [Local non-Containerized](#local-non-containerized)
+    - [Local Docker-Compose](#local-docker-compose)
+    - [Local Kubernetes](#local-kubernetes)
 - [Guides and References](#guides-and-references)
 - [Selected Package READMEs](#selected-package-readmes)
 
@@ -255,16 +255,15 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 ## Getting Started
 
-AIStore runs on commodity Linux machines with no special requirements on the hardware. The implication is that the number of possible (optimal and not-so-optimal) deployment options is practically unlimited. This section covers the bare minimum - the "Hello, World" of the AIStore deployment, if you will.
+AIStore runs on commodity Linux machines with no special hardware requirements.
 
-### Local Containerized (Docker)
+> It is expected, though, that all AIS target machines are identical, hardware-wise.
 
-AIStore is deployable using [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It allows for multi-container deployment of AIStore clusters which allows for single or multiple network communication. To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md)
+The implication is that the number of possible deployment options is practically unlimited. This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
 
+### Local non-Containerized
 
-### Local Non-containerized
-
-If [Go](https://golang.org/dl/) is already installed, getting started with AIStore takes no more than a minute and entails:
+Assuming that [Go](https://golang.org/dl/) is already installed, the remaining getting-started steps are:
 
 ```shell
 $ cd $GOPATH/src
@@ -273,7 +272,7 @@ $ cd github.com/NVIDIA/aistore/ais
 $ make deploy
 $ go test ./tests -v -run=Mirror
 ```
-The `go get` command installs AIStore sources and all versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
+The `go get` command installs AIS sources and all the versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 
 The `make deploy` command deploys AIStore daemons locally based on a few prompted Q&A. The example shown below deploys 10 targets (each with 2 local simulated filesystems) and 3 gateways, and will not require (or expect) to access Cloud storage (notice the "Cloud Provider" prompt below):
 
@@ -293,8 +292,6 @@ Enter your choice:
 3
 ```
 
-> Docker and K8s based deployments are described elsewhere in the documentation.
-
 > To enable optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
 
 Finally, the `go test` (above) will create a local bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
@@ -311,49 +308,26 @@ Here's a minor variation of the above:
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
-This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects match 'a\d+' regex.
+This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match 'a\d+' regex.
 
-For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
+> For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
+> For other useful commands, see the [Makefile](ais/Makefile).
 
-For other useful commands, see the [Makefile](ais/Makefile).
+> For tips and help pertaining to local non-containerized deployment, please see [the tips](docs/local-tips.md).
 
-### Tips
+> For helpful links and background on Go, AWS, GCP, and Deep Learning, please see [helpful links](docs/helpful-links.md).
 
-The following sequence downloads up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
+### Local Docker-Compose
 
-```shell
-$ cd $GOPATH/src/github.com/NVIDIA/aistore/ais/tests
-$ BUCKET=myS3bucket go test -v -run=down
-$ find /tmp/ais -type f | grep local
-$ find /tmp/ais -type f | grep cloud
-```
+The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It ialso allows for multi-clusters deployment with multiple separate networks.
 
-This, of course, assumes that all AIStore daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/ais.
+> AIS 2.0 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
 
-To show all existing buckets, run:
+To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md)
 
-```shell
-$ cd $GOPATH/src/github.com/NVIDIA/aistore
-$ BUCKET=x go test ./ais/tests -v -run=bucketnames
-```
+### Local Kubernetes
 
-Note that the output will include both local and Cloud bucket names.
-
-Further, to locate AIStore logs, run:
-
-```shell
-$ find $LOGDIR -type f | grep log
-```
-
-where $LOGDIR is the configured logging directory as per [AIStore configuration](ais/setup/config.sh).
-
-To terminate a running AIStore service and cleanup local caches, run:
-```shell
-$ make kill
-$ make rmcache
-```
-
-Alternatively, run `make clean` to delete AIStore binaries and all the data that AIS had accumulated in your machine.
+The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes/README.md).
 
 ## Guides and References
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
