@@ -83,7 +83,7 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Failed to read response, err: %v", err)
+				"failed to read response, err: %v", err)
 		}
 		return nil, fmt.Errorf("HEAD bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
 			bucket, r.StatusCode, string(b))
@@ -176,10 +176,10 @@ func GetBucketNames(baseParams *BaseParams, localOnly bool) (*cmn.BucketNames, e
 	if len(b) != 0 {
 		err = jsoniter.Unmarshal(b, &bucketNames)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
+			return nil, fmt.Errorf("failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
 		}
 	} else {
-		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s", baseParams.URL)
+		return nil, fmt.Errorf("empty response instead of empty bucket list from %s", baseParams.URL)
 	}
 	return &bucketNames, nil
 }
@@ -266,7 +266,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 		page.Entries = make([]*cmn.BucketEntry, 0, 1000)
 
 		if err = jsoniter.Unmarshal(respBody, page); err != nil {
-			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
 		}
 
 		reslist.Entries = append(reslist.Entries, page.Entries...)

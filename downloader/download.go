@@ -455,14 +455,14 @@ func (d *Downloader) dispatchDownload(t *task) {
 	t.fqn = lom.Fqn
 
 	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("Download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
+		err := fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
 		glog.Error(err.Error())
 		t.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	if !ok {
-		err := fmt.Errorf("No mpath exists for %v", t)
+		err := fmt.Errorf("no mpath exists for %v", t)
 		cmn.Assert(false, err)
 	}
 	j.addToDownloadQueue(t)
@@ -482,14 +482,14 @@ func (d *Downloader) dispatchCancel(req *request) {
 	req.fqn = lom.Fqn
 
 	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("Cancel request with %v failed. Failed to obtain mountpath for request's fqn: %q", req, req.fqn)
+		err := fmt.Errorf("cancel request with %v failed. Failed to obtain mountpath for request's fqn: %q", req, req.fqn)
 		glog.Error(err.Error())
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	if !ok {
-		err := fmt.Errorf("Cancel request with %v failed. No corresponding mpath exists", req)
+		err := fmt.Errorf("cancel request with %v failed. No corresponding mpath exists", req)
 		cmn.Assert(false, err)
 	}
 
@@ -526,14 +526,14 @@ func (d *Downloader) dispatchStatus(req *request) {
 	req.fqn = lom.Fqn
 
 	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("Status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
+		err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
 		glog.Error(err.Error())
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	if !ok {
-		err := fmt.Errorf("Status request with %v failed. No corresponding mpath exists", req)
+		err := fmt.Errorf("status request with %v failed. No corresponding mpath exists", req)
 		cmn.Assert(false, err)
 	}
 

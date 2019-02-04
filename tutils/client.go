@@ -178,9 +178,9 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		if r.StatusCode >= http.StatusBadRequest {
 			bytes, err := ioutil.ReadAll(r.Body)
 			if err == nil {
-				return 0, "", fmt.Errorf("Bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
+				return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
 			}
-			return 0, "", fmt.Errorf("Bad status %d from %s, err: %v", r.StatusCode, src, err)
+			return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 		}
 
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
@@ -188,11 +188,11 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		if validate {
 			length, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)
 			if err != nil {
-				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
+				return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 			}
 		} else {
 			if length, err = io.CopyBuffer(w, r.Body, buf); err != nil {
-				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
+				return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 			}
 		}
 	} else {
@@ -284,7 +284,7 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
 	handle, err := reader.Open()
 	if err != nil {
-		return HTTPLatencies{}, fmt.Errorf("Failed to open reader, err: %v", err)
+		return HTTPLatencies{}, fmt.Errorf("failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
@@ -307,7 +307,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	resp, err := tracedClient.Do(req)
 	if err != nil {
-		return HTTPLatencies{}, fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
+		return HTTPLatencies{}, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer func() {
 		if resp != nil {
@@ -319,7 +319,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return HTTPLatencies{}, fmt.Errorf("Failed to read response, err: %v", err)
+			return HTTPLatencies{}, fmt.Errorf("failed to read response, err: %v", err)
 		}
 		return HTTPLatencies{}, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
@@ -361,7 +361,7 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
 	b, err = json.Marshal(actionMsg)
 	if err != nil {
-		return fmt.Errorf("Failed to marhsal cmn.ActionMsg, err: %v", err)
+		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
 	}
 
 	baseParams := BaseAPIParams(proxyURL)
@@ -425,7 +425,7 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 		}
 		b, ioErr := ioutil.ReadAll(r.Body)
 		if ioErr != nil {
-			err = fmt.Errorf("Failed to read response body, err: %v", ioErr)
+			err = fmt.Errorf("failed to read response body, err: %v", ioErr)
 			return false, err
 		}
 		err = fmt.Errorf("IsCached failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
@@ -676,13 +676,13 @@ func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
 
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
 		return []byte{},
-			fmt.Errorf("Get xaction, HTTP Status %d", r.StatusCode)
+			fmt.Errorf("GET xaction, HTTP Status %d", r.StatusCode)
 	}
 
 	var response []byte
 	response, err = ioutil.ReadAll(r.Body)
 	if err != nil {
-		return []byte{}, fmt.Errorf("Failed to read response, err: %v", err)
+		return []byte{}, fmt.Errorf("failed to read response, err: %v", err)
 	}
 
 	return response, nil
@@ -694,7 +694,7 @@ func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string
 		reader, err = NewSGReader(sgl, int64(size), true /* with Hash */)
 	} else {
 		if readerType == ReaderTypeFile && readerPath == "" {
-			err = fmt.Errorf("Path to reader cannot be empty when reader type is %s", ReaderTypeFile)
+			err = fmt.Errorf("path to reader cannot be empty when reader type is %s", ReaderTypeFile)
 			return
 		}
 		// need to ensure that readerPath exists before trying to create a file there

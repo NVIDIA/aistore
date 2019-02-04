@@ -353,7 +353,7 @@ func (r *XactEC) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 	}
 
 	if len(nodes) == 0 {
-		return errors.New("Destination list is empty")
+		return errors.New("destination list is empty")
 	}
 
 	var err error
@@ -402,7 +402,7 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 	c := cmn.GCO.Get()
 	if sw.wg.WaitTimeout(c.Timeout.SendFile) {
 		r.unregWriter(uname)
-		return fmt.Errorf("Timed out waiting for %s is read", uname)
+		return fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
 	if glog.V(4) {
@@ -540,7 +540,7 @@ func (r *XactEC) removeObjAndMeta(bucket, objname string, islocal bool) error {
 			return errors.New(errstr)
 		}
 		if err := os.RemoveAll(fqnMeta); err != nil {
-			return fmt.Errorf("Error removing %s %q: %v", tp, fqnMeta, err)
+			return fmt.Errorf("error removing %s %q: %v", tp, fqnMeta, err)
 		}
 	}
 

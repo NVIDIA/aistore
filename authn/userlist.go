@@ -106,14 +106,14 @@ func (m *userManager) saveUsers() (err error) {
 // Registers a new user
 func (m *userManager) addUser(userID, userPass string) error {
 	if userID == "" || userPass == "" {
-		return fmt.Errorf("Invalid credentials")
+		return fmt.Errorf("invalid credentials")
 	}
 
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
 	if _, ok := m.Users[userID]; ok {
-		return fmt.Errorf("User '%s' already registered", userID)
+		return fmt.Errorf("user '%s' already registered", userID)
 	}
 	m.Users[userID] = &userInfo{
 		UserID:          userID,
@@ -130,7 +130,7 @@ func (m *userManager) delUser(userID string) error {
 	m.mtx.Lock()
 	if _, ok := m.Users[userID]; !ok {
 		m.mtx.Unlock()
-		return fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
+		return fmt.Errorf("user %s %s", userID, cmn.DoesNotExist)
 	}
 	delete(m.Users, userID)
 	token, ok := m.tokens[userID]
@@ -161,13 +161,13 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	if user, ok = m.Users[userID]; !ok {
-		return "", fmt.Errorf("Invalid credentials")
+		return "", fmt.Errorf("invalid credentials")
 	}
 	passwordDecoded := user.passwordDecoded
 	creds := user.Creds
 
 	if passwordDecoded != pwd {
-		return "", fmt.Errorf("Invalid username or password")
+		return "", fmt.Errorf("invalid username or password")
 	}
 
 	// check if a user is already has got token. If existing token expired then
@@ -249,19 +249,19 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 		if info.Token == token {
 			if info.Expires.Before(time.Now()) {
 				delete(m.tokens, id)
-				return nil, fmt.Errorf("Token expired")
+				return nil, fmt.Errorf("token expired")
 			}
 
 			user, ok := m.Users[id]
 			if !ok {
-				return nil, fmt.Errorf("Invalid token")
+				return nil, fmt.Errorf("invalid token")
 			}
 
 			return user, nil
 		}
 	}
 
-	return nil, fmt.Errorf("Token not found")
+	return nil, fmt.Errorf("token not found")
 }
 
 // Generic function to send everything to primary proxy
@@ -298,7 +298,7 @@ func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 		}
 
 		if time.Since(startRequest) > proxyTimeout {
-			return fmt.Errorf("Sending data to primary proxy timed out")
+			return fmt.Errorf("sending data to primary proxy timed out")
 		}
 
 		time.Sleep(proxyRetryTime)
@@ -310,12 +310,12 @@ func (m *userManager) updateCredentials(userID, provider, userCreds string) (boo
 	defer m.mtx.Unlock()
 
 	if !isValidProvider(provider) {
-		return false, fmt.Errorf("Invalid cloud provider: %s", provider)
+		return false, fmt.Errorf("invalid cloud provider: %s", provider)
 	}
 
 	user, ok := m.Users[userID]
 	if !ok {
-		err := fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
+		err := fmt.Errorf("user %s %s", userID, cmn.DoesNotExist)
 		return false, err
 	}
 
@@ -342,12 +342,12 @@ func (m *userManager) deleteCredentials(userID, provider string) (bool, error) {
 	defer m.mtx.Unlock()
 
 	if !isValidProvider(provider) {
-		return false, fmt.Errorf("Invalid cloud provider: %s", provider)
+		return false, fmt.Errorf("invalid cloud provider: %s", provider)
 	}
 
 	user, ok := m.Users[userID]
 	if !ok {
-		return false, fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
+		return false, fmt.Errorf("user %s %s", userID, cmn.DoesNotExist)
 	}
 	if _, ok = user.Creds[provider]; ok {
 		delete(user.Creds, provider)

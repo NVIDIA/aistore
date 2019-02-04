@@ -469,13 +469,13 @@ func ValidateVersion(version string) error {
 		}
 	}
 	if !versionValid {
-		return fmt.Errorf("Invalid version: %s - expecting one of %s", version, strings.Join(versions, ", "))
+		return fmt.Errorf("invalid version: %s - expecting one of %s", version, strings.Join(versions, ", "))
 	}
 	return nil
 }
 
 func validateConfig(config *Config) (err error) {
-	const badfmt = "Bad %q format, err: %v"
+	const badfmt = "bad %q format, err: %v"
 	var (
 		periodic  = &config.Periodic
 		lru       = &config.LRU
@@ -506,22 +506,22 @@ func validateConfig(config *Config) (err error) {
 
 	hwm, lwm, oos := lru.HighWM, lru.LowWM, lru.OOS
 	if hwm <= 0 || lwm <= 0 || oos <= 0 || hwm < lwm || oos < hwm || lwm > 100 || hwm > 100 || oos > 100 {
-		return fmt.Errorf("Invalid LRU configuration %+v", lru)
+		return fmt.Errorf("invalid LRU configuration %+v", lru)
 	}
 	if mirror.MirrorUtilThresh < 0 || mirror.MirrorUtilThresh > 100 || mirror.MirrorBurst < 0 {
-		return fmt.Errorf("Invalid mirror configuration %+v", mirror)
+		return fmt.Errorf("invalid mirror configuration %+v", mirror)
 	}
 	if mirror.MirrorEnabled && mirror.Copies != 2 {
-		return fmt.Errorf("Invalid mirror configuration %+v", mirror)
+		return fmt.Errorf("invalid mirror configuration %+v", mirror)
 	}
 
 	diskUtilHWM, diskUtilLWM := config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM
 	if diskUtilHWM <= 0 || diskUtilLWM <= 0 || diskUtilHWM <= diskUtilLWM || diskUtilLWM > 100 || diskUtilHWM > 100 {
-		return fmt.Errorf("Invalid Xaction configuration %+v", config.Xaction)
+		return fmt.Errorf("invalid Xaction configuration %+v", config.Xaction)
 	}
 
 	if config.Cksum.Checksum != ChecksumXXHash && config.Cksum.Checksum != ChecksumNone {
-		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
+		return fmt.Errorf("invalid checksum: %s - expecting %s or %s", config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
 	}
 	if err := ValidateVersion(config.Ver.Versioning); err != nil {
 		return err
@@ -533,19 +533,19 @@ func validateConfig(config *Config) (err error) {
 		return fmt.Errorf(badfmt, timeout.DefaultLongStr, err)
 	}
 	if timeout.MaxKeepalive, err = time.ParseDuration(timeout.MaxKeepaliveStr); err != nil {
-		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", timeout.MaxKeepaliveStr, err)
+		return fmt.Errorf("bad timeout max_keepalive format %s, err %v", timeout.MaxKeepaliveStr, err)
 	}
 	if timeout.ProxyPing, err = time.ParseDuration(timeout.ProxyPingStr); err != nil {
-		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", timeout.ProxyPingStr, err)
+		return fmt.Errorf("bad timeout proxy_ping format %s, err %v", timeout.ProxyPingStr, err)
 	}
 	if timeout.CplaneOperation, err = time.ParseDuration(timeout.CplaneOperationStr); err != nil {
-		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", timeout.CplaneOperationStr, err)
+		return fmt.Errorf("bad timeout vote_request format %s, err %v", timeout.CplaneOperationStr, err)
 	}
 	if timeout.SendFile, err = time.ParseDuration(timeout.SendFileStr); err != nil {
-		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", timeout.SendFileStr, err)
+		return fmt.Errorf("bad timeout send_file_time format %s, err %v", timeout.SendFileStr, err)
 	}
 	if timeout.Startup, err = time.ParseDuration(timeout.StartupStr); err != nil {
-		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", timeout.StartupStr, err)
+		return fmt.Errorf("bad proxy startup_time format %s, err %v", timeout.StartupStr, err)
 	}
 	keepalive.Proxy.Interval, err = time.ParseDuration(keepalive.Proxy.IntervalStr)
 	if err != nil {
@@ -569,19 +569,19 @@ func validateConfig(config *Config) (err error) {
 
 	// Parse ports
 	if net.L4.Port, err = ParsePort(net.L4.PortStr); err != nil {
-		return fmt.Errorf("Bad public port specified: %v", err)
+		return fmt.Errorf("bad public port specified: %v", err)
 	}
 
 	net.L4.PortIntraControl = 0
 	if net.L4.PortIntraControlStr != "" {
 		if net.L4.PortIntraControl, err = ParsePort(net.L4.PortIntraControlStr); err != nil {
-			return fmt.Errorf("Bad internal port specified: %v", err)
+			return fmt.Errorf("bad internal port specified: %v", err)
 		}
 	}
 	net.L4.PortIntraData = 0
 	if net.L4.PortIntraDataStr != "" {
 		if net.L4.PortIntraData, err = ParsePort(net.L4.PortIntraDataStr); err != nil {
-			return fmt.Errorf("Bad replication port specified: %v", err)
+			return fmt.Errorf("bad replication port specified: %v", err)
 		}
 	}
 
@@ -591,25 +591,25 @@ func validateConfig(config *Config) (err error) {
 
 	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraControl); overlap {
 		return fmt.Errorf(
-			"Public and internal addresses overlap: %s (public: %s; internal: %s)",
+			"public and internal addresses overlap: %s (public: %s; internal: %s)",
 			addr, net.IPv4, net.IPv4IntraControl,
 		)
 	}
 	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraData); overlap {
 		return fmt.Errorf(
-			"Public and replication addresses overlap: %s (public: %s; replication: %s)",
+			"public and replication addresses overlap: %s (public: %s; replication: %s)",
 			addr, net.IPv4, net.IPv4IntraData,
 		)
 	}
 	if overlap, addr := ipv4ListsOverlap(net.IPv4IntraControl, net.IPv4IntraData); overlap {
 		return fmt.Errorf(
-			"Internal and replication addresses overlap: %s (internal: %s; replication: %s)",
+			"internal and replication addresses overlap: %s (internal: %s; replication: %s)",
 			addr, net.IPv4IntraControl, net.IPv4IntraData,
 		)
 	}
 	if net.HTTP.RevProxy != "" {
 		if net.HTTP.RevProxy != RevProxyCloud && net.HTTP.RevProxy != RevProxyTarget {
-			return fmt.Errorf("Invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
+			return fmt.Errorf("invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
 				net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
 		}
 	}

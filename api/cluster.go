@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // GetClusterMap API
@@ -44,7 +44,7 @@ func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 	}
 	err = json.Unmarshal(body, &smap)
 	if err != nil {
-		return cluster.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
+		return cluster.Smap{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
 	return smap, nil
 }

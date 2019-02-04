@@ -263,11 +263,11 @@ func (mfs *MountedFS) Add(mpath string) error {
 	for _, bucket := range []string{cmn.LocalBs, cmn.CloudBs} {
 		invalidMpath := separator + bucket
 		if strings.HasSuffix(mpath, invalidMpath) {
-			return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
+			return fmt.Errorf("cannot add fspath %q with suffix %q", mpath, invalidMpath)
 		}
 		invalidMpath += separator
 		if strings.Contains(mpath, invalidMpath) {
-			return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
+			return fmt.Errorf("fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
 		}
 	}
 

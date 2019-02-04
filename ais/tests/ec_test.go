@@ -53,7 +53,7 @@ var (
 func ecSliceNumInit(smap cluster.Smap) error {
 	tCnt := len(smap.Tmap)
 	if tCnt < 4 {
-		return fmt.Errorf("Test requires at least 4 targets")
+		return fmt.Errorf("test requires at least 4 targets")
 	}
 
 	if tCnt == 4 {

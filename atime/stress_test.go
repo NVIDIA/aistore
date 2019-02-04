@@ -142,7 +142,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	if len(atimer.joggers) != len(mpaths) {
-		t.Error(fmt.Errorf("There must be %d mpathAtimeRunners, one for each mpath", len(mpaths)))
+		t.Error(fmt.Errorf("there must be %d mpathAtimeRunners, one for each mpath", len(mpaths)))
 	}
 	wg := &sync.WaitGroup{}
 	start := time.Now()
@@ -174,7 +174,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	wg.Wait()
 	cleanDirectories(tmpDir)
-	atimer.Stop(fmt.Errorf("Test Complete"))
+	atimer.Stop(fmt.Errorf("test complete"))
 }
 
 func Logf(msg string, args ...interface{}) {

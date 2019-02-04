@@ -123,11 +123,11 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 	}
 
 	if err := cmn.CreateDir(dir); err != nil {
-		return "", fmt.Errorf("Failed to create directory %s: %v", dir, err)
+		return "", fmt.Errorf("failed to create directory %s: %v", dir, err)
 	}
 
 	if err := ioutil.WriteFile(filePath, []byte(userCreds), 0755); err != nil {
-		return "", fmt.Errorf("Failed to save to file: %v", err)
+		return "", fmt.Errorf("failed to save to file: %v", err)
 	}
 
 	return filePath, nil

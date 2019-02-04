@@ -103,7 +103,7 @@ func (p *proxy) comparePrimaryURL(url string) error {
 //   new Smap that contains primary URL
 func (p *proxy) detectPrimary() error {
 	if p.Smap == nil || len(p.Smap.Pmap)+len(p.Smap.Tmap) == 0 {
-		return fmt.Errorf("Cluster map is empty")
+		return fmt.Errorf("cluster map is empty")
 	}
 
 	for _, pinfo := range p.Smap.Pmap {
@@ -122,5 +122,5 @@ func (p *proxy) detectPrimary() error {
 		glog.Errorf("Failed to get cluster map from [%s]: %v", tinfo.PublicNet.DirectURL, err)
 	}
 
-	return fmt.Errorf("No node has responded. Using primary URL from the config")
+	return fmt.Errorf("no node has responded. Using primary URL from the config")
 }

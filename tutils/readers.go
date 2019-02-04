@@ -391,6 +391,6 @@ func NewReader(p ParamReader) (Reader, error) {
 	case ReaderTypeFile:
 		return NewFileReader(p.Path, p.Name, p.Size, true /* withHash */)
 	default:
-		return nil, fmt.Errorf("Unknown memory type for creating inmem reader")
+		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
 	}
 }

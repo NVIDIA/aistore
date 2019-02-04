@@ -47,7 +47,7 @@ type timeoutconfig struct {
 
 func (c *config) validate() (err error) {
 	if c.Auth.ExpirePeriod, err = time.ParseDuration(c.Auth.ExpirePeriodStr); err != nil {
-		return fmt.Errorf("Bad expire time format %s, err: %v", c.Auth.ExpirePeriodStr, err)
+		return fmt.Errorf("bad expire time format %s, err: %v", c.Auth.ExpirePeriodStr, err)
 	}
 
 	return nil

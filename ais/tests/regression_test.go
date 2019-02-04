@@ -1367,7 +1367,7 @@ func getXactionRebalance(proxyURL string) (stats.RebalanceStats, error) {
 	err = json.Unmarshal(responseBytes, &rebalanceStats)
 	if err != nil {
 		return rebalanceStats,
-			fmt.Errorf("Failed to unmarshal rebalance stats: %v", err)
+			fmt.Errorf("failed to unmarshal rebalance stats: %v", err)
 	}
 
 	return rebalanceStats, nil

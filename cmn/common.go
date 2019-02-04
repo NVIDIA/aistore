@@ -307,7 +307,7 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, size ...int64) error {
 
 	file.Close()
 	if err != nil {
-		return fmt.Errorf("Failed to save to %q: %v", fqn, err)
+		return fmt.Errorf("failed to save to %q: %v", fqn, err)
 	}
 
 	return nil
@@ -376,9 +376,9 @@ func ParseIntRanged(str string, base, bits int, low, high int64) (int64, error) 
 
 	if v < low || v > high {
 		if low == high {
-			return low, fmt.Errorf("Only %d is supported", low)
+			return low, fmt.Errorf("only %d is supported", low)
 		}
-		return low, fmt.Errorf("It must be between %d and %d", low, high)
+		return low, fmt.Errorf("it must be between %d and %d", low, high)
 	}
 
 	return v, nil

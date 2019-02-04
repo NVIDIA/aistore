@@ -191,7 +191,7 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 		return err
 	}
 
-	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("unknown resource type for %s: %s, %d", op, name, f.typ)
 	return err
 }
 
@@ -295,7 +295,7 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 		return f, nil
 	}
 
-	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("unknown resource type for %s: %s, %d", op, name, f.typ)
 	return nil, err
 }
 
@@ -385,7 +385,7 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 		return err
 	}
 
-	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("unknown resource type for %s: %s, %d", op, name, f.typ)
 	return err
 }
 
@@ -556,7 +556,7 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 		return fi, err
 	}
 
-	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("unknown resource type for %s: %s, %d", op, name, f.typ)
 	return nil, err
 }
 

@@ -58,7 +58,7 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 	url := baseParams.URL + path
 	req, err := http.NewRequest(baseParams.Method, url, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request, err: %v", err)
+		return nil, fmt.Errorf("failed to create request, err: %v", err)
 	}
 	if len(optParams) > 0 {
 		setRequestOptParams(req, optParams[0])
@@ -66,12 +66,12 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 
 	resp, err := baseParams.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to %s, err: %v", baseParams.Method, err)
+		return nil, fmt.Errorf("failed to %s, err: %v", baseParams.Method, err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read response, err: %v", err)
+			return nil, fmt.Errorf("failed to read response, err: %v", err)
 		}
 		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
@@ -110,7 +110,7 @@ func convertToString(value interface{}) (valstr string, err error) {
 	} else if v, ok := value.(float64); ok {
 		valstr = strconv.FormatFloat(v, 'f', -1, 64)
 	} else {
-		err = fmt.Errorf("Failed to assert type on config param: %v (type %T)", value, value)
+		err = fmt.Errorf("failed to assert type on config param: %v (type %T)", value, value)
 	}
 	return
 }

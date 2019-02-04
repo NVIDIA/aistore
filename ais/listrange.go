@@ -44,11 +44,11 @@ type listf func(ct context.Context, objects []string, bucket string, deadline ti
 func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.GetMsg) (bucketList *cmn.BucketList, err error) {
 	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
 	if errstr != "" {
-		return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
+		return nil, fmt.Errorf("error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 	}
 	bucketList = &cmn.BucketList{}
 	if err := jsoniter.Unmarshal(jsbytes, bucketList); err != nil {
-		return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
+		return nil, fmt.Errorf("error unmarshalling BucketList: %v", err)
 	}
 	return
 }
@@ -192,7 +192,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string,
 	deadline time.Duration, done chan struct{}) error {
 	if t.bmdowner.get().IsLocal(bucket) {
-		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
+		return fmt.Errorf("cannot prefetch from a local bucket: %s", bucket)
 	}
 	var absdeadline time.Time
 	if deadline != 0 {
@@ -334,7 +334,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg cmn.ActionMsg) error {
 	operation := t.getOpFromActionMsg(msg.Action)
 	if operation == nil {
-		return fmt.Errorf("Invalid Operation")
+		return fmt.Errorf("invalid operation")
 	}
 
 	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
@@ -410,12 +410,12 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 	min, max, err := parseRange(rangeMsg.Range)
 	if err != nil {
-		return fmt.Errorf("Error parsing range string (%s): %v", rangeMsg.Range, err)
+		return fmt.Errorf("error parsing range string (%s): %v", rangeMsg.Range, err)
 	}
 
 	re, err := regexp.Compile(rangeMsg.Regex)
 	if err != nil {
-		return fmt.Errorf("Could not compile regex: %v", err)
+		return fmt.Errorf("could not compile regex: %v", err)
 	}
 
 	for {

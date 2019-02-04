@@ -424,7 +424,7 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, 
 	for {
 		reslist = testListBucket(t, proxyURL, bucket, msg, objLimit)
 		if reslist == nil {
-			return nil, fmt.Errorf("Failed to list bucket %s", bucket)
+			return nil, fmt.Errorf("failed to list bucket %s", bucket)
 		}
 		if copy {
 			for _, m := range reslist.Entries {
@@ -721,7 +721,7 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf("Worker %2d: get key %s from bucket %s http error %d",
+		err = fmt.Errorf("worker %2d: get key %s from bucket %s http error %d",
 			id, keyname, bucket, resp.StatusCode)
 		errCh <- err
 		t.Error(err)

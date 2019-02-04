@@ -1566,7 +1566,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
 	if err == nil {
 		if bucket != renctx.bucketFrom {
-			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
+			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
 	if errstr := renctx.t.renameBucketObject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
@@ -1871,7 +1871,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 		if r.err != nil {
 			if !os.IsNotExist(r.err) {
 				t.fshc(r.err, r.failedPath)
-				return nil, fmt.Errorf("Failed to read %s", r.failedPath)
+				return nil, fmt.Errorf("failed to read %s", r.failedPath)
 			}
 			continue
 		}
@@ -2947,7 +2947,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	if !dryRun.disk {
 		if file, err = cmn.CreateFile(roi.workFQN); err != nil {
 			roi.t.fshc(err, roi.workFQN)
-			return fmt.Errorf("Failed to create %s, err: %s", roi.workFQN, err)
+			return fmt.Errorf("failed to create %s, err: %s", roi.workFQN, err)
 		}
 		writer = file
 	}
@@ -3028,7 +3028,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = fmt.Errorf("Bad checksum expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
+			err = fmt.Errorf("bad checksum expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
 			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
@@ -3038,7 +3038,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	}
 
 	if err = file.Close(); err != nil {
-		return fmt.Errorf("Failed to close received file %s, err: %v", roi.workFQN, err)
+		return fmt.Errorf("failed to close received file %s, err: %v", roi.workFQN, err)
 	}
 	return nil
 }
@@ -3180,7 +3180,7 @@ func (t *targetrunner) userFromRequest(r *http.Request) (*authRec, error) {
 
 	authrec, err := t.authn.validateToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to decrypt token [%s]: %v", token, err)
+		return nil, fmt.Errorf("failed to decrypt token [%s]: %v", token, err)
 	}
 
 	return authrec, nil
@@ -3500,7 +3500,7 @@ func (t *targetrunner) disable() error {
 	if status >= http.StatusBadRequest || eunreg != nil {
 		// do not update state on error
 		if eunreg == nil {
-			eunreg = fmt.Errorf("Error unregistering target, http error code: %d", status)
+			eunreg = fmt.Errorf("error unregistering target, http error code: %d", status)
 		}
 		return eunreg
 	}
@@ -3539,7 +3539,7 @@ func (t *targetrunner) enable() error {
 	if status >= http.StatusBadRequest || ereg != nil {
 		// do not update state on error
 		if ereg == nil {
-			ereg = fmt.Errorf("Error registering target, http error code: %d", status)
+			ereg = fmt.Errorf("error registering target, http error code: %d", status)
 		}
 		return ereg
 	}

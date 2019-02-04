@@ -120,7 +120,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 		streams = sb.get()
 	)
 	if len(streams) == 0 {
-		err = fmt.Errorf("No streams %s => .../%s", sb.lsnode, sb.trname)
+		err = fmt.Errorf("no streams %s => .../%s", sb.lsnode, sb.trname)
 		return
 	}
 	if cb == nil {
@@ -241,7 +241,7 @@ func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenClo
 	)
 	if reopen && reader != nil {
 		if reader2, err = reader.Open(); err != nil { // reopen for every destination
-			err = fmt.Errorf("Unexpected: %s failed to reopen reader, err: %v", sb, err)
+			err = fmt.Errorf("unexpected: %s failed to reopen reader, err: %v", sb, err)
 			return
 		}
 	}

@@ -24,7 +24,7 @@ func TestReplicationRunnerStop(t *testing.T) {
 	rr := newReplicationRunner(tr, fs.Mountpaths)
 	go rr.Run()
 
-	rr.Stop(fmt.Errorf("Testing replicationRunner.stop"))
+	rr.Stop(fmt.Errorf("testing replicationRunner.stop"))
 
 	waitCh := make(chan struct{})
 	go func() {
@@ -53,7 +53,7 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 		t.Error("Send operation should fail on non-existing file")
 	}
 
-	rr.Stop(fmt.Errorf("Testing replicationRunner.sendReplica sync"))
+	rr.Stop(fmt.Errorf("testing replicationRunner.sendReplica sync"))
 }
 
 // newFakeTargetRunner returns a fake targetrunner initialized for replication tests

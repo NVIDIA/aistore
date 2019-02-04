@@ -580,18 +580,18 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 	for i := 0; i < count; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
-			return fmt.Errorf("Error creating reader: %v", err)
+			return fmt.Errorf("error creating reader: %v", err)
 		}
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 		if err = api.PutObject(baseParams, clibucket, keyname, reader.XXHash(), reader); err != nil {
-			return fmt.Errorf("Error executing put: %v", err)
+			return fmt.Errorf("error executing put: %v", err)
 		}
 		if _, err = api.GetObject(baseParams, clibucket, keyname); err != nil {
-			return fmt.Errorf("Error executing get: %v", err)
+			return fmt.Errorf("error executing get: %v", err)
 		}
 		if err = tutils.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
-			return fmt.Errorf("Error executing del: %v", err)
+			return fmt.Errorf("error executing del: %v", err)
 		}
 	}
 
@@ -828,7 +828,7 @@ func kill(daemonID, port string) (string, []string, error) {
 			break
 		}
 		if time.Now().After(to) {
-			err = fmt.Errorf("Failed to kill -2 process pid=%s at port %s", pid, port)
+			err = fmt.Errorf("failed to kill -2 process pid=%s at port %s", pid, port)
 			break
 		}
 		time.Sleep(time.Second)
@@ -842,7 +842,7 @@ func kill(daemonID, port string) (string, []string, error) {
 		if errpid != nil {
 			err = nil
 		} else {
-			err = fmt.Errorf("Failed to kill -9 process pid=%s at port %s", pid, port)
+			err = fmt.Errorf("failed to kill -9 process pid=%s at port %s", pid, port)
 		}
 	}
 
@@ -879,7 +879,7 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 func getPID(port string) (string, error) {
 	output, err := exec.Command("lsof", []string{"-sTCP:LISTEN", "-i", ":" + port}...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("Error executing LSOF command: %v", err)
+		return "", fmt.Errorf("error executing LSOF command: %v", err)
 	}
 
 	// The output of 'lsof' might contain extra message in the beginning like this one:
@@ -903,18 +903,18 @@ func getPID(port string) (string, error) {
 func getProcess(port string) (string, string, []string, error) {
 	pid, err := getPID(port)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("Error getting pid on port: %v", err)
+		return "", "", nil, fmt.Errorf("error getting pid on port: %v", err)
 	}
 
 	output, err := exec.Command("ps", "-p", pid, "-o", "command").CombinedOutput()
 	if err != nil {
-		return "", "", nil, fmt.Errorf("Error executing PS command: %v", err)
+		return "", "", nil, fmt.Errorf("error executing PS command: %v", err)
 	}
 
 	line := strings.Split(string(output), "\n")[1]
 	fields := strings.Fields(line)
 	if len(fields) == 0 {
-		return "", "", nil, fmt.Errorf("No returned fields")
+		return "", "", nil, fmt.Errorf("no returned fields")
 	}
 
 	return pid, fields[0], fields[1:], nil
@@ -930,7 +930,7 @@ func checkPmapVersions(t *testing.T, proxyURL string) {
 		}
 		smap := getClusterMap(t, proxyInfo.PublicNet.DirectURL)
 		if smap.Version != smapPrimary.Version {
-			err := fmt.Errorf("Proxy %s has version %d, but primary proxy has version %d of Pmap",
+			err := fmt.Errorf("proxy %s has version %d, but primary proxy has version %d of Pmap",
 				proxyID, smap.Version, smapPrimary.Version)
 			t.Error(err)
 		}
@@ -1036,7 +1036,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
 	}
 
-	return cluster.Smap{}, fmt.Errorf("Timed out waiting for the cluster to stabilize")
+	return cluster.Smap{}, fmt.Errorf("timed out waiting for the cluster to stabilize")
 }
 
 // primarySetToOriginal reads original primary proxy from configuration and

@@ -33,12 +33,12 @@ func getLocalIPv4List(allowLoopback bool) (addrlist []*localIPv4Info, err error)
 	addrlist = make([]*localIPv4Info, 0)
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
-		err = fmt.Errorf("Failed to get host unicast IPs, err: %v", e)
+		err = fmt.Errorf("failed to get host unicast IPs, err: %v", e)
 		return
 	}
 	iflist, e := net.Interfaces()
 	if e != nil {
-		err = fmt.Errorf("Failed to get interface list: %v", e)
+		err = fmt.Errorf("failed to get interface list: %v", e)
 		return
 	}
 
@@ -73,7 +73,7 @@ func getLocalIPv4List(allowLoopback bool) (addrlist []*localIPv4Info, err error)
 	}
 
 	if len(addrlist) == 0 {
-		return addrlist, fmt.Errorf("The host does not have any IPv4 addresses")
+		return addrlist, fmt.Errorf("the host does not have any IPv4 addresses")
 	}
 
 	return addrlist, nil
@@ -96,13 +96,13 @@ func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredList []string) (i
 	}
 
 	glog.Errorf("Configured IPv4 does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s\n", localList, configuredList)
-	return "", fmt.Errorf("Configured IPv4 does not match any local one")
+	return "", fmt.Errorf("configured IPv4 does not match any local one")
 }
 
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a deamon to listen on it
 func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrlist) == 0 {
-		return nil, fmt.Errorf("No addresses to choose from")
+		return nil, fmt.Errorf("no addresses to choose from")
 	} else if len(addrlist) == 1 {
 		msg := fmt.Sprintf("Found only one IPv4: %s, MTU %d", addrlist[0].ipv4, addrlist[0].mtu)
 		glog.Info(msg)
@@ -111,7 +111,7 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
 		}
 		ip = net.ParseIP(addrlist[0].ipv4)
 		if ip == nil {
-			return nil, fmt.Errorf("Failed to parse IP address: %s", addrlist[0].ipv4)
+			return nil, fmt.Errorf("failed to parse IP address: %s", addrlist[0].ipv4)
 		}
 		return ip, nil
 	}
@@ -123,7 +123,7 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
 	// FIXME: temp hack - make sure to keep working on laptops with dockers
 	ip = net.ParseIP(addrlist[0].ipv4)
 	if ip == nil {
-		return nil, fmt.Errorf("Failed to parse IP address: %s", addrlist[0].ipv4)
+		return nil, fmt.Errorf("failed to parse IP address: %s", addrlist[0].ipv4)
 	}
 	return ip, nil
 }
@@ -144,7 +144,7 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 
 	ip = net.ParseIP(selectedIPv4)
 	if ip == nil {
-		return nil, fmt.Errorf("Failed to parse ip %s", selectedIPv4)
+		return nil, fmt.Errorf("failed to parse ip %s", selectedIPv4)
 	}
 	return ip, nil
 }

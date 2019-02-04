@@ -33,7 +33,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 )
 
 // Declare a new type for Context field names
@@ -78,12 +78,12 @@ type (
 func decryptToken(tokenStr string) (*authRec, error) {
 	var (
 		issueStr, expireStr string
-		invalTokenErr       = fmt.Errorf("Invalid token")
+		invalTokenErr       = fmt.Errorf("invalid token")
 	)
 	rec := &authRec{}
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
 		return []byte(cmn.GCO.Get().Auth.Secret), nil
@@ -200,7 +200,7 @@ func (a *authManager) validateToken(token string) (ar *authRec, err error) {
 	a.Lock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		ar, err = nil, fmt.Errorf("Invalid token")
+		ar, err = nil, fmt.Errorf("invalid token")
 		a.Unlock()
 		return
 	}
@@ -221,19 +221,19 @@ func (a *authManager) extractTokenData(token string) (*authRec, error) {
 	if !ok || auth == nil {
 		if auth, err = decryptToken(token); err != nil {
 			glog.Errorf("Invalid token was received: %s", token)
-			return nil, fmt.Errorf("Invalid token")
+			return nil, fmt.Errorf("invalid token")
 		}
 		a.tokens[token] = auth
 	}
 
 	if auth == nil {
-		return nil, fmt.Errorf("Invalid token")
+		return nil, fmt.Errorf("invalid token")
 	}
 
 	if auth.expires.Before(time.Now()) {
 		glog.Errorf("Expired token was used: %s", token)
 		delete(a.tokens, token)
-		return nil, fmt.Errorf("Token expired")
+		return nil, fmt.Errorf("token expired")
 	}
 
 	return auth, nil

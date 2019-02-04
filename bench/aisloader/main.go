@@ -164,25 +164,25 @@ func parseCmdLine() (params, error) {
 
 	// Sanity check
 	if p.maxSize < p.minSize {
-		return params{}, fmt.Errorf("Invalid option: min and max size (%d, %d)", p.minSize, p.maxSize)
+		return params{}, fmt.Errorf("invalid option: min and max size (%d, %d)", p.minSize, p.maxSize)
 	}
 
 	if p.putPct < 0 || p.putPct > 100 {
-		return params{}, fmt.Errorf("Invalid option: put percent %d", p.putPct)
+		return params{}, fmt.Errorf("invalid option: put percent %d", p.putPct)
 	}
 
 	if p.statsShowInterval < 0 {
-		return params{}, fmt.Errorf("Invalid option: stats show interval %d", p.statsShowInterval)
+		return params{}, fmt.Errorf("invalid option: stats show interval %d", p.statsShowInterval)
 	}
 
 	if p.readOffStr != "" {
 		if p.readOff, err = cmn.S2B(p.readOffStr); err != nil {
-			return params{}, fmt.Errorf("Failed to parse read offset %s: %v", p.readOffStr, err)
+			return params{}, fmt.Errorf("failed to parse read offset %s: %v", p.readOffStr, err)
 		}
 	}
 	if p.readLenStr != "" {
 		if p.readLen, err = cmn.S2B(p.readLenStr); err != nil {
-			return params{}, fmt.Errorf("Failed to parse read length %s: %v", p.readLenStr, err)
+			return params{}, fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
 		}
 	}
 
@@ -194,7 +194,7 @@ func parseCmdLine() (params, error) {
 		}
 
 		if err := json.Unmarshal([]byte(jsonStr), &bprops); err != nil {
-			return params{}, fmt.Errorf("Failed to parse bucket properties: %v", err)
+			return params{}, fmt.Errorf("failed to parse bucket properties: %v", err)
 		}
 
 		p.bProps = bprops
@@ -209,12 +209,12 @@ func parseCmdLine() (params, error) {
 
 			if p.bProps.ParitySlices < 1 || p.bProps.ParitySlices > 32 {
 				return params{}, fmt.Errorf(
-					"Invalid number of parity slices: %d, it must be between 1 and 32",
+					"invalid number of parity slices: %d, it must be between 1 and 32",
 					p.bProps.ParitySlices)
 			}
 			if p.bProps.DataSlices < 1 || p.bProps.DataSlices > 32 {
 				return params{}, fmt.Errorf(
-					"Invalid number of data slices: %d, it must be between 1 and 32",
+					"invalid number of data slices: %d, it must be between 1 and 32",
 					p.bProps.DataSlices)
 			}
 		}
@@ -229,7 +229,7 @@ func parseCmdLine() (params, error) {
 			}
 			if p.bProps.Copies != 2 {
 				return params{}, fmt.Errorf(
-					"Invalid number of mirror copies: %d, it must equal 2",
+					"invalid number of mirror copies: %d, it must equal 2",
 					p.bProps.Copies)
 			}
 		}

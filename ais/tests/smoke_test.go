@@ -165,7 +165,7 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		}
 
 		if len(files) == 0 {
-			errCh <- fmt.Errorf("Cannot retrieve from an empty bucket %s", bucket)
+			errCh <- fmt.Errorf("cannot retrieve from an empty bucket %s", bucket)
 			// not considered as a failure, just can't do the test
 			return
 		}

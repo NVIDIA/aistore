@@ -49,7 +49,7 @@ func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read response, err: %v", err)
+			return nil, fmt.Errorf("failed to read response, err: %v", err)
 		}
 		return nil, fmt.Errorf("HEAD bucket/object: %s/%s failed, HTTP status: %d, HTTP response: %s",
 			bucket, object, r.StatusCode, string(b))
@@ -122,7 +122,7 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 	slab.Free(buf)
 
 	if err != nil {
-		return 0, fmt.Errorf("Failed to Copy HTTP response body, err: %v", err)
+		return 0, fmt.Errorf("failed to Copy HTTP response body, err: %v", err)
 	}
 	return n, nil
 }
@@ -167,13 +167,13 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 		slab.Free(buf)
 
 		if err != nil {
-			return 0, fmt.Errorf("Failed to calculate xxHash from HTTP response body, err: %v", err)
+			return 0, fmt.Errorf("failed to calculate xxHash from HTTP response body, err: %v", err)
 		}
 		if cksumVal != hdrHash {
 			return 0, cmn.NewInvalidCksumError(hdrHash, cksumVal)
 		}
 	} else {
-		return 0, fmt.Errorf("Can't validate hash types other than %s, object's hash type: %s", cmn.ChecksumXXHash, hdrHashType)
+		return 0, fmt.Errorf("can't validate hash types other than %s, object's hash type: %s", cmn.ChecksumXXHash, hdrHashType)
 	}
 	return n, nil
 }
@@ -187,7 +187,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.ReadOpenCloser, replicateOpts ...ReplicateObjectInput) error {
 	handle, err := reader.Open()
 	if err != nil {
-		return fmt.Errorf("Failed to open reader, err: %v", err)
+		return fmt.Errorf("failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
@@ -195,7 +195,7 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	reqURL := baseParams.URL + path
 	req, err := http.NewRequest(http.MethodPut, reqURL, handle)
 	if err != nil {
-		return fmt.Errorf("Failed to create new HTTP request, err: %v", err)
+		return fmt.Errorf("failed to create new HTTP request, err: %v", err)
 	}
 
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
@@ -222,14 +222,14 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	}
 
 	if err != nil {
-		return fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
+		return fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("Failed to read response, err: %v", err)
+			return fmt.Errorf("failed to read response, err: %v", err)
 		}
 		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}

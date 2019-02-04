@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type Vote string
@@ -558,7 +558,7 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// in the Smap
 	hrwmax, errstr := hrwProxy(h.smapowner.get(), currPrimaryID)
 	if errstr != "" {
-		return false, fmt.Errorf("Error executing HRW: %v", errstr)
+		return false, fmt.Errorf("error executing HRW: %v", errstr)
 	}
 	if glog.V(4) {
 		glog.Infof("Voting result for %s is %v. Expected primary: %s",

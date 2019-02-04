@@ -609,7 +609,7 @@ func (p *proxyrunner) createLocalBucket(msg cmn.ActionMsg, bucket string) error 
 	}
 	if !clone.add(bucket, true, bucketProps) {
 		p.bmdowner.Unlock()
-		return fmt.Errorf("Local bucket %s already exists", bucket)
+		return fmt.Errorf("local bucket %s already exists", bucket)
 	}
 	if errstr := p.savebmdconf(clone, config); errstr != "" {
 		p.bmdowner.Unlock()
@@ -1690,17 +1690,17 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(s) != 2 || s[0] != tokenStart {
-		return nil, fmt.Errorf("Invalid request")
+		return nil, fmt.Errorf("invalid request")
 	}
 
 	if p.authn == nil {
-		return nil, fmt.Errorf("Invalid credentials")
+		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	auth, err := p.authn.validateToken(s[1])
 	if err != nil {
 		glog.Errorf("Invalid token: %v", err)
-		return nil, fmt.Errorf("Invalid token")
+		return nil, fmt.Errorf("invalid token")
 	}
 
 	return auth, nil
@@ -2721,7 +2721,7 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
 		}
 		if !p.urlOutsideCluster(props.NextTierURL) {
-			return fmt.Errorf("Invalid next tier URL: %s, URL is in current cluster", props.NextTierURL)
+			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", props.NextTierURL)
 		}
 	}
 	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
@@ -2760,38 +2760,38 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 	}
 	lwm, hwm := props.LowWM, props.HighWM
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
-		return fmt.Errorf("Invalid WM configuration. LowWM: %d, HighWM: %d", lwm, hwm)
+		return fmt.Errorf("invalid WM configuration. LowWM: %d, HighWM: %d", lwm, hwm)
 	}
 	if props.DontEvictTimeStr != "" {
 		dontEvictTime, err := time.ParseDuration(props.DontEvictTimeStr)
 		if err != nil {
-			return fmt.Errorf("Bad dont_evict_time format %s, err: %v", dontEvictTime, err)
+			return fmt.Errorf("bad dont_evict_time format %s, err: %v", dontEvictTime, err)
 		}
 		props.DontEvictTime = dontEvictTime
 	}
 	if props.CapacityUpdTimeStr != "" {
 		capacityUpdTime, err := time.ParseDuration(props.CapacityUpdTimeStr)
 		if err != nil {
-			return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", capacityUpdTime, err)
+			return fmt.Errorf("bad capacity_upd_time format %s, err: %v", capacityUpdTime, err)
 		}
 		props.CapacityUpdTime = capacityUpdTime
 	}
 
 	if props.ECEnabled {
 		if !isLocal {
-			return fmt.Errorf("Erasure coding does not support Cloud buckets")
+			return fmt.Errorf("erasure coding does not support cloud buckets")
 		}
 
 		if props.ECObjSizeLimit < 0 {
-			return fmt.Errorf("Bad EC file size %d: must be 0(default) or greater than 0", props.ECObjSizeLimit)
+			return fmt.Errorf("bad EC file size %d: must be 0(default) or greater than 0", props.ECObjSizeLimit)
 		}
 		if props.DataSlices < ec.MinSliceCount || props.DataSlices > ec.MaxSliceCount {
-			return fmt.Errorf("Bad number of data slices %d: must be between %d and %d",
+			return fmt.Errorf("bad number of data slices %d: must be between %d and %d",
 				props.DataSlices, ec.MinSliceCount, ec.MaxSliceCount)
 		}
 		// TODO: warn about performance if number is OK but large?
 		if props.ParitySlices < ec.MinSliceCount || props.ParitySlices > ec.MaxSliceCount {
-			return fmt.Errorf("Bad number of parity slices %d: must be between %d and %d",
+			return fmt.Errorf("bad number of parity slices %d: must be between %d and %d",
 				props.ParitySlices, ec.MinSliceCount, ec.MaxSliceCount)
 		}
 
@@ -2800,8 +2800,8 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 		targetCnt := len(p.smapowner.get().Tmap)
 		if targetCnt < required {
 			return fmt.Errorf(
-				"It requires %d targets to use %d data and %d parity slices"+
-					"The cluster has only %d targets",
+				"it requires %d targets to use %d data and %d parity slices "+
+					"(the cluster has only %d targets)",
 				required, props.DataSlices, props.ParitySlices, targetCnt)
 		}
 	}

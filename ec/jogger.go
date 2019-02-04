@@ -109,7 +109,7 @@ func (c *jogger) ec(req *Request) {
 		act = "cleaning up"
 		c.parent.stats.updateDeleteTime(time.Since(req.tm), err != nil)
 	default:
-		err = fmt.Errorf("Invalid EC action: %v", req.Action)
+		err = fmt.Errorf("invalid EC action: %v", req.Action)
 	}
 
 	if err != nil {
@@ -159,7 +159,7 @@ func (c *jogger) encode(req *Request) error {
 	}
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
-		return fmt.Errorf("Object %s/%s requires %d targets to encode, only %d found",
+		return fmt.Errorf("object %s/%s requires %d targets to encode, only %d found",
 			req.LOM.Bucket, req.LOM.Objname, reqTargets, targetCnt)
 	}
 
@@ -281,7 +281,7 @@ func (c *jogger) restoreReplicated(req *Request, meta *Metadata, nodes map[strin
 	}
 
 	if writer == nil {
-		return errors.New("Failed to read a replica from any target")
+		return errors.New("failed to read a replica from any target")
 	}
 
 	// Save received replica and its metadata locally - it is main replica
@@ -648,7 +648,7 @@ func (c *jogger) restore(req *Request) error {
 	}
 
 	if len(nodes) < meta.Data {
-		return fmt.Errorf("Cannot restore: too many slices missing. Found %d slices, need %d or more", meta.Data, len(nodes))
+		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)", meta.Data, len(nodes))
 	}
 	return c.restoreEncoded(req, meta, nodes)
 }

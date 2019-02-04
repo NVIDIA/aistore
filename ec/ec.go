@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // EC module provides data protection on a per bucket basis. By default, the
@@ -234,8 +234,8 @@ var (
 	slicePadding = make([]byte, 64, 64) // for padding EC slices
 
 	ErrorECDisabled = errors.New("EC is disabled for bucket")
-	ErrorNoMetafile = errors.New("No metafile")
-	ErrorNotFound   = errors.New("Not found")
+	ErrorNoMetafile = errors.New("no metafile")
+	ErrorNotFound   = errors.New("not found")
 )
 
 func Init() {

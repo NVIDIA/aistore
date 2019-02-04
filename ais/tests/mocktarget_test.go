@@ -105,7 +105,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 		}
 
 		if err != nil {
-			p.errCh <- fmt.Errorf("Error writing message: %v\n", err)
+			p.errCh <- fmt.Errorf("error writing message: %v\n", err)
 		}
 
 	default:

@@ -266,24 +266,24 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(s) != 2 {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("Invalid header")
+		return fmt.Errorf("invalid header")
 	}
 
 	b, err := base64.StdEncoding.DecodeString(s[1])
 	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("Invalid header authorization")
+		return fmt.Errorf("invalid header authorization")
 	}
 
 	pair := strings.SplitN(string(b), ":", 2)
 	if len(pair) != 2 {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("Invalid header authorization")
+		return fmt.Errorf("invalid header authorization")
 	}
 
 	if pair[0] != conf.Auth.Username || pair[1] != conf.Auth.Password {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
-		return fmt.Errorf("Invalid credentials")
+		return fmt.Errorf("invalid credentials")
 	}
 
 	return nil

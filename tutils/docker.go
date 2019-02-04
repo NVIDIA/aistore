@@ -141,7 +141,7 @@ func DockerRemoveMpathDir(c int, mpathFQN string) (err error) {
 // ContainerExec executes a docker exec command for containerName
 func ContainerExec(containerName string, args ...string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("Not enough arguments to execute a command")
+		return fmt.Errorf("not enough arguments to execute a command")
 	}
 	temp := append([]string{"docker", "exec", containerName}, args...)
 	cmd := exec.Command(temp[0], temp[1:]...)
