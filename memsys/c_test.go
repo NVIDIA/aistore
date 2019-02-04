@@ -68,7 +68,8 @@ func TestSGLStressN(t *testing.T) {
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {
 					tutils.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
-					t.Fatalf("Step %d failed", i)
+					t.Errorf("Step %d failed", i)
+					return
 				}
 			}
 			sglR.Free() // removing these two lines fixes the test

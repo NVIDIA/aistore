@@ -422,7 +422,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		ecCheckSlices(t, foundParts, fullPath+objName,
 			objSize, sliceSize, totalCnt, ecParityCnt)
 		if mainObjPath == "" {
-			t.Fatalf("Full copy is not found")
+			t.Errorf("Full copy is not found")
+			return
 		}
 
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
@@ -442,7 +443,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 				}
 			}
 			if sliceToDel == "" {
-				t.Fatalf("Failed to select random slice for %s", objName)
+				t.Errorf("Failed to select random slice for %s", objName)
+				return
 			}
 			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
 			tutils.CheckFatal(os.Remove(sliceToDel), t)
@@ -460,7 +462,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		partsAfterRemove, _ := ecGetAllLocalSlices(fullPath, objName)
 		_, ok := partsAfterRemove[mainObjPath]
 		if ok || len(partsAfterRemove) != len(foundParts)-deletedFiles*2 {
-			t.Fatalf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
+			t.Errorf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
+			return
 		}
 
 		tutils.Logf("Restoring %s\n", objPath)
@@ -488,6 +491,10 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		go oneObj(objName, i)
 	}
 	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
 
 	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
@@ -615,8 +622,9 @@ func TestECStress(t *testing.T) {
 			foundParts, _ := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)
 			mainObjPath := ""
 			if len(foundParts) != totalCnt {
-				t.Fatalf("Expected number of files %s: %d, found: %d\n%+v",
+				t.Errorf("Expected number of files %s: %d, found: %d\n%+v",
 					objName, totalCnt, len(foundParts), foundParts)
+				return
 			}
 			metaCnt, sliceCnt, replCnt := 0, 0, 0
 			for k, v := range foundParts {
@@ -664,14 +672,16 @@ func TestECStress(t *testing.T) {
 			}
 
 			if mainObjPath == "" {
-				t.Fatalf("Full copy is not found")
+				t.Errorf("Full copy is not found")
+				return
 			}
 
 			tutils.CheckFatal(os.Remove(mainObjPath), t)
 			partsAfterRemove, _ := ecGetAllLocalSlices(fullPath, objName)
 			_, ok := partsAfterRemove[mainObjPath]
 			if ok || len(partsAfterRemove) >= len(foundParts) {
-				t.Fatalf("File is not deleted: %#v", partsAfterRemove)
+				t.Errorf("File is not deleted: %#v", partsAfterRemove)
+				return
 			}
 
 			_, err = api.GetObject(baseParams, TestLocalBucketName, objPath)
@@ -681,11 +691,13 @@ func TestECStress(t *testing.T) {
 				partsAfterRestore, _ := ecGetAllLocalSlices(fullPath, objName)
 				restoredSize, ok := partsAfterRestore[mainObjPath]
 				if !ok || len(partsAfterRestore) != len(foundParts) {
-					t.Fatalf("File is not restored: %#v", partsAfterRestore)
+					t.Errorf("File is not restored: %#v", partsAfterRestore)
+					return
 				}
 
 				if restoredSize != objSize {
-					t.Fatalf("File is restored incorrectly, size mismatches: %d, expected %d", restoredSize, objSize)
+					t.Errorf("File is restored incorrectly, size mismatches: %d, expected %d", restoredSize, objSize)
+					return
 				}
 			}
 		}(idx)
@@ -1115,7 +1127,8 @@ func TestECEmergencyTarget(t *testing.T) {
 		ecCheckSlices(t, foundParts, fullPath+objName,
 			objSize, sliceSize, totalCnt, ecParityCnt)
 		if mainObjPath == "" {
-			t.Fatalf("Full copy is not found")
+			t.Errorf("Full copy is not found")
+			return
 		}
 		t.Logf("Object %s EC in %v", objName, time.Since(start))
 	}
@@ -1127,6 +1140,9 @@ func TestECEmergencyTarget(t *testing.T) {
 		go putOneObj(i, objName)
 	}
 	wg.Wait()
+	if t.Failed() {
+		t.FailNow()
+	}
 
 	// 2. Kill a random target
 	removeTarget := extractTargetNodes(smap)[0]
@@ -1284,7 +1300,8 @@ func TestECEmergencyMpath(t *testing.T) {
 		ecCheckSlices(t, foundParts, fullPath+objName,
 			objSize, sliceSize, totalCnt, ecParityCnt)
 		if mainObjPath == "" {
-			t.Fatalf("Full copy is not found")
+			t.Errorf("Full copy is not found")
+			return
 		}
 	}
 
@@ -1295,6 +1312,9 @@ func TestECEmergencyMpath(t *testing.T) {
 		go putOneObj(i, objName)
 	}
 	wg.Wait()
+	if t.Failed() {
+		t.FailNow()
+	}
 
 	// 2. Disable a random mountpath
 	mpathID := rnd.Intn(len(mpathList.Available))

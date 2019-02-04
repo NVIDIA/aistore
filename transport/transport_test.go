@@ -240,7 +240,7 @@ func Test_CancelStream(t *testing.T) {
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
-	var canceled bool
+	canceled := false
 	for time.Since(now) < duration {
 		hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
@@ -260,10 +260,12 @@ func Test_CancelStream(t *testing.T) {
 		}
 	}
 	time.Sleep(time.Second)
+
 	if !canceled {
-		cancel()
 		tutils.Logln("Delayed cancelation...")
 	}
+	cancel() //does nothing if cancel() was called before, placed here to keep govet linter happy
+
 	termReason, termErr := stream.TermInfo()
 	stats := stream.GetStats()
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
@@ -534,7 +536,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 
 	if *totalRecv != size {
-		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, size)
+		t.Errorf("total received bytes %d is different from expected: %d", *totalRecv, size)
+		return
 	}
 }
 

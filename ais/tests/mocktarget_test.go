@@ -48,7 +48,8 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 
 	err := registerMockTarget(proxyURL, mocktgt, smap)
 	if err != nil {
-		t.Fatalf("failed to start http server for mock target: %v", err)
+		t.Errorf("failed to start http server for mock target: %v", err)
+		return
 	}
 
 	<-stopch
