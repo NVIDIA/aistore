@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"io/ioutil"
 	"net/url"
@@ -317,7 +318,7 @@ func readTestRoot(t *testing.T) []string {
 
 // put opens an object and writes a string at an offset (relative to begin of file)
 func put(t *testing.T, fs webdav.FileSystem, name string, offset int64, content string) {
-	f, err := fs.OpenFile(nil, name, os.O_CREATE|os.O_RDWR, os.ModePerm)
+	f, err := fs.OpenFile(context.Background(), name, os.O_CREATE|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		t.Fatalf("Failed to create file %s, err = %v", name, err)
 	}
@@ -340,7 +341,7 @@ func put(t *testing.T, fs webdav.FileSystem, name string, offset int64, content 
 
 // get reads a file and returns its content as a string
 func get(t *testing.T, fs webdav.FileSystem, name string) string {
-	f, err := fs.OpenFile(nil, name, os.O_RDONLY, os.ModePerm)
+	f, err := fs.OpenFile(context.Background(), name, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		t.Fatalf("Failed to open file, err = %v", err)
 	}
@@ -359,7 +360,7 @@ func get(t *testing.T, fs webdav.FileSystem, name string) string {
 }
 
 func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, error) {
-	dir, err := fs.OpenFile(nil, pth, 0 /* flag */, 0 /* perm */)
+	dir, err := fs.OpenFile(context.Background(), pth, 0 /* flag */, 0 /* perm */)
 	if err != nil {
 		t.Fatalf("Failed to open directory %s, err = %v", pth, err)
 	}
@@ -385,7 +386,7 @@ func TestFS(t *testing.T) {
 
 	// clean up
 	defer func() {
-		err := fs.RemoveAll(nil, bucketFullName)
+		err := fs.RemoveAll(context.Background(), bucketFullName)
 		if err != nil {
 			t.Fatalf("Failed to remove test bucket, err = %v", err)
 		}
@@ -403,38 +404,38 @@ func TestFS(t *testing.T) {
 
 	{
 		// basics
-		err := fs.Mkdir(nil, "notfullpath", 0)
+		err := fs.Mkdir(context.Background(), "notfullpath", 0)
 		if err == nil {
 			t.Fatalf("Relative path is not supported")
 		}
 
-		_, err = fs.OpenFile(nil, "notfullpath", 0, 0)
+		_, err = fs.OpenFile(context.Background(), "notfullpath", 0, 0)
 		if err == nil {
 			t.Fatalf("Relative path is not supported")
 		}
 
-		err = fs.RemoveAll(nil, "notfullpath")
+		err = fs.RemoveAll(context.Background(), "notfullpath")
 		if err == nil {
 			t.Fatalf("Relative path is not supported")
 		}
 
-		err = fs.Rename(nil, "notfullpath", "")
+		err = fs.Rename(context.Background(), "notfullpath", "")
 		if err == nil {
 			t.Fatalf("Relative path is not supported")
 		}
 
-		_, err = fs.Stat(nil, "notfullpath")
+		_, err = fs.Stat(context.Background(), "notfullpath")
 		if err == nil {
 			t.Fatalf("Relative path is not supported")
 		}
 	}
 
-	if fs.Mkdir(nil, separator, os.ModePerm) == nil {
+	if fs.Mkdir(context.Background(), separator, os.ModePerm) == nil {
 		t.Fatalf("Mkdir of root should fail")
 	}
 
 	// stat, open and close root
-	fi, err := fs.Stat(nil, "/")
+	fi, err := fs.Stat(context.Background(), "/")
 	if err != nil {
 		t.Fatalf("Failed to stat root, err = %v", err)
 	}
@@ -443,12 +444,12 @@ func TestFS(t *testing.T) {
 		t.Fatalf("Stat root returned not directory")
 	}
 
-	fi, err = fs.Stat(nil, "/unknownbucket")
+	_, err = fs.Stat(context.Background(), "/unknownbucket")
 	if err == nil {
 		t.Fatalf("Stat non-existing bucket should fail")
 	}
 
-	f, err := fs.OpenFile(nil, "/", 0, 0)
+	f, err := fs.OpenFile(context.Background(), "/", 0, 0)
 	if err != nil {
 		t.Fatalf("Failed to open root, err = %v", err)
 	}
@@ -459,7 +460,7 @@ func TestFS(t *testing.T) {
 		t.Fatalf("webdav test bucket already exists")
 	}
 
-	if err = fs.Mkdir(nil, bucketFullName, os.ModePerm); err != nil {
+	if err = fs.Mkdir(context.Background(), bucketFullName, os.ModePerm); err != nil {
 		t.Fatalf("Failed to create bucket, err = %v", err)
 	}
 
@@ -467,31 +468,31 @@ func TestFS(t *testing.T) {
 		t.Fatalf("Newly created bucket doesn't exist")
 	}
 
-	fi, err = fs.Stat(nil, bucketFullName)
+	fi, err = fs.Stat(context.Background(), bucketFullName)
 	if err != nil || fi.Name() != "" {
 		t.Fatalf("Failed to stat bucket %v, %s", err, fi.Name())
 	}
 
-	if fs.Mkdir(nil, bucketFullName, os.ModePerm) == nil {
+	if fs.Mkdir(context.Background(), bucketFullName, os.ModePerm) == nil {
 		t.Fatalf("Failed to find existing bucket, err = %v", err)
 	}
 
-	_, err = fs.OpenFile(nil, "/404", os.O_RDWR, os.ModePerm)
+	_, err = fs.OpenFile(context.Background(), "/404", os.O_RDWR, os.ModePerm)
 	if err == nil {
 		t.Fatalf("Open non-existing bucket should fail")
 	}
 
-	if fs.Mkdir(nil, path.Join(bucketFullName, "404dir/404"), os.ModePerm) == nil {
+	if fs.Mkdir(context.Background(), path.Join(bucketFullName, "404dir/404"), os.ModePerm) == nil {
 		t.Fatalf("Mkdir with non-existing path should fail")
 	}
 
 	{
-		_, err := fs.OpenFile(nil, path.Join(bucketFullName+"404", "file"), 0, 0)
+		_, err := fs.OpenFile(context.Background(), path.Join(bucketFullName+"404", "file"), 0, 0)
 		if err == nil {
 			t.Fatalf("Opened file in a non-existing bucket")
 		}
 
-		_, err = fs.OpenFile(nil, path.Join(bucketFullName, "dir404", "file"), 0, 0)
+		_, err = fs.OpenFile(context.Background(), path.Join(bucketFullName, "dir404", "file"), 0, 0)
 		if err == nil {
 			t.Fatalf("Opened file in a non-existing directory")
 		}
@@ -499,13 +500,13 @@ func TestFS(t *testing.T) {
 		// put new object
 		put(t, fs, file1Path, 0, content1)
 
-		err = fs.RemoveAll(nil, file1Path[0:len(file1Path)-1])
+		err = fs.RemoveAll(context.Background(), file1Path[0:len(file1Path)-1])
 		if err == nil {
 			t.Fatalf("Remove non-existing object which has prefix of an existing object as its name")
 		}
 
 		// open an object and close it without touching it(read or write or seek)
-		f, err = fs.OpenFile(nil, file1Path, 0, 0)
+		f, err = fs.OpenFile(context.Background(), file1Path, 0, 0)
 		if err != nil {
 			t.Fatalf("Failed to open file, err = %v", err)
 		}
@@ -544,50 +545,50 @@ func TestFS(t *testing.T) {
 		// readdir/mkdir
 		put(t, fs, file2Path, 0, content1)
 
-		err := fs.Mkdir(nil, dir1Path, os.ModePerm)
+		err := fs.Mkdir(context.Background(), dir1Path, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to create directory, err = %v", err)
 		}
 
-		err = fs.Mkdir(nil, dir1Path, os.ModePerm)
+		err = fs.Mkdir(context.Background(), dir1Path, os.ModePerm)
 		if err == nil {
 			t.Fatalf("Created duplicated directory")
 		}
 
 		put(t, fs, file3Path, 0, content2)
 
-		err = fs.Mkdir(nil, dir12Path, os.ModePerm)
+		err = fs.Mkdir(context.Background(), dir12Path, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to create directory, err = %v", err)
 		}
 
-		err = fs.Mkdir(nil, dir12Path, os.ModePerm)
+		err = fs.Mkdir(context.Background(), dir12Path, os.ModePerm)
 		if err == nil {
 			t.Fatalf("Created duplicated directory")
 		}
 
 		put(t, fs, file4Path, 0, content1)
-		if fs.Mkdir(nil, file4Path, os.ModePerm) == nil {
+		if fs.Mkdir(context.Background(), file4Path, os.ModePerm) == nil {
 			t.Fatalf("Mkdir with existing path should fail")
 		}
 
-		fs.Mkdir(nil, dir2Path, os.ModePerm)
+		fs.Mkdir(context.Background(), dir2Path, os.ModePerm)
 
-		fs.Mkdir(nil, dir20Path, os.ModePerm)
+		fs.Mkdir(context.Background(), dir20Path, os.ModePerm)
 		put(t, fs, file5Path, 0, content2)
-		fs.Mkdir(nil, dir3Path, os.ModePerm)
-		fs.Mkdir(nil, dir30Path, os.ModePerm)
+		fs.Mkdir(context.Background(), dir3Path, os.ModePerm)
+		fs.Mkdir(context.Background(), dir30Path, os.ModePerm)
 		put(t, fs, file6Path, 0, content1)
 
 		// stat a directory
-		fi, err = fs.Stat(nil, bucketFullName+"dir1")
+		_, err = fs.Stat(context.Background(), bucketFullName+"dir1")
 		if err != nil {
 			t.Fatalf("Failed to stat directory, err = %v", err)
 		}
 
 		// add afew in memory only directories
 		p1 := path.Join(bucketFullName, "dir2inmemdir")
-		fs.Mkdir(nil, p1, os.ModePerm)
+		fs.Mkdir(context.Background(), p1, os.ModePerm)
 
 		fis, _ := readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
@@ -599,7 +600,7 @@ func TestFS(t *testing.T) {
 			&fileInfo{name: "testfile2", size: int64(len(content1)), mode: defaultFileMode},
 		})
 
-		fs.RemoveAll(nil, p1)
+		fs.RemoveAll(context.Background(), p1)
 
 		fis, _ = readDir(t, fs, bucketFullName+"dir1/")
 		cmpFileInfos(t, fis, []os.FileInfo{
@@ -613,9 +614,9 @@ func TestFS(t *testing.T) {
 		})
 
 		p2 := path.Join(bucketFullName, "dir2/inmemdir2")
-		fs.Mkdir(nil, p2, os.ModePerm)
+		fs.Mkdir(context.Background(), p2, os.ModePerm)
 		p3 := path.Join(bucketFullName, "dir2/inmemdir1")
-		fs.Mkdir(nil, p3, os.ModePerm)
+		fs.Mkdir(context.Background(), p3, os.ModePerm)
 
 		fis, _ = readDir(t, fs, bucketFullName+"dir2/")
 		cmpFileInfos(t, fis, []os.FileInfo{
@@ -624,14 +625,14 @@ func TestFS(t *testing.T) {
 			&fileInfo{name: "inmemdir2", size: 0, mode: defaultDirMode},
 		})
 
-		fs.RemoveAll(nil, p2)
-		fs.RemoveAll(nil, p3)
+		fs.RemoveAll(context.Background(), p2)
+		fs.RemoveAll(context.Background(), p3)
 
-		fs.Mkdir(nil, path.Join(bucketFullName, "dir2/a"), os.ModePerm)
-		fs.Mkdir(nil, path.Join(bucketFullName, "dir2/a/b"), os.ModePerm)
-		fs.Mkdir(nil, path.Join(bucketFullName, "dir2/a/b/c"), os.ModePerm)
-		fs.Mkdir(nil, path.Join(bucketFullName, "dir2/a/b/c/d"), os.ModePerm)
-		fis, err = readDir(t, fs, bucketFullName+"dir2/a")
+		fs.Mkdir(context.Background(), path.Join(bucketFullName, "dir2/a"), os.ModePerm)
+		fs.Mkdir(context.Background(), path.Join(bucketFullName, "dir2/a/b"), os.ModePerm)
+		fs.Mkdir(context.Background(), path.Join(bucketFullName, "dir2/a/b/c"), os.ModePerm)
+		fs.Mkdir(context.Background(), path.Join(bucketFullName, "dir2/a/b/c/d"), os.ModePerm)
+		_, err = readDir(t, fs, bucketFullName+"dir2/a")
 		if err != nil {
 			t.Fatal("Failed to read multi level directory")
 		}
@@ -639,22 +640,22 @@ func TestFS(t *testing.T) {
 
 	{
 		// rename
-		err = fs.Rename(nil, file1Path, path.Join(bucketFullName+"404", "file"))
+		err = fs.Rename(context.Background(), file1Path, path.Join(bucketFullName+"404", "file"))
 		if err == nil {
 			t.Fatalf("Rename a file to a non-existing bucket should fail")
 		}
 
-		err = fs.Rename(nil, file1Path, path.Join(bucketFullName, "404dir/file"))
+		err = fs.Rename(context.Background(), file1Path, path.Join(bucketFullName, "404dir/file"))
 		if err == nil {
 			t.Fatalf("Rename a file to a non-existing dir should fail")
 		}
 
-		err = fs.Rename(nil, file1Path, "404dir/file")
+		err = fs.Rename(context.Background(), file1Path, "404dir/file")
 		if err == nil {
 			t.Fatalf("Rename failed to detect relative file path")
 		}
 
-		fs.Rename(nil, file1Path, file1Path+"_rn")
+		fs.Rename(context.Background(), file1Path, file1Path+"_rn")
 		fis, _ := readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
@@ -664,32 +665,32 @@ func TestFS(t *testing.T) {
 			&fileInfo{name: "testfile2", size: int64(len(content1)), mode: defaultFileMode},
 		})
 
-		err = fs.Rename(nil, bucketFullName, "anything")
+		err = fs.Rename(context.Background(), bucketFullName, "anything")
 		if err == nil {
 			t.Fatalf("Rename a bucket should fail")
 		}
 
-		err = fs.Rename(nil, bucketFullName+"dir1/", "anything")
+		err = fs.Rename(context.Background(), bucketFullName+"dir1/", "anything")
 		if err == nil {
 			t.Fatalf("Rename a directory should fail")
 		}
 
-		err = fs.Rename(nil, bucketFullName+"dir1", "anything")
+		err = fs.Rename(context.Background(), bucketFullName+"dir1", "anything")
 		if err == nil {
 			t.Fatalf("Rename a directory should fail")
 		}
 
-		err = fs.Rename(nil, bucketFullName+"404notfound", "anything")
+		err = fs.Rename(context.Background(), bucketFullName+"404notfound", "anything")
 		if err == nil {
 			t.Fatalf("Rename a non existing file should fail")
 		}
 
-		err = fs.Rename(nil, file2Path, bucketFullName+"dir1")
+		err = fs.Rename(context.Background(), file2Path, bucketFullName+"dir1")
 		if err == nil {
 			t.Fatalf("Rename a file to an existing directory name should fail")
 		}
 
-		err = fs.Rename(nil, file5Path, file6Path)
+		err = fs.Rename(context.Background(), file5Path, file6Path)
 		if err == nil {
 			t.Fatalf("Rename a file to an existing file name should fail")
 		}
@@ -697,7 +698,7 @@ func TestFS(t *testing.T) {
 
 	{
 		// read
-		f, err := fs.OpenFile(nil, file2Path, os.O_RDONLY, os.ModePerm)
+		f, err := fs.OpenFile(context.Background(), file2Path, os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to open file %s", file2Path)
 		}
@@ -714,7 +715,7 @@ func TestFS(t *testing.T) {
 		f.Close()
 
 		// append
-		f, err = fs.OpenFile(nil, file2Path, os.O_RDWR, os.ModePerm)
+		f, err = fs.OpenFile(context.Background(), file2Path, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to open file %s", file2Path)
 		}
@@ -738,16 +739,19 @@ func TestFS(t *testing.T) {
 
 		f.Close()
 
-		f, err = fs.OpenFile(nil, file2Path, os.O_RDONLY, os.ModePerm)
+		f, err = fs.OpenFile(context.Background(), file2Path, os.O_RDONLY, os.ModePerm)
+		if err != nil {
+			t.Fatalf("Failed to open file")
+		}
 		n, err = f.Write([]byte(strings.ToLower(content1)))
-		if err == nil {
+		if n > 0 || err == nil {
 			t.Fatalf("Wrote to a file without write permission")
 		}
 
 		f.Close()
 
 		// overwrite
-		f, err = fs.OpenFile(nil, file2Path, os.O_RDWR, os.ModePerm)
+		f, err = fs.OpenFile(context.Background(), file2Path, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to open file %s", file2Path)
 		}
@@ -770,17 +774,17 @@ func TestFS(t *testing.T) {
 	{
 		// open flags
 		fn := file2Path
-		_, err = fs.Stat(nil, fn)
+		_, err = fs.Stat(context.Background(), fn)
 		if err != nil {
 			t.Fatalf("Failed to open file %s for flag tests", fn)
 		}
 
-		_, err = fs.OpenFile(nil, fn, os.O_CREATE|os.O_EXCL, os.ModePerm)
+		_, err = fs.OpenFile(context.Background(), fn, os.O_CREATE|os.O_EXCL, os.ModePerm)
 		if err == nil {
 			t.Fatalf("Opened existing file with both O_CREATE and O_EXCL flags")
 		}
 
-		_, err = fs.OpenFile(nil, fn+"404", os.O_RDWR, os.ModePerm)
+		_, err = fs.OpenFile(context.Background(), fn+"404", os.O_RDWR, os.ModePerm)
 		if err == nil {
 			t.Fatalf("Opened non-existing file without O_CREATE")
 		}
@@ -789,24 +793,24 @@ func TestFS(t *testing.T) {
 	{
 		// truncate
 		fn := file2Path
-		fi, _ := fs.Stat(nil, fn)
+		fi, _ := fs.Stat(context.Background(), fn)
 		if fi.Size() == 0 {
 			t.Fatalf("Failed to prepare file for truncation")
 		}
 
-		f, err = fs.OpenFile(nil, fn, os.O_TRUNC|os.O_RDONLY, os.ModePerm)
+		_, err = fs.OpenFile(context.Background(), fn, os.O_TRUNC|os.O_RDONLY, os.ModePerm)
 		if err == nil {
 			t.Fatalf("Opened file for truncation with read only flag")
 		}
 
-		f, err = fs.OpenFile(nil, fn, os.O_TRUNC|os.O_RDWR, os.ModePerm)
+		f, err = fs.OpenFile(context.Background(), fn, os.O_TRUNC|os.O_RDWR, os.ModePerm)
 		if err != nil {
 			t.Fatalf("Failed to open file %s, err = %v", fn, err)
 		}
 
 		f.Close()
 
-		fi, _ = fs.Stat(nil, fn)
+		fi, _ = fs.Stat(context.Background(), fn)
 		if fi.Size() != 0 {
 			t.Fatalf("Failed to truncate file")
 		}
@@ -814,34 +818,34 @@ func TestFS(t *testing.T) {
 
 	{
 		// remove
-		err = fs.RemoveAll(nil, "/404bucket")
+		err = fs.RemoveAll(context.Background(), "/404bucket")
 		if err == nil {
 			t.Fatalf("Remove non-existing bucket should fail")
 		}
 
-		err = fs.RemoveAll(nil, "/")
+		err = fs.RemoveAll(context.Background(), "/")
 		if err == nil {
 			t.Fatalf("Remove root should fail")
 		}
 
 		p := path.Join(bucketFullName, "remove")
-		fs.Mkdir(nil, p, os.ModePerm)
-		err := fs.RemoveAll(nil, p)
+		fs.Mkdir(context.Background(), p, os.ModePerm)
+		err := fs.RemoveAll(context.Background(), p)
 		if err != nil {
 			t.Fatalf("Remove an existing directory should not fail")
 		}
 
-		_, err = fs.Stat(nil, p)
+		_, err = fs.Stat(context.Background(), p)
 		if err == nil {
 			t.Fatalf("Stat a removed directory should fail")
 		}
 
-		err = fs.RemoveAll(nil, file1Path)
+		err = fs.RemoveAll(context.Background(), file1Path)
 		if err == nil {
 			t.Fatalf("Remove a non existing file should fail")
 		}
 
-		fs.RemoveAll(nil, file2Path)
+		fs.RemoveAll(context.Background(), file2Path)
 		fis, _ := readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
@@ -850,7 +854,7 @@ func TestFS(t *testing.T) {
 			&fileInfo{name: "testfile1_rn", size: int64(len(content1) + len(content2)), mode: defaultFileMode},
 		})
 
-		fs.RemoveAll(nil, bucketFullName+"dir1/dir2/")
+		fs.RemoveAll(context.Background(), bucketFullName+"dir1/dir2/")
 		fis, _ = readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
@@ -865,20 +869,20 @@ func TestFS(t *testing.T) {
 		put(t, fs, file7Path, 0, content1)
 		readDir(t, fs, bucketFullName)
 
-		fs.Mkdir(nil, dirTestPath, os.ModePerm)
+		fs.Mkdir(context.Background(), dirTestPath, os.ModePerm)
 		put(t, fs, file8Path, 0, content1)
 		readDir(t, fs, bucketFullName)
 	}
 
 	{
 		// check existing 'on disk' objects
-		_, err = fs.Stat(nil, dir30Path)
+		_, err = fs.Stat(context.Background(), dir30Path)
 		if err != nil {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)
 		}
 
 		fs1 := NewFS(url.URL{Scheme: "http", Host: leader}, rootDir)
-		_, err = fs1.Stat(nil, dir30Path) // file6Path)
+		_, err = fs1.Stat(context.Background(), dir30Path) // file6Path)
 		if err != nil {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)
 		}
