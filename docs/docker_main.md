@@ -1,30 +1,26 @@
-# Docker 
+# Docker
 
 ## Introduction
 
-AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (`deploy/dev/docker` directory) and quick start (`deploy/quickstart/docker` directory).
+AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](../deploy/dev/docker) directory.
 
 ### Development Mode
-
 This mode is currently used for development purposes.
 All docker containers mount the same host's AIStore source directory, and then execute from this single source. Upon restart (of the AIStore cluster), all changes made in the host will, therefore, take an immediate effect.
 
 > The development mode is currently being maintained and updated.
 
 ### Quick Start Mode
+Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds. [See quick start AIS with Docker](../deploy/dev/docker/README.md#quick-start-ais-cluster). You just need Docker installed to quick-start AIS.
 
-Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds.
-
-For introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
-
-This README documents the steps to install and run AIStore
+For an introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
 
 ## Install Docker and Docker Compose
 **Note:** Using Docker requires one of the following versions of Ubuntu:
 * Bionic 18.04 (LTS)
 * Xenial 16.04 (LTS)
 * Trusty 14.04 (LTS)
-  
+
 1. Uninstall any old versions of docker:
     ```shell
     $ sudo apt-get remove docker docker-engine docker.io    
@@ -95,20 +91,20 @@ It’s OK if apt-get reports that none of these packages are installed.
 $ go get -u -v github.com/NVIDIA/aistore/ais
 ```
 
-2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 
+2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command.
 To run AIStore Docker containers, you will need to pass your AWS config and credential directory via flag `-a=<aws directory>` CLI. By default, AWS stores config and credential files in `~/.aws/`
 Example:
 ```shell
 $ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment scripts in [`deploy/dev/docker`](../deploy/dev/docker/README.md) and [deploy/quickstart/docker`](../deploy/quickstart/docker/README.md).
+3. To deploy AIStore, refer to the deployment script in [`deploy/dev/docker`](../deploy/dev/docker/README.md).
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands
 
 ### List Running Containers
-List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output: 
+List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output:
 
 ![docker ps](../docs/images/docker_ps.png)
 
@@ -241,5 +237,3 @@ Note:
 ```shell
     $ docker rmi $(docker images -q -a)
 ```
-
-

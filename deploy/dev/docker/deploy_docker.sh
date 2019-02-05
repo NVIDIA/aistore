@@ -1,23 +1,24 @@
 #!/bin/bash
 name=`basename "$0"`
 usage() {
-    echo "Usage: $name [-a=AWS_DIR] [-c=NUM] [-d=NUM] [-f=LIST] [-g] [-h] [-l] [-m] [-p=NUM] [-s] [-t=NUM]"
-    echo "  -a=AWS_DIR or --aws=AWS_DIR   : to use AWS, where AWS_DIR is the location of AWS configuration and credential files"
-    echo "  -c=NUM or --cluster=NUM       : where NUM is the number of clusters"
-    echo "  -d=NUM or --directories=NUM   : where NUM is the number of local cache directories"
-    echo "  -f=LIST or --filesystems=LIST : where LIST is a comma separated list of filesystems"
-    echo "  -g or --gcp                   : to use GCP"
-    echo "  -h or --help                  : show usage"
-    echo "  -l or --last                  : redeploy using the arguments from the last ais docker deployment"
-    echo "  -m or --multi                 : use multiple networks"
-    echo "  -p=NUM or --proxy=NUM         : where NUM is the number of proxies"
-    echo "  -s or --single                : use a single network"
-    echo "  -t=NUM or --target=NUM        : where NUM is the number of targets"
-    echo "  -grafana                      : starts Graphite and Grafana containers"
-    echo "  -nodiskio=BOOL                : run Dry-Run mode with disk IO is disabled (default = false)"
-    echo "  -nonetio=BOOL                 : run Dry-Run mode with network IO is disabled (default = false)"
-    echo "  -dryobjsize=SIZE              : size of an object when a source is a 'fake' one."
-    echo "                                  'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'"
+    echo "Usage: $name [-a=AWS_DIR] [-c=NUM] [-d=NUM] [-f=LIST] [-g] [-h] [-l] [-m] [-p=NUM] [-s] [-t=NUM] [-qs=AWS_DIR (Optional)]"
+    echo "  -a=AWS_DIR or --aws=AWS_DIR             : to use AWS, where AWS_DIR is the location of AWS configuration and credential files"
+    echo "  -c=NUM or --cluster=NUM                 : where NUM is the number of clusters"
+    echo "  -d=NUM or --directories=NUM             : where NUM is the number of local cache directories"
+    echo "  -f=LIST or --filesystems=LIST           : where LIST is a comma separated list of filesystems"
+    echo "  -g or --gcp                             : to use GCP"
+    echo "  -h or --help                            : show usage"
+    echo "  -l or --last                            : redeploy using the arguments from the last ais docker deployment"
+    echo "  -m or --multi                           : use multiple networks"
+    echo "  -p=NUM or --proxy=NUM                   : where NUM is the number of proxies"
+    echo "  -s or --single                          : use a single network"
+    echo "  -t=NUM or --target=NUM                  : where NUM is the number of targets"
+    echo "  -qs=AWS_DIR or --quickstart=AWS_DIR     : deploys a quickstart version of AIS with one proxy, one targe and one local file system"
+    echo "  -grafana                                : starts Graphite and Grafana containers"
+    echo "  -nodiskio=BOOL                          : run Dry-Run mode with disk IO is disabled (default = false)"
+    echo "  -nonetio=BOOL                           : run Dry-Run mode with network IO is disabled (default = false)"
+    echo "  -dryobjsize=SIZE                        : size of an object when a source is a 'fake' one."
+    echo "                                            'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'"
     echo "Note:"
     echo "   -if the -f or --filesystems flag is used, the -d or --directories flag is disabled and vice-versa"
     echo "   -if the -a or --aws flag is used, the -g or --gcp flag is disabled and vice-versa"
@@ -34,7 +35,7 @@ is_number() {
 }
 
 is_size() {
-    if [ -z "$1" ]; then 
+    if [ -z "$1" ]; then
       DRYOBJSIZE="8m"
     elif ! [[ "$1" =~ ^[0-9]+[g|G|m|M|k|K]$ ]] ; then
       echo "Error: '$1' is not a valid size"; exit 1
@@ -86,10 +87,37 @@ deploy_mode() {
         echo "Deployed in no disk IO mode with ${DRYOBJSIZE} fake object size."
     elif $NONETIO; then
         echo "Deployed in no network IO mode with ${DRYOBJSIZE} fake object size."
-    else 
+    else
         echo "Deployed in normal mode."
     fi
-}   
+}
+
+deploy_quickstart() {
+    QS_AWSDIR=${1:-'~/.aws/'}
+    QS_AWSDIR="${QS_AWSDIR/#\~/$HOME}"
+    if docker ps | grep ais-quickstart > /dev/null 2>&1; then
+        echo "Terminating old instance of quickstart cluster ..."
+        ./stop_docker.sh -qs
+    fi
+    # Need dummy files to make Dockerfile quiet
+    echo "" > ais.json
+    echo "" > collectd.conf
+    echo "" > statsd.conf
+    echo "Building Docker image ..."
+    docker build -t -q ais-quickstart --build-arg GOBASE=/go . > /dev/null 2>&1
+    if [ ! -d "$QS_AWSDIR" ]; then
+        echo "AWS credentials not found (tests may not work!) ..."
+        docker run -di ais-quickstart:latest
+    else
+        echo "AWS credentials found (${QS_AWSDIR}), continuing ..."
+        docker run -div ${QS_AWSDIR}credentials:/root/.aws/credentials -v ${QS_AWSDIR}config:/root/.aws/config ais-quickstart:latest
+    fi
+    echo "SSH into container ..."
+    container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
+    docker exec -it $container_id /bin/bash -c "echo 'Hello from AIS!'; /bin/bash;"
+    rm ais.json collectd.conf statsd.conf
+    exit 1
+}
 
 
 if ! [ -x "$(command -v docker-compose)" ]; then
@@ -132,7 +160,7 @@ case $i in
         CLOUD=2
         shift # past argument
         ;;
-    
+
     -nocloud)
         CLOUD=3
         shift # past argument
@@ -180,6 +208,12 @@ case $i in
         shift # past argument=value
         ;;
 
+    -qs=*|--quickstart=*|-qs|--quickstart)
+        deploy_quickstart "${i#*=}"
+        break
+        shift
+        ;;
+
     -s|--single)
         if [ "$network" != "multi" ]; then
             network="single"
@@ -200,7 +234,7 @@ case $i in
 
     -nodiskio=*|--nodiskio=*)
         NODISKIO="${i#*=}"
-        if $NODISKIO; then 
+        if $NODISKIO; then
             DRYRUN=1
         fi
         shift # past argument=value
@@ -208,7 +242,7 @@ case $i in
 
     -nonetio=*|--nonetio=*)
         NONETIO="${i#*=}"
-        if $NONETIO; then 
+        if $NONETIO; then
             DRYRUN=2
         fi
         shift # past argument=value
@@ -267,10 +301,10 @@ if [ $CLOUD -eq 1 ]; then
         usage
     fi
     CLDPROVIDER="aws"
-    # to get proper tilde expansion 
+    # to get proper tilde expansion
     aws_env="${aws_env/#\~/$HOME}"
     temp_file="$aws_env/credentials"
-    if [ -f $"$temp_file" ]; then    
+    if [ -f $"$temp_file" ]; then
         cp $"$temp_file"  ${LOCAL_AWS}
     else
         echo "No AWS credentials file found in specified directory. Exiting..."
@@ -430,7 +464,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     INT_DATA_SUBNET="${INT_DATA_NET}.0/24"
 
     if [ $i -eq 0 ]; then
-        PRIMARYHOSTIP="${PUB_NET}.2"   
+        PRIMARYHOSTIP="${PUB_NET}.2"
     fi
     if [ $i -eq 1 ]; then
         NEXTTIERHOSTIP="${PUB_NET}.2"

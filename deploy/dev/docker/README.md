@@ -1,5 +1,48 @@
-## Developer Docker Scripts
+#Working with AIS on Docker
+AIStore can be deployed on Docker in quick-start mode or development mode. [Quick-start mode ](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
 
+## Quick-start AIS Cluster
+Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](docs/docker_main.md)
+
+> For some tests, AWS config and credential files are needed
+
+1. To quick-start AIStore,
+```sh
+$ ./deploy_docker -qs
+```
+
+> The first build may take some time, but subsequent builds will be much faster.
+
+2. Once it finishes building, you should be inside the AIS container. Run,
+```sh
+$ cd $WORKDIR
+$ ./setup/deploy.sh
+```
+Type `1` for all options to create a very basic AIStore cluster.
+
+### Quick-start Example
+If everything went smoothly,
+```sh
+$ CGO_ENABLED=0 BUCKET=test go test ./tests -v -count=1 -run=smoke
+```
+runs some smoke tests.
+
+```sh
+$ CGO_ENABLED=0 BUCKET=test go test ./tests -v -count=1 -run=bucketname
+```
+Will return you a list of all local and AWS cloud buckets.
+
+> CGO_ENABLED is set to false to enable cross-compiling
+
+### Quick-start Configurations
+
+#### AWS
+Quick-start AIS also works with AWS by enabling users access to their S3 Buckets. To do so, users can specify the location of their AWS credentials by passing in the path. For example,
+```sh
+$ ./deploy_docker.sh -qs="~/.aws/"
+```
+
+## Developer Mode
 Use the `./deploy_docker.sh` script to deploy AIStore cluster(s) on a single machine. Each cluster can be deployed with one or three networks. The latter case is used to deploy a cluster with separated data and control planes. When deploying multiple clusters, only multiple networks are allowed.
 Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deployed.
 
@@ -11,33 +54,33 @@ Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deplo
 
 For the *i*th cluster, AIStore creates three networks: ais${i}\_public, ais${i}\_internal\_control, and ais${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (`-m` argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the Docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the Docker public and replication networks of other clusters to allow for multi-tiering and replication.
 
-## Deploying a Cluster
-
+## Deploying a Development Cluster
 Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode. The script will ask you for a number of configuration parameters and deploy AIS accordingly:
 
-```
-./deploy_docker.sh
+```sh
+$ ./deploy_docker.sh
 ```
 
-Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
+Be sure that the AWS credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
 To deploy a cluster in 'silent' mode use the following options (if any of them are not set, then the script switches to interactive mode and asks for the missing configuration parameters):
 
-* `-a=AWS_DIR` or `--aws=AWS_DIR`   : to use AWS, where AWS_DIR is the location of AWS configuration and credential files
-* `-c=NUM` or `--cluster=NUM`       : where NUM is the number of clusters
-* `-d=NUM` or `--directories=NUM`   : where NUM is the number of local cache directories
-* `-f=LIST` or `--filesystems=LIST` : where LIST is a comma separated list of filesystems
-* `-g` or `--gcp`                   : to use GCP
-* `-h` or `--help`                  : show usage
-* `-l` or `--last`                  : redeploy using the arguments from the last AIS Docker deployment
-* `-m` or `--multi`                 : use multiple networks
-* `-p=NUM` or `--proxy=NUM`         : where NUM is the number of proxies
-* `-s` or `--single`                : use a single network
-* `-t=NUM` or `--target=NUM`        : where NUM is the number of targets
-* `-nodiskio=BOOL`                  : run Dry-Run mode with disk IO is disabled (default = false)
-* `-nonetio=BOOL`                   : run Dry-Run mode with network IO is disabled (default = false)
-* `-dryobjsize=SIZE`                : size of an object when a source is a 'fake' one. 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'
-                                
+* `-a=AWS_DIR` or `--aws=AWS_DIR`           : to use AWS, where AWS_DIR is the location of AWS configuration and credential files
+* `-c=NUM` or `--cluster=NUM`               : where NUM is the number of clusters
+* `-d=NUM` or `--directories=NUM`           : where NUM is the number of local cache directories
+* `-f=LIST` or `--filesystems=LIST`         : where LIST is a comma separated list of filesystems
+* `-g` or `--gcp`                           : to use GCP
+* `-h` or `--help`                          : show usage
+* `-l` or `--last`                          : redeploy using the arguments from the last AIS Docker deployment
+* `-m` or `--multi`                         : use multiple networks
+* `-p=NUM` or `--proxy=NUM`                 : where NUM is the number of proxies
+* `-s` or `--single`                        : use a single network
+* `-t=NUM` or `--target=NUM`                : where NUM is the number of targets
+* `-qs=AWS_DIR` or `--quickstart=AWS_DIR`   : deploys a quickstart version of AIS
+* `-nodiskio=BOOL`                          : run Dry-Run mode with disk IO is disabled (default = false)
+* `-nonetio=BOOL`                           : run Dry-Run mode with network IO is disabled (default = false)
+* `-dryobjsize=SIZE`                        : size of an object when a source is a 'fake' one. 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'
+
 
 Note:
 * If the `-f` or `--filesystems` flag is used, the `-d` or `--directories` flag is disabled and vice-versa
@@ -48,20 +91,9 @@ Note:
 Please see [main AIStore README](docs/configuration.md) for more information about testing mode.
 
 Example Usage:
-```shell
+```sh
 $ ./deploy_docker.sh -p=3 -t=4 -d=2 -c=1 -a=~/.aws/
 ```
-When prompted with 
-
-```
-Select
- 1: Use no disk io (Dry Run)
- 2: Use no network io (Dry Run)
-Enter the mode you want:
-Note: No input will result in using the default (normal) mode
-```
-
-Just press `Enter`.
 
 * The command deploys a single cluster with 3 proxies, 4 targets and 2 local cache directories using AWS in normal mode.
 
@@ -145,7 +177,7 @@ Tests detect the Docker cluster and use primary URL "http://172.50.0.2:8080" (se
 $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.0.7:8080
 ```
 
-**NOTE:** Some tests require a minimum number of targets or proxies. Also, due to Docker permissioning, you might have to run tests with `sudo ...` too.
+**NOTE:** Some tests require a minimum number of targets or proxies. Also, due to Docker permissions, you might have to run tests with `sudo` too.
 
 ## Running benchmark tests in the Docker environment
 
@@ -162,7 +194,7 @@ To view the logs of a specific container, use the following command:
 ```
 $ ./logs.sh -c=container_name -t=a
 ```
-Refer to the `logs.sh` script for more details about its usage. 
+Refer to the `logs.sh` script for more details about its usage.
 
 ### `del_old_images.sh`
 Every new deployment builds a new Docker image. The new image replaces the old one. The old one becomes obsolete and gets name `<none>`. Use the following script to delete all obsolete and unused Docker images:
@@ -173,12 +205,12 @@ $ ./del_old_images.sh
 ### `get_ip_addresses.sh`
 If you want to quickly get the ip addresses of each container of all clusters, use the following script:
 ```
-$ ./get_ip_addresses.sh 
+$ ./get_ip_addresses.sh
 ```
 * Note: The port numbers for the ip addresses for each container will be 8080, 9080, 10080 by default for the public, intra control and intra data networks respectively.
 
-### `container_shell.sh` 
-To open an interactive shell for a daemon with container name CONTAINER_NAME, use the following script: 
+### `container_shell.sh`
+To open an interactive shell for a daemon with container name CONTAINER_NAME, use the following script:
 ```
 $ ./container_logs.sh CONTAINER_NAME
 ```
@@ -202,6 +234,4 @@ $ container_logs.sh CONTAINER_NAME
 
 
 ## Limitations
-
-Certain tests require the ability to modify files/directories or set Xattributes directly onto the filesystem of a container. These tests are currently skipped when using Docker because of Docker's write protection of container volumes.
-
+Certain tests require the ability to modify files/directories or set extended attributes(xattrs) directly onto the filesystem of a container. These tests are currently skipped when using Docker because of Docker's write protection of container volumes.

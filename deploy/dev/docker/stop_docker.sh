@@ -9,6 +9,7 @@ usage() {
     echo "$name -m or --multi               --> to stop a multi network docker configuration"
     echo "$name -c=NUM or--clustered=NUM    --> to stop multiple cluster docker configuration with NUM clusters"
     echo "$name -l or --last                --> Uses your last saved docker configuration defined in $setup_file to stop docker"
+    echo "$name -qs or --quickstart         --> stop the quickstart docker AIS deployment"
     echo "Note adding the --rmi flag to any of the commands above will also removes images."
     echo "Note providing multiple flags will result in the last flag taking precedence."
     echo
@@ -41,6 +42,15 @@ determine_config() {
     fi
 }
 
+stop_quickstart() {
+    container_id=`docker ps | grep ais-quickstart | awk '{ print $1 }'`
+    if docker ps | grep ais-quickstart > /dev/null 2>&1; then
+        docker rm --force $container_id
+        echo "AIStore quickstart terminated"
+    fi
+    exit 1
+}
+
 if ! [ -x "$(command -v docker-compose)" ]; then
   echo 'Error: docker-compose is not installed.' >&2
   exit 1
@@ -59,8 +69,8 @@ case $i in
         shift # past argument=value
         ;;
 
-    -s|--single)
-        network="single"
+    -l|--last)
+        get_setup
         shift # past argument=value
         ;;
 
@@ -69,16 +79,22 @@ case $i in
         shift # past argument=value
         ;;
 
+    -qs|--quickstart)
+        stop_quickstart
+        shift
+        ;;
+
     --rmi)
         remove_images=TRUE
         shift # past argument=value
         valid_log_file_type $LOG_TYPE
         ;;
 
-    -l|--last)
-        get_setup
+    -s|--single)
+        network="single"
         shift # past argument=value
         ;;
+
 
     *)
         usage
@@ -111,14 +127,14 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export INT_DATA_SUBNET="172.5$((2 + ($i * 3))).0.0/24"
     if [ "$remove_images" = TRUE ]; then
         docker-compose -p ais${i} -f $composer_file down -v --rmi all --remove-orphans
-    else 
+    else
         docker-compose -p ais${i} -f $composer_file down -v --remove-orphans
     fi
 done
 
 if [ "$remove_images" = TRUE ]; then
     docker-compose -f $composer_file down -v --rmi all --remove-orphans
-else 
+else
     docker-compose -f $composer_file down -v --remove-orphans
 fi
 

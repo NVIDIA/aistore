@@ -3,6 +3,7 @@ FROM ubuntu:18.04
 RUN apt-get clean && apt-get update &&\
   set -eux &&\
   apt-get --no-install-recommends -y install \
+      lsof \
       curl \
       git \
       ca-certificates \
@@ -47,7 +48,10 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 ARG CLDPROVIDER
 ENV CLD $CLDPROVIDER
 
-# Dry Run 
+#Quickstart
+ARG QUICK
+
+# Dry Run
 ARG NODISKIO
 ENV NODISK $NODISKIO
 
@@ -68,10 +72,11 @@ RUN git clone https://github.com/etsy/statsd.git
 
 ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
-RUN echo "\
+RUN if [ -n "$QUICK" ]; then echo "go get -u -v github.com/NVIDIA/aistore/ais && /bin/bash"> /run/run.sh ; \
+else echo "\
 exec node /statsd/stats.js /statsd.conf 2>&1 | tee -a /var/log/statsd.log & \n \
 cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go  \n \
 cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
-> /run/run.sh
+> /run/run.sh ; fi
 RUN chmod +x /run/run.sh
 CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $NONET $OBJSIZE"]
