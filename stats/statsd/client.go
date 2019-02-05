@@ -81,7 +81,7 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 	}
 
 	var (
-		t, v   string
+		t      string
 		packet string
 	)
 
@@ -91,13 +91,10 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 	for _, m := range metrics {
 		switch m.Type {
 		case Timer:
-			v = fmt.Sprintf("%v", m.Value)
 			t = "ms"
 		case Counter:
-			v = fmt.Sprintf("+%v", m.Value)
-			t = "g"
+			t = "c"
 		case Gauge:
-			v = fmt.Sprintf("%v", m.Value)
 			t = "g"
 		default:
 			cmn.Assert(false, m.Type)
@@ -106,7 +103,7 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 		if packet != "" {
 			packet += "\n"
 		}
-		packet += fmt.Sprintf("%s.%s.%s:%s|%s", c.prefix, bucket, m.Name, v, t)
+		packet += fmt.Sprintf("%s.%s.%s:%v|%s", c.prefix, bucket, m.Name, m.Value, t)
 	}
 
 	if packet != "" {

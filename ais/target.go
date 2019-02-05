@@ -309,7 +309,7 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.PutLatency, stats.KindLatency)
 	t.statsif.Register(stats.GetColdCount, stats.KindCounter)
 	t.statsif.Register(stats.GetColdSize, stats.KindCounter)
-	t.statsif.Register(stats.GetThroughput, stats.KindCounter)
+	t.statsif.Register(stats.GetThroughput, stats.KindThroughput)
 	t.statsif.Register(stats.LruEvictSize, stats.KindCounter)
 	t.statsif.Register(stats.LruEvictCount, stats.KindCounter)
 	t.statsif.Register(stats.TxCount, stats.KindCounter)
@@ -917,7 +917,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 	delta := time.Since(started)
 	t.statsif.AddMany(
-		stats.NamedVal64{Name: stats.GetThroughput, Val: int64(float64(written) / delta.Seconds())},
+		stats.NamedVal64{Name: stats.GetThroughput, Val: written},
 		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
 	)
 }

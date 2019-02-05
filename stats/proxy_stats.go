@@ -21,8 +21,9 @@ import (
 
 type (
 	ProxyCoreStats struct {
-		Tracker statsTracker
-		StatsdC *statsd.Client `json:"-"`
+		Tracker   statsTracker
+		StatsdC   *statsd.Client `json:"-"`
+		statsTime time.Duration
 	}
 	Prunner struct {
 		statsRunner
@@ -67,6 +68,11 @@ func (s *ProxyCoreStats) doAdd(name string, val int64) {
 		v.cumulative += val
 		v.Value += val
 		v.Unlock()
+	} else if v.kind == KindThroughput {
+		v.Lock()
+		v.cumulative += val
+		v.Value += val
+		v.Unlock()
 	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
 		nroot := strings.TrimSuffix(name, ".n")
 		s.StatsdC.Send(nroot, metric{statsd.Counter, "count", val})
@@ -86,6 +92,19 @@ func (s *ProxyCoreStats) copyZeroReset(ctracker copyTracker) {
 			v.Value = 0
 			v.numSamples = 0
 			v.Unlock()
+		} else if v.kind == KindThroughput {
+			v.Lock()
+			cmn.Assert(s.statsTime.Seconds() > 0, "ProxyCoreStats: statsTime not set")
+			throughput := v.Value / int64(s.statsTime.Seconds()) // note: int divide
+			ctracker[name] = &copyValue{Value: throughput}
+			v.Value = 0
+			v.Unlock()
+			if strings.HasSuffix(name, ".bps") {
+				nroot := strings.TrimSuffix(name, ".bps")
+				s.StatsdC.Send(nroot,
+					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
+				)
+			}
 		} else if v.kind == KindCounter {
 			v.RLock()
 			if v.Value != 0 {
@@ -99,9 +118,11 @@ func (s *ProxyCoreStats) copyZeroReset(ctracker copyTracker) {
 }
 
 func (s *ProxyCoreStats) copyCumulative(ctracker copyTracker) {
+	// serves to satisfy REST API what=stats query
+
 	for name, v := range s.Tracker {
 		v.RLock()
-		if v.kind == KindLatency {
+		if v.kind == KindLatency || v.kind == KindThroughput {
 			ctracker[name] = &copyValue{Value: v.cumulative}
 		} else if v.kind == KindCounter {
 			if v.Value != 0 {
@@ -122,6 +143,7 @@ func (r *Prunner) Run() error { return r.runcommon(r) }
 func (r *Prunner) Init() {
 	r.Core = &ProxyCoreStats{}
 	r.Core.init(24)
+	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime
 	r.ctracker = make(copyTracker, 24)
 
 	// subscribe to config changes
@@ -130,6 +152,7 @@ func (r *Prunner) Init() {
 
 func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
+	r.Core.statsTime = newConf.Periodic.StatsTime
 }
 
 func (r *Prunner) GetWhatStats() ([]byte, error) {

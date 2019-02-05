@@ -92,9 +92,9 @@ func TestClient(t *testing.T) {
 			Value: 789,
 		},
 	)
-	checkMsg(t, s, "test.three.timer:123|ms")
-	checkMsg(t, s, "test.three.counter:456|c")
-	checkMsg(t, s, "test.three.gauge.onemore:789|g")
+	checkMsg(t, s, "test.three.timer:123|ms\n"+
+		"test.three.counter:456|c\n"+
+		"test.three.gauge.onemore:789|g")
 }
 
 // server is the UDP server routine used for testing

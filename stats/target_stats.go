@@ -24,14 +24,13 @@ import (
 )
 
 //
-// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes), "*.tps" - throughput
+// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes), "*.bps" - throughput (in byte/s)
 //
 
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount     = "get.cold.n"
 	GetColdSize      = "get.cold.size"
-	GetThroughput    = "get.tps"
 	LruEvictSize     = "lru.evict.size"
 	LruEvictCount    = "lru.evict.n"
 	TxCount          = "tx.n"
@@ -57,6 +56,9 @@ const (
 	PutRedirLatency = "put.redir.µs"
 	ReplPutLatency  = "repl.µs"
 	DownloadLatency = "dl.µs"
+
+	// KindThroughput
+	GetThroughput = "get.bps" // bytes per second
 )
 
 //
@@ -118,6 +120,7 @@ func (r *Trunner) Init() {
 	r.lines = make([]string, 0, 16)
 
 	config := cmn.GCO.Get()
+	r.Core.statsTime = config.Periodic.StatsTime
 	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
 
@@ -127,6 +130,7 @@ func (r *Trunner) Init() {
 
 func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
+	r.Core.statsTime = newConf.Periodic.StatsTime
 	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
 	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(newConf.Periodic.StatsTime))
 }
@@ -313,7 +317,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
 	}
-	if v.kind == KindLatency {
+	if v.kind == KindLatency || v.kind == KindThroughput {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
 	}
@@ -323,12 +327,6 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		s.StatsdC.Send(nroot,
 			metric{Type: statsd.Counter, Name: "bytes", Value: val},
 			metric{Type: statsd.Counter, Name: "count", Value: 1},
-		)
-	}
-	if strings.HasSuffix(name, ".tps") {
-		nroot := strings.TrimSuffix(name, ".tps")
-		s.StatsdC.Send(nroot,
-			metric{Type: statsd.Gauge, Name: "throughput", Value: val},
 		)
 	}
 
