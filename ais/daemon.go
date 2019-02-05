@@ -191,7 +191,7 @@ func aisinit(version, build string) {
 	if err := cmn.LoadConfig(clivars.conffile, clivars.statstime, clivars.proxyurl, clivars.loglevel); err != nil {
 		glog.Fatalf("Failed to initialize, config %q, err: %v", clivars.conffile, err)
 	}
-	glog.Infof("version: %s | build_time: %s\n", version, build)
+	glog.Infof("git: %s | build-time: %s\n", version, build)
 
 	// init daemon
 	fs.Mountpaths = fs.NewMountedFS()

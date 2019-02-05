@@ -55,6 +55,8 @@ var (
 	_ cloudif = &awsimpl{}
 )
 
+func newAWSProvider(t *targetrunner) *awsimpl { return &awsimpl{t} }
+
 // If extractAWSCreds returns no error and awsCreds is nil then the default
 //   AWS client is used (that loads credentials from ~/.aws/credentials)
 func extractAWSCreds(credsList map[string]string) *awsCreds {

@@ -10,7 +10,9 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"runtime/debug"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -147,6 +149,14 @@ func (z *SGL) Open() (io.ReadCloser, error) { return NewReader(z), nil }
 func (z *SGL) Close() error { return nil }
 
 func (z *SGL) Free() {
+	if z.slab == nil { // FIXME DEBUG
+		glog.Errorln("freeing already freed")
+		stacktrace := debug.Stack()
+		n1 := len(stacktrace)
+		s1 := string(stacktrace[:n1])
+		glog.Errorln(s1)
+		return
+	}
 	z.slab.muput.Lock()
 	for i := 0; i < len(z.sgl); i++ {
 		z.slab._free(z.sgl[i])

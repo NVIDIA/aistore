@@ -175,7 +175,6 @@ func (lom *LOM) String() string {
 
 // main method
 func (lom *LOM) Fill(action int, config ...*cmn.Config) (errstr string) {
-	// init
 	if lom.Bucket == "" || lom.Objname == "" || lom.Fqn == "" {
 		if errstr = lom.init(); errstr != "" {
 			return
@@ -184,6 +183,11 @@ func (lom *LOM) Fill(action int, config ...*cmn.Config) (errstr string) {
 			lom.Config = config[0]
 		} else {
 			lom.Config = cmn.GCO.Get()
+		}
+		cprovider := lom.Config.CloudProvider
+		if !lom.Bislocal && (cprovider == "" || cprovider == cmn.ProviderAIS) {
+			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s)", lom, cprovider)
+			return
 		}
 		lom.Cksumcfg = &lom.Config.Cksum
 		lom.Mirror = &lom.Config.Mirror

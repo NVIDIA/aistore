@@ -154,7 +154,7 @@ func (t *targetrunner) Run() error {
 
 	dryinit()
 
-	t.rtnamemap = newrtnamemap(128) // lock/unlock name
+	t.rtnamemap = newrtnamemap()
 
 	bucketmd := newBucketMD()
 	t.bmdowner.put(bucketmd)
@@ -180,7 +180,7 @@ func (t *targetrunner) Run() error {
 		return ereg
 	}
 
-	go t.pollClusterStarted()
+	go t.pollClusterStarted(config.Timeout.CplaneOperation)
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
@@ -204,9 +204,11 @@ func (t *targetrunner) Run() error {
 
 	// cloud provider (empty stubs that may get populated via build tags)
 	if config.CloudProvider == cmn.ProviderAmazon {
-		t.cloudif = &awsimpl{t}
+		t.cloudif = newAWSProvider(t)
+	} else if config.CloudProvider == cmn.ProviderGoogle {
+		t.cloudif = newGCPProvider(t)
 	} else {
-		t.cloudif = &gcpimpl{t}
+		t.cloudif = newEmptyCloud() // mock
 	}
 
 	// prefetch
@@ -255,8 +257,6 @@ func (t *targetrunner) Run() error {
 		os.Exit(1)
 	}
 
-	glog.Infof("target %s is ready", t.si)
-	glog.Flush()
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 
@@ -276,7 +276,12 @@ func (t *targetrunner) Run() error {
 	}
 
 	dsort.RegisterNode(t.smapowner, t.si, t, t.rtnamemap)
-	return t.httprunner.run()
+	if err := t.httprunner.run(); err != nil {
+		return err
+	}
+	glog.Infof("target %s is ready to handle requests", t.si)
+	glog.Flush()
+	return nil
 }
 
 func (t *targetrunner) setupStreams() error {
@@ -624,10 +629,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// FIXME:
 	// if !dryRun.disk && lom.Exists() {
 	// 	if x := query.Get(cmn.URLParamReadahead); x != "" {
-	// 		t.readahead.ahead(lom.Fqn, rangeOff, rangeLen)
-	// 		return
-	// 	}
-	// }
 
 	if glog.V(4) {
 		pid := query.Get(cmn.URLParamProxyID)
@@ -644,9 +645,13 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	if !coldGet {
 		if errstr = lom.Fill(cluster.LomVersion | cluster.LomCksum); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, false)
-			t.invalmsghdlr(w, r, errstr)
-			return
+			_ = lom.Fill(cluster.LomFstat)
+			if lom.Exists() {
+				t.rtnamemap.Unlock(lom.Uname, false)
+				t.invalmsghdlr(w, r, errstr)
+				return
+			}
+			glog.Warningf("%s delete race - proceeding to execute cold GET...", lom)
 		}
 	}
 
@@ -3420,7 +3425,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	return
 }
 
-func (t *targetrunner) pollClusterStarted() {
+func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 	for {
 		time.Sleep(time.Second)
 		smap := t.smapowner.get()
@@ -3435,7 +3440,7 @@ func (t *targetrunner) pollClusterStarted() {
 				base:   psi.IntraControlNet.DirectURL,
 				path:   cmn.URLPath(cmn.Version, cmn.Health),
 			},
-			timeout: defaultTimeout,
+			timeout: timeout,
 		}
 		res := t.call(args)
 		if res.err != nil {

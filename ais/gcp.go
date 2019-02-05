@@ -67,6 +67,8 @@ var (
 // global - FIXME: environ
 //
 //======
+func newGCPProvider(t *targetrunner) *gcpimpl { return &gcpimpl{t} }
+
 func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }

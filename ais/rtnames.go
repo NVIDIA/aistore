@@ -15,6 +15,7 @@ import (
 
 const (
 	pollInterval = time.Millisecond * 100
+	initCapacity = 128
 )
 
 // Implements cluster.NameLocker interface.
@@ -38,9 +39,9 @@ type lockInfo struct {
 //
 // methods
 //
-func newrtnamemap(size int) *rtnamemap {
+func newrtnamemap() *rtnamemap {
 	return &rtnamemap{
-		m: make(map[string]*lockInfo, size),
+		m: make(map[string]*lockInfo, initCapacity),
 	}
 }
 
