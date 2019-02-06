@@ -79,7 +79,7 @@ import (
 	"io"
 	stdLog "log"
 	"os"
-	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -248,13 +248,13 @@ type modulePat struct {
 	level   Level
 }
 
-// match reports whether the file matches the pattern. It uses a string
-// comparison if the pattern contains no metacharacters.
+// match reports whether the file matches the pattern.
 func (m *modulePat) match(file string) bool {
 	if m.literal {
-		return file == m.pattern
+		return strings.HasSuffix(file, m.pattern)
 	}
-	match, _ := filepath.Match(m.pattern, file)
+	// .* is added to make sure that we match any prefix
+	match, _ := regexp.MatchString(".*"+m.pattern, file)
 	return match
 }
 
@@ -315,7 +315,7 @@ func (m *moduleSpec) Set(value string) error {
 // isLiteral reports whether the pattern is a literal string, that is, has no metacharacters
 // that require filepath.Match to be called to match the pattern.
 func isLiteral(pattern string) bool {
-	return !strings.ContainsAny(pattern, `\*?[]`)
+	return !strings.ContainsAny(pattern, `\*+?[]()^$|`)
 }
 
 // traceLocation represents the setting of the -log_backtrace_at flag.
@@ -968,9 +968,6 @@ func (l *loggingT) setV(pc uintptr) Level {
 	// The file is something like /a/b/c/d.go. We want just the d.
 	if strings.HasSuffix(file, ".go") {
 		file = file[:len(file)-3]
-	}
-	if slash := strings.LastIndex(file, "/"); slash >= 0 {
-		file = file[slash+1:]
 	}
 	for _, filter := range l.vmodule.filter {
 		if filter.match(file) {

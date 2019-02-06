@@ -297,15 +297,15 @@ var vGlobs = map[string]bool{
 	"glog_test=2": true,
 	"glog_test=3": true, // If -vmodule sets V to 1, V(3) will succeed.
 	// These all use 2 and check the patterns. All are true.
-	"*=2":           true,
+	".*=2":          true,
 	"?l*=2":         true,
-	"????_*=2":      true,
-	"??[mno]?_*t=2": true,
+	"...._.*=2":     true,
+	"..[mno]._*t=2": true,
 	// These all use 2 and check the patterns. All are false.
-	"*x=2":         false,
-	"m*=2":         false,
-	"??_*=2":       false,
-	"?[abc]?_*t=2": false,
+	"*x=2":          false,
+	"x.*=2":         false,
+	"??_*=2":        false,
+	".[abc]._.*t=2": false,
 }
 
 // Test that vmodule globbing works as advertised.
