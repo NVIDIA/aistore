@@ -4,7 +4,7 @@
 ##  Kubeadm: Deploying an AIStore Cluster
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.
 
-![K8s Arch](../../../docs/images/k8s_arch.png)
+<img src="../../../docs/images/k8s_arch.png" width="50%" >
 
 > Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. It cannot be used for multi-node deployments due to its limitations.
 
@@ -65,7 +65,7 @@ $ sysctl net.bridge.bridge-nf-call-iptables=1
 
 4. You should have received a command with the form,
 ```sh
-kubeadm join <MASTER_NODE_IP> --token <TOKEN> --discovery-token-ca-cert-hash <HASH>
+$ kubeadm join <MASTER_NODE_IP> --token <TOKEN> --discovery-token-ca-cert-hash <HASH>
 ```
 Use this to join the nodes to your cluster.
 

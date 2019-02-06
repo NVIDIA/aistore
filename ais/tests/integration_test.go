@@ -288,6 +288,100 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	assertClusterState(&m)
 }
 
+// Similar to TestGetAndReRegisterInParallel, but instead of unregister, we kill the target
+// 1. Kill registered target and wait for Smap to updated
+// 2. Create local bucket
+// 3. PUT large amounts of objects into local bucket
+// 4. Get the objects while simultaneously re-registering the target
+func TestGetAndKillInParallel(t *testing.T) {
+	const (
+		num       = 262144
+		filesize  = 2048
+		maxErrPct = 1
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           10 * time.Second,
+			num:             num,
+			numGetsEachFile: 5,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
+		// With the current design of ais, there is exists a brief period in which the cluster map is synced to
+		// all nodes in the cluster during restoring. During this period, errors can occur.
+		filenameCh = make(chan string, m.num)
+		errCh      = make(chan error, m.num)
+		sgl        *memsys.SGL
+		targetURL  string
+		targetPort string
+		targetID   string
+	)
+
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	saveClusterState(&m)
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Step 1
+	// Select a random target
+	for _, v := range m.smap.Tmap {
+		targetURL = v.PublicNet.DirectURL
+		targetPort = v.PublicNet.DaemonPort
+		targetID = v.DaemonID
+		break
+	}
+	tutils.Logf("Killing target: %s - %s\n", targetURL, targetID)
+	tcmd, targs, err := kill(targetID, targetPort)
+	tutils.CheckFatal(err, t)
+
+	primaryProxy := getPrimaryURL(m.t, proxyURLReadOnly)
+	m.smap, err = waitForPrimaryProxy(primaryProxy, "to update smap", m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
+	tutils.CheckFatal(err, t)
+
+	// Step 2
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Step 3
+	if usingSG {
+		sgl = tutils.Mem2.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	start := time.Now()
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
+	selectErr(errCh, "put", t, false)
+	close(filenameCh)
+	close(errCh)
+	tutils.Logf("PUT time: %v\n", time.Since(start))
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Step 4
+	m.wg.Add(num*m.numGetsEachFile + 1)
+	go func() {
+		restore(tcmd, targs, false, "target")
+		m.wg.Done()
+	}()
+	doGetsInParallel(&m)
+
+	m.wg.Wait()
+	resultsBeforeAfter(&m, num, maxErrPct)
+	assertClusterState(&m)
+}
+
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	var (
 		err error
