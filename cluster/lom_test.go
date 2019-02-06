@@ -33,6 +33,8 @@ const (
 )
 
 var _ = Describe("LOM", func() {
+	oldCloudProvider := cmn.GCO.Get().CloudProvider
+
 	cmn.CreateDir(mpath)
 	cmn.CreateDir(mpath2)
 
@@ -63,6 +65,9 @@ var _ = Describe("LOM", func() {
 	}})
 
 	BeforeEach(func() {
+		//dummy cloud provider for tests involving cloud buckets
+		cmn.GCO.Get().CloudProvider = cmn.ProviderAmazon
+
 		os.RemoveAll(mpath)
 		os.RemoveAll(mpath2)
 		cmn.CreateDir(mpath)
@@ -71,6 +76,8 @@ var _ = Describe("LOM", func() {
 	AfterEach(func() {
 		os.RemoveAll(mpath)
 		os.RemoveAll(mpath2)
+
+		cmn.GCO.Get().CloudProvider = oldCloudProvider
 	})
 
 	Describe("FQN Resolution", func() {
