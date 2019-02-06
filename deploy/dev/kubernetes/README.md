@@ -1,17 +1,17 @@
 ## Disclaimer
 > For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](../docker).
 
-##  Kubeadm: Deploying AIStore in a Single Node Cluster
-For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple single node cluster with one proxy and any number of targets.
+##  Kubeadm: Deploying an AIStore Cluster
+For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.
 
-> Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters.
+![K8s Arch](../../../docs/images/k8s_arch.png)
 
-> Eventually, there will be multi-node functionality.
+> Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. It cannot be used for multi-node deployments due to its limitations.
 
 ### Setup with Kubeadm
 We can use our local machine to host our Kubernetes cluster. For multi-node clusters, Kubeadm requires VMs or other physical machines to host the nodes.
 
-1. [Install Kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/) and [kubelet](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/) and [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) tools. 
+1. [Install Kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/) and [kubelet](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/) and [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) tools.
 ```sh
 $ sudo apt-get update && sudo apt-get install -y apt-transport-https curl
 $ curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
@@ -29,15 +29,24 @@ $ sudo apt-mark hold kubelet kubeadm kubectl
 $ sudo swapoff -a
 ```
 
-#### Deploying a Single Node Cluster
+4. Disable your firewall to allow DNS resolution for the pods in the Kubernetes cluster.
+```sh
+$ sudo ufw disable
+```
+
+> For multi-node Kubernetes clusters, you need perform the same steps on each machine
+
+#### Deploying a Two-Node Cluster
 1. Initialize the Kubernetes cluster with your local machine as the host.
 ```sh
 $ sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 ```
-The `--pod-network-cidr` allocates a CIDR for every node. This is a requirement by [flannel](https://github.com/coreos/flannel). 
+The `--pod-network-cidr` allocates a CIDR for every node. This is a requirement by [flannel](https://github.com/coreos/flannel).
 > Flannel is a virtual network that gives a subnet to each node for use with container([pod](https://kubernetes.io/docs/concepts/workloads/pods/pod)) runtimes.
 
-2. Once Kubeadm finishes initializing, a set of commands should appear on the screen. 
+> Ensure that Docker and Kubeadm are installed on all machines in the cluster
+
+2. Once Kubeadm finishes initializing, a set of commands should appear on the screen.
 ```sh
 $ mkdir -p $HOME/.kube
 $ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
@@ -49,44 +58,51 @@ This allows non-root users to use `kubectl`.
 ```sh
 $ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
 ```
-Also make sure that `/proc/sys/net/bridge/bridge-nf-call-iptables` is set to `1` by running 
+Also make sure that `/proc/sys/net/bridge/bridge-nf-call-iptables` is set to `1` by running
 ```sh
 $ sysctl net.bridge.bridge-nf-call-iptables=1
 ```
 
-4. Once that is setup, you should see that a Kubernetes node has been created. Check with
+4. You should have received a command with the form,
+```sh
+kubeadm join <MASTER_NODE_IP> --token <TOKEN> --discovery-token-ca-cert-hash <HASH>
+```
+Use this to join the nodes to your cluster.
+
+5. Once that is setup, you should see that your Kubernetes nodes has been created. Check with
 ```sh
 $ kubectl get nodes
 ```
-The name of the node should be the the name of your host machine. If the status is `NotReady`, wait for a couple of seconds and check again.
+The name of the nodes should be the the name of your machines that they are running on. If the status is `NotReady`, wait for a couple of seconds and check again.
 
-5. Once the status is `Ready`, add a label and untaint the node.
+6. Once the status is `Ready`, add labels to your nodes and untaint the master node.
  * Add a label:
 ```sh
-$ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais
+# Assigns the node to host the proxy Pod
+$ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-proxy
+
+# Assigns the node to host the target Pods
+$ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-target
 ```
-This allows the deployment files to know which node to deploy the pods to.
+This allows the pods to be ran on particular nodes.
+
  * untaint the node:
 ```sh
 $ kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
-This allows for pods to be scheduled on the host node.
-
-6. Disable your firewall to allow DNS resolution for the pods in the Kubernetes cluster.
-```sh
-$ sudo ufw disable
-```
+This allows for pods to be scheduled on the host/master node.
 
 7. Run the deployment script `sudo ./deploy_kubernetes.sh`.
 > This is still under development. It currently only works with one proxy and any number of targets.
+> If the pod is stuck on `ContainerCreating` status, you can check the logs using `kubectl describe pods <POD_NAME>`
 
 8. After a minute, you should see that the pods are running with `kubectl get pods -o wide`.
 ```sh
 $ kubectl get pods -o wide
 
-    NAME                               READY   STATUS    RESTARTS   AGE   IP           NODE         NOMINATED NODE   READINESS GATES
-    aisprimaryproxy-77456674db-6fzq5   1/1     Running   0          89s   10.244.0.4   ais-master   <none>           <none>
-    aistarget-5b6c698c8-f87mm          1/1     Running   0          39s   10.244.0.5   ais-master   <none>           <none>
+    NAME                               READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+    aisprimaryproxy-77456674db-6fzq5   1/1     Running   0          89s   10.244.0.4   ais-master     <none>           <none>
+    aistarget-5b6c698c8-f87mm          1/1     Running   0          39s   10.244.1.1   ais-worker1    <none>           <none>
 ```
 
 9. You can also scale the number of storage targets.
@@ -95,8 +111,18 @@ $ kubectl scale --replicas=<REPLICA_COUNT> -f aistarget_deployment.yml
 ```
 Setting the number of replicas to `6` will create six targets.
 
-#### Deploying Multi-Node Cluster
-> Work in progress
+#### Deploying a Single Node Cluster
+AIStore can also be deployed on a single-node Kubernetes cluster. The setup are similar to the multi-node deployment but users will need to slightly modify the deployment files. For each of the deployment files, modify
+```sh
+nodeSelector:
+    nodename: ais-XXX
+```
+to
+```sh
+nodeSelector:
+    nodename: ais
+```
+
 
 #### Interacting with the Cluster
 To interact with the cluster
@@ -112,7 +138,7 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}
 
 > The proxy inside the cluster is running at port 8080.
 
- * Also, you can query cluster information directly from the web browser. Just type `http://localhost:31337/v1/daemon?what=config`. 
+ * Also, you can query cluster information directly from the web browser. Just type `http://localhost:31337/v1/daemon?what=config`.
 
 > This uses port `31337` to communicate with the node.
 
@@ -133,8 +159,8 @@ $ sudo kubeadm reset
 $ kubectl get pods -o wide
 
     NAME                                READY     STATUS    RESTARTS   AGE      IP           NODE
-    aisprimaryproxy-77456674db-6fzq5    1/1       Running   0          89s      10.244.0.4   ais-master 
-    aistarget-5b6c698c8-f87mm           1/1       Running   0          39s      10.244.0.5   ais-master 
+    aisprimaryproxy-77456674db-6fzq5    1/1       Running   0          89s      10.244.0.4   ais-master
+    aistarget-5b6c698c8-f87mm           1/1       Running   0          39s      10.244.1.1   ais-worker1
 ```
 
 2. To view pod logs, run `kubectl logs <pod_name>`

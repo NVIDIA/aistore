@@ -1,5 +1,7 @@
-#Working with AIS on Docker
-AIStore can be deployed on Docker in quick-start mode or development mode. [Quick-start mode ](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
+# Working with AIS on Docker
+There are two different ways, or modes, to deploy AIS in Docker containers. We refer to those ways as [quick-start mode](#quick-start-ais-cluster) and [development mode](#developer-mode).
+
+[Quick-start mode](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
 
 ## Quick-start AIS Cluster
 Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](docs/docker_main.md)
@@ -181,7 +183,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 ## Running benchmark tests in the Docker environment
 
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](../../bench/aisloader/README.md)
+AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](../../../bench/aisloader)
 
 
 ## Utility Scripts

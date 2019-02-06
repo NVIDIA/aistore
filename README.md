@@ -260,7 +260,7 @@ AIStore runs on commodity Linux machines with no special hardware requirements.
 > It is expected, though, that all AIS target machines are identical, hardware-wise.
 
 The implication is that the number of possible deployment options is practically unlimited.
-This section covers 4 (four) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
+This section covers 3 (three) ways to deploy AIS on a single Linux machine and is intended for developers and development, and/or for a quick trial.
 
 ### Local non-Containerized
 
@@ -320,16 +320,15 @@ This command runs test that matches the specified string ("download"). The test 
 
 ### Local Docker-Compose
 
-The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks.
+The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
 
 > AIS 2.0 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
 
 To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
 
+#### Docker playground
 
-### Docker playground
-
-In [docker playground](deploy/dev/docker/playground) you can find scripts which download different datasets (eg. MNIST and subset of ImageNet).
+In [Docker playground](deploy/dev/docker/playground) you can find scripts which download different datasets (eg. MNIST and subset of ImageNet).
 The datasets are downloaded using [Downloader](docs/experimental.md#Downloader) which will save objects directly to the AIS cluster.
 During the download you can monitor the statistics:
  * number of requests made,
@@ -350,10 +349,7 @@ $ ./stop_docker.sh -l # stop docker
 
 ### Local Kubernetes
 
-The 3rd local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes/README.md).
-
-### Basic Docker Quick-start
-The 4th and final deployment option uses Docker. With very minimal setup, you can deploy a small AIS cluster within seconds. See [quick-start AIS with Docker](deploy/dev/docker/README.)
+The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
 
 ## Guides and References
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)

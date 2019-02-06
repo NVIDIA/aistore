@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: aistarget
 spec:
   selector:
     matchLabels:
       app: aistarget-app
+  serviceName: "aistarget-app"
   replicas: 1
   template:
     metadata:
@@ -38,7 +39,7 @@ spec:
         ports:
           - containerPort: 8080
       nodeSelector:
-          nodename: ais
+          nodename: ais-target
       volumes:
         - name: ais-config
           configMap:

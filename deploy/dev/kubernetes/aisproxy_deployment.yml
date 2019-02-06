@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: aisproxy
 spec:
@@ -7,6 +7,7 @@ spec:
     matchLabels:
        app: aisproxy-app
        primaryproxy: "false"
+  serviceName: "aisproxy-app"
   replicas: 1
   template:
     metadata:
@@ -14,15 +15,14 @@ spec:
         app: aisproxy-app
         primaryproxy: "false"
     spec:
-      hostNetwork: true
       containers:
       - name: aisproxy
         image: docker.io/aistorage/ais:v1.3
-        #imagePullPolicy: Always
+        imagePullPolicy: Always
         livenessProbe:
           httpGet:
             path: /v1/health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 20
           periodSeconds: 10
         env:
@@ -45,9 +45,9 @@ spec:
          - name: ais-localbucket
            mountPath: /usr/nvidia/
         ports:
-          - containerPort: 8081
+          - containerPort: 8080
       nodeSelector:
-          nodename: proxy
+          nodename: ais-proxy
       volumes:
         - name: ais-config
           configMap:

@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: aisprimaryproxy
 spec:
@@ -7,6 +7,7 @@ spec:
     matchLabels:
        app: aisproxy-app
        primaryproxy: "true"
+  serviceName: "aisproxy-app"
   replicas: 1
   template:
     metadata:
@@ -48,7 +49,7 @@ spec:
         ports:
           - containerPort: 8080
       nodeSelector:
-          nodename: ais
+          nodename: ais-proxy
       volumes:
         - name: ais-config
           configMap:
@@ -97,4 +98,18 @@ spec:
     protocol: TCP
   selector:
     app: aistarget-app
-  type: ClusterIP
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: aisproxyservice
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: aisproxy-app
+    primaryproxy: "false"
+  type: NodePort

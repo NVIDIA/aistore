@@ -67,6 +67,16 @@ fi
 START=0
 END=$TARGET_CNT
 
+echo "Enter number of proxy servers:"
+read PROXY_CNT
+if ! [[ "$PROXY_CNT" =~ ^[0-9]+$ ]] ; then
+  echo "Error: '$PROXY_CNT' must be at least 1"; exit 1
+elif [ $PROXY_CNT -lt 1 ] ; then
+  echo "Error: $PROXY_CNT is less than 1"; exit 1
+fi
+START=0
+END=$PROXY_CNT
+
 
 testfspathcnt=0
 fspath="\"\":\"\""
@@ -117,10 +127,10 @@ if [ $cldprovider -eq 1 ]; then
     if [ -z "$aws_env" ]; then
         aws_env="~/.aws/"
     fi
-    # to get proper tilde expansion 
+    # to get proper tilde expansion
     aws_env="${aws_env/#\~/$HOME}"
     temp_file="$aws_env/credentials"
-    if [ -f $"$temp_file" ]; then    
+    if [ -f $"$temp_file" ]; then
         cp $"$temp_file"  ${LOCAL_AWS}
     else
         echo "No AWS credentials file found in specified directory. Exiting..."
@@ -176,9 +186,6 @@ export AUTHENABLED=$AUTHENABLED
 
 source $DIR/../../../ais/setup/config.sh
 
-#1) create/update/delete kubctl configmap
-#)  run the cluster
-
 # Deploying kubernetes cluster
 echo Starting kubernetes deployment ..
 #Create AIStore configmap to attach during runtime
@@ -187,12 +194,20 @@ kubectl create configmap ais-config --from-file=./$CONFFILE
 kubectl create configmap statsd-config --from-file=./$CONFFILE_STATSD
 kubectl create configmap collectd-config --from-file=./$CONFFILE_COLLECTD
 
-echo Starting Primary Proxy Deployment
+echo "Starting Primary Proxy Deployment ..."
 kubectl create -f aisprimaryproxy_deployment.yml
 
 #Give some room to breathe
-echo "Waiting for proxy to start ..."
-sleep 50
+echo "Waiting for primary proxy to start ..."
+sleep 100
+
+if (( $PROXY_CNT > 1 )); then
+  echo "Starting Proxy Deployment"
+  kubectl create -f aisproxy_deployment.yml
+  PROXY_CNT=$((PROXY_CNT - 1))
+  echo "Scaling proxies (${PROXY_CNT} more)"
+  kubectl scale --replicas=$PROXY_CNT -f aisproxy_deployment.yml
+fi
 
 echo "Starting Target Deployment"
 kubectl create -f aistarget_deployment.yml
@@ -204,5 +219,4 @@ echo "List of running pods"
 kubectl get pods -o wide
 
 rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
-
-echo "Dones"
+echo "Done"
