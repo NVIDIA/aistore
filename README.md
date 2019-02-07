@@ -165,7 +165,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](docs/http_api.md). The generated package will cover the entire functionality of the API.
 
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-specification.yaml).
+> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/openapi.yaml).
 
 To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package).
 
@@ -179,7 +179,7 @@ To get started with the python client package, you need to first generate the cl
 
     ```shell
     cd <path_to_repo>
-    java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/rest-api-specification.yaml -g python -o ./python-client/
+    java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/openapi.yaml -g python -o ./python-client/
     ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.

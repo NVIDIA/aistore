@@ -57,7 +57,7 @@ func (t *targetrunner) getOpFromActionMsg(action string) listf {
 	switch action {
 	case cmn.ActPrefetch:
 		return t.addPrefetchList
-	case cmn.ActEvict:
+	case cmn.ActEvictObjects:
 		return t.doListEvict
 	case cmn.ActDelete:
 		return t.doListDelete

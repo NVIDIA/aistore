@@ -80,7 +80,7 @@ func DeleteObject(baseParams *BaseParams, bucket, object string) error {
 //
 // Evicts an object specified by bucket/object
 func EvictObject(baseParams *BaseParams, bucket, object string) error {
-	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvict, Name: cmn.URLPath(bucket, object)})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictObjects, Name: cmn.URLPath(bucket, object)})
 	if err != nil {
 		return err
 	}

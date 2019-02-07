@@ -254,6 +254,19 @@ Removes a local bucket using its name as the identifier
 Error from AIStore in completing the request
 ___
 
+#### EvictCloudBucket
+Evicts a cloud bucket using its name as the identifier
+
+##### Parameters
+| Name       | Type         | Description                                                                           |
+|------------|--------------|---------------------------------------------------------------------------------------|
+| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| bucket     | string       | Name of the existing bucket                                                           |
+##### Return
+Error from AIStore in completing the request
+___
+
 #### SetBucketProps
 Sets the properties of a bucket, using the bucket name as the identifier and the bucket properties to be set
 

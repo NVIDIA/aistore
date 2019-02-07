@@ -970,6 +970,83 @@ cleanup:
 	close(fileNameCh)
 }
 
+func Test_evictCloudBucket(t *testing.T) {
+	const filesize = largefilesize * 1024 * 1024
+	var (
+		numPuts    = 5
+		filesPutCh = make(chan string, numPuts)
+		fileslist  = make([]string, 0, 100)
+		errCh      = make(chan error, 100)
+		err        error
+		wg         = &sync.WaitGroup{}
+		bucket     = clibucket
+		sgl        *memsys.SGL
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		bProps     *cmn.BucketProps
+	)
+
+	if !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skip("Test_evictCloudBucket requires a cloud bucket")
+	}
+
+	ldir := filepath.Join(LocalSrcDir, EvictCBStr)
+	if err = cmn.CreateDir(ldir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
+	}
+
+	defer func() {
+		os.RemoveAll(LocalSrcDir)
+		//cleanup
+		for _, fn := range fileslist {
+			wg.Add(1)
+			go tutils.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
+		}
+		wg.Wait()
+		selectErr(errCh, "delete", t, false)
+		close(errCh)
+
+		resetBucketProps(proxyURL, clibucket, t)
+	}()
+
+	if usingSG {
+		sgl = tutils.Mem2.NewSGL(filesize)
+		defer sgl.Free()
+	}
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, EvictCBStr, filesize, numPuts, errCh, filesPutCh, sgl)
+	selectErr(errCh, "put", t, false)
+	close(filesPutCh) // to exit for-range
+	for fname := range filesPutCh {
+		fileslist = append(fileslist, filepath.Join(EvictCBStr, fname))
+	}
+	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
+	for _, fname := range fileslist {
+		if b, _ := tutils.IsCached(proxyURL, bucket, fname); !b {
+			t.Fatalf("Object not cached: %s", fname)
+		}
+	}
+
+	//test property, mirror is disabled for cloud bucket that hasn't been accessed, even if system config says otherwise
+	api.SetBucketProp(tutils.DefaultBaseAPIParams(t), bucket, cmn.HeaderBucketMirrorEnabled, true)
+	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	tutils.CheckFatal(err, t)
+	if !bProps.MirrorEnabled {
+		t.Fatalf("Test property not changed")
+	}
+
+	api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket)
+
+	for _, fname := range fileslist {
+		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
+			t.Fatalf("Object still cached: %s", fname)
+		}
+	}
+	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	tutils.CheckFatal(err, t)
+	if bProps.MirrorEnabled {
+		t.Fatalf("Test property not reset ")
+	}
+}
+
 func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string, oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	baseParams := tutils.BaseAPIParams(proxyURL)

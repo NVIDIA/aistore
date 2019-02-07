@@ -401,13 +401,13 @@ func DeleteRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadlin
 func EvictList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActEvict, http.MethodDelete, evictMsg)
+	return doListRangeCall(proxyURL, bucket, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActEvict, http.MethodDelete, evictMsg)
+	return doListRangeCall(proxyURL, bucket, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {

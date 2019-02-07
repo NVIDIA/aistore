@@ -1,6 +1,6 @@
-OPENAPI_MISSING_ERR = 'openapi_client missing, you probably forgot to generate the package (refer to https://github.com/NVIDIA/aistore/blob/master/swagger/README.md#how-to-generate-package)'
+OPENAPI_MISSING_ERR = 'openapi_client missing, you probably forgot to generate the package (refer to https://github.com/NVIDIA/aistore/blob/master/openapi/README.md#how-to-generate-package)'
 
-PYTHON3_NOT_SUPPORTED = 'python3 is not fully supported, (refer to https://github.com/NVIDIA/aistore/blob/master/swagger/README.md#future)'
+PYTHON3_NOT_SUPPORTED = 'python3 is not fully supported, (refer to https://github.com/NVIDIA/aistore/blob/master/openapi/README.md#future)'
 
 try:
     import openapi_client

@@ -159,19 +159,19 @@ class TestBucketApi(unittest.TestCase):
         self.bucket.set_properties(bucket_name, input_params)
 
         headers = self.bucket.get_properties_with_http_info(bucket_name)[2]
-        cloud_provider = headers[self.models.Headers.CLOUDPROVIDER]
+        cloud_provider = headers[self.models.Headers.CLOUD_PROVIDER]
         self.assertEqual(cloud_provider, self.models.CloudProvider.AIS,
                          "Incorrect CloudProvider in HEADER returned")
         versioning = headers[self.models.Headers.VERSIONING]
         self.assertEqual(versioning, self.models.Version.LOCAL,
                          "Incorrect Versioning in HEADER returned")
-        next_tier_url = headers[self.models.Headers.NEXTTIERURL]
+        next_tier_url = headers[self.models.Headers.NEXT_TIER_URL]
         self.assertEqual(next_tier_url, self.NEXT_TIER_URL,
                          "Incorrect NextTierURL in HEADER returned")
-        read_policy = headers[self.models.Headers.READPOLICY]
+        read_policy = headers[self.models.Headers.READ_POLICY]
         self.assertEqual(read_policy, self.models.RWPolicy.NEXT_TIER,
                          "Incorrect ReadPolicy in HEADER returned")
-        write_policy = headers[self.models.Headers.WRITEPOLICY]
+        write_policy = headers[self.models.Headers.WRITE_POLICY]
         self.assertEqual(write_policy, self.models.RWPolicy.NEXT_TIER,
                          "Incorrect WritePolicy in HEADER returned")
 
@@ -184,7 +184,7 @@ class TestBucketApi(unittest.TestCase):
         :return:
         """
         object_name, _ = self.__put_random_object()
-        input_params = self.models.InputParameters(self.models.Actions.EVICT)
+        input_params = self.models.InputParameters(self.models.Actions.EVICTOBJECTS)
         log.info("Evict object list [%s/%s] InputParamaters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
@@ -209,7 +209,7 @@ class TestBucketApi(unittest.TestCase):
         :return:
         """
         object_name, _ = self.__put_random_object()
-        input_params = self.models.InputParameters(self.models.Actions.EVICT)
+        input_params = self.models.InputParameters(self.models.Actions.EVICTOBJECTS)
         log.info("Evict object list [%s/%s] InputParamaters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
@@ -270,7 +270,7 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.EVICT, self.models.ListParameters(
+            self.models.Actions.EVICTOBJECTS, self.models.ListParameters(
             wait=True, objnames=[object_name]))
         log.info("Evict object list [%s/%s] InputParamaters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
@@ -289,12 +289,29 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.EVICT, self.models.RangeParameters(
+            self.models.Actions.EVICTOBJECTS, self.models.RangeParameters(
                 wait=True, prefix="", regex="", range=""))
         log.info("Evict object range [%s/%s] InputParamaters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
+        self.__execute_operation_on_unavailable_object(
+            self.object.get_properties, self.BUCKET_NAME, object_name,
+            check_cached=True)
+        
+    def test_evict_cloudbucket(self):
+        """
+        1. Create object
+        2. Evict the cloud bucket that contains object
+        3. Check if object in cache
+        :return:
+        """
+        object_name, _ = self.__put_random_object()
+        input_params = self.models.InputParameters(
+            self.models.Actions.EVICTCB)
+        log.info("Evict bucket [%s] InputParamaters [%s]",
+                 self.BUCKET_NAME, input_params)
+        self.bucket.delete(self.BUCKET_NAME, input_parameters=input_params)
         self.__execute_operation_on_unavailable_object(
             self.object.get_properties, self.BUCKET_NAME, object_name,
             check_cached=True)

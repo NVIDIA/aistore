@@ -212,6 +212,20 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
+// EvictCloudBucket API
+//
+// EvictCloudBucket sends a HTTP request to a proxy to evict a cloud bucket with the given name
+func EvictCloudBucket(baseParams *BaseParams, bucket string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}
+
 // RenameLocalBucket API
 //
 // RenameLocalBucket changes the name of a bucket from oldName to newBucketName

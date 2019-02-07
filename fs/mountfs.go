@@ -420,44 +420,30 @@ func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
 func (mfs *MountedFS) CreateDestroyLocalBuckets(op string, create bool, buckets ...string) {
 	const (
-		fmt1       = "%s: failed to %s %q, err: %v"
-		fmt2       = "%s: %s %q for content-type %q, bucket %q"
+		fmt1       = "%s: failed to %s"
+		fmt2       = "%s: %s"
 		createstr  = "create-local-bucket-dir"
 		destroystr = "destroy-local-bucket-dir"
 	)
-	var (
-		availablePaths, _ = mfs.Get()
-		contentTypes      = CSM.RegisteredContentTypes
-		wg                = &sync.WaitGroup{}
-		f                 = cmn.CreateDir
-		text              = createstr
-	)
+
+	text := createstr
 	if !create {
 		text = destroystr
 	}
 
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mi *MountpathInfo) {
-			ff := f
-			if !create {
-				ff = mi.FastRemoveDir
-			}
-			for _, bucket := range buckets {
-				for contentType := range contentTypes {
-					dir := mi.MakePathBucket(contentType, bucket, true /*bucket is local*/)
-					// TODO: on error abort and rollback
-					if err := ff(dir); err != nil {
-						glog.Errorf(fmt1, op, text, dir, err)
-					} else {
-						glog.Infof(fmt2, op, text, dir, contentType, bucket)
-					}
-				}
-			}
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
+	failMsg := fmt.Sprint(fmt1, op, text)
+	passMsg := fmt.Sprint(fmt2, op, text)
+
+	mfs.createDestroyBuckets(create, true, passMsg, failMsg, buckets...)
+}
+
+func (mfs *MountedFS) EvictCloudBucket(bucket string) {
+	const (
+		passMsg = "evict cloud bucket"
+		failMsg = "failed: evict cloud bucket"
+	)
+
+	mfs.createDestroyBuckets(false, false, passMsg, failMsg, bucket)
 }
 
 //
@@ -467,6 +453,44 @@ func (mfs *MountedFS) CreateDestroyLocalBuckets(op string, create bool, buckets 
 func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
 	atomic.StorePointer(&mfs.available, unsafe.Pointer(&available))
 	atomic.StorePointer(&mfs.disabled, unsafe.Pointer(&disabled))
+}
+
+func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string, failMsg string, buckets ...string) {
+	var (
+		contentTypes      = CSM.RegisteredContentTypes
+		availablePaths, _ = mfs.Get()
+		wg                = &sync.WaitGroup{}
+	)
+
+	for _, mpathInfo := range availablePaths {
+		wg.Add(1)
+		go func(mi *MountpathInfo) {
+			ff := cmn.CreateDir
+			if !create {
+				ff = mi.FastRemoveDir
+			}
+
+			for _, bucket := range buckets {
+				for contentType := range contentTypes {
+					dir := mi.MakePathBucket(contentType, bucket, loc /*whether buckets are local*/)
+					if !create {
+						if _, err := os.Stat(dir); os.IsNotExist(err) {
+							continue
+						}
+					}
+
+					// TODO: on error abort and rollback
+					if err := ff(dir); err != nil {
+						glog.Errorf("%q (dir: %q, err: %q)", failMsg, dir, err)
+					} else {
+						glog.Infof("%q (dir %q, bucket: %q)", passMsg, dir, bucket)
+					}
+				}
+			}
+			wg.Done()
+		}(mpathInfo)
+	}
+	wg.Wait()
 }
 
 // mountpathsCopy returns shallow copy of current mountpaths

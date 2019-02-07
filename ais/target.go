@@ -996,13 +996,12 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE { action} /v1/objects/bucket-name
+// DELETE { action } /v1/buckets/bucket-name
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket  string
 		msg     cmn.ActionMsg
 		started = time.Now()
-		ok      = true
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -1013,11 +1012,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, err := ioutil.ReadAll(r.Body)
-	defer func() {
-		if ok && err == nil && bool(glog.V(4)) {
-			glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
-		}
-	}()
+
 	if err == nil && len(b) > 0 {
 		err = jsoniter.Unmarshal(b, &msg)
 	}
@@ -1032,15 +1027,33 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	if len(b) > 0 { // must be a List/Range request
-		if err := t.listRangeOperation(r, apitems, msg); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
+
+	switch msg.Action {
+	case cmn.ActEvictCB:
+		bucketmd := t.bmdowner.get()
+		if bucketmd.IsLocal(bucket) {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+			return
 		}
-		return
+		fs.Mountpaths.EvictCloudBucket(bucket)
+	case cmn.ActDelete, cmn.ActEvictObjects:
+		if len(b) > 0 { // must be a List/Range request
+			err := t.listRangeOperation(r, apitems, msg)
+			if err != nil {
+				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
+			} else {
+				if bool(glog.V(4)) {
+					glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
+				}
+			}
+			return
+		}
+		s := fmt.Sprintf("Invalid API request: no message body")
+		t.invalmsghdlr(w, r, s)
+	default:
+		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
-	s := fmt.Sprintf("Invalid API request: no message body")
-	t.invalmsghdlr(w, r, s)
-	ok = false
+
 }
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
@@ -1069,7 +1082,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err == nil && len(b) > 0 {
 		err = jsoniter.Unmarshal(b, &msg)
 		if err == nil {
-			evict = (msg.Action == cmn.ActEvict)
+			evict = (msg.Action == cmn.ActEvictObjects)
 		}
 	} else if err != nil {
 		s := fmt.Sprintf("objDelete: Failed to read %s request, err: %v", r.Method, err)

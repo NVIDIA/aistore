@@ -1214,7 +1214,7 @@ components:
             - $ref: '#/components/schemas/ObjectPropertiesRequestParams'
     Actions:
       type: string
-      enum: [evict, rename, createlb, destroylb, renamelb, setprops, prefetch, delete, setconfig, shutdown, rebalance, listobjects, enable, disable, remove, add]
+      enum: [evictobjects, rename, createlb, destroylb, renamelb, evictcb, setprops, prefetch, delete, setconfig, shutdown, rebalance, listobjects, enable, disable, remove, add]
     ListParameters:
       properties:
         deadline:
@@ -1336,7 +1336,7 @@ components:
       enum: [ais, aws, gcp]
     Headers:
       type: string
-      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
+      enum: [cloud_provider, Versioning, next_tier_url, read_policy, write_policy, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
     RWPolicy:
       type: string
       enum: [cloud, next_tier]

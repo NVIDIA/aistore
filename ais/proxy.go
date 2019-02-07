@@ -487,7 +487,62 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Unlock()
 		msg.Action = path.Join(msg.Action, bucket)
 		p.metasyncer.sync(true, clone, &msg)
-	case cmn.ActDelete, cmn.ActEvict:
+	case cmn.ActEvictCB:
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
+		bucketmd := p.bmdowner.get()
+		if bucketmd.IsLocal(bucket) {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+			return
+		}
+
+		// check for and delete cloud metadata
+		p.bmdowner.Lock()
+		clone := bucketmd.clone()
+		if clone.del(bucket, false) {
+			if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
+				p.bmdowner.Unlock()
+				p.invalmsghdlr(w, r, errstr)
+				return
+			}
+			p.bmdowner.put(clone)
+			p.bmdowner.Unlock()
+
+			p.metasyncer.sync(false, clone, &msg)
+		} else {
+			// metadata doesn't exists or got deleted
+			p.bmdowner.Unlock()
+		}
+
+		jsonbytes, err := jsoniter.Marshal(msg)
+		cmn.Assert(err == nil, err)
+
+		// wipe the local copy of the cloud bucket on targets
+		smap := p.smapowner.get()
+		results := p.broadcastTo(
+			cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			nil, // query
+			http.MethodDelete,
+			jsonbytes,
+			smap,
+			defaultTimeout,
+			cmn.NetworkIntraControl,
+			cluster.Targets,
+		)
+
+		for result := range results {
+			if result.err != nil {
+				p.invalmsghdlr(
+					w,
+					r,
+					fmt.Sprintf("%s failed, err: %s", msg.Action, result.errstr),
+				)
+				return
+			}
+		}
+
+	case cmn.ActDelete, cmn.ActEvictObjects:
 		p.doListRange(w, r, &msg, http.MethodDelete)
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))

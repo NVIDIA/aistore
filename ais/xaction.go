@@ -275,7 +275,7 @@ func (xs *xactions) newEvictDelete(evict bool) *xactEvictDelete {
 
 	xact := cmn.ActDelete
 	if evict {
-		xact = cmn.ActEvict
+		xact = cmn.ActEvictObjects
 	}
 
 	id := xs.uniqueid()

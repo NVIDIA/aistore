@@ -2,7 +2,7 @@ import six
 import warnings
 from functools import wraps
 
-PYTHON3_SKIP = 'Feature does not work in python 3, (refer to https://github.com/NVIDIA/aistore/blob/master/swagger/README.md#future)'
+PYTHON3_SKIP = 'Feature does not work in python 3, (refer to https://github.com/NVIDIA/aistore/blob/master/openapi/README.md#future)'
 
 def bytestring(b):
 # Function for wraping bytearray as a string in python 3

@@ -21,6 +21,7 @@ const (
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
 	ColdMD5str              = "coldmd5"
+	EvictCBStr              = "evictCB"
 	DeleteDir               = "/tmp/ais/delete"
 	ChecksumWarmValidateDir = "/tmp/ais/checksumWarmValidate"
 	ChecksumWarmValidateStr = "checksumWarmValidate"
