@@ -97,3 +97,27 @@ All the 3 (three) networking options are enumerated [here](../cmn/network.go).
 ### Reverse proxy
 
 AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the version 2.0, this functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](../ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `netconfig`. For further details, please refer to [this readme](../docs/rproxy.md).
+
+### Examples
+
+The following assumes that the cluster (user-accessible) network is `cnet`, and the ports are `Gport` - for one of the deployed gateways, and `Tport` - one of the targets, respectively.
+
+#### Cluster-wide operation (all nodes): set the stats logging period to 1 second
+```shell
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://cnet:Gport/v1/cluster'
+```
+
+#### Cluster-wide operation (all nodes): set the stats logging period to 2 minutes
+```shell
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "2m"}' 'http://cnet:Gport/v1/cluster'
+```
+
+#### Cluster-wide operation (all nodes): elevate log verbosity to `4` for all sources matching `ais/targ*` regex
+```shell
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://cnet:Gport/v1/cluster'
+```
+
+#### Single-node operation (target at port `Tport`): set log verbosity to `1` for all source files that match the `ais/targ*` regex
+```shell
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://cnet:Tport/v1/daemon'
+```
