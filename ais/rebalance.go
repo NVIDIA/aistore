@@ -394,7 +394,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 	}
 }
 
-func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
+func (t *targetrunner) runRebalance(newsmap *smapX, newTargetID string) {
 	var (
 		wg       = &sync.WaitGroup{}
 		cnt      = newsmap.CountTargets() - 1
@@ -402,7 +402,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		ver      = newsmap.version()
 		config   = cmn.GCO.Get()
 	)
-	glog.Infof("%s: Smap v%d, newtargetid=%s", tname(t.si), ver, newtargetid)
+	glog.Infof("%s: Smap v%d, newTargetID=%s", tname(t.si), ver, newTargetID)
 	// first, check whether all the Smap-ed targets are up and running
 	for _, si := range newsmap.Tmap {
 		if si.DaemonID == t.si.DaemonID {
@@ -487,7 +487,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 			t.statsif.Add(stats.RebalGlobalSize, totalMovedBytes)
 		}
 	}
-	if newtargetid == t.si.DaemonID {
+	if newTargetID == t.si.DaemonID {
 		glog.Infof("rebalance %s(self)", tname(t.si))
 		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
 	}

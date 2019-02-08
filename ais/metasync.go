@@ -230,7 +230,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		payload        = make(cmn.SimpleKVs)
 		smap           = y.p.smapowner.get()
 		config         = cmn.GCO.Get()
-		newtargetid    string
+		newTargetID    string
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -294,7 +294,7 @@ OUTER:
 
 		action, id := path.Split(msg.Action)
 		if action == cmn.ActRegTarget {
-			newtargetid = id
+			newTargetID = id
 		}
 
 		payload[tag] = string(jsbytes)         // payload
@@ -323,8 +323,8 @@ OUTER:
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
-		// in addition to "connection-refused" always retry newtargetid - the joining one
-		if cmn.IsErrConnectionRefused(r.err) || r.si.DaemonID == newtargetid {
+		// in addition to "connection-refused" always retry newTargetID - the joining one
+		if cmn.IsErrConnectionRefused(r.err) || r.si.DaemonID == newTargetID {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 4)
 			}

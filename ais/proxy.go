@@ -2487,7 +2487,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
-		// storage targets make use action of the message structured as action/newtargetid,
+		// storage targets make use action of the message structured as action/newTargetID,
 		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
 		msg.Action = path.Join(msg.Action, nsi.DaemonID)
 
@@ -2517,7 +2517,7 @@ func (p *proxyrunner) registerToSmap(nsi *cluster.Snode, isproxy, nonelectable b
 				clone.NonElects = make(cmn.SimpleKVs)
 			}
 			clone.NonElects[id] = ""
-			glog.Infof("Warning: %s won't be electable", pname(nsi))
+			glog.Warningf("%s won't be electable", pname(nsi))
 		}
 		if glog.V(3) {
 			glog.Infof("joined %s (num proxies %d)", pname(nsi), clone.CountProxies())

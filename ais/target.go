@@ -121,9 +121,9 @@ type (
 		started time.Time // started time of receiving - used to calculate the recv duration
 		lom     *cluster.LOM
 	}
-
+	// the state that may influence GET logic for the first (getFromNeighAfterJoin) seconds after joining
 	getFromNeighbors struct {
-		stopts time.Time
+		stopts time.Time // (reg-time + const) when we stop trying to GET from neighbors
 		lookup bool
 	}
 
@@ -377,6 +377,11 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	if len(res.outjson) == 0 {
 		return
 	}
+	// There's a window of time between:
+	// a) target joining existing cluster and b) cluster starting to rebalance itself
+	// The latter is driven by metasync (see metasync.go) distributing the new Smap.
+	// To handle incoming GETs within this window (which would typically take a few seconds or less)
+	// we need to have the current cluster-wide metadata and the temporary gfn state:
 	err = jsoniter.Unmarshal(res.outjson, &meta)
 	cmn.Assert(err == nil, err)
 	t.gfn.lookup = true
@@ -3419,13 +3424,13 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 
 func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr string) {
 	var (
-		newtargetid, s string
+		newTargetID, s string
 		existentialQ   bool
 	)
 	// proxy => target control protocol (see p.httpclupost)
 	action, id := path.Split(msg.Action)
 	if action != "" {
-		newtargetid = id
+		newTargetID = id
 	}
 	if msg.Action != "" {
 		s = ", action " + msg.Action
@@ -3448,18 +3453,18 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 		return
 	}
 	if msg.Action == cmn.ActGlobalReb {
-		go t.runRebalance(newsmap, newtargetid)
+		go t.runRebalance(newsmap, newTargetID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")
 		return
 	}
-	if newtargetid == "" {
+	if newTargetID == "" {
 		return
 	}
-	glog.Infof("%s receiveSmap: go rebalance(newtargetid=%s)", tname(t.si), newtargetid)
-	go t.runRebalance(newsmap, newtargetid)
+	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname(t.si), newTargetID)
+	go t.runRebalance(newsmap, newTargetID)
 	return
 }
 
