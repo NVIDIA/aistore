@@ -609,9 +609,10 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 	for _, nodeMap := range bcastArgs.nodes {
 		nodeCount += len(nodeMap)
 	}
-	if nodeCount < 2 {
+	if nodeCount == 0 {
 		ch := make(chan callResult)
 		close(ch)
+		glog.Warningf("node count zero in [%+v] bcast", bcastArgs.req)
 		return ch
 	}
 	ch := make(chan callResult, nodeCount)
@@ -1013,7 +1014,7 @@ func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucket
 	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new bucket-metadata, value (%+v, %T), err: %v", bmdvalue, bmdvalue, err)
+		errstr = fmt.Sprintf("Failed to unmarshal new %s, value (%+v, %T), err: %v", bmdTermName, bmdvalue, bmdvalue, err)
 		return
 	}
 	if _, ok := payload[bucketmdtag+actiontag]; ok {
@@ -1026,7 +1027,7 @@ func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucket
 	myver := h.bmdowner.get().version()
 	if newbucketmd.version() <= myver {
 		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
+			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
 		}
 		newbucketmd = nil
 	}
@@ -1150,12 +1151,15 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 	for rcount := 0; rcount < 2; rcount++ {
 		res = h.call(callArgs)
 		if res.err == nil {
+			if !keepalive {
+				glog.Infof("%s: registered => %s/%s", h.si, url, path)
+			}
 			return
 		}
 		if cmn.IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s: connection refused)", h.si, path)
+			glog.Errorf("%s: (register => %s/%s: connection refused)", h.si, url, path)
 		} else {
-			glog.Errorf("%s: (register => %s: %v)", h.si, path, res.err)
+			glog.Errorf("%s: (register => %s/%s: %v)", h.si, url, path, res.err)
 		}
 	}
 	return

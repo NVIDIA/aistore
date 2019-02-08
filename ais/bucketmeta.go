@@ -29,6 +29,9 @@ import (
 // (*) for merges and conflict resolution, check the current version prior to put()
 //     (note that version check must be protected by the same critical section)
 //
+
+const bmdTermName = "BMD"
+
 type bucketMD struct {
 	cluster.BMD
 	vstr string // itoa(Version), to have it handy for http redirects

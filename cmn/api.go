@@ -67,7 +67,7 @@ const (
 	ActElection     = "election"
 	ActPutCopies    = "putcopies"
 	ActEraseCopies  = "erasecopies"
-	ActEC           = "ec"
+	ActEC           = "ec" // erasure (en)code objects
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

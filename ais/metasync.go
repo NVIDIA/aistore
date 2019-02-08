@@ -7,13 +7,14 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"path"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // REVS tags
@@ -49,10 +50,6 @@ const (
 //
 // Action message (above, see cmn.ActionMsg) provides receivers with a context as
 // to what exactly to do with the newly received versioned replica.
-//
-// In addition, storage target in particular make use action message structured as:
-// action/newtargetid, which allows targets to figure out whether to rebalance the
-// cluster, and how to execute the rebalancing.
 //
 // Further, the metasyncer:
 //
@@ -233,6 +230,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		payload        = make(cmn.SimpleKVs)
 		smap           = y.p.smapowner.get()
 		config         = cmn.GCO.Get()
+		newtargetid    string
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -294,6 +292,11 @@ OUTER:
 		jsmsg, err = jsoniter.Marshal(msg)
 		cmn.Assert(err == nil, err)
 
+		action, id := path.Split(msg.Action)
+		if action == cmn.ActRegTarget {
+			newtargetid = id
+		}
+
 		payload[tag] = string(jsbytes)         // payload
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
@@ -308,7 +311,7 @@ OUTER:
 		http.MethodPut,
 		jsbytes,
 		smap,
-		config.Timeout.CplaneOperation,
+		config.Timeout.CplaneOperation*2, // making exception for this critical op
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
@@ -320,9 +323,10 @@ OUTER:
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
-		if cmn.IsErrConnectionRefused(r.err) {
+		// in addition to "connection-refused" always retry newtargetid - the joining one
+		if cmn.IsErrConnectionRefused(r.err) || r.si.DaemonID == newtargetid {
 			if refused == nil {
-				refused = make(cluster.NodeMap)
+				refused = make(cluster.NodeMap, 4)
 			}
 			refused[r.si.DaemonID] = r.si
 		} else {
@@ -330,18 +334,17 @@ OUTER:
 		}
 	}
 	// step 5: handle connection-refused right away
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 10; i++ {
 		if len(refused) == 0 {
 			break
 		}
-
 		time.Sleep(config.Timeout.CplaneOperation)
 		smap = y.p.smapowner.get()
 		if !smap.isPrimary(y.p.si) {
 			y.becomeNonPrimary()
 			return
 		}
-		y.handleRefused(urlPath, jsbytes, refused, pairsToSend)
+		y.handleRefused(urlPath, jsbytes, refused, pairsToSend, config, smap)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.smapowner.get()
@@ -367,7 +370,8 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair) {
+func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
+	config *cmn.Config, smap *smapX) {
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
@@ -375,7 +379,7 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.
 			body:   body,
 		},
 		network: cmn.NetworkIntraControl,
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
+		timeout: config.Timeout.MaxKeepalive, // JSON config "max_keepalive"
 		nodes:   []cluster.NodeMap{refused},
 	}
 	res := y.p.broadcast(bcastArgs)
@@ -384,17 +388,18 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.
 		if r.err == nil {
 			delete(refused, r.si.DaemonID)
 			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-refused: sync-ed %s", r.si)
+			glog.Infof("handle-refused: sync-ed %s", smap.printname(r.si.DaemonID))
 		} else {
-			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
+			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)",
+				smap.printname(r.si.DaemonID), r.err, r.status)
 		}
 	}
 }
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap) {
-	smap := y.p.smapowner.get()
+func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, smap *smapX) {
+	smap = y.p.smapowner.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
@@ -435,7 +440,7 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap) 
 
 // gets invoked when retryTimer fires; returns updated number of still pending
 func (y *metasyncer) handlePending() (cnt int) {
-	count, pending := y.pending(true)
+	count, pending, smap := y.pending(true)
 	if count == 0 {
 		glog.Infof("no pending revs - all good")
 		return
@@ -471,10 +476,11 @@ func (y *metasyncer) handlePending() (cnt int) {
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-pending: sync-ed %s", r.si)
+			glog.Infof("handle-pending: sync-ed %s", smap.printname(r.si.DaemonID))
 		} else {
 			cnt++
-			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
+			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)",
+				smap.printname(r.si.DaemonID), r.err, r.status)
 		}
 	}
 	return

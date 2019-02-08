@@ -236,6 +236,9 @@ func (l *Level) Set(value string) error {
 }
 
 // moduleSpec represents the setting of the -vmodule flag.
+// * vmodule=ec/jogger=4 - matches file ec/jogger.go
+// * vmodule=jo.*er=4 - match all files which are in form of jo<some_text>er
+// * vmodule=ais/.*=4 - match all files from ais package.
 type moduleSpec struct {
 	filter []modulePat
 }

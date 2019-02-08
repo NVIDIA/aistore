@@ -136,7 +136,7 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 	// do rebalance
 	if glog.V(4) {
-		glog.Infof("%s %s => %s", lom, rcl.t.si, si)
+		glog.Infof("%s %s => %s", lom, tname(rcl.t.si), tname(si))
 	}
 
 	if errstr := lom.Fill(cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
@@ -273,11 +273,14 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 // pingTarget pings target to check if it is running. After DestRetryTime it
 // assumes that target is dead. Returns true if target is healthy and running,
 // false otherwise.
-func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, deadline time.Duration) bool {
-	query := url.Values{}
+func (t *targetrunner) pingTarget(si *cluster.Snode, config *cmn.Config) (ok bool) {
+	var (
+		timeout = keepaliveTimeoutDuration(config)
+		retries = int(config.Rebalance.DestRetryTime / timeout)
+		query   = url.Values{}
+	)
 	query.Add(cmn.URLParamFromID, t.si.DaemonID)
 
-	pollstarted, ok := time.Now(), false
 	callArgs := callArgs{
 		si: si,
 		req: reqArgs{
@@ -288,31 +291,26 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 		},
 		timeout: timeout,
 	}
-
-	config := cmn.GCO.Get()
-	for {
+	for i := 1; i <= retries; i++ {
 		res := t.call(callArgs)
 		if res.err == nil {
 			ok = true
+			glog.Infof("%s: %s is online", tname(t.si), tname(si))
 			break
 		}
-
+		s := fmt.Sprintf("retry #%d: %s is offline, err: %v", i, tname(si), res.err)
 		if res.status > 0 {
-			glog.Infof("%s is offline with status %d, err: %v", si.PublicNet.DirectURL, res.status, res.err)
+			glog.Infof("%s, status=%d", s, res.status)
 		} else {
-			glog.Infof("%s is offline, err: %v", si.PublicNet.DirectURL, res.err)
+			glog.Infoln(s)
 		}
 		callArgs.timeout = time.Duration(float64(callArgs.timeout)*1.5 + 0.5)
 		if callArgs.timeout > config.Timeout.MaxKeepalive {
 			callArgs.timeout = config.Timeout.MaxKeepalive
 		}
-		if time.Since(pollstarted) > deadline {
-			break
-		}
 		time.Sleep(keepaliveRetryDuration(config))
 	}
-
-	return ok
+	return
 }
 
 // waitForRebalanceFinish waits for the other target to complete the current
@@ -397,29 +395,22 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 }
 
 func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
-	neighborCnt := len(newsmap.Tmap) - 1
-
-	//
+	var (
+		wg       = &sync.WaitGroup{}
+		cnt      = newsmap.CountTargets() - 1
+		cancelCh = make(chan string, cnt)
+		ver      = newsmap.version()
+		config   = cmn.GCO.Get()
+	)
+	glog.Infof("%s: Smap v%d, newtargetid=%s", tname(t.si), ver, newtargetid)
 	// first, check whether all the Smap-ed targets are up and running
-	//
-	glog.Infof("rebalance: Smap ver %d, newtargetid=%s", newsmap.version(), newtargetid)
-
-	wg := &sync.WaitGroup{}
-	wg.Add(neighborCnt)
-	cancelCh := make(chan string, neighborCnt)
-
-	config := cmn.GCO.Get()
 	for _, si := range newsmap.Tmap {
 		if si.DaemonID == t.si.DaemonID {
 			continue
 		}
-
+		wg.Add(1)
 		go func(si *cluster.Snode) {
-			ok := t.pingTarget(
-				si,
-				keepaliveTimeoutDuration(config),
-				config.Rebalance.DestRetryTime,
-			)
+			ok := t.pingTarget(si, config)
 			if !ok {
 				cancelCh <- si.PublicNet.DirectURL
 			}
@@ -430,16 +421,18 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 
 	close(cancelCh)
 	if len(cancelCh) > 0 {
-		sid := <-cancelCh
-		glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
+		for sid := range cancelCh {
+			glog.Errorf("Not starting rebalancing: %s appears to be offline, Smap v%d",
+				newsmap.printname(sid), ver)
+		}
 		return
 	}
 
-	// find and abort in-progress x-action if exists and if its smap version is lower
-	// start new x-action unless the one for the current version is already in progress
+	// abort in-progress xaction if exists and if its Smap version is lower
+	// start new xaction unless the one for the current version is already in progress
 	availablePaths, _ := fs.Mountpaths.Get()
 	runnerCnt := len(availablePaths) * 2
-	xreb := t.xactions.renewRebalance(newsmap.Version, runnerCnt)
+	xreb := t.xactions.renewRebalance(ver, runnerCnt)
 	if xreb == nil {
 		return
 	}
@@ -473,8 +466,10 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	wg.Wait()
 
 	if pmarker != "" {
-		var aborted bool
-		totalMovedN, totalMovedBytes := int64(0), int64(0)
+		var (
+			totalMovedN, totalMovedBytes int64
+			aborted                      bool
+		)
 		for _, r := range allr {
 			if atomic.LoadInt64(&r.aborted) != 0 {
 				aborted = true
@@ -493,7 +488,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		}
 	}
 	if newtargetid == t.si.DaemonID {
-		glog.Infof("rebalance: %s <= self", newtargetid)
+		glog.Infof("rebalance %s(self)", tname(t.si))
 		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
 	xreb.EndTime(time.Now())

@@ -38,25 +38,30 @@ const (
 	tokenStart = "Bearer"
 )
 
-type ClusterMountpathsRaw struct {
-	Targets map[string]jsoniter.RawMessage `json:"targets"`
-}
-
-// Keeps a target response when doing parallel requests to all targets
-type bucketResp struct {
-	outjson []byte
-	err     error
-	id      string
-}
-
-// A list of target local files: cached or local bucket
-// Maximum number of files in the response is `pageSize` entries
-type localFilePage struct {
-	entries []*cmn.BucketEntry
-	err     error
-	id      string
-	marker  string
-}
+type (
+	ClusterMountpathsRaw struct {
+		Targets map[string]jsoniter.RawMessage `json:"targets"`
+	}
+	// Keeps a target response when doing parallel requests to all targets
+	bucketResp struct {
+		outjson []byte
+		err     error
+		id      string
+	}
+	// A list of target local objects (cached or local bucket)
+	// Maximum number of objects in the response is `pageSize`
+	localFilePage struct {
+		entries []*cmn.BucketEntry
+		err     error
+		id      string
+		marker  string
+	}
+	// two pieces of metadata a self-registering (joining) target wants to know right away
+	targetRegMeta struct {
+		Smap *smapX    `json:"smap"`
+		Bmd  *bucketMD `json:"bmd"`
+	}
+)
 
 func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
 	for _, w := range wraps {
@@ -98,7 +103,7 @@ func (p *proxyrunner) Run() error {
 		// create empty
 		bucketmd.Version = 1
 		if err := cmn.LocalSave(bucketmdfull, bucketmd); err != nil {
-			glog.Fatalf("FATAL: cannot store bucket-metadata, err: %v", err)
+			glog.Fatalf("FATAL: cannot store %s, err: %v", bmdTermName, err)
 		}
 	}
 	p.bmdowner.put(bucketmd)
@@ -167,12 +172,12 @@ func (p *proxyrunner) Run() error {
 		p.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
-	glog.Infof("%s: [public net] listening on: %s", p.si, p.si.PublicNet.DirectURL)
+	glog.Infof("%s: [public net] listening on: %s", pname(p.si), p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [intra control net] listening on: %s", p.si, p.si.IntraControlNet.DirectURL)
+		glog.Infof("%s: [intra control net] listening on: %s", pname(p.si), p.si.IntraControlNet.DirectURL)
 	}
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [intra data net] listening on: %s", p.si, p.si.IntraDataNet.DirectURL)
+		glog.Infof("%s: [intra data net] listening on: %s", pname(p.si), p.si.IntraDataNet.DirectURL)
 	}
 	if config.Net.HTTP.RevProxy != "" {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
@@ -227,7 +232,7 @@ func (p *proxyrunner) Stop(err error) {
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
-	glog.Infof("Stopping %s (ID %s, primary=%t), err: %v", p.Getname(), p.si, isPrimary, err)
+	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Getname(), pname(p.si), isPrimary, err)
 	p.xactions.abortAll()
 
 	if isPrimary {
@@ -727,7 +732,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
 		}
-		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
+		glog.Infof("renamed local bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActSyncLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
@@ -1078,7 +1083,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
-	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si, msg.Action, s, smap.ProxySI)
+	glog.Infof("%s: forwarding '%s:%s' to the primary %s", pname(p.si), msg.Action, s, smap.ProxySI)
 	p.rproxy.p.ServeHTTP(w, r)
 	return true
 }
@@ -1158,8 +1163,8 @@ func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket
 	)
 	for res := range results {
 		if res.err != nil {
-			s := fmt.Sprintf("Failed to remove object copies, target %s, bucket %s, err: %v(%d)",
-				res.si.DaemonID, bucket, res.err, res.status)
+			s := fmt.Sprintf("Failed to remove object copies, %s, bucket %s, err: %v(%d)",
+				tname(res.si), bucket, res.err, res.status)
 			if res.errstr != "" {
 				glog.Errorln(res.errstr)
 			}
@@ -1317,7 +1322,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *cluster.Snode, d
 					err: err,
 				}
 			}
-			glog.Errorf("Failed to get information about cached objects on target %s: %v", daemon, err)
+			glog.Errorf("Failed to get cached objects info from %s: %v", tname(daemon), err)
 			return
 		}
 
@@ -1333,7 +1338,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *cluster.Snode, d
 					err: err,
 				}
 			}
-			glog.Errorf("Failed to unmarshall cached objects list from target %s: %v", daemon, err)
+			glog.Errorf("Failed to unmarshall cached objects list from %s: %v", tname(daemon), err)
 			return
 		}
 
@@ -1599,7 +1604,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 func (p *proxyrunner) savebmdconf(bucketmd *bucketMD, config *cmn.Config) (errstr string) {
 	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
 	if err := cmn.LocalSave(bucketmdfull, bucketmd); err != nil {
-		errstr = fmt.Sprintf("Failed to store bucket-metadata at %s, err: %v", bucketmdfull, err)
+		errstr = fmt.Sprintf("Failed to store %s at %s, err: %v", bmdTermName, bucketmdfull, err)
 	}
 	return
 }
@@ -1824,7 +1829,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				cmn.Assert(smap.isValid())
 				break
 			}
-			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si, cmn.GetWhatSmap)
+			glog.Errorf("%s is starting up: cannot execute GET %s yet...", pname(p.si), cmn.GetWhatSmap)
 			time.Sleep(time.Second)
 			smap = p.smapowner.get()
 		}
@@ -1866,7 +1871,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if s := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); s != "" {
 				p.invalmsghdlr(w, r, s)
 			}
-			glog.Infof("%s: %s v%d done", p.si, cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", pname(p.si), cmn.SyncSmap, newsmap.version())
 			return
 		default:
 		}
@@ -1947,7 +1952,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	glog.Infof("Force new primary %s (URL: %s)", proxyID, newPrimaryURL)
 
 	if p.si.DaemonID == proxyID {
-		glog.Warningf("Proxy %s(self) is already the primary", proxyID)
+		glog.Warningf("%s is already the primary", pname(p.si))
 		return
 	}
 
@@ -1978,7 +1983,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	}
 
 	if proxyID != newSmap.ProxySI.DaemonID {
-		s := fmt.Sprintf("Proxy %s is not a primary. Current smap: %s", proxyID, newSmap.pp())
+		s := fmt.Sprintf("Proxy %s is not the primary. Current Smap: %s", proxyID, newSmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2008,7 +2013,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// forceful primary change
 	if force && apitems[0] == cmn.Proxy {
 		if !p.smapowner.get().isPrimary(p.si) {
-			s := fmt.Sprintf("Proxy %s is not a primary", p.si)
+			s := fmt.Sprintf("%s is not the primary", pname(p.si))
 			p.invalmsghdlr(w, r, s)
 		}
 		p.forcefulJoin(w, r, proxyID)
@@ -2090,8 +2095,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	msg := &cmn.ActionMsg{Action: cmn.ActNewPrimary}
 	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
-		glog.Infof("Distributing Smap v%d with the newly elected primary %s = self", clone.version(), p.si)
-		glog.Infof("Distributing bucket-metadata v%d as well", bucketmd.version())
+		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), pname(p.si))
+		glog.Infof("Distributing %s v%d as well", bmdTermName, bucketmd.version())
 	}
 	p.metasyncer.sync(true, clone, msg, bucketmd, msg)
 	return
@@ -2377,10 +2382,10 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		nsi                   cluster.Snode
-		keepalive, register   bool
-		isProxy, nonElectable bool
 		msg                   *cmn.ActionMsg
 		s                     string
+		keepalive, register   bool
+		isProxy, nonElectable bool
 	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
@@ -2391,7 +2396,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(apitems) > 0 {
 		keepalive = apitems[0] == cmn.Keepalive
-		register = apitems[0] == cmn.Register
+		register = apitems[0] == cmn.Register // user via REST API
 		isProxy = apitems[0] == cmn.Proxy
 		if isProxy {
 			if len(apitems) > 1 {
@@ -2414,7 +2419,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("register target %s: invalid IP address %v", &nsi, nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("register %s: invalid IP address %v", tname(&nsi), nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2437,7 +2442,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		if register {
 			if glog.V(3) {
-				glog.Infof("register target %s (num targets before %d)", &nsi, smap.CountTargets())
+				glog.Infof("register %s (num targets before %d)", tname(&nsi), smap.CountTargets())
 			}
 			args := callArgs{
 				si: &nsi,
@@ -2450,24 +2455,31 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				errstr := fmt.Sprintf("Failed to register target %s: %v, %s", &nsi, res.err, res.errstr)
+				errstr := fmt.Sprintf("Failed to register %s: %v, %s", tname(&nsi), res.err, res.errstr)
 				p.invalmsghdlr(w, r, errstr, res.status)
 				return
 			}
 		}
 	}
-	if p.startedup(0) == 0 { // see clusterStartup()
-		p.registerToSmap(isProxy, &nsi, nonElectable)
+	if p.startedup(0) == 0 {
+		p.registerToSmap(&nsi, isProxy, nonElectable)
 		p.smapowner.Unlock()
 		return
 	}
 	p.smapowner.Unlock()
+	if !isProxy && !register { // case: self-registering target
+		bmd := p.bmdowner.get()
+		meta := targetRegMeta{smap, bmd}
+		jsbytes, err := jsoniter.Marshal(&meta)
+		cmn.Assert(err == nil, err)
+		p.writeJSON(w, r, jsbytes, path.Join(cmn.ActRegTarget, nsi.DaemonID) /* tag */)
+	}
 
 	// update and distribute Smap
-	go func(isProxy, nonElectable bool) {
+	go func(nsi *cluster.Snode, isProxy, nonElectable bool) {
 		p.smapowner.Lock()
 
-		p.registerToSmap(isProxy, &nsi, nonElectable)
+		p.registerToSmap(nsi, isProxy, nonElectable)
 		smap := p.smapowner.get()
 
 		if errstr := p.smapowner.persist(smap, true); errstr != "" {
@@ -2475,25 +2487,24 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
+		// storage targets make use action of the message structured as action/newtargetid,
+		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
 		msg.Action = path.Join(msg.Action, nsi.DaemonID)
 
+		// metasync
 		params := []interface{}{smap, msg}
-		// if not proxy we need to ensure that target has the newest bucket metadata
 		if !isProxy {
-			// FIXME: it is not necessary to send bucket metadata for the whole
-			// cluster but only to specific target (nsi).
 			bmd := p.bmdowner.get()
 			params = append(params, bmd, msg)
 		}
 		if len(tokens.Tokens) > 0 {
 			params = append(params, tokens, msg)
 		}
-
 		p.metasyncer.sync(false, params...)
-	}(isProxy, nonElectable)
+	}(&nsi, isProxy, nonElectable)
 }
 
-func (p *proxyrunner) registerToSmap(isproxy bool, nsi *cluster.Snode, nonelectable bool) {
+func (p *proxyrunner) registerToSmap(nsi *cluster.Snode, isproxy, nonelectable bool) {
 	clone := p.smapowner.get().clone()
 	id := nsi.DaemonID
 	if isproxy {
@@ -2506,10 +2517,10 @@ func (p *proxyrunner) registerToSmap(isproxy bool, nsi *cluster.Snode, nonelecta
 				clone.NonElects = make(cmn.SimpleKVs)
 			}
 			clone.NonElects[id] = ""
-			glog.Infof("Note: proxy %s won't be electable", id)
+			glog.Infof("Warning: %s won't be electable", pname(nsi))
 		}
 		if glog.V(3) {
-			glog.Infof("joined proxy %s (num proxies %d)", id, clone.CountProxies())
+			glog.Infof("joined %s (num proxies %d)", pname(nsi), clone.CountProxies())
 		}
 	} else {
 		if clone.GetTarget(id) != nil { // ditto
@@ -2517,7 +2528,7 @@ func (p *proxyrunner) registerToSmap(isproxy bool, nsi *cluster.Snode, nonelecta
 		}
 		clone.addTarget(nsi)
 		if glog.V(3) {
-			glog.Infof("joined target %s (num targets %d)", id, clone.CountTargets())
+			glog.Infof("joined %s (num targets %d)", tname(nsi), clone.CountTargets())
 		}
 	}
 	p.smapowner.put(clone)
@@ -2593,7 +2604,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delProxy(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered proxy {%s} (num proxies %d)", sid, clone.CountProxies())
+			glog.Infof("unregistered %s (num proxies %d)", pname(psi), clone.CountProxies())
 		}
 	} else {
 		osi = clone.GetTarget(sid)
@@ -2605,7 +2616,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delTarget(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.CountTargets())
+			glog.Infof("unregistered %s (num targets %d)", tname(osi), clone.CountTargets())
 		}
 		args := callArgs{
 			si: osi,
@@ -2617,11 +2628,10 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		res := p.call(args)
 		if res.err != nil {
-			glog.Warningf("The target %s that is being unregistered failed to respond back: %v, %s",
-				osi.DaemonID, res.err, res.errstr)
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", tname(osi), res.err, res.errstr)
 		}
 	}
-	if p.startedup(0) == 0 { // see clusterStartup()
+	if p.startedup(0) == 0 {
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		return
@@ -2730,17 +2740,18 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg) (errstr string) {
+	s := fmt.Sprintf("receive %s: v%d", bmdTermName, newbucketmd.version())
 	if msg.Action == "" {
-		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
+		glog.Infoln(s)
 	} else {
-		glog.Infof("receive bucket-metadata: version %d, action %s", newbucketmd.version(), msg.Action)
+		glog.Infof("%s, action %s", s, msg.Action)
 	}
 	p.bmdowner.Lock()
 	myver := p.bmdowner.get().version()
 	if newbucketmd.version() <= myver {
 		p.bmdowner.Unlock()
 		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
+			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
 		}
 		return
 	}

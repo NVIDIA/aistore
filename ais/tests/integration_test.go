@@ -295,7 +295,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 4. Get the objects while simultaneously re-registering the target
 func TestGetAndKillInParallel(t *testing.T) {
 	const (
-		num       = 262144
+		num       = 20000
 		filesize  = 2048
 		maxErrPct = 1
 	)
@@ -304,7 +304,6 @@ func TestGetAndKillInParallel(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           10 * time.Second,
 			num:             num,
 			numGetsEachFile: 5,
 			repFilenameCh:   make(chan repFile, num),

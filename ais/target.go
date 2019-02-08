@@ -45,12 +45,13 @@ import (
 )
 
 const (
-	maxPageSize   = 64 * 1024     // max number of objects in a page (warning logged if requested page size exceeds this limit)
+	maxPageSize   = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
 	maxBytesInMem = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
 
-	// GET: when object is missing and rebalance is running we schedule couple of retries.
-	restoreMissingRetries   = 10
-	restoreMissingIntervals = 300 * time.Millisecond
+	// GET-from-neighbors tunables
+	getFromNeighRetries   = 10
+	getFromNeighSleep     = 300 * time.Millisecond
+	getFromNeighAfterJoin = time.Second * 30
 )
 
 type (
@@ -121,6 +122,11 @@ type (
 		lom     *cluster.LOM
 	}
 
+	getFromNeighbors struct {
+		stopts time.Time
+		lookup bool
+	}
+
 	targetrunner struct {
 		httprunner
 		cloudif        cloudif // multi-cloud backend
@@ -137,7 +143,8 @@ type (
 		streams        struct {
 			rebalance *transport.StreamBundle
 		}
-		regstate regstate // the state of being registered with the primary proxy, or maybe not
+		gfn      getFromNeighbors
+		regstate regstate // the state of being registered with the primary (can be en/disabled via API)
 	}
 )
 
@@ -167,7 +174,7 @@ func (t *targetrunner) Run() error {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying registration...", t.si)
+				glog.Errorf("%s: retrying registration...", tname(t.si))
 				time.Sleep(time.Second)
 				continue
 			}
@@ -175,8 +182,8 @@ func (t *targetrunner) Run() error {
 		break
 	}
 	if ereg != nil {
-		glog.Errorf("Target %s failed to register, err: %v", t.si, ereg)
-		glog.Errorf("Target %s is terminating", t.si)
+		glog.Errorf("%s failed to register, err: %v", tname(t.si), ereg)
+		glog.Errorf("%s is terminating", tname(t.si))
 		return ereg
 	}
 
@@ -279,7 +286,7 @@ func (t *targetrunner) Run() error {
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
-	glog.Infof("target %s is ready to handle requests", t.si)
+	glog.Infof("%s is ready to handle requests", tname(t.si))
 	glog.Flush()
 	return nil
 }
@@ -352,10 +359,10 @@ func (t *targetrunner) Stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, error) {
+func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
 	var (
-		newbucketmd bucketMD
-		res         callResult
+		res  callResult
+		meta targetRegMeta
 	)
 	if !keepalive {
 		res = t.join(false, nil)
@@ -366,21 +373,30 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, err
 	if res.err != nil {
 		return res.status, res.err
 	}
-	// not being sent at cluster startup and keepalive..
-	if len(res.outjson) > 0 {
-		err := jsoniter.Unmarshal(res.outjson, &newbucketmd)
-		cmn.Assert(err == nil, err)
-		t.bmdowner.Lock()
-		v := t.bmdowner.get().version()
-		if v > newbucketmd.version() {
-			glog.Errorf("register target - got bucket-metadata: local version %d > %d", v, newbucketmd.version())
-		} else {
-			glog.Infof("register target - got bucket-metadata: upgrading local version %d to %d", v, newbucketmd.version())
-		}
-		t.bmdowner.put(&newbucketmd)
-		t.bmdowner.Unlock()
+	// not being sent at cluster startup and keepalive
+	if len(res.outjson) == 0 {
+		return
 	}
-	return 0, nil
+	err = jsoniter.Unmarshal(res.outjson, &meta)
+	cmn.Assert(err == nil, err)
+	t.gfn.lookup = true
+	t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
+	// bmd
+	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
+	if errstr := t.receiveBucketMD(meta.Bmd, msg, "register"); errstr != "" {
+		t.gfn.lookup = false
+		glog.Errorf("registered %s: %s", tname(t.si), errstr)
+	} else {
+		glog.Infof("registered %s: %s v%d", tname(t.si), bmdTermName, t.bmdowner.get().version())
+	}
+	// smap
+	if errstr := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
+		t.gfn.lookup = false
+		glog.Errorf("registered %s: %s", tname(t.si), errstr)
+	} else {
+		glog.Infof("registered %s: Smap v%d", tname(t.si), t.smapowner.get().version())
+	}
+	return
 }
 
 func (t *targetrunner) unregister() (int, error) {
@@ -655,10 +671,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Need to check if dryrun is enabled to stop from getting LOM.
+	// check if dryrun is enabled to stop from getting LOM
 	if coldGet && lom.Bislocal && !dryRun.disk && !dryRun.network {
-		// Does not exist in the local bucket: restore from neighbors.
-		if errstr, errcode = t.restoreObjLocalBucket(lom, r); errstr != "" {
+		// does not exist in the local bucket: restore from neighbors
+		if errstr, errcode = t.restoreObjLBNeigh(lom, r, started); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname, false)
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -718,51 +734,53 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 //		targets using erasure coding(if it is on)
 // FIXME: must be done => (getfqn, and under write lock)
 //
-func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
+func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, started time.Time) (errstr string, errcode int) {
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted || running {
 		// FIXME: move this part to lom
 		oldFQN, oldSize := t.getFromOtherLocalFS(lom)
 		if oldFQN != "" {
-			if glog.V(4) {
-				glog.Infof("Restored (local rebalance in-progress?): %s (%s)", oldFQN, cmn.B2S(oldSize, 1))
-			}
 			lom.Fqn = oldFQN
 			lom.Size = oldSize
 			lom.DoesNotExist = false
+			if glog.V(4) {
+				glog.Infof("restored from LFS %s (%s)", lom, cmn.B2S(oldSize, 1))
+			}
 			return
 		}
 	}
-	// check cluster-wide when global rebalance is running
+	// check cluster-wide ("ask neighbors")
 	aborted, running = t.xactions.isAbortedOrRunningRebalance()
-	if aborted || running {
-		// Do couple of retries in case the object was moved or is being moved right now.
-		for retry := 0; retry < restoreMissingRetries; retry++ {
-			if props, errs := t.getFromNeighbor(r, lom); errs == "" {
-				lom.RestoredReceived(props)
-				if glog.V(4) {
-					glog.Infof("Restored (global rebalance in-progress?): %s (%s)", lom, cmn.B2S(lom.Size, 1))
-				}
-				return
-			}
-
-			time.Sleep(restoreMissingIntervals)
+	if t.gfn.lookup {
+		if aborted || running {
+			t.gfn.lookup = false
+		} else if started.After(t.gfn.stopts) {
+			t.gfn.lookup = false
 		}
-	} else {
-		if lom.Bprops != nil && lom.Bprops.NextTierURL != "" {
-			var (
-				props      *cluster.LOM
-				inNextTier bool
-			)
-			if inNextTier, errstr, errcode = t.objectInNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname); inNextTier {
-				if props, errstr, errcode =
-					t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, lom.Fqn); errstr == "" {
-					lom.RestoredReceived(props)
-					return
-				}
-			}
+	}
+	if aborted || running || t.gfn.lookup {
+		if glog.V(4) {
+			glog.Infof("neighbor lookup: aborted=%t, running=%t, lookup=%t", aborted, running, t.gfn.lookup)
 		}
+		// retry in case the object is being moved right now
+		for retry := 0; retry < getFromNeighRetries; retry++ {
+			props, errs := t.getFromNeighbor(r, lom)
+			if errs != "" {
+				time.Sleep(getFromNeighSleep)
+				continue
+			}
+			lom.RestoredReceived(props)
+			if glog.V(4) {
+				glog.Infof("restored from a neighbor: %s (%s)", lom, cmn.B2S(lom.Size, 1))
+			}
+			return
+		}
+	} else if t.getFromTier(lom) {
+		if glog.V(4) {
+			glog.Infof("restored from tier: %s (%s)", lom, cmn.B2S(lom.Size, 1))
+		}
+		return
 	}
 
 	// restore from existing EC slices if possible
@@ -919,6 +937,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	t.statsif.AddMany(
 		stats.NamedVal64{Name: stats.GetThroughput, Val: written},
 		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
+		stats.NamedVal64{Name: stats.GetCount, Val: 1},
 	)
 }
 
@@ -1060,8 +1079,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg     cmn.ActionMsg
-		evict   bool
 		started = time.Now()
+		evict   bool
 		ok      = true
 	)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -1089,7 +1108,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		if err == io.EOF {
 			trailer := r.Trailer.Get("Error")
 			if trailer != "" {
-				s = fmt.Sprintf("objDelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				s = fmt.Sprintf("objDelete: Failed to read %s request, err: %v, trailer: %s",
+					r.Method, err, trailer)
 			}
 		}
 		t.invalmsghdlr(w, r, s)
@@ -1113,7 +1133,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.ecmanager.CleanupObject(lom)
 		return
 	}
-	s := fmt.Sprintf("Invalid API request: No object name or message body.")
+	s := fmt.Sprintf("Invalid API request: no object name or message body")
 	t.invalmsghdlr(w, r, s)
 	ok = false
 }
@@ -1167,7 +1187,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		version := int64(v2)
 		if bucketmd.version() != version {
-			glog.Warningf("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
+			glog.Warningf("rename %s: %s v%d != v%d - proceeding anyway",
+				bucketFrom, bmdTermName, bucketmd.version(), version)
 		}
 		clone := bucketmd.clone()
 		clone.LBmap[bucketTo] = props
@@ -1184,7 +1205,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bucketmd.del(bucketFrom, true) // TODO: resolve conflicts
 		t.bmdowner.Unlock()
 
-		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
+		glog.Infof("renamed local bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		lbucket := apitems[0]
 		if !t.validatebckname(w, r, lbucket) {
@@ -1444,9 +1465,6 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 
 // GET /v1/health
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	from := query.Get(cmn.URLParamFromID)
-
 	aborted, running := t.xactions.isAbortedOrRunningRebalance()
 	if !aborted && !running {
 		aborted, running = t.xactions.isAbortedOrRunningLocalRebalance()
@@ -1459,7 +1477,17 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.keepalive.heardFrom(from, false)
+	query := r.URL.Query()
+	from := query.Get(cmn.URLParamFromID)
+	smap := t.smapowner.get()
+	if smap.GetProxy(from) != nil {
+		if glog.V(4) {
+			glog.Infof("%s: health-ping from p[%s]", pname(t.si), from)
+		}
+		t.keepalive.heardFrom(from, false)
+	} else if glog.V(4) {
+		glog.Infof("%s: health-ping from %s", tname(t.si), smap.printname(from))
+	}
 }
 
 // [METHOD] /v1/push/bucket-name
@@ -1675,6 +1703,23 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom 
 	}
 	if glog.V(4) {
 		glog.Infof("Success: %s (%s, %s) from %s", rlom, cmn.B2S(rlom.Size, 1), rlom.Nhobj, neighsi)
+	}
+	return
+}
+
+// TODO
+func (t *targetrunner) getFromTier(lom *cluster.LOM) (ok bool) {
+	if lom.Bprops == nil || lom.Bprops.NextTierURL == "" {
+		return
+	}
+	inNextTier, _, _ := t.objectInNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname)
+	if !inNextTier {
+		return
+	}
+	props, errstr, _ := t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, lom.Fqn)
+	if errstr == "" {
+		lom.RestoredReceived(props)
+		ok = true
 	}
 	return
 }
@@ -2282,7 +2327,9 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	if roi.lom.Exists() && roi.cksumToCheck != nil {
 		if errstr := roi.lom.Fill(cluster.LomCksum); errstr == "" {
 			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumToCheck) {
-				glog.Infof("Existing %s is valid: PUT is a no-op", roi.lom)
+				if glog.V(4) {
+					glog.Infof("%s is valid %s: PUT is a no-op", roi.lom, roi.cksumToCheck)
+				}
 				io.Copy(ioutil.Discard, roi.r) // drain the reader
 				return nil, 0
 			}
@@ -2547,7 +2594,8 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 
 	// migrate to another target
-	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si, bucketTo, objnameTo, si)
+	glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
+		bucketFrom, objnameFrom, tname(t.si), bucketTo, objnameTo, tname(si))
 
 	if file, err = cmn.NewFileHandle(fqn); err != nil {
 		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
@@ -2624,13 +2672,13 @@ func (t *targetrunner) IsBucketLocal(bucket string, bmd *cluster.BMD, q url.Valu
 		if v, err := strconv.ParseInt(s, 0, 64); err != nil {
 			glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
 		} else if v < bmd.Version {
-			glog.Errorf("bucket-metadata v%d > v%d (primary)", bmd.Version, v)
+			glog.Errorf("%s v%d > v%d (primary)", bmdTermName, bmd.Version, v)
 		} else if v > bmd.Version { // fixup
-			glog.Errorf("Warning: bucket-metadata v%d < v%d (primary) - updating...", bmd.Version, v)
+			glog.Errorf("%s v%d < v%d (primary) - proceeding anyway", bmdTermName, bmd.Version, v)
 			t.bmdVersionFixup()
 			islocal := t.bmdowner.get().IsLocal(bucket)
 			if islocal == proxylocal {
-				glog.Infof("Success: updated bucket-metadata to v%d - resolved 'islocal' mismatch", bmd.Version)
+				glog.Infof("updated %s to v%d - resolved 'islocal' mismatch", bmdTermName, bmd.Version)
 				errstr, errcode = "", 0
 			}
 		}
@@ -2713,7 +2761,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
-			glog.Infof("%s: %s v%d done", t.si, cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", tname(t.si), cmn.SyncSmap, newsmap.version())
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -2910,7 +2958,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.V(3) {
-		glog.Infof("Registered self %s", t.si)
+		glog.Infof("Registered %s(self)", tname(t.si))
 	}
 }
 
@@ -3144,7 +3192,7 @@ func (t *targetrunner) detectMpathChanges() {
 			newfs.Available.String(), newfs.Disabled.String(),
 		)
 
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathconfigfqn)
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", tname(t.si), mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
 		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
@@ -3324,9 +3372,9 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 // FIXME: use the message
 func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg, tag string) (errstr string) {
 	if msg.Action == "" {
-		glog.Infof("%s bucket-metadata: version %d", tag, newbucketmd.version())
+		glog.Infof("%s %s v%d", tag, bmdTermName, newbucketmd.version())
 	} else {
-		glog.Infof("%s bucket-metadata: version %d, action %s", tag, newbucketmd.version(), msg.Action)
+		glog.Infof("%s %s v%d, action %s", tag, bmdTermName, newbucketmd.version(), msg.Action)
 	}
 	t.bmdowner.Lock()
 	bucketmd := t.bmdowner.get()
@@ -3334,7 +3382,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	if newbucketmd.version() <= myver {
 		t.bmdowner.Unlock()
 		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
+			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
 		}
 		return
 	}
@@ -3371,10 +3419,10 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 
 func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr string) {
 	var (
-		newtargetid, s                 string
-		existentialQ, aborted, running bool
-		pid                            = newsmap.ProxySI.DaemonID
+		newtargetid, s string
+		existentialQ   bool
 	)
+	// proxy => target control protocol (see p.httpclupost)
 	action, id := path.Split(msg.Action)
 	if action != "" {
 		newtargetid = id
@@ -3382,18 +3430,18 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	if msg.Action != "" {
 		s = ", action " + msg.Action
 	}
-	glog.Infof("receive Smap: v%d, ntargets %d, primary %s%s", newsmap.version(), newsmap.CountTargets(), pid, s)
-
+	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
+		tname(t.si), newsmap.version(), newsmap.CountTargets(), pname(newsmap.ProxySI), s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
-			glog.Infof("target: %s <= self", si)
+			glog.Infof("%s <= self", tname(si))
 		} else {
-			glog.Infof("target: %s", si)
+			glog.Infof("%s", tname(si))
 		}
 	}
 	if !existentialQ {
-		errstr = fmt.Sprintf("Not finding self %s in the new %s", t.si, newsmap.pp())
+		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", tname(t.si), newsmap.pp())
 		return
 	}
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
@@ -3410,31 +3458,8 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	if newtargetid == "" {
 		return
 	}
-
-	glog.Infof("receiveSmap: newtargetid=%s", newtargetid)
-	if atomic.LoadInt32(&t.clusterStarted) != 0 {
-		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction
-		return
-	}
-
-	aborted, running = t.xactions.isAbortedOrRunningRebalance()
-	if !aborted || running {
-		glog.Infof("the cluster is starting up, rebalancing=(aborted=%t, running=%t)", aborted, running)
-		return
-	}
-	// resume global rebalance
-	f := func() {
-		glog.Infoln("waiting for cluster startup to resume rebalance...")
-		for {
-			time.Sleep(time.Second)
-			if atomic.LoadInt32(&t.clusterStarted) != 0 {
-				break
-			}
-		}
-		glog.Infoln("resuming rebalance...")
-		t.runRebalance(t.smapowner.get(), "")
-	}
-	go runRebalanceOnce.Do(f) // only once at startup
+	glog.Infof("%s receiveSmap: go rebalance(newtargetid=%s)", tname(t.si), newtargetid)
+	go t.runRebalance(newsmap, newtargetid)
 	return
 }
 
@@ -3462,15 +3487,16 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 		proxystats := &stats.ProxyCoreStats{} // FIXME
 		err := jsoniter.Unmarshal(res.outjson, proxystats)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
+				psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue
 		}
 		if proxystats.Tracker[stats.Uptime].Value != 0 {
+			glog.Infof("%s startup: primary %s", tname(t.si), pname(psi))
 			break
 		}
 	}
 	atomic.StoreInt32(&t.clusterStarted, 1)
-	glog.Infoln("cluster started up")
 }
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
@@ -3502,11 +3528,11 @@ func (t *targetrunner) disable() error {
 		return nil
 	}
 
-	glog.Info("Disabling the target")
+	glog.Infof("Disabling %s", tname(t.si))
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
 			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying unregistration...", t.si)
+				glog.Errorf("%s: retrying unregistration...", tname(t.si))
 				time.Sleep(time.Second)
 				continue
 			}
@@ -3517,13 +3543,13 @@ func (t *targetrunner) disable() error {
 	if status >= http.StatusBadRequest || eunreg != nil {
 		// do not update state on error
 		if eunreg == nil {
-			eunreg = fmt.Errorf("error unregistering target, http error code: %d", status)
+			eunreg = fmt.Errorf("error unregistering %s, http status %d", tname(t.si), status)
 		}
 		return eunreg
 	}
 
 	t.regstate.disabled = true
-	glog.Info("Target has been disabled")
+	glog.Infof("%s has been disabled (unregistered)", tname(t.si))
 	return nil
 }
 
@@ -3541,11 +3567,11 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 
-	glog.Info("Enabling the target")
+	glog.Infof("Enabling %s", tname(t.si))
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying registration...", t.si)
+				glog.Errorf("%s: retrying registration...", tname(t.si))
 				time.Sleep(time.Second)
 				continue
 			}
@@ -3556,13 +3582,13 @@ func (t *targetrunner) enable() error {
 	if status >= http.StatusBadRequest || ereg != nil {
 		// do not update state on error
 		if ereg == nil {
-			ereg = fmt.Errorf("error registering target, http error code: %d", status)
+			ereg = fmt.Errorf("error registering %s, http status: %d", tname(t.si), status)
 		}
 		return ereg
 	}
 
 	t.regstate.disabled = false
-	glog.Info("Target has been enabled")
+	glog.Infof("%s has been enabled", tname(t.si))
 	return nil
 }
 
