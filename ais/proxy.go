@@ -520,6 +520,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.bmdowner.Unlock()
 		}
 
+		msg.Value = clone
 		jsonbytes, err := jsoniter.Marshal(msg)
 		cmn.Assert(err == nil, err)
 

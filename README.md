@@ -2,7 +2,7 @@
 
 AIStore (AIS for short) is a built from scratch storage solution for AI applications. At its core, it's open-source object storage with extensions tailored for AI and, specifically, for petascale deep learning.
 
-As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and contorl primitives to read and write objects and create, destroy, list, and configure buckets that contain those objects.
+As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and control primitives to read and write objects and create, destroy, list, and configure [buckets](docs/bucket.md#bucket) that contain those objects.
 
 ## AIS Design Philosophy
 AIS is a *specialized* storage system. The design philosophy behind AIS is based on the simple truth that AI datasets are pre-sharded. More exactly, AI datasets (in particular, very large datasets) are pre-sharded, post-sharded, and otherwise transformed to facilitate training, inference, and simulation by the AI apps.
@@ -140,7 +140,9 @@ Similar to the AIS gateways, AIS storage targets can join and leave at any momen
 AIS features a [highly-available control plane](docs/ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](docs/http_api.md). Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
-As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
+AIS can be deployed as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage.
+
+As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](docs/batch.md#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
 
 ### Other Services
 
@@ -165,9 +167,9 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 
 AIStore provides an easy way to generate a python client package for simplified integration. The user can, after following a few simple steps, import the generated package and start communicating with AIS via its [RESTful API](docs/http_api.md). The generated package will cover the entire functionality of the API.
 
-> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/openapi.yaml).
+> Background: [OpenAPI Generator](https://github.com/openapitools/openapi-generator) is a tool that generates python client packages for simplified integration with RESTful APIs. We use OpenAPI Generator to generate the python client package using the [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](openapi/openapi.yaml).
 
-To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](swagger/README.md#how-to-generate-package).
+To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](openapi/README.md#how-to-generate-package).
 
 1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
 
@@ -179,7 +181,7 @@ To get started with the python client package, you need to first generate the cl
 
     ```shell
     cd <path_to_repo>
-    java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/openapi.yaml -g python -o ./python-client/
+    java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -g python -o ./python-client/
     ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
@@ -195,7 +197,7 @@ These steps should produce the python client package, which will be located [her
 
 Should you have any difficulty generating the python client package with these instructions, please open a ticket, and we will provide further assistance.
 
-Once the package is generated, it can be installed as follows, these commands can also be found [here](swagger/README.md#how-to-install).
+Once the package is generated, it can be installed as follows, these commands can also be found [here](openapi/README.md#how-to-install).
 
 ```shell
 cd <path_to_repo>/python-client
@@ -224,7 +226,7 @@ daemon_api = openapi_client.api.daemon_api.DaemonApi(proxyClient)
 print(daemon_api.get(openapi_models.GetWhat.SMAP))
 ```
 
-There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](swagger/README.md#how-to-use-package).
+There's a lot more that the python client package can do. Be sure to read [the complete guide on using the package](openapi/README.md#how-to-use-package).
 
 ### AIS Limitations
 There are no designed-in limitations on the:
@@ -360,7 +362,7 @@ The 3rd and final local-deployment option makes use of [Kubeadm](https://kuberne
 - [How to Benchmark](docs/howto_benchmark.md)
 - [RESTful API](docs/http_api.md)
 - [Joining a Cluster](docs/join_cluster.md)
-- [List-Bucket operation](docs/list_bucket.md)
+- [Bucket Abstraction](docs/bucket.md#bucket)
 - [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 - [Performance Tuning and Performance Testing](docs/performance.md)
 - [Rebalancing (of the stored content in presence of a variety of events)](docs/rebalance.md)
@@ -376,4 +378,4 @@ The 3rd and final local-deployment option makes use of [Kubeadm](https://kuberne
 - [Package `memsis`](memsis/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
-- [Package `swagger`](swagger/README.md)
+- [Package `openapi`](openapi/README.md)

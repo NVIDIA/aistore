@@ -1059,6 +1059,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
 			return
 		}
+
+		if errstr := t.ensureLatestBMD(msg); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
+
 		fs.Mountpaths.EvictCloudBucket(bucket)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
@@ -1167,6 +1172,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
 
+		if errstr := t.ensureLatestBMD(msg); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
+
 		t.bmdowner.Lock() // lock#1 begin
 
 		bucketmd := t.bmdowner.get()
@@ -1176,24 +1185,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			s := fmt.Sprintf("Local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 			t.invalmsghdlr(w, r, s)
 			return
-		}
-		bmd4ren, ok := msg.Value.(map[string]interface{})
-		if !ok {
-			t.bmdowner.Unlock()
-			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value))
-			return
-		}
-		v1, ok1 := bmd4ren["version"]
-		v2, ok2 := v1.(float64)
-		if !ok1 || !ok2 {
-			t.bmdowner.Unlock()
-			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2))
-			return
-		}
-		version := int64(v2)
-		if bucketmd.version() != version {
-			glog.Warningf("rename %s: %s v%d != v%d - proceeding anyway",
-				bucketFrom, bmdTermName, bucketmd.version(), version)
 		}
 		clone := bucketmd.clone()
 		clone.LBmap[bucketTo] = props
@@ -3466,6 +3457,27 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname(t.si), newTargetID)
 	go t.runRebalance(newsmap, newTargetID)
 	return
+}
+
+func (t *targetrunner) ensureLatestBMD(msg cmn.ActionMsg) string {
+	bucketmd := t.bmdowner.Get()
+	bmdVal, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		return fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value)
+	}
+	v1, ok1 := bmdVal["version"]
+	v2, ok2 := v1.(float64)
+	if !ok1 || !ok2 {
+		return fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2)
+	}
+	version := int64(v2)
+	if bucketmd.Version < version {
+		glog.Infof("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, version, msg.Action)
+		t.bmdVersionFixup()
+	} else if bucketmd.Version > version {
+		glog.Warningf("own bucket-metadata version %d > %d - proceeding to %v anyways", bucketmd.Version, version, msg.Action)
+	}
+	return ""
 }
 
 func (t *targetrunner) pollClusterStarted(timeout time.Duration) {

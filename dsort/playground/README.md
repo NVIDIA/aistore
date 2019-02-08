@@ -8,9 +8,9 @@ Python.
 
 Before you start playing with scripts, make sure that you have installed our python client.
 
-Note that the python client currently [does not fully support python 3](/swagger/README.md#future)
+Note that the python client currently [does not fully support python 3](/openapi/README.md#future)
 
-First build and install the client by following the instructions [here](/swagger/README.md#how-to-install-client-package)
+First build and install the client by following the instructions [here](/openapi/README.md#how-to-install-client-package)
 
 Then install playground helpers and scripts by doing:
 
