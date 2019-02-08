@@ -431,8 +431,8 @@ func (mfs *MountedFS) CreateDestroyLocalBuckets(op string, create bool, buckets 
 		text = destroystr
 	}
 
-	failMsg := fmt.Sprint(fmt1, op, text)
-	passMsg := fmt.Sprint(fmt2, op, text)
+	failMsg := fmt.Sprintf(fmt1, op, text)
+	passMsg := fmt.Sprintf(fmt2, op, text)
 
 	mfs.createDestroyBuckets(create, true, passMsg, failMsg, buckets...)
 }
