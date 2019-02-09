@@ -203,14 +203,14 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			h.callback(w, hdr, objReader, nil)
 			num := atomic.AddInt64(&stats.Num, 1)
 			if hdr.ObjAttrs.Size != objReader.off {
-				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d",
-					trname, sessid, objReader.off, hdr.ObjAttrs.Size, num)
+				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d, NAME: %s",
+					trname, sessid, objReader.off, hdr.ObjAttrs.Size, num, objReader.hdr.Objname)
 				glog.Errorln(err)
 			} else {
 				siz := atomic.AddInt64(&stats.Size, hdr.ObjAttrs.Size)
 				off := atomic.AddInt64(&stats.Offset, hdr.ObjAttrs.Size)
 				if bool(glog.V(4)) || debug {
-					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, hdr.ObjAttrs.Size, num)
+					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessid, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
 				}
 				continue
 			}
@@ -285,7 +285,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 		return
 	}
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s[%d]: new object size=%d", it.trname, sessid, hdr.ObjAttrs.Size)
+		glog.Infof("%s[%d]: new object %s size=%d", it.trname, sessid, hdr.Objname, hdr.ObjAttrs.Size)
 	}
 	obj = &objReader{body: it.body, hdr: hdr}
 	return

@@ -464,7 +464,7 @@ func (xs *xactions) renewEC() *ec.XactEC {
 
 	id := xs.uniqueid()
 	xec := ECM.newXact()
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, "" /* all buckets */, ec.IdleTimeout)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, "" /* all buckets */)
 	go xec.Run()
 	xs.add(xec)
 	xs.Unlock()

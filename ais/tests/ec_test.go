@@ -1079,6 +1079,9 @@ func TestECEmergencyTarget(t *testing.T) {
 		defer sgl.Free()
 	}
 
+	setClusterConfig(t, proxyURL, "rebalancing_enabled", false)
+	defer setClusterConfig(t, proxyURL, "rebalancing_enabled", true)
+
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -1174,7 +1177,7 @@ func TestECEmergencyTarget(t *testing.T) {
 	}()
 
 	// 3. Read objects
-	tutils.Logf("Reading all objects...")
+	tutils.Logln("Reading all objects...")
 	getOneObj := func(idx int, objName string) {
 		defer func() {
 			wg.Done()
@@ -1198,7 +1201,7 @@ func TestECEmergencyTarget(t *testing.T) {
 	wg.Wait()
 
 	// 4. Check that ListBucket returns correct number of items
-	tutils.Logf("DONE\nReading bucket list...")
+	tutils.Logln("DONE\nReading bucket list...")
 	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	if err != nil {
@@ -1255,6 +1258,9 @@ func TestECEmergencyMpath(t *testing.T) {
 		sgl = tutils.Mem2.NewSGL(0)
 		defer sgl.Free()
 	}
+
+	setClusterConfig(t, proxyURL, "rebalancing_enabled", false)
+	defer setClusterConfig(t, proxyURL, "rebalancing_enabled", true)
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
@@ -1337,7 +1343,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		tutils.CheckFatal(err, t)
 	}
 
-	tutils.Logf("Reading all objects...")
+	tutils.Logln("Reading all objects...")
 	wg.Add(numFiles)
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)

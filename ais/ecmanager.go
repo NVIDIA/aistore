@@ -64,7 +64,7 @@ func newECM(t *targetrunner) *ecManager {
 
 func (mgr *ecManager) newXact() *ec.XactEC {
 	return ec.NewXact(mgr.netReq, mgr.netResp, mgr.t, mgr.t.bmdowner,
-		mgr.t.smapowner, mgr.t.si, mgr.t.rtnamemap)
+		mgr.t.smapowner, mgr.t.si)
 }
 
 // A function to process command requests from other targets

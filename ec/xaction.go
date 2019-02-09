@@ -27,6 +27,7 @@ import (
 const (
 	requestBufSizeGlobal = 800
 	requestBufSizeFS     = 200
+	maxBgJobsPerJogger   = 32
 )
 
 type (
@@ -40,12 +41,12 @@ type (
 		mpathReqCh chan mpathReq // notify about mountpath changes
 		ecCh       chan *Request // to request object encoding
 
-		joggers    map[string]*jogger // active mountpath runners
-		bmd        cluster.Bowner     // bucket manager
-		smap       cluster.Sowner     // cluster map
-		si         *cluster.Snode     // target daemonInfo
-		nameLocker cluster.NameLocker // to lock/unlock objects
-		stats      stats              // EC statistics
+		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
+		getJoggers map[string]*getJogger // mountpath joggers for GET
+		bmd        cluster.Bowner        // bucket manager
+		smap       cluster.Sowner        // cluster map
+		si         *cluster.Snode        // target daemonInfo
+		stats      stats                 // EC statistics
 
 		dOwner *dataOwner // data slice manager
 
@@ -55,6 +56,8 @@ type (
 )
 
 type (
+	bgProcess = func(req *Request, cb func(error))
+
 	mpathReq struct {
 		action string
 		mpath  string
@@ -68,16 +71,18 @@ type (
 )
 
 func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
-	si *cluster.Snode, nameLocker cluster.NameLocker) *XactEC {
+	si *cluster.Snode) *XactEC {
+	availablePaths, disabledPaths := fs.Mountpaths.Get()
+	totalPaths := len(availablePaths) + len(disabledPaths)
 	runner := &XactEC{
 		t:          t,
 		mpathReqCh: make(chan mpathReq, 1),
-		joggers:    make(map[string]*jogger),
+		getJoggers: make(map[string]*getJogger, totalPaths),
+		putJoggers: make(map[string]*putJogger, totalPaths),
 		ecCh:       make(chan *Request, requestBufSizeGlobal),
 		bmd:        bmd,
 		smap:       smap,
 		si:         si,
-		nameLocker: nameLocker,
 
 		dOwner: &dataOwner{
 			mtx:    sync.Mutex{},
@@ -97,14 +102,17 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 	runner.respBundle = transport.NewStreamBundle(smap, si, client, netResp, RespStreamName, nil, cluster.Targets, transport.IntraBundleMultiplier)
 
 	// create all runners but do not start them until Run is called
-	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	for mpath := range availablePaths {
-		mpr := runner.newMpathRunner(mpath)
-		runner.joggers[mpath] = mpr
+		getJog := runner.newGetJogger(mpath)
+		runner.getJoggers[mpath] = getJog
+		putJog := runner.newPutJogger(mpath)
+		runner.putJoggers[mpath] = putJog
 	}
 	for mpath := range disabledPaths {
-		mpr := runner.newMpathRunner(mpath)
-		runner.joggers[mpath] = mpr
+		getJog := runner.newGetJogger(mpath)
+		runner.getJoggers[mpath] = getJog
+		putJog := runner.newPutJogger(mpath)
+		runner.putJoggers[mpath] = putJog
 	}
 
 	return runner
@@ -272,7 +280,6 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			}
 		}
 		// save slice/object
-		r.nameLocker.Lock(uname, true)
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 		buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
@@ -294,7 +301,6 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 				err = errors.New(errstr)
 			}
 		}
-		r.nameLocker.Unlock(uname, true)
 		if err != nil {
 			glog.Errorf("Failed to save %s/%s data to %q: %v",
 				hdr.Bucket, hdr.Objname, objFQN, err)
@@ -318,12 +324,23 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 	}
 }
 
-func (r *XactEC) newMpathRunner(mpath string) *jogger {
-	return &jogger{
+func (r *XactEC) newGetJogger(mpath string) *getJogger {
+	return &getJogger{
 		parent: r,
 		mpath:  mpath,
-		topCh:  make(chan *Request, requestBufSizeFS),
-		bgCh:   make(chan *Request, requestBufSizeFS),
+		workCh: make(chan *Request, requestBufSizeFS),
+		stopCh: make(chan struct{}, 1),
+		jobs:   make(map[uint64]bgProcess, 4),
+		sema:   make(chan struct{}, maxBgJobsPerJogger),
+		diskCh: make(chan struct{}, 1),
+	}
+}
+
+func (r *XactEC) newPutJogger(mpath string) *putJogger {
+	return &putJogger{
+		parent: r,
+		mpath:  mpath,
+		workCh: make(chan *Request, requestBufSizeFS),
 		stopCh: make(chan struct{}, 1),
 	}
 }
@@ -472,12 +489,16 @@ func (r *XactEC) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSour
 func (r *XactEC) Run() (err error) {
 	glog.Infof("Starting %s", r.Getname())
 
-	for _, mpr := range r.joggers {
-		go mpr.run()
+	for _, jog := range r.getJoggers {
+		go jog.run()
+	}
+	for _, jog := range r.putJoggers {
+		go jog.run()
 	}
 	conf := cmn.GCO.Get()
 	tck := time.NewTicker(conf.Periodic.StatsTime)
 	lastAction := time.Now()
+	idleTimeout := conf.Timeout.SendFile * 3
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
@@ -505,7 +526,7 @@ func (r *XactEC) Run() (err error) {
 				r.removeMpath(mpathRequest.mpath)
 			}
 		case <-r.ChanCheckTimeout():
-			idleEnds := lastAction.Add(IdleTimeout)
+			idleEnds := lastAction.Add(idleTimeout)
 			if idleEnds.Before(time.Now()) && r.Timeout() {
 				if glog.V(4) {
 					glog.Infof("Idle time is over: %v. Last action at: %v",
@@ -564,12 +585,17 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 		glog.Warningf("Failed to read file stats: %s", errstr)
 	}
 
-	if sgl != nil && err == nil {
+	if sgl != nil && err == nil && sgl.Size() != 0 {
 		sz = sgl.Size()
 		reader = memsys.NewReader(sgl)
 	} else {
+		if sgl != nil {
+			sgl.Free()
+			sgl = nil
+		}
 		ireq.Exists = false
 	}
+	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
 	objAttrs := transport.ObjectAttrs{
 		Size:    sz,
 		Version: lom.Version,
@@ -635,8 +661,11 @@ func (r *XactEC) stop() {
 	}
 
 	r.XactDemandBase.Stop()
-	for _, mpr := range r.joggers {
-		mpr.stop()
+	for _, jog := range r.getJoggers {
+		jog.stop()
+	}
+	for _, jog := range r.putJoggers {
+		jog.stop()
 	}
 	r.reqBundle.Close(true)
 	r.respBundle.Close(true)
@@ -647,6 +676,9 @@ func (r *XactEC) stop() {
 func (r *XactEC) Encode(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
+	if glog.V(4) {
+		glog.Infof("ECXAction (queue = %d): encode object %s", len(r.ecCh), req.LOM.Uname)
+	}
 	r.ecCh <- req
 }
 
@@ -671,15 +703,20 @@ func (r *XactEC) Cleanup(req *Request) {
 
 func (r *XactEC) dispatchRequest(req *Request) {
 	r.IncPending()
-	jogger, ok := r.joggers[req.LOM.ParsedFQN.MpathInfo.Path]
-	cmn.Assert(ok, "Invalid mountpath given in EC request")
 	switch req.Action {
 	case ActRestore:
-		r.stats.updateQueue(len(jogger.topCh))
-		jogger.topCh <- req
+		jogger, ok := r.getJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
+		cmn.Assert(ok, "Invalid mountpath given in EC request")
+		r.stats.updateQueue(len(jogger.workCh))
+		jogger.workCh <- req
 	default:
-		r.stats.updateQueue(len(jogger.bgCh))
-		jogger.bgCh <- req
+		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
+		cmn.Assert(ok, "Invalid mountpath given in EC request")
+		if glog.V(4) {
+			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname)
+		}
+		r.stats.updateQueue(len(jogger.workCh))
+		jogger.workCh <- req
 	}
 }
 
@@ -741,19 +778,27 @@ func (r *XactEC) ReqEnableMountpath(mpath string)  { /* do nothing */ }
 func (r *XactEC) ReqDisableMountpath(mpath string) { /* do nothing */ }
 
 func (r *XactEC) addMpath(mpath string) {
-	jogger, ok := r.joggers[mpath]
+	jogger, ok := r.getJoggers[mpath]
 	if ok && jogger != nil {
 		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
 		return
 	}
-	runner := r.newMpathRunner(mpath)
-	r.joggers[mpath] = runner
-	go runner.run()
+	getJog := r.newGetJogger(mpath)
+	r.getJoggers[mpath] = getJog
+	go getJog.run()
+	putJog := r.newPutJogger(mpath)
+	r.putJoggers[mpath] = putJog
+	go putJog.run()
 }
 
 func (r *XactEC) removeMpath(mpath string) {
-	jogger, ok := r.joggers[mpath]
+	getJog, ok := r.getJoggers[mpath]
 	cmn.Assert(ok, "Mountpath unregister handler for EC called with invalid mountpath")
-	jogger.stop()
-	delete(r.joggers, mpath)
+	getJog.stop()
+	delete(r.getJoggers, mpath)
+
+	putJog, ok := r.putJoggers[mpath]
+	cmn.Assert(ok, "Mountpath unregister handler for EC called with invalid mountpath")
+	putJog.stop()
+	delete(r.putJoggers, mpath)
 }

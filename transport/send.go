@@ -265,7 +265,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 		return
 	}
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s: send %s/%s(%d)", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
+		glog.Infof("%s: send %s/%s(%d)[queue len=%d]", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size, len(s.workCh))
 	}
 	s.time.idle.Stop()
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
@@ -601,7 +601,7 @@ func (s *Stream) eoObj(err error) {
 	atomic.AddInt64(&s.stats.Num, 1)
 
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s: sent size=%d (%d/%d)", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num)
+		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num, obj.hdr.Objname)
 	}
 exit:
 	if err != nil {

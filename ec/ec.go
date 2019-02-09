@@ -119,8 +119,6 @@ const (
 
 	RespStreamName = "ec-resp"
 	ReqStreamName  = "ec-req"
-
-	IdleTimeout = time.Minute * 10
 )
 
 // type of EC request between targets. If the destination has to respond it
