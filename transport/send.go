@@ -517,9 +517,13 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 		err = io.EOF
 		num := atomic.LoadInt64(&s.stats.Num)
-		glog.Warningf("%s: timed out (%d/%d)", s, s.Numcur, num)
+		if glog.V(4) {
+			glog.Warningf("%s: timed out (%d/%d)", s, s.Numcur, num)
+		}
 		if atomic.CompareAndSwapInt64(&s.lifecycle, activated, expired) {
-			glog.Infof("%s: activated => expired", s)
+			if glog.V(4) {
+				glog.Infof("%s: activated => expired", s)
+			}
 		}
 		return
 	case <-s.stopCh:
