@@ -100,24 +100,24 @@ AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. A
 
 ### Examples
 
-The following assumes that the cluster (user-accessible) network is `cnet`, and the ports are `Gport` - for one of the deployed gateways, and `Tport` - one of the targets, respectively.
+The following assumes that `G` and `T` are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.
 
 #### Cluster-wide operation (all nodes): set the stats logging period to 1 second
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://cnet:Gport/v1/cluster'
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'
 ```
 
 #### Cluster-wide operation (all nodes): set the stats logging period to 2 minutes
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "2m"}' 'http://cnet:Gport/v1/cluster'
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "2m"}' 'http://G/v1/cluster'
 ```
 
 #### Cluster-wide operation (all nodes): elevate log verbosity to `4` for all sources matching `ais/targ*` regex
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://cnet:Gport/v1/cluster'
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
 ```
 
 #### Single-node operation (target at port `Tport`): set log verbosity to `1` for all source files that match the `ais/targ*` regex
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://cnet:Tport/v1/daemon'
+~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
 ```

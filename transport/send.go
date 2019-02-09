@@ -30,7 +30,7 @@ import (
 const (
 	maxHeaderSize  = 1024
 	lastMarker     = cmn.MaxInt64
-	defaultIdleOut = time.Second
+	defaultIdleOut = time.Second * 2
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 )
