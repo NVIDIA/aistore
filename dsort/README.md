@@ -17,7 +17,7 @@ Example of map-reduce like operation which can be performed on dSort is
 shuffling (in particular sorting) all objects across all shards by a given
 algorithm.
 
-![dsort](../docs/images/dsort_mapreduce.png)
+![dsort](/docs/images/dsort_mapreduce.png)
 
 We allow for output shards to be different size than input shards, thus a user
 is also able to reshard the objects. This means that output shards can contain
@@ -104,7 +104,7 @@ operations at once, it might be better to set the concurrency parameter to
 something lower since both of the operation may use disk at the same time. A
 higher concurrency parameter can result in performance degradation.
 
-![Shard creation](../docs/images/dsort_shard_creation.png)
+![Shard creation](/docs/images/dsort_shard_creation.png)
 
 **Metrics** - user can monitor whole operation thanks to metrics. Metrics
 provide an overview of what is happening in the cluster, for example: which

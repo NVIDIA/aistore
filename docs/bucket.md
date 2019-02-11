@@ -16,9 +16,12 @@ As one would normally expect from an object store, AIS uses the bucket abstracti
 
 Buckets in AIS serve as the basic container in which objects are stored, similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
 
-Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [REST API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster.
+There are two different kinds of buckets in AIS, **local buckets** and **cloud buckets**. All the [supported storage services](storage_svcs.md) equally apply to both sorts of buckets, with a few exceptions. The following table summarizes them.
 
-When AIS is deployed as [fast tier](../README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short).
+| Kind | Description | Supported Storage Services (as of v2.0) |
+| --- | --- | --- |
+| local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [REST API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets have operations specific to its cache within AIS. Local buckets, as of v2.0, are the only buckets that can be created, renamed or deleted through the [RESTful API](http_api.md).
 
@@ -43,7 +46,7 @@ $ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroyl
 
 ## Cloud Bucket
 
-Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](../README.md#fast-tier). 
+Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier). 
 
 ### Prefetch/Evict Objects
 
@@ -112,7 +115,7 @@ This request will produce an output that (in part) may look as follows:
 
 <img src="images/ais-ls-subdir.png" alt="AIStore list directory" width="440">
 
-For many more examples, please refer to the [test sources](../ais/tests/) in the repository.
+For many more examples, please refer to the [test sources](/ais/tests/) in the repository.
 
 ### Example: Listing all pages
 

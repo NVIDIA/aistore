@@ -15,7 +15,7 @@ AIS can be designated as HTTP(S) proxy vis-à-vis 3rd party object storages. As 
    ```shell
    $ export http_proxy=<AIS PROXY URL>
    ```
-2. AIS configuration: set `rproxy=cloud` in the [configuration](../ais/setup/config.sh):
+2. AIS configuration: set `rproxy=cloud` in the [configuration](/ais/setup/config.sh):
    ```json
       "http": {
            "proto":                "http",
@@ -84,7 +84,7 @@ curl -L -X GET http://www.googleapis.com/storage/v1/b/gcp-public/o/LT08%2FPRE%2f
 
 AIS supports a second (and special) mode whereby an AIS gateway serves as a **reverse proxy vis-à-vis AIS targets**.
 
-The corresponding use case entails [configuring `rproxy=target`](../ais/setup/config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
+The corresponding use case entails [configuring `rproxy=target`](/ais/setup/config.sh) and is intended to support (kernel-based) clients with a preference for a single (or a few) persistent storage connection(s).
 ```json
    "http": {
         "proto":                "http",

@@ -1,6 +1,6 @@
 ### Tips
 
-Assuming [local non-containerized deployment](../README.md#local-non-containerized), the following sequence will download up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
+Assuming [local non-containerized deployment](/README.md#local-non-containerized), the following sequence will download up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
 
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/aistore/ais/tests
@@ -26,7 +26,7 @@ Further, to locate AIStore logs, run:
 $ find $LOGDIR -type f | grep log
 ```
 
-where $LOGDIR is the configured logging directory as per [AIStore configuration](ais/setup/config.sh).
+where $LOGDIR is the configured logging directory as per [AIStore configuration](/ais/setup/config.sh).
 
 To terminate a running AIStore service and cleanup local caches, run:
 ```shell

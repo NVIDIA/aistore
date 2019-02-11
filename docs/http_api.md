@@ -96,7 +96,7 @@ ___
 
 <a name="ft8">8</a>: Advanced usage only. Use it when the cluster is in split-brain mode. E.g, if the original primary proxy's network gets down for a while, the rest proxies vote and select new primary. After network is back the original proxy does not join the new primary automatically. It results in two primary proxies in a cluster. [↩](#a8)
 
-<a name="ft9">9</a>: The difference between "Set bucket props" and "Set single bucket prop" is that the single props action requires non-empty "name" and "value", and "value" must be a string; the bucket props action requires "value" to be a full correct cmn.BucketProps structure. The list of property names see in [constant list](../cmn/api.go) - look for a section 'Header Key enum'[↩](#a9)
+<a name="ft9">9</a>: The difference between "Set bucket props" and "Set single bucket prop" is that the single props action requires non-empty "name" and "value", and "value" must be a string; the bucket props action requires "value" to be a full correct cmn.BucketProps structure. The list of property names see in [constant list](/cmn/api.go) - look for a section 'Header Key enum'[↩](#a9)
 
 ### Querying information
 
@@ -125,5 +125,5 @@ This single command causes execution of multiple `GET ?what=stats` requests with
 
 <img src="images/ais-get-stats.png" alt="AIStore statistics" width="440">
 
-More usage examples can be found in the [the source](../ais/tests/regression_test.go).
+More usage examples can be found in the [the source](/ais/tests/regression_test.go).
 

@@ -13,7 +13,7 @@ There are features, capabilities and modules that we designate as _experimental_
 
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. AIStore WebDAV server is a reverse proxy (with interoperable WebDAV on the front and AIStore's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
 
-For information on how to run it and details, please refer to the [WebDAV README](../webdav/README.md).
+For information on how to run it and details, please refer to the [WebDAV README](/webdav/README.md).
 
 ### Multi-tiering
 
@@ -55,7 +55,7 @@ The picture below illustrates some of the aspects of replication service as far 
 
 ### Authentication
 
-Please see [AuthN documentation](../authn/README.md).
+Please see [AuthN documentation](/authn/README.md).
 
 ### Downloader
 
@@ -63,7 +63,7 @@ AIS supports downloading files directly onto AIS from external servers using its
 
 All types of download requests are issued to Downloader (a goroutine), which is an extended action that starts up whenever there is traffic to AIS's download endpoints. The goroutine is alive until all download endpoint requests are handled or as long as more download requests are incoming. After a brief period of inactivity, the goroutine will self-terminate.
 
-AIS's Downloader dispatches each download request to the request's corresponding mountpath jogger, which will process and handle the request accordingly. To learn more about AIS's Downloader and how to use its endpoints, refer to the Downloader [README](downloader/README.md). In the README, you'll also find details about AIS's multi and list download operations, which are useful to download multiple objects easily. In the `downloader` package [folder](downloader/), you will also find sample scripts to upload very large machine learning datasets to AIS easily that utilize AIS's download endpoints.
+AIS's Downloader dispatches each download request to the request's corresponding mountpath jogger, which will process and handle the request accordingly. To learn more about AIS's Downloader and how to use its endpoints, refer to the Downloader [README](/downloader/README.md). In the README, you'll also find details about AIS's multi and list download operations, which are useful to download multiple objects easily. In the `downloader` package [folder](/downloader/), you will also find sample scripts to upload very large machine learning datasets to AIS easily that utilize AIS's download endpoints.
 
 ### Replication
 

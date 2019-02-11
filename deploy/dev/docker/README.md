@@ -4,7 +4,7 @@ There are two different ways, or modes, to deploy AIS in Docker containers. We r
 [Quick-start mode](#quick-start-ais-cluster) allows for a quick containerized deployment of AIS with minimal setup. [Development mode](#developer-mode) allows users to test and develop AIS in a more robust containerized environment.
 
 ## Quick-start AIS Cluster
-Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](docs/docker_main.md)
+Create a containerized, one-proxy, one-target deployment of AIStore within seconds. The minimum requirements to get this working is to have Docker installed. If you don't have Docker and Docker-Compose installed, please see [Getting started with Docker.](/docs/docker_main.md)
 
 > For some tests, AWS config and credential files are needed
 
@@ -50,7 +50,7 @@ Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deplo
 
 ## Requirements
 
->Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](docs/docker_main.md)
+>Install Docker and Docker-Compose prior to deploying a cluster. For setting up Docker services please read [Getting started with Docker.](/docs/docker_main.md)
 
 [`$GOPATH`](https://golang.org/doc/code.html#GOPATH) environment variable must be defined before starting cluster deployment. Docker uses the `$GOPATH/src` directory as a bind mount for the container. The container at start builds new binaries from the current sources.
 
@@ -90,7 +90,7 @@ Note:
 * If the `-s` or `--single` and `-m` or `--multi` flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
-Please see [main AIStore README](docs/configuration.md) for more information about testing mode.
+Please see [main AIStore README](/docs/configuration.md) for more information about testing mode.
 
 Example Usage:
 ```sh
@@ -183,7 +183,7 @@ $ BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h -url=http://172.51.
 
 ## Running benchmark tests in the Docker environment
 
-AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](../../../bench/aisloader)
+AIStore Docker clusters can also be deployed in Dry-Run mode. These modes can be activated either through the interactive interface or by passing in either **one** of `-nodiskio` or `-nonetio`. See more about benchmark tests, see [AIS Loader](/bench/aisloader/README.md)
 
 
 ## Utility Scripts

@@ -15,16 +15,16 @@ AIStore supports 3 types of download requests:
 * *Multi* - download multiple objects
 * *List* - download multiple objects based on a given naming pattern
 
-> - Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](../docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](../README.md#python-client).
+> - Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client).
 
 Rest of this document is structured around these 3 supported types of downloads:
 
 ## Table of Contents
-- [Single-object download](single-object-download)
-- [Multi-object download](multi-object-download)
-- [List download](list-download)
-- [Cancellation](cancellation)
-- [Status of the download](status-of-the-download)
+- [Single-object download](#single-object-download)
+- [Multi-object download](#multi-object-download)
+- [List download](#list-download)
+- [Cancellation](#cancellation)
+- [Status of the download](#status-of-the-download)
 
 ## Single-object download
 

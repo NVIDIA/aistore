@@ -1,17 +1,17 @@
 ## Table of Contents
 - [AIS Load Generator](#ais-load-generator)
    - [Cluster Under Test](#cluster-under-test)
-   - [Local vs Cloud-based bucket](local-vs-cloud-based-bucket)
-   - [Duration](duration)
-   - [Write vs Read](write-vs-read)
-   - [Read range](read-range)
-   - [Cleanup](cleanup)
-   - [Object size](object-size)
-   - [Grafana and Graphite](grafana-and-graphite)
+   - [Local vs Cloud-based bucket](#local-vs-cloud-based-bucket)
+   - [Duration](#duration)
+   - [Write vs Read](#write-vs-read)
+   - [Read range](#read-range)
+   - [Cleanup](#cleanup)
+   - [Object size](#object-size)
+   - [Grafana and Graphite](#grafana-and-graphite)
 
 ## AIS Load Generator
 
-`aisloader` is a command-line load generator [included with AIStore](../bench/aisloader/). For usage, cd to the `aisloader` source directory and run:
+`aisloader` is a command-line load generator [included with AIStore](/bench/aisloader/). For usage, cd to the `aisloader` source directory and run:
 
 ```shell
 $ go install
@@ -54,7 +54,7 @@ Nothing to read, bucket is empty
 
 In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-local' to select between local bucket (`-local=true`) or Cloud-based one (`-local=false`).
 
-> Terminology: the term *local bucket* simply means that the bucket in question does not cache (or tier) and is not backed by the namesake Cloud bucket. AIStore-own local buckets are totally distributed, content-wise, across the entire AIS cluster. All the [supported storage services](../docs/storage_svcs.md) equally apply to both sorts of buckets.
+> Terminology: the term *local bucket* simply means that the bucket in question does not cache (or tier) and is not backed by the namesake Cloud bucket. AIStore-own local buckets are totally distributed, content-wise, across the entire AIS cluster. All the [supported storage services](/docs/storage_svcs.md) equally apply to both sorts of buckets.
 
 Note that aisloader **will create a local bucket if it does not exist**.
 
@@ -144,9 +144,9 @@ By default, object sizes are randomly selected as well in the range between 1MiB
 
 ### Setting bucket properties
 
-Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](../docs/storage_svcs.md)).
+Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/docs/storage_svcs.md)).
 
-> For background on local mirroring and erasure coding (EC), please see [storage services](../docs/storage_svcs.md).
+> For background on local mirroring and erasure coding (EC), please see [storage services](/docs/storage_svcs.md).
 
 To achieve that, use the option `-bprops`. For example:
 

@@ -102,7 +102,7 @@ On the wire, each transmitted object will have the layout:
 
 The size must be known upfront, which is the current limitation.
 
-A stream (the [Stream type](transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
+A stream (the [Stream type](/transport/send.go)) carries a sequence of objects of arbitrary sizes and contents, and overall looks as follows:
 
 >> object1 = (**[header1]**, **[data1]**) object2 = (**[header2]**, **[data2]**), etc.
 

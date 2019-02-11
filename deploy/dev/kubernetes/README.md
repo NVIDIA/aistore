@@ -1,5 +1,5 @@
 ## Disclaimer
-> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](../docker).
+> For a more robust version, the development team has switched over to Docker. If you would like to deploy AIS in a containerized environment, consider using Docker. The Docker folder can be found in [`deploy/dev/docker`](/deploy/dev/docker).
 
 ##  Kubeadm: Deploying an AIStore Cluster
 For development purposes, we are going to use [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) to create a simple two node cluster with any number of proxies and any number of targets. Users can also decide to deploy AIS with a single-node.
@@ -142,7 +142,7 @@ $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}
 
 > This uses port `31337` to communicate with the node.
 
-For the full list of commands, see the [HTTP_API](docs/http_api.md).
+For the full list of commands, see the [HTTP_API](/docs/http_api.md).
 
 
 #### Stopping the Cluster

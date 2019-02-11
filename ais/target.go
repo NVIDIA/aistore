@@ -3463,19 +3463,19 @@ func (t *targetrunner) ensureLatestBMD(msg cmn.ActionMsg) string {
 	bucketmd := t.bmdowner.Get()
 	bmdVal, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		return fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value)
+		return fmt.Sprintf("unexpected Value format %+v, %T", msg.Value, msg.Value)
 	}
 	v1, ok1 := bmdVal["version"]
 	v2, ok2 := v1.(float64)
 	if !ok1 || !ok2 {
-		return fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2)
+		return fmt.Sprintf("invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2)
 	}
 	version := int64(v2)
 	if bucketmd.Version < version {
 		glog.Infof("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, version, msg.Action)
 		t.bmdVersionFixup()
 	} else if bucketmd.Version > version {
-		glog.Warningf("own bucket-metadata version %d > %d - proceeding to %v anyways", bucketmd.Version, version, msg.Action)
+		return fmt.Sprintf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, version, msg.Action)
 	}
 	return ""
 }
