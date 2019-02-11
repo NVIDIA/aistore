@@ -78,23 +78,14 @@ func (m *Manager) start() (err error) {
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	// After each target participates in the cluster-wide record distribution, start listening for the signal
-	// to start creating shards locally.
-	shardCreation := &sync.WaitGroup{}
-	shardCreation.Add(1)
-	shardCreationErrCh := make(chan error, 1)
-	go func() {
-		shardCreationErrCh <- m.createShardsLocally()
-		shardCreation.Done()
-	}()
-
 	// Run phase 3. only if you are final target (and actually have any sorted records)
 	if curTargetIsFinal && m.recManager.Records.Len() > 0 {
 		shardSize := m.rs.OutputShardSize
 		if m.extractCreator.UsingCompression() {
-			// By making the assumption that the input content is reasonably uniform across all shards,
-			// the output shard size required (such that each gzip compressed output shard will have
-			// a size close to rs.ShardSizeBytes) can be estimated.
+			// By making the assumption that the input content is reasonably
+			// uniform across all shards, the output shard size required (such
+			// that each gzip compressed output shard will have a size close to
+			// rs.ShardSizeBytes) can be estimated.
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
 			glog.V(4).Infof("estimated output shard size required before gzip compression: %d", shardSize)
@@ -106,8 +97,9 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
-	shardCreation.Wait()
-	if err := <-shardCreationErrCh; err != nil {
+	// After each target participates in the cluster-wide record distribution,
+	// start listening for the signal to start creating shards locally.
+	if err := m.createShardsLocally(); err != nil {
 		return err
 	}
 

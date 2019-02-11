@@ -342,10 +342,8 @@ func (m *Manager) cleanup() {
 
 	m.streamWriters.writers = nil
 
-	m.recManager.Cleanup()
 	m.shardManager.Cleanup()
 	m.extractCreator = nil
-	extract.FreeMemory()
 	m.client = nil
 
 	m.ctx.smap.Listeners().Unreg(m)
@@ -366,6 +364,13 @@ func (m *Manager) finalCleanup() {
 	if err := m.cleanupStreams(); err != nil {
 		glog.Error(err)
 	}
+
+	// The reason why this is not in regular cleanup is because we are only sure
+	// that this can be freed once we cleanup streams - streams are asynchronous
+	// and we may have race between in-flight request and cleanup.
+	m.recManager.Cleanup()
+	extract.FreeMemory()
+
 	m.finishedAck.m = nil
 	Managers.persist(m.ManagerUUID)
 }
