@@ -373,7 +373,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 
 	msg := VoteMessage{Record: *vr}
 	jsbytes, err := jsoniter.Marshal(&msg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	q := url.Values{}
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
@@ -418,7 +418,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				StartTime: time.Now(),
 				Initiator: p.si.DaemonID,
 			}})
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	smap := p.smapowner.get()
 	res := p.broadcastTo(
@@ -515,7 +515,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) {
 	msg := VoteInitiationMessage{Request: *vr}
 	body, err := jsoniter.Marshal(&msg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	args := callArgs{
 		si: nextPrimaryProxy,

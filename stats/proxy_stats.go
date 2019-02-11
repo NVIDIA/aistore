@@ -56,7 +56,7 @@ func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarsh
 //
 func (s *ProxyCoreStats) doAdd(name string, val int64) {
 	v, ok := s.Tracker[name]
-	cmn.Assert(ok, "Invalid stats name '"+name+"'")
+	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
 	if v.kind == KindLatency {
 		if strings.HasSuffix(name, ".µs") {
 			nroot := strings.TrimSuffix(name, ".µs")
@@ -94,7 +94,7 @@ func (s *ProxyCoreStats) copyZeroReset(ctracker copyTracker) {
 			v.Unlock()
 		} else if v.kind == KindThroughput {
 			v.Lock()
-			cmn.Assert(s.statsTime.Seconds() > 0, "ProxyCoreStats: statsTime not set")
+			cmn.AssertMsg(s.statsTime.Seconds() > 0, "ProxyCoreStats: statsTime not set")
 			throughput := v.Value / int64(s.statsTime.Seconds()) // note: int divide
 			ctracker[name] = &copyValue{Value: throughput}
 			v.Value = 0

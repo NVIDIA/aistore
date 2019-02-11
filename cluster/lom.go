@@ -399,7 +399,7 @@ func (lom *LOM) checksum(action int) (errstr string) {
 	if lom.Cksumcfg.Checksum == cmn.ChecksumNone {
 		return
 	}
-	cmn.Assert(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
+	cmn.AssertMsg(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
 	if lom.Nhobj != nil {
 		_, storedCksum = lom.Nhobj.Get()
 	} else if b, errstr = fs.GetXattr(lom.Fqn, cmn.XattrXXHash); errstr != "" {

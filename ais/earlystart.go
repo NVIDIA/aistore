@@ -107,7 +107,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 3: join as a non-primary, or
 	// 	   keep starting up as a primary
 	if !guessAmPrimary {
-		cmn.Assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
+		cmn.AssertMsg(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
 		glog.Infof("%s: starting up as non-primary, joining => %s", p.si, getSmapURL)
 		p.secondaryStartup(getSmapURL)
 		return
@@ -151,9 +151,8 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			glog.Fatalf("FATAL: %s", s)
 		}
 		smap := &smapX{}
-		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
-			cmn.Assert(false, err)
-		}
+		err := jsoniter.Unmarshal(res.outjson, smap)
+		cmn.AssertNoErr(err)
 		if !smap.isValid() {
 			s := fmt.Sprintf("Invalid Smap at startup/registration: %s", smap.pp())
 			glog.Fatalln(s)

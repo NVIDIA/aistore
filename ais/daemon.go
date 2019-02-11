@@ -176,7 +176,7 @@ func aisinit(version, build string) {
 	var err error
 
 	flag.Parse()
-	cmn.Assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	cmn.AssertMsg(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 
 	dryRun.size, err = cmn.S2B(dryRun.sizeStr)
 	if dryRun.size < 1 || err != nil {

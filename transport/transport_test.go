@@ -440,12 +440,12 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.Assert(hdr.IsLocal, "incorrectly set is local value")
-		cmn.Assert(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs), fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
+		cmn.AssertMsg(hdr.IsLocal, "incorrectly set is local value")
+		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs), fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 
 		written, err := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(err == nil)
-		cmn.Assert(written == hdr.ObjAttrs.Size, fmt.Sprintf("written: %d, expected: %d", written, hdr.ObjAttrs.Size))
+		cmn.AssertMsg(written == hdr.ObjAttrs.Size, fmt.Sprintf("written: %d, expected: %d", written, hdr.ObjAttrs.Size))
 
 		atomic.AddInt64(&receivedCount, 1)
 	}

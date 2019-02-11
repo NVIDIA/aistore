@@ -258,7 +258,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 	}
 
 	jsbytes, err = jsoniter.Marshal(reslist)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	return
 }
 

@@ -383,7 +383,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide metadata and the temporary gfn state:
 	err = jsoniter.Unmarshal(res.outjson, &meta)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	t.gfn.lookup = true
 	t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
 	// bmd
@@ -1468,7 +1468,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
 	jsbytes, err := jsoniter.Marshal(status)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
 		return
 	}
@@ -1992,7 +1992,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsbytes, err := jsoniter.Marshal(bucketnames)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
 
@@ -2003,7 +2003,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	jsbytes, err := jsoniter.Marshal(reslist)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	ok = t.writeJSON(w, r, jsbytes, "listbucket")
 	return
 }
@@ -2854,7 +2854,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
 		jsbytes, err := rst.GetWhatStats()
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatXaction:
 		var (
@@ -2870,7 +2870,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			jsbytes = sts.GetPrefetchStats(kindDetails)
 		} else {
 			jsbytes, err = jsoniter.Marshal(kindDetails)
-			cmn.Assert(err == nil, err)
+			cmn.AssertNoErr(err)
 		}
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatMountpaths:
@@ -3045,7 +3045,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 
 	if !roi.cold && roi.lom.Cksumcfg.Checksum != cmn.ChecksumNone {
 		checkCksumType = roi.lom.Cksumcfg.Checksum
-		cmn.Assert(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
+		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
 
 		if !roi.migrated || roi.lom.Cksumcfg.ValidateClusterMigration {
 			saveHash = xxhash.New64()
@@ -3073,7 +3073,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		if roi.lom.Cksumcfg.ValidateColdGet && roi.cksumToCheck != nil {
 			expectedCksum = roi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
-			cmn.Assert(checkCksumType == cmn.ChecksumMD5, checkCksumType)
+			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5, checkCksumType)
 
 			checkHash = md5.New()
 			hashes = append(hashes, checkHash)
@@ -3141,7 +3141,7 @@ func (t *targetrunner) testCachepathMounts() {
 		}
 
 		err := fs.Mountpaths.Add(mpath)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	}
 }
 

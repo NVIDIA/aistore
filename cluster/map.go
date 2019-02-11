@@ -71,7 +71,7 @@ func (d *Snode) URL(network string) string {
 	case cmn.NetworkIntraData:
 		return d.IntraDataNet.DirectURL
 	default:
-		cmn.Assert(false, "unknown network '"+network+"'")
+		cmn.AssertMsg(false, "unknown network '"+network+"'")
 		return ""
 	}
 }

@@ -83,7 +83,7 @@ func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relative
 
 func (mfs *MountedFS) CreateBucketDir(bucketType string) error {
 	if !cmn.StringInSlice(bucketType, []string{cmn.LocalBs, cmn.CloudBs}) {
-		cmn.Assert(false, "unknown bucket type: '"+bucketType+"'")
+		cmn.AssertMsg(false, "unknown bucket type: '"+bucketType+"'")
 	}
 	availablePaths, _ := Mountpaths.Get()
 	for contentType := range CSM.RegisteredContentTypes {

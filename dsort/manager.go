@@ -338,7 +338,9 @@ func (m *Manager) cleanup() {
 		glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
 	}()
 
-	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
+	if m.inProgress() {
+		cmn.AssertMsg(false, fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
+	}
 
 	m.streamWriters.writers = nil
 
@@ -417,7 +419,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	case extZip:
 		m.extractCreator = extract.NewZipExtractCreator()
 	default:
-		cmn.Assert(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
+		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
 	}
 
 	return nil
@@ -569,7 +571,7 @@ func (m *Manager) maxMemoryUsage() (uint64, error) {
 	case memNumber:
 		return cmn.MinU64(m.maxMemUsage.Value, mem.Total), nil
 	default:
-		cmn.Assert(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", m.maxMemUsage.Type))
+		cmn.AssertMsg(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", m.maxMemUsage.Type))
 		return 0, nil
 	}
 }

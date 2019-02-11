@@ -97,7 +97,7 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 		case Gauge:
 			t = "g"
 		default:
-			cmn.Assert(false, m.Type)
+			cmn.AssertMsg(false, fmt.Sprintf("Unknown type %+v", m.Type))
 		}
 
 		if packet != "" {

@@ -312,7 +312,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		val  = nv.Val
 	)
 	v, ok := s.Tracker[name]
-	cmn.Assert(ok, "Invalid stats name '"+name+"'")
+	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
 	if v.isCommon {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
@@ -349,7 +349,7 @@ func (r *Trunner) GetPrefetchStats(allXactionDetails []XactionDetails) []byte {
 	}
 	v.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	return jsonBytes
 }
 
@@ -368,7 +368,7 @@ func (r *Trunner) GetRebalanceStats(allXactionDetails []XactionDetails) []byte {
 	vt.RUnlock()
 	vr.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	return jsonBytes
 }
 

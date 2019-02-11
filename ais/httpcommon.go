@@ -588,7 +588,9 @@ func (h *httprunner) broadcastTo(path string, query url.Values, method string, b
 	default:
 		cmn.Assert(false)
 	}
-	cmn.Assert(cmn.NetworkIsKnown(network), "unknown network '"+network+"'")
+	if !cmn.NetworkIsKnown(network) {
+		cmn.AssertMsg(false, "unknown network '"+network+"'")
+	}
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: method,
@@ -724,22 +726,22 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	switch getWhat {
 	case cmn.GetWhatConfig:
 		jsbytes, err = jsoniter.Marshal(cmn.GCO.Get())
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	case cmn.GetWhatSmap:
 		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	case cmn.GetWhatBucketMeta:
 		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	case cmn.GetWhatSmapVote:
 		_, xx := h.xactions.findL(cmn.ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	case cmn.GetWhatDaemonInfo:
 		jsbytes, err = jsoniter.Marshal(h.si)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)
@@ -1127,7 +1129,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
 	info, err := jsoniter.Marshal(h.si)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	if isproxy {

@@ -712,7 +712,7 @@ func (r *Mem2) doStats() {
 func (r *Mem2) assertReadyForUse() {
 	if r.Debug {
 		errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
-		cmn.Assert(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr)
+		cmn.AssertMsg(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr)
 	}
 }
 

@@ -236,12 +236,12 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	for tag, revs := range y.last {
 		jsbytes, err = revs.marshal()
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		if cowcopy, ok := y.lastclone[tag]; ok {
 			if cowcopy != string(jsbytes) {
 				s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
 					tag, revs.version())
-				cmn.Assert(false, s)
+				cmn.AssertMsg(false, s)
 			}
 		}
 	}
@@ -257,7 +257,7 @@ OUTER:
 		if tag == smaptag {
 			v := smap.version()
 			if revs.version() > v {
-				cmn.Assert(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
+				cmn.AssertMsg(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
 			} else if revs.version() < v {
 				glog.Warningf("Warning: %s: using newer Smap v%d to broadcast", s, v)
 			}
@@ -287,10 +287,10 @@ OUTER:
 
 		y.last[tag] = revs
 		jsbytes, err = revs.marshal()
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		y.lastclone[tag] = string(jsbytes)
 		jsmsg, err = jsoniter.Marshal(msg)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 
 		action, id := path.Split(msg.Action)
 		if action == cmn.ActRegTarget {
@@ -301,7 +301,7 @@ OUTER:
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
 	jsbytes, err = jsoniter.Marshal(payload)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	// step 3: b-cast
 	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
@@ -450,17 +450,17 @@ func (y *metasyncer) handlePending() (cnt int) {
 	pairs := make([]revspair, 0, len(y.last))
 	msg := &cmn.ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
 	jsmsg, err := jsoniter.Marshal(msg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	for tag, revs := range y.last {
 		body, err := revs.marshal()
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		payload[tag] = string(body)
 		payload[tag+actiontag] = string(jsmsg)
 		pairs = append(pairs, revspair{revs, msg})
 	}
 
 	body, err := jsoniter.Marshal(payload)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{

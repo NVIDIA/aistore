@@ -706,12 +706,12 @@ func (r *XactEC) dispatchRequest(req *Request) {
 	switch req.Action {
 	case ActRestore:
 		jogger, ok := r.getJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.Assert(ok, "Invalid mountpath given in EC request")
+		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 		r.stats.updateQueue(len(jogger.workCh))
 		jogger.workCh <- req
 	default:
 		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.Assert(ok, "Invalid mountpath given in EC request")
+		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 		if glog.V(4) {
 			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname)
 		}
@@ -793,12 +793,12 @@ func (r *XactEC) addMpath(mpath string) {
 
 func (r *XactEC) removeMpath(mpath string) {
 	getJog, ok := r.getJoggers[mpath]
-	cmn.Assert(ok, "Mountpath unregister handler for EC called with invalid mountpath")
+	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
 	getJog.stop()
 	delete(r.getJoggers, mpath)
 
 	putJog, ok := r.putJoggers[mpath]
-	cmn.Assert(ok, "Mountpath unregister handler for EC called with invalid mountpath")
+	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
 	putJog.stop()
 	delete(r.putJoggers, mpath)
 }

@@ -339,7 +339,7 @@ Loop:
 			case adminCancel:
 				d.dispatchCancel(req)
 			default:
-				cmn.Assert(false, req, req.action)
+				cmn.AssertFmt(false, req, req.action)
 			}
 		case task := <-d.downloadCh:
 			d.dispatchDownload(task)
@@ -461,10 +461,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	if !ok {
-		err := fmt.Errorf("no mpath exists for %v", t)
-		cmn.Assert(false, err)
-	}
+	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
 	j.addToDownloadQueue(t)
 }
 
@@ -488,10 +485,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	if !ok {
-		err := fmt.Errorf("cancel request with %v failed. No corresponding mpath exists", req)
-		cmn.Assert(false, err)
-	}
+	cmn.AssertMsg(ok, fmt.Sprintf("cancel request with %v failed. No corresponding mpath exists", req))
 
 	// Cancel currently running task
 	j.Lock()
@@ -532,10 +526,7 @@ func (d *Downloader) dispatchStatus(req *request) {
 		return
 	}
 	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	if !ok {
-		err := fmt.Errorf("status request with %v failed. No corresponding mpath exists", req)
-		cmn.Assert(false, err)
-	}
+	cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
 
 	var written bool
 	j.Lock()

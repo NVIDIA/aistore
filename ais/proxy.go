@@ -522,7 +522,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 		msg.Value = clone
 		jsonbytes, err := jsoniter.Marshal(msg)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 
 		// wipe the local copy of the cloud bucket on targets
 		smap := p.smapowner.get()
@@ -654,7 +654,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	v.Unlock()
 	jsbytes, err := jsoniter.Marshal(rr.Core)
 
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
@@ -1067,13 +1067,13 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if body == nil {
 		var err error
 		body, err = jsoniter.Marshal(msg)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 	}
 	p.rproxy.Lock()
 	if p.rproxy.u != smap.ProxySI.PublicNet.DirectURL {
 		p.rproxy.u = smap.ProxySI.PublicNet.DirectURL
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
 		p.rproxy.p.Transport = cmn.NewTransport(cmn.ClientArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
@@ -1099,7 +1099,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 	rproxy, ok := p.rproxy.tmap[tsi.DaemonID]
 	if !ok || rproxy == nil {
 		uparsed, err := url.Parse(tsi.PublicNet.DirectURL)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		rproxy = httputil.NewSingleHostReverseProxy(uparsed)
 		rproxy.Transport = cmn.NewTransport(cmn.ClientArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
@@ -1115,7 +1115,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	smap4bcast := p.smapowner.get()
 	msg.Value = clone
 	jsbytes, err := jsoniter.Marshal(msg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom),
@@ -1151,7 +1151,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 
 func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.ActionMsg, config *cmn.Config) {
 	jsbytes, err := jsoniter.Marshal(msg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		nil, // query
@@ -1185,7 +1185,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
 		jsbytes, err := jsoniter.Marshal(bucketnames)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, "getbucketnames?local=true")
 		return
 	}
@@ -1596,7 +1596,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		return
 	}
 	jsbytes, err := jsoniter.Marshal(allentries)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	ok = p.writeJSON(w, r, jsbytes, "listbucket")
 	pagemarker = allentries.PageMarker
 	return
@@ -1671,7 +1671,7 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 	}
 	// Send json message to all
 	jsonbytes, err := jsoniter.Marshal(actionMsg)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	var (
 		q       = url.Values{}
@@ -1820,7 +1820,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
 		jsbytes, err := rst.GetWhatStats()
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatSmap:
 		smap := p.smapowner.get()
@@ -1835,7 +1835,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			smap = p.smapowner.get()
 		}
 		jsbytes, err := jsoniter.Marshal(smap)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	default:
 		p.httprunner.httpdaeget(w, r)
@@ -2074,7 +2074,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si, true) {
-		cmn.Assert(false, "This proxy '"+p.si.DaemonID+"' must always be present in the local "+smap.pp())
+		cmn.AssertMsg(false, "This proxy '"+p.si.DaemonID+"' must always be present in the local "+smap.pp())
 	}
 	clone := smap.clone()
 	// FIXME: may be premature at this point
@@ -2312,7 +2312,7 @@ func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Reques
 	} else {
 		jsbytes, err = jsoniter.Marshal(results)
 	}
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	return p.writeJSON(w, r, jsbytes, "getXaction")
 }
 
@@ -2356,7 +2356,7 @@ func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.R
 	rr := getproxystatsrunner()
 	out.Proxy = rr.Core
 	jsbytes, err := jsoniter.Marshal(out)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
 	return ok
 }
@@ -2374,7 +2374,7 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 	out := &ClusterMountpathsRaw{}
 	out.Targets = targetMountpaths
 	jsbytes, err := jsoniter.Marshal(out)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterMountpaths")
 	return ok
 }
@@ -2415,7 +2415,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
 	}
 	body, err := jsoniter.Marshal(nsi)
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 	if p.forwardCP(w, r, msg, s, body) {
 		return
 	}
@@ -2472,7 +2472,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		bmd := p.bmdowner.get()
 		meta := targetRegMeta{smap, bmd}
 		jsbytes, err := jsoniter.Marshal(&meta)
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, path.Join(cmn.ActRegTarget, nsi.DaemonID) /* tag */)
 	}
 
@@ -2683,7 +2683,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else {
 			glog.Infof("setconfig %s=%s", msg.Name, value)
 			msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
-			cmn.Assert(err == nil, err)
+			cmn.AssertNoErr(err)
 
 			results := p.broadcastTo(
 				cmn.URLPath(cmn.Version, cmn.Daemon),
@@ -2710,7 +2710,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets
-		cmn.Assert(err == nil, err)
+		cmn.AssertNoErr(err)
 
 		p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
@@ -2890,7 +2890,7 @@ func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketC
 
 func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 	jsbytes, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRechecksum})
-	cmn.Assert(err == nil, err)
+	cmn.AssertNoErr(err)
 
 	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
@@ -2929,9 +2929,8 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 		return false
 	}
 	si := &cluster.Snode{}
-	if err := jsoniter.Unmarshal(res.outjson, si); err != nil {
-		cmn.Assert(false, err)
-	}
+	err := jsoniter.Unmarshal(res.outjson, si)
+	cmn.AssertNoErr(err)
 	return !nsi.Equals(si)
 }
 

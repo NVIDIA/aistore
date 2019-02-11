@@ -74,6 +74,6 @@ func (tg *TimeoutGroup) Done() {
 			tg.fin <- struct{}{}
 		}
 	} else if left < 0 {
-		Assert(false, fmt.Sprintf("jobs left is below zero: %d", left))
+		AssertMsg(false, fmt.Sprintf("jobs left is below zero: %d", left))
 	}
 }

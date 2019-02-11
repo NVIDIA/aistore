@@ -110,17 +110,14 @@ func (f *ContentSpecMgr) RegisterFileType(contentType string, spec ContentResolv
 // contain additional info which will then speed up subsequent parsing
 func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
 	parsedFQN, err := Mountpaths.FQN2Info(fqn)
-	if err != nil {
-		cmn.Assert(false, err)
-		return ""
-	}
+	cmn.AssertNoErr(err)
 	return f.GenContentParsedFQN(parsedFQN, contentType, prefix)
 }
 
 func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN FQNparsed, contentType, prefix string) (fqn string) {
 	spec, ok := f.RegisteredContentTypes[contentType]
 	if !ok {
-		cmn.Assert(false, fmt.Sprintf("Invalid content type '%s'", contentType))
+		cmn.AssertMsg(false, fmt.Sprintf("Invalid content type '%s'", contentType))
 	}
 	fqn = f.FQN(
 		parsedFQN.MpathInfo,
@@ -159,7 +156,7 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 
 func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, isLocal bool, bucket, objName string) (fqn string) {
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
-		cmn.Assert(false, fmt.Sprintf("contentType %s was not registered", contentType))
+		cmn.AssertMsg(false, fmt.Sprintf("contentType %s was not registered", contentType))
 	}
 	return mi.MakePathBucketObject(contentType, bucket, objName, isLocal)
 }

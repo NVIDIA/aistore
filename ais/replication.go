@@ -191,7 +191,7 @@ func (rr *replicationRunner) dispatchRequest(req *replRequest) {
 	mpath := mpathInfo.Path
 
 	r, ok := rr.mpathReplicators[mpath]
-	cmn.Assert(ok, "Invalid mountpath given in replication request")
+	cmn.AssertMsg(ok, "Invalid mountpath given in replication request")
 
 	go r.once.Do(r.jog) // FIXME: (only run replicator if there is at least one replication request)
 	r.replReqCh <- req
@@ -248,7 +248,7 @@ func (rr *replicationRunner) addMpath(mpath string) {
 
 func (rr *replicationRunner) removeMpath(mpath string) {
 	replicator, ok := rr.mpathReplicators[mpath]
-	cmn.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
+	cmn.AssertMsg(ok, "Mountpath unregister handler for replication called with invalid mountpath")
 	replicator.Stop()
 	delete(rr.mpathReplicators, mpath)
 }

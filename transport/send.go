@@ -276,7 +276,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 	}
 	// next object => SQ
 	if reader == nil {
-		cmn.Assert(hdr.ObjAttrs.Size == 0, "nil reader: expecting zero-length data")
+		cmn.AssertMsg(hdr.ObjAttrs.Size == 0, "nil reader: expecting zero-length data")
 		reader = nopRC
 	}
 	obj := obj{hdr: hdr, reader: reader, callback: callback}

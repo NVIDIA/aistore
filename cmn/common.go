@@ -145,19 +145,42 @@ func (ss StringSet) String() string {
 	return strings.Join(keys, ",")
 }
 
-func Assert(cond bool, args ...interface{}) {
+const assertMsg = "assertion failed"
+
+// NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
+func AssertFmt(cond bool, args ...interface{}) {
 	if cond {
 		return
 	}
-	var message = "assertion failed"
+	var message = assertMsg
 	if len(args) > 0 {
 		message += ": "
 		for i := 0; i < len(args); i++ {
 			message += fmt.Sprintf("%#v ", args[i])
 		}
 	}
-	glog.Flush()
 	panic(message)
+}
+
+// this and the other two asserts get inlined and optimized
+func Assert(cond bool) {
+	if !cond {
+		panic(assertMsg)
+	}
+}
+
+// NOTE: preferable usage is to have the 'if' in the calling code:
+//       if (!cond) { AssertMsg(false, msg) }
+// - otherwise the message (e.g. Sprintf) may get evaluated every time
+func AssertMsg(cond bool, msg string) {
+	if !cond {
+		panic(assertMsg + ": " + msg)
+	}
+}
+func AssertNoErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 func StringInSlice(s string, arr []string) bool {

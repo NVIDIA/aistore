@@ -146,7 +146,7 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key string, kind string, isCommon ...bool) {
-	cmn.Assert(kind == KindCounter || kind == KindLatency || kind == KindThroughput || kind == KindSpecial, "Invalid stats kind '"+kind+"'")
+	cmn.AssertMsg(kind == KindCounter || kind == KindLatency || kind == KindThroughput || kind == KindSpecial, "Invalid stats kind '"+kind+"'")
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {
 		tracker[key].isCommon = isCommon[0]

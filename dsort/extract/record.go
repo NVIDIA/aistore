@@ -158,7 +158,7 @@ func (r *Records) Less(i, j int, formatType string) bool {
 		return lhs.(string) < rhs.(string)
 	}
 
-	cmn.Assert(false, lhs, rhs, r.arr[i], r.arr[j])
+	cmn.AssertFmt(false, lhs, rhs, r.arr[i], r.arr[j])
 	return false
 }
 

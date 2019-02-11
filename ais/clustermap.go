@@ -108,20 +108,24 @@ func (m *smapX) containsID(id string) bool {
 }
 
 func (m *smapX) addTarget(tsi *cluster.Snode) {
-	cmn.Assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	if m.containsID(tsi.DaemonID) {
+		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	}
 	m.Tmap[tsi.DaemonID] = tsi
 	m.Version++
 }
 
 func (m *smapX) addProxy(psi *cluster.Snode) {
-	cmn.Assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	if m.containsID(psi.DaemonID) {
+		cmn.AssertMsg(false, "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	}
 	m.Pmap[psi.DaemonID] = psi
 	m.Version++
 }
 
 func (m *smapX) delTarget(sid string) {
 	if m.GetTarget(sid) == nil {
-		cmn.Assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -129,7 +133,7 @@ func (m *smapX) delTarget(sid string) {
 
 func (m *smapX) delProxy(pid string) {
 	if m.GetProxy(pid) == nil {
-		cmn.Assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
 	}
 	delete(m.Pmap, pid)
 	m.Version++
@@ -317,7 +321,7 @@ func (sls *smaplisteners) Reg(sl cluster.Slistener) {
 	l := len(sls.listeners)
 	for k := 0; k < l; k++ {
 		if sls.listeners[k] == sl {
-			cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
+			cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
 		}
 		if sls.listeners[k].String() == sl.String() {
 			glog.Warningf("duplicate smap-listener %s", sl)
@@ -344,7 +348,7 @@ func (sls *smaplisteners) Unreg(sl cluster.Slistener) {
 		return
 	}
 	sls.Unlock()
-	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
+	cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
 }
 
 func (sls *smaplisteners) notify() {

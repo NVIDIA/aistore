@@ -246,7 +246,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	)
 	n, err = it.body.Read(it.headerBuf[:sizeofI64*2])
 	if n < sizeofI64*2 {
-		cmn.Assert(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
+		cmn.AssertMsg(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
 		}
@@ -274,7 +274,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 		return
 	}
 	if debug {
-		cmn.Assert(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
+		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
 	}
 	hdr, sessid = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
@@ -328,7 +328,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	off, sessid = extInt64(off, body)
 	if debug {
-		cmn.Assert(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
+		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
 	}
 	return
 }
