@@ -36,10 +36,6 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
-const ( // to compute MaxIdleConnsPerHost and MaxIdleConns
-	targetMaxIdleConnsPer = 32
-	proxyMaxIdleConnsPer  = 32
-)
 const ( //  h.call(timeout)
 	defaultTimeout = time.Duration(-1)
 	longTimeout    = time.Duration(0)
@@ -172,7 +168,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: add support for caching HTTPS requests
-	dest_conn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
+	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -187,7 +183,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Client does not support hijacking", http.StatusInternalServerError)
 		return
 	}
-	client_conn, _, err := hijacker.Hijack()
+	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	}
@@ -202,8 +198,8 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// NOTE: it looks like double closing both connections.
 	// Need to check how the tunnel works
-	go transfer(dest_conn, client_conn)
-	go transfer(client_conn, dest_conn)
+	go transfer(destConn, clientConn)
+	go transfer(clientConn, destConn)
 }
 
 type httprunner struct {

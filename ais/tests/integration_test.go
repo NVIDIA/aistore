@@ -2049,6 +2049,7 @@ func testLocalMirror(t *testing.T, erase bool) {
 			responseBytes, err := tutils.GetXactionResponse(m.proxyURL, cmn.ActEraseCopies)
 			tutils.CheckFatal(err, t)
 			err = json.Unmarshal(responseBytes, &allDetails)
+			tutils.CheckFatal(err, t)
 			ok = true
 			for tid := range allDetails {
 				detail := allDetails[tid][0] // TODO

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -273,11 +272,4 @@ func TestLsblk(t *testing.T) {
 			}
 		}
 	}
-}
-
-func updateTestConfig(d time.Duration) {
-	config := cmn.GCO.BeginUpdate()
-	config.Periodic.StatsTime = d
-	config.Periodic.IostatTime = time.Second
-	cmn.GCO.CommitUpdate(config)
 }

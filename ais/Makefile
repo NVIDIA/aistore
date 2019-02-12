@@ -120,7 +120,7 @@ lint-install:
 	@go get -u honnef.co/go/tools/cmd/staticcheck
 
 LINT_VET_IGNORE := -composites=false
-LINT_IGNORE := "(should have comment|comment on exported)"
+LINT_IGNORE := "(should have comment|comment on exported|don't use an underscore in package name|should be consistent with previous receiver name|by other packages, and that stutters;|error should be returned as the last|error should be the last type)"
 
 lint:
 	@CHECK="lint" LINT_VET_IGNORE=$(LINT_VET_IGNORE) LINT_IGNORE=$(LINT_IGNORE) LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh

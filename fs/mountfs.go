@@ -162,7 +162,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 // GetIOStats returns the most recently updated previous/current (utilization, queue size)
 func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
 	cmn.Assert(name == StatDiskUtil || name == StatQueueLen)
-	tracker, _ := mi.iostats[name]
+	tracker := mi.iostats[name]
 	p := &tracker.prev
 	prev = p.U2F()
 	c := &tracker.curr
@@ -183,7 +183,7 @@ func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
 // updated utilizations and queue lengths of the disks used by this mountpath
 // (or, more precisely, the underlying local FS)
 func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
-	tracker, _ := mi.iostats[name]
+	tracker := mi.iostats[name]
 	if mi.ioepoch[name] < epoch {
 		// current => prev, f => curr, mi.epoch = epoch
 		curr := &tracker.curr
@@ -202,7 +202,6 @@ func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
 			atomic.StoreUint32(&curr.Min, u)
 		}
 	}
-	return
 }
 
 func (mi *MountpathInfo) String() string {

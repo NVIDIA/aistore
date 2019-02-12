@@ -52,8 +52,8 @@ const (
 	NotSupported = "not supported yet"
 	NoMountpaths = "no mountpaths"
 
-	GCS_URL     = "http://storage.googleapis.com"
-	GCS_URL_ALT = "http://www.googleapis.com"
+	GCS_URL     = "http://storage.googleapis.com" // nolint: golint
+	GCS_URL_ALT = "http://www.googleapis.com"     // nolint: golint
 )
 
 type (
@@ -194,15 +194,13 @@ func StringInSlice(s string, arr []string) bool {
 
 func CopyStruct(dst interface{}, src interface{}) {
 	x := reflect.ValueOf(src)
-	if x.Kind() == reflect.Ptr {
-		starX := x.Elem()
-		y := reflect.New(starX.Type())
-		starY := y.Elem()
-		starY.Set(starX)
-		reflect.ValueOf(dst).Elem().Set(y.Elem())
-	} else {
-		dst = x.Interface()
-	}
+	Assert(x.Kind() == reflect.Ptr)
+	starX := x.Elem()
+	y := reflect.New(starX.Type())
+	starY := y.Elem()
+	starY.Set(starX)
+	reflect.ValueOf(dst).Elem().Set(y.Elem())
+
 }
 
 //

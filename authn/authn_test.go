@@ -1,3 +1,4 @@
+// Authorization server for AIStore. See /authn/README.md for more info.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *

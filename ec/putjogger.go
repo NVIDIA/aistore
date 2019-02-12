@@ -242,7 +242,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*slice, error) {
 	var (
 		totalCnt = paritySlices + dataSlices
-		slices   = make([]*slice, totalCnt, totalCnt)
+		slices   = make([]*slice, totalCnt)
 		sgl      *memsys.SGL
 	)
 
@@ -269,8 +269,8 @@ func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*s
 
 	// readers are slices of original object(no memory allocated),
 	// writers are slices created by EC encoding process(memory is allocated)
-	readers := make([]io.Reader, dataSlices, dataSlices)
-	writers := make([]io.Writer, paritySlices, paritySlices)
+	readers := make([]io.Reader, dataSlices)
+	writers := make([]io.Writer, paritySlices)
 	for i := 0; i < dataSlices; i++ {
 		reader := memsys.NewSliceReader(sgl, int64(i)*sliceSize, sliceSize)
 		slices[i] = &slice{reader: reader}

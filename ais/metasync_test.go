@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type (

@@ -1,3 +1,4 @@
+// Package ais provides core functionality for the AIStore object storage.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -164,6 +165,7 @@ func (rr *replicationRunner) newSendReplRequest(dstDirectURL, fqn string, delete
 	return req
 }
 
+//lint:ignore U1000 unused
 func (rr *replicationRunner) newReceiveReplRequest(srcDirectURL, fqn string, httpReq *http.Request, sync bool) *replRequest {
 	req := &replRequest{
 		action:          replicationActReceive,
@@ -220,6 +222,7 @@ func (rr *replicationRunner) reqSendReplica(dstDirectURL, fqn string, deleteObje
 	return nil
 }
 
+//lint:ignore U1000 unused
 func (rr *replicationRunner) reqReceiveReplica(srcDirectURL, fqn string, r *http.Request) error {
 	req := rr.newReceiveReplRequest(srcDirectURL, fqn, r, true)
 	rr.replReqCh <- req

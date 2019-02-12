@@ -1,8 +1,8 @@
+// Package health provides a basic mountpath health monitor.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// Package health provides a basic mountpath health monitor.
 package health
 
 import (

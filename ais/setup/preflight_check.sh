@@ -8,14 +8,17 @@ lint)
     err_count=0
     echo "Checking vet..." >&2
     for dir in ${LINT_DIRS}
-    do                   
+    do
         errs=$(go tool vet "${LINT_VET_IGNORE}" "${dir}" 2>&1 | tee -a /dev/stderr | wc -l)
         err_count=$(($err_count + $errs))
     done
-    echo "Checking others..." >&2
-    errs=$(${GOPATH}/bin/gometalinter --exclude="${LINT_IGNORE}" --disable-all --enable=golint --enable=errcheck --enable=staticcheck ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
+    echo "Checking staticcheck..." >&2
+    errs=$(${GOPATH}/bin/gometalinter --exclude="${LINT_IGNORE}" --disable-all --enable=staticcheck --linter="staticcheck:staticcheck -tags hrw {path}:PATH:LINE:COL:MESSAGE" ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
     err_count=$(($err_count + $errs))
-    if [ "${err_count}" != "0" ]; then 
+    echo "Checking others..." >&2
+    errs=$(${GOPATH}/bin/gometalinter --exclude="${LINT_IGNORE}" --disable-all --enable=golint --enable=errcheck ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
+    err_count=$(($err_count + $errs))
+    if [ "${err_count}" != "0" ]; then
         echo "found ${err_count} lint errors, please fix or add exception" >&2
         exit 1
     fi
@@ -25,7 +28,7 @@ fmt)
     err_count=0
     echo "Running style check..." >&2
     for dir in ${LINT_DIRS}
-    do                   
+    do
         errs=$(${GOPATH}/bin/goimports -d ${dir} 2>&1 | tee -a /dev/stderr | grep -e "^diff -u" | wc -l)
         err_count=$(($err_count + $errs))
     done
@@ -39,7 +42,7 @@ spell)
     err_count=0
     echo "Running spell check..." >&2
     for dir in ${MISSPELL_DIRS}
-    do                   
+    do
         errs=$(${GOPATH}/bin/misspell "${dir}" 2>&1 | tee -a /dev/stderr | wc -l)
         err_count=$(($err_count + $errs))
     done

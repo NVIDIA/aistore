@@ -1,3 +1,4 @@
+// Package extract provides provides functions for working with compressed files
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -27,8 +28,8 @@ type tarFileHeader struct {
 
 	Size  int64  `json:"size"`  // Logical file size in bytes
 	Mode  int64  `json:"mode"`  // Permission and mode bits
-	Uid   int    `json:"uid"`   // User ID of owner
-	Gid   int    `json:"gid"`   // Group ID of owner
+	UID   int    `json:"uid"`   // User ID of owner
+	GID   int    `json:"gid"`   // Group ID of owner
 	Uname string `json:"uname"` // User name of owner
 	Gname string `json:"gname"` // Group name of owner
 }
@@ -97,8 +98,8 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 			Typeflag: metadata.Typeflag,
 			Linkname: metadata.Linkname,
 			Mode:     metadata.Mode,
-			Uid:      metadata.Uid,
-			Gid:      metadata.Gid,
+			Uid:      metadata.UID,
+			Gid:      metadata.GID,
 			Uname:    metadata.Uname,
 			Gname:    metadata.Gname,
 		}
@@ -148,8 +149,8 @@ func (t *tarExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 			Typeflag: header.Typeflag,
 			Linkname: header.Linkname,
 			Mode:     header.Mode,
-			Uid:      header.Uid,
-			Gid:      header.Gid,
+			UID:      header.Uid,
+			GID:      header.Gid,
 			Uname:    header.Uname,
 			Gname:    header.Gname,
 		}

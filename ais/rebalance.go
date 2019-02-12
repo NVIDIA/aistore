@@ -32,7 +32,6 @@ import (
 const NeighborRebalanceStartDelay = 10 * time.Second
 
 var (
-	runRebalanceOnce      = &sync.Once{}
 	runLocalRebalanceOnce = &sync.Once{}
 )
 

@@ -262,7 +262,7 @@ func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[st
 func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*Metadata) ([]*slice, map[int]string, error) {
 	wgSlices := cmn.NewTimeoutGroup()
 	sliceCnt := meta.Data + meta.Parity
-	slices := make([]*slice, sliceCnt, sliceCnt)
+	slices := make([]*slice, sliceCnt)
 	daemons := make([]string, 0, len(nodes)) // target to be requested for a slice
 	idToNode := make(map[int]string)         // which target what slice returned
 
@@ -328,9 +328,9 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) ([]*memsys.SGL, error) {
 	sliceCnt := meta.Data + meta.Parity
 	sliceSize := SliceSize(meta.Size, meta.Data)
-	readers := make([]io.Reader, sliceCnt, sliceCnt)
-	writers := make([]io.Writer, sliceCnt, sliceCnt)
-	sgls := make([]*memsys.SGL, sliceCnt, sliceCnt)
+	readers := make([]io.Reader, sliceCnt)
+	writers := make([]io.Writer, sliceCnt)
+	sgls := make([]*memsys.SGL, sliceCnt)
 
 	// allocate memory for reconstructed(missing) slices - EC requirement,
 	// and open existing slices for reading
@@ -365,7 +365,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		return sgls, err
 	}
 
-	srcReaders := make([]io.Reader, meta.Data, meta.Data)
+	srcReaders := make([]io.Reader, meta.Data)
 	for i := 0; i < meta.Data; i++ {
 		if slices[i] != nil && slices[i].sgl != nil && slices[i].sgl.Size() == sliceSize {
 			srcReaders[i] = memsys.NewReader(slices[i].sgl)
@@ -678,7 +678,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		}
 
 		metas[node.DaemonID] = &md
-		cnt, _ := chk[md.Checksum]
+		cnt := chk[md.Checksum]
 		cnt++
 		chk[md.Checksum] = cnt
 

@@ -141,10 +141,6 @@ type Manager struct {
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
 
-// contentPathFunc is type for the function which for given key and ext generates
-// a contentPath aka recordPath and fullPath.
-type contentPathFunc func(string, string) (string, string)
-
 func RegisterNode(smap cluster.Sowner, snode *cluster.Snode, t cluster.Target, nameLocker cluster.NameLocker) {
 	ctx.smap = smap
 	ctx.node = snode

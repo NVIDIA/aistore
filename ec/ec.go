@@ -222,13 +222,14 @@ func (m *Metadata) marshal() ([]byte, error) {
 	return jsoniter.Marshal(m)
 }
 
+//lint:ignore U1000 unused
 func (m *Metadata) unmarshal(b []byte) error {
 	return jsoniter.Unmarshal(b, m)
 }
 
 var (
 	mem2         = &memsys.Mem2{Name: "ec", MinPctFree: 10}
-	slicePadding = make([]byte, 64, 64) // for padding EC slices
+	slicePadding = make([]byte, 64) // for padding EC slices
 
 	ErrorECDisabled = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile = errors.New("no metafile")

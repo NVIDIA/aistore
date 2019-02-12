@@ -311,6 +311,9 @@ func TestFSCheckerDetection(t *testing.T) {
 		f.Close()
 		for _, n := range objList {
 			_, err = api.GetObject(baseParams, bucket, n)
+			if err != nil {
+				t.Errorf("Failed to get object %v: %v", n, err)
+			}
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")

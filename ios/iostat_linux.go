@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	iostatnumsys     = 6
 	iostatnumdsk     = 14
 	iostatMinVersion = 11
 )
@@ -41,7 +40,6 @@ type (
 			dutil          map[string]float32           // disk utilizations (iostat's %util)
 			dquel          map[string]float32           // disk queue lengths ("avgqu-sz" or "aqu-sz")
 			availablePaths map[string]*fs.MountpathInfo // cached fs.Mountpaths.Get
-			lastUpdate     time.Time
 		}
 	}
 	DevIOMetrics map[string]float32
@@ -135,7 +133,7 @@ func (r *IostatRunner) Run() error {
 			}
 			device := fields[0]
 			if mpath, ok := r.disks2mpath[device]; ok {
-				mpathInfo, _ := r.stats.availablePaths[mpath]
+				mpathInfo := r.stats.availablePaths[mpath]
 				lines[device] = strings.Join(fields, ", ")
 				for i := 1; i < len(fields); i++ {
 					name := r.metricNames[i-1]

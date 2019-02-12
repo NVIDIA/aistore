@@ -15,8 +15,7 @@ import (
 )
 
 const (
-	maxMapSize     = 1000
-	flushThreshold = 4 * 1024
+	maxMapSize = 1000
 )
 
 var (

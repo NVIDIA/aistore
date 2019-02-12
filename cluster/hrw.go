@@ -57,8 +57,8 @@ func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, 
 		node *Snode
 		hash uint64
 	}
-	arr := make([]tsi, len(smap.Tmap), len(smap.Tmap))
-	si = make([]*Snode, count, count)
+	arr := make([]tsi, len(smap.Tmap))
+	si = make([]*Snode, count)
 	name := Uname(bucket, objname)
 	digest := xxhash.ChecksumString64S(name, MLCG32)
 

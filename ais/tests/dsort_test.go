@@ -34,7 +34,6 @@ type dsortFramework struct {
 	fileInTarballSize int
 	tarballSize       int
 	outputShardCnt    int
-	customFileType    string
 
 	extension       string
 	algorithm       *dsort.SortAlgorithm

@@ -37,7 +37,8 @@ const (
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
-	xreplication     = "replication" // TODO: fix replication
+	//lint:ignore U1000 unused
+	xreplication = "replication" // TODO: fix replication
 )
 
 type (
@@ -341,6 +342,7 @@ func gettargetkeepalive() *targetKeepaliveRunner {
 }
 
 // TODO: fix replication
+//lint:ignore U1000 unused
 func getreplicationrunner() *replicationRunner {
 	r := ctx.rg.runmap[xreplication]
 	rr, ok := r.(*replicationRunner)
@@ -351,13 +353,6 @@ func getreplicationrunner() *replicationRunner {
 func getstorstatsrunner() *stats.Trunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*stats.Trunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getiostatrunner() *ios.IostatRunner {
-	r := ctx.rg.runmap[xiostat]
-	rr, ok := r.(*ios.IostatRunner)
 	cmn.Assert(ok)
 	return rr
 }

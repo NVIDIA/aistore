@@ -1,3 +1,4 @@
+// Package extract provides provides functions for working with compressed files
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -117,10 +118,6 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{},
 	default:
 		return nil, fmt.Errorf("not implemented extractor type: %s", ke.ty)
 	}
-}
-
-func (ske *SingleKeyExtractor) extract() {
-	return
 }
 
 func ValidateAlgorithmFormatType(ty string) error {

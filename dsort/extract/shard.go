@@ -1,3 +1,4 @@
+// Package extract provides provides functions for working with compressed files
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

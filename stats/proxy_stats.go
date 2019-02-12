@@ -48,8 +48,8 @@ func (s *ProxyCoreStats) init(size int) {
 	s.Tracker.registerCommonStats()
 }
 
-func (p *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(p.Tracker) }
-func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &p.Tracker) }
+func (s *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
+func (s *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
 
 //
 // NOTE naming convention: ".n" for the count and ".µs" for microseconds

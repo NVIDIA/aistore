@@ -86,6 +86,7 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 
 // ecEnabled returns whether or not erasure coding is enabled
 // for the bucket. Returns false if bucket not found
+//lint:ignore U1000 unused
 func (m *bucketMD) ecEnabled(bucket string) bool {
 	p, ok := m.Get(bucket, m.IsLocal(bucket))
 	return ok && p.ECEnabled

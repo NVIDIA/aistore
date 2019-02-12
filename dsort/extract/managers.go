@@ -1,3 +1,4 @@
+// Package extract provides provides functions for working with compressed files
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -5,7 +6,6 @@ package extract
 
 import (
 	"bytes"
-	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -50,7 +50,6 @@ type (
 		daemonID  string
 		extension string
 
-		h               hash.Hash
 		keyExtractor    KeyExtractor
 		contents        *sync.Map
 		extractionPaths *sync.Map // Keys correspond to all paths to record contents on disk.

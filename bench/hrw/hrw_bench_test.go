@@ -32,7 +32,7 @@ func BenchmarkHRW(b *testing.B) {
 		// Number of nodes: {16, 32, 64}
 		for k := uint(4); k <= 6; k++ {
 			numNodes := 1 << k
-			nodes := randNodeIds(numNodes, randGen)
+			nodes := randNodeIDs(numNodes, randGen)
 			fileName := randFileName(randGen, nameLen)
 			for _, hashFunc := range hashFuncs {
 				b.Run(fmt.Sprintf("%s/%d/%d", hashFunc.name, numNodes, nameLen), func(b *testing.B) {
@@ -126,7 +126,7 @@ func TestEqualDistribution(t *testing.T) {
 
 func invokeHashFunctions(seed int64, numObjs, numNodes int, useSimilarNames bool, hashFuncs []hashFuncs, dist [][]int) {
 	randGen := rand.New(rand.NewSource(seed))
-	nodes := randNodeIds(numNodes, randGen)
+	nodes := randNodeIDs(numNodes, randGen)
 	bucketName := randFileName(randGen, fqnMaxLen-objNameLen)
 	for n := 0; n < numObjs; n++ {
 		var fileName string

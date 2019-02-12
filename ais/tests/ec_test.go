@@ -73,7 +73,7 @@ func ecSliceNumInit(smap cluster.Smap) error {
 // algorithm on GET request from a client.
 // The function uses heuristics to detect the main one: it should be the oldest
 func ecGetAllLocalSlices(objDir, objName string) (map[string]int64, string) {
-	foundParts := make(map[string]int64, 0)
+	foundParts := make(map[string]int64)
 	oldest := time.Now()
 	main := ""
 
@@ -227,7 +227,7 @@ func randObjectSize(rnd *rand.Rand, n, every int) (
 
 func calculateSlicesCount(slices map[string]int64) map[string]int {
 	calc := make(map[string]int, len(slices))
-	for k, _ := range slices {
+	for k := range slices {
 		o := filepath.Base(k)
 		if n, ok := calc[o]; ok {
 			calc[o] = n + 1
@@ -407,8 +407,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := tutils.NewRandReader(int64(objSize), false)
-		defer r.Close()
 		tutils.CheckFatal(err, t)
+		defer r.Close()
 
 		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
 		tutils.CheckFatal(err, t)
@@ -944,8 +944,8 @@ func TestECXattrs(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := tutils.NewRandReader(int64(objSize), false)
-		defer r.Close()
 		tutils.CheckFatal(err, t)
+		defer r.Close()
 
 		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
 		tutils.CheckFatal(err, t)
@@ -1114,8 +1114,8 @@ func TestECEmergencyTarget(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := tutils.NewRandReader(int64(objSize), false)
-		defer r.Close()
 		tutils.CheckFatal(err, t)
+		defer r.Close()
 
 		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
 		tutils.CheckFatal(err, t)
@@ -1292,8 +1292,8 @@ func TestECEmergencyMpath(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := tutils.NewRandReader(int64(objSize), false)
-		defer r.Close()
 		tutils.CheckFatal(err, t)
+		defer r.Close()
 
 		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
 		tutils.CheckFatal(err, t)

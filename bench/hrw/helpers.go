@@ -1,3 +1,4 @@
+//Package hrw_bench provides a way to benchmark different HRW variants. See /bench/hrw/README.md for more info.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -53,7 +54,7 @@ func similarFileName(bucketName string, objNum int) string {
 }
 
 // Duplicated on purpose to avoid dependency on any AIStore code.
-func randNodeId(randGen *rand.Rand) string {
+func randNodeID(randGen *rand.Rand) string {
 	randIP := ""
 	for i := 0; i < 3; i++ {
 		randIP += strconv.Itoa(randGen.Intn(255)) + "."
@@ -65,10 +66,10 @@ func randNodeId(randGen *rand.Rand) string {
 	return nodeID + ":" + randPort
 }
 
-func randNodeIds(numNodes int, randGen *rand.Rand) []node {
+func randNodeIDs(numNodes int, randGen *rand.Rand) []node {
 	nodes := make([]node, numNodes)
 	for i := 0; i < numNodes; i++ {
-		id := randNodeId(randGen)
+		id := randNodeID(randGen)
 		xhash := xxhash.NewS64(xxHashSeed)
 		xhash.WriteString(id)
 		seed := xxhash.ChecksumString64S(id, xxHashSeed)

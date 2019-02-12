@@ -1,3 +1,4 @@
+// Package extract provides provides functions for working with compressed files
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -151,7 +152,7 @@ func (z *zipExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 	return extractedSize, extractedCount, nil
 }
 
-func NewZipExtractCreator() *zipExtractCreator {
+func NewZipExtractCreator() ExtractCreator {
 	return &zipExtractCreator{}
 }
 

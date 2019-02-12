@@ -2274,6 +2274,7 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 }
 
 // TODO: this function is for now unused because replication does not work
+//lint:ignore U1000 unused
 func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replicaSrc string) (errstr string) {
 	var (
 		started = time.Now()
