@@ -15,14 +15,13 @@ spec:
     spec:
       containers:
       - name: aistarget
-        image: docker.io/aistorage/ais:v1.3
-        imagePullPolicy: Always
+        image: ${DOCKER_HOST_IP}:5000/ais:v1
         env:
          - name: ROLE
            value: "target"
         volumeMounts:
          - name: ais-config
-           mountPath: /etc/ais/ais.json
+           mountPath: /aisconfig/ais.json
            subPath: ais.json
          - name: collectd-config
            mountPath: /etc/collectd/collectd.conf

@@ -8,7 +8,54 @@ For development purposes, we are going to use [Kubeadm](https://kubernetes.io/do
 
 > Using [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube/) to deploy a Kubernetes cluster will also work for deploying single node clusters. It cannot be used for multi-node deployments due to its limitations.
 
+### Prerequisites
+AIStore on Kubernetes utilizes a [local Docker repository](https://docs.docker.com/registry/deploying/). This allows Kubernetes nodes to build the latests AIS version directly from the source without having to fetch from a remote registry. This guide uses your local machine as the local Docker registry host. You will also need Docker-Compose installed. For more information, see [Docker and Docker-Compose installation guide](../../../docs/docker_main.md)
+
+### Creating a local Docker registry for local networks
+1. Create a self signed certificate for your Docker registry. This will allow your Kubernetes nodes on the same network to pull images from the local Docker repository.
+```sh
+$ sudo vim /etc/ssl/openssl.cnf
+```
+Add the line `subjectAltName=IP:<YOUR_IPv4_ADDRESS>` below the section labelled `[ v3_ca ]`.
+
+2. Create a certificate directory
+```sh
+$ sudo mkdir /certs
+```
+
+3. Create the certificate
+```sh
+$ sudo openssl req \
+  -newkey rsa:4096 -nodes -sha256 -keyout /certs/domain.key \
+  -x509 -days 365 -out /certs/domain.crt
+```
+You'll be prompted to fill out some information for your certificate. You can leave them with their default values. You should end up with two files `domain.crt` and `domain.key`.
+
+4. To allow access for Docker to trust these certificates,
+```sh
+$ sudo mkdir -p /etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000
+$ sudo cp /certs/domain.crt /etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000/
+$ cd /etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000/
+$ sudo mv domain.crt ca.crt
+```
+
+5. Reload the Docker daemon to use the new certificate
+```sh
+$ sudo service docker reload
+```
+
+6. On your other Kubernetes nodes, copy the `ca.crt` file to `etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000`
+```sh
+$ sudo mkdir -p /etc/docker/certs.d/<YOUR_IPv4_ADDRESS>:5000
+```
+Copy the contents of `ca.crt` to the directory and reload the Docker service with
+```sh
+$ sudo service docker reload
+```
+> If you change or create a new certificate, and you already have an AIS instance running on Kubernetes, running `sudo service docker reload` might not be enough to tell Docker to use your new certificate. You might also need to delete your local Docker registry (`docker ps` and look for the "registry" Docker container) and run `sudo ./deploy_kubernetes` again.
+
 ### Setup with Kubeadm
+
 We can use our local machine to host our Kubernetes cluster. For multi-node clusters, Kubeadm requires VMs or other physical machines to host the nodes.
 
 1. [Install Kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/) and [kubelet](https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/) and [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) tools.
@@ -22,6 +69,7 @@ $ sudo apt-get update
 $ sudo apt-get install -y kubelet kubeadm kubectl
 $ sudo apt-mark hold kubelet kubeadm kubectl
 ```
+
 2. [Install Docker](https://docs.docker.com/install/)
 
 3. Disable swap memory. Kubeadm requires that swap memory is disabled.
@@ -37,10 +85,12 @@ $ sudo ufw disable
 > For multi-node Kubernetes clusters, you need perform the same steps on each machine
 
 #### Deploying a Two-Node Cluster
+
 1. Initialize the Kubernetes cluster with your local machine as the host.
 ```sh
 $ sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 ```
+
 The `--pod-network-cidr` allocates a CIDR for every node. This is a requirement by [flannel](https://github.com/coreos/flannel).
 > Flannel is a virtual network that gives a subnet to each node for use with container([pod](https://kubernetes.io/docs/concepts/workloads/pods/pod)) runtimes.
 
@@ -60,7 +110,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0
 ```
 Also make sure that `/proc/sys/net/bridge/bridge-nf-call-iptables` is set to `1` by running
 ```sh
-$ sysctl net.bridge.bridge-nf-call-iptables=1
+$ sudo sysctl net.bridge.bridge-nf-call-iptables=1
 ```
 
 4. You should have received a command with the form,
@@ -77,6 +127,7 @@ The name of the nodes should be the the name of your machines that they are runn
 
 6. Once the status is `Ready`, add labels to your nodes and untaint the master node.
  * Add a label:
+ 
 ```sh
 # Assigns the node to host the proxy Pod
 $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-proxy
@@ -87,6 +138,7 @@ $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-target
 This allows the pods to be ran on particular nodes.
 
  * untaint the node:
+
 ```sh
 $ kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
@@ -127,23 +179,39 @@ nodeSelector:
 #### Interacting with the Cluster
 To interact with the cluster
  * SSH into the proxy
+
 ```sh
 $ kubectl exec -it <AIS_PRIMARY_PROXY_NAME> -- /bin/bash
 ```
 Example : `kubectl exec -it aisprimaryproxy-77456674db-6fzq5 -- /bin/bash`
+
  * To create a local bucket with name `abc`
 ```sh
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://<IP_OF_PRIMARY_PROXY>:8080/v1/buckets/abc
 ```
-
 > The proxy inside the cluster is running at port 8080.
 
  * Also, you can query cluster information directly from the web browser. Just type `http://localhost:31337/v1/daemon?what=config`.
-
+ 
+ For the full list of commands, see the [HTTP_API](docs/http_api.md).
 > This uses port `31337` to communicate with the node.
 
-For the full list of commands, see the [HTTP_API](/docs/http_api.md).
+ * To run tests, SSH into the primary proxy
+ 
+```sh
+$ kubectl exec -it <AIS_PRIMARY_PROXY_NAME> -- /bin/bash
+```
+ Once inside the container, go to the `$WORKDIR`
 
+```sh
+$ cd $WORKDIR
+```
+From there you can run tests using,
+
+```sh
+$ CGO_ENABLED=0 BUCKET=yourS3Bucket go test ./tests -v -count=1
+```
+This runs the entire test suite. To run specific tests, use the [`-run`](https://golang.org/pkg/testing/#hdr-Subtests_and_Sub_benchmarks) tag.
 
 #### Stopping the Cluster
 1. Run `./stop_kubernetes.sh` to teardown the deployments.

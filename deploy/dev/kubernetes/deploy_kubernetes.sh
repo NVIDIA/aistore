@@ -4,34 +4,57 @@ GRAPHITE_PORT=2003
 GRAPHITE_SERVER="52.41.234.112"
 usage() {
     echo "Usage: $0"
-    echo "   -a : aws.env - AWS credentials"
-    echo "   -g : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
-    echo "   -p : port of graphite server (default is $GRAPHITE_PORT)"
+    echo "   -a|--aws   : aws.env - AWS credentials"
+    echo "   -g         : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
+    echo "   -p         : port of graphite server (default is $GRAPHITE_PORT)"
+    echo "   -h|--host  : IP of your local Docker registry host"
     echo
     exit 1;
 }
 aws_env="";
 os="ubuntu"
-while getopts "a:g:p:" OPTION
+
+for i in "$@"
 do
-    case $OPTION in
-    a)
-        aws_env=${OPTARG}
+case $i in
+    -a=*|--aws=*)
+        aws_env="${i#*=}"
+        shift # past argument=value
         ;;
 
-    g)
-        GRAPHITE_SERVER=${OPTARG}
+    -g)
+        GRAPHITE_SERVER="${i#*=}"
+        shift # past argument=value
         ;;
 
-    p)
-        GRAPHITE_PORT=${OPTARG}
+    -p)
+        GRAPHITE_PORT="${i#*=}"
+        shift # past argument=value
+        ;;
+
+    -h=*|--host=*)
+        DOCKER_HOST_IP="${i#*=}"
+        shift
         ;;
 
     *)
         usage
         ;;
-    esac
+esac
 done
+
+create_local_repo() {
+    if docker ps | grep registry:2 &> /dev/null; then 
+        echo "Local repository already exists ..."
+        docker-compose down
+    fi
+    echo "Creating local repository and building image..."
+    docker-compose up -d
+    
+    echo "Pushing to repository..."
+    docker push localhost:5000/ais:v1
+}
+
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ "${PWD##*/}" != "docker" ]; then
@@ -51,6 +74,7 @@ SERVICENAME="ais"
 LOGDIR="/tmp/ais/log"
 LOGLEVEL="3"
 CONFDIR="/usr/nvidia"
+DOCKER_HOST_IP=""
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -121,7 +145,7 @@ if [ $cldprovider -eq 1 ]; then
     CLDPROVIDER="aws"
 
     echo "Enter the location of your AWS configuration and credentials files:"
-    echo "Note: No input will result in using the default aws dir (~/.aws/)"
+    echo "Note: No input will result in using the default AWS dir (~/.aws/)"
     read aws_env
 
     if [ -z "$aws_env" ]; then
@@ -160,6 +184,17 @@ elif [ $cldprovider -eq 2 ]; then
   echo "" > ${LOCAL_AWS}
 fi
 
+if [ -z "$DOCKER_HOST_IP" ]; then
+    echo "Enter the internal IP of the host that runs the local Docker registry"
+    echo "Note: No input will result in using your current system's internal IP ($(hostname -I | head -n1 | awk '{print $1;}'))"
+    read DOCKER_HOST_IP
+
+    if [ -z "$DOCKER_HOST_IP" ]; then
+        DOCKER_HOST_IP=$(hostname -I | head -n1 | awk '{print $1;}')
+    fi
+fi
+
+
 if kubectl get secrets | grep aws > /dev/null 2>&1; then
     kubectl delete secret aws-credentials
 fi
@@ -183,8 +218,11 @@ export IOSTAT_TIME=$IOSTAT_TIME
 export USE_HTTPS=$USE_HTTPS
 export NON_ELECTABLE=$NON_ELECTABLE
 export AUTHENABLED=$AUTHENABLED
-
+export DOCKER_HOST_IP=$DOCKER_HOST_IP
+echo $DIR
 source $DIR/../../../ais/setup/config.sh
+
+create_local_repo $TARGET_CNT $CLDPROVIDER
 
 # Deploying kubernetes cluster
 echo Starting kubernetes deployment ..
@@ -194,23 +232,24 @@ kubectl create configmap ais-config --from-file=./$CONFFILE
 kubectl create configmap statsd-config --from-file=./$CONFFILE_STATSD
 kubectl create configmap collectd-config --from-file=./$CONFFILE_COLLECTD
 
+
 echo "Starting Primary Proxy Deployment ..."
-kubectl create -f aisprimaryproxy_deployment.yml
+envsubst < aisprimaryproxy_deployment.yml | kubectl apply -f -
 
 #Give some room to breathe
 echo "Waiting for primary proxy to start ..."
-sleep 100
+sleep 70
 
 if (( $PROXY_CNT > 1 )); then
   echo "Starting Proxy Deployment"
-  kubectl create -f aisproxy_deployment.yml
+  envsubst < aisproxy_deployment.yml | kubectl apply -f -
   PROXY_CNT=$((PROXY_CNT - 1))
   echo "Scaling proxies (${PROXY_CNT} more)"
   kubectl scale --replicas=$PROXY_CNT -f aisproxy_deployment.yml
 fi
 
 echo "Starting Target Deployment"
-kubectl create -f aistarget_deployment.yml
+envsubst < aistarget_deployment.yml | kubectl create -f -
 
 echo "Scaling targets"
 kubectl scale --replicas=$TARGET_CNT -f aistarget_deployment.yml

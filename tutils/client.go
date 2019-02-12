@@ -793,6 +793,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 		objCh <- objName
 	}
 	close(objCh)
+	Logf("%d PUT requests completed...\n", len(objList))
 
 	wg.Wait()
 }

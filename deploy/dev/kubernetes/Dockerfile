@@ -22,7 +22,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
 
 
 # Setting ENV variables
-ENV GOLANG_VERSION 1.11
+ENV GOLANG_VERSION 1.11.5
 ENV CONFFILE /etc/ais/ais.json
 
 # Reassign arguments to environment variables so run.sh can use them

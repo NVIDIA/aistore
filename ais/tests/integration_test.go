@@ -293,7 +293,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 2. Create local bucket
 // 3. PUT large amounts of objects into local bucket
 // 4. Get the objects while simultaneously re-registering the target
-func TestGetAndKillInParallel(t *testing.T) {
+func TestGetAndRestoreInParallel(t *testing.T) {
 	const (
 		num       = 20000
 		filesize  = 2048
