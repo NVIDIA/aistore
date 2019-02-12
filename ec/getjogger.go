@@ -423,7 +423,6 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*memsys.SGL, idToNode map[int]string) error {
 	sliceCnt := meta.Data + meta.Parity
 	nodeToID := make(map[string]int, len(idToNode))
-	emptyNodes := make([]string, 0)
 	// transpose SliceID <-> DaemonID map for faster lookup
 	for k, v := range idToNode {
 		nodeToID[v] = k
@@ -435,6 +434,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*m
 	if errstr != "" {
 		return errors.New(errstr)
 	}
+	emptyNodes := make([]string, 0, len(targets))
 	for _, t := range targets {
 		if t.DaemonID == c.parent.si.DaemonID {
 			continue
@@ -596,10 +596,6 @@ func (c *getJogger) restore(req *Request) error {
 // object hashes is calculated. The most frequent has wins, and all metadatas
 // with different hashes are considered obsolete and will be discarded
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
-	type nodeMeta struct {
-		writer *slice
-		id     string
-	}
 	metaWG := cmn.NewTimeoutGroup()
 	request, _ := c.parent.newIntraReq(reqMeta, nil).marshal()
 	hdr := transport.Header{

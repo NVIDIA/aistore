@@ -578,21 +578,17 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 		sz     int64
 	)
 	ireq := r.newIntraReq(act, nil)
-	sgl, err := readFile(fqn)
+	fh, err := cmn.NewFileHandle(fqn)
 	lom := &cluster.LOM{Fqn: fqn, T: r.t}
-	if errstr := lom.Fill(cluster.LomAtime | cluster.LomVersion | cluster.LomCksum); errstr != "" {
+	if errstr := lom.Fill(cluster.LomFstat | cluster.LomAtime | cluster.LomVersion | cluster.LomCksum); errstr != "" {
 		// an error is OK. Log it and try to go on with what has been read
 		glog.Warningf("Failed to read file stats: %s", errstr)
 	}
 
-	if sgl != nil && err == nil && sgl.Size() != 0 {
-		sz = sgl.Size()
-		reader = memsys.NewReader(sgl)
+	if err == nil && lom.Size != 0 {
+		sz = lom.Size
+		reader = fh
 	} else {
-		if sgl != nil {
-			sgl.Free()
-			sgl = nil
-		}
 		ireq.Exists = false
 	}
 	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
@@ -610,8 +606,8 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 		ObjAttrs: objAttrs,
 	}
 	if rHdr.Opaque, err = ireq.marshal(); err != nil {
-		if sgl != nil {
-			sgl.Free()
+		if fh != nil {
+			fh.Close()
 		}
 		return err
 	}
@@ -619,9 +615,6 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 	cb := func(hdr transport.Header, c io.ReadCloser, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)
-		}
-		if sgl != nil {
-			sgl.Free()
 		}
 	}
 	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)

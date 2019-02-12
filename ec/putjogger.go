@@ -144,8 +144,7 @@ func (c *putJogger) encode(req *Request) error {
 
 	// if an object is small just make `parity` copies
 	if meta.IsCopy {
-		if copySlices, err := c.createCopies(req, meta); err != nil {
-			c.freeSGL(copySlices)
+		if err := c.createCopies(req, meta); err != nil {
 			c.cleanup(req)
 		}
 		return err
@@ -193,30 +192,28 @@ func (c *putJogger) cleanup(req *Request) error {
 
 // Sends object replicas to targets that must have replicas after the client
 // uploads the main replica
-func (c *putJogger) createCopies(req *Request, metadata *Metadata) ([]*slice, error) {
+func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	var (
-		copies   = req.LOM.Bprops.ParitySlices
-		replicas = make([]*slice, copies, copies)
+		copies = req.LOM.Bprops.ParitySlices
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
 	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), copies+1)
 	if errstr != "" {
-		return replicas, errors.New(errstr)
+		return errors.New(errstr)
 	}
 	targets = targets[1:]
 
 	// Because object encoding is called after the main replica is saved to
 	// disk it needs to read it from the local storage
-	sgl, err := readFile(req.LOM.Fqn)
+	fh, err := cmn.NewFileHandle(req.LOM.Fqn)
 	if err != nil {
-		return replicas, err
+		return err
 	}
 
-	nodes := make([]string, len(targets), len(targets))
-	for i, tgt := range targets {
-		replicas[i] = &slice{}
-		nodes[i] = tgt.DaemonID
+	nodes := make([]string, 0, len(targets))
+	for _, tgt := range targets {
+		nodes = append(nodes, tgt.DaemonID)
 	}
 
 	// broadcast the replica to the targets
@@ -224,16 +221,15 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) ([]*slice, er
 		if err != nil {
 			glog.Errorf("Failed to to %v: %v", nodes, err)
 		}
-		sgl.Free()
 	}
 	src := &dataSource{
-		reader:   memsys.NewReader(sgl),
-		size:     sgl.Size(),
+		reader:   fh,
+		size:     req.LOM.Size,
 		metadata: metadata,
 	}
 	err = c.parent.writeRemote(nodes, req.LOM, src, cb)
 
-	return replicas, err
+	return err
 }
 
 // generateSlices gets FQN to the original file and encodes it into EC slices
@@ -251,27 +247,16 @@ func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*s
 	)
 
 	// read the object into memory
-	fSrc, err := readFile(fqn)
+	sgl, err := readFile(fqn)
 	if err != nil {
 		return sgl, slices, err
 	}
-	fileSize := fSrc.Size()
+	fileSize := sgl.Size()
 
 	sliceSize := SliceSize(fileSize, dataSlices)
 	padSize := sliceSize*int64(dataSlices) - fileSize
 	initSize := cmn.MinI64(sliceSize, cmn.MiB)
 
-	// TODO: what if file is bigger than available memory?
-	sgl = mem2.NewSGL(initSize)
-	buf, slab := mem2.AllocFromSlab2(32 * cmn.KiB)
-	if _, err = io.CopyBuffer(sgl, fSrc, buf); err != nil {
-		fSrc.Close()
-		slab.Free(buf)
-		return sgl, slices, err
-	}
-
-	fSrc.Close()
-	slab.Free(buf)
 	// make the last slice the same size as the others by padding with 0's
 	for padSize > 0 {
 		byteCnt := cmn.Min(int(padSize), len(slicePadding))

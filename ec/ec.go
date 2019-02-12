@@ -161,9 +161,8 @@ type (
 		IsCopy bool         // replicate or use erasure coding
 
 		// private properties
-		sgl     *memsys.SGL // object's data
-		putTime time.Time   // time when the object is put into main queue
-		tm      time.Time   // to measure different steps
+		putTime time.Time // time when the object is put into main queue
+		tm      time.Time // to measure different steps
 	}
 )
 

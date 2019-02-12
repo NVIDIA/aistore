@@ -35,10 +35,7 @@ const (
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
 
-	ecObjMinSize = 1024 * 64
-	ecObjMaxSize = 64 * cmn.MiB
-	ecObjLimit   = 256 * cmn.KiB
-
+	ecObjLimit     = 256 * cmn.KiB
 	ecMinSmallSize = 32 * cmn.KiB
 	ecSmallDelta   = 200 * cmn.KiB
 	ecMinBigSize   = ecObjLimit * 2
