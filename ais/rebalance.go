@@ -303,7 +303,7 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, config *cmn.Config) (ok boo
 		} else {
 			glog.Infoln(s)
 		}
-		callArgs.timeout = time.Duration(float64(callArgs.timeout)*1.5 + 0.5)
+		callArgs.timeout += callArgs.timeout / 2
 		if callArgs.timeout > config.Timeout.MaxKeepalive {
 			callArgs.timeout = config.Timeout.MaxKeepalive
 		}

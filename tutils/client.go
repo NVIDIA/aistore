@@ -43,6 +43,11 @@ var (
 	readProxyURL = "http://localhost:8080" // Just setting a default, will get actual value later
 )
 
+const (
+	httpMaxRetries = 5                     // maximum number of retries for an HTTP request
+	httpRetrySleep = 30 * time.Millisecond // a sleep between HTTP request retries
+)
+
 type (
 	// traceableTransport is an http.RoundTripper that keeps track of a http
 	// request and implements hooks to report HTTP tracing events.
@@ -307,8 +312,20 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	resp, err := tracedClient.Do(req)
 	if err != nil {
+		sleep := httpRetrySleep
+		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
+			for i := 0; i < httpMaxRetries && err != nil; i++ {
+				time.Sleep(sleep)
+				resp, err = tracedClient.Do(req)
+				sleep += sleep / 2
+			}
+		}
+	}
+
+	if err != nil {
 		return HTTPLatencies{}, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
