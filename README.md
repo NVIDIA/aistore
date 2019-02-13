@@ -341,7 +341,7 @@ We hope that this super simple but yet verbose presentation will showcase capabi
 Here is how you can play with the playground script (in this example AIS will download ImageNet):
 
 ```shell
-$ cd path_to/docker/dev
+$ cd path_to/deploy/dev/docker
 $ ./deploy_docker.sh -d=2 -p=4 -t=4 -c=1 -grafana -nocloud # start 4 proxies and 4 targets
 $ ./playground/download_imagenet.sh # download some of ImageNet images into AIS and show stats
 $ # once Downloader will save the files...

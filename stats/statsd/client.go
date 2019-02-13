@@ -8,6 +8,7 @@
 package statsd
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"strings"
@@ -19,12 +20,14 @@ import (
 type MetricType int
 
 const (
-	// Timer is statd's timer type
+	// Timer is statsd's timer type
 	Timer MetricType = iota
-	// Counter is statd's counter type
+	// Counter is statsd's counter type
 	Counter
-	// Gauge is statd's gauge type
+	// Gauge is statsd's gauge type
 	Gauge
+	// PersistentCounter is statsd's gauge type which is increased every time by the value
+	PersistentCounter
 )
 
 type (
@@ -81,8 +84,8 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 	}
 
 	var (
-		t      string
-		packet string
+		t, prefix string
+		packet    bytes.Buffer
 	)
 
 	// NOTE: ":" is not allowed since it will be treated as value eg. in case daemonID is in form NUMBER:NUMBER
@@ -96,17 +99,20 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 			t = "c"
 		case Gauge:
 			t = "g"
+		case PersistentCounter:
+			prefix = "+"
+			t = "g"
 		default:
 			cmn.AssertMsg(false, fmt.Sprintf("Unknown type %+v", m.Type))
 		}
 
-		if packet != "" {
-			packet += "\n"
+		if packet.Len() > 0 {
+			packet.WriteRune('\n')
 		}
-		packet += fmt.Sprintf("%s.%s.%s:%v|%s", c.prefix, bucket, m.Name, m.Value, t)
+		fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
 	}
 
-	if packet != "" {
-		c.conn.Write([]byte(packet))
+	if packet.Len() > 0 {
+		c.conn.Write(packet.Bytes())
 	}
 }

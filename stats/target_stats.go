@@ -324,9 +324,15 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	// target only
 	if strings.HasSuffix(name, ".size") {
 		nroot := strings.TrimSuffix(name, ".size")
+		metricType := statsd.Counter
+
+		if nroot == "dl" {
+			metricType = statsd.PersistentCounter
+		}
+
 		s.StatsdC.Send(nroot,
-			metric{Type: statsd.Counter, Name: "bytes", Value: val},
-			metric{Type: statsd.Counter, Name: "count", Value: 1},
+			metric{Type: metricType, Name: "bytes", Value: val},
+			metric{Type: metricType, Name: "count", Value: 1},
 		)
 	}
 

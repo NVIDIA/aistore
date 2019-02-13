@@ -445,7 +445,7 @@ PORT_INTRA_DATA=10080
 if [ "$GRAFANA" == true ]; then
     GRAPHITE_PORT=2003
     GRAPHITE_SERVER="graphite"
-    docker network create docker_dev
+    docker network create docker_default
     docker-compose -f ${composer_file} up --build -d graphite
     docker-compose -f ${composer_file} up --build -d grafana
 else
