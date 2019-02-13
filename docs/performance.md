@@ -1,8 +1,6 @@
 # Performance
 
-AIStore is all about the performance.
-As AIStore strives to be the most efficient storage solution for AI it is not possible without underlying components optimalizations.
-Below you will find some tips and tricks which you can use to ensure that AIStore delivers the best performance.
+AIStore is all about the performance. Below you will find some tips and tricks to ensure that AIStore does deliver.
 
 - [Performance tuning](#performance-tuning)
     - [General](#general)
@@ -21,16 +19,18 @@ Below you will find some tips and tricks which you can use to ensure that AIStor
 
 ### General
 
-Here we gathered couple articles/papers which we think you may find useful:
+A couple of articles that we think you may find useful or helpful:
 
 * https://wiki.mikejung.biz/Ubuntu_Performance_Tuning <- good guide about general optimizations (some of them are described below)
 * https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions
 
 ### CPU
 
-Setting CPU governor to `performance` setting can result in much better network throughput and overall performance: [Tuning Net](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
+Setting CPU governor (P-States) to `performance` may make a big difference and, in particular, result in much better network throughput:
 
-Depending on distribution you may need to install differrent tooling to be able to change it. On `Debian` and `Ubuntu` you can do:
+* [Recent Linux TCP Updates, and how to tune your 100G host](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
+
+On `Debian` and `Ubuntu`:
 
 ```bash
 apt-get install -y linux-tools-$(uname -r) # install `cpupower`
@@ -38,6 +38,8 @@ cpupower frequency-info # check current settings
 cpupower frequency-set -r -g performance # set `performance` setting to all CPU's
 cpupower frequency-info # check settings after the change
 ```
+
+Once the packages are installed (the step that will depend on your Linux distribution), you can then follow the *tuning instructions* from the referenced PDF (above).
 
 ### Network
 
