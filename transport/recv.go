@@ -68,7 +68,10 @@ func init() {
 	mu = &sync.Mutex{}
 	muxers = make(map[string]*mux.ServeMux)
 	handlers = make(map[string]map[string]*handler)
-	debug = os.Getenv("AIS_STREAM_DEBUG") != ""
+	if os.Getenv("AIS_STREAM_DEBUG") != "" {
+		debug = true
+		glog.SetV(glog.SmoduleTransport, 10)
+	}
 }
 
 //
@@ -187,14 +190,14 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		objReader, sessid, hl64, err := it.next()
 		if sessid != 0 {
 			statsif, loaded := h.sessions.LoadOrStore(sessid, &Stats{})
-			if !loaded && (bool(glog.V(4)) || debug) {
+			if !loaded && bool(glog.FastV(4, glog.SmoduleTransport)) {
 				glog.Infof("%s[%d]: start-of-stream", trname, sessid)
 			}
 			stats = statsif.(*Stats)
 		}
 		if stats != nil && hl64 != 0 {
 			off := atomic.AddInt64(&stats.Offset, hl64)
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessid, off, hl64)
 			}
 		}
@@ -209,7 +212,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			} else {
 				siz := atomic.AddInt64(&stats.Size, hdr.ObjAttrs.Size)
 				off := atomic.AddInt64(&stats.Offset, hdr.ObjAttrs.Size)
-				if bool(glog.V(4)) || debug {
+				if glog.FastV(4, glog.SmoduleTransport) {
 					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessid, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
 				}
 				continue
@@ -278,13 +281,13 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	}
 	hdr, sessid = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
-		if bool(glog.V(4)) || debug {
+		if glog.FastV(4, glog.SmoduleTransport) {
 			glog.Infof("%s[%d]: last", it.trname, sessid)
 		}
 		err = io.EOF
 		return
 	}
-	if bool(glog.V(4)) || debug {
+	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s[%d]: new object %s size=%d", it.trname, sessid, hdr.Objname, hdr.ObjAttrs.Size)
 	}
 	obj = &objReader{body: it.body, hdr: hdr}

@@ -114,6 +114,17 @@ var severityName = []string{
 	fatalLog:   "FATAL",
 }
 
+const (
+	SmoduleTransport = iota
+	SmoduleAIS
+	// NOTE: this guard is used to define size of 'smodules' array, make sure it is always last.
+	_smoduleLast
+)
+
+var (
+	smodules [_smoduleLast]Level
+)
+
 // get returns the value of the severity.
 func (s *severity) get() severity {
 	return severity(atomic.LoadInt32((*int32)(s)))
@@ -1027,6 +1038,21 @@ func V(level Level) Verbose {
 		return Verbose(v >= level)
 	}
 	return Verbose(false)
+}
+
+// FastV similarly to V checks if verbosity level is enough to print the log
+// message. It should only be used for datapath since it does not take vmodule
+// into account and was designed in need of very fast and inlined func.
+func FastV(level Level, smodule uint8) Verbose {
+	return Verbose(logging.verbosity.get() >= level || smodules[smodule] >= level)
+}
+
+// SetV sets verbosity level for static module.
+//
+// NOTE: SetV should be set in the init. Bugs are expected when SetV is called
+// in-flight since no locks are taken.
+func SetV(smodule uint8, level Level) {
+	smodules[smodule] = level
 }
 
 // Info is equivalent to the global Info function, guarded by the value of v.

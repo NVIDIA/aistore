@@ -930,7 +930,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	if !coldGet {
 		lom.UpdateAtime(started)
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
 		if coldGet {
 			s += " (cold)"
@@ -2346,7 +2346,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 
 	delta := time.Since(roi.started)
 	roi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT: %s/%s, %d µs", roi.bucket, roi.objname, int64(delta/time.Microsecond))
 	}
 

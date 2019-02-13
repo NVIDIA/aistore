@@ -268,7 +268,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 	}
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
 		s.postCh <- struct{}{}
-		if bool(glog.V(4)) || debug {
+		if glog.FastV(4, glog.SmoduleTransport) {
 			glog.Infof("%s: expired => posted", s)
 		}
 	}
@@ -339,7 +339,7 @@ func (hdr *Header) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
 func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 	for {
 		if atomic.CompareAndSwapInt64(&s.lifecycle, posted, activated) {
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: posted => activated", s)
 			}
 			if dryrun {
@@ -365,7 +365,7 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 	// handle termination that is caused by anything other than Fin()
 	if *s.term.reason != endOfStream {
 		if *s.term.reason == reasonStopped {
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: stopped", s)
 			}
 		} else {
@@ -429,7 +429,7 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 			*s.term.reason = reasonCanceled
 			return
 		case <-s.lastCh:
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: end-of-stream", s)
 			}
 			*s.term.reason = endOfStream
@@ -459,12 +459,12 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 		request = request.WithContext(ctx)
 	}
 	s.Numcur, s.Sizecur = 0, 0
-	if bool(glog.V(4)) || debug {
+	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: Do", s)
 	}
 	response, err = s.client.Do(request)
 	if err == nil {
-		if bool(glog.V(4)) || debug {
+		if glog.FastV(4, glog.SmoduleTransport) {
 			glog.Infof("%s: Done", s)
 		}
 	} else {
@@ -536,7 +536,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.sendoff.off:])
 	s.sendoff.off += int64(n)
-	if (bool(glog.V(4)) || debug) && (s.sendoff.off < int64(len(s.header))) {
+	if bool(glog.FastV(4, glog.SmoduleTransport)) && (s.sendoff.off < int64(len(s.header))) {
 		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
 	}
 	if s.sendoff.off >= int64(len(s.header)) {
@@ -544,7 +544,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 			cmn.Assert(s.sendoff.off == int64(len(s.header)))
 		}
 		atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
-		if bool(glog.V(4)) || debug {
+		if glog.FastV(4, glog.SmoduleTransport) {
 			num := atomic.LoadInt64(&s.stats.Num)
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
 		}
@@ -553,11 +553,11 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 
 		obj := &s.sendoff.obj
 		if !obj.hdr.IsLast() {
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: sent header %s/%s(%d)", s, obj.hdr.Bucket, obj.hdr.Objname, obj.hdr.ObjAttrs.Size)
 			}
 		} else {
-			if bool(glog.V(4)) || debug {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
@@ -602,7 +602,7 @@ func (s *Stream) eoObj(err error) {
 	s.Numcur++
 	atomic.AddInt64(&s.stats.Num, 1)
 
-	if bool(glog.V(4)) || debug {
+	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num, obj.hdr.Objname)
 	}
 exit:
