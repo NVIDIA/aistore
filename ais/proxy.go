@@ -465,6 +465,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
+
 	switch msg.Action {
 	case cmn.ActDestroyLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
@@ -490,8 +491,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
-		msg.Action = path.Join(msg.Action, bucket)
-		p.metasyncer.sync(true, clone, &msg)
+
+		msgInt := p.newActionMsgInternal(&msg, nil, clone)
+		p.metasyncer.sync(true, clone, msgInt)
 	case cmn.ActEvictCB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
@@ -514,14 +516,15 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.bmdowner.put(clone)
 			p.bmdowner.Unlock()
 
-			p.metasyncer.sync(false, clone, &msg)
+			msgInt := p.newActionMsgInternal(&msg, nil, clone)
+			p.metasyncer.sync(false, clone, msgInt)
 		} else {
 			// metadata doesn't exists or got deleted
 			p.bmdowner.Unlock()
 		}
 
-		msg.Value = clone
-		jsonbytes, err := jsoniter.Marshal(msg)
+		msgInt := p.newActionMsgInternal(&msg, nil, clone)
+		jsonbytes, err := jsoniter.Marshal(msgInt)
 		cmn.AssertNoErr(err)
 
 		// wipe the local copy of the cloud bucket on targets
@@ -658,7 +661,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
-func (p *proxyrunner) createLocalBucket(msg cmn.ActionMsg, bucket string) error {
+func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error {
 	config := cmn.GCO.Get()
 
 	p.bmdowner.Lock()
@@ -678,8 +681,8 @@ func (p *proxyrunner) createLocalBucket(msg cmn.ActionMsg, bucket string) error 
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	msg.Action = path.Join(msg.Action, bucket)
-	p.metasyncer.sync(true, clone, &msg)
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(true, clone, msgInt)
 	return nil
 }
 
@@ -704,7 +707,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if err := p.createLocalBucket(msg, bucket); err != nil {
+		if err := p.createLocalBucket(&msg, bucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 		}
 	case cmn.ActRenameLB:
@@ -738,7 +741,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
-		p.metasyncer.sync(false, p.bmdowner.get(), &msg)
+		bmdowner := p.bmdowner.get()
+		msgInt := p.newActionMsgInternal(&msg, nil, bmdowner)
+		p.metasyncer.sync(false, bmdowner, msgInt)
 	case cmn.ActPrefetch:
 		p.doListRange(w, r, &msg, http.MethodPost)
 	case cmn.ActListObjects:
@@ -917,8 +922,8 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	msg := cmn.ActionMsg{Action: cmn.ActSetProps}
-	p.metasyncer.sync(true, clone, &msg)
+	msgInt := p.newActionMsgInternalStr(cmn.ActSetProps, nil, clone)
+	p.metasyncer.sync(true, clone, msgInt)
 }
 
 // PUT /v1/buckets/bucket-name
@@ -1017,7 +1022,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	p.metasyncer.sync(true, clone, &msg)
+	msgInt := p.newActionMsgInternal(&msg, nil, clone)
+	p.metasyncer.sync(true, clone, msgInt)
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1111,10 +1117,10 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 }
 
 func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
-	msg *cmn.ActionMsg, config *cmn.Config) bool {
+	actionMsg *cmn.ActionMsg, config *cmn.Config) bool {
 	smap4bcast := p.smapowner.get()
-	msg.Value = clone
-	jsbytes, err := jsoniter.Marshal(msg)
+	msgInt := p.newActionMsgInternal(actionMsg, smap4bcast, clone)
+	jsbytes, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
 
 	res := p.broadcastTo(
@@ -1145,19 +1151,22 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	p.metasyncer.sync(true, clone, msg)
+	msgInt = p.newActionMsgInternal(actionMsg, smap4bcast, clone)
+	p.metasyncer.sync(true, clone, msgInt)
 	return true
 }
 
-func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.ActionMsg, config *cmn.Config) {
-	jsbytes, err := jsoniter.Marshal(msg)
+func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *cmn.ActionMsg, config *cmn.Config) {
+	smap := p.smapowner.get()
+	msgInt := p.newActionMsgInternal(actionMsg, smap, nil)
+	jsbytes, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		nil, // query
 		http.MethodPost,
 		jsbytes,
-		p.smapowner.get(),
+		smap,
 		config.Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
@@ -1236,7 +1245,8 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cluster.Snode,
 	getMsg *cmn.GetMsg, islocal bool, cached bool) (*bucketResp, error) {
-	actionMsgBytes, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: getMsg})
+	bmdowner := p.bmdowner.get()
+	actionMsgBytes, err := jsoniter.Marshal(p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: getMsg}, nil, bmdowner))
 	if err != nil {
 		return &bucketResp{
 			outjson: nil,
@@ -1253,7 +1263,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cl
 	query := url.Values{}
 	query.Add(cmn.URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(cmn.URLParamCached, strconv.FormatBool(cached))
-	query.Add(cmn.URLParamBMDVersion, p.bmdowner.get().vstr)
+	query.Add(cmn.URLParamBMDVersion, bmdowner.vstr)
 
 	args := callArgs{
 		si: dinfo,
@@ -1656,7 +1666,8 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 		return
 	}
 	bucket := apitems[0]
-	islocal := p.bmdowner.get().IsLocal(bucket)
+	bmdowner := p.bmdowner.get()
+	islocal := bmdowner.IsLocal(bucket)
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")
@@ -1669,8 +1680,10 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 			return
 		}
 	}
+	smap := p.smapowner.get()
 	// Send json message to all
-	jsonbytes, err := jsoniter.Marshal(actionMsg)
+	msgInt := p.newActionMsgInternal(actionMsg, smap, bmdowner)
+	jsonbytes, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
 
 	var (
@@ -1686,7 +1699,6 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 		timeout = defaultTimeout
 	}
 
-	smap := p.smapowner.get()
 	results = p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		q,
@@ -1741,7 +1753,8 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	p.authn.updateRevokedList(tokenList)
 
 	if p.smapowner.get().isPrimary(p.si) {
-		p.metasyncer.sync(false, p.authn.revokedTokenList(), msg)
+		msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, nil, nil)
+		p.metasyncer.sync(false, p.authn.revokedTokenList(), msgInt)
 	}
 }
 
@@ -2093,13 +2106,13 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
 
-	msg := &cmn.ActionMsg{Action: cmn.ActNewPrimary}
 	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
 		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), pname(p.si))
 		glog.Infof("Distributing %s v%d as well", bmdTermName, bucketmd.version())
 	}
-	p.metasyncer.sync(true, clone, msg, bucketmd, msg)
+	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
+	p.metasyncer.sync(true, clone, msgInt, bucketmd, msgInt)
 	return
 }
 
@@ -2488,18 +2501,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
-		// storage targets make use action of the message structured as action/newTargetID,
+		// storage targets make use of msgInt.NewDaemonID,
 		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
-		msg.Action = path.Join(msg.Action, nsi.DaemonID)
+		msgInt := p.newActionMsgInternal(msg, smap, nil)
+		msgInt.NewDaemonID = nsi.DaemonID
+		msgInt.SmapVersion = smap.Version
 
 		// metasync
-		params := []interface{}{smap, msg}
+		params := []interface{}{smap, msgInt}
 		if !isProxy {
 			bmd := p.bmdowner.get()
-			params = append(params, bmd, msg)
+			params = append(params, bmd, msgInt)
 		}
 		if len(tokens.Tokens) > 0 {
-			params = append(params, tokens, msg)
+			params = append(params, tokens, msgInt)
 		}
 		p.metasyncer.sync(false, params...)
 	}(&nsi, isProxy, nonElectable)
@@ -2649,7 +2664,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.metasyncer.sync(true, clone, msg)
+	msgInt := p.newActionMsgInternal(msg, smap, nil)
+	p.metasyncer.sync(true, clone, msgInt)
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -2727,7 +2743,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case cmn.ActGlobalReb:
-		p.metasyncer.sync(false, p.smapowner.get(), &msg)
+		smap := p.smapowner.get()
+		msgInt := p.newActionMsgInternal(&msg, smap, nil)
+		p.metasyncer.sync(false, smap, msgInt)
 
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
@@ -2740,12 +2758,12 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg) (errstr string) {
+func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal) (errstr string) {
 	s := fmt.Sprintf("receive %s: v%d", bmdTermName, newbucketmd.version())
-	if msg.Action == "" {
+	if msgInt.Action == "" {
 		glog.Infoln(s)
 	} else {
-		glog.Infof("%s, action %s", s, msg.Action)
+		glog.Infof("%s, action %s", s, msgInt.Action)
 	}
 	p.bmdowner.Lock()
 	myver := p.bmdowner.get().version()
@@ -2889,7 +2907,8 @@ func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketC
 }
 
 func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
-	jsbytes, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRechecksum})
+	smap := p.smapowner.get()
+	jsbytes, err := jsoniter.Marshal(p.newActionMsgInternalStr(cmn.ActRechecksum, smap, nil))
 	cmn.AssertNoErr(err)
 
 	res := p.broadcastTo(
@@ -2897,7 +2916,7 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 		nil,
 		http.MethodPost,
 		jsbytes,
-		p.smapowner.get(),
+		smap,
 		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,

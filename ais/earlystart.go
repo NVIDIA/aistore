@@ -227,7 +227,9 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	smap = p.smapowner.get()
 	if haveRegistratons {
 		glog.Infof("%s: merged local Smap (%d/%d)", p.si, smap.CountTargets(), smap.CountProxies())
-		p.metasyncer.sync(true, smap, metaction1, p.bmdowner.get(), metaction1)
+		bmdowner := p.bmdowner.get()
+		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmdowner)
+		p.metasyncer.sync(true, smap, msgInt, bmdowner, msgInt)
 	} else {
 		glog.Infof("%s: no registrations yet", p.si)
 	}
@@ -245,7 +247,9 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	if s := p.smapowner.persist(p.smapowner.get(), true); s != "" {
 		glog.Fatalf("FATAL: %s", s)
 	}
-	p.metasyncer.sync(false, smap, metaction2, p.bmdowner.get(), metaction2)
+	bmdowner := p.bmdowner.get()
+	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmdowner)
+	p.metasyncer.sync(false, smap, msgInt, bmdowner, msgInt)
 	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d",
 		p.si.DaemonID, smap.version(), smap.CountTargets())
 	p.startedup(1) // started up as primary

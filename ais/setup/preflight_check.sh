@@ -64,7 +64,7 @@ if [ "$?" == "0" ]; then
     fi
 fi
 if [ "$(ps aux | grep -v -e 'grep' | grep bin/ais)" != "" ]; then
-    echo "AIStore running on locally..." >&2
+    echo "AIStore running locally..." >&2
     exit 0 
 fi
 echo "AIStore is not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized)" >&2
@@ -74,8 +74,8 @@ exit $?
 test-short)
   echo "Running short tests..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1  -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo -n "${errs}" | wc -l)
-  if [ "${err_count}" != "0" ]; then
+  err_count=$(echo "${errs}" | wc -l)
+  if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
       echo "test-short: ${err_count} failed" >&2
       exit 1
@@ -85,8 +85,8 @@ test-short)
 test-long)
   echo "Running long tests..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo -n "${errs}" | wc -l)
-  if [ "${err_count}" != "0" ]; then
+  err_count=$(echo "${errs}" | wc -l)
+  if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
       echo "test-short: ${err_count} failed" >&2
       exit 1
@@ -96,8 +96,8 @@ test-long)
 test-run)
   echo "Running test with regex..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo -n "${errs}" | wc -l)
-  if [ "${err_count}" != "0" ]; then
+  err_count=$(echo "${errs}" | wc -l)
+  if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
       echo "test-run: ${err_count} failed" >&2
       exit 1

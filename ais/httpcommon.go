@@ -84,6 +84,18 @@ type (
 		Smap           *smapX    `json:"smap"`
 		BucketMD       *bucketMD `json:"bucketmd"`
 	}
+
+	// actionMsgInternal is an extended ActionMsg with extra information for node <=> node control plane communications
+	actionMsgInternal struct {
+		cmn.ActionMsg
+		BMDVersion  int64 `json:"bmdversion"`
+		SmapVersion int64 `json:"smapversion"`
+
+		// special field: used when new target is registered to primary proxy
+		// storage targets make use of NewDaemonID,
+		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
+		NewDaemonID string `json:"newdaemonid"`
+	}
 )
 
 //===========
@@ -642,6 +654,28 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 	return ch
 }
 
+func (h *httprunner) newActionMsgInternalStr(msgStr string, smap *smapX, bmdowner *bucketMD) *actionMsgInternal {
+	return h.newActionMsgInternal(&cmn.ActionMsg{Value: msgStr}, smap, bmdowner)
+}
+
+func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX, bmdowner *bucketMD) *actionMsgInternal {
+	msgInt := &actionMsgInternal{ActionMsg: *actionMsg}
+
+	if smap != nil {
+		msgInt.SmapVersion = smap.Version
+	} else {
+		msgInt.SmapVersion = h.smapowner.Get().Version
+	}
+
+	if bmdowner != nil {
+		msgInt.BMDVersion = bmdowner.Version
+	} else {
+		msgInt.BMDVersion = h.bmdowner.Get().Version
+	}
+
+	return msgInt
+}
+
 //=============================
 //
 // http request parsing helpers
@@ -953,11 +987,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 // metasync Rx handlers
 //
 //=====================
-func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msg *cmn.ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msgInt *actionMsgInternal, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, msg = &smapX{}, &cmn.ActionMsg{}
+	newsmap, msgInt = &smapX{}, &actionMsgInternal{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
@@ -966,7 +1000,7 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msg *cm
 	}
 	if _, ok := payload[smaptag+actiontag]; ok {
 		msgvalue = payload[smaptag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), msgInt); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
 		}
@@ -997,18 +1031,18 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msg *cm
 		}
 	}
 	s := ""
-	if msg.Action != "" {
-		s = ", action " + msg.Action
+	if msgInt.Action != "" {
+		s = ", action " + msgInt.Action
 	}
 	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.CountTargets(), s)
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucketMD, msg *cmn.ActionMsg, errstr string) {
+func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucketMD, msgInt *actionMsgInternal, errstr string) {
 	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
-	newbucketmd, msg = &bucketMD{}, &cmn.ActionMsg{}
+	newbucketmd, msgInt = &bucketMD{}, &actionMsgInternal{}
 	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
@@ -1017,7 +1051,7 @@ func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucket
 	}
 	if _, ok := payload[bucketmdtag+actiontag]; ok {
 		msgvalue = payload[bucketmdtag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), msgInt); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
 		}
@@ -1038,10 +1072,10 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 		return nil, ""
 	}
 
-	msg := cmn.ActionMsg{}
+	msgInt := actionMsgInternal{}
 	if _, ok := payload[tokentag+actiontag]; ok {
 		msgvalue := payload[tokentag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), &msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), &msgInt); err != nil {
 			errstr := fmt.Sprintf(
 				"Failed to unmarshal action message, value (%+v, %T), err: %v",
 				msgvalue, msgvalue, err)
@@ -1057,8 +1091,8 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 	}
 
 	s := ""
-	if msg.Action != "" {
-		s = ", action " + msg.Action
+	if msgInt.Action != "" {
+		s = ", action " + msgInt.Action
 	}
 	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
 

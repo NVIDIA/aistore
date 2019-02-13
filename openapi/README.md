@@ -19,7 +19,7 @@
 
 ## Overview
 
-OpenAPI Generator (formerly called Swagger) is used to generate a python client package for simplied integration with the RESTful API.
+OpenAPI Generator (formerly called Swagger) is used to generate a python client package for simplified integration with the RESTful API.
 
 Note that, as of v2.0, [python3 is currently not fully supported](#future).
 

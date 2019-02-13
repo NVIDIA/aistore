@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -329,6 +328,7 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.VerChangeSize, stats.KindCounter)
 	t.statsif.Register(stats.ErrCksumCount, stats.KindCounter)
 	t.statsif.Register(stats.ErrCksumSize, stats.KindCounter)
+	t.statsif.Register(stats.ErrMetadataCount, stats.KindCounter)
 	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
 	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
 	// rebalance
@@ -387,8 +387,8 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	t.gfn.lookup = true
 	t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
 	// bmd
-	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
-	if errstr := t.receiveBucketMD(meta.Bmd, msg, "register"); errstr != "" {
+	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
+	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, "register"); errstr != "" {
 		t.gfn.lookup = false
 		glog.Errorf("registered %s: %s", tname(t.si), errstr)
 	} else {
@@ -1024,7 +1024,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket  string
-		msg     cmn.ActionMsg
+		msgInt  actionMsgInternal
 		started = time.Now()
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -1038,8 +1038,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 
 	if err == nil && len(b) > 0 {
-		err = jsoniter.Unmarshal(b, &msg)
+		err = jsoniter.Unmarshal(b, &msgInt)
 	}
+	t.ensureLatestMD(msgInt)
 	if err != nil {
 		s := fmt.Sprintf("Failed to read %s body, err: %v", r.Method, err)
 		if err == io.EOF {
@@ -1052,7 +1053,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch msg.Action {
+	switch msgInt.Action {
 	case cmn.ActEvictCB:
 		bucketmd := t.bmdowner.get()
 		if bucketmd.IsLocal(bucket) {
@@ -1060,14 +1061,10 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if errstr := t.ensureLatestBMD(msg); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
-
 		fs.Mountpaths.EvictCloudBucket(bucket)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, apitems, msg)
+			err := t.listRangeOperation(r, apitems, msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
 			} else {
@@ -1080,7 +1077,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf("Invalid API request: no message body")
 		t.invalmsghdlr(w, r, s)
 	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
+		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msgInt.Action))
 	}
 
 }
@@ -1151,8 +1148,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	var msg cmn.ActionMsg
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	var msgInt actionMsgInternal
+	if cmn.ReadJSON(w, r, &msgInt) != nil {
 		return
 	}
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -1160,9 +1157,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch msg.Action {
+	t.ensureLatestMD(msgInt)
+
+	switch msgInt.Action {
 	case cmn.ActPrefetch:
-		if err := t.listRangeOperation(r, apitems, msg); err != nil {
+		if err := t.listRangeOperation(r, apitems, msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 		}
 	case cmn.ActRenameLB:
@@ -1170,11 +1169,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if !t.validatebckname(w, r, lbucket) {
 			return
 		}
-		bucketFrom, bucketTo := lbucket, msg.Name
-
-		if errstr := t.ensureLatestBMD(msg); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
+		bucketFrom, bucketTo := lbucket, msgInt.Name
 
 		t.bmdowner.Lock() // lock#1 begin
 
@@ -1208,7 +1203,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// list the bucket and return
-		tag, ok := t.listbucket(w, r, lbucket, &msg)
+		tag, ok := t.listbucket(w, r, lbucket, &msgInt)
 		if ok {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
@@ -1233,7 +1228,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		islocal := bucketmd.IsLocal(bucket)
 		t.xactions.renewEraseCopies(bucket, t, islocal)
 	default:
-		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
+		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
 	}
 }
 
@@ -2012,7 +2007,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *cmn.ActionMsg) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *actionMsgInternal) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -2670,8 +2665,10 @@ func (t *targetrunner) IsBucketLocal(bucket string, bmd *cluster.BMD, q url.Valu
 			glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
 		} else if v < bmd.Version {
 			glog.Errorf("%s v%d > v%d (primary)", bmdTermName, bmd.Version, v)
+			t.statsif.Add(stats.ErrMetadataCount, 1)
 		} else if v > bmd.Version { // fixup
 			glog.Errorf("%s v%d < v%d (primary) - proceeding anyway", bmdTermName, bmd.Version, v)
+			t.statsif.Add(stats.ErrMetadataCount, 1)
 			t.bmdVersionFixup()
 			islocal := t.bmdowner.get().IsLocal(bucket)
 			if islocal == proxylocal {
@@ -2683,14 +2680,14 @@ func (t *targetrunner) IsBucketLocal(bucket string, bmd *cluster.BMD, q url.Valu
 	return
 }
 
-func (t *targetrunner) bmdVersionFixup() {
+func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (errstr string) {
 	smap := t.smapowner.get()
 	if smap == nil || !smap.isValid() {
-		return
+		return "smap nil or missing"
 	}
 	psi := smap.ProxySI
 	q := url.Values{}
-	q.Add(cmn.URLParamWhat, cmn.GetWhatBucketMeta)
+	q.Add(cmn.URLParamWhat, what)
 	args := callArgs{
 		si: psi,
 		req: reqArgs{
@@ -2703,18 +2700,38 @@ func (t *targetrunner) bmdVersionFixup() {
 	}
 	res := t.call(args)
 	if res.err != nil {
-		glog.Errorf("Failed to get-what=%s, err: %v", cmn.GetWhatBucketMeta, res.err)
-		return
+		return fmt.Sprintf("failed to %s=%s, err: %v", what, cmn.GetWhatBucketMeta, res.err)
 	}
-	newbucketmd := &bucketMD{}
-	err := jsoniter.Unmarshal(res.outjson, newbucketmd)
+
+	err := jsoniter.Unmarshal(res.outjson, outStruct)
 	if err != nil {
-		glog.Errorf("Unexpected: failed to unmarshal get-what=%s response from %s, err: %v [%v]",
-			cmn.GetWhatBucketMeta, psi.IntraControlNet.DirectURL, err, string(res.outjson))
+		return fmt.Sprintf("unexpected: failed to unmarshal %s=%s response, err: %v [%v]",
+			what, psi.IntraControlNet.DirectURL, err, string(res.outjson))
+	}
+
+	return ""
+}
+
+func (t *targetrunner) smapVersionFixup() {
+	newsmap := &smapX{}
+	errstr := t.fetchPrimaryMD(cmn.GetWhatSmap, newsmap)
+	if errstr != "" {
+		glog.Errorf(errstr)
 		return
 	}
-	var msg = cmn.ActionMsg{Action: "get-what=" + cmn.GetWhatBucketMeta}
-	t.receiveBucketMD(newbucketmd, &msg, "fixup")
+	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newsmap, nil)
+	t.receiveSmap(newsmap, msgInt)
+}
+
+func (t *targetrunner) bmdVersionFixup() {
+	newbucketmd := &bucketMD{}
+	errstr := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newbucketmd)
+	if errstr != "" {
+		glog.Errorf(errstr)
+		return
+	}
+	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newbucketmd)
+	t.receiveBucketMD(newbucketmd, msgInt, "fixup")
 }
 
 //===========================
@@ -3367,11 +3384,11 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg, tag string) (errstr string) {
-	if msg.Action == "" {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag string) (errstr string) {
+	if msgInt.Action == "" {
 		glog.Infof("%s %s v%d", tag, bmdTermName, newbucketmd.version())
 	} else {
-		glog.Infof("%s %s v%d, action %s", tag, bmdTermName, newbucketmd.version(), msg.Action)
+		glog.Infof("%s %s v%d, action %s", tag, bmdTermName, newbucketmd.version(), msgInt.Action)
 	}
 	t.bmdowner.Lock()
 	bucketmd := t.bmdowner.get()
@@ -3414,18 +3431,18 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (errstr string) {
 	var (
 		newTargetID, s string
 		existentialQ   bool
 	)
 	// proxy => target control protocol (see p.httpclupost)
-	action, id := path.Split(msg.Action)
+	action, id := msgInt.Action, msgInt.NewDaemonID
 	if action != "" {
 		newTargetID = id
 	}
-	if msg.Action != "" {
-		s = ", action " + msg.Action
+	if msgInt.Action != "" {
+		s = ", action " + msgInt.Action
 	}
 	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
 		tname(t.si), newsmap.version(), newsmap.CountTargets(), pname(newsmap.ProxySI), s)
@@ -3444,7 +3461,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 		return
 	}
-	if msg.Action == cmn.ActGlobalReb {
+	if msgInt.Action == cmn.ActGlobalReb {
 		go t.runRebalance(newsmap, newTargetID)
 		return
 	}
@@ -3460,25 +3477,30 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	return
 }
 
-func (t *targetrunner) ensureLatestBMD(msg cmn.ActionMsg) string {
+func (t *targetrunner) ensureLatestMD(msgInt actionMsgInternal) {
+	smap := t.smapowner.Get()
+	smapVersion := msgInt.SmapVersion
+	if smap.Version < smapVersion {
+		glog.Errorf("own smap version %d < %d - fetching latest for %v", smap.Version, smapVersion, msgInt.Action)
+		t.statsif.Add(stats.ErrMetadataCount, 1)
+		t.smapVersionFixup()
+	} else if smap.Version > smapVersion {
+		//if metasync outraces the request, we end up here, just log it and continue
+		glog.Errorf("own smap version %d > %d - encountered during %v", smap.Version, smapVersion, msgInt.Action)
+		t.statsif.Add(stats.ErrMetadataCount, 1)
+	}
+
 	bucketmd := t.bmdowner.Get()
-	bmdVal, ok := msg.Value.(map[string]interface{})
-	if !ok {
-		return fmt.Sprintf("unexpected Value format %+v, %T", msg.Value, msg.Value)
-	}
-	v1, ok1 := bmdVal["version"]
-	v2, ok2 := v1.(float64)
-	if !ok1 || !ok2 {
-		return fmt.Sprintf("invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2)
-	}
-	version := int64(v2)
-	if bucketmd.Version < version {
-		glog.Infof("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, version, msg.Action)
+	bmdVersion := msgInt.BMDVersion
+	if bucketmd.Version < bmdVersion {
+		glog.Errorf("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		t.statsif.Add(stats.ErrMetadataCount, 1)
 		t.bmdVersionFixup()
-	} else if bucketmd.Version > version {
-		return fmt.Sprintf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, version, msg.Action)
+	} else if bucketmd.Version > bmdVersion {
+		//if metasync outraces the request, we end up here, just log it and continue
+		glog.Errorf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
+		t.statsif.Add(stats.ErrMetadataCount, 1)
 	}
-	return ""
 }
 
 func (t *targetrunner) pollClusterStarted(timeout time.Duration) {

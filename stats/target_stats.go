@@ -43,6 +43,7 @@ const (
 	VerChangeSize    = "vchange.size"
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
+	ErrMetadataCount = "err.md.n"
 	RebalGlobalCount = "reb.global.n"
 	RebalLocalCount  = "reb.local.n"
 	RebalGlobalSize  = "reb.global.size"

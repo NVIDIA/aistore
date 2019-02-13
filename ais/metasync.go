@@ -7,7 +7,6 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"path"
 	"sync"
 	"time"
 
@@ -48,7 +47,7 @@ const (
 //
 //         (shared-replicated-object, associated action-message)
 //
-// Action message (above, see cmn.ActionMsg) provides receivers with a context as
+// Action message (above, see actionMsgInternal) provides receivers with a context as
 // to what exactly to do with the newly received versioned replica.
 //
 // Further, the metasyncer:
@@ -91,8 +90,8 @@ type revs interface {
 // private types - used internally by the metasync
 type (
 	revspair struct {
-		revs revs
-		msg  *cmn.ActionMsg
+		revs   revs
+		msgInt *actionMsgInternal
 	}
 	revsReq struct {
 		pairs []revspair
@@ -189,16 +188,9 @@ func (y *metasyncer) sync(wait bool, params ...interface{}) {
 	cmn.Assert(l > 0 && len(params) == l*2)
 	revsReq := revsReq{pairs: make([]revspair, l)}
 	for i := 0; i < len(params); i += 2 {
-		revs, ok := params[i].(revs)
-		cmn.Assert(ok)
-		if action, ok := params[i+1].(string); ok {
-			msg := &cmn.ActionMsg{Action: action}
-			revsReq.pairs[i/2] = revspair{revs, msg}
-		} else {
-			msg, ok := params[i+1].(*cmn.ActionMsg)
-			cmn.Assert(ok)
-			revsReq.pairs[i/2] = revspair{revs, msg}
-		}
+		revs := params[i].(revs)
+		msgInt := params[i+1].(*actionMsgInternal)
+		revsReq.pairs[i/2] = revspair{revs, msgInt}
 	}
 	if wait {
 		revsReq.wg = &sync.WaitGroup{}
@@ -250,8 +242,8 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 OUTER:
 	for _, pair := range pairs {
 		var (
-			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
-			s              = fmt.Sprintf("%s, action=%s, version=%d", tag, msg.Action, revs.version())
+			revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
+			s                 = fmt.Sprintf("%s, action=%s, version=%d", tag, msgInt.Action, revs.version())
 		)
 		// vs current Smap
 		if tag == smaptag {
@@ -282,17 +274,17 @@ OUTER:
 	}
 	// step 2: build payload and update last sync-ed
 	for _, pair := range pairsToSend {
-		var revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
-		glog.Infof("dosync: %s, action=%s, version=%d", tag, msg.Action, revs.version())
+		var revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
+		glog.Infof("dosync: %s, action=%s, version=%d", tag, msgInt.Action, revs.version())
 
 		y.last[tag] = revs
 		jsbytes, err = revs.marshal()
 		cmn.AssertNoErr(err)
 		y.lastclone[tag] = string(jsbytes)
-		jsmsg, err = jsoniter.Marshal(msg)
+		jsmsg, err = jsoniter.Marshal(msgInt)
 		cmn.AssertNoErr(err)
 
-		action, id := path.Split(msg.Action)
+		action, id := msgInt.Action, msgInt.NewDaemonID
 		if action == cmn.ActRegTarget {
 			newTargetID = id
 		}
@@ -448,15 +440,15 @@ func (y *metasyncer) handlePending() (cnt int) {
 
 	payload := make(cmn.SimpleKVs)
 	pairs := make([]revspair, 0, len(y.last))
-	msg := &cmn.ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
-	jsmsg, err := jsoniter.Marshal(msg)
+	msgInt := y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // the same action msg for all
+	jsmsg, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
 	for tag, revs := range y.last {
 		body, err := revs.marshal()
 		cmn.AssertNoErr(err)
 		payload[tag] = string(body)
 		payload[tag+actiontag] = string(jsmsg)
-		pairs = append(pairs, revspair{revs, msg})
+		pairs = append(pairs, revspair{revs, msgInt})
 	}
 
 	body, err := jsoniter.Marshal(payload)

@@ -331,14 +331,14 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg cmn.ActionMsg) error {
-	operation := t.getOpFromActionMsg(msg.Action)
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msgInt actionMsgInternal) error {
+	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")
 	}
 
-	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
-	jsmap, ok := msg.Value.(map[string]interface{})
+	detail := fmt.Sprintf(" (%s, %s, %T)", msgInt.Action, msgInt.Name, msgInt.Value)
+	jsmap, ok := msgInt.Value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid cmn.ActionMsg.Value format" + detail)
 	}
