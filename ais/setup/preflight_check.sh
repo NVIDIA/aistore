@@ -49,6 +49,25 @@ spell)
     fi
     exit 0
   ;;
+test-env)
+hash docker &>/dev/null
+if [ "$?" == "0" ]; then
+    docker_running=$(docker container ls)
+    if [ "$?" != "0" ]; then
+        echo "Warning: Can't check if AIS is running from docker, verify that you have permissions for /var/run/docker.sock" >&2
+    elif [ "$(echo ${docker_running} | grep ais)" != "" ]; then
+        echo "AIStore running on docker..." >&2
+        exit 0 
+    fi
+fi
+if [ "$(ps aux | grep -v -e 'grep' | grep bin/ais)" != "" ]; then
+    echo "AIStore running on locally..." >&2
+    exit 0 
+fi
+echo "AIStore is not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized)" >&2
+echo -n "continue? [y/N] " >&2 && read ans && [ ${ans:-N} == y ]
+exit $?
+  ;;
 test-short)
   echo "Running short tests..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1  -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )

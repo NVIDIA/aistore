@@ -90,14 +90,7 @@ test-envcheck:
 ifeq ($(BUCKET),)
 	$(error missing environment variable: BUCKET="bucketname")
 endif
-ifneq ($(shell hash docker && docker container ls | grep ais),)
-	@echo "AIStore running on docker..."
-else ifneq ($(shell ps aux | grep -v -e 'grep' | grep bin/ais),)
-	@echo "AIStore running locally..."
-else
-	$(warning AIStore not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized))
-	@echo -n "continue? [y/N] " && read ans && [ $${ans:-N} == y ]
-endif
+	@CHECK="test-env" $(SHELL) ./setup/preflight_check.sh
 
 test-short: test-envcheck
 	@CHECK="test-short" BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
