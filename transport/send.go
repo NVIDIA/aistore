@@ -30,7 +30,7 @@ import (
 const (
 	maxHeaderSize  = 1024
 	lastMarker     = cmn.MaxInt64
-	defaultIdleOut = time.Second * 2
+	defaultIdleOut = time.Second * 3
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 )
@@ -259,24 +259,22 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 //
 // ---------------------------------------------------------------------------------------
 func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, prc ...*int64) (err error) {
+	s.time.idle.Stop()
 	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s]", s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname)
+		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
+			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
 		glog.Errorln(err)
 		return
 	}
-	if bool(glog.V(4)) || debug {
-		glog.Infof("%s: send %s/%s(%d)[queue len=%d]", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size, len(s.workCh))
-	}
-	s.time.idle.Stop()
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
+		s.postCh <- struct{}{}
 		if bool(glog.V(4)) || debug {
 			glog.Infof("%s: expired => posted", s)
 		}
-		s.postCh <- struct{}{}
 	}
 	// next object => SQ
 	if reader == nil {
-		cmn.AssertMsg(hdr.ObjAttrs.Size == 0, "nil reader: expecting zero-length data")
+		cmn.Assert(hdr.ObjAttrs.Size == 0 || hdr.ObjAttrs.Size == lastMarker)
 		reader = nopRC
 	}
 	obj := obj{hdr: hdr, reader: reader, callback: callback}
@@ -284,18 +282,18 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 		obj.prc = prc[0]
 	}
 	s.workCh <- obj
+	if bool(glog.V(4)) || debug {
+		glog.Infof("%s: send %s/%s(%d)[sq=%d]", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size, len(s.workCh))
+	}
 	return
 }
 
 func (s *Stream) Fin() (err error) {
-	if s.Terminated() {
-		err = fmt.Errorf("%s terminated(%s, %v), cannot Fin()", s, *s.term.reason, s.term.err)
-		return
-	}
-	s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}}
+	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
+	err = s.Send(hdr, nil, nil)
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
-		glog.Infof("%s: (expired => posted) to handle Fin", s)
 		s.postCh <- struct{}{}
+		glog.Infof("%s: (expired => posted) to handle Fin", s)
 	}
 	s.wg.Wait() // normal (graceful, synchronous) termination
 	return
@@ -539,7 +537,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.sendoff.off:])
 	s.sendoff.off += int64(n)
 	if (bool(glog.V(4)) || debug) && (s.sendoff.off < int64(len(s.header))) {
-		glog.Errorf("%s: Split-Header Warning: n(copied) %d < %d hlen", s, s.sendoff.off, len(s.header))
+		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
 	}
 	if s.sendoff.off >= int64(len(s.header)) {
 		if debug {
