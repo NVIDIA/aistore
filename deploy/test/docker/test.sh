@@ -48,10 +48,22 @@ case $i in
 esac
 done
 
+if [ "$(docker ps -q -f name=${CONTAINER_NAME}$)" ]; then
+    echo "Container with ${CONTAINER_NAME} name already exists/running"
+    exit 1
+fi
+
+function cleanup {
+    rm -f ${AISTORE_PATH}/.dockerignore
+}
+trap cleanup EXIT INT TERM
+
 set -e # don't allow errors in build and volume creation
+echo ".git" > ${AISTORE_PATH}/.dockerignore
 docker volume create ${CONTAINER_NAME} # mount filesystem for docker so AIS can see that
 docker build -t test-docker -f ${S_PATH}/Dockerfile ${AISTORE_PATH} \
     --build-arg cld_provider=${CLD_PROVIDER}
+cleanup
 set +e # now we can allow fails
 
 docker run -it ${RUN_FLAGS} \

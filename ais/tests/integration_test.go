@@ -155,7 +155,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		m.wg.Done()
 	}()
 
-	time.Sleep(time.Second * 3) // give gets some room to breath
+	time.Sleep(time.Second * 3) // give gets some room to breathe
 	go func() {
 		doReregisterTarget(target, &m)
 		m.wg.Done()
@@ -1386,7 +1386,9 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
-		os.RemoveAll(newMountpath)
+		if !tutils.DockerRunning() {
+			os.RemoveAll(newMountpath)
+		}
 		tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 

@@ -229,34 +229,28 @@ func (t *targetrunner) Run() error {
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-
-	// Public network
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Buckets)+"/", t.bucketHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Download), t.downloadHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), t.daemonHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Push)+"/", t.pushHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), t.tokenHandler)
-	transport.SetMux(cmn.NetworkPublic, t.publicServer.mux) // to register transport handlers at runtime
-	t.registerPublicNetHandler("/", cmn.InvalidHandler)
-
-	// Intra control network
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), t.metasyncHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), dsort.SortHandler)
+	transport.SetMux(cmn.NetworkPublic, t.publicServer.mux)
 	if config.Net.UseIntraControl {
-		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux) // to register transport handlers at runtime
-		t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Download), t.downloadHandler)
-		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)
+		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux)
 	}
-
-	// Intra data network
 	if config.Net.UseIntraData {
-		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux) // to register transport handlers at runtime
-		t.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
-		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
+		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux)
 	}
+	networkHandlers := []networkHandler{
+		networkHandler{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		networkHandler{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+		networkHandler{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Push, h: t.pushHandler, net: []string{cmn.NetworkPublic}},
+
+		networkHandler{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+
+		networkHandler{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+	}
+	t.registerNetworkHandlers(networkHandlers)
 
 	if err := t.setupStreams(); err != nil {
 		glog.Error(err)

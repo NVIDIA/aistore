@@ -533,7 +533,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 				return
 			}
 			sendTo := targetOrder[i+1]
-			u := sendTo.IntraDataNet.DirectURL + fmt.Sprintf(
+			u := sendTo.URL(cmn.NetworkIntraData) + fmt.Sprintf(
 				"%s?%s=%d&%s=%d&%s=%d",
 				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
 				cmn.URLParamTotalCompressedSize, m.totalCompressedSize(),

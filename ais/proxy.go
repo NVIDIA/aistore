@@ -134,43 +134,33 @@ func (p *proxyrunner) Run() error {
 	//
 
 	// Public network
-	if config.Auth.Enabled {
-		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Buckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
-		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
-	} else {
-		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Buckets)+"/", p.bucketHandler)
-		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
-	}
-
-	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Download), p.downloadHandler)
-	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), p.daemonHandler)
-	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Cluster), p.clusterHandler)
-	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), p.tokenHandler)
-	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), dsort.ProxySortHandler)
-
 	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
 	} else {
 		p.registerPublicNetHandler("/", cmn.InvalidHandler)
 	}
 
-	// Intra control network
-	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), p.metasyncHandler)
-	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), p.healthHandler)
-	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), p.voteHandler)
-	if config.Net.UseIntraControl {
-		if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-			p.registerIntraControlNetHandler("/", p.reverseProxyHandler)
-		} else {
-			p.registerIntraControlNetHandler("/", cmn.InvalidHandler)
-		}
+	bucketHandler, objectHandler := p.bucketHandler, p.objectHandler
+	if config.Auth.Enabled {
+		bucketHandler, objectHandler = wrapHandler(p.bucketHandler, p.checkHTTPAuth), wrapHandler(p.objectHandler, p.checkHTTPAuth)
 	}
 
-	// Intra data network
-	if config.Net.UseIntraData {
-		p.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
-		p.registerIntraDataNetHandler("/", cmn.InvalidHandler)
+	networkHandlers := []networkHandler{
+		networkHandler{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Sort, h: dsort.ProxySortHandler, net: []string{cmn.NetworkPublic}},
+
+		networkHandler{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
+
+		networkHandler{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
+	p.registerNetworkHandlers(networkHandlers)
 
 	glog.Infof("%s: [public net] listening on: %s", pname(p.si), p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {

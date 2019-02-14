@@ -434,10 +434,10 @@ fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cp $DIR/../../../ais/setup/config.sh config.sh
 
+docker network create docker_default
 if [ "$GRAFANA" == true ]; then
     GRAPHITE_PORT=2003
     GRAPHITE_SERVER="graphite"
-    docker network create docker_default
     docker-compose -f ${composer_file} up --build -d graphite
     docker-compose -f ${composer_file} up --build -d grafana
 else
@@ -470,6 +470,12 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     IPV4LIST_INTRA_CONTROL=""
     IPV4LIST_INTRA_DATA=""
 
+    mkdir -p /tmp/ais/${i}
+    # UID is used to ensure that volumes' folders have the same permissions as
+    # the user who starts the script. Otherwise they would have `root` permission.
+    export UID # (see docker compose files)
+    export CLUSTER=${i}
+
     for j in `seq 2 $((($TARGET_CNT + $PROXY_CNT + 1) * $CLUSTER_CNT))`; do
         IPV4LIST="${IPV4LIST}${PUB_NET}.$j,"
     done
@@ -501,7 +507,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
 
     echo Starting Primary Proxy
     AIS_PRIMARYPROXY=true docker-compose -p ais${i} -f ${composer_file} up -d proxy
-    sleep 5 # give primary proxy some room to breath
+    sleep 2 # give primary proxy some room to breathe
 
     echo Starting cluster ..
     docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate

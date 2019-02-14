@@ -143,5 +143,7 @@ fi
 
 echo "Removing volumes..."
 docker volume prune -f
-echo "Removing volumes folders (requires sudo)..."
-sudo rm -rf /tmp/ais/ 
+echo "Removing volumes folders..."
+for ((i=0; i<${CLUSTER_CNT}; i++)); do
+    rm -rf /tmp/ais/${i}
+done

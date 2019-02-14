@@ -21,9 +21,10 @@ services:
     env_file:
       - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env
+    user: ${UID:-1000}
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - /tmp/ais:/tmp/ais
+      - /tmp/ais/${CLUSTER:-0}:/tmp/ais
   target:
     build:
       context: .
@@ -38,9 +39,10 @@ services:
     env_file:
       - /tmp/docker_ais/tmp.env
       - /tmp/docker_ais/aws.env
+    user: ${UID:-1000}
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-      - /tmp/ais:/tmp/ais
+      - /tmp/ais/${CLUSTER:-0}:/tmp/ais
 networks:
   docker_default:
     external: true

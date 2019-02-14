@@ -138,14 +138,9 @@ $ ./stop_docker.sh -c=NUM_CLUSTERS
 ```
 These commands stop all containers (even stopped and dead ones), and remove Docker networks used by AIS. Refer to the stop_docker.sh script for more details about its usage.
 
-After the cluster has been stopped, delete the `/tmp/ais/` directory on your local machine. The following command does this (note Docker protects the contents of this directory):
-```
-$ sudo rm -rf /tmp/ais
-```
-
 ## Viewing the Local Filesystem of a Container
-The Docker-Compose file is currently set to mount the `/tmp/ais/c${i}\_${target,proxy}\_${j}` directory, where *i* is the cluster number and *j* is the daemon number, to `/tmp/ais` inside the container.
-Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}`, navigate to `/tmp/ais/c${i}\_{target,proxy}\_${j}` directory on your local machine.
+The Docker-Compose file is currently set to mount the `/tmp/ais/${i}/${hostname}` directory, where *i* is the cluster number and *hostname* is hostname of container, to `/tmp/ais` inside the container.
+Thus, to see the `/tmp/ais` folder of container `ais${i}\_${target,proxy}\_${j}` obtain the hostname of given container and navigate to `/tmp/ais/${i}/${hostname}` directory on your local machine.
 
 ## Extra configuration
 

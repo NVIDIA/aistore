@@ -43,13 +43,12 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 # Install statsd
 RUN git clone https://github.com/etsy/statsd.git
 
-ENV CONFDIR /etc/ais
+ENV CONFDIR /tmp/.conf
 ENV CONFFILE ${CONFDIR}/ais.json
 ENV CONFFILE_COLLECTD ${CONFDIR}/collectd.conf
 ENV CONFFILE_STATSD ${CONFDIR}/statsd.conf
 
 ENV MOUNTPATH /tmp/ais
-RUN mkdir -p ${CONFDIR}
 
 ARG QUICK
 ENV QUICK=${QUICK}

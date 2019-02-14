@@ -78,6 +78,12 @@ type (
 		nodes   []cluster.NodeMap
 	}
 
+	networkHandler struct {
+		r   string           // resource
+		h   http.HandlerFunc // handler
+		net []string
+	}
+
 	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
 	SmapVoteMsg struct {
 		VoteInProgress bool      `json:"vote_in_progress"`
@@ -273,6 +279,44 @@ func (server *netServer) shutdown() {
 		glog.Infof("Stopped server, err: %v", err)
 	}
 	cancel()
+}
+
+func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
+	config := cmn.GCO.Get()
+
+	for _, nh := range networkHandlers {
+		if nh.r == "/" {
+			if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
+				h.registerPublicNetHandler("/", cmn.InvalidHandler)
+			}
+			if config.Net.UseIntraControl {
+				h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			}
+			if config.Net.UseIntraData {
+				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			}
+			continue
+		}
+
+		if cmn.StringInSlice(cmn.NetworkPublic, nh.net) {
+			h.registerPublicNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+
+			if config.Net.UseIntraControl && cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
+				h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			}
+			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
+				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			}
+		} else if cmn.StringInSlice(cmn.NetworkIntraControl, nh.net) {
+			h.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+
+			if config.Net.UseIntraData && cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
+				h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+			}
+		} else if cmn.StringInSlice(cmn.NetworkIntraData, nh.net) {
+			h.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, nh.r), nh.h)
+		}
+	}
 }
 
 func (h *httprunner) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {

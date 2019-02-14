@@ -3,7 +3,9 @@
 # required for `source /config.sh`
 export TEST_FSPATH_ROOT=${MOUNTPATH}/${HOSTNAME}
 export LOGDIR=${TEST_FSPATH_ROOT}/log
+mkdir -p ${CONFDIR}
 mkdir -p ${TEST_FSPATH_ROOT}
+touch ${LOGDIR}/statsd.log
 
 if [ -n "${QUICK}" ]; then
     go get -u -v github.com/NVIDIA/aistore/ais && /bin/bash

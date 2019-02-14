@@ -40,7 +40,7 @@ func (p *proxyrunner) downloadRedirectURL(bucket, objname string, started time.T
 		return
 	}
 	daemonID = si.DaemonID
-	redirectURL = si.URL(cmn.NetworkPublic) + cmn.URLPath(cmn.Version, cmn.Download) + "?"
+	redirectURL = si.URL(cmn.NetworkIntraControl) + cmn.URLPath(cmn.Version, cmn.Download) + "?"
 	var query = url.Values{}
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
 	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(started.UnixNano()), 10))

@@ -10,6 +10,15 @@ elif [ ${CLD_PROVIDER} == 2 ]; then
     BUCKET=smth # TODO:
 fi
 
+function cleanup {
+    if [ ${CLD_PROVIDER} == 1 ]; then
+        aws s3 rb ${BUCKET} --force
+    elif [ ${CLD_PROVIDER} == 2 ]; then
+        : # TODO: currently noop
+    fi
+}
+trap cleanup EXIT INT TERM
+
 pushd $AIS > /dev/null
 
 # try to build and deploy
@@ -22,11 +31,5 @@ popd > /dev/null
 BUCKET=${BUCKET} gotest -v -p 1 -count 1 -timeout 1h ./...
 EXIT_CODE=$?
 popd > /dev/null
-
-if [ ${CLD_PROVIDER} == 1 ]; then
-    aws s3api delete-bucket --bucket ${BUCKET} --region ${AWS_DEFAULT_REGION}
-elif [ ${CLD_PROVIDER} == 2 ]; then
-    : # TODO: currently noop
-fi
 
 exit ${EXIT_CODE}
