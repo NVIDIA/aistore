@@ -9,24 +9,24 @@ Translated from
 */
 package xoshiro256
 
-import "math/bits"
-
 func Hash(seed uint64) uint64 {
+	const n = 64
+
 	// Recommendation as per http://xoshiro.di.unimi.it/xoshiro256starstar.c:
 	//
 	// The state must be seeded so that it is not everywhere zero. If you have
 	// a 64-bit seed, we suggest to seed a splitmix64 generator and use its
 	// output to fill s.
-	s0 := splitmix64(seed)
-	s1 := splitmix64(s0)
 
-	return bits.RotateLeft64(s1*5, 7) * 9
-}
-
-// http://xoshiro.di.unimi.it/splitmix64.c
-func splitmix64(x uint64) uint64 {
-	z := x + 0x9e3779b97f4a7c15
+	z := seed + 0x9e3779b97f4a7c15
 	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
 	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
-	return z ^ (z >> 31)
+	z = (z ^ (z >> 31)) + 0x9e3779b97f4a7c15
+	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9
+	z = (z ^ (z >> 27)) * 0x94d049bb133111eb
+	z = (z ^ (z >> 31)) * 5
+
+	// inlined: bits.RotateLeft64(z, 7) * 9
+	s := uint(7) & (n - 1)
+	return (z<<s | z>>(n-s)) * 9
 }

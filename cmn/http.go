@@ -105,24 +105,26 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
 		status = errCode[0]
 	}
-	errMsg := ErrHTTP(r, msg, status)
-	stack := "("
-	for i := 1; i < 4; i++ {
-		if _, file, line, ok := runtime.Caller(i); ok {
-			if !strings.Contains(msg, ".go, #") {
+
+	var errMsg bytes.Buffer
+	errMsg.WriteString(ErrHTTP(r, msg, status))
+	if !strings.Contains(msg, ".go, #") {
+		errMsg.WriteString("| (")
+		for i := 1; i < 4; i++ {
+			if _, file, line, ok := runtime.Caller(i); ok {
 				f := filepath.Base(file)
-				if stack != "(" {
-					stack += " <- "
+				if i > 1 {
+					errMsg.WriteString(" <- ")
 				}
-				stack += fmt.Sprintf("[%s, #%d]", f, line)
+				fmt.Fprintf(&errMsg, "[%s, #%d]", f, line)
 			}
 		}
+		errMsg.WriteRune(')')
 	}
-	stack += ")"
-	errMsg += "| " + stack
 
-	glog.Errorln(errMsg)
-	http.Error(w, errMsg, status)
+	msg = errMsg.String()
+	glog.Errorln(msg)
+	http.Error(w, msg, status)
 }
 
 func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {

@@ -24,19 +24,20 @@ func Uname(bucket, objname string) string {
 }
 
 func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
-	if smap.CountTargets() == 0 {
-		errstr = "cluster map is empty: no targets"
-		return
-	}
-	name := Uname(bucket, objname)
-	digest := xxhash.ChecksumString64S(name, MLCG32)
-	var max uint64
+	var (
+		max    uint64
+		name   = Uname(bucket, objname)
+		digest = xxhash.ChecksumString64S(name, MLCG32)
+	)
 	for _, sinfo := range smap.Tmap {
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
 		if cs > max {
 			max = cs
 			si = sinfo
 		}
+	}
+	if si == nil {
+		errstr = "cluster map is empty: no targets"
 	}
 	return
 }
