@@ -74,9 +74,9 @@ exit $?
 test-short)
   echo "Running short tests..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1  -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo ${errs} -n | wc -l)
+  err_count=$(echo -n "${errs}" | wc -l)
   if [ "${err_count}" != "0" ]; then
-      echo ${errs} >&2
+      echo "${errs}" >&2
       echo "test-short: ${err_count} failed" >&2
       exit 1
   fi
@@ -85,9 +85,9 @@ test-short)
 test-long)
   echo "Running long tests..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo ${errs} -n | wc -l)
+  err_count=$(echo -n "${errs}" | wc -l)
   if [ "${err_count}" != "0" ]; then
-      echo ${errs} >&2
+      echo "${errs}" >&2
       echo "test-short: ${err_count} failed" >&2
       exit 1
   fi
@@ -96,9 +96,9 @@ test-long)
 test-run)
   echo "Running test with regex..." >&2
   errs=$(GOCACHE=off BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL" )
-  err_count=$(echo ${errs} -n | wc -l)
+  err_count=$(echo -n "${errs}" | wc -l)
   if [ "${err_count}" != "0" ]; then
-      echo ${errs} >&2
+      echo "${errs}" >&2
       echo "test-run: ${err_count} failed" >&2
       exit 1
   fi
