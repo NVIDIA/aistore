@@ -49,11 +49,13 @@ esac
 done
 
 set -e # don't allow errors in build and volume creation
+docker volume create ${CONTAINER_NAME} # mount filesystem for docker so AIS can see that
 docker build -t test-docker -f ${S_PATH}/Dockerfile ${AISTORE_PATH} \
     --build-arg cld_provider=${CLD_PROVIDER}
 set +e # now we can allow fails
 
 docker run -it ${RUN_FLAGS} \
+    -v ${CONTAINER_NAME}:/tmp \
     --ulimit nofile=100000:100000 \
     --name=${CONTAINER_NAME} \
     test-docker # image
@@ -64,5 +66,6 @@ else
     echo -e "\nALL TESTS PASSED!"
 fi
 
-# Removing container
+# Removing container and volume
 docker rm -f ${CONTAINER_NAME} > /dev/null 2>&1
+docker volume rm ${CONTAINER_NAME} > /dev/null 2>&1
