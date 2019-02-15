@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/klauspost/reedsolomon"
@@ -30,6 +31,8 @@ type putJogger struct {
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
 	stopCh chan struct{} // jogger management channel: to stop it
+
+	toDisk bool // use files or SGL
 }
 
 func (c *putJogger) run() {
@@ -40,6 +43,10 @@ func (c *putJogger) run() {
 		select {
 		case req := <-c.workCh:
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
+			memRequired := req.LOM.Size *
+				int64(req.LOM.Bprops.DataSlices+req.LOM.Bprops.ParitySlices) /
+				int64(req.LOM.Bprops.ParitySlices)
+			c.toDisk = useDisk(memRequired)
 			req.tm = time.Now()
 			c.ec(req)
 			c.parent.DecPending()
@@ -94,9 +101,8 @@ func (c *putJogger) ec(req *Request) {
 // removes all temporary slices in case of erasure coding fails in the middle
 func (c *putJogger) freeSGL(slices []*slice) {
 	for _, s := range slices {
-		if s != nil && s.sgl != nil {
-			s.sgl.Free()
-			s.sgl = nil
+		if s != nil {
+			s.free()
 		}
 	}
 }
@@ -232,14 +238,14 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	return err
 }
 
-// generateSlices gets FQN to the original file and encodes it into EC slices
+// generateSlicesToMemory gets FQN to the original file and encodes it into EC slices
 // * fqn - the path to original object
 // * dataSlices - the number of data slices
 // * paritySlices - the number of parity slices
 // Returns:
 // * SGL that hold all the objects data
 // * constructed from the main object slices
-func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*slice, error) {
+func generateSlicesToMemory(fqn string, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
 	var (
 		totalCnt = paritySlices + dataSlices
 		slices   = make([]*slice, totalCnt)
@@ -278,7 +284,7 @@ func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*s
 	}
 	for i := 0; i < paritySlices; i++ {
 		writer := mem2.NewSGL(initSize)
-		slices[i+dataSlices] = &slice{sgl: writer}
+		slices[i+dataSlices] = &slice{obj: writer}
 		writers[i] = writer
 	}
 
@@ -289,6 +295,81 @@ func generateSlices(fqn string, dataSlices, paritySlices int) (*memsys.SGL, []*s
 
 	err = stream.Encode(readers, writers)
 	return sgl, slices, err
+}
+
+// generateSlicesToDisk gets FQN to the original file and encodes it into EC slices
+// * fqn - the path to original object
+// * dataSlices - the number of data slices
+// * paritySlices - the number of parity slices
+// Returns:
+// * Main object file handle
+// * constructed from the main object slices
+func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
+	var (
+		totalCnt = paritySlices + dataSlices
+		slices   = make([]*slice, totalCnt)
+		fh       *cmn.FileHandle
+	)
+
+	stat, err := os.Stat(fqn)
+	if err != nil {
+		return fh, slices, err
+	}
+	fileSize := stat.Size()
+
+	fh, err = cmn.NewFileHandle(fqn)
+	if err != nil {
+		return fh, slices, err
+	}
+
+	sliceSize := SliceSize(fileSize, dataSlices)
+	padSize := sliceSize*int64(dataSlices) - fileSize
+
+	// readers are slices of original object(no memory allocated),
+	// writers are slices created by EC encoding process
+	readers := make([]io.Reader, dataSlices)
+	writers := make([]io.Writer, paritySlices)
+	sizeLeft := fileSize
+	for i := 0; i < dataSlices; i++ {
+		var (
+			reader cmn.ReadOpenCloser
+			err    error
+		)
+		if sizeLeft < sliceSize {
+			reader, err = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sizeLeft, padSize)
+		} else {
+			reader, err = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sliceSize, 0)
+		}
+		if err != nil {
+			return fh, slices, err
+		}
+		slices[i] = &slice{obj: fh, reader: reader}
+		readers[i] = reader
+		sizeLeft -= sliceSize
+	}
+	for i := 0; i < paritySlices; i++ {
+		workFQN := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
+		writer, err := cmn.CreateFile(workFQN)
+		if err != nil {
+			return fh, slices, err
+		}
+		slices[i+dataSlices] = &slice{writer: writer, workFQN: workFQN}
+		writers[i] = writer
+	}
+
+	stream, err := reedsolomon.NewStreamC(dataSlices, paritySlices, true, true)
+	if err != nil {
+		return fh, slices, err
+	}
+
+	err = stream.Encode(readers, writers)
+	for _, wr := range writers {
+		// writer can be only *os.File within this function
+		f, ok := wr.(*os.File)
+		cmn.Assert(ok)
+		f.Close()
+	}
+	return fh, slices, err
 }
 
 // copies the constructed EC slices to remote targets
@@ -307,18 +388,25 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	}
 
 	// load the data slices from original object and construct parity ones
-	sgl, slices, err := generateSlices(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+	var (
+		objReader cmn.ReadOpenCloser
+		slices    []*slice
+		err       error
+	)
+	if c.toDisk {
+		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+	} else {
+		objReader, slices, err = generateSlicesToMemory(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+	}
 	if err != nil {
-		if sgl != nil {
-			sgl.Free()
-		}
+		freeObject(objReader)
 		c.freeSGL(slices)
 		return nil, err
 	}
 
 	wg := sync.WaitGroup{}
 	ch := make(chan error, totalCnt)
-	objSGL := &slice{cnt: int32(req.LOM.Bprops.DataSlices), sgl: sgl}
+	mainObj := &slice{refCnt: int32(req.LOM.Bprops.DataSlices), obj: objReader}
 	sliceSize := SliceSize(req.LOM.Size, req.LOM.Bprops.DataSlices)
 
 	// transfer a slice to remote target
@@ -328,23 +416,44 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	copySlice := func(i int) {
 		defer wg.Done()
 
-		var sglSlice *slice
+		var data *slice
 		if i < req.LOM.Bprops.DataSlices {
 			// the slice is just a reader that does not allocate new memory
-			sglSlice = objSGL
+			data = mainObj
 		} else {
 			// the slice uses its own SGL, so the counter is 1
-			sglSlice = &slice{cnt: 1, sgl: slices[i].sgl}
+			data = &slice{refCnt: 1, obj: slices[i].obj, workFQN: slices[i].workFQN}
 		}
 
 		// In case of data slice, reopen its reader, because it was read
 		// to the end by erasure encoding while calculating parity slices
-		var reader cmn.ReadOpenCloser
+		var (
+			reader cmn.ReadOpenCloser
+			err    error
+		)
 		if slices[i].reader != nil {
-			slices[i].reader.Seek(0, io.SeekStart)
 			reader = slices[i].reader
+			if sgl, ok := reader.(*memsys.SliceReader); ok {
+				_, err = sgl.Seek(0, io.SeekStart)
+			} else if sgl, ok := reader.(*memsys.Reader); ok {
+				_, err = sgl.Seek(0, io.SeekStart)
+			} else if f, ok := reader.(*cmn.FileSectionHandle); ok {
+				_, err = f.Open()
+			} else {
+				cmn.AssertFmt(false, "unsupported reader type", reader)
+			}
 		} else {
-			reader = memsys.NewReader(slices[i].sgl)
+			if sgl, ok := slices[i].obj.(*memsys.SGL); ok {
+				reader = memsys.NewReader(sgl)
+			} else if slices[i].workFQN != "" {
+				reader, err = cmn.NewFileHandle(slices[i].workFQN)
+			} else {
+				cmn.AssertFmt(false, "unsupported reader type", slices[i].obj)
+			}
+		}
+		if err != nil {
+			ch <- fmt.Errorf("failed to reset reader: %v", err)
+			return
 		}
 
 		mcopy := *meta
@@ -352,11 +461,11 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		src := &dataSource{
 			reader:   reader,
 			size:     sliceSize,
-			obj:      sglSlice,
+			obj:      data,
 			metadata: &mcopy,
 			isSlice:  true,
 		}
-		err := c.parent.writeRemote([]string{targets[i+1].DaemonID}, req.LOM, src, nil)
+		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, req.LOM, src, nil)
 		if err != nil {
 			ch <- err
 			return

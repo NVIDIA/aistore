@@ -13,14 +13,12 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -56,7 +54,7 @@ type (
 )
 
 type (
-	bgProcess = func(req *Request, cb func(error))
+	bgProcess = func(req *Request, toDisk bool, buffer []byte, cb func(error))
 
 	mpathReq struct {
 		action string
@@ -390,7 +388,7 @@ func (r *XactEC) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 //		name, it puts the data to its writer and notifies when download is done
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
-func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer *memsys.SGL) error {
+func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
 	hdr := transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
@@ -400,9 +398,9 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 	reader, hdr.ObjAttrs.Size = nil, 0
 
 	sw := &slice{
-		sgl: writer,
-		wg:  cmn.NewTimeoutGroup(),
-		lom: lom,
+		writer: writer,
+		wg:     cmn.NewTimeoutGroup(),
+		lom:    lom,
 	}
 
 	sw.wg.Add(1)
@@ -421,6 +419,7 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 		return fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
+	lom.Fill("", cluster.LomFstat)
 	if glog.V(4) {
 		glog.Infof("Received object %s/%s from %s", lom.Bucket, lom.Objname, daemonID)
 	}
@@ -470,12 +469,8 @@ func (r *XactEC) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSour
 	if cb == nil && src.obj != nil {
 		obj := src.obj
 		cb = func(hdr transport.Header, reader io.ReadCloser, err error) {
-			if obj != nil && obj.sgl != nil {
-				cnt := atomic.AddInt32(&obj.cnt, -1)
-				if cnt < 1 {
-					obj.sgl.Free()
-					obj.sgl = nil
-				}
+			if obj != nil {
+				obj.release()
 			}
 			if err != nil {
 				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket, lom.Objname, daemonIDs, err)
@@ -626,7 +621,7 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func (r *XactEC) writerReceive(writer *slice, exists bool, reader io.Reader) error {
+func (r *XactEC) writerReceive(writer *slice, exists bool, reader io.Reader) (err error) {
 	buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 
 	if !exists {
@@ -638,10 +633,13 @@ func (r *XactEC) writerReceive(writer *slice, exists bool, reader io.Reader) err
 		return ErrorNotFound
 	}
 
-	writer.n, writer.err = io.CopyBuffer(writer.sgl, reader, buf)
+	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
+	if file, ok := writer.writer.(*os.File); ok {
+		file.Close()
+	}
 	writer.wg.Done()
 	slab.Free(buf)
-	return nil
+	return err
 }
 
 func (r *XactEC) Stop(error) { r.Abort() }

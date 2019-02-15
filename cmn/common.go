@@ -210,6 +210,7 @@ func CopyStruct(dst interface{}, src interface{}) {
 var (
 	_ ReadOpenCloser = &FileHandle{}
 	_ ReadSizer      = &SizedReader{}
+	_ ReadOpenCloser = &FileSectionHandle{}
 )
 
 type (
@@ -227,6 +228,14 @@ type (
 	FileHandle struct {
 		*os.File
 		fqn string
+	}
+
+	// FileSectionHandle is a slice of already opened file with optional padding
+	// that implements cmn.ReadOpenCloser interface
+	FileSectionHandle struct {
+		s         *io.SectionReader
+		padding   int64 // padding size
+		padOffset int64 // offset iniside padding when reading a file
 	}
 
 	// SizedReader is simple struct which implements ReadSizer interface.
@@ -256,6 +265,58 @@ func NewSizedReader(r io.Reader, size int64) *SizedReader {
 func (f *SizedReader) Size() int64 {
 	return f.size
 }
+
+func NewFileSectionHandle(r io.ReaderAt, offset, size, padding int64) (*FileSectionHandle, error) {
+	sec := io.NewSectionReader(r, offset, size)
+	return &FileSectionHandle{sec, padding, 0}, nil
+}
+
+func (f *FileSectionHandle) Open() (io.ReadCloser, error) {
+	_, err := f.s.Seek(0, io.SeekStart)
+	f.padOffset = 0
+	return f, err
+}
+
+// Reads a file slice. When the slice finishes but the buffer is not filled yet,
+// act as if it reads a few more bytes from somewhere
+// NOTE: padded byte values are random
+func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
+	var fromPad int64
+
+	// if it is still reading a file from disk - just continue reading
+	if f.padOffset == 0 {
+		n, err = f.s.Read(buf)
+		// if it reads fewer bytes than expected and it does not fail,
+		// try to "read" from padding
+		if f.padding == 0 || n == len(buf) || (err != nil && err != io.EOF) {
+			return n, err
+		}
+		fromPad = int64(len(buf) - n)
+	} else {
+		// slice is already read, keep reading padding bytes
+		fromPad = MinI64(int64(len(buf)), f.padding-f.padOffset)
+	}
+
+	// either buffer is full or end of padding is reached. Nothing to read
+	if fromPad == 0 {
+		return n, io.EOF
+	}
+
+	// the number of remained bytes in padding is enough to complete read request
+	if fromPad <= (f.padding - f.padOffset) {
+		n += int(fromPad)
+		f.padOffset += fromPad
+		return n, nil
+	}
+
+	// the number of bytes remained in padding is less than required. "Read" as
+	// many as possible and return io.EOF
+	n += int(f.padding - f.padOffset)
+	f.padOffset = f.padding
+	return n, io.EOF
+}
+
+func (f *FileSectionHandle) Close() error { return nil }
 
 // CreateDir creates directory if does not exists. Does not return error when
 // directory already exists.

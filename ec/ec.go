@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -119,6 +120,10 @@ const (
 
 	RespStreamName = "ec-resp"
 	ReqStreamName  = "ec-req"
+
+	// EC switches to disk from SGL when memory pressure is high and the amount of
+	// memory required to encode an object exceeds the limit
+	objSizeHighMem = 50 * cmn.MiB
 )
 
 // type of EC request between targets. If the destination has to respond it
@@ -187,13 +192,14 @@ type (
 
 	// keeps temporarily a slice of object data until it is sent to remote node
 	slice struct {
-		sgl    *memsys.SGL         // SGL that keep a data for remote node
-		reader *memsys.SliceReader // used in encoding - a slice of original data
-		wg     *cmn.TimeoutGroup   // for synchronous download (for restore)
-		lom    *cluster.LOM        // for xattrs
-		n      int64               // number of byte sent
-		cnt    int32               // number of references
-		err    error               // send error (set by transport)
+		obj     cmn.ReadOpenCloser // the whole object or its replica
+		reader  cmn.ReadOpenCloser // used in encoding - a slice of `obj`
+		writer  io.Writer          // for parity slices and downloading slices from other targets when restoring
+		wg      *cmn.TimeoutGroup  // for synchronous download (for restore)
+		lom     *cluster.LOM       // for xattrs
+		n       int64              // number of byte sent/received
+		refCnt  int32              // number of references
+		workFQN string             // FQN for temporary slice/replica
 	}
 
 	// a source for data response: the data to send to the caller
@@ -209,6 +215,30 @@ type (
 		isSlice  bool               // is it slice or replica
 	}
 )
+
+// frees all allocated memory and removes slice's temporary file
+func (s *slice) free() {
+	freeObject(s.obj)
+	s.obj = nil
+	if s.reader != nil {
+		s.reader.Close()
+	}
+	if s.workFQN != "" {
+		os.RemoveAll(s.workFQN)
+	}
+}
+
+// decreases the number of links to the object (the initial number is set
+// at slice creation time). If the number drops to zero the allocated
+// memory/temporary file is cleaned up
+func (s *slice) release() {
+	if s.obj != nil || s.workFQN != "" {
+		refCnt := atomic.AddInt32(&s.refCnt, -1)
+		if refCnt < 1 {
+			s.free()
+		}
+	}
+}
 
 func (r *intraReq) marshal() ([]byte, error) {
 	return jsoniter.Marshal(r)
@@ -287,4 +317,42 @@ func readFile(fqn string) (sgl *memsys.SGL, err error) {
 func IsECCopy(size int64, bprops *cmn.BucketProps) bool {
 	return size < bprops.ECObjSizeLimit ||
 		(bprops.ECObjSizeLimit == 0 && size < DefaultSizeLimit)
+}
+
+// returns whether EC must use disk instead of keeping everything in memory.
+// Depends on available free memory and size of an object to process
+func useDisk(objSize int64) bool {
+	switch mem2.MemPressure() {
+	case memsys.OOM, memsys.MemPressureExtreme:
+		return true
+	case memsys.MemPressureHigh:
+		return objSize > objSizeHighMem
+	default:
+		return false
+	}
+}
+
+// Frees allocated memory if it is SGL or closes the file handle in case of regular file
+func freeObject(r interface{}) {
+	if r == nil {
+		return
+	}
+	if sgl, ok := r.(*memsys.SGL); ok {
+		sgl.Free()
+		return
+	}
+	if f, ok := r.(*cmn.FileHandle); ok {
+		f.Close()
+		return
+	}
+	cmn.AssertFmt(false, "Invalid object type", r)
+}
+
+// removes all temporary slices in case of erasure coding fails in the middle
+func freeSlices(slices []*slice) {
+	for _, s := range slices {
+		if s != nil {
+			s.free()
+		}
+	}
 }

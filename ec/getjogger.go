@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -26,8 +27,6 @@ import (
 // a mountpath getJogger: processes GET requests to one mountpath
 type getJogger struct {
 	parent *XactEC
-	slab   *memsys.Slab2
-	buffer []byte
 	mpath  string // mountpath that the jogger manages
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
@@ -42,7 +41,6 @@ type getJogger struct {
 
 func (c *getJogger) run() {
 	glog.Infof("Started EC for mountpath: %s", c.mpath)
-	c.buffer, c.slab = mem2.AllocFromSlab2(cmn.MiB)
 
 	for {
 		select {
@@ -52,9 +50,6 @@ func (c *getJogger) run() {
 			c.ec(req)
 			c.parent.DecPending()
 		case <-c.stopCh:
-			c.slab.Free(c.buffer)
-			c.buffer = nil
-			c.slab = nil
 			return
 		}
 	}
@@ -68,13 +63,10 @@ func (c *getJogger) stop() {
 
 // starts EC process
 func (c *getJogger) ec(req *Request) {
-	var (
-		err error
-	)
-
 	switch req.Action {
 	case ActRestore:
 		c.sema <- struct{}{}
+		toDisk := useDisk(0 /*size of the original object is unknown*/)
 		c.jobID++
 		jobID := c.jobID
 		ch := req.ErrCh
@@ -87,9 +79,8 @@ func (c *getJogger) ec(req *Request) {
 				close(ch)
 			}
 		}
-		c.jobMtx.Lock()
-		restore := func(req *Request, cb func(error)) {
-			err := c.restore(req)
+		restore := func(req *Request, toDisk bool, buffer []byte, cb func(error)) {
+			err := c.restore(req, toDisk, buffer)
 			c.parent.stats.updateDecodeTime(time.Since(req.tm), err != nil)
 			if cb != nil {
 				cb(err)
@@ -99,11 +90,16 @@ func (c *getJogger) ec(req *Request) {
 			}
 			<-c.sema
 		}
+		c.jobMtx.Lock()
 		c.jobs[jobID] = restore
 		c.jobMtx.Unlock()
-		go restore(req, cb)
+		buffer, slab := mem2.AllocFromSlab2(cmn.MiB)
+		go func() {
+			restore(req, toDisk, buffer, cb)
+			slab.Free(buffer)
+		}()
 	default:
-		err = fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
+		err := fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
 		glog.Errorf("Error occurred during restoring object [%s/%s], fqn: %q, err: %v",
 			req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
 		if req.ErrCh != nil {
@@ -113,27 +109,17 @@ func (c *getJogger) ec(req *Request) {
 	}
 }
 
-// removes all temporary slices in case of erasure coding fails in the middle
-func (c *getJogger) freeSGL(slices []*slice) {
-	for _, s := range slices {
-		if s != nil && s.sgl != nil {
-			s.sgl.Free()
-			s.sgl = nil
-		}
-	}
-}
-
 // the final step of replica restoration process: the main target detects which
 // nodes do not have replicas and copy it to them
 // * bucket/objname - object path
-// * sgl - replica content to sent to remote targets
+// * reader - replica content to sent to remote targets
 // * metadata - object's EC metadata
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
-func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, sgl *memsys.SGL, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
+func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
 	targets, errstr := cluster.HrwTargetList(lom.Bucket, lom.Objname, c.parent.smap.Get(), replicaCnt)
 	if errstr != "" {
-		sgl.Free()
+		freeObject(reader)
 		glog.Errorf("Failed to get list of %d targets: %s", replicaCnt, errstr)
 		return
 	}
@@ -154,18 +140,37 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, sgl *memsys.SGL, metad
 	// memory on completion
 	// Otherwise just free allocated memory and return immediately
 	if len(daemons) == 0 {
-		sgl.Free()
+		freeObject(reader)
+		return
+	}
+	var (
+		srcReader cmn.ReadOpenCloser
+		err       error
+	)
+
+	if sgl, ok := reader.(*memsys.SGL); ok {
+		srcReader = memsys.NewReader(sgl)
+	} else if _, ok := reader.(*cmn.FileHandle); ok {
+		srcReader, err = cmn.NewFileHandle(lom.FQN)
+	} else {
+		cmn.AssertFmt(false, "unsupported reader type", reader)
+	}
+
+	if err != nil {
+		glog.Error(err)
+		freeObject(reader)
 		return
 	}
 	cb := func(hdr transport.Header, reader io.ReadCloser, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket, lom.Objname, daemons, err)
 		}
-		sgl.Free()
+		freeObject(reader)
 	}
+
 	src := &dataSource{
-		reader:   memsys.NewReader(sgl),
-		size:     sgl.Size(),
+		reader:   srcReader,
+		size:     lom.Size,
 		metadata: metadata,
 	}
 	if err := c.parent.writeRemote(daemons, lom, src, cb); err != nil {
@@ -178,7 +183,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, sgl *memsys.SGL, metad
 // * meta - rebuilt object's metadata
 // * nodes - filled by requestMeta the list of targets what responsed to GET
 //      metadata request with valid metafile
-func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[string]*Metadata) error {
+func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, nodes map[string]*Metadata, buffer []byte) error {
 	var writer *memsys.SGL
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
@@ -219,7 +224,7 @@ func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[st
 	}
 	req.LOM.FQN = objFQN
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-	if err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), c.buffer); err != nil {
+	if err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer); err != nil {
 		writer.Free()
 		return err
 	}
@@ -234,18 +239,87 @@ func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[st
 		writer.Free()
 		return err
 	}
-	c.diskCh <- struct{}{}
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if err := cmn.SaveReader(metaFQN, bytes.NewReader(b), c.buffer); err != nil {
+	if err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer); err != nil {
 		writer.Free()
 		<-c.diskCh
 		return err
 	}
-	<-c.diskCh
 
 	// now a client can read the object, but EC needs to restore missing
 	// replicas. So, execute copying replicas in background and return
 	go c.copyMissingReplicas(req.LOM, writer, meta, nodes, meta.Parity+1)
+
+	return nil
+}
+
+func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, nodes map[string]*Metadata, buffer []byte) error {
+	var writer *os.File
+	// try read a replica from targets one by one until the replica is got
+	objFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	if errstr != "" {
+		return errors.New(errstr)
+	}
+	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec-restore-repl")
+
+	for node := range nodes {
+		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
+		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).marshal()
+		if err != nil {
+			glog.Errorf("Failed to marshal %v", err)
+			continue
+		}
+
+		w, err := cmn.CreateFile(tmpFQN)
+		if err != nil {
+			glog.Errorf("Failed to create file: %v", err)
+			break
+		}
+		req.LOM.FQN = tmpFQN
+		err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
+		w.Close()
+
+		if err == nil && req.LOM.Size != 0 {
+			// a valid replica is found - break and do not free SGL
+			writer = w
+			break
+		}
+
+		os.RemoveAll(tmpFQN)
+	}
+	if glog.V(4) {
+		glog.Infof("Found meta -> obj get %s/%s, writer found: %v", req.LOM.Bucket, req.LOM.Objname, writer != nil)
+	}
+
+	if writer == nil {
+		return errors.New("failed to read a replica from any target")
+	}
+	req.LOM.FQN = objFQN
+	if err := cmn.MvFile(tmpFQN, objFQN); err != nil {
+		return err
+	}
+
+	if errstr := req.LOM.Persist(); errstr != "" {
+		return errors.New(errstr)
+	}
+
+	b, err := jsoniter.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
+	if err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer); err != nil {
+		<-c.diskCh
+		return err
+	}
+
+	// now a client can read the object, but EC needs to restore missing
+	// replicas. So, execute copying replicas in background and return
+	reader, err := cmn.NewFileHandle(objFQN)
+	if err != nil {
+		return err
+	}
+	go c.copyMissingReplicas(req.LOM, reader, meta, nodes, meta.Parity+1)
 
 	return nil
 }
@@ -259,7 +333,7 @@ func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[st
 // Returns:
 // * []slice - a list of received slices in correct order (missing slices = nil)
 // * map[int]string - a map of slice locations: SliceID <-> DaemonID
-func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*Metadata) ([]*slice, map[int]string, error) {
+func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string]*Metadata, toDisk bool) ([]*slice, map[int]string, error) {
 	wgSlices := cmn.NewTimeoutGroup()
 	sliceCnt := meta.Data + meta.Parity
 	slices := make([]*slice, sliceCnt)
@@ -276,10 +350,26 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		}
 		// create SGL to receive the slice data and save it to correct
 		// position in the slice list
-		writer := &slice{
-			sgl: mem2.NewSGL(cmn.KiB * 512),
-			wg:  wgSlices,
-			lom: req.LOM,
+		var writer *slice
+		if toDisk {
+			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
+			fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
+			fh, err := cmn.CreateFile(fqn)
+			if err != nil {
+				return slices, nil, err
+			}
+			writer = &slice{
+				writer:  fh,
+				wg:      wgSlices,
+				lom:     req.LOM,
+				workFQN: fqn,
+			}
+		} else {
+			writer = &slice{
+				writer: mem2.NewSGL(cmn.KiB * 512),
+				wg:     wgSlices,
+				lom:    req.LOM,
+			}
 		}
 		slices[v.SliceID-1] = writer
 		idToNode[v.SliceID] = k
@@ -294,7 +384,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	iReq.IsSlice = true
 	request, err := iReq.marshal()
 	if err != nil {
-		c.freeSGL(slices)
+		freeSlices(slices)
 		return nil, nil, err
 	}
 	hdr := transport.Header{
@@ -308,7 +398,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		glog.Infof("Requesting daemons %v for slices of %s/%s", daemons, req.LOM.Bucket, req.LOM.Objname)
 	}
 	if err := c.parent.sendByDaemonID(daemons, hdr, nil, nil, true); err != nil {
-		c.freeSGL(slices)
+		freeSlices(slices)
 		return nil, nil, err
 	}
 	conf := cmn.GCO.Get()
@@ -325,32 +415,63 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 // * idToNode - remote location of the slices (SliceID <-> DaemonID)
 // Returns:
 // * list of created SGLs to be freed later
-func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) ([]*memsys.SGL, error) {
+func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string, toDisk bool, buffer []byte) ([]*slice, error) {
+	var err error
 	sliceCnt := meta.Data + meta.Parity
 	sliceSize := SliceSize(meta.Size, meta.Data)
 	readers := make([]io.Reader, sliceCnt)
 	writers := make([]io.Writer, sliceCnt)
-	sgls := make([]*memsys.SGL, sliceCnt)
+	restored := make([]*slice, sliceCnt)
 
 	// allocate memory for reconstructed(missing) slices - EC requirement,
 	// and open existing slices for reading
-	for i, slice := range slices {
-		if slice != nil && slice.sgl != nil && glog.V(4) {
-			glog.Infof("Got slice %d size %d (want %d) of %s/%s",
-				i+1, slice.sgl.Size(), sliceSize, req.LOM.Bucket, req.LOM.Objname)
-			if slice.sgl.Size() == 0 {
-				slice.sgl.Free()
-				slice.sgl = nil
+	for i, sl := range slices {
+		if sl != nil && sl.writer != nil {
+			sz := sl.n
+			if glog.V(4) {
+				glog.Infof("Got slice %d size %d (want %d) of %s/%s",
+					i+1, sz, sliceSize, req.LOM.Bucket, req.LOM.Objname)
+			}
+			if sz == 0 {
+				freeObject(sl.obj)
+				sl.obj = nil
+				freeObject(sl.writer)
+				sl.writer = nil
 			}
 		}
-		if slice == nil || slice.sgl == nil {
-			sgl := mem2.NewSGL(cmn.KiB * 512)
-			sgls[i] = sgl
-			writers[i] = sgl
+		if sl == nil || sl.writer == nil {
+			if toDisk {
+				prefix := fmt.Sprintf("ec-rebuild-%d", i)
+				fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
+				file, err := cmn.CreateFile(fqn)
+				if err != nil {
+					break
+				}
+				writers[i] = file
+				restored[i] = &slice{workFQN: fqn, n: sliceSize}
+			} else {
+				sgl := mem2.NewSGL(cmn.KiB * 512)
+				restored[i] = &slice{obj: sgl, n: sliceSize}
+				writers[i] = sgl
+			}
 			delete(idToNode, i+1)
 		} else {
-			readers[i] = memsys.NewReader(slice.sgl)
+			if sgl, ok := sl.writer.(*memsys.SGL); ok {
+				readers[i] = memsys.NewReader(sgl)
+			} else if sl.workFQN != "" {
+				readers[i], err = cmn.NewFileHandle(sl.workFQN)
+				if err != nil {
+					break
+				}
+			} else {
+				err = fmt.Errorf("Unsupported slice source: %T", sl.writer)
+				break
+			}
 		}
+	}
+
+	if err != nil {
+		return restored, err
 	}
 
 	// reconstruct the main object from slices
@@ -359,18 +480,36 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 	stream, err := reedsolomon.NewStreamC(meta.Data, meta.Parity, true, true)
 	if err != nil {
-		return sgls, err
+		return restored, err
 	}
 	if err = stream.Reconstruct(readers, writers); err != nil {
-		return sgls, err
+		return restored, err
 	}
 
 	srcReaders := make([]io.Reader, meta.Data)
 	for i := 0; i < meta.Data; i++ {
-		if slices[i] != nil && slices[i].sgl != nil && slices[i].sgl.Size() == sliceSize {
-			srcReaders[i] = memsys.NewReader(slices[i].sgl)
+		if slices[i] != nil && slices[i].writer != nil {
+			if sgl, ok := slices[i].writer.(*memsys.SGL); ok {
+				srcReaders[i] = memsys.NewReader(sgl)
+			} else if slices[i].workFQN != "" {
+				srcReaders[i], err = cmn.NewFileHandle(slices[i].workFQN)
+				if err != nil {
+					return restored, err
+				}
+			} else {
+				return restored, fmt.Errorf("invalid writer: %T", slices[i].writer)
+			}
 		} else {
-			srcReaders[i] = memsys.NewReader(sgls[i])
+			if restored[i].workFQN != "" {
+				srcReaders[i], err = cmn.NewFileHandle(restored[i].workFQN)
+				if err != nil {
+					return restored, err
+				}
+			} else if sgl, ok := restored[i].obj.(*memsys.SGL); ok {
+				srcReaders[i] = memsys.NewReader(sgl)
+			} else {
+				return restored, fmt.Errorf("empty slice %d of %s/%s", i, req.LOM.Bucket, req.LOM.Objname)
+			}
 		}
 	}
 
@@ -380,19 +519,19 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, mainFQN)
 	}
 	if errstr != "" {
-		return sgls, errors.New(errstr)
+		return restored, errors.New(errstr)
 	}
 
 	c.diskCh <- struct{}{}
 	req.LOM.FQN = mainFQN
 	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
-	if err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, c.buffer, meta.Size); err != nil {
+	if err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, meta.Size); err != nil {
 		<-c.diskCh
-		return sgls, err
+		return restored, err
 	}
 	<-c.diskCh
 	if errstr := req.LOM.Persist(); errstr != "" {
-		return sgls, errors.New(errstr)
+		return restored, errors.New(errstr)
 	}
 
 	// save object's metadata locally
@@ -400,26 +539,26 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	mainMeta.SliceID = 0
 	metaBuf, err := mainMeta.marshal()
 	if err != nil {
-		return sgls, err
+		return restored, err
 	}
 	metaFQN := fs.CSM.GenContentFQN(mainFQN, MetaType, "")
 	if glog.V(4) {
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, metaFQN)
 	}
-	if err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer); err != nil {
-		return sgls, err
+	if err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer); err != nil {
+		return restored, err
 	}
 
-	return sgls, nil
+	return restored, nil
 }
 
 // upload missing slices to targets that do not have any slice at the moment
 // of reconstruction:
 // * req - original request
 // * meta - rebuilt object's metadata
-// * sgls - object slices reconstructed by `restoreMainObj`
+// * slices - object slices reconstructed by `restoreMainObj`
 // * idToNode - a map of targets that already contain a slice (SliceID <-> target)
-func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*memsys.SGL, idToNode map[int]string) error {
+func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) error {
 	sliceCnt := meta.Data + meta.Parity
 	nodeToID := make(map[string]int, len(idToNode))
 	// transpose SliceID <-> DaemonID map for faster lookup
@@ -451,39 +590,50 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*m
 	// Do not wait until the data transfer is completed
 	idx := 0
 	for _, tgt := range emptyNodes {
-		for idx < len(sgls) && sgls[idx] == nil {
+		for idx < len(slices) && slices[idx] == nil {
 			idx++
 		}
 		if glog.V(4) {
 			glog.Infof("For %s found %s/%s slice %d (%d)",
-				tgt, req.LOM.Bucket, req.LOM.Objname, idx, len(sgls))
+				tgt, req.LOM.Bucket, req.LOM.Objname, idx, len(slices))
 		}
 
-		if idx >= len(sgls) {
+		if idx >= len(slices) {
 			// unlikely but we need to free allocated memory for rest of slices
 			glog.Errorf("Numbers of restored slices and empty targets mismatch")
-			sgls[idx].Free()
+			slices[idx].free()
 			continue
 		}
 
 		// every slice's SGL must be freed on transfer completion
-		cb := func(daemonID string, sgl *memsys.SGL, id int) transport.SendCallback {
+		cb := func(daemonID string, s *slice, id int) transport.SendCallback {
 			return func(hdr transport.Header, reader io.ReadCloser, err error) {
 				if err != nil {
 					glog.Errorf("Failed to send %s/%s to %v: %v", req.LOM.Bucket, req.LOM.Objname, daemonID, err)
 				}
-				if sgl != nil {
-					sgl.Free()
+				if s != nil {
+					s.free()
 				}
 			}
-		}(tgt, sgls[idx], idx+1)
+		}(tgt, slices[idx], idx+1)
 
 		// clone the object's metadata and set the correct SliceID before sending
 		sliceMeta := *meta
 		sliceMeta.SliceID = idx + 1
+		var reader cmn.ReadOpenCloser
+		if slices[idx].workFQN != "" {
+			reader, _ = cmn.NewFileHandle(slices[idx].workFQN)
+		} else {
+			if s, ok := slices[idx].obj.(*memsys.SGL); ok {
+				reader = memsys.NewReader(s)
+			} else {
+				glog.Errorf("Invalid reader type of %s: %T", req.LOM.Objname, slices[idx].obj)
+				continue
+			}
+		}
 		dataSrc := &dataSource{
-			reader:   memsys.NewReader(sgls[idx]),
-			size:     sgls[idx].Size(),
+			reader:   reader,
+			size:     slices[idx].n,
 			metadata: &sliceMeta,
 			isSlice:  true,
 		}
@@ -503,7 +653,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, sgls []*m
 // * req - original request
 // * meta - rebuild object's metadata
 // * nodes - the list of targets that responded with valid metadata
-func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[string]*Metadata) error {
+func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[string]*Metadata, toDisk bool, buffer []byte) error {
 	if glog.V(4) {
 		glog.Infof("Starting EC restore %s/%s", req.LOM.Bucket, req.LOM.Objname)
 	}
@@ -517,27 +667,20 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 	}
 
 	// download all slices from the targets that have sent metadata
-	slices, idToNode, err := c.requestSlices(req, meta, nodes)
+	slices, idToNode, err := c.requestSlices(req, meta, nodes, toDisk)
 	if err != nil {
 		freeWriters()
 		return err
 	}
 
 	// restore and save locally the main replica
-	sgls, err := c.restoreMainObj(req, meta, slices, idToNode)
-	freeMem := func() {
-		for _, sgl := range sgls {
-			if sgl != nil {
-				sgl.Free()
-			}
-		}
-	}
+	restored, err := c.restoreMainObj(req, meta, slices, idToNode, toDisk, buffer)
 	if err != nil {
 		glog.Errorf("Failed to restore main object %s/%s: %v",
 			req.LOM.Bucket, req.LOM.Objname, err)
 		freeWriters()
-		freeMem()
-		c.freeSGL(slices)
+		freeSlices(restored)
+		freeSlices(slices)
 		return err
 	}
 
@@ -545,12 +688,15 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 	// Start a background process that uploads reconstructed data to
 	// remote targets and then return from the function
 	go func() {
-		if err := c.uploadRestoredSlices(req, meta, sgls, idToNode); err != nil {
+		if err := c.uploadRestoredSlices(req, meta, restored, idToNode); err != nil {
 			glog.Errorf("Failed to restore slices of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
-			freeMem()
-			c.freeSGL(slices)
+			freeSlices(restored)
+			freeSlices(slices)
 			return
 		}
+		// do not free `restored` here - it is done in transport callback when
+		// transport completes sending restored slices to correct target
+		freeSlices(slices)
 		if glog.V(4) {
 			glog.Infof("Slices %s/%s restored successfully", req.LOM.Bucket, req.LOM.Objname)
 		}
@@ -564,7 +710,7 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 }
 
 // Entry point: restores main objects and slices if possible
-func (c *getJogger) restore(req *Request) error {
+func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
 	if req.LOM.Bprops == nil || !req.LOM.Bprops.ECEnabled {
 		return ErrorECDisabled
 	}
@@ -581,19 +727,25 @@ func (c *getJogger) restore(req *Request) error {
 	}
 
 	if meta.IsCopy {
-		return c.restoreReplicated(req, meta, nodes)
+		if toDisk {
+			return c.restoreReplicatedFromDisk(req, meta, nodes, buffer)
+		}
+		return c.restoreReplicatedFromMemory(req, meta, nodes, buffer)
 	}
 
 	if len(nodes) < meta.Data {
 		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)", meta.Data, len(nodes))
 	}
-	return c.restoreEncoded(req, meta, nodes)
+	return c.restoreEncoded(req, meta, nodes, toDisk, buffer)
 }
 
 // broadcast request for object's metadata
 // After all target respond, the metadata filtered: the number of different
 // object hashes is calculated. The most frequent has wins, and all metadatas
 // with different hashes are considered obsolete and will be discarded
+//
+// NOTE: metafiles are tiny things - less than 100 bytes, that is why they
+// always use SGL. No `toDisk` check required
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
 	metaWG := cmn.NewTimeoutGroup()
 	request, _ := c.parent.newIntraReq(reqMeta, nil).marshal()
@@ -615,8 +767,8 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		}
 
 		writer := &slice{
-			sgl: mem2.NewSGL(cmn.KiB),
-			wg:  metaWG,
+			writer: mem2.NewSGL(cmn.KiB),
+			wg:     metaWG,
 		}
 		metaWG.Add(1)
 		uname := unique(node.DaemonID, req.LOM.Bucket, req.LOM.Objname)
@@ -629,9 +781,9 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	if err := c.parent.reqBundle.SendV(hdr, nil, nil); err != nil {
 		glog.Errorf("Failed to request metafile for %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
 		for _, wr := range writers {
-			if wr != nil && wr.sgl != nil {
-				wr.sgl.Free()
-				wr.sgl = nil
+			if wr != nil && wr.writer != nil {
+				freeObject(wr.writer)
+				wr.writer = nil
 			}
 		}
 		return nil, nil, err
@@ -655,16 +807,18 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 
 		uname := unique(node.DaemonID, req.LOM.Bucket, req.LOM.Objname)
 		wr, ok := c.parent.unregWriter(uname)
-		if !ok || wr == nil || wr.sgl == nil {
+		if !ok || wr == nil || wr.writer == nil {
 			continue
 		}
-		if wr.sgl.Size() == 0 {
-			wr.sgl.Free()
+		sgl, ok := wr.writer.(*memsys.SGL)
+		cmn.Assert(ok)
+		if sgl.Size() == 0 {
+			freeObject(wr.writer)
 			continue
 		}
 
-		b, err := ioutil.ReadAll(memsys.NewReader(wr.sgl))
-		wr.sgl.Free()
+		b, err := ioutil.ReadAll(memsys.NewReader(sgl))
+		freeObject(wr.writer)
 		if err != nil {
 			glog.Errorf("Error reading metadata from %s: %v", node.DaemonID, err)
 			continue
