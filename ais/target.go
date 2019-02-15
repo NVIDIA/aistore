@@ -306,7 +306,7 @@ func (t *targetrunner) setupStreams() error {
 
 	client := transport.NewDefaultClient()
 	// TODO: stream bundle multiplier (currently default) should be adjustable at runtime (#253)
-	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets)
+	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, 4)
 	return nil
 }
 
@@ -2951,6 +2951,18 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
 		case cmn.Register:
+			// TODO: this is duplicated in `t.register`. The difference is that
+			// here we are reregistered by the user and in `t.register` is
+			// registering new target. This needs to be consolidated somehow.
+			//
+			// There's a window of time between:
+			// a) target joining existing cluster and b) cluster starting to rebalance itself
+			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
+			// To handle incoming GETs within this window (which would typically take a few seconds or less)
+			// we need to have the current cluster-wide metadata and the temporary gfn state:
+			t.gfn.lookup = true
+			t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
+
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
 			}

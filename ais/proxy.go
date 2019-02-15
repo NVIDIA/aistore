@@ -2450,7 +2450,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		osi := smap.GetTarget(nsi.DaemonID)
-		if !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
+
+		// FIXME: If not keepalive then update smap anyway - either: new target,
+		// updated target or target has powercycled. Except 'updated target' case,
+		// rebalance needs to be triggered and updating smap is the easiest way.
+		if keepalive && !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
 			p.smapowner.Unlock()
 			return
 		}

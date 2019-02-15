@@ -39,7 +39,6 @@ type repFile struct {
 type metadata struct {
 	t                   *testing.T
 	smap                cluster.Smap
-	delay               time.Duration
 	semaphore           chan struct{}
 	controlCh           chan struct{}
 	repFilenameCh       chan repFile
@@ -87,18 +86,17 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 // 4. GET the objects while simultaneously re-registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	const (
-		num       = 20000
-		filesize  = 1024
-		maxErrPct = 5
+		num       = 50000
+		filesize  = 1024 * 10
+		maxErrPct = 0
 	)
 
 	var (
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           10 * time.Second,
 			num:             num,
-			numGetsEachFile: 5,
+			numGetsEachFile: 3,
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
 			wg:              &sync.WaitGroup{},
@@ -151,12 +149,17 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 4.
-	m.wg.Add(num*m.numGetsEachFile + 1)
+	m.wg.Add(num*m.numGetsEachFile + 2)
+	go func() {
+		doGetsInParallel(&m)
+		m.wg.Done()
+	}()
+
+	time.Sleep(time.Second * 3) // give gets some room to breath
 	go func() {
 		doReregisterTarget(target, &m)
 		m.wg.Done()
 	}()
-	doGetsInParallel(&m)
 
 	m.wg.Wait()
 	// ===================================================================
@@ -189,7 +192,6 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		err error
 		m   = metadata{
 			t:                   t,
-			delay:               15 * time.Second,
 			otherTasksToTrigger: otherTasksToTrigger,
 			num:                 num,
 			numGetsEachFile:     5,
@@ -1645,9 +1647,6 @@ func doGetsInParallel(m *metadata) {
 		tutils.Logf("GET each of the %d objects from bucket %s...\n", m.num, m.bucket)
 	} else {
 		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
-	}
-	if m.delay != 0 {
-		time.Sleep(m.delay)
 	}
 	for i := 0; i < m.num*m.numGetsEachFile; i++ {
 		go func() {
