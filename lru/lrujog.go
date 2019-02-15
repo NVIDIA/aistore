@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -180,7 +179,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 	}
 	if capCheck >= capCheckThresh {
 		capCheck = 0
-		usedpct, ok := ios.GetFSUsedPercentage(lctx.bckTypeDir)
+		usedpct, ok := lctx.ini.GetFSUsedPercentage(lctx.bckTypeDir)
 		lctx.throttle = false
 		lctx.config = cmn.GCO.Get()
 		now := time.Now()
@@ -225,7 +224,7 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 
 func (lctx *lructx) evictSize() (err error) {
 	hwm, lwm := lctx.config.LRU.HighWM, lctx.config.LRU.LowWM
-	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bckTypeDir)
+	blocks, bavail, bsize, err := lctx.ini.GetFSStats(lctx.bckTypeDir)
 	if err != nil {
 		return err
 	}

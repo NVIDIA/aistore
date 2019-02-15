@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
@@ -458,10 +459,12 @@ func (t *targetrunner) RunLRU() {
 		return
 	}
 	ini := lru.InitLRU{
-		Xlru:       xlru,
-		Namelocker: t.rtnamemap,
-		Statsif:    t.statsif,
-		T:          t,
+		Xlru:                xlru,
+		Namelocker:          t.rtnamemap,
+		Statsif:             t.statsif,
+		T:                   t,
+		GetFSUsedPercentage: ios.GetFSUsedPercentage,
+		GetFSStats:          ios.GetFSStats,
 	}
 	lru.InitAndRun(&ini) // blocking
 

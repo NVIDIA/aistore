@@ -45,11 +45,13 @@ const (
 
 type (
 	InitLRU struct {
-		Ratime     *atime.Runner
-		Xlru       cmn.Xact
-		Namelocker cluster.NameLocker
-		Statsif    stats.Tracker
-		T          cluster.Target
+		Ratime              *atime.Runner
+		Xlru                cmn.Xact
+		Namelocker          cluster.NameLocker
+		Statsif             stats.Tracker
+		T                   cluster.Target
+		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
+		GetFSStats          func(path string) (blocks uint64, bavail uint64, bsize int64, err error)
 	}
 
 	fileInfo struct {
@@ -115,6 +117,7 @@ func InitAndRun(ini *InitLRU) {
 		startLRUJoggers := func(bckIsLocal bool) (aborted bool) {
 			joggers := make(map[string]*lructx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))
+
 			for mpath, mpathInfo := range availablePaths {
 				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bckIsLocal)
 			}
@@ -125,13 +128,14 @@ func InitAndRun(ini *InitLRU) {
 			wg.Wait()
 			close(errCh)
 			select {
-			case <-errCh:
-				aborted = true
+			case _, ok := <-errCh:
+				aborted = ok
 			default:
 				break
 			}
 			return
 		}
+
 		if aborted := startLRUJoggers(false /*cloud*/); aborted {
 			break
 		}
