@@ -282,7 +282,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 		obj.prc = prc[0]
 	}
 	s.workCh <- obj
-	if bool(glog.V(4)) || debug {
+	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: send %s/%s(%d)[sq=%d]", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size, len(s.workCh))
 	}
 	return
@@ -515,11 +515,11 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 		err = io.EOF
 		num := atomic.LoadInt64(&s.stats.Num)
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleTransport) {
 			glog.Warningf("%s: timed out (%d/%d)", s, s.Numcur, num)
 		}
 		if atomic.CompareAndSwapInt64(&s.lifecycle, activated, expired) {
-			if glog.V(4) {
+			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: activated => expired", s)
 			}
 		}
