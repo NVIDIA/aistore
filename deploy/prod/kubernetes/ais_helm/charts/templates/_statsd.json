@@ -1,0 +1,6 @@
+{{- define "statsd.config" -}}
+{
+	graphitePort: {{ .Values.graphite_server.port }},
+	graphiteHost: "{{ .Values.graphite_server.ip }}"
+}
+{{- end -}}

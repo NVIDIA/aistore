@@ -1,0 +1,167 @@
+# Default values for ais (proxy and target).
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# DFC Image, common between Target and Proxy
+image:
+  repository: quay.io/nvidia/ais_k8s
+  tag: 10
+  pullPolicy: IfNotPresent
+
+common_config:
+  dir: /etc/ais
+  cloudprovider: aws
+  cloud_buckets: cloud
+  local_buckets: local
+  mirror:
+    mirror_util_tresh: 0
+    mirror_enabled: false
+  log:
+    dir: /var/log/ais
+    loglevel : 3
+  periodic:
+    iostat_time: "2s"
+  auth:
+    secret        : aBitLongSecretKey
+    enabled       : false
+    creddir       : ""
+
+
+proxy:
+  name : "proxy"    # A component label for selector
+  config:
+    proxyconfig:
+      non_electable : false
+      discovery_url : ""
+    test_fspaths:
+      count         : 0
+      instance      : 0
+    netconfig:
+      ipv4          : ""
+      l4_port       : 8080
+      ipv4_intra_control: ""
+      ipv4_intra_data: ""
+      l4_port_intra_control: ""
+      l4_port_intra_data: ""
+      http:
+        use_https   : false
+  service:
+    type: ClusterIP
+    port: 8080
+  nodeSelector:
+    ais-proxy-type : electable
+  # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
+  initialPrimaryProxyNodeLabel:
+    name: initial_primary_proxy
+    value: yes
+  # The path of the environment file to be passed into the ais container
+  envMountPath:
+    hostPath: /tmp/
+    podPath:  /var/ais_env
+  etcMountPath:
+    hostPath: /etc/ais/proxy
+    # No pod path as it should be the same as config.dir
+
+ne_proxy:
+  name : "ne_proxy"    # A component label for selector
+  config:
+    proxyconfig:
+      non_electable : true
+      discovery_url : ""
+    test_fspaths:
+      count         : 0
+      instance      : 0
+    netconfig:
+      ipv4          : ""
+      l4_port       : 8080
+      ipv4_intra_control: ""
+      ipv4_intra_data: ""
+      l4_port_intra_control: ""
+      l4_port_intra_data: ""
+      http:
+        use_https   : false
+  service:
+    type: ClusterIP
+    port: 8080
+  nodeSelector:
+    ais-proxy-type : nonelectable
+  # The path of the environment file to be passed into the ais container
+  envMountPath:
+    hostPath: /tmp/
+    podPath:  /var/ais_env
+  etcMountPath:
+    hostPath: /etc/ais/proxy
+
+
+target:
+  name : "target"   # A component label for selector
+  config:
+    proxyconfig:  
+      non_electable : false
+      discovery_url : ""
+    test_fspaths:
+      count         : 0
+      instance      : 0
+    netconfig:
+      ipv4          : ""
+      l4_port       : 8081
+      ipv4_intra_control: ""
+      ipv4_intra_data: ""
+      l4_port_intra_control: ""
+      l4_port_intra_data: ""
+      http:
+        use_https   : false
+  service:
+    type: ClusterIP
+    port: 8081
+  nodeSelector:
+    ais-target-node : yes
+  etcMountPath:
+    hostPath: /etc/ais/target
+    # No pod path as it should be the same as config.dir
+  mountPaths:
+    #- /tmp
+    - /ais/sda
+    - /ais/sdb
+    - /ais/sdc
+    - /ais/sdd
+    - /ais/sde
+    - /ais/sdf
+    - /ais/sdg
+    - /ais/sdh
+    - /ais/sdi
+    - /ais/sdj
+    
+ingress: {}
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+
+tolerations: []
+
+# Make sure the DFC target only deploy to the node that are marked with a label that signify a hi-perf
+# storage
+# target-node-key-name : target-node
+affinity: {}
+#affinity:
+#  requiredDuringSchedulingIgnoredDuringExecution:
+#    nodeSelectorTerms:
+#    - matchExpressions:
+#        - key: beta.kubernetes.io/instance-type
+#          operator: In
+#          values:
+#            - d1.8xlarge
+
+graphite_server:
+  port  : 2003
+  ip    : 52.41.234.112 

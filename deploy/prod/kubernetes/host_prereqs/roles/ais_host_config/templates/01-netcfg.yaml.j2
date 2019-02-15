@@ -1,0 +1,14 @@
+#
+# Ubuntu 18.04 has some bug whereby specifying the mtu for a dhcp-configured
+# interface in netplan fails, so we have to resort to some matching as below.
+#
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ item.interface }}:
+      dhcp4: yes
+      match:
+        driver: {{ item.driver }}
+      mtu: {{ item.mtu }}
+

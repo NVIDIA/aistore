@@ -1,0 +1,25 @@
+---
+
+- name: Check PCM directory exists .
+  stat:
+    path: /home/ngn-gia-storage-user/pcm-master
+  register: pcm_dir_exists
+
+- name: Get PCM code as zip
+  get_url: 
+     url: 'https://github.com/opcm/pcm/archive/master.zip'
+     dest: '/tmp/pcm.zip'
+     mode: 0440
+  when: not pcm_dir_exists.stat.exists
+
+- name: Unarchive pcm.zip
+  unarchive:
+    src: /tmp/pcm.zip
+    dest: /home/ngn-gia-storage-user
+    remote_src: yes
+  when: not pcm_dir_exists.stat.exists
+   
+- name: Install PCM tool
+  command: make
+  args:
+     chdir: /home/ngn-gia-storage-user/pcm-master

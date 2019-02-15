@@ -1,0 +1,13 @@
+---
+
+- name: update apt-cache
+  apt:
+     update_cache: yes
+
+- name: install mpstat,iostat
+  apt:  name=systat state=latest
+
+
+- name: install bcc
+  apt: name=bcc state=latest
+

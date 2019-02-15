@@ -1,0 +1,50 @@
+ais_devices:
+  - sda
+  - sdb
+  - sdc
+  - sdd
+  - sde
+  - sdf
+  - sdg
+  - sdh
+  - sdi
+  - sdj
+
+ais_host_mtu:
+  - interface: enp94s0
+    driver: mlx5_core
+    mtu: 9000
+
+#
+# Lines to add to /etc/security/limits.conf (or /etc/security/limits.d/)
+#
+ais_pam_limits:
+  - limit_item: nofile
+    limit_type: soft
+    value: 1048576
+    comment: required in AIS docs (but also need to change in pods)
+  - limit_item: nofile
+    limit_type: hard
+    value: 1048576
+    comment: required in AIS docs (but also need to change in pods)
+
+#
+# Items to add/tweak in /etc/sysctl.conf
+#
+ais_host_sysctl:
+#  - name: net.core.rmem_max
+#    value:
+#    comment: need to optimize
+#  - name: net.ipv4.tcp_rmem
+#    value:
+#    comment: need to optimize
+#  - name: net.core.wmem_max
+#    value:
+#    comment: need to optimize
+#  - name: net.ipv4.tcp_wmem
+#    value:
+#    comment: need to optimize
+  - name: net.ipv4.tcp_mtu_probing
+    value: 2
+    comment: recommended in AIS docs
+

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "ais.name" . }}-statsd
+data:
+  statsd.json: |-
+{{ include "statsd.config" .   | indent 4 }}
+

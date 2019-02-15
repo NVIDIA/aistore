@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "ais.name" . }}-neproxy
+data:
+  ais.json: |-
+{{ include "ne_proxy.config" .   | indent 4 }}

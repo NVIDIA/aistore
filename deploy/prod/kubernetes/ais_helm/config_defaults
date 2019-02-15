@@ -1,0 +1,38 @@
+resource_type=$1
+export CONFFILE=_ais_${resource_type}.json
+export CONFFILE_COLLECTD=_collectd.json
+export CONFFILE_STATSD=_statsd.json
+export CONFDIR="{{ .Values.common_config.dir }}"
+export CLDPROVIDER="{{ .Values.common_config.cloudprovider }}"
+export LOGDIR="{{ .Values.common_config.log.dir }}"
+export LOGLEVEL="{{ .Values.common_config.log.loglevel }}"
+export NON_ELECTABLE="{{ .Values.${resource_type}.config.proxyconfig.non_electable }}"
+export PROXYURL="http://{{ template \"ais.fullname\" . }}-proxy:{{ .Values.proxy.service.port }}"
+export DISCOVERYURL="{{ .Values.${resource_type}.config.proxyconfig.discovery_url }}"
+export FSPATHS="{{- \$last_mount := last .Values.target.mountPaths -}} 
+        {{- range .Values.target.mountPaths -}}
+        {{- if eq . \$last_mount }}
+        \"{{ . }}\": \"\"
+        {{ else }}
+        \"{{ . }}\": \"\",
+        {{- end -}}
+        {{- end -}}"
+export TESTFSPATHCOUNT="{{ .Values.${resource_type}.config.test_fspaths.count }}"
+export c="{{ .Values.${resource_type}.config.test_fspaths.instance }}"
+export IPV4LIST="{{ .Values.${resource_type}.config.netconfig.ipv4 }}"
+export IPV4LIST_INTRA_CONTROL="{{ .Values.${resource_type}.config.netconfig.ipv4_intra_control }}"
+export IPV4LIST_INTRA_DATA="{{ .Values.${resource_type}.config.netconfig.ipv4_intra_data }}"
+export PORT="{{ .Values.${resource_type}.config.netconfig.l4_port }}"
+export PORT_INTRA_CONTROL="{{ .Values.${resource_type}.config.netconfig.l4_port_intra_control }}"
+export PORT_INTRA_DATA="{{ .Values.${resource_type}.config.netconfig.l4_port_intra_data }}"
+
+export USE_HTTPS="{{ .Values.${resource_type}.config.netconfig.http.use_https }}"
+
+export SECRETKEY="{{ .Values.common_config.auth.secret }}"
+export AUTHENABLED="{{ .Values.common_config.auth.enabled }}"
+export CREDDIR="{{ .Values.common_config.auth.creddir }}"
+export GRAPHITE_SERVER="{{ .Values.graphite_server.ip }}"
+export GRAPHITE_PORT="{{ .Values.graphite_server.port }}"
+export IOSTAT_TIME="{{ .Values.common_config.periodic.iostat_time }}"
+export MIRROR_UTIL_THRESH="{{ .Values.common_config.mirror.mirror_util_tresh }}"
+export MIRROR_ENABLED="{{ .Values.common_config.mirror.mirror_enabled }}"

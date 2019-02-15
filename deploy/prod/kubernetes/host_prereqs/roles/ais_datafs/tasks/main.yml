@@ -1,0 +1,62 @@
+- name: umount
+  mount:
+    src: "/dev/{{ item }}"
+    path: "/ais/{{ item }}"
+    state: unmounted
+    fstype: xfs
+    opts: noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier
+  with_items:
+    - "{{ ais_devices }}"
+  when:
+    - ais_fs_umount is defined
+    - ais_fs_umount
+
+- name: umount and remove from fstab
+  mount:
+    src: "/dev/{{ item }}"
+    path: "/ais/{{ item }}"
+    state: absent
+    fstype: xfs
+    opts: noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier
+  with_items:
+    - "{{ ais_devices }}"
+  when:
+    - ais_fs_umount_purge is defined
+    - ais_fs_umount_purge
+
+- name: mkfs
+  filesystem:
+    dev: "/dev/{{ item }}"
+    force: yes
+    fstype: xfs
+    opts:
+  with_items:
+    - "{{ ais_devices }}"
+  when:
+    - ais_fs_losedata is defined
+    - ais_fs_losedata == 'danger_danger'
+
+- name: mount and populate fstab
+  mount:
+    src: "/dev/{{ item }}"
+    path: "/ais/{{ item }}"
+    state: mounted
+    fstype: xfs
+    opts: noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier
+  with_items:
+    - "{{ ais_devices }}"
+  when:
+    - ais_fs_mount is defined
+    - ais_fs_mount
+
+- name: chown and chmod XXX wide open
+  file:
+    path: "/ais/{{ item }}"
+    state: directory
+    mode: 0777
+    owner: root
+  with_items:
+    - "{{ ais_devices }}"
+  when:
+    - ais_fs_mount is defined
+    - ais_fs_mount

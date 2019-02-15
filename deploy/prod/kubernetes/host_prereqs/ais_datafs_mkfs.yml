@@ -1,0 +1,9 @@
+---
+- hosts: kube-node
+  vars_files:
+    - "vars.yml"
+
+  gather_facts: true
+  roles:
+          - { role: ais_datafs, ais_fs_umount_purge: true, ais_fs_losedata: "danger_danger", ais_fs_mount: true }
+

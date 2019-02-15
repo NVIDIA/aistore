@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "ais.name" . }}-target
+data:
+  ais.json: |-
+{{ include "target.config" .   | indent 4 }}
+

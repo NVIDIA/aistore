@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ template "ais.fullname" . }}-target
+  labels:
+    app: {{ template "ais.name" . }}
+    chart: {{ template "ais.chart" . }}
+    component: "{{ .Values.target.name }}"
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "ais.name" . }}
+        component: "{{ .Values.target.name }}"
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name : CONFFILE
+              value : "/var/ais_config/ais.json"
+            - name: STATSDCONF
+              value: "/var/statsd_config/statsd.json"
+            - name: COLLECTDCONF
+              value: "/var/collectd_config/collectd.json"
+            - name : ROLE
+              value : "target"
+            # dummy value for target
+            - name : TARGETS
+              value : "1"
+            # Passing in the hostIP daemon ID, so that the ais target will have the same set of hash
+            - name: AIS_DAEMONID
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          ports:
+            - name: http
+              containerPort: {{ .Values.target.service.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: etc-mount
+              mountPath: "{{ .Values.target.config.dir }}"
+            - name: config-mount
+              mountPath: "/var/ais_config"
+            - name: statsd-config
+              mountPath: "/var/statsd_config"
+            - name: collectd-config
+              mountPath: "/var/collectd_config"
+            {{ range .Values.target.mountPaths }}
+            - name: fspath{{ . | replace "/" "-" }}
+              mountPath: "{{ . }}"
+            {{ end }}
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: {{ .Values.target.service.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: {{ .Values.target.service.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      serviceAccount: {{ template "ais.name" . }}-sa
+    {{- with .Values.target.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: config-mount
+          configMap:
+            name:  {{ template "ais.name" . }}-target
+        - name: etc-mount
+          hostPath:
+            path: {{ .Values.target.etcMountPath.hostPath }}
+        - name: statsd-config
+          configMap:
+            name: {{ template "ais.name" . }}-statsd
+        - name: collectd-config
+          configMap:
+            name: {{ template "ais.name" . }}-collectd
+        {{ range .Values.target.mountPaths }}
+        - name: fspath{{ . | replace "/" "-" }}
+          hostPath:
+            path: {{ . }} 
+        {{ end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      imagePullSecrets:
+        - name: containerbuilder-pull-secret

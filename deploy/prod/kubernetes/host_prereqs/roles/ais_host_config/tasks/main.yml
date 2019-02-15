@@ -1,0 +1,28 @@
+- name: configure ulimits for host
+  pam_limits:
+    domain: '*'
+    limit_item: "{{ item.limit_item }}"
+    limit_type: "{{ item.limit_type }}"
+    value: "{{ item.value }}"
+  with_items:
+    - "{{ ais_pam_limits }}"
+
+- name: tweak sysctl.conf
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+  with_items:
+    - "{{ ais_host_sysctl }}"
+
+- name: set host mtu in netplan
+  template:
+    src: 01-netcfg.yaml.j2
+    dest: /etc/netplan/01-netcfg.yaml
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - "{{ ais_host_mtu }}"
+
+- name:       Applying Netplan Configuration
+  command:    netplan apply

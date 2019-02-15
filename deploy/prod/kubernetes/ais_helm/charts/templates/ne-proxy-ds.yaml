@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ template "ais.fullname" . }}-ne-proxy
+  labels:
+    app: {{ template "ais.name" . }}
+    chart: {{ template "ais.chart" . }}
+    component: "{{ .Values.ne_proxy.name }}"
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      release: {{ .Release.Name }}
+  # RollingUpdate won't work for DFC Proxy because as soon as a master is killed one of the remaining proxies will
+  # try to become a master, so we have to kill them all and relaunch them
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ template "ais.name" . }}
+        component: "{{ .Values.ne_proxy.name }}"
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name : CONFFILE
+              value : "/var/ais_config/ais.json"
+            - name: STATSDCONF
+              value: "/var/statsd_config/statsd.json"
+            - name: COLLECTDCONF
+              value: "/var/collectd_config/collectd.json"
+            - name : ROLE
+              value : "proxy"
+            - name : TARGETS
+              value : "1"
+          ports:
+            - name: http
+              containerPort: {{ .Values.ne_proxy.service.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: config-mount
+              mountPath: "/var/ais_config"
+            - name: env-mount
+              mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
+            - name: etc-mount
+              mountPath: "{{ .Values.ne_proxy.config.dir }}"
+            - name: statsd-config
+              mountPath: "/var/statsd_config"
+            - name: collectd-config
+              mountPath: "/var/collectd_config"
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: {{ .Values.ne_proxy.service.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: {{ .Values.ne_proxy.service.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      serviceAccount: {{ template "ais.name" . }}-sa
+    {{- with .Values.ne_proxy.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: config-mount
+          configMap:
+            name:  {{ template "ais.name" . }}-neproxy
+        - name: env-mount
+          hostPath:
+            path: {{ .Values.ne_proxy.envMountPath.hostPath }}
+        - name: etc-mount
+          hostPath:
+            path: {{ .Values.ne_proxy.etcMountPath.hostPath }}
+        - name: statsd-config
+          configMap:
+            name: {{ template "ais.name" . }}-statsd
+        - name: collectd-config
+          configMap:
+            name: {{ template "ais.name" . }}-collectd
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      imagePullSecrets:
+        - name: containerbuilder-pull-secret

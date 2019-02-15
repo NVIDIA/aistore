@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "ais.fullname" . }}-target
+  labels:
+    app: {{ template "ais.name" . }}
+    chart: {{ template "ais.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.target.service.type }}
+  ports:
+    - port: {{ .Values.target.service.port }}
+      targetPort: {{ .Values.target.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ template "ais.name" . }}
+    component: "{{ .Values.target.name }}"
+    release: {{ .Release.Name }}
