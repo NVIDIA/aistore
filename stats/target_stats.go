@@ -312,30 +312,29 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		name = nv.Name
 		val  = nv.Val
 	)
+
 	v, ok := s.Tracker[name]
 	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
-	if v.isCommon {
+
+	// most target stats can be handled by ProxyCoreStats.doAdd
+	// .size stats, as of 2.0, is the only type that's unique to target
+	if !strings.HasSuffix(name, ".size") {
 		s.ProxyCoreStats.doAdd(name, val)
 		return
 	}
-	if v.kind == KindLatency || v.kind == KindThroughput {
-		s.ProxyCoreStats.doAdd(name, val)
-		return
-	}
-	// target only
-	if strings.HasSuffix(name, ".size") {
-		nroot := strings.TrimSuffix(name, ".size")
-		metricType := statsd.Counter
 
-		if nroot == "dl" {
-			metricType = statsd.PersistentCounter
-		}
+	// target only suffix
+	nroot := strings.TrimSuffix(name, ".size")
+	metricType := statsd.Counter
 
-		s.StatsdC.Send(nroot,
-			metric{Type: metricType, Name: "bytes", Value: val},
-			metric{Type: metricType, Name: "count", Value: 1},
-		)
+	if nroot == "dl" {
+		metricType = statsd.PersistentCounter
 	}
+
+	s.StatsdC.Send(nroot,
+		metric{Type: metricType, Name: "bytes", Value: val},
+		metric{Type: metricType, Name: "count", Value: 1},
+	)
 
 	v.Lock()
 	v.Value += val
