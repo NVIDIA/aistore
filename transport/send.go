@@ -6,6 +6,7 @@
 package transport
 
 import (
+	"container/heap"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -30,16 +31,17 @@ import (
 const (
 	maxHeaderSize  = 1024
 	lastMarker     = cmn.MaxInt64
-	defaultIdleOut = time.Second * 3
+	tickMarker     = cmn.MaxInt64 ^ 0xa5a5a5a5
+	tickUnit       = time.Second
+	defaultIdleOut = time.Second * 2
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 )
 
-// stream TCP/HTTP lifecycle: expired => posted => activated ( => expired) transitions
+// stream TCP/HTTP session: inactive <=> active transitions
 const (
-	expired = iota + 1
-	posted
-	activated
+	inactive = iota
+	active
 )
 
 // termination: reasons
@@ -57,7 +59,8 @@ type (
 		// user-defined & queryable
 		client          *http.Client // http client this send-stream will use
 		toURL, trname   string       // http endpoint
-		sessid          int64        // stream session ID
+		sessID          int64        // stream session ID
+		sessST          int64        // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
 		stats           Stats        // stream stats
 		Numcur, Sizecur int64        // gets reset to zero upon each timeout
 		// internals
@@ -66,14 +69,15 @@ type (
 		cmplCh   chan cmpl     // aka SCQ; note that SQ and SCQ together form a FIFO
 		lastCh   chan struct{} // end of stream
 		stopCh   chan struct{} // stop/abort stream
-		postCh   chan struct{} // expired => posted transition: new HTTP/TCP session
+		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
 			start   int64         // to support idle(%)
-			idleOut time.Duration // inter-object timeout: when triggers, causes recycling of the underlying http request
-			idle    *time.Timer
+			idleOut time.Duration // idle timeout
+			posted  int64         // num posted since the last GC do()
+			ticks   int           // num 1s ticks until idle timeout
+			index   int           // heap stuff
 		}
-		lifecycle int64 // see state enum above
 		wg        sync.WaitGroup
 		sendoff   sendoff
 		maxheader []byte // max header buffer
@@ -89,7 +93,7 @@ type (
 		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
 		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
-		Burst       int             // SQ and CSQ sizes: max num objects and send-completions that can be posted without exp-ng back-pressure
+		Burst       int             // SQ and CSQ buffer sizes: max num objects and send-completions
 		DryRun      bool            // dry run: short-circuit the stream on the send side
 	}
 	// stream stats
@@ -127,6 +131,10 @@ type (
 	//
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
 	SendCallback func(Header, io.ReadCloser, error)
+
+	StreamCollector struct {
+		cmn.Named
+	}
 )
 
 // internal
@@ -134,7 +142,7 @@ type (
 	obj struct {
 		hdr      Header        // object header
 		reader   io.ReadCloser // reader, to read the object, and close when done
-		callback SendCallback  // callback fired when sending is done OR when the stream terminates for any reason (see "reason")
+		callback SendCallback  // callback fired when sending is done OR when the stream terminates (see term.reason)
 		prc      *int64        // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
 	}
 	sendoff struct {
@@ -148,17 +156,163 @@ type (
 		err error
 	}
 	nopReadCloser struct{}
+
+	collector struct {
+		streams map[string]*Stream
+		heap    []*Stream
+		ticker  *time.Ticker
+		stopCh  chan struct{}
+		ctrlCh  chan ctrl
+	}
+	ctrl struct { // add/del channel to/from collector
+		s   *Stream
+		add bool
+	}
 )
 
 var (
 	nopRC      = &nopReadCloser{}
 	background = context.Background()
+	sessID     = int64(100) // unique session IDs starting from 101
+	sc         = &StreamCollector{}
+	gc         *collector // real collector
 )
 
-func NewDefaultClient() *http.Client {
-	return cmn.NewClient(cmn.ClientArgs{
-		IdleConnsPerHost: 1000,
-	})
+// default HTTP client to be used with streams
+func NewDefaultClient() *http.Client { return cmn.NewClient(cmn.ClientArgs{IdleConnsPerHost: 1000}) }
+
+//
+// Stream Collector - a singleton object with responsibilities that include:
+// 1. control part of the stream lifecycle:
+//    - activation (followed by connection establishment and HTTP PUT), and
+//    - deactivation (teardown)
+// 2. implement per-stream idle timeouts measured in tick units (tickUnit)
+//    whereby each stream is effectively provided with its own idle timer
+//
+// NOTE: requires static initialization
+//
+func Init() *StreamCollector {
+	cmn.Assert(gc == nil)
+
+	// real stream collector
+	gc = &collector{
+		stopCh:  make(chan struct{}, 1),
+		ctrlCh:  make(chan ctrl, 16),
+		streams: make(map[string]*Stream, 16),
+		heap:    make([]*Stream, 0, 16), // min-heap sorted by stream.time.ticks
+	}
+	heap.Init(gc)
+
+	return sc
+}
+
+func (sc *StreamCollector) Run() (err error) {
+	glog.Infof("Starting %s", sc.Getname())
+	return gc.run()
+}
+func (sc *StreamCollector) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", sc.Getname(), err)
+	gc.stop(err)
+}
+
+func (gc *collector) run() (err error) {
+	gc.ticker = time.NewTicker(tickUnit)
+	for {
+		select {
+		case <-gc.ticker.C:
+			gc.do()
+		case ctrl, ok := <-gc.ctrlCh:
+			if !ok {
+				return
+			}
+			s, add := ctrl.s, ctrl.add
+			_, ok = gc.streams[s.lid]
+			if add {
+				cmn.AssertMsg(!ok, s.lid)
+				gc.streams[s.lid] = s
+				heap.Push(gc, s)
+			} else {
+				cmn.AssertMsg(ok, s.lid)
+				delete(gc.streams, s.lid)
+				heap.Remove(gc, s.time.index)
+				close(s.workCh) // delayed close
+			}
+		case <-gc.stopCh:
+			for _, s := range gc.streams {
+				s.stopCh <- struct{}{}
+			}
+			gc.streams = nil
+			return
+		}
+	}
+}
+func (gc *collector) stop(err error) {
+	gc.stopCh <- struct{}{}
+	close(gc.stopCh)
+}
+
+// as min-heap
+func (gc *collector) Len() int { return len(gc.heap) }
+
+func (gc *collector) Less(i, j int) bool {
+	si := gc.heap[i]
+	sj := gc.heap[j]
+	return si.time.ticks < sj.time.ticks
+}
+
+func (gc *collector) Swap(i, j int) {
+	gc.heap[i], gc.heap[j] = gc.heap[j], gc.heap[i]
+	gc.heap[i].time.index = i
+	gc.heap[j].time.index = j
+}
+
+func (gc *collector) Push(x interface{}) {
+	l := len(gc.heap)
+	s := x.(*Stream)
+	s.time.index = l
+	gc.heap = append(gc.heap, s)
+	heap.Fix(gc, s.time.index) // reorder the newly added stream right away
+}
+
+func (gc *collector) update(s *Stream, ticks int) {
+	s.time.ticks = ticks
+	cmn.Assert(s.time.ticks >= 0)
+	heap.Fix(gc, s.time.index)
+}
+
+func (gc *collector) Pop() interface{} {
+	old := gc.heap
+	n := len(old)
+	sl := old[n-1]
+	gc.heap = old[0 : n-1]
+	return sl
+}
+
+// collector's main method
+func (gc *collector) do() {
+	for _, s := range gc.streams {
+		if atomic.LoadInt64(&s.sessST) == active {
+			gc.update(s, s.time.ticks-1)
+		}
+	}
+	for _, s := range gc.streams {
+		if s.time.ticks > 0 {
+			continue
+		}
+		gc.update(s, int(s.time.idleOut/tickUnit))
+		if atomic.SwapInt64(&s.time.posted, 0) > 0 {
+			continue
+		}
+		if len(s.workCh) == 0 && atomic.CompareAndSwapInt64(&s.sessST, active, inactive) {
+			s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
+			if glog.FastV(4, glog.SmoduleTransport) {
+				glog.Infof("%s: active => inactive", s)
+			}
+		}
+	}
+	// at this point the following must be true for each i = range gc.heap:
+	// 1. heap[i].index == i
+	// 2. heap[i+1].ticks >= heap[i].ticks
 }
 
 //
@@ -182,13 +336,13 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		dryrun = extra.DryRun
 		cmn.Assert(dryrun || client != nil)
 	}
-	if tm := time.Now().UnixNano(); tm&0xffff != 0 {
-		s.sessid = tm & 0xffff
-	} else { // enforce non-zero
-		s.sessid = tm
+	if s.time.idleOut < tickUnit {
+		s.time.idleOut = tickUnit
 	}
+	s.time.ticks = int(s.time.idleOut / tickUnit)
+	s.sessID = atomic.AddInt64(&sessID, 1)
 	s.trname = path.Base(u.Path)
-	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessid)
+	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
 
 	// burst size: the number of objects the caller is permitted to post for sending
 	// without experiencing any sort of back-pressure
@@ -210,10 +364,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.lastCh = make(chan struct{}, 1)
 	s.stopCh = make(chan struct{}, 1)
 	s.postCh = make(chan struct{}, 1)
-	s.maxheader = make([]byte, maxHeaderSize)
-	s.time.idle = time.NewTimer(s.time.idleOut)
-	s.time.idle.Stop()
-	atomic.StoreInt64(&s.lifecycle, expired) // initiate HTTP/TCP session upon arrival of the very first object and *not* earlier
+	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
+	atomic.StoreInt64(&s.sessST, inactive)    // NOTE: initiate HTTP session upon arrival of the first object
 
 	var ctx context.Context
 	if extra != nil && extra.Ctx != nil {
@@ -225,11 +377,11 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	atomic.StoreInt64(&s.time.start, time.Now().UnixNano())
 	s.term.reason = new(string)
 
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.sendLoop(ctx, dryrun) // handle SQ
-	s.wg.Add(1)
-	go s.cmplLoop() // handle SCQ
+	go s.cmplLoop()            // handle SCQ
 
+	gc.ctrlCh <- ctrl{s, true /* collect */}
 	return
 }
 
@@ -259,22 +411,22 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 //
 // ---------------------------------------------------------------------------------------
 func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, prc ...*int64) (err error) {
-	s.time.idle.Stop()
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
 			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
 		glog.Errorln(err)
 		return
 	}
-	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
+	atomic.AddInt64(&s.time.posted, 1)
+	if atomic.CompareAndSwapInt64(&s.sessST, inactive, active) {
 		s.postCh <- struct{}{}
 		if glog.FastV(4, glog.SmoduleTransport) {
-			glog.Infof("%s: expired => posted", s)
+			glog.Infof("%s: inactive => active", s)
 		}
 	}
 	// next object => SQ
 	if reader == nil {
-		cmn.Assert(hdr.ObjAttrs.Size == 0 || hdr.ObjAttrs.Size == lastMarker)
+		cmn.Assert(hdr.IsHeaderOnly())
 		reader = nopRC
 	}
 	obj := obj{hdr: hdr, reader: reader, callback: callback}
@@ -291,17 +443,13 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 func (s *Stream) Fin() (err error) {
 	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
 	err = s.Send(hdr, nil, nil)
-	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
-		s.postCh <- struct{}{}
-		glog.Infof("%s: (expired => posted) to handle Fin", s)
-	}
 	s.wg.Wait() // normal (graceful, synchronous) termination
 	return
 }
 
 func (s *Stream) Stop()               { s.stopCh <- struct{}{} }
 func (s *Stream) URL() string         { return s.toURL }
-func (s *Stream) ID() (string, int64) { return s.trname, s.sessid }
+func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
 func (s *Stream) Terminated() bool    { return atomic.LoadInt64(&s.term.barr) != 0 }
 
@@ -330,7 +478,9 @@ func (s *Stream) GetStats() (stats Stats) {
 	return
 }
 
-func (hdr *Header) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *Header) IsLast() bool       { return hdr.ObjAttrs.Size == lastMarker }
+func (hdr *Header) IsIdleTick() bool   { return hdr.ObjAttrs.Size == tickMarker }
+func (hdr *Header) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.IsLast() }
 
 //
 // internal methods including the sending and completing loops below, each running in its own goroutine
@@ -338,10 +488,7 @@ func (hdr *Header) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
 
 func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 	for {
-		if atomic.CompareAndSwapInt64(&s.lifecycle, posted, activated) {
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s: posted => activated", s)
-			}
+		if atomic.LoadInt64(&s.sessST) == active {
 			if dryrun {
 				s.dryrun()
 			} else if err := s.doRequest(ctx); err != nil {
@@ -354,12 +501,10 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 			break
 		}
 	}
-	s.time.idle.Stop()
+	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
 	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
 	close(s.cmplCh)
-	close(s.lastCh)
 	close(s.stopCh)
-	close(s.workCh)
 	s.wg.Done()
 
 	// handle termination that is caused by anything other than Fin()
@@ -439,10 +584,12 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 			*s.term.reason = reasonStopped
 			return
 		case <-s.postCh:
-			if v := atomic.LoadInt64(&s.lifecycle); v == posted {
-				next = true // initiate new HTTP/TCP session
-				return
+			atomic.StoreInt64(&s.sessST, active)
+			next = true // initiate new HTTP/TCP session
+			if glog.FastV(4, glog.SmoduleTransport) {
+				glog.Infof("%s: active <- posted", s)
 			}
+			return
 		}
 	}
 }
@@ -478,52 +625,34 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 
 // as io.Reader
 func (s *Stream) Read(b []byte) (n int, err error) {
-	// current object
-	if s.sendoff.obj.reader != nil {
-		if s.sendoff.dod != 0 {
-			if s.sendoff.obj.hdr.ObjAttrs.Size == 0 { // when the object is header-only
+	obj := &s.sendoff.obj
+	if obj.reader != nil { // have object
+		if s.sendoff.dod != 0 { // fast path
+			if !obj.hdr.IsHeaderOnly() {
+				return s.sendData(b)
+			}
+			if !obj.hdr.IsLast() {
 				s.eoObj(nil)
+			} else {
+				err = io.EOF
 				return
 			}
-			return s.sendData(b)
+		} else {
+			return s.sendHdr(b)
 		}
-		return s.sendHdr(b)
 	}
-	beg := time.Now()
-	defer s.addIdle(beg)
-	select {
-	// next object
-	case s.sendoff.obj = <-s.workCh:
-		s.time.idle.Stop()
+repeat:
+	select { // ignoring idle time spent here to optimize-out addIdle(time.Now()) overhead
+	case s.sendoff.obj = <-s.workCh: // next object OR idle tick
+		if s.sendoff.obj.hdr.IsIdleTick() {
+			if len(s.workCh) > 0 {
+				goto repeat
+			}
+			return s.deactivate()
+		}
 		l := s.insHeader(s.sendoff.obj.hdr)
 		s.header = s.maxheader[:l]
 		return s.sendHdr(b)
-	// control stream lifesycle at object boundaries
-	case <-s.time.idle.C:
-		select {
-		// next object
-		case obj, ok := <-s.workCh:
-			if ok {
-				s.sendoff.obj = obj
-				s.time.idle.Stop()
-				l := s.insHeader(s.sendoff.obj.hdr)
-				s.header = s.maxheader[:l]
-				return s.sendHdr(b)
-			}
-		default:
-			break
-		}
-		err = io.EOF
-		num := atomic.LoadInt64(&s.stats.Num)
-		if glog.FastV(4, glog.SmoduleTransport) {
-			glog.Warningf("%s: timed out (%d/%d)", s, s.Numcur, num)
-		}
-		if atomic.CompareAndSwapInt64(&s.lifecycle, activated, expired) {
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s: activated => expired", s)
-			}
-		}
-		return
 	case <-s.stopCh:
 		num := atomic.LoadInt64(&s.stats.Num)
 		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
@@ -533,16 +662,20 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	}
 }
 
+func (s *Stream) deactivate() (n int, err error) {
+	err = io.EOF
+	if glog.FastV(4, glog.SmoduleTransport) {
+		num := atomic.LoadInt64(&s.stats.Num)
+		glog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
+	}
+	return
+}
+
 func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.sendoff.off:])
 	s.sendoff.off += int64(n)
-	if bool(glog.FastV(4, glog.SmoduleTransport)) && (s.sendoff.off < int64(len(s.header))) {
-		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
-	}
 	if s.sendoff.off >= int64(len(s.header)) {
-		if debug {
-			cmn.Assert(s.sendoff.off == int64(len(s.header)))
-		}
+		cmn.Assert(s.sendoff.off == int64(len(s.header)))
 		atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
 		if glog.FastV(4, glog.SmoduleTransport) {
 			num := atomic.LoadInt64(&s.stats.Num)
@@ -550,19 +683,16 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		}
 		s.sendoff.dod = s.sendoff.off
 		s.sendoff.off = 0
-
-		obj := &s.sendoff.obj
-		if !obj.hdr.IsLast() {
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s: sent header %s/%s(%d)", s, obj.hdr.Bucket, obj.hdr.Objname, obj.hdr.ObjAttrs.Size)
-			}
-		} else {
+		if s.sendoff.obj.hdr.IsLast() {
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
 			s.lastCh <- struct{}{}
+			close(s.lastCh)
 		}
+	} else if glog.FastV(4, glog.SmoduleTransport) {
+		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))
 	}
 	return
 }
@@ -596,7 +726,8 @@ func (s *Stream) eoObj(err error) {
 		goto exit
 	}
 	if s.sendoff.off != obj.hdr.ObjAttrs.Size {
-		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size", s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.ObjAttrs.Size)
+		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size",
+			s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.ObjAttrs.Size)
 		goto exit
 	}
 	s.Numcur++
@@ -609,7 +740,6 @@ exit:
 	if err != nil {
 		glog.Errorln(err)
 	}
-	s.time.idle.Reset(s.time.idleOut)
 
 	// next completion => SCQ
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
@@ -621,16 +751,13 @@ exit:
 // stream helpers
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
-	if debug {
-		cmn.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < maxHeaderSize-12*sizeofI64)
-	}
 	l = sizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
 	l = insBool(l, s.maxheader, hdr.IsLocal)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
-	l = insInt64(l, s.maxheader, s.sessid)
+	l = insInt64(l, s.maxheader, s.sessID)
 	hlen := l - sizeofI64*2
 	insInt64(0, s.maxheader, int64(hlen))
 	checksum := xoshiro256.Hash(uint64(hlen))
@@ -655,9 +782,7 @@ func insByte(off int, to []byte, b []byte) int {
 	binary.BigEndian.PutUint64(to[off:], uint64(l))
 	off += sizeofI64
 	n := copy(to[off:], b)
-	if debug {
-		cmn.Assert(n == l)
-	}
+	cmn.Assert(n == l)
 	return off + l
 }
 

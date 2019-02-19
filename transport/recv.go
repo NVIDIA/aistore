@@ -155,12 +155,12 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 		eps := make(EndpointStats)
 		f := func(key, value interface{}) bool {
 			out := &Stats{}
-			sessid := key.(int64)
+			sessID := key.(int64)
 			in := value.(*Stats)
 			out.Num = atomic.LoadInt64(&in.Num)
 			out.Offset = atomic.LoadInt64(&in.Offset)
 			out.Size = atomic.LoadInt64(&in.Size)
-			eps[sessid] = out
+			eps[sessID] = out
 			return true
 		}
 		h.sessions.Range(f)
@@ -187,18 +187,18 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, maxHeaderSize)}
 	for {
 		var stats *Stats
-		objReader, sessid, hl64, err := it.next()
-		if sessid != 0 {
-			statsif, loaded := h.sessions.LoadOrStore(sessid, &Stats{})
+		objReader, sessID, hl64, err := it.next()
+		if sessID != 0 {
+			statsif, loaded := h.sessions.LoadOrStore(sessID, &Stats{})
 			if !loaded && bool(glog.FastV(4, glog.SmoduleTransport)) {
-				glog.Infof("%s[%d]: start-of-stream", trname, sessid)
+				glog.Infof("%s[%d]: start-of-stream", trname, sessID)
 			}
 			stats = statsif.(*Stats)
 		}
 		if stats != nil && hl64 != 0 {
 			off := atomic.AddInt64(&stats.Offset, hl64)
 			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessid, off, hl64)
+				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessID, off, hl64)
 			}
 		}
 		if objReader != nil {
@@ -207,19 +207,19 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			num := atomic.AddInt64(&stats.Num, 1)
 			if hdr.ObjAttrs.Size != objReader.off {
 				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d, NAME: %s",
-					trname, sessid, objReader.off, hdr.ObjAttrs.Size, num, objReader.hdr.Objname)
+					trname, sessID, objReader.off, hdr.ObjAttrs.Size, num, objReader.hdr.Objname)
 				glog.Errorln(err)
 			} else {
 				siz := atomic.AddInt64(&stats.Size, hdr.ObjAttrs.Size)
 				off := atomic.AddInt64(&stats.Offset, hdr.ObjAttrs.Size)
 				if glog.FastV(4, glog.SmoduleTransport) {
-					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessid, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
+					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
 				}
 				continue
 			}
 		}
 		if err != nil {
-			if sessid != 0 {
+			if sessID != 0 {
 				// delayed cleanup old sessions
 				f := func(key, value interface{}) bool {
 					id := key.(int64)
@@ -231,7 +231,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 					return true
 				}
 				h.oldSessions.Range(f)
-				h.oldSessions.Store(sessid, time.Now())
+				h.oldSessions.Store(sessID, time.Now())
 			}
 			if err != io.EOF {
 				h.callback(w, Header{}, nil, err)
@@ -242,7 +242,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
+func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 	var (
 		n   int
 		hdr Header
@@ -279,16 +279,16 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	if debug {
 		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
 	}
-	hdr, sessid = ExtHeader(it.headerBuf, hlen)
+	hdr, sessID = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
 		if glog.FastV(4, glog.SmoduleTransport) {
-			glog.Infof("%s[%d]: last", it.trname, sessid)
+			glog.Infof("%s[%d]: last", it.trname, sessID)
 		}
 		err = io.EOF
 		return
 	}
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s[%d]: new object %s size=%d", it.trname, sessid, hdr.Objname, hdr.ObjAttrs.Size)
+		glog.Infof("%s[%d]: new object %s size=%d", it.trname, sessID, hdr.Objname, hdr.ObjAttrs.Size)
 	}
 	obj = &objReader{body: it.body, hdr: hdr}
 	return
@@ -314,7 +314,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 			glog.Errorf("actual offset: %d, expected: %d", obj.off, obj.hdr.ObjAttrs.Size)
 		}
 	default:
-		glog.Errorf("err %v", err) // canceled?
+		glog.Errorf("err %v\n", err) // canceled?
 	}
 	return
 }
@@ -322,14 +322,14 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 //
 // helpers
 //
-func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
+func ExtHeader(body []byte, hlen int) (hdr Header, sessID int64) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.Objname = extString(off, body)
 	off, hdr.IsLocal = extBool(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
-	off, sessid = extInt64(off, body)
+	off, sessID = extInt64(off, body)
 	if debug {
 		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
 	}

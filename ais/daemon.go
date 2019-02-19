@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -27,6 +28,7 @@ const (
 	xproxy           = "proxy"
 	xtarget          = "target"
 	xmem             = "gmem2"
+	xstreamc         = "stream-collector"
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
@@ -238,6 +240,10 @@ func aisinit(version, build string) {
 		_ = mem.Init(false)                                       // don't ignore init-time errors
 		ctx.rg.add(mem, xmem)                                     // to periodically house-keep
 		gmem2 = getmem2()                                         // making it global; getmem2() can still be used
+
+		// Stream Collector - a singleton object with responsibilities that include:
+		sc := transport.Init()
+		ctx.rg.add(sc, xstreamc)
 
 		// fs.Mountpaths must be inited prior to all runners that utilize all
 		// or run per filesystem(s); for mountpath definition, see fs/mountfs.go

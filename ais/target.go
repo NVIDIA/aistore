@@ -2578,7 +2578,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 			errstr = fmt.Sprintf("Rename object %s/%s: %v", bucketFrom, objnameFrom, err)
 		} else {
 			t.statsif.Add(stats.RenameCount, 1)
-			if glog.V(3) {
+			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Renamed %s => %s", fqn, newFQN)
 			}
 		}
@@ -2586,19 +2586,21 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 
 	// migrate to another target
-	glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
-		bucketFrom, objnameFrom, tname(t.si), bucketTo, objnameTo, tname(si))
-
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
+			bucketFrom, objnameFrom, tname(t.si), bucketTo, objnameTo, tname(si))
+	}
 	if file, err = cmn.NewFileHandle(fqn); err != nil {
 		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
 	}
 	defer file.Close()
 
 	lom := &cluster.LOM{T: t, Fqn: fqn}
-	if errstr := lom.Fill(cluster.LomFstat | cluster.LomVersion | cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
+	if errstr := lom.Fill(
+		cluster.LomFstat | cluster.LomVersion | cluster.LomAtime |
+			cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
 		return errstr
 	}
-
 	cksumType, cksum := lom.Nhobj.Get()
 	hdr := transport.Header{
 		Bucket:  bucketTo,

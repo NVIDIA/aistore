@@ -76,6 +76,10 @@ func init() {
 		os.Exit(1)
 	}
 	Mem2 = memsys.Init()
+
+	sc := transport.Init()
+	sc.Setname("stream-collector")
+	go sc.Run()
 }
 
 func Example_headers() {
@@ -83,6 +87,9 @@ func Example_headers() {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			panic(err)
+		}
+		if len(body) == 0 {
+			return
 		}
 		var (
 			hdr       transport.Header
@@ -116,6 +123,10 @@ func Example_headers() {
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
+	var wg sync.WaitGroup
+	cb := func(transport.Header, io.ReadCloser, error) {
+		wg.Done()
+	}
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.Header{
@@ -128,7 +139,9 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Version:   "2",
 		},
 	}
-	stream.Send(hdr, sgl1, nil)
+	wg.Add(1)
+	stream.Send(hdr, sgl1, cb)
+	wg.Wait()
 
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
@@ -142,20 +155,22 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			Version:   "2",
 		},
 	}
-	stream.Send(hdr, sgl2, nil)
+	wg.Add(1)
+	stream.Send(hdr, sgl2, cb)
+	wg.Wait()
 }
 
 func Example_mux() {
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			panic(err)
 		}
 		if int64(len(object)) != hdr.ObjAttrs.Size {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.ObjAttrs.Size))
 		}
-		// fmt.Printf("%s...\n", string(object[:16])) // FIXME
+		fmt.Printf("%s...\n", string(object[:16]))
 	}
 	mux := mux.NewServeMux()
 
@@ -182,12 +197,11 @@ func Example_mux() {
 	sendText(stream, text3, text4)
 	stream.Fin()
 
+	// Output:
 	// Lorem ipsum dolo...
 	// Duis aute irure ...
 	// Et harum quidem ...
 	// Temporibus autem...
-
-	// Output:
 }
 
 // test random streaming
