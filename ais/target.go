@@ -240,6 +240,7 @@ func (t *targetrunner) Run() error {
 		networkHandler{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 		networkHandler{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 		networkHandler{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		networkHandler{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
 		networkHandler{r: cmn.Push, h: t.pushHandler, net: []string{cmn.NetworkPublic}},
 
 		networkHandler{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},

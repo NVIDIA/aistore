@@ -31,6 +31,14 @@ func CheckFatal(err error, t *testing.T) {
 	}
 }
 
+func CheckError(err error, t *testing.T) {
+	if err != nil {
+		Logf("ERROR: %v\n", err)
+		debug.PrintStack()
+		t.Errorf("ERROR: %v", err)
+	}
+}
+
 func Logf(msg string, args ...interface{}) {
 	if testing.Verbose() {
 		fmt.Fprintf(os.Stdout, msg, args...)

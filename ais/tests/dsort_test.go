@@ -993,19 +993,16 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			tutils.CheckFatal(err, t)
 		})
 
-		// TODO: if any below fails reregistering target will not happen,
-		// need to change it to `tutils.CheckError(t, err)`
-
 		tutils.Logln("waiting for distributed sort to finish up...")
 		aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-		tutils.CheckFatal(err, t)
+		tutils.CheckError(err, t)
 		if !aborted {
 			t.Error("dsort was not aborted")
 		}
 
 		tutils.Logln("checking metrics...")
 		allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-		tutils.CheckFatal(err, t)
+		tutils.CheckError(err, t)
 		if len(allMetrics) == m.originalTargetCount {
 			t.Errorf("number of metrics %d is same as number of original targets %d", len(allMetrics), m.originalTargetCount)
 		}
@@ -1065,9 +1062,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	tutils.Logln("started distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	// TODO: if it fails reregistering target will not happen, need to change
-	// it to `tutils.CheckError(t, err)`
-	tutils.CheckFatal(err, t)
+	tutils.CheckError(err, t)
 
 	waitForDSortPhase(t, m.proxyURL, managerUUID, "sorting", func() {
 		// Reregister target 0

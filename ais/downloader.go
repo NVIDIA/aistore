@@ -355,13 +355,17 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	switch r.Method {
 	case http.MethodGet:
-		glog.Infof("Getting status of download: %s", payload)
+		if glog.V(4) {
+			glog.Infof("Getting status of download: %s", payload)
+		}
 		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Status(&payload)
 	case http.MethodDelete:
 		glog.Infof("Cancelling download: %s", payload)
 		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Cancel(&payload)
 	case http.MethodPost:
-		glog.Infof("Downloading: %s", payload)
+		if glog.V(4) {
+			glog.Infof("Downloading: %s", payload)
+		}
 		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Download(&payload)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")

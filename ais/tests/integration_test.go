@@ -347,7 +347,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 	primaryProxy := getPrimaryURL(m.t, proxyURLReadOnly)
 	m.smap, err = waitForPrimaryProxy(primaryProxy, "to update smap", m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
-	tutils.CheckFatal(err, t)
+	tutils.CheckError(err, t)
 
 	// Step 2
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1064,10 +1064,10 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
 		err = tutils.UnregisterTarget(m.proxyURL, targets[i].DaemonID)
-		tutils.CheckFatal(err, t)
+		tutils.CheckError(err, t)
 		n := len(getClusterMap(t, m.proxyURL).Tmap)
 		if n != m.originalTargetCount-(i+1) {
-			t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
+			t.Errorf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
 		}
 		tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", targets[i].URL(cmn.NetworkPublic), n)
 	}
@@ -1076,7 +1076,7 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
 			err = tutils.RegisterTarget(m.proxyURL, targets[number], m.smap)
-			tutils.CheckFatal(err, t)
+			tutils.CheckError(err, t)
 			m.wg.Done()
 		}(i)
 	}

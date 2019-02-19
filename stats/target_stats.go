@@ -317,7 +317,8 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
 
 	// most target stats can be handled by ProxyCoreStats.doAdd
-	// .size stats, as of 2.0, is the only type that's unique to target
+	// stats that track data IO are unique to target and are handled here
+	// .size stats, as of 2.x and beyond, is one of them
 	if !strings.HasSuffix(name, ".size") {
 		s.ProxyCoreStats.doAdd(name, val)
 		return

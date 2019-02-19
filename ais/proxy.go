@@ -2754,11 +2754,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal) (errstr string) {
-	s := fmt.Sprintf("receive %s: v%d", bmdTermName, newbucketmd.version())
-	if msgInt.Action == "" {
-		glog.Infoln(s)
-	} else {
-		glog.Infof("%s, action %s", s, msgInt.Action)
+	if glog.V(3) {
+		s := fmt.Sprintf("receive %s: v%d", bmdTermName, newbucketmd.version())
+		if msgInt.Action == "" {
+			glog.Infoln(s)
+		} else {
+			glog.Infof("%s, action %s", s, msgInt.Action)
+		}
 	}
 	p.bmdowner.Lock()
 	myver := p.bmdowner.get().version()

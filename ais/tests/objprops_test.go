@@ -233,7 +233,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Pmap),
 		len(smap.Tmap)-1,
 	)
-	tutils.CheckFatal(err, t)
+	tutils.CheckError(err, t)
 
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.DaemonID, removeTarget.URL(cmn.NetworkPublic))
 
