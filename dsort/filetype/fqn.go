@@ -10,8 +10,13 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-const DSortFileType = "dsort"
-const DSortWorkfileType = "dsortw"
+const (
+	DSortFileType     = "dsort"
+	DSortWorkfileType = "dsortw"
+
+	WorkfileRecvShard   = "recv-shard"
+	WorkfileCreateShard = "create-shard"
+)
 
 var (
 	_ fs.ContentResolver = &DSortFile{}

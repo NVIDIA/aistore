@@ -372,19 +372,16 @@ func (lom *LOM) init(bucketProvider string) (errstr string) {
 		}
 
 		if bucketProvider == "" {
-			if lom.ParsedFQN.IsLocal {
-				bucketProvider = cmn.LocalBs
-			} else {
-				bucketProvider = cmn.CloudBs
-			}
+			bucketProvider = GenBucketProvider(lom.ParsedFQN.IsLocal)
 		}
-
 	}
 
 	lom.Uname = Uname(lom.Bucket, lom.Objname)
 	// bucketmd, bckIsLocal, bprops
 	lom.Bucketmd = bowner.Get()
-	lom.initBckIsLocal(bucketProvider)
+	if err := lom.initBckIsLocal(bucketProvider); err != nil {
+		return err.Error()
+	}
 	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.FQN == "" {
 		lom.FQN, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
@@ -408,15 +405,18 @@ func (lom *LOM) resolveFQN(bowner Bowner, bckIsLocal ...bool) (errstr string) {
 	return
 }
 
-func (lom *LOM) initBckIsLocal(bucketProvider string) {
+func (lom *LOM) initBckIsLocal(bucketProvider string) error {
 	if bucketProvider == cmn.CloudBs {
 		lom.BckIsLocal = false
 	} else if bucketProvider == cmn.LocalBs {
+		if !lom.Bucketmd.IsLocal(lom.Bucket) {
+			return fmt.Errorf("bucket provider set to 'local' but %s local bucket does not exist", lom.Bucket)
+		}
 		lom.BckIsLocal = true
-		cmn.Assert(lom.Bucketmd.IsLocal(lom.Bucket))
 	} else {
 		lom.BckIsLocal = lom.Bucketmd.IsLocal(lom.Bucket)
 	}
+	return nil
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
@@ -444,7 +444,7 @@ func (lom *LOM) checksum(action int) (errstr string) {
 		b                          []byte
 		algo                       = lom.Cksumcfg.Checksum
 	)
-	if lom.Cksumcfg.Checksum == cmn.ChecksumNone {
+	if algo == cmn.ChecksumNone {
 		return
 	}
 	cmn.AssertMsg(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
@@ -500,4 +500,11 @@ func (lom *LOM) recomputeXXHash(fqn string, size int64) (cksum, errstr string) {
 	file.Close()
 	slab.Free(buf)
 	return
+}
+
+func GenBucketProvider(isLocal bool) string {
+	if isLocal {
+		return cmn.LocalBs
+	}
+	return cmn.CloudBs
 }

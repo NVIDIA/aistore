@@ -359,6 +359,12 @@ func (m *Manager) finalCleanup() {
 		return // do not clean if already scheduled
 	}
 
+	glog.Infof("dsort %s has started a final cleanup", m.ManagerUUID)
+	now := time.Now()
+	defer func() {
+		glog.Infof("dsort %s final cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
+	}()
+
 	if err := m.cleanupStreams(); err != nil {
 		glog.Error(err)
 	}
@@ -694,6 +700,8 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
+		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
+
 		writer := m.pullStreamWriter(hdr.Objname)
 		if writer == nil { // was removed after timing out
 			return
@@ -724,21 +732,29 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			return
 		}
 
+		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 		buf, slab := mem.AllocFromSlab2(cmn.MiB)
 		defer slab.Free(buf)
 
-		shardFQN, errStr := cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, hdr.IsLocal)
-		if errStr != "" {
+		lom := &cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}
+		bckProvider := cluster.GenBucketProvider(hdr.IsLocal)
+		if errStr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCksum); errStr != "" {
 			glog.Error(errStr)
 			return
 		}
-		file, err := cmn.CreateFile(shardFQN)
-		if err != nil {
-			glog.Error(err)
-			return
+		if lom.Exists() {
+			if lom.Cksum != nil && cmn.EqCksum(lom.Cksum, cksum) {
+				glog.Infof("shard (%s) already exists and checksums are equal, skipping", lom)
+				io.Copy(ioutil.Discard, object) // drain the reader
+				return
+			}
+
+			glog.Warningf("shard (%s) already exists, overriding", lom)
 		}
-		defer file.Close()
-		if _, err := io.CopyBuffer(file, object, buf); err != nil {
+
+		workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileRecvShard)
+		rc := ioutil.NopCloser(object)
+		if err := m.ctx.t.Receive(workFQN, rc, lom); err != nil {
 			glog.Error(err)
 			return
 		}

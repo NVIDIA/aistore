@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"math"
 	"net/http"
@@ -309,25 +310,39 @@ ExtractAllShards:
 	return nil
 }
 
-func (m *Manager) createShard(s *extract.Shard) (err error) {
+func (m *Manager) genShardName(s *extract.Shard) string {
+	return m.rs.OutputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.OutputFormat.DigitCount, s.Index) + m.rs.OutputFormat.Suffix + m.fileExtension
+}
 
+func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
 		shardFile      *os.File
+		w              io.Writer
 		beforeCreation time.Time
 		loadContent    = m.loadContent()
 		metrics        = m.Metrics.Creation
+
+		// object related variables
+		shardName  = m.genShardName(s)
+		bucket     = m.rs.Bucket
+		bckIsLocal = m.rs.IsLocalBucket
+
+		// variables which may be not set, depending on context
+		h          hash.Hash
+		cksumType  string
+		cksumValue string
 	)
 
 	if m.Metrics.extended {
 		beforeCreation = time.Now()
 	}
 
-	fqn, errStr := cluster.FQN(fs.ObjectType, s.Bucket, s.Name, s.IsLocal)
-	if errStr != "" {
+	lom := &cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}
+	bckProvider := cluster.GenBucketProvider(bckIsLocal)
+	if errStr := lom.Fill(bckProvider, cluster.LomFstat); errStr != "" {
 		return errors.New(errStr)
 	}
-	uname := cluster.Uname(s.Bucket, s.Name)
-	workFQN := fs.CSM.GenContentFQN(fqn, filetype.DSortWorkfileType, "")
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
 
 	// Check if aborted
 	select {
@@ -337,8 +352,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	m.acquireCreateSema()
+	defer m.releaseCreateSema()
+
 	if m.ctx.t.OOS() {
-		m.releaseCreateSema()
 		return errors.New("out of space")
 	}
 
@@ -347,24 +363,36 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return fmt.Errorf("failed to create new shard file, err: %v", err)
 	}
 
-	_, err = m.extractCreator.CreateShard(s, shardFile, loadContent)
+	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
+		cksumType = lom.Cksumcfg.Checksum
+		cmn.AssertMsg(cksumType == cmn.ChecksumXXHash, cksumType)
+		h = xxhash.New64()
+		w = io.MultiWriter(shardFile, h)
+	} else {
+		w = shardFile
+	}
+
+	_, err = m.extractCreator.CreateShard(s, w, loadContent)
 	shardFile.Close()
 	if err != nil {
-		m.releaseCreateSema()
 		return err
 	}
 
-	if err := cmn.MvFile(workFQN, fqn); err != nil {
-		m.releaseCreateSema()
+	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
+		cksumValue = cmn.HashToStr(h)
+		cmn.Assert(cksumValue != "")
+		lom.Cksum = cmn.NewCksum(cksumType, cksumValue)
+	}
+
+	if err := cmn.MvFile(workFQN, lom.FQN); err != nil {
 		return err
 	}
-	m.releaseCreateSema()
 
-	metrics.Lock()
-	metrics.CreatedCnt++
-	metrics.Unlock()
+	if errStr := lom.Persist(); errStr != "" {
+		return errors.New(errStr)
+	}
 
-	si, errStr := cluster.HrwTarget(s.Bucket, s.Name, m.smap)
+	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	if errStr != "" {
 		return errors.New(errStr)
 	}
@@ -374,30 +402,31 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
 	if si.DaemonID != m.ctx.node.DaemonID {
-		m.ctx.nameLocker.Lock(uname, false)
-		file, err := cmn.NewFileHandle(fqn)
+		m.ctx.nameLocker.Lock(lom.Uname, false)
+		defer m.ctx.nameLocker.Unlock(lom.Uname, false)
+
+		file, err := cmn.NewFileHandle(lom.FQN)
 		if err != nil {
-			m.ctx.nameLocker.Unlock(uname, false)
 			return err
 		}
 
 		stat, err := file.Stat()
 		if err != nil {
-			m.ctx.nameLocker.Unlock(uname, false)
 			return err
 		}
 
 		if stat.Size() <= 0 {
-			m.ctx.nameLocker.Unlock(uname, false)
-			return nil
+			goto exit
 		}
 
 		hdr := transport.Header{
-			Bucket:  s.Bucket,
-			Objname: s.Name,
-			IsLocal: s.IsLocal,
+			Bucket:  bucket,
+			Objname: shardName,
+			IsLocal: bckIsLocal,
 			ObjAttrs: transport.ObjectAttrs{
-				Size: stat.Size(),
+				Size:       stat.Size(),
+				CksumValue: cksumValue,
+				CksumType:  cksumType,
 			},
 		}
 
@@ -405,13 +434,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
 		streamWg.Add(1)
-		m.acquireCreateSema() // need to acquire sema because we will be reading file
 		err = m.streams.shards[si.DaemonID].Get().Send(hdr, file, func(_ transport.Header, _ io.ReadCloser, err error) {
 			errCh <- err
 			streamWg.Done()
 		})
-		m.releaseCreateSema()
-		m.ctx.nameLocker.Unlock(uname, false)
 		if err != nil {
 			return err
 		}
@@ -419,15 +445,16 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		if err = <-errCh; err != nil {
 			return err
 		}
-
-		metrics.Lock()
-		metrics.MovedShardCnt++
-		metrics.Unlock()
 	}
 
+exit:
 	if m.Metrics.extended {
 		metrics.Lock()
+		metrics.CreatedCnt++
 		metrics.ShardCreationStats.update(time.Since(beforeCreation))
+		if si.DaemonID != m.ctx.node.DaemonID {
+			metrics.MovedShardCnt++
+		}
 		metrics.Unlock()
 	}
 
@@ -617,7 +644,6 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		start           int
 		curShardSize    int64
 		baseURL         string
-		ext             = m.fileExtension
 		wg              = &sync.WaitGroup{}
 		errCh           = make(chan error, m.smap.CountTargets())
 		shardsToTarget  = make(map[string][]*extract.Shard, m.smap.CountTargets())
@@ -642,9 +668,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 
 		shard := &extract.Shard{
-			Name:    m.rs.OutputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.OutputFormat.DigitCount, shardNum) + m.rs.OutputFormat.Suffix + ext,
-			Bucket:  m.rs.Bucket,
-			IsLocal: m.rs.IsLocalBucket,
+			Index: shardNum,
 		}
 		if m.extractCreator.UsingCompression() {
 			daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
@@ -655,7 +679,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			// correct HRW target as opposed to constructing it on the target
 			// with optimal file content locality and then sent to the correct
 			// target.
-			si, errStr := cluster.HrwTarget(m.rs.Bucket, shard.Name, m.smap)
+			si, errStr := cluster.HrwTarget(m.rs.Bucket, m.genShardName(shard), m.smap)
 			if errStr != "" {
 				return errors.New(errStr)
 			}

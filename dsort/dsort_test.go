@@ -256,7 +256,15 @@ func (tctx *testContext) setup() {
 	time.Sleep(time.Millisecond * 100)
 
 	ctx.smap = smap
-	ctx.t = cluster.NewTargetMock(nil)
+	ctx.t = cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
+		LBmap: map[string]*cmn.BucketProps{
+			testBucket: &cmn.BucketProps{
+				CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumXXHash},
+			},
+		},
+		CBmap:   map[string]*cmn.BucketProps{},
+		Version: 1,
+	}})
 	ctx.nameLocker = &nameLockerMock{}
 	tctx.smap = smap
 	tctx.targets = targets
@@ -275,6 +283,10 @@ func (tctx *testContext) teardown() {
 }
 
 var _ = Describe("Distributed Sort", func() {
+	sc := transport.Init()
+	sc.Setname("stream-collector")
+	go sc.Run()
+
 	Describe("participateInRecordDistribution", func() {
 		Describe("Simple smoke tests", func() {
 			var runSmokeRecordDistribution = func(targetCnt int) {
@@ -576,7 +588,7 @@ var _ = Describe("Distributed Sort", func() {
 					key := fmt.Sprintf("%s%d%s%s", rs.OutputFormat.Prefix, i, rs.OutputFormat.Suffix, rs.Extension)
 					keys[i] = key
 
-					f, err := cmn.CreateFile(filepath.Join(testDir, fs.ObjectType, "local", testBucket, key))
+					f, err := cmn.CreateFile(filepath.Join(testDir, fs.ObjectType, cmn.LocalBs, testBucket, key))
 					Expect(err).ShouldNot(HaveOccurred())
 					err = f.Close()
 					Expect(err).ShouldNot(HaveOccurred())
@@ -622,8 +634,9 @@ var _ = Describe("Distributed Sort", func() {
 					} else {
 						Expect(shard.Size).To(Equal(args.expectedShardSize))
 					}
-					Expect(shard.Name).To(HavePrefix(rs.OutputFormat.Prefix))
-					Expect(shard.Name).To(HaveSuffix("%s%s", rs.OutputFormat.Suffix, rs.Extension))
+					shardName := manager.genShardName(shard)
+					Expect(shardName).To(HavePrefix(rs.OutputFormat.Prefix))
+					Expect(shardName).To(HaveSuffix("%s%s", rs.OutputFormat.Suffix, rs.Extension))
 
 					// Ensure that all shards records have good key (there is duplicates)
 					for _, shardRecord := range shard.Records.All() {
