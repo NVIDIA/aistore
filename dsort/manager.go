@@ -46,8 +46,8 @@ var (
 		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
 		mem = &memsys.Mem2{
-			Name:   "DSort.Mem2",
-			Period: time.Minute * 10,
+			Name:     "DSort.Mem2",
+			TimeIval: time.Minute * 10,
 		}
 		if err := mem.Init(false); err != nil {
 			glog.Error(err)

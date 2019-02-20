@@ -59,7 +59,7 @@ func init() {
 }
 
 func Test_Sleep(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
+	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func Test_Sleep(t *testing.T) {
 }
 
 func Test_NoSleep(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
+	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +129,9 @@ func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
 			tutils.Logf("max alloc ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
 			bufsize, len = mem.MaxFreeRingLen()
 			tutils.Logf("max free  ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
+			if p := mem.MemPressure(); p > memsys.MemPressureLow {
+				tutils.Logf("memory pressure %s\n", memsys.MemPressureText(p))
+			}
 		}
 	}
 }
@@ -174,7 +177,7 @@ func printstats(mem *memsys.Mem2) {
 		ravgmiss             = make([]float64, memsys.Numslabs)
 	)
 	for {
-		time.Sleep(mem.Period)
+		time.Sleep(mem.TimeIval)
 		req.Wg.Add(1)
 		mem.GetStats(req)
 		req.Wg.Wait()

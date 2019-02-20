@@ -44,7 +44,7 @@ import (
 //
 // In that sense, a typical initialization sequence includes 2 or 3 steps, e.g.:
 // 1) construct:
-// 	mem2 := &memsys.Mem2{Period: ..., MinPctFree: ..., Name: ..., Debug: ...}
+// 	mem2 := &memsys.Mem2{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
 // 2) initialize:
 // 	err := mem2.Init()
 // 	if err != nil {
@@ -118,6 +118,23 @@ const (
 	Mem2Stopped
 )
 
+const SwappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
+const (
+	MemPressureLow = iota
+	MemPressureModerate
+	MemPressureHigh
+	MemPressureExtreme
+	OOM
+)
+
+var memPressureText = map[int]string{
+	MemPressureLow:      "low",
+	MemPressureModerate: "moderate",
+	MemPressureHigh:     "high",
+	MemPressureExtreme:  "extreme",
+	OOM:                 "OOM",
+}
+
 //
 // API types
 //
@@ -146,7 +163,6 @@ type (
 	}
 	Mem2 struct {
 		cmn.Named
-		swap   uint64
 		stopCh chan struct{}
 		statCh chan ReqStats2
 		time   struct {
@@ -163,7 +179,9 @@ type (
 		// for user to specify at construction time
 		Name        string
 		MinFree     uint64        // memory that must be available at all times
-		Period      time.Duration // interval of time to watch for low memory and make steps
+		TimeIval    time.Duration // interval of time to watch for low memory and make steps
+		swap        uint64        // actual swap size
+		Swapping    int           // max = SwappingMax; halves every r.time.d unless swapping
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
 		Debug       bool
@@ -185,7 +203,7 @@ type sortpair struct {
 var (
 	// gMem2 is the global memory manager used in various packages outside ais.
 	// Its runtime params are set below and is intended to remain so.
-	gMem2 = &Mem2{Name: GlobalMem2Name, Period: time.Minute * 2, MinPctFree: 50}
+	gMem2 = &Mem2{Name: GlobalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
 	// Mapping of usageLvl values to corresponding strings for log messages
 	usageLvls = map[int64]string{Mem2Initialized: "Initialized", Mem2Running: "Running", Mem2Stopped: "Stopped"}
 )
@@ -238,6 +256,32 @@ func (r *Mem2) MaxFreeRingLen() (slabBufSize int64, ringLen int) {
 	}
 	return
 }
+
+// returns an estimate for the current memory pressured expressed as one of the enumerated values
+func (r *Mem2) MemPressure() int {
+	mem := sigar.Mem{}
+	mem.Get()
+	swap := sigar.Swap{}
+	swap.Get()
+	if swap.Used > r.swap {
+		r.Swapping = SwappingMax
+	}
+	if r.Swapping > 0 {
+		return OOM
+	}
+	if mem.ActualFree > r.lowwm {
+		return MemPressureLow
+	}
+	if mem.ActualFree <= r.MinFree {
+		return MemPressureExtreme
+	}
+	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowwm - r.MinFree)
+	if x <= 25 {
+		return MemPressureHigh
+	}
+	return MemPressureModerate
+}
+func MemPressureText(v int) string { return memPressureText[v] }
 
 //
 // on error behavior is defined by the ignorerr argument
@@ -302,10 +346,10 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	r.lowwm = cmn.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
-	if r.Period == 0 {
-		r.Period = memCheckAbove
+	if r.TimeIval == 0 {
+		r.TimeIval = memCheckAbove
 	}
-	r.time.d = r.Period
+	r.time.d = r.TimeIval
 	r.setTimer(mem.ActualFree, mem.Total, false /*swapping */, false /* reset */)
 
 	// 5. final construction steps
@@ -545,6 +589,11 @@ func (r *Mem2) work() {
 	swap := sigar.Swap{}
 	swap.Get()
 	swapping := swap.Used > r.swap
+	if swapping {
+		r.Swapping = SwappingMax
+	} else {
+		r.Swapping /= 2
+	}
 	r.swap = swap.Used
 
 	r.doStats()
@@ -601,23 +650,23 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 	var changed bool
 	switch {
 	case free > r.lowwm && free > total-total/5:
-		if r.time.d != r.Period*2 {
-			r.time.d = r.Period * 2
+		if r.time.d != r.TimeIval*2 {
+			r.time.d = r.TimeIval * 2
 			changed = true
 		}
 	case free <= r.MinFree || swapping:
-		if r.time.d != r.Period/4 {
-			r.time.d = r.Period / 4
+		if r.time.d != r.TimeIval/4 {
+			r.time.d = r.TimeIval / 4
 			changed = true
 		}
 	case free <= r.lowwm:
-		if r.time.d != r.Period/2 {
-			r.time.d = r.Period / 2
+		if r.time.d != r.TimeIval/2 {
+			r.time.d = r.TimeIval / 2
 			changed = true
 		}
 	default:
-		if r.time.d != r.Period {
-			r.time.d = r.Period
+		if r.time.d != r.TimeIval {
+			r.time.d = r.TimeIval
 			changed = true
 		}
 	}
