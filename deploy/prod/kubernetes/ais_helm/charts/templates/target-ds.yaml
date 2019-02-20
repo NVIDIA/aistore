@@ -46,7 +46,7 @@ spec:
               protocol: TCP
           volumeMounts:
             - name: etc-mount
-              mountPath: "{{ .Values.target.config.dir }}"
+              mountPath: "{{ .Values.common_config.dir }}"
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: statsd-config

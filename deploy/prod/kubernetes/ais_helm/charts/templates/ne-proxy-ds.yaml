@@ -48,7 +48,7 @@ spec:
             - name: env-mount
               mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
             - name: etc-mount
-              mountPath: "{{ .Values.ne_proxy.config.dir }}"
+              mountPath: "{{ .Values.commom_config.dir }}"
             - name: statsd-config
               mountPath: "/var/statsd_config"
             - name: collectd-config
