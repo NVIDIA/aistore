@@ -7,6 +7,8 @@
 package main
 
 import (
+	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -28,6 +30,10 @@ func doPut(wo *workOrder) {
 		Name: wo.objName,
 		Size: wo.size,
 	})
+
+	if runParams.readerType == tutils.ReaderTypeFile {
+		defer os.Remove(path.Join(runParams.tmpDir, wo.objName))
+	}
 
 	if err != nil {
 		wo.err = err

@@ -216,6 +216,7 @@ const (
 	GetWhatSmapVote   = "smapvote"
 	GetWhatMountpaths = "mountpaths"
 	GetWhatDaemonInfo = "daemoninfo"
+	GetWhatSysInfo    = "sysinfo"
 )
 
 // GetMsg.GetSort enum

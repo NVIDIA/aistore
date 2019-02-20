@@ -4,7 +4,9 @@
  */
 package cmn
 
-import "math"
+import (
+	"math"
+)
 
 const MaxInt64 = int64(math.MaxInt64)
 

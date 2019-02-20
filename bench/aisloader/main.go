@@ -23,8 +23,10 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -64,6 +66,7 @@ type (
 		putPct            int           // % of puts, rest are gets
 		duration          time.Duration // Stops after run at least this long
 		putSizeUpperBound int64         // Stops after written at least this much data
+		putSizeDelete     bool          // Starts deleting instead of stopping after reaching putSizeUpperBound
 		minSize           int
 		maxSize           int
 		numWorkers        int
@@ -84,6 +87,9 @@ type (
 		readOff           int64  // read offset \
 		readLen           int64  // read length / to test range read
 		randomize         bool
+		jsonFormat        bool
+		statsOutput       string
+		stopable          bool // if true, will stop when `stop` is sent through stdin
 
 		// bucket-related options
 		bPropsStr string
@@ -95,6 +101,18 @@ type (
 		put       stats.HTTPReq
 		get       stats.HTTPReq
 		getConfig stats.HTTPReq
+	}
+
+	jsonStats struct {
+		Start      time.Time     `json:"start_time"` // time current stats started
+		Cnt        int64         `json:"count"`      // total # of requests
+		Bytes      int64         `json:"bytes"`      // total bytes by all requests
+		Errs       int64         `json:"errors"`     // number of failed requests
+		Latency    int64         `json:"latency"`    // Average request latency in nanoseconds
+		Duration   time.Duration `json:"duration"`
+		MinLatency int64         `json:"min_latency"`
+		MaxLatency int64         `json:"max_latency"`
+		Throughput int64         `json:"throughput"`
 	}
 )
 
@@ -132,11 +150,12 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	flag.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "'local' if using local bucket, otherwise 'cloud'")
 	flag.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
-		"If duration is 0 and totalputsize is also 0, it is a no op.")
+		"If duration is 0 and totalputsize is also 0, it is a no op if stopable=false.")
 	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
 	flag.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests")
 	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
 	flag.Int64Var(&p.putSizeUpperBound, "totalputsize", 0, "Stops after total put size exceeds this (in KB); 0 = no limit")
+	flag.BoolVar(&p.putSizeDelete, "putsizedelete", false, "Start deleting instead of stoping after total put size exceeds this")
 	flag.BoolVar(&p.cleanUp, "cleanup", true, "True if clean up after run")
 	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
 	flag.IntVar(&p.minSize, "minsize", 1024, "Minimal object size in KB")
@@ -153,6 +172,9 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset")
 	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length (0 - read the entire object)")
 	flag.BoolVar(&p.randomize, "randomize", false, "Determines if the random source should be nondeterministic")
+	flag.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
+	flag.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
+	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving SIGHUP")
 
 	flag.Parse()
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
@@ -272,14 +294,14 @@ func main() {
 
 	runParams, err = parseCmdLine()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stdout, "err: "+err.Error())
 		os.Exit(2)
 	}
 
-	// If neither duration nor put upper bound is specified, it is a no op.
+	// If neither duration nor put upper bound is specified while not stopable, it is a no op.
 	// This can be used as a cleaup only run (no put no get).
 	if runParams.duration == 0 {
-		if runParams.putSizeUpperBound == 0 {
+		if runParams.putSizeUpperBound == 0 && !runParams.stopable {
 			if runParams.cleanUp {
 				cleanUp()
 			}
@@ -366,6 +388,11 @@ func main() {
 		fmt.Printf("Found %d existing objects\n", len(allObjects))
 	}
 
+	osSigChan := make(chan os.Signal, 1)
+	if runParams.stopable {
+		signal.Notify(osSigChan, syscall.SIGHUP)
+	}
+
 	logRunParams(runParams, os.Stdout)
 
 	host, err := os.Hostname()
@@ -401,7 +428,17 @@ func main() {
 	accumulatedStats = newStats(tsStart)
 
 	statsWriter := os.Stdout
-	writeStatsHeader(statsWriter)
+
+	if runParams.statsOutput != "" {
+		f, err := cmn.CreateFile(runParams.statsOutput)
+		if err != nil {
+			fmt.Println("Failed to create stats out file")
+		}
+
+		statsWriter = f
+	}
+
+	preWriteStats(statsWriter, runParams.jsonFormat)
 
 	// Get the workers started
 	for i := 0; i < runParams.numWorkers; i++ {
@@ -428,11 +465,21 @@ L:
 			break L
 		case wo := <-workOrderResults:
 			completeWorkOrder(wo)
+			if runParams.statsShowInterval == 0 && runParams.putSizeUpperBound != 0 {
+				accumulatedStats.aggregate(intervalStats)
+				intervalStats = newStats(time.Now())
+			}
 			newWorkOrder()
 		case <-statsTicker.C:
-			accumulatedStats.aggregate(intervalStats)
-			writeStats(statsWriter, false /* final */, intervalStats, accumulatedStats)
-			intervalStats = newStats(time.Now())
+			if runParams.statsShowInterval > 0 {
+				accumulatedStats.aggregate(intervalStats)
+				writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+				intervalStats = newStats(time.Now())
+			}
+		case <-osSigChan:
+			if runParams.stopable {
+				break L
+			}
 		default:
 			// Do nothing
 		}
@@ -451,8 +498,8 @@ L:
 
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 	accumulatedStats.aggregate(intervalStats)
-	writeStats(statsWriter, true /* final */, intervalStats, accumulatedStats)
-
+	writeStats(statsWriter, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
+	postWriteStats(statsWriter, runParams.jsonFormat)
 	if runParams.cleanUp {
 		cleanUp()
 	}
@@ -548,67 +595,147 @@ func prettyTimeStamp() string {
 	return time.Now().String()[11:19]
 }
 
-// writeStatusHeader writes stats header to the writter.
-func writeStatsHeader(to *os.File) {
+func preWriteStats(to *os.File, jsonFormat bool) {
 	fmt.Fprintln(to)
-	fmt.Fprintf(to, statsPrintHeader,
-		"Time", "OP", "Count", "Total Bytes", "Latency(min, avg, max)", "Throughput", "Error")
+	if !jsonFormat {
+		fmt.Fprintf(to, statsPrintHeader,
+			"Time", "OP", "Count", "Total Bytes", "Latency(min, avg, max)", "Throughput", "Error")
+	} else {
+		fmt.Fprintln(to, "[")
+	}
 }
 
-// writeStatus writes stats to the writter.
-// if final = true, writes the total; otherwise writes the interval stats
-func writeStats(to *os.File, final bool, s, t sts) {
+func postWriteStats(to *os.File, jsonFormat bool) {
+	if jsonFormat {
+		fmt.Fprintln(to)
+		fmt.Fprintln(to, "]")
+	}
+}
+
+func writeFinalStats(to *os.File, jsonFormat bool, s sts) {
+	if !jsonFormat {
+		writeHumanReadibleFinalStats(to, s)
+	} else {
+		writeStatsJSON(to, s, false)
+	}
+}
+
+func writeIntervalStats(to *os.File, jsonFormat bool, s, t sts) {
+	if !jsonFormat {
+		writeHumanReadibleIntervalStats(to, s, t)
+	} else {
+		writeStatsJSON(to, s)
+	}
+}
+
+func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
+	stats := &jsonStats{
+		Cnt:        r.Total(),
+		Bytes:      r.TotalBytes(),
+		Start:      r.Start(),
+		Duration:   time.Since(r.Start()),
+		Errs:       r.TotalErrs(),
+		Latency:    r.AvgLatency(),
+		MinLatency: r.MinLatency(),
+		MaxLatency: r.MaxLatency(),
+		Throughput: r.Throughput(r.Start(), time.Now()),
+	}
+
+	return stats
+}
+
+func writeStatsJSON(to *os.File, s sts, withcomma ...bool) {
+	stats := struct {
+		Get *jsonStats `json:"get"`
+		Put *jsonStats `json:"put"`
+		Cfg *jsonStats `json:"cfg"`
+	}{
+		Get: jsonStatsFromReq(s.get),
+		Put: jsonStatsFromReq(s.put),
+		Cfg: jsonStatsFromReq(s.getConfig),
+	}
+	jsonOutput, err := json.Marshal(stats)
+	if err != nil {
+		fmt.Fprint(os.Stderr, "Error during converting stats to json, skipping")
+	}
+
+	fmt.Fprintln(to)
+	fmt.Fprint(to, string(jsonOutput))
+	// print comma by default
+	if len(withcomma) == 0 || withcomma[0] {
+		fmt.Fprint(to, ",")
+	}
+}
+
+func writeHumanReadibleIntervalStats(to *os.File, s, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
 	pl := prettyLatency
 	pt := prettyTimeStamp
-	if final {
-		writeStatsHeader(to)
+
+	// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
+	if s.put.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "Put",
-			pn(t.put.Total()),
-			pb(t.put.TotalBytes()),
-			pl(t.put.MinLatency(), t.put.AvgLatency(), t.put.MaxLatency()),
-			pb(t.put.Throughput(t.put.Start(), time.Now())),
-			pn(t.put.TotalErrs()))
+			pn(s.put.Total())+"("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(int64(len(workOrderResults)))+")",
+			pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
+			pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
+			pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
+			pn(s.put.TotalErrs())+"("+pn(t.put.TotalErrs())+")")
+	}
+	if s.get.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "Get",
-			pn(t.get.Total()),
-			pb(t.get.TotalBytes()),
-			pl(t.get.MinLatency(), t.get.AvgLatency(), t.get.MaxLatency()),
-			pb(t.get.Throughput(t.get.Start(), time.Now())),
-			pn(t.get.TotalErrs()))
+			pn(s.get.Total())+"("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(int64(len(workOrderResults)))+")",
+			pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
+			pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
+			pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
+			pn(s.get.TotalErrs())+"("+pn(t.get.TotalErrs())+")")
+	}
+	if s.getConfig.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "CFG",
-			pn(t.getConfig.Total()),
-			pb(t.getConfig.TotalBytes()),
-			pl(t.getConfig.MinLatency(), t.getConfig.AvgLatency(), t.getConfig.MaxLatency()),
-			pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now())),
-			pn(t.getConfig.TotalErrs()))
+			pn(s.getConfig.Total())+"("+pn(t.getConfig.Total())+")",
+			pb(s.getConfig.TotalBytes())+"("+pb(t.getConfig.TotalBytes())+")",
+			pl(s.getConfig.MinLatency(), s.getConfig.AvgLatency(), s.getConfig.MaxLatency()),
+			pb(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+"("+pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
+			pn(s.getConfig.TotalErrs())+"("+pn(t.getConfig.TotalErrs())+")")
+	}
+}
+
+func writeHumanReadibleFinalStats(to *os.File, t sts) {
+	p := fmt.Fprintf
+	pn := prettyNumber
+	pb := prettyNumBytes
+	pl := prettyLatency
+	pt := prettyTimeStamp
+	preWriteStats(to, false)
+	p(to, statsPrintHeader, pt(), "Put",
+		pn(t.put.Total()),
+		pb(t.put.TotalBytes()),
+		pl(t.put.MinLatency(), t.put.AvgLatency(), t.put.MaxLatency()),
+		pb(t.put.Throughput(t.put.Start(), time.Now())),
+		pn(t.put.TotalErrs()))
+	p(to, statsPrintHeader, pt(), "Get",
+		pn(t.get.Total()),
+		pb(t.get.TotalBytes()),
+		pl(t.get.MinLatency(), t.get.AvgLatency(), t.get.MaxLatency()),
+		pb(t.get.Throughput(t.get.Start(), time.Now())),
+		pn(t.get.TotalErrs()))
+	p(to, statsPrintHeader, pt(), "CFG",
+		pn(t.getConfig.Total()),
+		pb(t.getConfig.TotalBytes()),
+		pl(t.getConfig.MinLatency(), t.getConfig.AvgLatency(), t.getConfig.MaxLatency()),
+		pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now())),
+		pn(t.getConfig.TotalErrs()))
+}
+
+// writeStatus writes stats to the writter.
+// if final = true, writes the total; otherwise writes the interval stats
+func writeStats(to *os.File, jsonFormat, final bool, s, t sts) {
+	if final {
+		writeFinalStats(to, jsonFormat, t)
 	} else {
 		// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
-		if s.put.Total() != 0 {
-			p(to, statsPrintHeader, pt(), "Put",
-				pn(s.put.Total())+"("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(int64(len(workOrderResults)))+")",
-				pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
-				pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
-				pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
-				pn(s.put.TotalErrs())+"("+pn(t.put.TotalErrs())+")")
-		}
-		if s.get.Total() != 0 {
-			p(to, statsPrintHeader, pt(), "Get",
-				pn(s.get.Total())+"("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(int64(len(workOrderResults)))+")",
-				pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
-				pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
-				pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
-				pn(s.get.TotalErrs())+"("+pn(t.get.TotalErrs())+")")
-		}
-		if s.getConfig.Total() != 0 {
-			p(to, statsPrintHeader, pt(), "CFG",
-				pn(s.getConfig.Total())+"("+pn(t.getConfig.Total())+")",
-				pb(s.getConfig.TotalBytes())+"("+pb(t.getConfig.TotalBytes())+")",
-				pl(s.getConfig.MinLatency(), s.getConfig.AvgLatency(), s.getConfig.MaxLatency()),
-				pb(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+"("+pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
-				pn(s.getConfig.TotalErrs())+"("+pn(t.getConfig.TotalErrs())+")")
-		}
+		writeIntervalStats(to, jsonFormat, s, t)
 	}
 }
 

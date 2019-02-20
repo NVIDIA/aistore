@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
@@ -71,6 +72,21 @@ type (
 	PairU32 struct {
 		Min uint32
 		Max uint32
+	}
+	SysInfo struct {
+		MemUsed    uint64    `json:"mem_used"`
+		MemAvail   uint64    `json:"mem_avail"`
+		PctMemUsed float64   `json:"pct_mem_used"`
+		PctCPUUsed float64   `json:"pct_cpu_used"`
+		Timestamp  time.Time `json:"timestamp"`
+	}
+	ClusterSysInfo struct {
+		Proxy  map[string]*SysInfo `json:"proxy"`
+		Target map[string]*SysInfo `json:"target"`
+	}
+	ClusterSysInfoRaw struct {
+		Proxy  map[string]jsoniter.RawMessage `json:"proxy"`
+		Target map[string]jsoniter.RawMessage `json:"target"`
 	}
 )
 

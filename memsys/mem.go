@@ -283,6 +283,28 @@ func (r *Mem2) MemPressure() int {
 }
 func MemPressureText(v int) string { return memPressureText[v] }
 
+func (r *Mem2) FetchSysInfo() *cmn.SysInfo {
+	sysInfo := &cmn.SysInfo{}
+
+	concSigar := sigar.ConcreteSigar{}
+	concMem, _ := concSigar.GetMem()
+
+	sysInfo.MemAvail = concMem.Total
+
+	mem := sigar.ProcMem{}
+	mem.Get(os.Getpid())
+	sysInfo.MemUsed = mem.Resident
+	sysInfo.PctMemUsed = float64(sysInfo.MemUsed) * 100 / float64(sysInfo.MemAvail)
+
+	cpu := sigar.ProcCpu{}
+	cpu.Get(os.Getpid())
+	sysInfo.PctCPUUsed = cpu.Percent
+
+	sysInfo.Timestamp = time.Now()
+
+	return sysInfo
+}
+
 //
 // on error behavior is defined by the ignorerr argument
 // true:  print error message and proceed regardless

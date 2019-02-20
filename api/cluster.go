@@ -49,6 +49,40 @@ func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 	return smap, nil
 }
 
+// GetClusterSysInfo API
+//
+// GetClusterSysInfo retrieves AIStore system info
+func GetClusterSysInfo(baseParams *BaseParams) (cmn.ClusterSysInfo, error) {
+	var (
+		q       = url.Values{}
+		body    []byte
+		sysinfo cmn.ClusterSysInfo
+	)
+	q.Add(cmn.URLParamWhat, cmn.GetWhatSysInfo)
+	query := q.Encode()
+	requestURL := fmt.Sprintf("%s?%s", baseParams.URL+cmn.URLPath(cmn.Version, cmn.Cluster), query)
+
+	resp, err := baseParams.Client.Get(requestURL)
+	if err != nil {
+		return cmn.ClusterSysInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return cmn.ClusterSysInfo{}, fmt.Errorf("get SysInfo, HTTP status %d", resp.StatusCode)
+	}
+
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return cmn.ClusterSysInfo{}, err
+	}
+	err = json.Unmarshal(body, &sysinfo)
+	if err != nil {
+		return cmn.ClusterSysInfo{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
+	}
+
+	return sysinfo, nil
+}
+
 // RegisterTarget API
 //
 // Registers an existing target to the clustermap.

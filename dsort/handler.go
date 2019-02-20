@@ -109,7 +109,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	//
 	// This prevents bugs where one targets would just start dSort (other did
 	// not have yet initialized) and starts to communicate with other targets
-	// but because the are not ready with their initialization will not recognize
+	// but because they are not ready with their initialization will not recognize
 	// given dSort job. Also bug where we could send abort (which triggers cleanup)
 	// to not yet initialized target.
 

@@ -1,0 +1,117 @@
+package report
+
+import (
+	"encoding/json"
+	"sync"
+	"time"
+
+	"github.com/NVIDIA/aistore/bench/soaktest/constants"
+	"github.com/NVIDIA/aistore/bench/soaktest/stats"
+	"github.com/NVIDIA/aistore/cmn"
+)
+
+// Uses the stats package to generate csv reports of the soaktest.
+// Maintains awareness of recipe, phase and primitive
+
+type ReportContext struct {
+	currentRecipe string
+	recipeNumber  map[string]int
+
+	phaseNumber int
+
+	primitiveStatsPhaseQueue []*stats.PrimitiveStat
+	primStatsMux             sync.Mutex
+
+	recipeGetStats stats.RecipeStats
+	recipePutStats stats.RecipeStats
+}
+
+func NewReportContext() *ReportContext {
+	return &ReportContext{
+		primitiveStatsPhaseQueue: make([]*stats.PrimitiveStat, 0),
+		recipeNumber:             make(map[string]int),
+	}
+}
+
+func (rctx *ReportContext) RecordRegression(stat *stats.PrimitiveStat) {
+	stat.RecipeName = rctx.currentRecipe
+	stat.RecipeNum = rctx.recipeNumber[stat.RecipeName]
+
+	regressionWriter.WriteStat(stat)
+}
+
+func (rctx *ReportContext) BeginRecipe(name string) {
+	val, ok := rctx.recipeNumber[name]
+	if !ok {
+		val = 1
+	} else {
+		val++
+	}
+	rctx.recipeNumber[name] = val
+
+	rctx.currentRecipe = name
+
+	timestamp := time.Now()
+	rctx.recipeGetStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: constants.OpTypeGet, BeginTime: timestamp}
+	rctx.recipePutStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: constants.OpTypePut, BeginTime: timestamp}
+
+	rctx.phaseNumber = 0
+}
+
+func (rctx *ReportContext) WriteSystemInfoStats(systemInfoStats *cmn.ClusterSysInfo) {
+	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats)
+	for _, st := range sysinfoStats {
+		sysinfoWriter.WriteStat(st)
+	}
+}
+
+// EndRecipe should be called after the recipe
+func (rctx *ReportContext) EndRecipe() error {
+	timestamp := time.Now()
+	rctx.recipeGetStats.EndTime = timestamp
+	rctx.recipePutStats.EndTime = timestamp
+
+	summaryWriter.WriteStat(rctx.recipeGetStats)
+	summaryWriter.WriteStat(rctx.recipePutStats)
+
+	return nil
+}
+
+// FlushRecipePhase should be called after each phase
+func (rctx *ReportContext) FlushRecipePhase() {
+	rctx.phaseNumber++
+	Writef(ConsoleLevel, "[Phase %v]\n", rctx.phaseNumber)
+
+	// No primitives in this phase
+	if len(rctx.primitiveStatsPhaseQueue) == 0 {
+		Writef(DetailLevel, "skipping flush stats, none found in phase...\n")
+		return
+	}
+
+	// all of the following should be put to logs
+	for _, stat := range rctx.primitiveStatsPhaseQueue {
+		stat.RecipeName = rctx.currentRecipe
+		stat.RecipeNum = rctx.recipeNumber[stat.RecipeName]
+
+		b, err := json.Marshal(stat)
+		if err == nil {
+			Writef(DetailLevel, string(b))
+		}
+
+		detailWriter.WriteStat(stat)
+
+		if stat.OpType == constants.OpTypeGet || stat.Fatal {
+			rctx.recipeGetStats.Add(stat)
+		} else if stat.OpType == constants.OpTypePut || stat.Fatal {
+			rctx.recipePutStats.Add(stat)
+		}
+	}
+
+	rctx.primitiveStatsPhaseQueue = rctx.primitiveStatsPhaseQueue[:0]
+}
+
+func (rctx *ReportContext) PutPrimitiveStats(p *stats.PrimitiveStat) {
+	rctx.primStatsMux.Lock()
+	rctx.primitiveStatsPhaseQueue = append(rctx.primitiveStatsPhaseQueue, p)
+	rctx.primStatsMux.Unlock()
+}

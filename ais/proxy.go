@@ -1882,7 +1882,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo:
+	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo, cmn.GetWhatSysInfo:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
@@ -2345,6 +2345,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	switch getWhat {
 	case cmn.GetWhatStats:
 		p.invokeHTTPGetClusterStats(w, r)
+	case cmn.GetWhatSysInfo:
+		p.invokeHTTPGetClusterSysinfo(w, r)
 	case cmn.GetWhatXaction:
 		p.invokeHTTPGetXaction(w, r)
 	case cmn.GetWhatMountpaths:
@@ -2398,6 +2400,53 @@ func (p *proxyrunner) invokeHTTPGetMsgOnTargets(w http.ResponseWriter, r *http.R
 		targetResults[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
 	}
 	return targetResults, true
+}
+
+func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http.Request) bool {
+	smapX := p.smapowner.get()
+	fetchResults := func(broadcastType int, expectedNodes int) (map[string]jsoniter.RawMessage, string) {
+		results := p.broadcastTo(
+			cmn.URLPath(cmn.Version, cmn.Daemon),
+			r.URL.Query(),
+			r.Method,
+			nil, // message
+			smapX,
+			cmn.GCO.Get().Timeout.Default,
+			cmn.NetworkIntraControl,
+			broadcastType,
+		)
+		resultMap := make(map[string]jsoniter.RawMessage, expectedNodes)
+		for result := range results {
+			if result.err != nil {
+				return nil, result.errstr
+			}
+			resultMap[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
+		}
+		return resultMap, ""
+	}
+
+	out := &cmn.ClusterSysInfoRaw{}
+
+	proxyResults, err := fetchResults(cluster.Proxies, smapX.CountProxies())
+	if err != "" {
+		p.invalmsghdlr(w, r, err)
+		return false
+	}
+
+	out.Proxy = proxyResults
+
+	targetResults, err := fetchResults(cluster.Targets, smapX.CountTargets())
+	if err != "" {
+		p.invalmsghdlr(w, r, err)
+		return false
+	}
+
+	out.Target = targetResults
+
+	jsbytes, errObj := jsoniter.Marshal(out)
+	cmn.AssertNoErr(errObj)
+	ok := p.writeJSON(w, r, jsbytes, "HttpGetClusterSysInfo")
+	return ok
 }
 
 // FIXME: read-lock
