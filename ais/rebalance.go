@@ -38,14 +38,13 @@ var (
 type (
 	globalRebJogger struct {
 		t           *targetrunner
-		mpathplus   string
+		mpath       string
 		xreb        *xactRebalance
 		wg          *sync.WaitGroup
 		newsmap     *smapX
 		atimeRespCh chan *atime.Response
 		objectMoved int64
 		byteMoved   int64
-		aborted     int64
 	}
 	// FIXME: copy-paste, embed same base
 	localRebJogger struct {
@@ -57,7 +56,6 @@ type (
 		byteMoved   int64
 		slab        *memsys.Slab2
 		buf         []byte
-		aborted     int64
 	}
 )
 
@@ -67,14 +65,15 @@ type (
 
 func (rcl *globalRebJogger) jog() {
 	rcl.atimeRespCh = make(chan *atime.Response, 1)
-	if err := filepath.Walk(rcl.mpathplus, rcl.walk); err != nil {
+	if err := filepath.Walk(rcl.mpath, rcl.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %s traversal due to: %s", rcl.mpathplus, s)
+			glog.Infof("Stopping %s traversal due to: %s", rcl.mpath, s)
 		} else {
-			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpathplus, err)
+			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpath, err)
 		}
 	}
+
 	rcl.xreb.confirmCh <- struct{}{}
 	rcl.wg.Done()
 }
@@ -99,13 +98,8 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		file *cmn.FileHandle
 	)
 
-	// Check if we should abort
-	select {
-	case <-rcl.xreb.ChanAbort():
-		atomic.StoreInt64(&rcl.aborted, 2019)
-		return fmt.Errorf("%s: aborted, path %s", rcl.xreb, rcl.mpathplus)
-	default:
-		break
+	if rcl.xreb.Aborted() {
+		return fmt.Errorf("%s: aborted, path %s", rcl.xreb, rcl.mpath)
 	}
 	if err != nil {
 		if errstr := cmn.PathWalkErr(err); errstr != "" {
@@ -200,14 +194,10 @@ func (rb *localRebJogger) jog() {
 }
 
 func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) error {
-	// Check if we should abort
-	select {
-	case <-rb.xreb.ChanAbort():
-		atomic.StoreInt64(&rb.aborted, 2019)
+	if rb.xreb.Aborted() {
 		return fmt.Errorf("%s aborted, path %s", rb.xreb, rb.mpath)
-	default:
-		break
 	}
+
 	if err != nil {
 		if errstr := cmn.PathWalkErr(err); errstr != "" {
 			glog.Errorf(errstr)
@@ -451,13 +441,13 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newTargetID string) {
 	// TODO: currently supporting a single content-type: Object
 	for _, mpathInfo := range availablePaths {
 		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		rc := &globalRebJogger{t: t, mpathplus: mpathC, xreb: xreb, wg: wg, newsmap: newsmap}
+		rc := &globalRebJogger{t: t, mpath: mpathC, xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		allr = append(allr, rc)
 		go rc.jog()
 
 		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		rl := &globalRebJogger{t: t, mpathplus: mpathL, xreb: xreb, wg: wg, newsmap: newsmap}
+		rl := &globalRebJogger{t: t, mpath: mpathL, xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		allr = append(allr, rl)
 		go rl.jog()
@@ -470,9 +460,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newTargetID string) {
 			aborted                      bool
 		)
 		for _, r := range allr {
-			if atomic.LoadInt64(&r.aborted) != 0 {
-				aborted = true
-			}
+			aborted = aborted || r.xreb.Aborted()
 			totalMovedN += r.objectMoved
 			totalMovedBytes += r.byteMoved
 		}
@@ -550,9 +538,7 @@ func (t *targetrunner) runLocalRebalance() {
 		var aborted bool
 		totalMovedN, totalMovedBytes := int64(0), int64(0)
 		for _, r := range allr {
-			if atomic.LoadInt64(&r.aborted) != 0 {
-				aborted = true
-			}
+			aborted = aborted || r.xreb.Aborted()
 			totalMovedN += r.objectMoved
 			totalMovedBytes += r.byteMoved
 		}

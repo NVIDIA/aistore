@@ -113,10 +113,8 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	}
 
 	for _, objname := range objs {
-		select {
-		case <-xdel.ChanAbort():
+		if xdel.Aborted() {
 			return nil
-		default:
 		}
 		// skip when deadline has expired
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {

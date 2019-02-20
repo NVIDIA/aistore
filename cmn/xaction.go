@@ -70,7 +70,7 @@ var _ Xact = &XactBase{}
 
 func NewXactBase(id int64, kind string, bucket ...string) *XactBase {
 	stime := time.Now()
-	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{}, 1)}
+	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
 	if len(bucket) > 0 {
 		xact.bucket = bucket[0]
 	}
@@ -83,6 +83,14 @@ func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) Finished() bool             { return atomic.LoadInt64(&xact.eutime) != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
+func (xact *XactBase) Aborted() bool {
+	select {
+	case <-xact.ChanAbort():
+		return true
+	default:
+		return false
+	}
+}
 
 func (xact *XactBase) String() string {
 	stime := xact.StartTime()
@@ -124,7 +132,6 @@ func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 
 func (xact *XactBase) Abort() {
 	atomic.StoreInt64(&xact.eutime, time.Now().UnixNano())
-	xact.abrt <- struct{}{} // NOTE: to get this, xactions must be receiving on the ChanAbort() channel - examples in the code
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
 }

@@ -139,7 +139,7 @@ func (xs *xactions) renewRebalance(curversion int64, runnerCnt int) *xactRebalan
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if xreb.curversion > curversion {
-			glog.Errorf("%s version is greater than curversion %d", xreb, curversion)
+			glog.Errorf("(reb: %s) %d version is greater than curversion %d", xreb, xreb.curversion, curversion)
 			xs.Unlock()
 			return nil
 		}
