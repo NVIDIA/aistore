@@ -12,12 +12,12 @@ fi
 
 function cleanup {
     if [ ${CLD_PROVIDER} == 1 ]; then
-        aws s3 rb ${BUCKET} --force
+        aws s3 rb s3://${BUCKET} --force
     elif [ ${CLD_PROVIDER} == 2 ]; then
         : # TODO: currently noop
     fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
 
 pushd $AIS > /dev/null
 
