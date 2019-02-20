@@ -584,7 +584,14 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 		}
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
-		if err = api.PutObject(baseParams, clibucket, keyname, reader.XXHash(), reader); err != nil {
+		putArgs := api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bucket:     clibucket,
+			Object:     keyname,
+			Hash:       reader.XXHash(),
+			Reader:     reader,
+		}
+		if err = api.PutObject(putArgs); err != nil {
 			return fmt.Errorf("error executing put: %v", err)
 		}
 		if _, err = api.GetObject(baseParams, clibucket, keyname); err != nil {
@@ -642,8 +649,14 @@ loop:
 
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
-
-		err = api.PutObject(baseParams, localBucketName, keyname, reader.XXHash(), reader)
+		putArgs := api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bucket:     localBucketName,
+			Object:     keyname,
+			Hash:       reader.XXHash(),
+			Reader:     reader,
+		}
+		err = api.PutObject(putArgs)
 		if err != nil {
 			errCh <- err
 			continue

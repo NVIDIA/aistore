@@ -147,8 +147,13 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	}
 	nextTierMock.Start()
 	defer nextTierMock.Close()
-
-	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     clibucket,
+		Object:     object,
+		Reader:     tutils.NewBytesReader(data),
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -213,7 +218,14 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 
 	reader, err := tutils.NewRandReader(int64(filesize), false)
 	tutils.CheckFatal(err, t)
-	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, reader.XXHash(), reader)
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     clibucket,
+		Object:     object,
+		Hash:       reader.XXHash(),
+		Reader:     reader,
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -328,16 +340,26 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	err = api.SetBucketProps(baseParams, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
-
-	api.PutObject(baseParams, TestLocalBucketName, object, "", tutils.NewBytesReader(localData))
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     TestLocalBucketName,
+		Object:     object,
+		Reader:     tutils.NewBytesReader(localData),
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForLocalBucketReached != 1 {
 		t.Errorf("Expected to hit nextTierMockForLocalBucket 1 time, actual: %d",
 			nextTierMockForLocalBucketReached)
 	}
-
-	api.PutObject(baseParams, clibucket, object, "", tutils.NewBytesReader(cloudData))
+	putArgs = api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     clibucket,
+		Object:     object,
+		Reader:     tutils.NewBytesReader(cloudData),
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForCloudBucketReached != 1 {
@@ -385,8 +407,13 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
-
-	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     clibucket,
+		Object:     object,
+		Reader:     tutils.NewBytesReader(data),
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -439,8 +466,13 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
-
-	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     clibucket,
+		Object:     object,
+		Reader:     tutils.NewBytesReader(data),
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 
 	deleteCloudObject(proxyURL, clibucket, object, t)

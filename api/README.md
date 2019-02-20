@@ -358,14 +358,25 @@ ___
 #### PutObject
 Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it in the bucket identified by its name. The name of the object put is likewise identified by its name. If the object hash passed in is not empty, the value is set in the request header with the default checksum type "xxhash"
 ##### Parameters
+| Name          | Type                 | Description                                                                           |
+|---------------|----------------------|---------------------------------------------------------------------------------------|
+| args          | PutObjectArgs        | A field that handles the arguments for PutObject                                      |
+| replicateOpts | ReplicateObjectInput | Used to hold optional parameters for PutObject when it is used for replication        |
+
+##### PutObjectArgs
 | Name       | Type               | Description                                                                           |
 |------------|--------------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string             | URL of the proxy to which the HTTP Request is sent                                    |
-| bucket     | string             | Name of the bucket storing the object                                                 |
-| object     | string             | Name of the object                                                                    |
-| hash       | string             | Hash computed for the object                                                          |
-| reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
+| Bucket     | string             | Name of the bucket storing the object                                                 |
+| Object     | string             | Name of the object                                                                    |
+| Hash       | string             | Hash computed for the object                                                          |
+| Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
+
+##### ReplicateObjectInput
+| Name       | Type               | Description                                                                                          |
+|------------|--------------------|------------------------------------------------------------------------------------------------------|
+| SourceURL  | string             | Used to set the request header to determine whether PUT object request is for replication in AIStore |
 
 ##### Return
 Error from AIStore in completing the request
@@ -433,6 +444,7 @@ ___
 
 
 ### Optional Parameters
+
 **ParamsOptional**
 | Name    | Type          | Description                                                                                           |
 |---------|---------------|-------------------------------------------------------------------------------------------------------|

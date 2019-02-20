@@ -456,7 +456,14 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader, errCh chan error) {
 	defer wg.Done()
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.PutObject(baseParams, bucket, object, reader.XXHash(), reader)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Object:     object,
+		Hash:       reader.XXHash(),
+		Reader:     reader,
+	}
+	err := api.PutObject(putArgs)
 	if err != nil {
 		if errCh == nil {
 			fmt.Println("Error channel is not given, do not know how to report error", err)
@@ -758,7 +765,14 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
 		baseParams := BaseAPIParams(proxyURL)
-		err = api.PutObject(baseParams, bucket, fullObjName, reader.XXHash(), reader)
+		putArgs := api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bucket:     bucket,
+			Object:     fullObjName,
+			Hash:       reader.XXHash(),
+			Reader:     reader,
+		}
+		err = api.PutObject(putArgs)
 		if err != nil {
 			if errCh == nil {
 				Logf("Error performing PUT of object with random data, provided error channel is nil\n")

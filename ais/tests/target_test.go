@@ -31,7 +31,14 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
 	baseParams := tutils.BaseAPIParams(url)
 	reader := tutils.NewBytesReader(objDummyData)
-	if err := api.PutObject(baseParams, bucket, objName, reader.XXHash(), reader); err == nil {
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Object:     objName,
+		Hash:       reader.XXHash(),
+		Reader:     reader,
+	}
+	if err := api.PutObject(putArgs); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }

@@ -173,7 +173,14 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					err = api.PutObject(baseParams, clibucket, keyname, r.XXHash(), r)
+					putArgs := api.PutObjectArgs{
+						BaseParams: baseParams,
+						Bucket:     clibucket,
+						Object:     keyname,
+						Hash:       r.XXHash(),
+						Reader:     r,
+					}
+					err = api.PutObject(putArgs)
 					if err != nil {
 						errCh <- err
 					}

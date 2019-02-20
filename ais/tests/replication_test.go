@@ -387,5 +387,12 @@ func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhas
 	url := dstProxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	baseParams := tutils.BaseAPIParams(url)
 	replicateParams := api.ReplicateObjectInput{SourceURL: srcURL}
-	return api.PutObject(baseParams, bucket, object, xxhash, reader, replicateParams)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Object:     object,
+		Hash:       xxhash,
+		Reader:     reader,
+	}
+	return api.PutObject(putArgs, replicateParams)
 }

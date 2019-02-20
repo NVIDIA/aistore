@@ -95,7 +95,14 @@ func (p *proxyServer) putObject(localPath string, bucket string, prefix string) 
 		return err
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
-	return api.PutObject(baseParams, bucket, prefix, r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Object:     prefix,
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	return api.PutObject(putArgs)
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).

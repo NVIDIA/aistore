@@ -1170,7 +1170,14 @@ func TestStressDeleteRange(t *testing.T) {
 		go func(i int, reader tutils.Reader) {
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
-				err = api.PutObject(baseParams, TestLocalBucketName, objname, reader.XXHash(), reader)
+				putArgs := api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bucket:     TestLocalBucketName,
+					Object:     objname,
+					Hash:       reader.XXHash(),
+					Reader:     reader,
+				}
+				err = api.PutObject(putArgs)
 				if err != nil {
 					errCh <- err
 				}

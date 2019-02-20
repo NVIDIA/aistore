@@ -53,7 +53,14 @@ func putFile(size int64, withHash bool) error {
 	if err != nil {
 		return err
 	}
-	err = api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     "bucket",
+		Object:     "key",
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	err = api.PutObject(putArgs)
 	r.Close()
 	os.Remove(path.Join(dir, fn))
 	return err
@@ -65,7 +72,14 @@ func putInMem(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     "bucket",
+		Object:     "key",
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	return api.PutObject(putArgs)
 }
 
 func putRand(size int64, withHash bool) error {
@@ -74,7 +88,14 @@ func putRand(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     "bucket",
+		Object:     "key",
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	return api.PutObject(putArgs)
 }
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
@@ -84,7 +105,14 @@ func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: baseParams,
+		Bucket:     "bucket",
+		Object:     "key",
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	return api.PutObject(putArgs)
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {

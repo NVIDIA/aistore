@@ -43,7 +43,14 @@ func putRR(t *testing.T, id int, proxyURL string, reader tutils.Reader, bucket, 
 	for i := 0; i < numobjects; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		objname := filepath.Join(dir, fname)
-		err := api.PutObject(tutils.DefaultBaseAPIParams(t), bucket, objname, reader.XXHash(), reader)
+		putArgs := api.PutObjectArgs{
+			BaseParams: tutils.DefaultBaseAPIParams(t),
+			Bucket:     bucket,
+			Object:     objname,
+			Hash:       reader.XXHash(),
+			Reader:     reader,
+		}
+		err := api.PutObject(putArgs)
 		tutils.CheckFatal(err, t)
 	}
 }

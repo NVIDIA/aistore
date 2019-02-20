@@ -106,7 +106,14 @@ func main() {
 				if err != nil {
 					glog.Error(err)
 				}
-				if err := api.PutObject(baseParams, bucket, name, reader.XXHash(), reader); err != nil {
+				putArgs := api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bucket:     bucket,
+					Object:     name,
+					Hash:       reader.XXHash(),
+					Reader:     reader,
+				}
+				if err := api.PutObject(putArgs); err != nil {
 					glog.Error(err)
 				}
 				fmt.Printf("PUT: %s/%s\n", bucket, name)
@@ -135,7 +142,14 @@ func main() {
 			wg.Add(1)
 			go func() {
 				sema <- struct{}{}
-				if err := api.PutObject(baseParams, bucket, filepath.Base(path), reader.XXHash(), reader); err != nil {
+				putArgs := api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bucket:     bucket,
+					Object:     filepath.Base(path),
+					Hash:       reader.XXHash(),
+					Reader:     reader,
+				}
+				if err := api.PutObject(putArgs); err != nil {
 					glog.Error(err)
 				}
 				<-sema

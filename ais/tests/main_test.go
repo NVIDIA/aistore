@@ -622,7 +622,14 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", rrErr)
 	}
 	defer r.Close()
-	if err := api.PutObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, objName, r.XXHash(), r); err != nil {
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     TestLocalBucketName,
+		Object:     objName,
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	if err := api.PutObject(putArgs); err != nil {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
@@ -657,8 +664,14 @@ func TestHeadObjectCheckCached(t *testing.T) {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", err)
 	}
 	defer r.Close()
-
-	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, fileName, r.XXHash(), r)
+	putArgs := api.PutObjectArgs{
+		BaseParams: tutils.DefaultBaseAPIParams(t),
+		Bucket:     clibucket,
+		Object:     fileName,
+		Hash:       r.XXHash(),
+		Reader:     r,
+	}
+	err = api.PutObject(putArgs)
 	tutils.CheckFatal(err, t)
 
 	b, err := tutils.IsCached(proxyURL, clibucket, fileName)

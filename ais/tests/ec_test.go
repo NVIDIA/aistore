@@ -410,7 +410,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		tutils.CheckFatal(err, t)
 		defer r.Close()
 
-		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+		err = api.PutObject(putArgs)
 		tutils.CheckFatal(err, t)
 
 		tutils.Logf("Waiting for %s\n", objPath)
@@ -611,8 +612,8 @@ func TestECStress(t *testing.T) {
 				wg.Done()
 			}()
 			tutils.CheckFatal(err, t)
-
-			err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+			err = api.PutObject(putArgs)
 			tutils.CheckFatal(err, t)
 
 			fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
@@ -819,7 +820,8 @@ func TestECExtraStress(t *testing.T) {
 			if err != nil {
 				t.Errorf("Failed to create reader: %v", err)
 			}
-			err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+			err = api.PutObject(putArgs)
 			if err != nil {
 				t.Errorf("PUT failed: %v", err)
 			}
@@ -946,8 +948,8 @@ func TestECXattrs(t *testing.T) {
 		r, err := tutils.NewRandReader(int64(objSize), false)
 		tutils.CheckFatal(err, t)
 		defer r.Close()
-
-		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+		err = api.PutObject(putArgs)
 		tutils.CheckFatal(err, t)
 
 		tutils.Logf("Waiting for %s\n", objPath)
@@ -1116,8 +1118,8 @@ func TestECEmergencyTarget(t *testing.T) {
 		r, err := tutils.NewRandReader(int64(objSize), false)
 		tutils.CheckFatal(err, t)
 		defer r.Close()
-
-		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+		err = api.PutObject(putArgs)
 		tutils.CheckFatal(err, t)
 		t.Logf("Object %s put in %v", objName, time.Since(start))
 		start = time.Now()
@@ -1294,8 +1296,8 @@ func TestECEmergencyMpath(t *testing.T) {
 		r, err := tutils.NewRandReader(int64(objSize), false)
 		tutils.CheckFatal(err, t)
 		defer r.Close()
-
-		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+		err = api.PutObject(putArgs)
 		tutils.CheckFatal(err, t)
 
 		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)

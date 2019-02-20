@@ -36,6 +36,14 @@ type ReplicateObjectInput struct {
 	SourceURL string
 }
 
+type PutObjectArgs struct {
+	BaseParams *BaseParams
+	Bucket     string
+	Object     string
+	Hash       string
+	Reader     cmn.ReadOpenCloser
+}
+
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
@@ -184,15 +192,15 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
-func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.ReadOpenCloser, replicateOpts ...ReplicateObjectInput) error {
-	handle, err := reader.Open()
+func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error {
+	handle, err := args.Reader.Open()
 	if err != nil {
 		return fmt.Errorf("failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	reqURL := baseParams.URL + path
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
+	reqURL := args.BaseParams.URL + path
 	req, err := http.NewRequest(http.MethodPut, reqURL, handle)
 	if err != nil {
 		return fmt.Errorf("failed to create new HTTP request, err: %v", err)
@@ -201,23 +209,23 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.
 	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
+		return args.Reader.Open()
 	}
-	if hash != "" {
+	if args.Hash != "" {
 		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
-		req.Header.Set(cmn.HeaderObjCksumVal, hash)
+		req.Header.Set(cmn.HeaderObjCksumVal, args.Hash)
 	}
 	if len(replicateOpts) > 0 {
 		req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
 	}
 
-	resp, err := baseParams.Client.Do(req)
+	resp, err := args.BaseParams.Client.Do(req)
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = baseParams.Client.Do(req)
+				resp, err = args.BaseParams.Client.Do(req)
 				sleep += sleep / 2
 			}
 		}
