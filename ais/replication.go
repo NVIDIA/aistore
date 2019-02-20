@@ -309,11 +309,11 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 func (r *mpathReplicator) send(req *replRequest) error {
 	var errstr string
 	bucketProvider := req.httpReq.URL.Query().Get(cmn.URLParamBucketProvider)
-	lom := &cluster.LOM{T: r.t, Fqn: req.fqn}
+	lom := &cluster.LOM{T: r.t, FQN: req.fqn}
 	if errstr = lom.Fill(bucketProvider, cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
-	if lom.DoesNotExist {
+	if !lom.Exists() {
 		return fmt.Errorf("%s/%s %s", lom.Bucket, lom.Objname, cmn.DoesNotExist)
 	}
 	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname)
@@ -350,10 +350,10 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	// specify source direct URL in request header
 	httpReq.Header.Add(cmn.HeaderObjReplicSrc, r.directURL)
-	if lom.Nhobj != nil {
-		htype, hval := lom.Nhobj.Get()
-		httpReq.Header.Add(cmn.HeaderObjCksumType, htype)
-		httpReq.Header.Add(cmn.HeaderObjCksumVal, hval)
+	if lom.Cksum != nil {
+		cksumType, cksumValue := lom.Cksum.Get()
+		httpReq.Header.Add(cmn.HeaderObjCksumType, cksumType)
+		httpReq.Header.Add(cmn.HeaderObjCksumVal, cksumValue)
 	}
 	if atimestr != "" {
 		httpReq.Header.Add(cmn.HeaderObjAtime, atimestr)
@@ -396,7 +396,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
 		httpReq        = req.httpReq
-		lom            = &cluster.LOM{T: r.t, Fqn: req.fqn}
+		lom            = &cluster.LOM{T: r.t, FQN: req.fqn}
 		bucketProvider = httpReq.URL.Query().Get(cmn.URLParamBucketProvider)
 	)
 	if errstr := lom.Fill(bucketProvider, 0); errstr != "" {

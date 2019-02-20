@@ -1467,7 +1467,6 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bucketProvider string, listm
 		err  error
 	}
 	const (
-		islocal    = true
 		cachedObjs = false
 	)
 	msg := &cmn.GetMsg{}
@@ -1552,7 +1551,6 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bucketProvider string, listm
 
 func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bucketProvider string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
 	const (
-		islocal       = false
 		cachedObjects = false
 	)
 	var resp *bucketResp

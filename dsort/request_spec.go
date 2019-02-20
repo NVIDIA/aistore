@@ -373,7 +373,7 @@ func parseMemUsage(memUsage string) (*parsedMemUsage, error) {
 	suffix := memUsage[idx:]
 	if suffix == "%" {
 		parsedMU.Type = memPercent
-		if parsedMU.Value <= 0 || parsedMU.Value >= 100 {
+		if parsedMU.Value == 0 || parsedMU.Value >= 100 {
 			return nil, errInvalidMaxMemPercent
 		}
 	} else if value, err := cmn.S2B(memUsage); err != nil {

@@ -363,7 +363,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Nhobj: cksum, Version: strconv.FormatInt(attrs.Generation, 10)}
+	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Cksum: cksum, Version: strconv.FormatInt(attrs.Generation, 10)}
 	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
 		return
 	}
@@ -386,7 +386,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.CksumValue) (version string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.CksumProvider) (version string, errstr string, errcode int) {
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return

@@ -2016,7 +2016,7 @@ func testLocalMirror(t *testing.T, erase bool) {
 
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
 		tutils.CheckFatal(err, t)
-		if 2 != p.Copies {
+		if p.Copies != 2 {
 			t.Fatalf("%d copies != 2", p.Copies)
 		}
 	}

@@ -109,7 +109,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
 		return ec.ErrorECDisabled
 	}
-	cmn.Assert(lom.Fqn != "")
+	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
 	if lom.T.OOS() {
@@ -118,7 +118,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	if !lom.Bprops.ECEnabled {
 		return nil
 	}
-	spec, _ := fs.CSM.FileSpec(lom.Fqn)
+	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return nil
 	}
@@ -143,7 +143,7 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
 		return
 	}
-	cmn.Assert(lom.Fqn != "")
+	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
 	if !lom.Bprops.ECEnabled {

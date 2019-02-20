@@ -105,7 +105,7 @@ func (c *getJogger) ec(req *Request) {
 	default:
 		err = fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
 		glog.Errorf("Error occurred during restoring object [%s/%s], fqn: %q, err: %v",
-			req.LOM.Bucket, req.LOM.Objname, req.LOM.Fqn, err)
+			req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
 		if req.ErrCh != nil {
 			req.ErrCh <- err
 			close(req.ErrCh)
@@ -212,12 +212,12 @@ func (c *getJogger) restoreReplicated(req *Request, meta *Metadata, nodes map[st
 	}
 
 	// Save received replica and its metadata locally - it is main replica
-	objFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.Bislocal)
+	objFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		writer.Free()
 		return errors.New(errstr)
 	}
-	req.LOM.Fqn = objFQN
+	req.LOM.FQN = objFQN
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 	if err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), c.buffer); err != nil {
 		writer.Free()
@@ -375,7 +375,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	src := io.MultiReader(srcReaders...)
-	isLocal := req.LOM.Bislocal
+	isLocal := req.LOM.BckIsLocal
 	mainFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, isLocal)
 	if glog.V(4) {
 		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, mainFQN)
@@ -385,7 +385,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	c.diskCh <- struct{}{}
-	req.LOM.Fqn = mainFQN
+	req.LOM.FQN = mainFQN
 	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
 	if err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, c.buffer, meta.Size); err != nil {
 		<-c.diskCh

@@ -79,7 +79,7 @@ func (c *putJogger) ec(req *Request) {
 
 	if err != nil {
 		glog.Errorf("Error occurred during %s object [%s/%s], fqn: %q, err: %v",
-			act, req.LOM.Bucket, req.LOM.Objname, req.LOM.Fqn, err)
+			act, req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
 	}
 
 	if req.ErrCh != nil {
@@ -104,15 +104,15 @@ func (c *putJogger) freeSGL(slices []*slice) {
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
-		glog.Infof("Encoding %q...", req.LOM.Fqn)
+		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
-	_, chk := req.LOM.Nhobj.Get()
+	_, cksumValue := req.LOM.Cksum.Get()
 	meta := &Metadata{
 		Size:     req.LOM.Size,
 		Data:     req.LOM.Bprops.DataSlices,
 		Parity:   req.LOM.Bprops.ParitySlices,
 		IsCopy:   req.IsCopy,
-		Checksum: chk,
+		Checksum: cksumValue,
 	}
 
 	// calculate the number of targets required to encode the object
@@ -134,7 +134,7 @@ func (c *putJogger) encode(req *Request) error {
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.Bislocal)
+	metaFQN, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -164,7 +164,7 @@ func (c *putJogger) encode(req *Request) error {
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.Bislocal)
+	fqnMeta, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, errstr)
 		return nil
@@ -206,7 +206,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 
 	// Because object encoding is called after the main replica is saved to
 	// disk it needs to read it from the local storage
-	fh, err := cmn.NewFileHandle(req.LOM.Fqn)
+	fh, err := cmn.NewFileHandle(req.LOM.FQN)
 	if err != nil {
 		return err
 	}
@@ -307,7 +307,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	}
 
 	// load the data slices from original object and construct parity ones
-	sgl, slices, err := generateSlices(req.LOM.Fqn, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+	sgl, slices, err := generateSlices(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
 	if err != nil {
 		if sgl != nil {
 			sgl.Free()
@@ -373,10 +373,10 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	if err, ok := <-ch; ok {
 		glog.Errorf("Error while copying %d slices (with %d parity) for %q: %v",
-			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.Fqn, err)
+			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.FQN, err)
 	} else if glog.V(4) {
 		glog.Infof("EC created %d slices (with %d parity) for %q: %v",
-			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.Fqn, err)
+			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.FQN, err)
 	}
 
 	return slices, nil

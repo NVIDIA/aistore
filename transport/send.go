@@ -109,11 +109,11 @@ type (
 
 	// attributes associated with given object
 	ObjectAttrs struct {
-		Atime     int64  // access time - nanoseconds since UNIX epoch
-		Size      int64  // size of objects in bytes
-		CksumType string // checksum type
-		Cksum     string // checksum of the object produced by given checksum type
-		Version   string // version of the object
+		Atime      int64  // access time - nanoseconds since UNIX epoch
+		Size       int64  // size of objects in bytes
+		CksumType  string // checksum type
+		CksumValue string // checksum of the object produced by given checksum type
+		Version    string // version of the object
 	}
 
 	// object header
@@ -799,7 +799,7 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 	off = insInt64(off, to, attr.Size)
 	off = insInt64(off, to, attr.Atime)
 	off = insString(off, to, attr.CksumType)
-	off = insString(off, to, attr.Cksum)
+	off = insString(off, to, attr.CksumValue)
 	off = insString(off, to, attr.Version)
 	return off
 }

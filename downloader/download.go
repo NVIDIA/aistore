@@ -452,7 +452,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 		t.writeErrResp(fmt.Errorf("download task with %v failed, object with the same bucket and objname already exists", t), http.StatusConflict)
 		return
 	}
-	t.fqn = lom.Fqn
+	t.fqn = lom.FQN
 
 	if lom.ParsedFQN.MpathInfo == nil {
 		err := fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
@@ -476,7 +476,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 		req.writeErrResp(fmt.Errorf("cancel request with %s failed, download has already finished", req), http.StatusBadRequest)
 		return
 	}
-	req.fqn = lom.Fqn
+	req.fqn = lom.FQN
 
 	if lom.ParsedFQN.MpathInfo == nil {
 		err := fmt.Errorf("cancel request with %v failed. Failed to obtain mountpath for request's fqn: %q", req, req.fqn)
@@ -517,7 +517,7 @@ func (d *Downloader) dispatchStatus(req *request) {
 		req.writeResp(resp)
 		return
 	}
-	req.fqn = lom.Fqn
+	req.fqn = lom.FQN
 
 	if lom.ParsedFQN.MpathInfo == nil {
 		err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)

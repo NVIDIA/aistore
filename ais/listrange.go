@@ -148,7 +148,7 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket str
 func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
 	var (
 		errstr            string
-		vchanged, coldget bool
+		vchanged, coldGet bool
 		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 		versioncfg        = &cmn.GCO.Get().Ver
 	)
@@ -156,20 +156,19 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		glog.Error(errstr)
 		return
 	}
-	if lom.Bislocal { // must not come here
-		if lom.DoesNotExist {
+	if lom.BckIsLocal { // must not come here
+		if !lom.Exists() {
 			glog.Errorf("prefetch: %s", lom)
 		}
 		return
 	}
-	coldget = lom.DoesNotExist
+	coldGet = !lom.Exists()
 	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(false) {
-		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
+		if coldGet, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
 			return
 		}
-		coldget = vchanged
 	}
-	if !coldget {
+	if !coldGet {
 		return
 	}
 	if errstr, _ = t.getCold(ct, lom, true); errstr != "" {

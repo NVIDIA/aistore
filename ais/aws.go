@@ -349,8 +349,8 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 //=======================
 func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var (
-		cksum        cmn.CksumValue
-		cksumToCheck cmn.CksumValue
+		cksum        cmn.CksumProvider
+		cksumToCheck cmn.CksumProvider
 	)
 
 	sess := createSession(ct)
@@ -377,7 +377,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname stri
 		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
 	}
 
-	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: cksum}
+	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Cksum: cksum}
 	if obj.VersionId != nil {
 		lom.Version = *obj.VersionId
 	}
@@ -402,16 +402,16 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname stri
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cmn.CksumValue) (version string, errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.CksumProvider) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		uploadoutput *s3manager.UploadOutput
 	)
 
-	htype, hval := ohash.Get()
+	cksumType, cksumValue := cksum.Get()
 	md := make(map[string]*string)
-	md[awsChecksumType] = aws.String(htype)
-	md[awsChecksumVal] = aws.String(hval)
+	md[awsChecksumType] = aws.String(cksumType)
+	md[awsChecksumVal] = aws.String(cksumValue)
 
 	sess := createSession(ct)
 	uploader := s3manager.NewUploader(sess)

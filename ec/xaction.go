@@ -233,7 +233,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			writer.lom.Version = hdr.ObjAttrs.Version
 			writer.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
 			if hdr.ObjAttrs.CksumType != "" {
-				writer.lom.Nhobj = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.Cksum)
+				writer.lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 			}
 			if err := r.writerReceive(writer, iReq.Exists, object); err != nil {
 				glog.Errorf("Failed to read replica: %v", err)
@@ -284,17 +284,16 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 		buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
 		if err == nil {
-			lom := &cluster.LOM{Fqn: objFQN, T: r.t}
+			lom := &cluster.LOM{FQN: objFQN, T: r.t}
 			if errstr := lom.Fill("", 0); errstr != "" {
-				glog.Errorf("Failed to read resolve FQN %s: %s",
-					objFQN, errstr)
+				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, errstr)
 				slab.Free(buf)
 				return
 			}
 			lom.Version = hdr.ObjAttrs.Version
 			lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
 			if hdr.ObjAttrs.CksumType != "" {
-				lom.Nhobj = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.Cksum)
+				lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 			}
 
 			if errstr := lom.Persist(); errstr != "" {
@@ -459,8 +458,8 @@ func (r *XactEC) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSour
 		Version: lom.Version,
 		Atime:   lom.Atime.UnixNano(),
 	}
-	if lom.Nhobj != nil {
-		objAttrs.CksumType, objAttrs.Cksum = lom.Nhobj.Get()
+	if lom.Cksum != nil {
+		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
 	}
 	hdr := transport.Header{
 		Objname:  lom.Objname,
@@ -579,8 +578,7 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 	)
 	ireq := r.newIntraReq(act, nil)
 	fh, err := cmn.NewFileHandle(fqn)
-	lom := &cluster.LOM{Fqn: fqn, T: r.t}
-
+	lom := &cluster.LOM{FQN: fqn, T: r.t}
 	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		// an error is OK. Log it and try to go on with what has been read
 		glog.Warningf("Failed to read file stats: %s", errstr)
@@ -598,8 +596,8 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 		Version: lom.Version,
 		Atime:   lom.Atime.UnixNano(),
 	}
-	if lom.Nhobj != nil {
-		objAttrs.CksumType, objAttrs.Cksum = lom.Nhobj.Get()
+	if lom.Cksum != nil {
+		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
 	}
 	rHdr := transport.Header{
 		Bucket:   bucket,

@@ -13,7 +13,7 @@ import (
 // typed checksum value
 //
 type (
-	CksumValue interface {
+	CksumProvider interface {
 		Get() (string, string)
 		String() string
 	}
@@ -27,7 +27,7 @@ type (
 	}
 )
 
-func NewCksum(kind string, val string) CksumValue {
+func NewCksum(kind string, val string) CksumProvider {
 	if kind == "" {
 		return nil
 	}
@@ -45,7 +45,7 @@ func HashToStr(h hash.Hash) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func EqCksum(a, b CksumValue) bool {
+func EqCksum(a, b CksumProvider) bool {
 	if a == nil || b == nil {
 		return false
 	}

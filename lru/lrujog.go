@@ -78,9 +78,9 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	var (
 		h   = lctx.heap
-		lom = &cluster.LOM{T: lctx.ini.T, Fqn: fqn}
+		lom = &cluster.LOM{T: lctx.ini.T, FQN: fqn}
 	)
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || lom.DoesNotExist {
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || !lom.Exists() {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}
@@ -211,7 +211,7 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 			glog.Warningf("remove(%s=>%s): %s", fi.lom, fi.lom.CopyFQN, errstr)
 		}
 	}
-	if err := os.Remove(fi.lom.Fqn); err == nil {
+	if err := os.Remove(fi.lom.FQN); err == nil {
 		glog.Infof("Evicted %s", fi.lom)
 		ok = true
 	} else if os.IsNotExist(err) {

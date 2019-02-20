@@ -144,8 +144,8 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: j.parent.T, Fqn: fqn}
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || lom.DoesNotExist {
+	lom := &cluster.LOM{T: j.parent.T, FQN: fqn}
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || !lom.Exists() {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}

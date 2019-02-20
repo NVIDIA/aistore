@@ -604,6 +604,7 @@ func Test_SameLocalAndCloudBucketname(t *testing.T) {
 	// Reset cloud bucket props
 	globalProps.CloudProvider = cmn.ProviderAmazon
 	err = api.ResetBucketProps(baseParams, bucketName, queryCloud)
+	tutils.CheckFatal(err, t)
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
 	tutils.CheckFatal(err, t)
 	validateBucketProps(t, globalProps, *cloudProps)

@@ -117,7 +117,7 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if fi.Mode().IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rcl.t, Fqn: fqn}
+	lom := &cluster.LOM{T: rcl.t, FQN: fqn}
 	if errstr := lom.Fill("", 0); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
@@ -141,37 +141,37 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
-	if lom.DoesNotExist || lom.IsCopy() {
+	if !lom.Exists() || lom.IsCopy() {
 		return nil
 	}
 
 	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
 	rcl.t.rtnamemap.Lock(lom.Uname, false)
 
-	if file, err = cmn.NewFileHandle(lom.Fqn); err != nil {
-		glog.Errorf("failed to open file: %s, err: %v", lom.Fqn, err)
+	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
+		glog.Errorf("failed to open file: %s, err: %v", lom.FQN, err)
 		rcl.t.rtnamemap.Unlock(lom.Uname, false)
 		return err
 	}
 
-	cksumType, cksum := lom.Nhobj.Get()
+	cksumType, cksumValue := lom.Cksum.Get()
 	hdr := transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
-		IsLocal: lom.Bislocal,
+		IsLocal: lom.BckIsLocal,
 		Opaque:  []byte(rcl.t.si.DaemonID),
 		ObjAttrs: transport.ObjectAttrs{
-			Size:      fi.Size(),
-			Atime:     lom.Atime.UnixNano(),
-			CksumType: cksumType,
-			Cksum:     cksum,
-			Version:   lom.Version,
+			Size:       fi.Size(),
+			Atime:      lom.Atime.UnixNano(),
+			CksumType:  cksumType,
+			CksumValue: cksumValue,
+			Version:    lom.Version,
 		},
 	}
 
 	rcl.wg.Add(1) // NOTE: Done happens in case of SendV error or in rebalanceObjCallback.
 	if err := rcl.t.streams.rebalance.SendV(hdr, file, rcl.rebalanceObjCallback, si); err != nil {
-		glog.Errorf("failed to rebalance: %s, err: %v", lom.Fqn, err)
+		glog.Errorf("failed to rebalance: %s, err: %v", lom.FQN, err)
 		rcl.t.rtnamemap.Unlock(lom.Uname, false)
 		rcl.wg.Done()
 		return err
@@ -218,7 +218,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rb.t, Fqn: fqn}
+	lom := &cluster.LOM{T: rb.t, FQN: fqn}
 	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %v - skipping...", lom, err)
@@ -226,7 +226,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 	// local rebalance: skip local copies
-	if lom.DoesNotExist || lom.IsCopy() {
+	if !lom.Exists() || lom.IsCopy() {
 		return nil
 	}
 	// check whether locally-misplaced

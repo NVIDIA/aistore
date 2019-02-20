@@ -367,7 +367,7 @@ func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
 	off, attr.Size = extInt64(off, from)
 	off, attr.Atime = extInt64(off, from)
 	off, attr.CksumType = extString(off, from)
-	off, attr.Cksum = extString(off, from)
+	off, attr.CksumValue = extString(off, from)
 	off, attr.Version = extString(off, from)
 	return off, attr
 }

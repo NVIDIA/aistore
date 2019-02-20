@@ -118,8 +118,8 @@ func Example_headers() {
 	sendText(stream, text1, text2)
 	stream.Fin()
 	// Output:
-	// {Bucket:abc Objname:X IsLocal:false Opaque:[] ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash Cksum:hash Version:2}} (96)
-	// {Bucket:abracadabra Objname:p/q/s IsLocal:true Opaque:[49 50 51] ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash Cksum:hash Version:2}} (111)
+	// {Bucket:abc Objname:X IsLocal:false Opaque:[] ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2}} (96)
+	// {Bucket:abracadabra Objname:p/q/s IsLocal:true Opaque:[49 50 51] ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2}} (111)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -132,11 +132,11 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr := transport.Header{
 		"abc", "X", false, nil,
 		transport.ObjectAttrs{
-			Size:      sgl1.Size(),
-			Atime:     663346294,
-			CksumType: cmn.ChecksumXXHash,
-			Cksum:     "hash",
-			Version:   "2",
+			Size:       sgl1.Size(),
+			Atime:      663346294,
+			CksumType:  cmn.ChecksumXXHash,
+			CksumValue: "hash",
+			Version:    "2",
 		},
 	}
 	wg.Add(1)
@@ -148,11 +148,11 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr = transport.Header{
 		"abracadabra", "p/q/s", true, []byte{'1', '2', '3'},
 		transport.ObjectAttrs{
-			Size:      sgl2.Size(),
-			Atime:     663346294,
-			CksumType: cmn.ChecksumXXHash,
-			Cksum:     "hash",
-			Version:   "2",
+			Size:       sgl2.Size(),
+			Atime:      663346294,
+			CksumType:  cmn.ChecksumXXHash,
+			CksumValue: "hash",
+			Version:    "2",
 		},
 	}
 	wg.Add(1)
@@ -422,25 +422,25 @@ func Test_OnSendCallback(t *testing.T) {
 func Test_ObjAttrs(t *testing.T) {
 	testAttrs := []transport.ObjectAttrs{
 		transport.ObjectAttrs{
-			Size:      1024,
-			Atime:     1024,
-			CksumType: "",
-			Cksum:     "cheksum",
-			Version:   "102.44",
+			Size:       1024,
+			Atime:      1024,
+			CksumType:  "",
+			CksumValue: "cheksum",
+			Version:    "102.44",
 		},
 		transport.ObjectAttrs{
-			Size:      1024,
-			Atime:     math.MaxInt64,
-			CksumType: cmn.ChecksumXXHash,
-			Cksum:     "120421",
-			Version:   "102.44",
+			Size:       1024,
+			Atime:      math.MaxInt64,
+			CksumType:  cmn.ChecksumXXHash,
+			CksumValue: "120421",
+			Version:    "102.44",
 		},
 		transport.ObjectAttrs{
-			Size:      0,
-			Atime:     0,
-			CksumType: "",
-			Cksum:     "102412",
-			Version:   "",
+			Size:       0,
+			Atime:      0,
+			CksumType:  "",
+			CksumValue: "102412",
+			Version:    "",
 		},
 	}
 

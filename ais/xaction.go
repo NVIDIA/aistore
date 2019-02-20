@@ -346,7 +346,7 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 		Mirror:         *lom.Mirror,
 		T:              t,
 		Namelocker:     t.rtnamemap,
-		Bislocal:       lom.Bislocal,
+		Bislocal:       lom.BckIsLocal,
 	}
 	if err := xcopy.InitAndRun(); err != nil {
 		glog.Errorln(err)
