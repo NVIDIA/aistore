@@ -308,9 +308,9 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 
 func (r *mpathReplicator) send(req *replRequest) error {
 	var errstr string
-
+	bucketProvider := req.httpReq.URL.Query().Get(cmn.URLParamBucketProvider)
 	lom := &cluster.LOM{T: r.t, Fqn: req.fqn}
-	if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
+	if errstr = lom.Fill(bucketProvider, cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
 	if lom.DoesNotExist {
@@ -320,7 +320,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	r.t.rtnamemap.Lock(lom.Uname, req.deleteObject)
 	defer r.t.rtnamemap.Unlock(lom.Uname, req.deleteObject)
 
-	if errstr = lom.Fill(cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
+	if errstr = lom.Fill(bucketProvider, cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
 
@@ -395,10 +395,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 // FIXME: use atime
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
-		httpReq = req.httpReq
-		lom     = &cluster.LOM{T: r.t, Fqn: req.fqn}
+		httpReq        = req.httpReq
+		lom            = &cluster.LOM{T: r.t, Fqn: req.fqn}
+		bucketProvider = httpReq.URL.Query().Get(cmn.URLParamBucketProvider)
 	)
-	if errstr := lom.Fill(0); errstr != "" {
+	if errstr := lom.Fill(bucketProvider, 0); errstr != "" {
 		return errors.New(errstr)
 	}
 	if timeStr := httpReq.Header.Get(cmn.HeaderObjAtime); timeStr != "" {

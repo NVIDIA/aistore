@@ -112,6 +112,9 @@ type (
 		// It usually contains credentials to access the cloud.
 		ctx context.Context
 
+		// User specified parameter to determine which bucket to put object
+		bucketProvider string
+
 		// INTERNAL
 
 		// FQN which is used only temporarily for receiving file. After
@@ -620,6 +623,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
+	bucketProvider := query.Get(cmn.URLParamBucketProvider)
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
 	}
@@ -630,18 +634,16 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (does_not_exist|misplaced -> ok, other)
+	if errstr = lom.Fill(bucketProvider, cluster.LomFstat, config); errstr != "" { // (does_not_exist|misplaced -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-
 	if lom.Mirror.MirrorEnabled {
-		if errstr = lom.Fill(cluster.LomCopy); errstr != "" {
+		if errstr = lom.Fill(bucketProvider, cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
 		}
 	}
-
 	// FIXME:
 	// if !dryRun.disk && lom.Exists() {
 	// 	if x := query.Get(cmn.URLParamReadahead); x != "" {
@@ -650,18 +652,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom, pid)
 	}
-	if errstr, errcode = t.IsBucketLocal(bucket, lom.Bucketmd, query, lom.Bislocal); errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
-		return
-	}
 
 	// 2. under lock: versioning, checksum, restore from cluster
 	t.rtnamemap.Lock(lom.Uname, false)
 	coldGet := !lom.Exists()
 
 	if !coldGet {
-		if errstr = lom.Fill(cluster.LomVersion | cluster.LomCksum); errstr != "" {
-			_ = lom.Fill(cluster.LomFstat)
+		if errstr = lom.Fill(bucketProvider, cluster.LomVersion|cluster.LomCksum); errstr != "" {
+			_ = lom.Fill(bucketProvider, cluster.LomFstat)
 			if lom.Exists() {
 				t.rtnamemap.Unlock(lom.Uname, false)
 				t.invalmsghdlr(w, r, errstr)
@@ -684,7 +682,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !coldGet && !lom.Bislocal { // exists && cloud-bucket: check ver if requested
+	if !coldGet && !lom.Bislocal { // exists && cloud-bucket : check ver if requested
 		if versioncfg.ValidateWarmGet && (lom.Version != "" && versioningConfigured(lom.Bislocal)) {
 			if coldGet, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
 				t.rtnamemap.Unlock(lom.Uname, false)
@@ -696,7 +694,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// checksum validation, if requested
 	if !coldGet && lom.Cksumcfg.ValidateWarmGet {
-		errstr = lom.Fill(cluster.LomCksum | cluster.LomCksumPresentRecomp | cluster.LomCksumMissingRecomp)
+		errstr = lom.Fill(bucketProvider, cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 		if lom.Badchecksum {
 			glog.Errorln(errstr)
 			if lom.Bislocal {
@@ -723,6 +721,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	// 4. finally
 	t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, coldGet)
 	t.rtnamemap.Unlock(lom.Uname, false)
@@ -735,6 +734,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // FIXME: must be done => (getfqn, and under write lock)
 //
 func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, started time.Time) (errstr string, errcode int) {
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted || running {
@@ -788,7 +788,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		if glog.V(4) {
 			glog.Infof("%s/%s is restored successfully", lom.Bucket, lom.Objname)
 		}
-		lom.Fill(cluster.LomFstat | cluster.LomAtime)
+		lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomAtime)
 		lom.DoesNotExist = false
 		return
 	} else if ecErr != ec.ErrorECDisabled {
@@ -968,7 +968,8 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int6
 }
 
 func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, errstr string) {
-	offsetStr, lengthStr := query.Get(cmn.URLParamOffset), query.Get(cmn.URLParamLength)
+	offsetStr := query.Get(cmn.URLParamOffset)
+	lengthStr := query.Get(cmn.URLParamLength)
 	if offsetStr == "" && lengthStr == "" {
 		return
 	}
@@ -1085,6 +1086,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict   bool
 		ok      = true
 	)
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1119,18 +1121,16 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if objname != "" {
 		lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-		if errstr := lom.Fill(0); errstr != "" {
+		if errstr := lom.Fill(bucketProvider, 0); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-
 		err := t.objDelete(t.contextWithAuth(r), bucket, objname, evict)
 		if err != nil {
 			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-
 		// EC cleanup if EC is enabled
 		t.ecmanager.CleanupObject(lom)
 		return
@@ -1143,6 +1143,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
 	var msgInt actionMsgInternal
 	if cmn.ReadJSON(w, r, &msgInt) != nil {
 		return
@@ -1198,7 +1199,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// list the bucket and return
-		tag, ok := t.listbucket(w, r, lbucket, &msgInt)
+		tag, ok := t.listbucket(w, r, lbucket, bucketProvider, &msgInt)
 		if ok {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
@@ -1246,6 +1247,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var bucketprops cmn.SimpleKVs
+	var errcode int
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
@@ -1260,14 +1262,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.IsLocal(bucket)
-	errstr, errcode := t.IsBucketLocal(bucket, &bucketmd.BMD, query, islocal)
+	bucketProvider := query.Get(cmn.URLParamBucketProvider)
+	bckIsLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
 	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
-	if !islocal {
+	if !bckIsLocal {
 		bucketprops, errstr, errcode = getcloudif().headbucket(t.contextWithAuth(r), bucket)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
@@ -1279,7 +1281,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketprops[cmn.HeaderVersioning] = cmn.VersionLocal
 	}
 	// double check if we support versioning internally for the bucket
-	if !versioningConfigured(islocal) {
+	if !versioningConfigured(bckIsLocal) {
 		bucketprops[cmn.HeaderVersioning] = cmn.VersionNone
 	}
 
@@ -1289,7 +1291,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// include bucket's own config override
-	props, ok := bucketmd.Get(bucket, islocal)
+	props, ok := bucketmd.Get(bucket, bckIsLocal)
 	if props == nil {
 		return
 	}
@@ -1335,7 +1337,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		errcode                 int
 		objmeta                 cmn.SimpleKVs
 	)
-	checkCached, _ = parsebool(r.URL.Query().Get(cmn.URLParamCheckCached))
+	query := r.URL.Query()
+	checkCached, _ = parsebool(query.Get(cmn.URLParamCheckCached))
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1344,20 +1347,15 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
+	bucketProvider := query.Get(cmn.URLParamBucketProvider)
 	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat | cluster.LomVersion); errstr != "" { // (doesnotexist -> ok, other)
+	if errstr = lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomVersion); errstr != "" { // (doesnotexist -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	query := r.URL.Query()
 	if glog.V(4) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom, pid)
-	}
-	errstr, errcode = t.IsBucketLocal(bucket, lom.Bucketmd, query, lom.Bislocal)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
-		return
 	}
 	if lom.Bislocal || checkCached {
 		if lom.DoesNotExist {
@@ -1633,8 +1631,13 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom 
 		glog.Infof("Found %s at %s", lom, neighsi)
 	}
 
+	// FIXME: For now, need to re-translate lom.Bislocal to appropriate value ("local"|"cloud")
 	// FIXME: this code below looks like a general code for sending request
-	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamLocal, lom.Bislocal)
+	bucketProvider := "local"
+	if !lom.Bislocal {
+		bucketProvider = "cloud"
+	}
+	geturl := fmt.Sprintf("%s%s?%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBucketProvider, bucketProvider)
 	//
 	// http request
 	//
@@ -1729,7 +1732,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	}
 
 	// refill
-	if errstr = lom.Fill(cluster.LomFstat | cluster.LomCksum | cluster.LomVersion); errstr != "" {
+	if errstr = lom.Fill("", cluster.LomFstat|cluster.LomCksum|cluster.LomVersion); errstr != "" {
 		glog.Warning(errstr)
 		lom.DoesNotExist = true // NOTE: in an attempt to fix it
 	}
@@ -1744,7 +1747,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 			}
 		}
 		if !coldget && lom.Cksumcfg.ValidateWarmGet {
-			errstr := lom.Fill(cluster.LomCksum | cluster.LomCksumPresentRecomp | cluster.LomCksumMissingRecomp)
+			errstr := lom.Fill("", cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 			if lom.Badchecksum {
 				coldget = true
 			} else if errstr == "" {
@@ -1758,7 +1761,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	}
 	getfqn := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	if !coldget {
-		_ = lom.Fill(cluster.LomCksum)
+		_ = lom.Fill("", cluster.LomCksum)
 		glog.Infof("cold-GET race: %s(%s, ver=%s) - nothing to do", lom, cmn.B2S(lom.Size, 1), lom.Version)
 		crace = true
 		goto ret
@@ -1961,25 +1964,24 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	bucketmd := t.bmdowner.get()
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
 
 	bucketnames := &cmn.BucketNames{
 		Local: make([]string, 0, len(bucketmd.LBmap)),
 		Cloud: make([]string, 0, 64),
 	}
-	for bucket := range bucketmd.LBmap {
-		bucketnames.Local = append(bucketnames.Local, bucket)
+	if bucketProvider != cmn.CloudBs {
+		for bucket := range bucketmd.LBmap {
+			bucketnames.Local = append(bucketnames.Local, bucket)
+		}
 	}
 
-	q := r.URL.Query()
-	localonly, _ := parsebool(q.Get(cmn.URLParamLocal))
-	if !localonly {
-		buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errcode)
-			return
-		}
-		bucketnames.Cloud = buckets
+	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+		return
 	}
+	bucketnames.Cloud = buckets
 
 	jsbytes, err := jsoniter.Marshal(bucketnames)
 	cmn.AssertNoErr(err)
@@ -2002,7 +2004,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *actionMsgInternal) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket, bucketProvider string, actionMsg *actionMsgInternal) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -2013,11 +2015,9 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
-	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.IsLocal(bucket)
-	errstr, errcode = t.IsBucketLocal(bucket, &bucketmd.BMD, query, islocal)
+	isLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
 	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 	useCache, errstr, errcode := t.checkCacheQueryParameter(r)
@@ -2040,7 +2040,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if islocal {
+	if isLocal {
 		tag = "local"
 		if errstr, ok = t.doLocalBucketList(w, r, bucket, &msg); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -2160,7 +2160,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 		lomAction |= cluster.LomVersion
 	}
 	if lomAction != 0 {
-		lom.Fill(lomAction)
+		lom.Fill("", lomAction)
 	}
 	if ci.needAtime {
 		fileInfo.Atime = lom.Atimestr
@@ -2211,7 +2211,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		objStatus = cmn.ObjStatusOK
 		lom       = &cluster.LOM{T: ci.t, Fqn: fqn}
 	)
-	errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy)
+	errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy)
 	if lom.DoesNotExist {
 		return nil
 	}
@@ -2248,13 +2248,15 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
 	roi := &recvObjInfo{
-		t:            t,
-		objname:      objname,
-		bucket:       bucket,
-		r:            r.Body,
-		cksumToCheck: cksum,
-		ctx:          t.contextWithAuth(r),
+		t:              t,
+		objname:        objname,
+		bucket:         bucket,
+		r:              r.Body,
+		cksumToCheck:   cksum,
+		ctx:            t.contextWithAuth(r),
+		bucketProvider: bucketProvider,
 	}
 	if err := roi.init(); err != nil {
 		return err, http.StatusInternalServerError
@@ -2291,14 +2293,12 @@ func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replic
 
 func (roi *recvObjInfo) init() error {
 	cmn.Assert(roi.t != nil)
-
 	roi.started = time.Now()
 	roi.lom = &cluster.LOM{T: roi.t, Objname: roi.objname, Bucket: roi.bucket}
-	if errstr := roi.lom.Fill(cluster.LomFstat); errstr != "" {
+	if errstr := roi.lom.Fill(roi.bucketProvider, cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
 	roi.workFQN = fs.CSM.GenContentParsedFQN(roi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-
 	// All objects which are migrated should contain checksum.
 	if roi.migrated {
 		cmn.Assert(roi.cksumToCheck != nil)
@@ -2309,10 +2309,9 @@ func (roi *recvObjInfo) init() error {
 
 func (roi *recvObjInfo) recv() (err error, errCode int) {
 	cmn.Assert(roi.lom != nil)
-
 	// optimize out if the checksums do match
 	if roi.lom.Exists() && roi.cksumToCheck != nil {
-		if errstr := roi.lom.Fill(cluster.LomCksum); errstr == "" {
+		if errstr := roi.lom.Fill(roi.bucketProvider, cluster.LomCksum); errstr == "" {
 			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumToCheck) {
 				if glog.V(4) {
 					glog.Infof("%s is valid %s: PUT is a no-op", roi.lom, roi.cksumToCheck)
@@ -2476,7 +2475,7 @@ func (t *targetrunner) objDelete(ct context.Context, bucket, objname string, evi
 		errcode int
 		lom     = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 	)
-	if errstr = lom.Fill(0); errstr != "" {
+	if errstr = lom.Fill("", 0); errstr != "" {
 		return errors.New(errstr)
 	}
 	t.rtnamemap.Lock(lom.Uname, true)
@@ -2492,7 +2491,7 @@ func (t *targetrunner) objDelete(ct context.Context, bucket, objname string, evi
 		t.statsif.Add(stats.DeleteCount, 1)
 	}
 
-	_ = lom.Fill(cluster.LomFstat | cluster.LomCopy) // ignore fstat errors
+	_ = lom.Fill("", cluster.LomFstat|cluster.LomCopy) // ignore fstat errors
 	if lom.DoesNotExist {
 		return nil
 	}
@@ -2591,9 +2590,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	defer file.Close()
 
 	lom := &cluster.LOM{T: t, Fqn: fqn}
-	if errstr := lom.Fill(
-		cluster.LomFstat | cluster.LomVersion | cluster.LomAtime |
-			cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomVersion|cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errstr
 	}
 	cksumType, cksum := lom.Nhobj.Get()
@@ -2637,42 +2634,6 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
 			cmn.URLParamCached, useCacheStr)
 		errcode = http.StatusInternalServerError
-	}
-	return
-}
-
-func (t *targetrunner) IsBucketLocal(bucket string, bmd *cluster.BMD, q url.Values, islocal bool) (errstr string, errcode int) {
-	proxylocalstr := q.Get(cmn.URLParamLocal)
-	if proxylocalstr == "" {
-		return
-	}
-	proxylocal, err := parsebool(proxylocalstr)
-	if err != nil {
-		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, cmn.URLParamLocal, proxylocalstr)
-		errcode = http.StatusInternalServerError
-		return
-	}
-	if islocal == proxylocal {
-		return
-	}
-	errstr = fmt.Sprintf("%s: bucket %s is-local mismatch: (proxy) %t != %t (self)", t.si, bucket, proxylocal, islocal)
-	errcode = http.StatusInternalServerError
-	if s := q.Get(cmn.URLParamBMDVersion); s != "" {
-		if v, err := strconv.ParseInt(s, 0, 64); err != nil {
-			glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
-		} else if v < bmd.Version {
-			glog.Errorf("%s v%d > v%d (primary)", bmdTermName, bmd.Version, v)
-			t.statsif.Add(stats.ErrMetadataCount, 1)
-		} else if v > bmd.Version { // fixup
-			glog.Errorf("%s v%d < v%d (primary) - proceeding anyway", bmdTermName, bmd.Version, v)
-			t.statsif.Add(stats.ErrMetadataCount, 1)
-			t.bmdVersionFixup()
-			islocal := t.bmdowner.get().IsLocal(bucket)
-			if islocal == proxylocal {
-				glog.Infof("updated %s to v%d - resolved 'islocal' mismatch", bmdTermName, bmd.Version)
-				errstr, errcode = "", 0
-			}
-		}
 	}
 	return
 }

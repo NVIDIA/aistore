@@ -551,7 +551,7 @@ func GetPrimaryProxy(proxyURL string) (string, error) {
 // the bucket exists.
 func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 	baseParams := BaseAPIParams(serverURL)
-	buckets, err := api.GetBucketNames(baseParams, true)
+	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 	if err != nil {
 		return false, err
 	}

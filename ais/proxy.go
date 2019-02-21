@@ -305,9 +305,13 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+	}
 	// all bucket names
 	if bucket == "*" {
-		p.getbucketnames(w, r, bucket)
+		p.getbucketnames(w, r, bucket, bucketProvider)
 		return
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
@@ -374,6 +378,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 
 	config := cmn.GCO.Get()
 	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
@@ -425,6 +434,11 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -688,6 +702,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
@@ -738,7 +757,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActPrefetch:
 		p.doListRange(w, r, &msg, http.MethodPost)
 	case cmn.ActListObjects:
-		p.listBucketAndCollectStats(w, r, bucket, msg, started)
+		p.listBucketAndCollectStats(w, r, bucket, bucketProvider, msg, started)
 	case cmn.ActEraseCopies:
 		p.eraseCopies(w, r, bucket, &msg, config)
 	default:
@@ -748,8 +767,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request,
-	lbucket string, msg cmn.ActionMsg, started time.Time) {
-	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
+	lbucket, bucketProvider string, msg cmn.ActionMsg, started time.Time) {
+	pagemarker, ok := p.listbucket(w, r, lbucket, bucketProvider, &msg)
 	if ok {
 		delta := time.Since(started)
 		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
@@ -803,6 +822,11 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	var si *cluster.Snode
 	// Use random map iteration order to choose a random target to redirect to
 	smap := p.smapowner.get()
@@ -816,18 +840,17 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, bucket, name, value string) {
+func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, bucket, name, value string, proxyLocal bool) {
 	if glog.V(4) {
 		glog.Infof("Updating bucket %s property %s => %s", bucket, name, value)
 	}
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	isLocal := clone.IsLocal(bucket)
 	config := cmn.GCO.Get()
 
-	bprops, exists := clone.Get(bucket, isLocal)
+	bprops, exists := clone.Get(bucket, proxyLocal)
 	if !exists {
-		cmn.Assert(!isLocal)
+		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
 			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:    config.LRU,
@@ -907,7 +930,7 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 		return
 	}
 
-	clone.set(bucket, isLocal, bprops)
+	clone.set(bucket, proxyLocal, bprops)
 	if e := p.savebmdconf(clone, config); e != "" {
 		glog.Errorln(e)
 	}
@@ -927,7 +950,12 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	proxyLocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	b, _, err := cmn.ReadBytes(r)
 	if err != nil {
 		return
@@ -938,7 +966,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	// or parsed value is not a string, it falls through to the next case
 	if err = jsoniter.Unmarshal(b, &msg); err == nil {
 		if st, ok := msg.Value.(string); ok && msg.Action == cmn.ActSetProps {
-			p.updateBucketProp(w, r, bucket, msg.Name, st)
+			p.updateBucketProp(w, r, bucket, msg.Name, st, proxyLocal)
 			return
 		}
 	}
@@ -960,12 +988,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	isLocal := clone.IsLocal(bucket)
 	config := cmn.GCO.Get()
 
-	bprops, exists := clone.Get(bucket, isLocal)
+	bprops, exists := clone.Get(bucket, proxyLocal)
 	if !exists {
-		cmn.Assert(!isLocal)
+		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
 			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:    config.LRU,
@@ -976,7 +1003,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActSetProps:
-		if err := p.validateBucketProps(nprops, isLocal); err != nil {
+		if err := p.validateBucketProps(nprops, proxyLocal); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -1007,7 +1034,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			MirrorConf: config.Mirror,
 		}
 	}
-	clone.set(bucket, isLocal, bprops)
+	clone.set(bucket, proxyLocal, bprops)
 	if e := p.savebmdconf(clone, config); e != "" {
 		glog.Errorln(e)
 	}
@@ -1020,13 +1047,19 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	checkCached, _ := parsebool(r.URL.Query().Get(cmn.URLParamCheckCached))
+	query := r.URL.Query()
+	checkCached, _ := parsebool(query.Get(cmn.URLParamCheckCached))
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
 	if !p.validatebckname(w, r, bucket) {
+		return
+	}
+	bucketProvider := query.Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	smap := p.smapowner.get()
@@ -1175,18 +1208,17 @@ func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket
 	}
 }
 
-func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
-	q := r.URL.Query()
-	localonly, _ := parsebool(q.Get(cmn.URLParamLocal))
+func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec, bucketProvider string) {
 	bucketmd := p.bmdowner.get()
-	if localonly {
+	bckProviderStr := "?" + cmn.URLParamBucketProvider + "=" + bucketProvider
+	if bucketProvider == cmn.LocalBs {
 		bucketnames := &cmn.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
 		for bucket := range bucketmd.LBmap {
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
 		jsbytes, err := jsoniter.Marshal(bucketnames)
 		cmn.AssertNoErr(err)
-		p.writeJSON(w, r, jsbytes, "getbucketnames?local=true")
+		p.writeJSON(w, r, jsbytes, "getbucketnames"+bckProviderStr)
 		return
 	}
 
@@ -1195,7 +1227,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	for _, si = range smap.Tmap {
 		break
 	}
-
+	bucketspec += bckProviderStr
 	args := callArgs{
 		si: si,
 		req: reqArgs{
@@ -1210,20 +1242,22 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		p.invalmsghdlr(w, r, res.errstr)
 		p.keepalive.onerr(res.err, res.status)
 	} else {
-		p.writeJSON(w, r, res.outjson, "getbucketnames")
+		p.writeJSON(w, r, res.outjson, "getbucketnames"+bckProviderStr)
 	}
 }
 
 func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, bucket string) (redirect string) {
 	var (
-		query    = url.Values{}
-		bucketmd = p.bmdowner.get()
-		islocal  = bucketmd.IsLocal(bucket)
+		query          = url.Values{}
+		bucketmd       = p.bmdowner.get()
+		bucketProvider = r.URL.Query().Get(cmn.URLParamBucketProvider)
 	)
 	redirect = to + r.URL.Path + "?"
 	if r.URL.RawQuery != "" {
 		redirect += r.URL.RawQuery + "&"
 	}
+	islocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	cmn.Assert(errstr == "")
 
 	query.Add(cmn.URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
@@ -1234,8 +1268,8 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
-func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cluster.Snode,
-	getMsg *cmn.GetMsg, islocal bool, cached bool) (*bucketResp, error) {
+func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bucketProvider string, dinfo *cluster.Snode,
+	getMsg *cmn.GetMsg, cached bool) (*bucketResp, error) {
 	bmdowner := p.bmdowner.get()
 	actionMsgBytes, err := jsoniter.Marshal(p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: getMsg}, nil, bmdowner))
 	if err != nil {
@@ -1246,12 +1280,16 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cl
 		}, err
 	}
 
+	islocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	cmn.Assert(errstr == "")
+
 	var header http.Header
 	if r != nil {
 		header = r.Header
 	}
 
 	query := url.Values{}
+	query.Add(cmn.URLParamBucketProvider, bucketProvider)
 	query.Add(cmn.URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(cmn.URLParamCached, strconv.FormatBool(cached))
 	query.Add(cmn.URLParamBMDVersion, bmdowner.vstr)
@@ -1311,12 +1349,12 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh
 
 // Request list of all cached files from a target.
 // The target returns its list in batches `pageSize` length
-func (p *proxyrunner) generateCachedList(bucket string, daemon *cluster.Snode, dataCh chan *localFilePage, origmsg *cmn.GetMsg) {
+func (p *proxyrunner) generateCachedList(bucket, bucketProvider string, daemon *cluster.Snode, dataCh chan *localFilePage, origmsg *cmn.GetMsg) {
 	var msg cmn.GetMsg
 	cmn.CopyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
 	for {
-		resp, err := p.targetListBucket(nil, bucket, daemon, &msg, false /* islocal */, true /* cachedObjects */)
+		resp, err := p.targetListBucket(nil, bucket, bucketProvider, daemon, &msg, true /* cachedObjects */)
 		if err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
@@ -1364,7 +1402,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *cluster.Snode, d
 
 // Get list of cached files from all targets and update the list
 // of files from cloud with local metadata (iscached, atime etc)
-func (p *proxyrunner) collectCachedFileList(bucket string, fileList *cmn.BucketList, getmsgjson []byte) (err error) {
+func (p *proxyrunner) collectCachedFileList(bucket, bucketProvider string, fileList *cmn.BucketList, getmsgjson []byte) (err error) {
 	reqParams := &cmn.GetMsg{}
 	err = jsoniter.Unmarshal(getmsgjson, reqParams)
 	if err != nil {
@@ -1395,7 +1433,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *cmn.BucketL
 		wg.Add(1)
 		// without this copy all goroutines get the same pointer
 		go func(d *cluster.Snode) {
-			p.generateCachedList(bucket, d, dataCh, reqParams)
+			p.generateCachedList(bucket, bucketProvider, d, dataCh, reqParams)
 			wg.Done()
 		}(daemon)
 	}
@@ -1423,7 +1461,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *cmn.BucketL
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) getLocalBucketObjects(bucket, bucketProvider string, listmsgjson []byte) (allEntries *cmn.BucketList, err error) {
 	type targetReply struct {
 		resp *bucketResp
 		err  error
@@ -1450,7 +1488,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *cluster.Snode) {
-		resp, err := p.targetListBucket(nil, bucket, si, msg, islocal, cachedObjs)
+		resp, err := p.targetListBucket(nil, bucket, bucketProvider, si, msg, cachedObjs)
 		targetResults <- &targetReply{resp, err}
 		wg.Done()
 	}
@@ -1512,7 +1550,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	return allEntries, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bucketProvider string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
 	const (
 		islocal       = false
 		cachedObjects = false
@@ -1520,6 +1558,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	var resp *bucketResp
 	allentries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	msg := cmn.GetMsg{}
+
 	err = jsoniter.Unmarshal(listmsgjson, &msg)
 	if err != nil {
 		return
@@ -1531,7 +1570,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	// first, get the cloud object list from a random target
 	smap := p.smapowner.get()
 	for _, si := range smap.Tmap {
-		resp, err = p.targetListBucket(r, bucket, si, &msg, islocal, cachedObjects)
+		resp, err = p.targetListBucket(r, bucket, bucketProvider, si, &msg, cachedObjects)
 		if err != nil {
 			return
 		}
@@ -1564,7 +1603,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 		strings.Contains(msg.GetProps, cmn.GetPropsIsCached) {
 		// Now add local properties to the cloud objects
 		// The call replaces allentries.Entries with new values
-		err = p.collectCachedFileList(bucket, allentries, listmsgjson)
+		err = p.collectCachedFileList(bucket, bucketProvider, allentries, listmsgjson)
 	}
 	return
 }
@@ -1578,7 +1617,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *cmn.ActionMsg) (pagemarker string, ok bool) {
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket, bucketProvider string, actionMsg *cmn.ActionMsg) (pagemarker string, ok bool) {
 	var allentries *cmn.BucketList
 	listmsgjson, err := jsoniter.Marshal(actionMsg.Value)
 	if err != nil {
@@ -1587,10 +1626,10 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		return
 	}
 
-	if p.bmdowner.get().IsLocal(bucket) {
-		allentries, err = p.getLocalBucketObjects(bucket, listmsgjson)
+	if bucketProvider == cmn.CloudBs || !p.bmdowner.get().IsLocal(bucket) {
+		allentries, err = p.getCloudBucketObjects(r, bucket, bucketProvider, listmsgjson)
 	} else {
-		allentries, err = p.getCloudBucketObjects(r, bucket, listmsgjson)
+		allentries, err = p.getLocalBucketObjects(bucket, bucketProvider, listmsgjson)
 	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())

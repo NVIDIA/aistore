@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,7 +19,8 @@ import (
 //
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps) error {
+func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
+	querystr := ""
 	if props.Checksum == "" {
 		props.Checksum = cmn.ChecksumInherit
 	}
@@ -28,7 +30,10 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 		return err
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
 	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
@@ -40,14 +45,18 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 // either single string value or entire bucket property structure) and to avoid
 // a lot of type reflexlection checks.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{}) error {
+func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{}, query ...url.Values) error {
 	strValue := fmt.Sprintf("%v", value)
+	querystr := ""
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Name: prop, Value: strValue})
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
 	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
@@ -55,13 +64,18 @@ func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{
 // ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
-func ResetBucketProps(baseParams *BaseParams, bucket string) error {
+func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values) error {
+	querystr := ""
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
 	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
@@ -71,8 +85,14 @@ func ResetBucketProps(baseParams *BaseParams, bucket string) error {
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error) {
-	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket))
+func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cmn.BucketProps, error) {
+	var querystr = ""
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+
+	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr)
+
 	if err != nil {
 		return nil, err
 	}
@@ -162,13 +182,13 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 
 // GetBucketNames API
 //
-// If localOnly is false, returns two lists, one for local buckets and one for cloud buckets.
-// Otherwise, i.e. localOnly is true, still returns two lists, but the one for cloud buckets is empty
-func GetBucketNames(baseParams *BaseParams, localOnly bool) (*cmn.BucketNames, error) {
+// bucketProvider takes one of "" (empty), "cloud" or "local". If bucketProvider is empty, return all bucketnames.
+// Otherwise return "cloud" or "local" buckets.
+func GetBucketNames(baseParams *BaseParams, bucketProvider string) (*cmn.BucketNames, error) {
 	var bucketNames cmn.BucketNames
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
-		fmt.Sprintf("?%s=%t", cmn.URLParamLocal, localOnly)
+		fmt.Sprintf("?%s=%s", cmn.URLParamBucketProvider, bucketProvider)
 	b, err := DoHTTPRequest(baseParams, path, nil)
 	if err != nil {
 		return nil, err
@@ -244,9 +264,13 @@ func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjects int) (*cmn.BucketList, error) {
+func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+	var querystr = ""
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
 	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
 
 	// An optimization to read as few objects from bucket as possible.

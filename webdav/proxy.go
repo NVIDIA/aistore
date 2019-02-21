@@ -36,7 +36,7 @@ func (p *proxyServer) doesBucketExist(bucket string) bool {
 	// _, err := api.HeadBucket(p.url, bucket)
 	// return err == nil
 	baseParams := tutils.BaseAPIParams(p.url)
-	bns, err := api.GetBucketNames(baseParams, true /* local */)
+	bns, err := api.GetBucketNames(baseParams, cmn.LocalBs /* local */)
 	if err != nil {
 		return false
 	}
@@ -51,12 +51,12 @@ func (p *proxyServer) doesBucketExist(bucket string) bool {
 }
 
 // listBuckets returns a slice of names of all buckets
-func (p *proxyServer) listBuckets(local bool) ([]string, error) {
-	if !local {
+func (p *proxyServer) listBuckets(bucketProvider string) ([]string, error) {
+	if bucketProvider == cmn.CloudBs || bucketProvider == "" {
 		return nil, nil
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
-	bns, err := api.GetBucketNames(baseParams, local)
+	bns, err := api.GetBucketNames(baseParams, bucketProvider)
 	if err != nil {
 		return nil, err
 	}

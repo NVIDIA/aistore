@@ -201,11 +201,11 @@ ___
 #### GetBucketNames
 Given the url of an existing proxy in a cluster, `GetBucketNames` returns the names of all existing local and cloud buckets
 ##### Parameters
-| Name       | Type         | Description                                                                           |
-|------------|--------------|---------------------------------------------------------------------------------------|
-| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| localOnly  | bool         | If true, does not return the names of cloud buckets                                   |
+| Name           | Type         | Description                                                                           |
+|----------------|--------------|---------------------------------------------------------------------------------------|
+| httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| bucketProvider | string       | One of "" (empty), "cloud", "local". If value is empty, returns all bucket names. Otherwise, return "cloud" or "local" buckets.|
 ##### Return
 Two lists: one for the names of local buckets, and the other for the names of cloud buckets
 
@@ -364,14 +364,15 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | replicateOpts | ReplicateObjectInput | Used to hold optional parameters for PutObject when it is used for replication        |
 
 ##### PutObjectArgs
-| Name       | Type               | Description                                                                           |
-|------------|--------------------|---------------------------------------------------------------------------------------|
-| httpClient | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string             | URL of the proxy to which the HTTP Request is sent                                    |
-| Bucket     | string             | Name of the bucket storing the object                                                 |
-| Object     | string             | Name of the object                                                                    |
-| Hash       | string             | Hash computed for the object                                                          |
-| Reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
+| Name           | Type               | Description                                                                           |
+|----------------|--------------------|---------------------------------------------------------------------------------------|
+| httpClient     | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL       | string             | URL of the proxy to which the HTTP Request is sent                                    |
+| Bucket         | string             | Name of the bucket storing the object                                                 |
+| BucketProvider | string             | Location of the bucket. One of "", "cloud", or "local", where "" is determined by AIS |
+| Object         | string             | Name of the object                                                                    |
+| Hash           | string             | Hash computed for the object                                                          |
+| Reader         | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
 
 ##### ReplicateObjectInput
 | Name       | Type               | Description                                                                                          |

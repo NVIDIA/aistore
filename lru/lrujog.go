@@ -80,7 +80,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		h   = lctx.heap
 		lom = &cluster.LOM{T: lctx.ini.T, Fqn: fqn}
 	)
-	if errstr := lom.Fill(cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || lom.DoesNotExist {
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || lom.DoesNotExist {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}

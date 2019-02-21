@@ -1723,7 +1723,7 @@ func doReregisterTarget(target *cluster.Snode, m *metadata) {
 			}
 		} else {
 			baseParams.URL = target.URL(cmn.NetworkPublic)
-			lbNames, err := api.GetBucketNames(baseParams, true)
+			lbNames, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 			tutils.CheckFatal(err, m.t)
 			// T3
 			if cmn.StringInSlice(m.bucket, lbNames.Local) {

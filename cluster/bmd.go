@@ -18,6 +18,7 @@ type Bowner interface {
 // - BMD (instance) can be obtained via Bowner.Get()
 // - BMD is immutable and versioned
 // - BMD versioning is monotonic and incremental
+// Note: Getting a cloud object does not add the cloud bucket to CBmap
 type BMD struct {
 	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
 	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their AIStore-only metadata

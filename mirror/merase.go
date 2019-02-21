@@ -145,7 +145,7 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.T, Fqn: fqn}
-	if errstr := lom.Fill(cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || lom.DoesNotExist {
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || lom.DoesNotExist {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}

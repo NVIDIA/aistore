@@ -174,9 +174,9 @@ func (lom *LOM) String() string {
 }
 
 // main method
-func (lom *LOM) Fill(action int, config ...*cmn.Config) (errstr string) {
+func (lom *LOM) Fill(bucketProvider string, action int, config ...*cmn.Config) (errstr string) {
 	if lom.Bucket == "" || lom.Objname == "" || lom.Fqn == "" {
-		if errstr = lom.init(); errstr != "" {
+		if errstr = lom.init(bucketProvider); errstr != "" {
 			return
 		}
 		if len(config) > 0 {
@@ -331,7 +331,7 @@ func (lom *LOM) ChooseMirror() (fqn string) {
 // private methods
 //
 
-func (lom *LOM) init() (errstr string) {
+func (lom *LOM) init(bucketProvider string) (errstr string) {
 	bowner := lom.T.GetBowner()
 	// resolve fqn
 	if lom.Bucket == "" || lom.Objname == "" {
@@ -347,7 +347,7 @@ func (lom *LOM) init() (errstr string) {
 	lom.Uname = Uname(lom.Bucket, lom.Objname)
 	// bucketmd, bislocal, bprops
 	lom.Bucketmd = bowner.Get()
-	lom.Bislocal = lom.Bucketmd.IsLocal(lom.Bucket)
+	lom.initBislocal(bucketProvider)
 	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.Bislocal)
 	if lom.Fqn == "" {
 		lom.Fqn, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.Bislocal)
@@ -369,6 +369,17 @@ func (lom *LOM) resolveFQN(bowner Bowner, bislocal ...bool) (errstr string) {
 		errstr = err.Error()
 	}
 	return
+}
+
+func (lom *LOM) initBislocal(bucketProvider string) {
+	if bucketProvider == cmn.CloudBs {
+		lom.Bislocal = false
+	} else if bucketProvider == cmn.LocalBs {
+		lom.Bislocal = true
+		cmn.Assert(lom.Bucketmd.IsLocal(lom.Bucket))
+	} else {
+		lom.Bislocal = lom.Bucketmd.IsLocal(lom.Bucket)
+	}
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)

@@ -285,7 +285,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
 		if err == nil {
 			lom := &cluster.LOM{Fqn: objFQN, T: r.t}
-			if errstr := lom.Fill(0); errstr != "" {
+			if errstr := lom.Fill("", 0); errstr != "" {
 				glog.Errorf("Failed to read resolve FQN %s: %s",
 					objFQN, errstr)
 				slab.Free(buf)
@@ -580,7 +580,8 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 	ireq := r.newIntraReq(act, nil)
 	fh, err := cmn.NewFileHandle(fqn)
 	lom := &cluster.LOM{Fqn: fqn, T: r.t}
-	if errstr := lom.Fill(cluster.LomFstat | cluster.LomAtime | cluster.LomVersion | cluster.LomCksum); errstr != "" {
+
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		// an error is OK. Log it and try to go on with what has been read
 		glog.Warningf("Failed to read file stats: %s", errstr)
 	}

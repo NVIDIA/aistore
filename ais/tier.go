@@ -68,7 +68,7 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn strin
 	}
 
 	lom = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(0); errstr != "" {
+	if errstr = lom.Fill("", 0); errstr != "" {
 		resp.Body.Close()
 		return
 	}

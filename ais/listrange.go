@@ -152,7 +152,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 		versioncfg        = &cmn.GCO.Get().Ver
 	)
-	if errstr = lom.Fill(cluster.LomFstat | cluster.LomVersion | cluster.LomCksum); errstr != "" {
+	if errstr = lom.Fill("", cluster.LomFstat|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		glog.Error(errstr)
 		return
 	}

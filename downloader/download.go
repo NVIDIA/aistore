@@ -443,7 +443,7 @@ func (d *Downloader) Status(body *cmn.DlBody) (resp string, err error, statusCod
 
 func (d *Downloader) dispatchDownload(t *task) {
 	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.objname}
-	errstr := lom.Fill(cluster.LomFstat)
+	errstr := lom.Fill("", cluster.LomFstat)
 	if errstr != "" {
 		t.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -467,7 +467,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 
 func (d *Downloader) dispatchCancel(req *request) {
 	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill(cluster.LomFstat)
+	errstr := lom.Fill("", cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -506,7 +506,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 
 func (d *Downloader) dispatchStatus(req *request) {
 	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill(cluster.LomFstat)
+	errstr := lom.Fill("", cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -607,7 +607,7 @@ func (j *jogger) stop() {
 func (t *task) download() {
 	t.Lock()
 	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.objname}
-	if errstr := lom.Fill(cluster.LomFstat); errstr != "" {
+	if errstr := lom.Fill("", cluster.LomFstat); errstr != "" {
 		t.abort(errors.New(errstr))
 		t.Unlock()
 		return

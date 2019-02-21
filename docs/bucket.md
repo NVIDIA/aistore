@@ -46,7 +46,9 @@ $ curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "destroyl
 
 ## Cloud Bucket
 
-Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier). 
+Cloud buckets are existing buckets in the cloud storage when AIS is deployed as [fast tier](/README.md#fast-tier).
+
+> By default, AIS does not keep track of the cloud buckets in its configuration map. However, if users modify the properties of the cloud bucket, AIS will then keep track.
 
 ### Prefetch/Evict Objects
 
@@ -100,6 +102,20 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
 | pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and local bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html). |\b
+
+The full list of supported bucket properties are:
+
+| Bucket Property | JSON | Description | Fields |
+| --- | --- | --- | --- |
+| CloudProvider | cloud_provider | CloudProvider can be "aws", "gcp" (clouds) - or "ais" (local) | `"cloud_provider": "aws" | "gcp" | "ais"` |
+| NextTierURL | next_tier_url | NextTierURL is an absolute URI corresponding to the primary proxy of the next tier configured for the bucket specified | `"next_tier_url": "http://G-other"` |
+| ReadPolicy | read_policy | ReadPolicy determines if a read will be from cloud or next tier specified by NextTierURL. Default: "next_tier" |   `"read_policy": "next_tier" | "cloud"` |
+| WritePolicy | write_policy | WritePolicy determines if a write will be to cloud or next tier specified by NextTierURL. Default: "cloud" | `"write_policy": "next_tier" |"cloud"` |
+| CksumConf | cksum_config | Configuration for [Checksum](docs/checksum.md). `validate_checksum_cold_get` determines whether or not the checksum of received object is checked after downloading it from the cloud or next tier. `validate_checksum_warm_get`: determines if the object's version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. `validate_cluster_migration` determines if the migrated objects across single cluster should have their checksum validated. `enable_read_range_checksum` returns the read range checksum otherwise return the entire object checksum.  | `"cksum_config": { "checksum": "none" | "xxhash" | "md5" | "inherit", "validate_checksum_cold_get": bool,  "validate_checksum_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range_checksum": bool }` |
+| LRUConf | lru_props | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `lru_local_buckets` enables or disables LRU for local buckets. `lru_enabled` LRU will only run when set to true. | `"lru_props": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "lru_local_buckets": bool, "lru_enabled": bool }` |
+| MirrorConf | mirror | Configuration for [Mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `mirror_burst_buffer` represents channel buffer size.  `mirror_util_thresh` represents the threshold when utilizations are considered equivalent. `mirror_optimize_put` represents the optimization objective. `mirror_enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "mirror_burst_buffer": int64, "mirror_util_thresh": int64, "mirror_optimize_put": bool, "mirror_enabled": bool }` |
+| ECConf | ec_config | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec_config": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled"" bool }` |
+
 
  <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
 

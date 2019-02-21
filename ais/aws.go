@@ -381,7 +381,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname stri
 	if obj.VersionId != nil {
 		lom.Version = *obj.VersionId
 	}
-	if errstr = lom.Fill(0); errstr != "" {
+	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
 		return
 	}
 	roi := &recvObjInfo{

@@ -37,11 +37,12 @@ type ReplicateObjectInput struct {
 }
 
 type PutObjectArgs struct {
-	BaseParams *BaseParams
-	Bucket     string
-	Object     string
-	Hash       string
-	Reader     cmn.ReadOpenCloser
+	BaseParams     *BaseParams
+	Bucket         string
+	BucketProvider string
+	Object         string
+	Hash           string
+	Reader         cmn.ReadOpenCloser
 }
 
 // HeadObject API
@@ -189,6 +190,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 // PutObject API
 //
 // Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
+// If there is a local bucket and cloud bucket with the same name, specify with bucketProvider ("local", "cloud")
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
@@ -200,7 +202,10 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	defer handle.Close()
 
 	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	reqURL := args.BaseParams.URL + path
+	var query = url.Values{}
+	query.Add(cmn.URLParamBucketProvider, args.BucketProvider)
+	reqURL := args.BaseParams.URL + path + "?" + query.Encode()
+
 	req, err := http.NewRequest(http.MethodPut, reqURL, handle)
 	if err != nil {
 		return fmt.Errorf("failed to create new HTTP request, err: %v", err)

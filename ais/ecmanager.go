@@ -131,7 +131,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	if mgr.xact == nil || mgr.xact.Finished() {
 		mgr.xact = mgr.t.xactions.renewEC()
 	}
-	if errstr := lom.Fill(cluster.LomAtime | cluster.LomVersion | cluster.LomCksum); errstr != "" {
+	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		return errors.New(errstr)
 	}
 	mgr.xact.Encode(req)

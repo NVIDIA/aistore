@@ -118,7 +118,7 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: rcl.t, Fqn: fqn}
-	if errstr := lom.Fill(0); errstr != "" {
+	if errstr := lom.Fill("", 0); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
 		}
@@ -138,7 +138,7 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		glog.Infof("%s %s => %s", lom, tname(rcl.t.si), tname(si))
 	}
 
-	if errstr := lom.Fill(cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
+	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
 	if lom.DoesNotExist || lom.IsCopy() {
@@ -219,7 +219,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 	lom := &cluster.LOM{T: rb.t, Fqn: fqn}
-	if errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy); errstr != "" {
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %v - skipping...", lom, err)
 		}
