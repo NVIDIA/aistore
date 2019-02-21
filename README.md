@@ -54,6 +54,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [Local non-Containerized](#local-non-containerized)
     - [Local Docker-Compose](#local-docker-compose)
     - [Local Kubernetes](#local-kubernetes)
+    - [Performance Monitoring](#performance-monitoring)
 - [Guides and References](#guides-and-references)
 - [Selected Package READMEs](#selected-package-readmes)
 
@@ -330,28 +331,46 @@ To get started with AIStore and Docker, see: [Getting started with Docker](docs/
 
 #### Docker playground
 
-In [Docker playground](deploy/dev/docker/playground) you can find scripts which download different datasets (eg. MNIST and subset of ImageNet).
-The datasets are downloaded using [Downloader](docs/experimental.md#Downloader) which will save objects directly to the AIS cluster.
-During the download you can monitor the statistics:
- * number of requests made,
- * number of requests failed,
- * number of bytes transferred.
-We hope that this super simple but yet verbose presentation will showcase capabilities and monitoring tools for AIS.
+Following is a super-simple presentation to showcase some of the AIS capabilities.
 
-Here is how you can play with the playground script (in this example AIS will download ImageNet):
+In [Docker playground](deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](downloader/README.md) that stores all downloaded objects directly into the AIStore.
+
+During the download, you can monitor:
+
+ * number of requests made
+ * number of requests failed
+ * number of bytes transferred
+
+In the example below, AIS downloads a handful of ImageNet images and collects/visualizes the corresponding statistics:
 
 ```shell
 $ cd path_to/deploy/dev/docker
-$ ./deploy_docker.sh -d=2 -p=4 -t=4 -c=1 -grafana -nocloud # start 4 proxies and 4 targets
+$ ./deploy_docker.sh -d=2 -p=2 -t=4 -c=1 -grafana -nocloud # start 2 proxies and 4 targets
 $ ./playground/download_imagenet.sh # download some of ImageNet images into AIS and show stats
 $ # once Downloader will save the files...
 $ ./playground/stress_get.sh imagenet # do gets on saved files (requires jq command)
 $ ./stop_docker.sh -l # stop docker
 ```
 
+<img src="docs/images/playground-grafana.png" alt="Playground Grafana dashboard" width="400">
+
 ### Local Kubernetes
 
 The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
+
+### Performance Monitoring
+
+AIS has out of the box support for [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite which then can be used as a data-source for Grafana to get visual overview of the statistics and metrics.
+
+We have provided scripts for easy deployment of both Graphite and Grafana.
+
+> For [local non-containerized deployments](#local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment will automatically notice the presence of the containers and will send statistics to the Graphite.
+
+> For [local docker-compose based deployments](#local-docker-compose), make sure to use `-grafana` command-line option. The `deploy_docker.sh` script will then spin-up Graphite and Grafana containers.
+
+In both of these cases, Grafana will be accessible at [localhost:3000](http://localhost:3000).
+
+> For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 
 ## Guides and References
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
@@ -375,7 +394,7 @@ The 3rd and final local-deployment option makes use of [Kubeadm](https://kuberne
 - [Package `docker`](docs/docker_main.md)
 - [Package `api`](api/README.md)
 - [Package `authn`](authn/README.md)
-- [Package `memsis`](memsis/README.md)
+- [Package `memsys`](memsys/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
 - [Package `openapi`](openapi/README.md)

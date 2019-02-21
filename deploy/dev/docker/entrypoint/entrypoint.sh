@@ -5,6 +5,7 @@ export TEST_FSPATH_ROOT=${MOUNTPATH}/${HOSTNAME}
 export LOGDIR=${TEST_FSPATH_ROOT}/log
 mkdir -p ${CONFDIR}
 mkdir -p ${TEST_FSPATH_ROOT}
+mkdir -p ${LOGDIR}
 touch ${LOGDIR}/statsd.log
 
 if [ -n "${QUICK}" ]; then

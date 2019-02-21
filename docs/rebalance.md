@@ -1,6 +1,8 @@
 ## Table of Contents
+
 - [Global Rebalancing](#global-rebalancing)
 - [Local Rebalancing](#local-rebalancing)
+- [Limitations](#limitations)
 
 ## Global Rebalancing
 
@@ -20,8 +22,17 @@ Further, cluster-wide rebalancing does not require any downtime. Incoming GET re
 
 ## Local Rebalancing
 
-While global rebalancing (see previous section) takes care of the *cluster-grow* and *cluster-shrink* events, local rebalancing, as the name implies, is responsible for the *mountpath-added* and *mountpath-removed* events that are handled locally within (and by) each storage target.
+While global rebalancing (previous section) takes care of the *cluster-grow* and *cluster-shrink* events, local rebalancing, as the name implies, is responsible for the *mountpath-added* and *mountpath-removed* events that are handled locally within (and by) each storage target.
 
 > Terminology: *mountpath* is a triplet **(local filesystem (LFS), disks that this LFS utilizes, LFS directory)**. The following rules apply: 1) different mountpaths use different LFSes, and 2) different LFSes use different disks.
 
-Further, mountpath removal can be done administratively or triggered by a disk fault (see [filesystem health checking](/health/fshc.md). Irrespectively of the original cause, mountpath-level events activate local rebalancer that in many ways performs the same set of steps as the global one (above). The one big distinction is that object migrations are local (and relatively fast).
+Further, mountpath removal can be done administratively or be triggered by a disk fault (see [filesystem health checking](/health/fshc.md). Irrespectively of the original cause, mountpath-level events activate local rebalancer that in many ways performs the same set of steps as the global one. The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
+
+## Limitations
+
+AIS *cluster rebalancing* has limitations that we are aware of. As of the v2.0, the limitations are:
+
+* **Single target at a time**. Joining another storage target, or targets, while AIS cluster is still rebalancing is **not recommended** as it may result in GET errors.
+* **IO performance**. During rebalancing, response latency and overall cluster throughput may substantially degrade.
+
+All of these limitations will be addressed and removed in the nearest (v2.1) future.

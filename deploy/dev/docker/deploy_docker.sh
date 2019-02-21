@@ -14,6 +14,7 @@ usage() {
     echo "  -s or --single                          : use a single network"
     echo "  -t=NUM or --target=NUM                  : where NUM is the number of targets"
     echo "  -qs=AWS_DIR or --quickstart=AWS_DIR     : deploys a quickstart version of AIS with one proxy, one targe and one local file system"
+    echo "  -nocloud                                : to deploy AIS without any cloud provider"
     echo "  -grafana                                : starts Graphite and Grafana containers"
     echo "  -nodiskio=BOOL                          : run Dry-Run mode with disk IO is disabled (default = false)"
     echo "  -nonetio=BOOL                           : run Dry-Run mode with network IO is disabled (default = false)"
@@ -60,6 +61,9 @@ save_env() {
     echo "NODISKIO=${NODISKIO-false}" >> ${TMP_ENV}
     echo "NONETIO=${NONETIO-false}" >> ${TMP_ENV}
     echo "DRYOBJSIZE=${DRYOBJSIZE-8m}" >> ${TMP_ENV}
+
+    echo "GRAPHITE_PORT=${GRAPHITE_PORT}" >> ${TMP_ENV}
+    echo "GRAPHITE_SERVER=${GRAPHITE_SERVER}" >> ${TMP_ENV}
 
     echo "PROXYURL=http://${PUB_NET}.2:${PORT}" >> ${TMP_ENV}
     echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}

@@ -79,6 +79,8 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * `-s` or `--single`                        : use a single network
 * `-t=NUM` or `--target=NUM`                : where NUM is the number of targets
 * `-qs=AWS_DIR` or `--quickstart=AWS_DIR`   : deploys a quickstart version of AIS
+* `-nocloud`                                : to deploy AIS without any cloud provider
+* `-grafana`                                : starts Graphite and Grafana (can be accessed at [localhost:3000](http://localhost:3000)) for displaying metrics
 * `-nodiskio=BOOL`                          : run Dry-Run mode with disk IO is disabled (default = false)
 * `-nonetio=BOOL`                           : run Dry-Run mode with network IO is disabled (default = false)
 * `-dryobjsize=SIZE`                        : size of an object when a source is a 'fake' one. 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'
