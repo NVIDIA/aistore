@@ -1,15 +1,110 @@
-ais_devices:
-  - sda
-  - sdb
-  - sdc
-  - sdd
-  - sde
-  - sdf
-  - sdg
-  - sdh
-  - sdi
-  - sdj
+#
+# Packages to install on all hosts. Most of these are for debug and convenience, none
+# essential for AIS.
+#
+# XXX TODO Need to separate this into Linux flavours - these assume Ubuntu
+#
+ais_packages:
+  - dstat
+  - ethtool
+  - iproute2
+  - net-tools
+  - sysstat
+  - util-linux
+  - lshw
+  - util-linux
+  - dmidecode
+  - lsscsi
+  - smartmontools
+  - sdparm
+  - iotop
+  - procps
+  - iftop
+  - nicstat
+  - linux-tools-common
+  - linux-tools-{{ ansible_kernel }}
+  - procps
+  - sysstat
+  - tcpdump
+  - htop
+  - atop
+  - nmon
+  - strace
+  - bpfcc-tools
+  - linux-headers-{{ ansible_kernel }}
+  - systemtap
+  - gcc
+  - fio
+  - iperf
+  - attr
+  - xfsprogs
+  - vim
+  - traceroute
+  - curl
+  - python
+  - net-tools
+  - jq
+  - make
+  - gcc
+  - g++
 
+#
+# Packages unique to GPU systems. Don't include CUDA here - just generally-
+# available Ubuntu packages. Some of these duplicate with list above - just 
+# tracking the requirements from https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#pre-installation-actions
+# These are packages for the host OS - so no need to include other DL software which
+# will run in containers.
+#
+ais_gpu_packages:
+  - gcc
+  - linux-headers-{{ ansible_kernel }}
+
+#
+# CUDA and nvidia-docker install details - versions etc matched to host OS. We require just the drivers,
+# not the CUDA runtime.
+# XXX should be able to use ansible vars here; note that the repo servers are case-sensitive
+#
+cuda_repo_deb: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-repo-ubuntu1804_10.1.105-1_amd64.deb
+cuda_repo_key: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+nvidia_docker_key: 'https://nvidia.github.io/nvidia-docker/gpgkey'
+libnvidia_container_key: 'https://nvidia.github.io/libnvidia-container/gpgkey'
+
+#
+# Caution is required  when blasting out host/dev combos for mkfs via ansible!
+# The playbooks are intended to mkfs at initial cluster establishment, and also
+# when new nodes are added (or disks replaced, or extra disks made available).
+#
+# To try to make it more difficult to mistakenly blast out a mkfs to all k8s nodes
+# we choose not to list any host grouping here, and require that the intended
+# set of hosts be specified on the playbook cmdline with -e, for example:
+# 
+# ansible-playbook -i hosts.ini ais_datafs_mkfs.yml \
+#     -e '{"ais_hosts": ["cpu01"], "ais_devices": ["sda", "sdb"]}'
+#
+# You can also specify variables in a json or yaml file and use -e "@file.yml" etc
+#
+ais_hosts: dummy-to-require-cmdline-specification-of-hosts
+
+#
+# Same approach here. List on playbook cmdline with -e.
+#
+ais_devices:
+        #- sda
+        #- sdb
+        #- sdc
+        #- sdd
+        #- sde
+        #- sdf
+        #- sdg
+        #- sdh
+        #- sdi
+        #- sdj
+
+#
+# MTU for host NICs. XXX would be best to parametrize NIC name or driver
+# Note that if changing this you also need to change the MTU used
+# in Calico within k8s (to at least 20 bytes less than this value).
+#
 ais_host_mtu:
   - interface: enp94s0
     driver: mlx5_core
@@ -28,23 +123,76 @@ ais_pam_limits:
     value: 1048576
     comment: required in AIS docs (but also need to change in pods)
 
+
 #
-# Items to add/tweak in /etc/sysctl.conf
+# Items to add/tweak in /etc/sysctl.conf. The 'default' is just for reference/comparison,
+# as is the 'comment' field.
+#
+# XXX TODO Explain/document these choices in the comment fields provided.
 #
 ais_host_sysctl:
-#  - name: net.core.rmem_max
-#    value:
-#    comment: need to optimize
-#  - name: net.ipv4.tcp_rmem
-#    value:
-#    comment: need to optimize
-#  - name: net.core.wmem_max
-#    value:
-#    comment: need to optimize
-#  - name: net.ipv4.tcp_wmem
-#    value:
-#    comment: need to optimize
+  - name: net.core.somaxconn
+    value: 1024
+    default: 128
+    state: present
+    comment:
+  - name: net.core.rmem_max
+    value: 16777216
+    default: 212992
+    state: present
+    comment:
+  - name: net.core.wmem_max
+    value: 25165824
+    default: 212992
+    state: present
+    comment:
+  - name: net.core.wmem_default
+    value: 25165824
+    default: 212992
+    state: present
+    comment:
+  - name: net.core.optmem_max
+    value: 25165824
+    default: 20480
+    state: present
+    comment:
+  - name: net.ipv4.tcp_wmem
+    value:   4096    12582912 16777216
+    default: 4096       16384  4194304
+    state: present
+    comment:
+  - name: net.ipv4.tcp_rmem
+    value:   4096    12582912 16777216
+    default: 4096       87380  6291456
+    state: present
+    comment:
   - name: net.ipv4.tcp_mtu_probing
     value: 2
-    comment: recommended in AIS docs
-
+    default: 0
+    state: present
+    comment: We control the MTU within the cluster nodes and k8s pods, so we can always use an initial MSS of tcp_base_mss. XXX should we be tweaking tcp_base_mss??
+  - name: net.ipv4.tcp_slow_start_after_idle
+    value: 0
+    default: 1
+    state: present
+    comment:
+    # - name: net.core.netdev_max_backlog
+    # value: 13888
+    # default:
+    # state:
+    # comment: A large device backlog queue can lead to greater latencies, so avoiding this one for now.
+  - name: net.ipv4.tcp_tw_reuse
+    value: 1
+    default: 0
+    state: present
+    comment: If sockets hang around in timewait state for long then (since we're PUTting and GETting lots of objects) we very soon find that we exhaust local port range. So we stretch the available range of local ports (ip_local_port_range), increase the max number of timewait buckets held by the system simultaneously (tcp_max_tw_buckets), and reuse sockets in timewait state as soon as it is "safe from a protocol point of view" (whatever that means, tcp_tw_reuse).
+  - name: net.ipv4.ip_local_port_range
+    value:   10240 65535 
+    default: 32768 60999 
+    state: present
+    comment: See comment for tw_reuse
+  - name: net.ipv4.tcp_max_tw_buckets
+    value:   1440000
+    default:  262144
+    state: present
+    comment: See comment for tw_reuse

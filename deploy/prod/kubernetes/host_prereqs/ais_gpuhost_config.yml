@@ -1,0 +1,14 @@
+#
+# Config specific to GPU hosts
+#
+---
+- hosts: '{{ play2hosts | default("gpu-worker-node") }}'
+  vars_files:
+    - "vars.yml"
+
+  gather_facts: true
+  roles:
+    - { role: ais_gpuhost_config }
+
+
+

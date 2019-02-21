@@ -1,20 +1,25 @@
+#
+# TODO: parametrize
+#
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "ais.fullname" . }}-target
+  name: {{ template "ais.fullname" . }}-initial-primary-proxy
   labels:
     app: {{ template "ais.name" . }}
     chart: {{ template "ais.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
-  type: {{ .Values.target.service.type }}
+  type: ClusterIP
+  clusterIP: None
   ports:
-    - port: {{ .Values.target.service.port }}
-      targetPort: {{ .Values.target.service.port }}
+    - port: {{ .Values.proxy.service.port }}
+      targetPort: {{ .Values.proxy.service.port }}
       protocol: TCP
       name: http
   selector:
     app: {{ template "ais.name" . }}
-    component: "{{ .Values.target.name }}"
+    component: "{{ .Values.proxy.name }}"
     release: {{ .Release.Name }}
+    initial_primary_proxy: "yes"

@@ -27,6 +27,12 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              add:
+                {{ range .Values.common_config.container_capabilities }}
+                - {{ . }}
+                {{ end }}
           env:
             - name : CONFFILE
               value : "/var/ais_config/ais.json"
@@ -38,6 +44,8 @@ spec:
               value : "proxy"
             - name : TARGETS
               value : "1"
+            - name: PRIMARY_PROXY_SERVICE_HOSTNAME
+              value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
             - name: http
               containerPort: {{ .Values.ne_proxy.service.port }}

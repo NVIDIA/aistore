@@ -1,7 +1,10 @@
-FROM ubuntu:xenial
+#
+# Dockerfile to build an AIS docker image in which we run from a standalone ais binary
+#
+FROM ubuntu:bionic
 RUN mkdir -p /usr/local/bin
 COPY ais_binary/ais /usr/local/bin/ais
-RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs-legacy collectd collectd-utils git iputils-ping netcat
+RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs collectd collectd-utils git iputils-ping netcat
 RUN pip install awscli
 RUN cd /opt && git clone git://github.com/etsy/statsd.git
 ENV STATSD_PATH /opt/statsd

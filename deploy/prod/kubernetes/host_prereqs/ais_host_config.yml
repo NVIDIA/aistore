@@ -1,9 +1,0 @@
----
-- hosts: kube-node
-  vars_files:
-    - "vars.yml"
-
-  gather_facts: true
-  roles:
-    - pcm
-    - { role: ais_host_config }

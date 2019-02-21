@@ -1,0 +1,97 @@
+#
+# Host config unique to GPU nodes
+#
+
+#
+# Add all keys first - prevents apt update in replays tripping over missing keys
+#
+- name: Add keys
+  apt_key:
+    state: present
+    url: '{{ item }}'
+  with_items:
+    - '{{ cuda_repo_key }}'
+    - '{{ nvidia_docker_key }}'
+    - '{{ libnvidia_container_key }}'
+
+- name: Install desired generic Ubuntu packages required for GPU nodes
+  apt:
+    update_cache: yes
+    name: '{{ ais_gpu_packages }}'
+    state: present
+
+- name: Add NVIDIA CUDA repo binary package
+  apt:
+    deb: '{{ cuda_repo_deb }}'
+
+#
+# Install CUDA - see https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#ubuntu-installation
+#
+- name: Install CUDA drivers (reboot required?)
+  apt:
+    update_cache: yes
+    pkg: cuda
+    state: present
+
+#
+# Add nvidia docker repos per https://nvidia.github.io/nvidia-docker/.
+#
+- name: Add nvidia-docker repo
+  apt_repository:
+    repo: 'deb {{ item }} /'
+  with_items:
+    - 'https://nvidia.github.io/libnvidia-container/{{ ansible_distribution | lower }}{{ ansible_distribution_version }}/$(ARCH)'
+    - 'https://nvidia.github.io/nvidia-container-runtime/{{ ansible_distribution | lower }}{{ ansible_distribution_version }}/$(ARCH)'
+    - 'https://nvidia.github.io/nvidia-docker/{{ ansible_distribution | lower }}{{ ansible_distribution_version }}/$(ARCH)'
+
+#
+# Need to HUP or restart dockerd following this task.
+#
+# XXX TODO This will fail if docker is not yet installed, or is installed but not the correct version.
+# Since we're using kubespray to install Docker we have a problem: we would like to run these host
+# config plays *before* building the k8s cluster, but it won't be present until we run kubespray.
+# Various way of solving that - current choice is to stick head in sand and require this to be run 
+# on GPU nodes after kubespray, and require docker be up-to-date (be careful to keep versions in sync
+# across CPU and GPU nodes).
+#
+# Kubespray today is using Docker 18.06.2-ce, and is reluctant to agree to install later versions.
+# So instead (having configued nvidia repos and using apt-cache madison nvidia-docker2 nvidia-container-runtime
+# to see available versions) we'll avoid selecting the latest nvidia packages (wich want Docker 18.09)
+# and instead use those listed as depending on Docker 18.06.2.
+#
+# We must install both packages in a single apt instance.
+#
+- name: Install nvidia-docker and nvidia-container-runtime
+  apt:
+    update_cache: yes
+    name:
+      - nvidia-docker2=2.0.3+docker18.06.2-1
+      - nvidia-container-runtime=2.0.0+docker18.06.2-1
+    state: present
+
+#
+# Change default runtime to nvidia (nvidia-docker install has added it as a runtime, but not as default).
+#
+- name: Change default docker runtime to nvidia
+  lineinfile:
+    path: /etc/docker/daemon.json
+    state: present
+    firstmatch: yes
+    insertafter: '^{'
+    line: '    "default-runtime": "nvidia",'
+  register: defruntime
+
+- name: Restart docker
+  service:
+    name: docker
+    state: restarted
+  when: defruntime.changed
+
+  #
+  # Now add device plugin
+  # kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.11/nvidia-device-plugin.yml
+  #
+  # It's a daemonset, so don't repeat command on all nodes!
+  #
+  # https://github.com/NVIDIA/k8s-device-plugin#preparing-your-gpu-nodes
+  #

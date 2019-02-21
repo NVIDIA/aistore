@@ -2,7 +2,20 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# DFC Image, common between Target and Proxy
+# AIS Image, common between Target and Proxy
+
+#
+# XXX TODO The hostPath value spread around under /etc/ais should
+# be rationalized:
+#
+#   - under a single directory tree, for ease of management
+#   - not in a standard host OS location such as /etc, but it must be persistent across reboot
+#   - unique per helm application name instance, ideally, so that we can run more than one
+#     helm application instance per k8s cluster (this would go a long way towards solving
+#     the management of this persistent state across helm install/delete cycles)
+#   - secure, /tmp/ is an uncontrolled channel into the container
+#
+
 image:
   repository: quay.io/nvidia/ais_k8s
   tag: 10
@@ -25,6 +38,9 @@ common_config:
     secret        : aBitLongSecretKey
     enabled       : false
     creddir       : ""
+  container_capabilities:
+    # Needed for debug if you wish to run delve within a pod (or look into kubesquash etc)
+    #- SYS_PTRACE
 
 
 proxy:
@@ -53,8 +69,8 @@ proxy:
     value: "electable"
   # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
   initialPrimaryProxyNodeLabel:
-    name: initial_primary_proxy
-    value: yes
+    name: "initial_primary_proxy"
+    value: "yes"
   # The path of the environment file to be passed into the ais container
   envMountPath:
     hostPath: /tmp/

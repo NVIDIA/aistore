@@ -1,9 +1,42 @@
+#
+# Perform mkfs of AIS target filesystems. Not something you want to do lightly, so intentionally
+# a little awkward to run - we don't include default values for ais_hosts and ais_devices,
+# requiring that they be passed on the cmdline.
+#
+# After mkfs we will add the filesystems to /etc/fstab and mount them.
+#
+# This playbook will prompt for confirmation when the play is run interactively.
+#
+# Example usage:
+#
+#       ansible-playbook -i hosts.ini ais_datafs_mkfs.yml \
+#               -e '{"ais_hosts": ["cpu01", "cpu02", "cpu03", "cpu04", "cpu05", "cpu06", "cpu07"], \
+#               "ais_devices": ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh", "sdi", "sdj"]}' \
+#               --become
+#
 ---
-- hosts: kube-node
+- hosts: "{{ ais_hosts }}"
   vars_files:
     - "vars.yml"
 
-  gather_facts: true
+  vars_prompt:
+    - name: "mkfs_confirmation"
+      prompt: "Are you sure you want to destroy and mkfs AIS filesystems on {{ ais_hosts }}, devices {{ ais_devices }}? Type 'yes' to confirm."
+      default: "no"
+      private: no
+
+  pre_tasks:
+    - name: check confirmation
+      fail:
+        msg: "mkfs not confirmed/forced"
+      when: mkfs_confirmation != "yes"
+
+    - name: check disk list
+      fail:
+        msg: "no ais_devices specified!"
+      when: ais_devices is undefined
+
+  gather_facts: false
+
   roles:
           - { role: ais_datafs, ais_fs_umount_purge: true, ais_fs_losedata: "danger_danger", ais_fs_mount: true }
-

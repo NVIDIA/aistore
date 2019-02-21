@@ -1,4 +1,14 @@
-- name: configure ulimits for host
+- name: Update apt list
+  apt:
+    update_cache: yes
+
+- name: Install desired packages
+  apt:
+    update_cache: no
+    name: '{{ ais_packages }}'
+    state: present
+
+- name: Configure ulimits for host
   pam_limits:
     domain: '*'
     limit_item: "{{ item.limit_item }}"
@@ -7,14 +17,17 @@
   with_items:
     - "{{ ais_pam_limits }}"
 
-- name: tweak sysctl.conf
+- name: Tweak sysctl.conf
   sysctl:
+    sysctl_file: /etc/sysctl.d/90-ais.conf
+    reload: yes
     name: "{{ item.name }}"
     value: "{{ item.value }}"
+    state: "{{ item.state }}"
   with_items:
     - "{{ ais_host_sysctl }}"
 
-- name: set host mtu in netplan
+- name: Set host mtu in netplan
   template:
     src: 01-netcfg.yaml.j2
     dest: /etc/netplan/01-netcfg.yaml
@@ -23,6 +36,8 @@
     mode: 0644
   with_items:
     - "{{ ais_host_mtu }}"
+  register: netplan
 
-- name:       Applying Netplan Configuration
-  command:    netplan apply
+- name: Apply netplan if changed
+  command: netplan apply
+  when: netplan.changed
