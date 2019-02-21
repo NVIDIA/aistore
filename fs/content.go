@@ -154,11 +154,11 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	return
 }
 
-func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, isLocal bool, bucket, objName string) (fqn string) {
+func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, bckIsLocal bool, bucket, objName string) (fqn string) {
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
 		cmn.AssertMsg(false, fmt.Sprintf("contentType %s was not registered", contentType))
 	}
-	return mi.MakePathBucketObject(contentType, bucket, objName, isLocal)
+	return mi.MakePathBucketObject(contentType, bucket, objName, bckIsLocal)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

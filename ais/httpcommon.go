@@ -787,14 +787,14 @@ func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, buc
 }
 
 func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLocal bool, errstr string) {
-	bislocal := h.bmdowner.get().IsLocal(bucket)
+	bckIsLocal := h.bmdowner.get().IsLocal(bucket)
 	switch bucketProvider {
 	case cmn.LocalBs:
 		isLocal = true
 	case cmn.CloudBs:
 		isLocal = false
 	case "":
-		isLocal = bislocal
+		isLocal = bckIsLocal
 	default:
 		errstr = fmt.Sprintf("Invalid value(%s) for bprovider", bucketProvider)
 		return
@@ -803,9 +803,9 @@ func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLo
 	if bucket == "*" {
 		return
 	}
-	if isLocal && !bislocal {
+	if isLocal && !bckIsLocal {
 		errstr = fmt.Sprintf("Local bucket (%s) does not exist", bucket)
-	} else if !isLocal && bislocal {
+	} else if !isLocal && bckIsLocal {
 		if glog.V(4) {
 			glog.Warningf("Duplicated name: local bucket (%s) exists, proceeding to use cloud bucket (%s)", bucket, bucket)
 		}

@@ -28,7 +28,7 @@ import (
 
 func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh chan struct{}) {
 	defer wg.Done()
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bislocal)
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bckIsLocal)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}

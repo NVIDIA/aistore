@@ -1256,10 +1256,10 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 	if r.URL.RawQuery != "" {
 		redirect += r.URL.RawQuery + "&"
 	}
-	islocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	bckIsLocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
 	cmn.Assert(errstr == "")
 
-	query.Add(cmn.URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(cmn.URLParamLocal, strconv.FormatBool(bckIsLocal))
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
 	query.Add(cmn.URLParamBMDVersion, bucketmd.vstr)
 	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(ts.UnixNano()), 10))
@@ -1280,7 +1280,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bucketProvider s
 		}, err
 	}
 
-	islocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	bckIsLocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
 	cmn.Assert(errstr == "")
 
 	var header http.Header
@@ -1290,7 +1290,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bucketProvider s
 
 	query := url.Values{}
 	query.Add(cmn.URLParamBucketProvider, bucketProvider)
-	query.Add(cmn.URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(cmn.URLParamLocal, strconv.FormatBool(bckIsLocal))
 	query.Add(cmn.URLParamCached, strconv.FormatBool(cached))
 	query.Add(cmn.URLParamBMDVersion, bmdowner.vstr)
 
@@ -1695,7 +1695,7 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 	}
 	bucket := apitems[0]
 	bmdowner := p.bmdowner.get()
-	islocal := bmdowner.IsLocal(bucket)
+	bckIsLocal := bmdowner.IsLocal(bucket)
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")
@@ -1720,7 +1720,7 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 		timeout time.Duration
 	)
 
-	q.Set(cmn.URLParamLocal, strconv.FormatBool(islocal))
+	q.Set(cmn.URLParamLocal, strconv.FormatBool(bckIsLocal))
 	if wait {
 		timeout = longTimeout
 	} else {

@@ -32,7 +32,7 @@ type (
 		Namelocker             cluster.NameLocker
 		wg                     *sync.WaitGroup
 		total, dropped, copied int64
-		Bislocal               bool
+		BckIsLocal               bool
 	}
 	copier struct { // one per mountpath
 		parent    *XactCopy
@@ -63,7 +63,7 @@ func (r *XactCopy) InitAndRun() error {
 	go r.Run()
 	for _, mpathInfo := range availablePaths {
 		copier := &copier{parent: r, mpathInfo: mpathInfo}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal)
 		r.copiers[mpathLC] = copier
 		r.wg.Add(1)
 		go copier.jog()

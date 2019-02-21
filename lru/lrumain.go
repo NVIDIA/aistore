@@ -80,7 +80,7 @@ type (
 		config          *cmn.Config
 		atimeRespCh     chan *atime.Response
 		dontevictime    time.Time
-		bislocal        bool
+		bckIsLocal        bool
 		throttle        bool
 		aborted         bool
 	}
@@ -112,11 +112,11 @@ func InitAndRun(ini *InitLRU) {
 		//
 		// NOTE the sequence: Cloud buckets first, local buckets second
 		//
-		startLRUJoggers := func(bislocal bool) (aborted bool) {
+		startLRUJoggers := func(bckIsLocal bool) (aborted bool) {
 			joggers := make(map[string]*lructx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))
 			for mpath, mpathInfo := range availablePaths {
-				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bislocal)
+				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bckIsLocal)
 			}
 			for _, j := range joggers {
 				wg.Add(1)
@@ -144,7 +144,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bislocal bool) *lructx {
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bckIsLocal bool) *lructx {
 	lctx := &lructx{
 		oldwork:         make([]*fileInfo, 0, 64),
 		ini:             *ini,
@@ -154,7 +154,7 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, conte
 		contentResolver: contentResolver,
 		config:          config,
 		atimeRespCh:     make(chan *atime.Response, 1),
-		bislocal:        bislocal,
+		bckIsLocal:        bckIsLocal,
 	}
 	return lctx
 }

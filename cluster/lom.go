@@ -378,7 +378,7 @@ func (lom *LOM) init(bucketProvider string) (errstr string) {
 	}
 
 	lom.Uname = Uname(lom.Bucket, lom.Objname)
-	// bucketmd, bislocal, bprops
+	// bucketmd, bckIsLocal, bprops
 	lom.Bucketmd = bowner.Get()
 	lom.initBckIsLocal(bucketProvider)
 	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)

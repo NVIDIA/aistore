@@ -211,8 +211,8 @@ func (mi *MountpathInfo) String() string {
 }
 
 // returns fqn for a given content-type
-func (mi *MountpathInfo) MakePath(contentType string, bislocal bool) (fqn string) {
-	if bislocal {
+func (mi *MountpathInfo) MakePath(contentType string, bckIsLocal bool) (fqn string) {
+	if bckIsLocal {
 		fqn = filepath.Join(mi.Path, contentType, cmn.LocalBs)
 	} else {
 		fqn = filepath.Join(mi.Path, contentType, cmn.CloudBs)
@@ -220,11 +220,11 @@ func (mi *MountpathInfo) MakePath(contentType string, bislocal bool) (fqn string
 	return
 }
 
-func (mi *MountpathInfo) MakePathBucket(contentType, bucket string, bislocal bool) string {
-	return filepath.Join(mi.MakePath(contentType, bislocal), bucket)
+func (mi *MountpathInfo) MakePathBucket(contentType, bucket string, bckIsLocal bool) string {
+	return filepath.Join(mi.MakePath(contentType, bckIsLocal), bucket)
 }
-func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname string, bislocal bool) string {
-	return filepath.Join(mi.MakePath(contentType, bislocal), bucket, objname)
+func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname string, bckIsLocal bool) string {
+	return filepath.Join(mi.MakePath(contentType, bckIsLocal), bucket, objname)
 }
 
 //

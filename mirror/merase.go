@@ -39,7 +39,7 @@ type (
 		// init
 		T          cluster.Target
 		Namelocker cluster.NameLocker
-		Bislocal   bool
+		BckIsLocal   bool
 	}
 	eraser struct { // one per mountpath
 		parent    *XactErase
@@ -95,7 +95,7 @@ func (r *XactErase) init() (numjs int, err error) {
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
 		eraser := &eraser{parent: r, mpathInfo: mpathInfo, config: config}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal)
 		r.erasers[mpathLC] = eraser
 		go eraser.jog()
 	}
@@ -121,7 +121,7 @@ func (j *eraser) stop() { j.stopCh <- struct{}{}; close(j.stopCh) }
 func (j *eraser) jog() {
 	glog.Infof("eraser[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.stopCh = make(chan struct{}, 1)
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Bislocal)
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckIsLocal)
 	if err := filepath.Walk(dir, j.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {

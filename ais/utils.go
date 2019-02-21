@@ -178,9 +178,9 @@ func parsebool(s string) (value bool, err error) {
 //    AWS bucket versioning can be disabled on the cloud. In this case we do not
 //    save/read/update version using xattrs. And the function returns that the
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
-func versioningConfigured(islocal bool) bool {
+func versioningConfigured(isLocal bool) bool {
 	versioning := cmn.GCO.Get().Ver.Versioning
-	if islocal {
+	if isLocal {
 		return versioning == cmn.VersionAll || versioning == cmn.VersionLocal
 	}
 	return versioning == cmn.VersionAll || versioning == cmn.VersionCloud

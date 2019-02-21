@@ -404,7 +404,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		prefix         = rangeMsg.Prefix
 		ct             = t.contextWithAuth(r)
 		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
-		islocal        = t.bmdowner.get().IsLocal(bucket)
+		bckIsLocal     = t.bmdowner.get().IsLocal(bucket)
 	)
 
 	min, max, err := parseRange(rangeMsg.Range)
@@ -418,7 +418,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 	}
 
 	for {
-		if islocal {
+		if bckIsLocal {
 			bucketListPage, err = t.prepareLocalObjectList(bucket, msg)
 		} else {
 			bucketListPage, err = getCloudBucketPage(ct, bucket, msg)

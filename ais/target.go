@@ -484,7 +484,7 @@ loop:
 			}
 			bucket := fwd.bucket
 			bucketmd := t.bmdowner.get()
-			if islocal := bucketmd.IsLocal(bucket); islocal {
+			if bckIsLocal := bucketmd.IsLocal(bucket); bckIsLocal {
 				glog.Errorf("prefetch: bucket  %s is local, nothing to do", bucket)
 			} else {
 				for _, objname := range fwd.objnames {
@@ -1221,8 +1221,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		t.xactions.abortPutCopies(bucket)
 		bucketmd := t.bmdowner.get()
-		islocal := bucketmd.IsLocal(bucket)
-		t.xactions.renewEraseCopies(bucket, t, islocal)
+		bckIsLocal := bucketmd.IsLocal(bucket)
+		t.xactions.renewEraseCopies(bucket, t, bckIsLocal)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
 	}
@@ -1894,14 +1894,14 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	islocal := t.bmdowner.get().IsLocal(bucket)
+	bckIsLocal := t.bmdowner.get().IsLocal(bucket)
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToProcess() {
 			continue
 		}
 		for _, mpathInfo := range availablePaths {
 			wg.Add(1)
-			dir := mpathInfo.MakePathBucket(contentType, bucket, islocal)
+			dir := mpathInfo.MakePathBucket(contentType, bucket, bckIsLocal)
 			go walkMpath(dir)
 		}
 	}
@@ -2010,7 +2010,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
-	isLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
+	bckIsLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -2035,7 +2035,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if isLocal {
+	if bckIsLocal {
 		tag = "local"
 		if errstr, ok = t.doLocalBucketList(w, r, bucket, &msg); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -2264,11 +2264,11 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 //lint:ignore U1000 unused
 func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replicaSrc string) (errstr string) {
 	var (
-		started = time.Now()
-		islocal = t.bmdowner.get().IsLocal(bucket)
+		started    = time.Now()
+		bckIsLocal = t.bmdowner.get().IsLocal(bucket)
 	)
 
-	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, bckIsLocal)
 	if errstr != "" {
 		return errstr
 	}
@@ -2412,7 +2412,7 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 		return
 	}
 
-	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.BckIsLocal {
+	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.BckIsLocal != lom.BckIsLocal {
 		t.xcopy = t.xactions.renewPutCopies(lom, t)
 	}
 	if t.xcopy == nil {
@@ -2546,8 +2546,8 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		return
 	}
 	bucketmd := t.bmdowner.get()
-	islocalFrom := bucketmd.IsLocal(bucketFrom)
-	fqn, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, islocalFrom)
+	bckIsLocalFrom := bucketmd.IsLocal(bucketFrom)
+	fqn, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
 	if errstr != "" {
 		return
 	}
@@ -2558,8 +2558,8 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
-		islocalTo := bucketmd.IsLocal(bucketTo)
-		newFQN, errstr = cluster.FQN(contentType, bucketTo, objnameTo, islocalTo)
+		bckIsLocalTo := bucketmd.IsLocal(bucketTo)
+		newFQN, errstr = cluster.FQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
 		if errstr != "" {
 			return
 		}

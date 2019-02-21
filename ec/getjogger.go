@@ -375,8 +375,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	src := io.MultiReader(srcReaders...)
-	isLocal := req.LOM.BckIsLocal
-	mainFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, isLocal)
+	mainFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if glog.V(4) {
 		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, mainFQN)
 	}

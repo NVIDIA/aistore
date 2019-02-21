@@ -346,7 +346,7 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 		Mirror:         *lom.Mirror,
 		T:              t,
 		Namelocker:     t.rtnamemap,
-		Bislocal:       lom.BckIsLocal,
+		BckIsLocal:     lom.BckIsLocal,
 	}
 	if err := xcopy.InitAndRun(); err != nil {
 		glog.Errorln(err)
@@ -368,7 +368,7 @@ func (xs *xactions) abortPutCopies(bucket string) {
 	xs.Unlock()
 }
 
-func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, islocal bool) {
+func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, bckIsLocal bool) {
 	kinderase := path.Join(cmn.ActEraseCopies, bucket)
 	xs.Lock()
 	xx := xs.findU(kinderase)
@@ -383,7 +383,7 @@ func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, islocal boo
 		XactBase:   *base,
 		T:          t,
 		Namelocker: t.rtnamemap,
-		Bislocal:   islocal,
+		BckIsLocal: bckIsLocal,
 	}
 	xs.add(xerase)
 	go xerase.Run()

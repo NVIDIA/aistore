@@ -125,7 +125,7 @@ func (r *XactEC) DispatchReq(w http.ResponseWriter, hdr transport.Header, object
 		return
 	}
 
-	islocal := r.bmd.Get().IsLocal(hdr.Bucket)
+	bckIsLocal := r.bmd.Get().IsLocal(hdr.Bucket)
 	daemonID := iReq.Sender
 	// command requests should not have a body, but if it has,
 	// the body must be drained to avoid errors
@@ -139,7 +139,7 @@ func (r *XactEC) DispatchReq(w http.ResponseWriter, hdr transport.Header, object
 	switch iReq.Act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(hdr.Bucket, hdr.Objname, islocal); err != nil {
+		if err := r.removeObjAndMeta(hdr.Bucket, hdr.Objname, bckIsLocal); err != nil {
 			glog.Errorf("Failed to delete %s/%s: %v", hdr.Bucket, hdr.Objname, err)
 		}
 	case reqGet:
@@ -149,12 +149,12 @@ func (r *XactEC) DispatchReq(w http.ResponseWriter, hdr transport.Header, object
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, hdr.Objname)
 			}
-			fqn, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, islocal)
+			fqn, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, bckIsLocal)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", hdr.Objname)
 			}
-			fqn, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, islocal)
+			fqn, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, bckIsLocal)
 		}
 		if errstr != "" {
 			glog.Errorf(errstr)
@@ -166,7 +166,7 @@ func (r *XactEC) DispatchReq(w http.ResponseWriter, hdr transport.Header, object
 		}
 	case reqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, errstr := cluster.FQN(MetaType, hdr.Bucket, hdr.Objname, islocal)
+		fqn, errstr := cluster.FQN(MetaType, hdr.Bucket, hdr.Objname, bckIsLocal)
 		if errstr != "" {
 			glog.Errorf(errstr)
 			return
@@ -253,7 +253,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			return
 		}
 
-		isLocal := r.bmd.Get().IsLocal(hdr.Bucket)
+		bckIsLocal := r.bmd.Get().IsLocal(hdr.Bucket)
 		var (
 			objFQN, errstr string
 			err            error
@@ -263,7 +263,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, hdr.Bucket, hdr.Objname)
 			}
-			objFQN, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, isLocal)
+			objFQN, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return
@@ -273,7 +273,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 				glog.Infof("Got replica response from %s (%s/%s)",
 					iReq.Sender, hdr.Bucket, hdr.Objname)
 			}
-			objFQN, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, isLocal)
+			objFQN, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return
@@ -543,7 +543,7 @@ func (r *XactEC) Run() (err error) {
 
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
-func (r *XactEC) removeObjAndMeta(bucket, objname string, islocal bool) error {
+func (r *XactEC) removeObjAndMeta(bucket, objname string, bckIsLocal bool) error {
 	if glog.V(4) {
 		glog.Infof("Delete request for %s/%s", bucket, objname)
 	}
@@ -555,7 +555,7 @@ func (r *XactEC) removeObjAndMeta(bucket, objname string, islocal bool) error {
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, errstr := cluster.FQN(tp, bucket, objname, islocal)
+		fqnMeta, errstr := cluster.FQN(tp, bucket, objname, bckIsLocal)
 		if errstr != "" {
 			return errors.New(errstr)
 		}
