@@ -114,7 +114,7 @@ func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
 	return f.GenContentParsedFQN(parsedFQN, contentType, prefix)
 }
 
-func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN FQNparsed, contentType, prefix string) (fqn string) {
+func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN ParsedFQN, contentType, prefix string) (fqn string) {
 	spec, ok := f.RegisteredContentTypes[contentType]
 	if !ok {
 		cmn.AssertMsg(false, fmt.Sprintf("Invalid content type '%s'", contentType))

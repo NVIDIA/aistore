@@ -14,7 +14,7 @@ import (
 //
 // resolve and validate fqn
 //
-func ResolveFQN(fqn string, bowner Bowner, isLocal ...bool) (parsedFQN fs.FQNparsed, hrwFQN string, err error) {
+func ResolveFQN(fqn string, bowner Bowner, isLocal ...bool) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	var errstr string
 	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {

@@ -219,27 +219,23 @@ loop:
 
 func (j *copier) mirror(lom *cluster.LOM) {
 	// copy
-	var (
-		cpyfqn       string
-		parsedCpyFQN = lom.ParsedFQN
-	)
 	j.parent.Namelocker.Lock(lom.Uname, false)
 	defer j.parent.Namelocker.Unlock(lom.Uname, false)
 
-	parsedCpyFQN.MpathInfo = j.mpathInfo
-	workfqn := fs.CSM.GenContentParsedFQN(parsedCpyFQN, fs.WorkfileType, fs.WorkfilePut)
-	if err := lom.CopyObject(workfqn, j.buf); err != nil {
+	lom.ParsedFQN.MpathInfo = j.mpathInfo
+	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
+	if err := lom.CopyObject(workFQN, j.buf); err != nil {
 		return
 	}
-	cpyfqn = fs.CSM.FQN(j.mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+	cpyFQN := fs.CSM.FQN(j.mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
 	if glog.V(4) {
-		glog.Infof("Copied %s => workfile %s, cpyfqn %s", lom, workfqn, cpyfqn)
+		glog.Infof("Copied %s => workfile %s, cpyFQN %s", lom, workFQN, cpyFQN)
 	}
-	if err := cmn.MvFile(workfqn, cpyfqn); err != nil {
+	if err := cmn.MvFile(workFQN, cpyFQN); err != nil {
 		glog.Errorln(err)
 		goto fail
 	}
-	if errstr := lom.SetXcopy(cpyfqn); errstr != "" {
+	if errstr := lom.SetXcopy(cpyFQN); errstr != "" {
 		glog.Errorln(errstr)
 	} else {
 		if glog.V(4) {
@@ -251,8 +247,8 @@ func (j *copier) mirror(lom *cluster.LOM) {
 	}
 	return
 fail:
-	if errRemove := os.Remove(workfqn); errRemove != nil {
-		glog.Errorf("Failed to remove %s, err: %v", workfqn, errRemove)
-		j.parent.T.FSHC(errRemove, workfqn)
+	if errRemove := os.Remove(workFQN); errRemove != nil {
+		glog.Errorf("Failed to remove %s, err: %v", workFQN, errRemove)
+		j.parent.T.FSHC(errRemove, workFQN)
 	}
 }

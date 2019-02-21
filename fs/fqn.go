@@ -22,7 +22,7 @@ const (
 	WorkfileFSHC        = "fshc"   // FSHC test file
 )
 
-type FQNparsed struct {
+type ParsedFQN struct {
 	MpathInfo   *MountpathInfo
 	ContentType string
 	Bucket      string
@@ -31,7 +31,7 @@ type FQNparsed struct {
 }
 
 // mpathInfo, bucket, objname, isLocal, err
-func (mfs *MountedFS) FQN2Info(fqn string) (parsed FQNparsed, err error) {
+func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	var rel string
 
 	parsed.MpathInfo, rel = mfs.Path2MpathInfo(fqn)

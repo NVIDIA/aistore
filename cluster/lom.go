@@ -59,7 +59,7 @@ type (
 		Uname           string
 		HrwFQN          string       // misplaced?
 		CopyFQN         string       // local replica
-		ParsedFQN       fs.FQNparsed // redundant in-part; tradeoff to speed-up workfile name gen, etc.
+		ParsedFQN       fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		// props
 		Version  string
 		Atime    time.Time
@@ -98,6 +98,33 @@ func (lom *LOM) Misplaced() bool       { return lom.HrwFQN != lom.FQN && !lom.Is
 func (lom *LOM) IsCopy() bool          { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a mirrored copy of an object
 func (lom *LOM) HasCopy() bool         { return lom.CopyFQN != "" && lom.FQN == lom.HrwFQN }     // has one mirrored copy
 
+func (lom *LOM) GenFQN(ty, prefix string) string {
+	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
+}
+
+func (lom *LOM) Copy(props LOMCopyProps) *LOM {
+	dstLOM := &LOM{}
+	*dstLOM = *lom
+
+	if dstLOM.Cksum != nil && props.Cksum == nil {
+		_ = dstLOM.checksum(0) // already copied; ignoring "get" errors at this point
+	} else if props.Cksum != nil {
+		dstLOM.Cksum = props.Cksum
+	}
+	if props.Version != "" {
+		dstLOM.Version = props.Version
+	}
+
+	if props.FQN != "" {
+		dstLOM.Bucket = ""
+		dstLOM.Objname = ""
+		dstLOM.FQN = props.FQN
+		dstLOM.init(props.BucketProvider)
+	}
+
+	return dstLOM
+}
+
 //
 // local replica management
 //
@@ -132,29 +159,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
 		err = errors.New(errstr)
 	}
 	return
-}
-
-func (lom *LOM) Copy(props LOMCopyProps) *LOM {
-	dstLOM := &LOM{}
-	*dstLOM = *lom
-
-	if dstLOM.Cksum != nil && props.Cksum == nil {
-		_ = dstLOM.checksum(0) // already copied; ignoring "get" errors at this point
-	} else if props.Cksum != nil {
-		dstLOM.Cksum = props.Cksum
-	}
-	if props.Version != "" {
-		dstLOM.Version = props.Version
-	}
-
-	if props.FQN != "" {
-		dstLOM.Bucket = ""
-		dstLOM.Objname = ""
-		dstLOM.FQN = props.FQN
-		dstLOM.init(props.BucketProvider)
-	}
-
-	return dstLOM
 }
 
 // format

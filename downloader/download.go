@@ -617,7 +617,7 @@ func (t *task) download() {
 		t.Unlock()
 		return
 	}
-	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	postFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
 
 	// create request
 	httpReq, err := http.NewRequest(http.MethodGet, t.link, nil)

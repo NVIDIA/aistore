@@ -1661,7 +1661,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		cksumType  = response.Header.Get(cmn.HeaderObjCksumType)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 		version    = response.Header.Get(cmn.HeaderObjVersion)
-		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
+		workFQN    = lom.GenFQN(fs.WorkfileType, fs.WorkfileRemote)
 	)
 
 	remoteLOM = lom.Copy(cluster.LOMCopyProps{Cksum: cksum, Version: version})
@@ -1755,7 +1755,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 			}
 		}
 	}
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
+	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfileColdget)
 	if !coldGet {
 		_ = lom.Fill("", cluster.LomCksum)
 		glog.Infof("cold-GET race: %s(%s, ver=%s) - nothing to do", lom, cmn.B2S(lom.Size, 1), lom.Version)
@@ -2293,7 +2293,7 @@ func (roi *recvObjInfo) init() error {
 	if errstr := roi.lom.Fill(roi.bucketProvider, cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
-	roi.workFQN = fs.CSM.GenContentParsedFQN(roi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	roi.workFQN = roi.lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
 	// All objects which are migrated should contain checksum.
 	if roi.migrated {
 		cmn.Assert(roi.cksumToCheck != nil)
