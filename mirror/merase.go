@@ -39,7 +39,7 @@ type (
 		// init
 		T          cluster.Target
 		Namelocker cluster.NameLocker
-		BckIsLocal   bool
+		BckIsLocal bool
 	}
 	eraser struct { // one per mountpath
 		parent    *XactErase

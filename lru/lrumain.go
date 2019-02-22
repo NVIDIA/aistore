@@ -80,7 +80,7 @@ type (
 		config          *cmn.Config
 		atimeRespCh     chan *atime.Response
 		dontevictime    time.Time
-		bckIsLocal        bool
+		bckIsLocal      bool
 		throttle        bool
 		aborted         bool
 	}
@@ -154,7 +154,7 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, conte
 		contentResolver: contentResolver,
 		config:          config,
 		atimeRespCh:     make(chan *atime.Response, 1),
-		bckIsLocal:        bckIsLocal,
+		bckIsLocal:      bckIsLocal,
 	}
 	return lctx
 }

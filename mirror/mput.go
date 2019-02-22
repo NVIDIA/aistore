@@ -32,7 +32,7 @@ type (
 		Namelocker             cluster.NameLocker
 		wg                     *sync.WaitGroup
 		total, dropped, copied int64
-		BckIsLocal               bool
+		BckIsLocal             bool
 	}
 	copier struct { // one per mountpath
 		parent    *XactCopy

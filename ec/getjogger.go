@@ -464,7 +464,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 					break
 				}
 			} else {
-				err = fmt.Errorf("Unsupported slice source: %T", sl.writer)
+				err = fmt.Errorf("unsupported slice source: %T", sl.writer)
 				break
 			}
 		}
