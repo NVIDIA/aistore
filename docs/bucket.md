@@ -1,5 +1,6 @@
 ## Table of Contents
 - [Bucket](#bucket)
+    - [Bucket Provider](#bucket-provider)
 - [Local Bucket](#local-bucket)
     - [Example: create, rename and, destroy local bucket](#example-create-rename-and-destroy-local-bucket)
 - [Cloud Bucket](#cloud-bucket)
@@ -23,9 +24,15 @@ There are two different kinds of buckets in AIS, **local buckets** and **cloud b
 | local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [REST API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
-Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets have operations specific to its cache within AIS. Local buckets, as of v2.0, are the only buckets that can be created, renamed or deleted through the [RESTful API](http_api.md).
+Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. Local buckets, as of v2.0, are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
 
-The RESTful API itself is documented [here](http_api.md), while this document serves to further explain certain features of it specific to buckets.
+### Bucket Provider
+
+Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
+
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with (currently) two supported enumerated values: `local` and `cloud`.
+
+For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). Rest of this document serves to further explain features and concepts specific to storage buckets.
 
 ## Local Bucket
 Local Buckets are buckets that exist only within AIS.

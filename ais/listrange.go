@@ -32,14 +32,15 @@ const (
 )
 
 type filesWithDeadline struct {
-	ctx      context.Context
-	objnames []string
-	bucket   string
-	deadline time.Time
-	done     chan struct{}
+	ctx            context.Context
+	objnames       []string
+	bucket         string
+	bucketProvider string
+	deadline       time.Time
+	done           chan struct{}
 }
 
-type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
+type listf func(ct context.Context, objects []string, bucket, bucketProvider string, deadline time.Duration, done chan struct{}) error
 
 func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.GetMsg) (bucketList *cmn.BucketList, err error) {
 	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
@@ -97,7 +98,8 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 //
 //=============
 
-func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
+func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string,
+	bucket, bucketProvider string, deadline time.Duration, done chan struct{}) error {
 	xdel := t.xactions.newEvictDelete(evict)
 	defer func() {
 		if done != nil {
@@ -120,7 +122,15 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		err := t.objDelete(ct, bucket, objname, evict)
+		lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
+		if errstr := lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
+			glog.Errorln(errstr)
+			continue
+		}
+		if evict && !lom.Exists() {
+			continue
+		}
+		err := t.objDelete(ct, lom, evict)
 		if err != nil {
 			return err
 		}
@@ -129,12 +139,14 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	return nil
 }
 
-func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, deadline, done)
+func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket, bucketProvider string,
+	deadline time.Duration, done chan struct{}) error {
+	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, bucketProvider, deadline, done)
 }
 
-func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, deadline, done)
+func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, bucketProvider string,
+	deadline time.Duration, done chan struct{}) error {
+	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, bucketProvider, deadline, done)
 }
 
 //=========
@@ -143,14 +155,14 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket str
 //
 //=========
 
-func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
+func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bucketProvider string) {
 	var (
 		errstr            string
 		vchanged, coldGet bool
 		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 		versioncfg        = &cmn.GCO.Get().Ver
 	)
-	if errstr = lom.Fill("", cluster.LomFstat|cluster.LomVersion|cluster.LomCksum); errstr != "" {
+	if errstr = lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		glog.Error(errstr)
 		return
 	}
@@ -186,17 +198,15 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	}
 }
 
-func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string,
+func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string, bucketProvider string,
 	deadline time.Duration, done chan struct{}) error {
-	if t.bmdowner.get().IsLocal(bucket) {
-		return fmt.Errorf("cannot prefetch from a local bucket: %s", bucket)
-	}
+	//Validation is checked in target.go
 	var absdeadline time.Time
 	if deadline != 0 {
 		// 0 is no deadline - if deadline == 0, the absolute deadline is 0 time.
 		absdeadline = time.Now().Add(deadline)
 	}
-	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, deadline: absdeadline, done: done}
+	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, bucketProvider: bucketProvider, deadline: absdeadline, done: done}
 	return nil
 }
 
@@ -328,7 +338,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msgInt actionMsgInternal) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bucketProvider string, msgInt actionMsgInternal) error {
 	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")
@@ -345,17 +355,17 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg
 		if errstr != "" {
 			return fmt.Errorf(errstr + detail)
 		}
-		return t.iterateBucketListPages(r, apitems, rangeMsg, operation)
+		return t.iterateBucketListPages(r, apitems, bucketProvider, rangeMsg, operation)
 	}
 	// Parse map into ListMsg
 	listMsg, errstr := parseListMsg(jsmap)
 	if errstr != "" {
 		return fmt.Errorf(errstr + detail)
 	}
-	return t.listOperation(r, apitems, listMsg, operation)
+	return t.listOperation(r, apitems, bucketProvider, listMsg, operation)
 }
 
-func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *cmn.ListMsg, f listf) error {
+func (t *targetrunner) listOperation(r *http.Request, apitems []string, bucketProvider string, listMsg *cmn.ListMsg, f listf) error {
 	var err error
 	bucket := apitems[0]
 	objs := make([]string, 0, len(listMsg.Objnames))
@@ -378,7 +388,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 
 		// Asynchronously perform function
 		go func() {
-			err := f(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done)
+			err := f(t.contextWithAuth(r), objs, bucket, bucketProvider, listMsg.Deadline, done)
 			if err != nil {
 				glog.Errorf("Error performing list function: %v", err)
 				t.statsif.Add(stats.ErrListCount, 1)
@@ -394,7 +404,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 	return err
 }
 
-func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, rangeMsg *cmn.RangeMsg, operation listf) error {
+func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, bucketProvider string, rangeMsg *cmn.RangeMsg, operation listf) error {
 	var (
 		bucketListPage *cmn.BucketList
 		err            error
@@ -402,8 +412,8 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		prefix         = rangeMsg.Prefix
 		ct             = t.contextWithAuth(r)
 		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
-		bckIsLocal     = t.bmdowner.get().IsLocal(bucket)
 	)
+	bckIsLocal, _ := t.validateBucketProvider(bucketProvider, bucket)
 
 	min, max, err := parseRange(rangeMsg.Range)
 	if err != nil {
@@ -447,7 +457,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 			}
 
 			// Call listrange function with paged chunk of entries
-			if err := t.listOperation(r, apitems, listMsg, operation); err != nil {
+			if err := t.listOperation(r, apitems, bucketProvider, listMsg, operation); err != nil {
 				return err
 			}
 		}

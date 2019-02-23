@@ -486,7 +486,7 @@ func resetBucketProps(proxyURL, bucket string, t *testing.T) {
 }
 
 func deleteCloudObject(proxyURL, bucket, object string, t *testing.T) {
-	if err := tutils.Del(proxyURL, bucket, object, nil, nil, true); err != nil {
+	if err := tutils.Del(proxyURL, bucket, object, cmn.CloudBs, nil, nil, true); err != nil {
 		t.Errorf("bucket/object: %s/%s not deleted, err: %v", bucket, object, err)
 	}
 }

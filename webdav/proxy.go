@@ -7,6 +7,7 @@ package main
 
 import (
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -66,7 +67,7 @@ func (p *proxyServer) listBuckets(bucketProvider string) ([]string, error) {
 
 // doesObjectExists checks whether a resource exists by querying AIStore.
 func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, error) {
-	entries, err := p.listObjectsDetails(bucket, prefix, 1)
+	entries, err := p.listObjectsDetails(bucket, "", prefix, 1)
 	if err != nil {
 		return false, nil, err
 	}
@@ -89,42 +90,47 @@ func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, e
 
 // putObject creates a new file reader and uses it to make a proxy put call to save a new
 // object with xxHash enabled into a bucket.
-func (p *proxyServer) putObject(localPath string, bucket string, prefix string) error {
+func (p *proxyServer) putObject(localPath, bucket, bucketProvider, prefix string) error {
 	r, err := tutils.NewFileReaderFromFile(localPath, true /* xxhash */)
 	if err != nil {
 		return err
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
 	putArgs := api.PutObjectArgs{
-		BaseParams: baseParams,
-		Bucket:     bucket,
-		Object:     prefix,
-		Hash:       r.XXHash(),
-		Reader:     r,
+		BaseParams:     baseParams,
+		Bucket:         bucket,
+		BucketProvider: bucketProvider,
+		Object:         prefix,
+		Hash:           r.XXHash(),
+		Reader:         r,
 	}
 	return api.PutObject(putArgs)
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
-func (p *proxyServer) getObject(bucket string, prefix string, w io.Writer) error {
+func (p *proxyServer) getObject(bucket, bucketProvider, prefix string, w io.Writer) error {
+	query := url.Values{}
+	query.Add(cmn.URLParamBucketProvider, bucketProvider)
 	baseParams := tutils.BaseAPIParams(p.url)
-	options := api.GetObjectInput{Writer: w}
+	options := api.GetObjectInput{Writer: w, Query: query}
 	_, err := api.GetObjectWithValidation(baseParams, bucket, prefix, options)
 	return err
 }
 
-func (p *proxyServer) deleteObject(bucket string, prefix string) error {
-	return tutils.Del(p.url, bucket, prefix, nil /* wg */, nil /* errCh */, true /* silent */)
+func (p *proxyServer) deleteObject(bucket, bucketProvider, prefix string) error {
+	return tutils.Del(p.url, bucket, prefix, bucketProvider, nil /* wg */, nil /* errCh */, true /* silent */)
 }
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int) ([]*cmn.BucketEntry, error) {
+func (p *proxyServer) listObjectsDetails(bucket, bucketProvider, prefix string, limit int) ([]*cmn.BucketEntry, error) {
 	msg := &cmn.GetMsg{
 		GetPrefix: prefix,
 		GetProps:  "size, ctime",
 	}
+	query := url.Values{}
+	query.Add(cmn.URLParamBucketProvider, bucketProvider)
 	baseParams := tutils.BaseAPIParams(p.url)
-	bl, err := api.ListBucket(baseParams, bucket, msg, limit)
+	bl, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
 		return nil, err
 	}
@@ -133,11 +139,11 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 }
 
 // listObjectsNames returns names of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsNames(bucket string, prefix string) ([]string, error) {
-	return tutils.ListObjects(p.url, bucket, prefix, 0)
+func (p *proxyServer) listObjectsNames(bucket, bucketProvider, prefix string) ([]string, error) {
+	return tutils.ListObjects(p.url, bucket, bucketProvider, prefix, 0)
 }
 
 // deleteObjects deletes all objects in the list of names from a bucket
-func (p *proxyServer) deleteObjects(bucket string, names []string) error {
-	return tutils.DeleteList(p.url, bucket, names, true /* wait */, 0 /* deadline*/)
+func (p *proxyServer) deleteObjects(bucket, bucketProvider string, names []string) error {
+	return tutils.DeleteList(p.url, bucket, bucketProvider, names, true /* wait */, 0 /* deadline*/)
 }

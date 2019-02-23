@@ -146,7 +146,7 @@ Given a target and a mountpath, `DisableMountpath` disables that mountpath on th
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
-| mountPath  | string       | Mountpath to be disabled on a target                                                   |
+| mountPath  | string       | Mountpath to be disabled on a target                                                  |
 ##### Return
 Error from AIStore in completing the request
 ___
@@ -191,6 +191,7 @@ Given a bucket name, returns its properties
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket     | string       | Name of the bucket                                                                    |
+| query      | url.Values   | Optional URL query values such as [`?bprovider`](#url_query_values)                   |
 
 ##### Return
 A pointer to an instance of `cmn.BucketProps`, consisting of all the properties of the specified bucket
@@ -200,12 +201,14 @@ ___
 
 #### GetBucketNames
 Given the url of an existing proxy in a cluster, `GetBucketNames` returns the names of all existing local and cloud buckets
+
 ##### Parameters
 | Name           | Type         | Description                                                                           |
 |----------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucketProvider | string       | One of "" (empty), "cloud", "local". If value is empty, returns all bucket names. Otherwise, return "cloud" or "local" buckets.|
+
 ##### Return
 Two lists: one for the names of local buckets, and the other for the names of cloud buckets
 
@@ -263,6 +266,7 @@ Evicts a cloud bucket using its name as the identifier
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket     | string       | Name of the existing bucket                                                           |
+| query      | url.Values   | Optional URL query values such as [`?bprovider`](#url_query_values)                   |
 ##### Return
 Error from AIStore in completing the request
 ___
@@ -277,6 +281,7 @@ Sets the properties of a bucket, using the bucket name as the identifier and the
 | proxyURL   | string          | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket     | string          | Name of the existing bucket                                                           |
 | props      | cmn.BucketProps | Bucket properties to be set                                                           |
+| query      | url.Values      | Optional URL query values such as [`?bprovider`](#url_query_values)                   |
 
 ##### Return
 Error from AIStore in completing the request
@@ -291,6 +296,7 @@ Resets the properties of a bucket, identified by its name, to the global configu
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket     | string       | Name of the existing bucket                                                           |
+| query      | url.Values   | Optional URL query values such as [`?bprovider`](#url_query_values)                   |
 
 ##### Return
 Error from AIStore in completing the request
@@ -303,12 +309,13 @@ ___
 Returns the size and version of an object identified by a combination of its bucket and object names
 
 ##### Parameters
-| Name       | Type         | Description                                                                           |
-|------------|--------------|---------------------------------------------------------------------------------------|
-| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| bucket     | string       | Name of the bucket storing the object                                                 |
-| object     | string       | Name of the object                                                                    |
+| Name           | Type         | Description                                                                           |
+|----------------|--------------|---------------------------------------------------------------------------------------|
+| httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| bucket         | string       | Name of the bucket storing the object                                                 |
+| bucketProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| object         | string       | Name of the object                                                                    |
 
 ##### Return
 A pointer of an instance of `cmn.ObjectProps`, containing information on the size and version of the object
@@ -369,7 +376,7 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | httpClient     | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string             | URL of the proxy to which the HTTP Request is sent                                    |
 | Bucket         | string             | Name of the bucket storing the object                                                 |
-| BucketProvider | string             | Location of the bucket. One of "", "cloud", or "local", where "" is determined by AIS |
+| BucketProvider | string             | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
 | Object         | string             | Name of the object                                                                    |
 | Hash           | string             | Hash computed for the object                                                          |
 | Reader         | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
@@ -418,12 +425,13 @@ ___
 Deletes an object identified by the combination of its bucket and object name
 
 ##### Parameters
-| Name       | Type         | Description                                                                           |
-|------------|--------------|---------------------------------------------------------------------------------------|
-| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| bucket     | string       | Name of the bucket storing the object                                                 |
-| object     | string       | Name of the object to be replicated                                                   |
+| Name           | Type         | Description                                                                           |
+|----------------|--------------|---------------------------------------------------------------------------------------|
+| httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| bucket         | string       | Name of the bucket storing the object                                                 |
+| object         | string       | Name of the object to be replicated                                                   |
+| bucketProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
 
 ##### Return
 Error from AIStore in completing the request
@@ -452,6 +460,12 @@ ___
 | Query   | url.Values    | Map of string keys to slice of strings values, used to set the URL.RawQuery field of the HTTP Request |
 | Headers | http.Header   | Map of string keys to string values, used to set the HTTP Request header                              |
 ___
+
+### URL Query Values
+| Name | Fields | Description |
+| --- | --- | --- |
+| bprovider | "", "cloud", "local" | Location of the bucket - "cloud" or "local". If the value is empty, the location of the bucket is determined by checking if it exists in AIS local bucket metadata |
+
 ## Basic API Workflow
 A sample demo of the APIs listed above:
 ```go

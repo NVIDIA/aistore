@@ -48,8 +48,9 @@ type PutObjectArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps, error) {
-	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object))
+func HeadObject(baseParams *BaseParams, bucket, bucketProvider, object string) (*cmn.ObjectProps, error) {
+	bucketProviderStr := "?" + cmn.URLParamBucketProvider + "=" + bucketProvider
+	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr)
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +79,11 @@ func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps
 // DeleteObject API
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(baseParams *BaseParams, bucket, object string) error {
+func DeleteObject(baseParams *BaseParams, bucket, object, bucketProvider string) error {
+	bucketProviderStr := "?" + cmn.URLParamBucketProvider + "=" + bucketProvider
+
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr
 	_, err := DoHTTPRequest(baseParams, path, nil)
 	return err
 }

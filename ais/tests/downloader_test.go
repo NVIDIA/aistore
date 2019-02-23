@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -90,7 +91,7 @@ func TestDownloadObject(t *testing.T) {
 
 	waitForDownload(t, bucket, map[string]string{objname: linkSmall})
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
@@ -120,7 +121,7 @@ func TestDownloadObjectMulti(t *testing.T) {
 
 	waitForDownload(t, bucket, m)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
 	if len(objs) != len(m) {
 		t.Errorf("expected objects (%s), got: %s", m, objs)

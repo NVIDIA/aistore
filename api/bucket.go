@@ -235,13 +235,17 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 // EvictCloudBucket API
 //
 // EvictCloudBucket sends a HTTP request to a proxy to evict a cloud bucket with the given name
-func EvictCloudBucket(baseParams *BaseParams, bucket string) error {
+func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values) error {
+	var querystr string
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
 	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }

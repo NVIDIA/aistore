@@ -201,7 +201,6 @@ func (lom *LOM) String() string {
 // main method
 func (lom *LOM) Fill(bucketProvider string, action int, config ...*cmn.Config) (errstr string) {
 	lom.SetExists(true) // by default we assume that the object exists
-
 	if lom.Bucket == "" || lom.Objname == "" || lom.FQN == "" {
 		if errstr = lom.init(bucketProvider); errstr != "" {
 			return
@@ -245,6 +244,7 @@ func (lom *LOM) Fill(bucketProvider string, action int, config ...*cmn.Config) (
 			return
 		}
 		lom.Size = finfo.Size()
+
 	}
 	if action&LomVersion != 0 {
 		var version []byte

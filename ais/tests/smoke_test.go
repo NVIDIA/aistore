@@ -62,7 +62,7 @@ func Test_smoke(t *testing.T) {
 			}
 		}
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, "smoke/"+file, wg, errCh, true)
+		go tutils.Del(proxyURL, clibucket, "smoke/"+file, "", wg, errCh, true)
 	}
 	wg.Wait()
 	select {

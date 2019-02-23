@@ -859,6 +859,10 @@ func completeWorkOrder(wo *workOrder) {
 
 func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Clean up ...")
+	bucketProvider := cmn.LocalBs
+	if !runParams.isLocal {
+		bucketProvider = cmn.CloudBs
+	}
 
 	var wg sync.WaitGroup
 	f := func(objs []string, wg *sync.WaitGroup) {
@@ -868,14 +872,14 @@ func cleanUp() {
 		b := cmn.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
-			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, bucketProvider, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
 		}
 
 		if t%b != 0 {
-			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, objs[n*b:], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, bucketProvider, objs[n*b:], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
@@ -916,6 +920,10 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	var err error
-	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, myName, 0)
+	bucketProvider := cmn.LocalBs
+	if !runParams.isLocal {
+		bucketProvider = cmn.CloudBs
+	}
+	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, bucketProvider, myName, 0)
 	return err
 }

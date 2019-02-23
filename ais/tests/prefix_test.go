@@ -214,7 +214,7 @@ func prefixCleanup(t *testing.T, proxyURL string) {
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, keyName, wg, errCh, true)
+		go tutils.Del(proxyURL, clibucket, keyName, "", wg, errCh, true)
 	}
 	wg.Wait()
 

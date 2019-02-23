@@ -543,20 +543,10 @@ func (h *httprunner) call(args callArgs) callResult {
 	url := args.req.url()
 	if len(args.req.body) == 0 {
 		request, err = http.NewRequest(args.req.method, url, nil)
-		if glog.V(4) { // super-verbose
-			glog.Infof("%s %s", args.req.method, url)
-		}
 	} else {
 		request, err = http.NewRequest(args.req.method, url, bytes.NewBuffer(args.req.body))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
-		}
-		if glog.V(4) { // super-verbose
-			l := len(args.req.body)
-			if l > 16 {
-				l = 16
-			}
-			glog.Infof("%s %s %s...}", args.req.method, url, string(args.req.body[:l]))
 		}
 	}
 
@@ -796,7 +786,7 @@ func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLo
 	case "":
 		isLocal = bckIsLocal
 	default:
-		errstr = fmt.Sprintf("Invalid value(%s) for bprovider", bucketProvider)
+		errstr = fmt.Sprintf("Invalid value %s for %s", bucketProvider, cmn.URLParamBucketProvider)
 		return
 	}
 	// Get bucket names
@@ -804,11 +794,7 @@ func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLo
 		return
 	}
 	if isLocal && !bckIsLocal {
-		errstr = fmt.Sprintf("Local bucket (%s) does not exist", bucket)
-	} else if !isLocal && bckIsLocal {
-		if glog.V(4) {
-			glog.Warningf("Duplicated name: local bucket (%s) exists, proceeding to use cloud bucket (%s)", bucket, bucket)
-		}
+		errstr = fmt.Sprintf("Local bucket %s does not exist", bucket)
 	}
 	return
 }

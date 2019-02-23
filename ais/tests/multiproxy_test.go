@@ -597,7 +597,7 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 		if _, err = api.GetObject(baseParams, clibucket, keyname); err != nil {
 			return fmt.Errorf("error executing get: %v", err)
 		}
-		if err = tutils.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
+		if err = tutils.Del(proxyURL, clibucket, keyname, "", nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
 			return fmt.Errorf("error executing del: %v", err)
 		}
 	}
@@ -628,7 +628,7 @@ loop:
 			for {
 				select {
 				case keyname := <-missedDeleteCh:
-					err := tutils.Del(url, localBucketName, keyname, nil, errCh, true)
+					err := tutils.Del(url, localBucketName, keyname, "", nil, errCh, true)
 					if err != nil {
 						missedDeleteCh <- keyname
 					}
@@ -666,7 +666,7 @@ loop:
 			errCh <- err
 		}
 
-		err = tutils.Del(proxyURL, localBucketName, keyname, nil, errCh, true)
+		err = tutils.Del(proxyURL, localBucketName, keyname, "", nil, errCh, true)
 		if err != nil {
 			missedDeleteCh <- keyname
 		}
@@ -675,7 +675,7 @@ loop:
 	// process left over not deleted objects
 	close(missedDeleteCh)
 	for n := range missedDeleteCh {
-		tutils.Del(proxyURL, localBucketName, n, nil, nil, true)
+		tutils.Del(proxyURL, localBucketName, n, "", nil, nil, true)
 	}
 }
 

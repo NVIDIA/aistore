@@ -146,7 +146,7 @@ func TestListObjects(t *testing.T) {
 		wg.Wait()
 
 		// Confirm PUTs
-		bckObjs, err := tutils.ListObjects(proxyURL, bucket, "", 0)
+		bckObjs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 		tutils.CheckFatal(err, t)
 
 		if len(bckObjs) != totalObjects {

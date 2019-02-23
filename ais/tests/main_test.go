@@ -278,7 +278,7 @@ func Test_putdeleteRange(t *testing.T) {
 		msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
-		err := tutils.DeleteRange(proxyURL, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
+		err := tutils.DeleteRange(proxyURL, clibucket, "", test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -477,8 +477,140 @@ func printBucketNames(t *testing.T, bucketNames []string) {
 	}
 	fmt.Fprintln(os.Stdout, string(pretty))
 }
+func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
+	var (
+		bucketName = clibucket
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		fileName1  = "mytestobj1.txt"
+		fileName2  = "mytestobj2.txt"
+		queryLocal = url.Values{}
+		queryCloud = url.Values{}
+		dataLocal  = []byte("im local")
+		dataCloud  = []byte("I'm from the cloud!")
+		files      = []string{fileName1, fileName2}
+	)
 
-func Test_SameLocalAndCloudBucketname(t *testing.T) {
+	if !isCloudBucket(t, proxyURL, bucketName) {
+		t.Skip("Test_SameLocalAndCloudBucketname requires a cloud bucket")
+	}
+	queryLocal.Add(cmn.URLParamBucketProvider, cmn.LocalBs)
+	queryCloud.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
+
+	putArgsLocal := api.PutObjectArgs{
+		BaseParams:     baseParams,
+		Bucket:         bucketName,
+		BucketProvider: cmn.LocalBs,
+		Object:         fileName1,
+		Reader:         tutils.NewBytesReader(dataLocal),
+	}
+
+	putArgsCloud := api.PutObjectArgs{
+		BaseParams:     baseParams,
+		Bucket:         bucketName,
+		BucketProvider: cmn.CloudBs,
+		Object:         fileName1,
+		Reader:         tutils.NewBytesReader(dataCloud),
+	}
+
+	//PUT/GET/DEL Without local bucket
+	tutils.Logf("Validating responses for non-existent local bucket...\n")
+	err := api.PutObject(putArgsLocal)
+	if err == nil {
+		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+	}
+
+	_, err = api.GetObject(baseParams, bucketName, fileName1, api.GetObjectInput{Query: queryLocal})
+	if err == nil {
+		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+	}
+
+	err = api.DeleteObject(baseParams, bucketName, fileName1, cmn.LocalBs)
+	if err == nil {
+		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+	}
+
+	// Prefetch, evict without bprovider=cloud
+	tutils.Logf("Validating responses for empty bprovider for cloud bucket operations ...\n")
+	err = tutils.PrefetchList(proxyURL, clibucket, "", files, true, 0)
+	if err == nil {
+		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+	}
+
+	err = tutils.PrefetchRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
+	if err == nil {
+		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+	}
+
+	err = tutils.EvictList(proxyURL, bucketName, "", files, true, 0)
+	if err == nil {
+		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+	}
+
+	err = tutils.EvictRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
+	if err == nil {
+		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+	}
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
+
+	// PUT
+	tutils.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
+	err = api.PutObject(putArgsLocal)
+	tutils.CheckFatal(err, t)
+	putArgsLocal.Object = fileName2
+	err = api.PutObject(putArgsLocal)
+	tutils.CheckFatal(err, t)
+
+	err = api.PutObject(putArgsCloud)
+	tutils.CheckFatal(err, t)
+	putArgsCloud.Object = fileName2
+	err = api.PutObject(putArgsCloud)
+	tutils.CheckFatal(err, t)
+
+	// Check Local bucket has 2 files
+	tutils.Logf("Validating local bucket have %s and %s ...\n", fileName1, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
+	tutils.CheckFatal(err, t)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName2)
+	tutils.CheckFatal(err, t)
+
+	// Prefetch/Evict should work
+	err = tutils.PrefetchList(proxyURL, clibucket, cmn.CloudBs, files, true, 0)
+	tutils.CheckFatal(err, t)
+	err = tutils.EvictList(proxyURL, bucketName, cmn.CloudBs, files, true, 0)
+	tutils.CheckFatal(err, t)
+
+	// Deleting from cloud bucket
+	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
+	tutils.DeleteList(proxyURL, bucketName, cmn.CloudBs, files, true, 0)
+
+	// Deleting from local bucket
+	tutils.Logf("Deleting %s and %s from local bucket ...\n", fileName1, fileName2)
+	tutils.DeleteList(proxyURL, bucketName, cmn.LocalBs, files, true, 0)
+
+	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
+	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		t.Errorf("Local file %s not deleted", fileName1)
+	}
+	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName2)
+	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		t.Errorf("Local file %s not deleted", fileName2)
+	}
+
+	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName1)
+	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		t.Errorf("Cloud file %s not deleted", fileName1)
+	}
+	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName2)
+	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		t.Errorf("Cloud file %s not deleted", fileName2)
+	}
+
+}
+
+func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	var (
 		bucketName   = clibucket
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
@@ -571,6 +703,24 @@ func Test_SameLocalAndCloudBucketname(t *testing.T) {
 			len(dataLocal), len(dataCloud), lenLocal, lenCloud)
 	}
 
+	// Delete
+	err = api.DeleteObject(baseParams, bucketName, fileName, cmn.CloudBs)
+	tutils.CheckFatal(err, t)
+
+	lenLocal, err = api.GetObject(baseParams, bucketName, fileName, api.GetObjectInput{Query: queryLocal})
+	tutils.CheckFatal(err, t)
+
+	// Check that local object still exists
+	if lenLocal != int64(len(dataLocal)) {
+		t.Errorf("Local file %s deleted", fileName)
+	}
+
+	// Check that cloud object is deleted using HeadObject
+	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName)
+	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		t.Errorf("Cloud file %s not deleted", fileName)
+	}
+
 	// Set Props Object
 	err = api.SetBucketProps(baseParams, bucketName, bucketPropsLocal, queryLocal)
 	tutils.CheckFatal(err, t)
@@ -653,7 +803,7 @@ func Test_coldgetmd5(t *testing.T) {
 	for fname := range filesPutCh {
 		fileslist = append(fileslist, filepath.Join(ColdValidStr, fname))
 	}
-	evictobjects(t, proxyURL, fileslist)
+	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
 		setClusterConfig(t, proxyURL, "validate_checksum_cold_get", false)
@@ -667,7 +817,7 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without MD5 validation: %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
-	evictobjects(t, proxyURL, fileslist)
+	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Enable Cold Get Validation
 	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", true)
 	if t.Failed() {
@@ -687,7 +837,7 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
@@ -773,7 +923,7 @@ func TestHeadObject(t *testing.T) {
 	}
 
 	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1"}
-	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, objName)
+	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
@@ -782,7 +932,7 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	_, err = api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "this_object_should_not_exist")
+	_, err = api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", "this_object_should_not_exist")
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
@@ -819,7 +969,7 @@ func TestHeadObjectCheckCached(t *testing.T) {
 		t.Error("Expected object to be cached, got false from tutils.IsCached")
 	}
 
-	err = tutils.Del(proxyURL, clibucket, fileName, nil, nil, true)
+	err = tutils.Del(proxyURL, clibucket, fileName, "", nil, nil, true)
 	tutils.CheckFatal(err, t)
 
 	b, err = tutils.IsCached(proxyURL, clibucket, fileName)
@@ -946,7 +1096,7 @@ func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go tutils.Del(proxyURL, bucket, keyname, dwg, errCh, true)
+		go tutils.Del(proxyURL, bucket, keyname, "", dwg, errCh, true)
 	}
 	dwg.Wait()
 }
@@ -1114,7 +1264,7 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, fn, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, clibucket, fn, "", wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
@@ -1135,6 +1285,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bProps     *cmn.BucketProps
+		query      = url.Values{}
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1151,7 +1302,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		//cleanup
 		for _, fn := range fileslist {
 			wg.Add(1)
-			go tutils.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
+			go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, !testing.Verbose())
 		}
 		wg.Wait()
 		selectErr(errCh, "delete", t, false)
@@ -1184,8 +1335,8 @@ func Test_evictCloudBucket(t *testing.T) {
 	if !bProps.MirrorEnabled {
 		t.Fatalf("Test property not changed")
 	}
-
-	api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket)
+	query.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
+	api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
 
 	for _, fname := range fileslist {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
@@ -1395,7 +1546,7 @@ cleanup:
 	}
 
 	wg.Add(1)
-	go tutils.Del(proxyURL, clibucket, filepath.Join(RangeGetStr, fileName), wg, errCh, !testing.Verbose())
+	go tutils.Del(proxyURL, clibucket, filepath.Join(RangeGetStr, fileName), "", wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
 	setClusterConfig(t, proxyURL, "enable_read_range_checksum", oldEnableReadRangeChecksum)
@@ -1548,7 +1699,7 @@ func Test_checksum(t *testing.T) {
 		}
 	}
 	// Delete it from cache.
-	evictobjects(t, proxyURL, fileslist)
+	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
 		setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumNone)
@@ -1572,7 +1723,7 @@ func Test_checksum(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without any checksum validation: %v\n", totalio, duration)
 	selectErr(errCh, "get", t, false)
-	evictobjects(t, proxyURL, fileslist)
+	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	switch clichecksum {
 	case "all":
 		setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumXXHash)
@@ -1631,7 +1782,7 @@ func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []s
 		}
 
 		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, fn, wg, errCh, true)
+		go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, true)
 	}
 
 	wg.Wait()
@@ -1660,8 +1811,8 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 	getsGroup.Wait()
 }
 
-func evictobjects(t *testing.T, proxyURL string, fileslist []string) {
-	err := tutils.EvictList(proxyURL, clibucket, fileslist, true, 0)
+func evictobjects(t *testing.T, proxyURL, bucketProvider string, fileslist []string) {
+	err := tutils.EvictList(proxyURL, clibucket, bucketProvider, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}

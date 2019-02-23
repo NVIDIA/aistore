@@ -4,6 +4,7 @@
 - [Notation](#notation)
 - [Overview](#overview)
 - [API Reference](#api-reference)
+- [Bucket Provider](#bucket-provider)
 - [Querying information](#querying-information)
 - [Example: querying runtime statistics](#example-querying-runtime-statistics)
 
@@ -65,8 +66,8 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Get [bucket](bucket.md) names | GET /v1/buckets/\* | `curl -X GET 'http://G/v1/buckets/*'` |
 | List objects in a given [bucket](bucket.md) | POST {"action": "listobjects", "value":{  properties-and-options... }} /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> |
 | Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mylocalbucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
-| Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/mydirectory/myobject'` |
-| Evict object from cache | DELETE '{"action": "evictobjects"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evictobjects"}' 'http://G/v1/objects/mybucket/myobject'` |
+| Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L 'http://G/v1/objects/mybucket/myobject'` |
+| [Evict](bucket.md#prefetchevict-objects) object from cache | DELETE '{"action": "evictobjects"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evictobjects"}' 'http://G/v1/objects/mybucket/myobject'` |
 | Create local [bucket](bucket.md) (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
 | Destroy local [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
 | Rename local [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
@@ -76,7 +77,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | [Prefetch](bucket.md#prefetchevict-objects) a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Prefetch](bucket.md#prefetchevict-objects) a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
-| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
+| Delete a range of objects | DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Evict](bucket.md#prefetchevict-objects) a list of objects | DELETE '{"action":"evictobjects", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | [Evict](bucket.md#prefetchevict-objects) a range of objects| DELETE '{"action":"evictobjects", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' 'http://G/v1/buckets/abc'` <sup>[4](#ft4)</sup> |
 | Get [bucket properties](bucket.md#properties-and-options) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` |
@@ -102,13 +103,15 @@ ___
 
 <a name="ft7">7</a>: The difference between "Set bucket props" and "Set single bucket prop" is that the single property action requires non-empty `name` and `value`whereby the `value` must be a string. In the case of "Set bucket props", the `value` must be correctly-filled `cmn.BucketProps` structure. For the list of supported propertes, see [API constants](/cmn/api.go) and look for a section titled 'Header Key enum'[↩](#a7)
 
-#### Optional Parameters
+### Bucket Provider
 
-In situations where users have a cloud bucket and a local bucket with the same name, users can add the `?bprovider=(local|cloud)` query string in GET requests to specify the location of the object they want to retrieve.
+Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
+
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with (currently) only two supported enumerated values: `local` and `cloud`.
+
+In all those cases users can add an optional `?bprovider=local` or `?bprovider=cloud` query to the GET (PUT, DELETE, List/Range) request.
+
 Example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?bprovider=local'`
-
-> If `bprovider` is not specified and there is a local bucket and cloud bucket with the same name, it will default to `local`.
-
 
 ### Querying information
 

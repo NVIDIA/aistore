@@ -357,7 +357,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	return l, nil
 }
 
-func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
+func Del(proxyURL, bucket, object, bucketProvider string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -365,15 +365,16 @@ func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan 
 		fmt.Printf("DEL: %s\n", object)
 	}
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.DeleteObject(baseParams, bucket, object)
+	err := api.DeleteObject(baseParams, bucket, object, bucketProvider)
 	emitError(nil, err, errCh)
 	return err
 }
 
-func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}) error {
+func doListRangeCall(proxyURL, bucket, bucketProvider, action, method string, listrangemsg interface{}) error {
 	var (
-		b   []byte
-		err error
+		b     []byte
+		err   error
+		query = url.Values{}
 	)
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
 	b, err = json.Marshal(actionMsg)
@@ -381,50 +382,54 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
 	}
 
+	query.Add(cmn.URLParamBucketProvider, bucketProvider)
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = method
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	optParams := api.OptionalParams{Header: http.Header{
-		"Content-Type": []string{"application/json"},
-	}}
+	optParams := api.OptionalParams{
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		Query: query,
+	}
 	_, err = api.DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
-func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+func PrefetchList(proxyURL, bucket, bucketProvider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
-func PrefetchRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func PrefetchRange(proxyURL, bucket, bucketProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
-func DeleteList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+func DeleteList(proxyURL, bucket, bucketProvider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
-func DeleteRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func DeleteRange(proxyURL, bucket, bucketProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
-func EvictList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+func EvictList(proxyURL, bucket, bucketProvider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
-func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func EvictRange(proxyURL, bucket, bucketProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeCall(proxyURL, bucket, bucketProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
@@ -492,10 +497,13 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
+func ListObjects(proxyURL, bucket, bucketProvider, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.GetMsg{GetPrefix: prefix}
 	baseParams := BaseAPIParams(proxyURL)
-	data, err := api.ListBucket(baseParams, bucket, msg, objectCountLimit)
+	query := url.Values{}
+	query.Add(cmn.URLParamBucketProvider, bucketProvider)
+
+	data, err := api.ListBucket(baseParams, bucket, msg, objectCountLimit, query)
 	if err != nil {
 		return nil, err
 	}

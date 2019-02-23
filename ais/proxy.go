@@ -469,7 +469,12 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
-
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	bckIsLocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	switch msg.Action {
 	case cmn.ActDestroyLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
@@ -499,15 +504,20 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msgInt := p.newActionMsgInternal(&msg, nil, clone)
 		p.metasyncer.sync(true, clone, msgInt)
 	case cmn.ActEvictCB:
-		if p.forwardCP(w, r, &msg, bucket, nil) {
+		// Check that users didn't specify bprovider=cloud
+		if bucketProvider == "" {
+			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
+				cmn.URLParamBucketProvider, cmn.URLParamBucketProvider, cmn.CloudBs))
 			return
-		}
-		bucketmd := p.bmdowner.get()
-		if bucketmd.IsLocal(bucket) {
+		} else if bckIsLocal {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
 			return
 		}
 
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
+		bucketmd := p.bmdowner.get()
 		// check for and delete cloud metadata
 		p.bmdowner.Lock()
 		clone := bucketmd.clone()
@@ -556,7 +566,17 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case cmn.ActDelete, cmn.ActEvictObjects:
-		p.doListRange(w, r, &msg, http.MethodDelete)
+		if msg.Action == cmn.ActEvictObjects {
+			if bucketProvider == "" {
+				p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
+					cmn.URLParamBucketProvider, cmn.URLParamBucketProvider, cmn.CloudBs))
+				return
+			} else if bckIsLocal {
+				p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+				return
+			}
+		}
+		p.doListRange(w, r, &msg, http.MethodDelete, bucketProvider)
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
@@ -570,6 +590,11 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
+	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
@@ -703,7 +728,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
-	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+	bckIsLocal, errstr := p.validateBucketProvider(bucketProvider, bucket)
+	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -755,7 +781,16 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		msgInt := p.newActionMsgInternal(&msg, nil, bmdowner)
 		p.metasyncer.sync(false, bmdowner, msgInt)
 	case cmn.ActPrefetch:
-		p.doListRange(w, r, &msg, http.MethodPost)
+		// Check that users didn't specify bprovider=cloud
+		if bucketProvider == "" {
+			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
+				cmn.URLParamBucketProvider, cmn.URLParamBucketProvider, cmn.CloudBs))
+			return
+		} else if bckIsLocal {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+			return
+		}
+		p.doListRange(w, r, &msg, http.MethodPost, bucketProvider)
 	case cmn.ActListObjects:
 		p.listBucketAndCollectStats(w, r, bucket, bucketProvider, msg, started)
 	case cmn.ActEraseCopies:
@@ -1684,9 +1719,12 @@ func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn
 	p.invalmsghdlr(w, r, cmn.NotSupported) // see also: daemon.go, config.sh, and tests/replication
 }
 
-func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method string) {
+func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method, bucketProvider string) {
 	var (
-		err error
+		err     error
+		results chan callResult
+		timeout time.Duration
+		query   = r.URL.Query()
 	)
 
 	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -1695,7 +1733,10 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 	}
 	bucket := apitems[0]
 	bmdowner := p.bmdowner.get()
-	bckIsLocal := bmdowner.IsLocal(bucket)
+	if _, errstr := p.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")
@@ -1714,13 +1755,6 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 	jsonbytes, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
 
-	var (
-		q       = url.Values{}
-		results chan callResult
-		timeout time.Duration
-	)
-
-	q.Set(cmn.URLParamLocal, strconv.FormatBool(bckIsLocal))
 	if wait {
 		timeout = longTimeout
 	} else {
@@ -1729,7 +1763,7 @@ func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, action
 
 	results = p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-		q,
+		query,
 		method,
 		jsonbytes,
 		smap,

@@ -230,12 +230,12 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					tutils.Del(proxyURL, clibucket, keyname, wg, errCh, true)
+					tutils.Del(proxyURL, clibucket, keyname, "", wg, errCh, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				tutils.Del(proxyURL, clibucket, keyname, nil, errCh, true)
+				tutils.Del(proxyURL, clibucket, keyname, "", nil, errCh, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 

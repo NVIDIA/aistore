@@ -510,7 +510,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			defer wg.Done()
 			objName := fmt.Sprintf(objPatt, i)
 			objPath := ecTestDir + objName
-			err = tutils.Del(proxyURL, TestLocalBucketName, objPath, nil, nil, true)
+			err = tutils.Del(proxyURL, TestLocalBucketName, objPath, "", nil, nil, true)
 			tutils.CheckFatal(err, t)
 
 			deadline := time.Now().Add(time.Second * 10)

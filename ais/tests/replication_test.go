@@ -69,7 +69,7 @@ func testReplicationReceiveOneObject(t *testing.T) {
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLData)
 		err = httpReplicationPut(t, dummySrcURL, proxyURLData, clibucket, object, xxhash, reader)
 		tutils.CheckFatal(err, t)
-		tutils.Del(proxyURL, clibucket, object, nil, nil, true)
+		tutils.Del(proxyURL, clibucket, object, cmn.CloudBs, nil, nil, true)
 	}
 
 }

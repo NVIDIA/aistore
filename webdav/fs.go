@@ -362,20 +362,20 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 			return err
 		}
 
-		err = fs.proxy.deleteObject(f.bucket, f.prefix)
+		err = fs.proxy.deleteObject(f.bucket, "", f.prefix)
 		return err
 
 	case Directory:
 		// if name is identified as a directory, it exists for sure
 		var names []string
-		names, err = fs.proxy.listObjectsNames(f.bucket, f.prefix)
+		names, err = fs.proxy.listObjectsNames(f.bucket, "", f.prefix)
 		if err != nil {
 			return err
 		}
 
 		if len(names) != 0 {
 			// f.parent() should not return nil since the directory
-			err = fs.proxy.deleteObjects(f.bucket, names)
+			err = fs.proxy.deleteObjects(f.bucket, "", names)
 		}
 
 		if err == nil {
@@ -482,7 +482,7 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 		os.Remove(localPath)
 	}()
 
-	err = fs.proxy.getObject(oldf.bucket, oldf.prefix, h)
+	err = fs.proxy.getObject(oldf.bucket, "", oldf.prefix, h)
 	if err != nil {
 		return err
 	}
@@ -492,12 +492,12 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 		return err
 	}
 
-	err = fs.proxy.putObject(localPath, newf.bucket, newf.prefix)
+	err = fs.proxy.putObject(localPath, newf.bucket, "", newf.prefix)
 	if err != nil {
 		return err
 	}
 
-	err = fs.proxy.deleteObject(oldf.bucket, oldf.prefix)
+	err = fs.proxy.deleteObject(oldf.bucket, "", oldf.prefix)
 	return err
 }
 
@@ -752,7 +752,7 @@ func (f *File) Close() error {
 	}
 
 	if f.dirty {
-		err = f.fs.proxy.putObject(f.localPath, f.bucket, f.prefix)
+		err = f.fs.proxy.putObject(f.localPath, f.bucket, "", f.prefix)
 	}
 
 	os.Remove(f.localPath)
@@ -766,7 +766,7 @@ func (f *File) Read(b []byte) (n int, err error) {
 	webdavLog(logLevelAIS, "%-15s: %-70s # bytes = %d", "File Read", f.name, len(b))
 
 	if f.handle == nil {
-		err := f.downlaodFile()
+		err := f.downloadFile()
 		if err != nil {
 			return 0, err
 		}
@@ -787,7 +787,7 @@ func (f *File) Write(data []byte) (n int, err error) {
 	}
 
 	if f.handle == nil {
-		err := f.downlaodFile()
+		err := f.downloadFile()
 		if err != nil {
 			return 0, err
 		}
@@ -821,7 +821,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 		return f.list(count, fis)
 
 	case Bucket, Directory:
-		objs, err := f.fs.proxy.listObjectsDetails(f.bucket, f.prefix, 0 /* limit */)
+		objs, err := f.fs.proxy.listObjectsDetails(f.bucket, "", f.prefix, 0 /* limit */)
 		if err != nil {
 			return nil, err
 		}
@@ -848,7 +848,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 // Seek moves current position of an object
 func (f *File) Seek(offset int64, whence int) (int64, error) {
 	if f.handle == nil {
-		err := f.downlaodFile()
+		err := f.downloadFile()
 		if err != nil {
 			return 0, err
 		}
@@ -877,14 +877,14 @@ func (f *File) createLocalFile(perm os.FileMode) error {
 	return f.handle.Chmod(perm)
 }
 
-// downlaodFile creates a local file, get the file from AIStore.
-func (f *File) downlaodFile() error {
+// downloadFile creates a local file, get the file from AIStore.
+func (f *File) downloadFile() error {
 	err := f.createLocalFile(f.perm)
 	if err != nil {
 		return err
 	}
 
-	err = f.fs.proxy.getObject(f.bucket, f.prefix, f.handle)
+	err = f.fs.proxy.getObject(f.bucket, "", f.prefix, f.handle)
 	if err != nil {
 		return err
 	}

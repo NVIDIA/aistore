@@ -109,7 +109,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL, bucket, bucketProvider string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -128,7 +128,7 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 		}
 	}
 
-	err := tutils.EvictList(proxyURL, bucket, toEvictList, true, 0)
+	err := tutils.EvictList(proxyURL, bucket, bucketProvider, toEvictList, true, 0)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()
@@ -309,7 +309,7 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 	wg := &sync.WaitGroup{}
 	for objname := range newVersions {
 		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, objname, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bucket, objname, "", wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, abortonerr)
@@ -400,7 +400,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 
 	if !bckIsLocal {
 		// try to evict some files and check if they are gone
-		propsEvict(t, proxyURL, bucket, newVersions, msg, versionEnabled)
+		propsEvict(t, proxyURL, bucket, cmn.CloudBs, newVersions, msg, versionEnabled)
 
 		// read objects to put them to the cache. After that all objects must have iscached=true
 		propsRecacheObjects(t, proxyURL, bucket, newVersions, msg, versionEnabled)
