@@ -37,7 +37,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 > Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets** or AIS buckets. Cloud-based and local buckets support the same API. AIS (local) buckets are distributed, content-wise, across the entire cluster and all the [supported storage services](docs/storage_svcs.md) equally apply to both kinds of the buckets with a few exceptions: as of v2.0, only local buckets can be renamed and erasure (en)coded.
 
-> If (and only when) a cloud-based and a local bucket share the same exact name and are simultaneously accessible, users can explicitly let AIS know which bucket to use via [the API](docs/bucket.md).
+> If (and only when) a cloud-based and a local bucket share the same name and are simultaneously accessible, users can explicitly let AIS know via [the API](docs/bucket.md) which bucket to use.
 
 ## Table of Contents
 - [Overview](#overview)
