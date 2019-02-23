@@ -161,7 +161,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 	smap := getClusterMap(t, proxyURL)
 	if len(smap.Tmap) == 1 {
@@ -348,16 +348,37 @@ func TestListObjectsPrefix(t *testing.T) {
 		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
-	tutils.Logf("Create a list of %d objects", numFiles)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	tutils.Logf("Create a list of %d objects\n", numFiles)
+	if isCloudBucket(t, proxyURL, bucket) {
+		tutils.Logf("Cleaning up the cloud bucket %s\n", bucket)
+		msg := &cmn.GetMsg{GetPageSize: 1000, GetPrefix: prefix}
+		reslist, err := listObjects(t, proxyURL, msg, bucket, 0)
+		tutils.CheckFatal(err, t)
+		for _, entry := range reslist.Entries {
+			err := tutils.Del(proxyURL, bucket, entry.Name, "", nil, nil, false)
+			tutils.CheckFatal(err, t)
+		}
+	} else {
+		tutils.Logf("Recreating the local bucket %s\n", bucket)
+		tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 	}
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
 		fname := fmt.Sprintf("obj%d", i+1)
 		fileList = append(fileList, fname)
 	}
+
 	tutils.PutObjsFromList(proxyURL, bucket, dir, readerType, prefix, fileSize, fileList, errCh, filesPutCh, sgl)
+	defer func() {
+		// cleanup objects created by the test
+		for _, fname := range fileList {
+			if err := tutils.Del(proxyURL, bucket, prefix+"/"+fname, "", nil, nil, false); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+
 	close(filesPutCh)
 	selectErr(errCh, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 	close(errCh)
@@ -516,15 +537,6 @@ func TestObjectPrefix(t *testing.T) {
 
 func TestObjectsVersions(t *testing.T) {
 	propsMainTest(t, cmn.VersionAll)
-}
-
-func TestRegressionCloudBuckets(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestRegressionCloudBuckets requires a cloud bucket")
-	}
-
-	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: clibucket})
 }
 
 func TestRebalance(t *testing.T) {
@@ -745,7 +757,7 @@ func TestLRU(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestLRU test requires a cloud bucket")
+		t.Skipf("%s test requires a cloud bucket", t.Name())
 	}
 
 	getRandomFiles(proxyURL, 20, clibucket, "", t, nil, errCh)

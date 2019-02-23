@@ -492,7 +492,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, bucketName) {
-		t.Skip("Test_SameLocalAndCloudBucketname requires a cloud bucket")
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 	queryLocal.Add(cmn.URLParamBucketProvider, cmn.LocalBs)
 	queryCloud.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
@@ -627,7 +627,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, bucketName) {
-		t.Skip("Test_SameLocalAndCloudBucketname requires a cloud bucket")
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
 	queryLocal.Add(cmn.URLParamBucketProvider, cmn.LocalBs)
@@ -782,7 +782,7 @@ func Test_coldgetmd5(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("Test_coldgetmd5 requires a cloud bucket")
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
 	ldir := filepath.Join(LocalSrcDir, ColdValidStr)
@@ -1289,7 +1289,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("Test_evictCloudBucket requires a cloud bucket")
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
 	ldir := filepath.Join(LocalSrcDir, EvictCBStr)

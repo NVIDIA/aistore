@@ -106,7 +106,7 @@ func TestRProxyGCS(t *testing.T) {
 	// the test requires very specific configuration that cannot be enabled
 	// on the fly. That is why it is not Fatal error
 	if config.Net.HTTP.RevProxy != cmn.RevProxyCloud {
-		t.Skip("Test requires the cluster deployed in reverse proxy mode")
+		t.Skipf("%s requires the cluster deployed in reverse proxy mode", t.Name())
 	}
 
 	// look for leftovers and cleanup if found

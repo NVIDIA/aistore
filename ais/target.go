@@ -1121,7 +1121,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if !lom.Exists() {
+	// evict non-existing lom from Cloud = no-op
+	if !lom.Exists() && evict {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s/%s %s, nothing to do", bucket, objname, cmn.DoesNotExist)
 		}

@@ -47,10 +47,10 @@ var (
 	ecParityCnt = 2
 )
 
-func ecSliceNumInit(smap cluster.Smap) error {
+func ecSliceNumInit(t *testing.T, smap cluster.Smap) error {
 	tCnt := len(smap.Tmap)
 	if tCnt < 4 {
-		return fmt.Errorf("test requires at least 4 targets")
+		return fmt.Errorf("%s requires at least 4 targets", t.Name())
 	}
 
 	if tCnt == 4 {
@@ -353,7 +353,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -562,7 +562,7 @@ func TestECStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -769,7 +769,7 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -899,7 +899,7 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1069,7 +1069,7 @@ func TestECEmergencyTarget(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1240,7 +1240,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(smap); err != nil {
+	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1250,7 +1250,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	mpathList, err := api.GetMountpaths(tgtParams)
 	tutils.CheckFatal(err, t)
 	if len(mpathList.Available) < 2 {
-		t.Fatal("Test requires 2 or more mountpaths")
+		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
 	}
 
 	if usingSG {
