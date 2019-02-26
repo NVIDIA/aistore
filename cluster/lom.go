@@ -199,10 +199,10 @@ func (lom *LOM) String() string {
 }
 
 // main method
-func (lom *LOM) Fill(bucketProvider string, action int, config ...*cmn.Config) (errstr string) {
+func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (errstr string) {
 	lom.SetExists(true) // by default we assume that the object exists
 	if lom.Bucket == "" || lom.Objname == "" || lom.FQN == "" {
-		if errstr = lom.init(bucketProvider); errstr != "" {
+		if errstr = lom.init(bckProvider); errstr != "" {
 			return
 		}
 		if len(config) > 0 {
@@ -358,7 +358,7 @@ func (lom *LOM) ChooseMirror() (fqn string) {
 // private methods
 //
 
-func (lom *LOM) init(bucketProvider string) (errstr string) {
+func (lom *LOM) init(bckProvider string) (errstr string) {
 	bowner := lom.T.GetBowner()
 	// resolve fqn
 	if lom.Bucket == "" || lom.Objname == "" {
@@ -371,15 +371,15 @@ func (lom *LOM) init(bucketProvider string) (errstr string) {
 			return
 		}
 
-		if bucketProvider == "" {
-			bucketProvider = GenBucketProvider(lom.ParsedFQN.IsLocal)
+		if bckProvider == "" {
+			bckProvider = GenBucketProvider(lom.ParsedFQN.IsLocal)
 		}
 	}
 
 	lom.Uname = Uname(lom.Bucket, lom.Objname)
 	// bucketmd, bckIsLocal, bprops
 	lom.Bucketmd = bowner.Get()
-	if err := lom.initBckIsLocal(bucketProvider); err != nil {
+	if err := lom.initBckIsLocal(bckProvider); err != nil {
 		return err.Error()
 	}
 	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)
@@ -405,10 +405,10 @@ func (lom *LOM) resolveFQN(bowner Bowner, bckIsLocal ...bool) (errstr string) {
 	return
 }
 
-func (lom *LOM) initBckIsLocal(bucketProvider string) error {
-	if bucketProvider == cmn.CloudBs {
+func (lom *LOM) initBckIsLocal(bckProvider string) error {
+	if bckProvider == cmn.CloudBs {
 		lom.BckIsLocal = false
-	} else if bucketProvider == cmn.LocalBs {
+	} else if bckProvider == cmn.LocalBs {
 		if !lom.Bucketmd.IsLocal(lom.Bucket) {
 			return fmt.Errorf("bucket provider set to 'local' but %s local bucket does not exist", lom.Bucket)
 		}

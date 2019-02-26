@@ -52,12 +52,12 @@ func (p *proxyServer) doesBucketExist(bucket string) bool {
 }
 
 // listBuckets returns a slice of names of all buckets
-func (p *proxyServer) listBuckets(bucketProvider string) ([]string, error) {
-	if bucketProvider == cmn.CloudBs || bucketProvider == "" {
+func (p *proxyServer) listBuckets(bckProvider string) ([]string, error) {
+	if bckProvider == cmn.CloudBs || bckProvider == "" {
 		return nil, nil
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
-	bns, err := api.GetBucketNames(baseParams, bucketProvider)
+	bns, err := api.GetBucketNames(baseParams, bckProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, e
 
 // putObject creates a new file reader and uses it to make a proxy put call to save a new
 // object with xxHash enabled into a bucket.
-func (p *proxyServer) putObject(localPath, bucket, bucketProvider, prefix string) error {
+func (p *proxyServer) putObject(localPath, bucket, bckProvider, prefix string) error {
 	r, err := tutils.NewFileReaderFromFile(localPath, true /* xxhash */)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (p *proxyServer) putObject(localPath, bucket, bucketProvider, prefix string
 	putArgs := api.PutObjectArgs{
 		BaseParams:     baseParams,
 		Bucket:         bucket,
-		BucketProvider: bucketProvider,
+		BucketProvider: bckProvider,
 		Object:         prefix,
 		Hash:           r.XXHash(),
 		Reader:         r,
@@ -108,27 +108,27 @@ func (p *proxyServer) putObject(localPath, bucket, bucketProvider, prefix string
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
-func (p *proxyServer) getObject(bucket, bucketProvider, prefix string, w io.Writer) error {
+func (p *proxyServer) getObject(bucket, bckProvider, prefix string, w io.Writer) error {
 	query := url.Values{}
-	query.Add(cmn.URLParamBucketProvider, bucketProvider)
+	query.Add(cmn.URLParamBckProvider, bckProvider)
 	baseParams := tutils.BaseAPIParams(p.url)
 	options := api.GetObjectInput{Writer: w, Query: query}
 	_, err := api.GetObjectWithValidation(baseParams, bucket, prefix, options)
 	return err
 }
 
-func (p *proxyServer) deleteObject(bucket, bucketProvider, prefix string) error {
-	return tutils.Del(p.url, bucket, prefix, bucketProvider, nil /* wg */, nil /* errCh */, true /* silent */)
+func (p *proxyServer) deleteObject(bucket, bckProvider, prefix string) error {
+	return tutils.Del(p.url, bucket, prefix, bckProvider, nil /* wg */, nil /* errCh */, true /* silent */)
 }
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsDetails(bucket, bucketProvider, prefix string, limit int) ([]*cmn.BucketEntry, error) {
+func (p *proxyServer) listObjectsDetails(bucket, bckProvider, prefix string, limit int) ([]*cmn.BucketEntry, error) {
 	msg := &cmn.GetMsg{
 		GetPrefix: prefix,
 		GetProps:  "size, ctime",
 	}
 	query := url.Values{}
-	query.Add(cmn.URLParamBucketProvider, bucketProvider)
+	query.Add(cmn.URLParamBckProvider, bckProvider)
 	baseParams := tutils.BaseAPIParams(p.url)
 	bl, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
@@ -139,11 +139,11 @@ func (p *proxyServer) listObjectsDetails(bucket, bucketProvider, prefix string, 
 }
 
 // listObjectsNames returns names of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsNames(bucket, bucketProvider, prefix string) ([]string, error) {
-	return tutils.ListObjects(p.url, bucket, bucketProvider, prefix, 0)
+func (p *proxyServer) listObjectsNames(bucket, bckProvider, prefix string) ([]string, error) {
+	return tutils.ListObjects(p.url, bucket, bckProvider, prefix, 0)
 }
 
 // deleteObjects deletes all objects in the list of names from a bucket
-func (p *proxyServer) deleteObjects(bucket, bucketProvider string, names []string) error {
-	return tutils.DeleteList(p.url, bucket, bucketProvider, names, true /* wait */, 0 /* deadline*/)
+func (p *proxyServer) deleteObjects(bucket, bckProvider string, names []string) error {
+	return tutils.DeleteList(p.url, bucket, bckProvider, names, true /* wait */, 0 /* deadline*/)
 }

@@ -5,7 +5,7 @@
     - [Example: create, rename and, destroy local bucket](#example-create-rename-and-destroy-local-bucket)
 - [Cloud Bucket](#cloud-bucket)
     - [Prefetch/Evict Objects](#prefetchevict-objects)
-    - [Evict Bucket](#evict-bucket)
+    - [Evict Cloud Bucket](#evict-cloud-bucket)
 - [List Bucket](#list-bucket)
     - [properties-and-options](#properties-and-options)
     - [Example: listing local and Cloud buckets](#example-listing-local-and-cloud-buckets)
@@ -21,7 +21,7 @@ There are two different kinds of buckets in AIS, **local buckets** and **cloud b
 
 | Kind | Description | Supported Storage Services (as of v2.0) |
 | --- | --- | --- |
-| local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [REST API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [RESTful API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
 Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. Local buckets, as of v2.0, are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
@@ -30,16 +30,16 @@ Cloud-based and local buckets support the same API with minor exceptions. Cloud 
 
 Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with (currently) two supported enumerated values: `local` and `cloud`.
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for local buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
 For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). Rest of this document serves to further explain features and concepts specific to storage buckets.
 
 ## Local Bucket
-Local Buckets are buckets that exist only within AIS.
+Local buckets are buckets that exist only within AIS.
 
-Local Bucket API can be used to create, rename and, destroy local buckets.
+The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy local buckets.
 
-New local buckets must be given a unique name that is not shared with any other local or cloud bucket. 
+New local buckets must be given a unique name that is not shared with any other local or cloud bucket.
 
 ### Example: create, rename and, destroy local bucket
 
@@ -61,9 +61,9 @@ Cloud buckets are existing buckets in the cloud storage when AIS is deployed as 
 
 Objects within cloud buckets are automatically fetched into storage targets when accessed through AIS, and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
 
-Cloud Bucket API can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets, or to evict them. 
+The [RESTful API](docs/http_api.md) can be used to manually fetch a group of objects from the cloud bucket (called prefetch) into storage targets, or to remove them from AIS (called evict).
 
-Objects are prefetched or deleted using [List/Range Operations](batch.md#listrange-operations).
+Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
 
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from the cloud bucket `abc`, run:
 
@@ -79,15 +79,13 @@ To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects
 curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evictobjects", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc
 ```
 
-### Evict Bucket
+### Evict Cloud Bucket
 
-Before a cloud bucket is accessed through AIS, the cluster has no awareness of said bucket. 
+Before a cloud bucket is accessed through AIS, the cluster has no awareness of the bucket.
 
-Once a request to access the bucket, or to change the bucket's properties (see `set bucket props` in [REST API](http_api.md)) has been made, the AIS cluster starts keeping track of the bucket.
+Once there is a request to access the bucket, or a request to change the bucket's properties (see `set bucket props` in [REST API](http_api.md)), then the AIS cluster starts keeping track of the bucket.
 
-Cloud Bucket API provides the operation to evict a cloud bucket.
-
-Evicting a cloud bucket will remove all traces of the cloud bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to access the bucket were made. This does not affect the objects stored within the cloud bucket.
+In an evict bucket operation, AIS will remove all traces of the cloud bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the cloud bucket.
 
 For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 

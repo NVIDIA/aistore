@@ -776,19 +776,50 @@ func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, buc
 	return true
 }
 
-func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLocal bool, errstr string) {
+func validCloudProvider(bckProvider, cloudProvider string) bool {
+	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
+}
+
+func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bool, errstr string) {
+	bckProvider = strings.ToLower(bckProvider)
+	config := cmn.GCO.Get()
+
+	// Translates the various query values for URLParamBckProvider for cluster use
+	bckProviderMap := map[string]string{
+		// Cloud values
+		cmn.CloudBs:        cmn.CloudBs,
+		cmn.ProviderAmazon: cmn.CloudBs,
+		cmn.ProviderGoogle: cmn.CloudBs,
+
+		// Local values
+		cmn.LocalBs:     cmn.LocalBs,
+		cmn.ProviderAIS: cmn.LocalBs,
+
+		// unset
+		"": "",
+	}
+	val, ok := bckProviderMap[bckProvider]
+	if !ok {
+		errstr = fmt.Sprintf("Invalid value %s for %s", bckProvider, cmn.URLParamBckProvider)
+		return
+	}
+
 	bckIsLocal := h.bmdowner.get().IsLocal(bucket)
-	switch bucketProvider {
+	switch val {
 	case cmn.LocalBs:
 		isLocal = true
 	case cmn.CloudBs:
+		// Check if user does have the associated cloud
+		if !validCloudProvider(bckProvider, config.CloudProvider) {
+			errstr = fmt.Sprintf("Cluster cloud provider '%s', mis-match bucket provider '%s'",
+				config.CloudProvider, bckProvider)
+			return
+		}
 		isLocal = false
-	case "":
-		isLocal = bckIsLocal
 	default:
-		errstr = fmt.Sprintf("Invalid value %s for %s", bucketProvider, cmn.URLParamBucketProvider)
-		return
+		isLocal = bckIsLocal
 	}
+
 	// Get bucket names
 	if bucket == "*" {
 		return
@@ -796,6 +827,7 @@ func (h *httprunner) validateBucketProvider(bucketProvider, bucket string) (isLo
 	if isLocal && !bckIsLocal {
 		errstr = fmt.Sprintf("Local bucket %s does not exist", bucket)
 	}
+
 	return
 }
 

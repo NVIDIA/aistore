@@ -515,9 +515,9 @@ var _ = Describe("Distributed Sort", func() {
 				tctx.setup()
 
 				rs = &ParsedRequestSpec{
-					Extension:     extTar,
-					Bucket:        testBucket,
-					IsLocalBucket: true,
+					Extension:   extTar,
+					Bucket:      testBucket,
+					BckProvider: cmn.LocalBs,
 					OutputFormat: &parsedOutputTemplate{
 						Prefix: "superprefix",
 						Suffix: "supersuffix",

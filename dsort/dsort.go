@@ -207,7 +207,8 @@ ExtractAllShards:
 				if si.DaemonID != m.ctx.node.DaemonID {
 					return nil
 				}
-				fqn, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, m.rs.IsLocalBucket)
+				bckIsLocal := m.rs.BckProvider == cmn.LocalBs
+				fqn, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, bckIsLocal)
 				if errStr != "" {
 					return errors.New(errStr)
 				}
@@ -323,9 +324,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		metrics        = m.Metrics.Creation
 
 		// object related variables
-		shardName  = m.genShardName(s)
-		bucket     = m.rs.Bucket
-		bckIsLocal = m.rs.IsLocalBucket
+		shardName = m.genShardName(s)
+		bucket    = m.rs.Bucket
 
 		// variables which may be not set, depending on context
 		h          hash.Hash
@@ -338,8 +338,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	lom := &cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}
-	bckProvider := cluster.GenBucketProvider(bckIsLocal)
-	if errStr := lom.Fill(bckProvider, cluster.LomFstat); errStr != "" {
+	if errStr := lom.Fill(m.rs.BckProvider, cluster.LomFstat); errStr != "" {
 		return errors.New(errStr)
 	}
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
@@ -422,7 +421,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		hdr := transport.Header{
 			Bucket:  bucket,
 			Objname: shardName,
-			IsLocal: bckIsLocal,
+			IsLocal: m.rs.BckProvider == cmn.LocalBs,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       stat.Size(),
 				CksumValue: cksumValue,
@@ -715,9 +714,9 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				return
 			}
 			u += fmt.Sprintf(
-				"%s?%s=%t",
+				"%s?%s=%s",
 				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
-				cmn.URLParamLocal, m.rs.IsLocalBucket,
+				cmn.URLParamBckProvider, m.rs.BckProvider,
 			)
 			if _, err = m.doWithAbort(http.MethodPost, u, body, nil); err != nil {
 				errCh <- err

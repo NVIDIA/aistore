@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/tutils"
@@ -63,7 +64,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		OutputFormat:     df.outputTempl,
 		OutputShardSize:  df.outputShardSize,
 		Algorithm:        *df.algorithm,
-		IsLocalBucket:    true,
+		BckProvider:      cmn.LocalBs,
 		ExtractConcLimit: 10,
 		CreateConcLimit:  10,
 		MaxMemUsage:      df.maxMemUsage,

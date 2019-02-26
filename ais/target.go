@@ -114,7 +114,7 @@ type (
 		ctx context.Context
 
 		// User specified parameter to determine which bucket to put object
-		bucketProvider string
+		bckProvider string
 
 		// INTERNAL
 
@@ -486,12 +486,12 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			bckIsLocal, _ := t.validateBucketProvider(fwd.bucketProvider, fwd.bucket)
+			bckIsLocal, _ := t.validateBckProvider(fwd.bckProvider, fwd.bucket)
 			if bckIsLocal {
 				glog.Errorf("prefetch: bucket %s is local, nothing to do", fwd.bucket)
 			} else {
 				for _, objname := range fwd.objnames {
-					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.bucketProvider)
+					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.bckProvider)
 				}
 			}
 			// Signal completion of prefetch
@@ -626,7 +626,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	bucketProvider := query.Get(cmn.URLParamBucketProvider)
+	bckProvider := query.Get(cmn.URLParamBckProvider)
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
 	}
@@ -637,12 +637,12 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(bucketProvider, cluster.LomFstat, config); errstr != "" { // (does_not_exist|misplaced -> ok, other)
+	if errstr = lom.Fill(bckProvider, cluster.LomFstat, config); errstr != "" { // (does_not_exist|misplaced -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 	if lom.Mirror.MirrorEnabled {
-		if errstr = lom.Fill(bucketProvider, cluster.LomCopy); errstr != "" {
+		if errstr = lom.Fill(bckProvider, cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
 		}
@@ -661,8 +661,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	coldGet := !lom.Exists()
 
 	if !coldGet {
-		if errstr = lom.Fill(bucketProvider, cluster.LomVersion|cluster.LomCksum); errstr != "" {
-			_ = lom.Fill(bucketProvider, cluster.LomFstat)
+		if errstr = lom.Fill(bckProvider, cluster.LomVersion|cluster.LomCksum); errstr != "" {
+			_ = lom.Fill(bckProvider, cluster.LomFstat)
 			if lom.Exists() {
 				t.rtnamemap.Unlock(lom.Uname, false)
 				t.invalmsghdlr(w, r, errstr)
@@ -697,7 +697,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// checksum validation, if requested
 	if !coldGet && lom.Cksumcfg.ValidateWarmGet {
-		errstr = lom.Fill(bucketProvider, cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
+		errstr = lom.Fill(bckProvider, cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 		if lom.BadCksum {
 			glog.Errorln(errstr)
 			if lom.BckIsLocal {
@@ -737,7 +737,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // FIXME: must be done => (getfqn, and under write lock)
 //
 func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, started time.Time) (errstr string, errcode int) {
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted || running {
@@ -791,7 +791,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s/%s is restored successfully", lom.Bucket, lom.Objname)
 		}
-		lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomAtime)
+		lom.Fill(bckProvider, cluster.LomFstat|cluster.LomAtime)
 		lom.SetExists(true)
 		return
 	} else if ecErr != ec.ErrorECDisabled {
@@ -1034,8 +1034,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
-	if _, errstr := t.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if _, errstr := t.validateBckProvider(bckProvider, bucket); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1063,7 +1063,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		fs.Mountpaths.EvictCloudBucket(bucket)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, apitems, bucketProvider, msgInt)
+			err := t.listRangeOperation(r, apitems, bckProvider, msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
 			} else {
@@ -1088,7 +1088,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		started = time.Now()
 		evict   bool
 	)
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1120,7 +1120,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict = (msg.Action == cmn.ActEvictObjects)
 	}
 	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr := lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
+	if errstr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1157,8 +1157,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := apitems[0]
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
-	if _, errstr := t.validateBucketProvider(bucketProvider, bucket); errstr != "" {
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if _, errstr := t.validateBckProvider(bckProvider, bucket); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1168,7 +1168,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
 		// validation done in proxy.go
-		if err := t.listRangeOperation(r, apitems, bucketProvider, msgInt); err != nil {
+		if err := t.listRangeOperation(r, apitems, bckProvider, msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
@@ -1209,7 +1209,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// list the bucket and return
-		tag, ok := t.listbucket(w, r, bucket, bucketProvider, &msgInt)
+		tag, ok := t.listbucket(w, r, bucket, bckProvider, &msgInt)
 		if ok {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
@@ -1272,8 +1272,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	bucketProvider := query.Get(cmn.URLParamBucketProvider)
-	bckIsLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
+	bckProvider := query.Get(cmn.URLParamBckProvider)
+	bckIsLocal, errstr := t.validateBckProvider(bckProvider, bucket)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -1357,9 +1357,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	bucketProvider := query.Get(cmn.URLParamBucketProvider)
+	bckProvider := query.Get(cmn.URLParamBckProvider)
 	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(bucketProvider, cluster.LomFstat|cluster.LomVersion); errstr != "" { // (doesnotexist -> ok, other)
+	if errstr = lom.Fill(bckProvider, cluster.LomFstat|cluster.LomVersion); errstr != "" { // (doesnotexist -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1643,11 +1643,11 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 
 	// FIXME: For now, need to re-translate lom.BckIsLocal to appropriate value ("local"|"cloud")
 	// FIXME: this code below looks like a general code for sending request
-	bucketProvider := cmn.LocalBs
+	bckProvider := cmn.LocalBs
 	if !lom.BckIsLocal {
-		bucketProvider = cmn.CloudBs
+		bckProvider = cmn.CloudBs
 	}
-	geturl := fmt.Sprintf("%s%s?%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBucketProvider, bucketProvider)
+	geturl := fmt.Sprintf("%s%s?%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, bckProvider)
 	//
 	// http request
 	//
@@ -1969,13 +1969,13 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	bucketmd := t.bmdowner.get()
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
 	bucketnames := &cmn.BucketNames{
 		Local: make([]string, 0, len(bucketmd.LBmap)),
 		Cloud: make([]string, 0, 64),
 	}
-	if bucketProvider != cmn.CloudBs {
+	if bckProvider != cmn.CloudBs {
 		for bucket := range bucketmd.LBmap {
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
@@ -2009,7 +2009,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket, bucketProvider string, actionMsg *actionMsgInternal) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string, actionMsg *actionMsgInternal) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -2020,7 +2020,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
-	bckIsLocal, errstr := t.validateBucketProvider(bucketProvider, bucket)
+	bckIsLocal, errstr := t.validateBckProvider(bckProvider, bucket)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -2253,15 +2253,15 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 
-	bucketProvider := r.URL.Query().Get(cmn.URLParamBucketProvider)
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	roi := &recvObjInfo{
-		t:              t,
-		objname:        objname,
-		bucket:         bucket,
-		r:              r.Body,
-		cksumToCheck:   cksum,
-		ctx:            t.contextWithAuth(r),
-		bucketProvider: bucketProvider,
+		t:            t,
+		objname:      objname,
+		bucket:       bucket,
+		r:            r.Body,
+		cksumToCheck: cksum,
+		ctx:          t.contextWithAuth(r),
+		bckProvider:  bckProvider,
 	}
 	if err := roi.init(); err != nil {
 		return err, http.StatusInternalServerError
@@ -2300,7 +2300,7 @@ func (roi *recvObjInfo) init() error {
 	cmn.Assert(roi.t != nil)
 	roi.started = time.Now()
 	roi.lom = &cluster.LOM{T: roi.t, Objname: roi.objname, Bucket: roi.bucket}
-	if errstr := roi.lom.Fill(roi.bucketProvider, cluster.LomFstat); errstr != "" {
+	if errstr := roi.lom.Fill(roi.bckProvider, cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
 	roi.workFQN = roi.lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
@@ -2316,7 +2316,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	cmn.Assert(roi.lom != nil)
 	// optimize out if the checksums do match
 	if roi.lom.Exists() && roi.cksumToCheck != nil {
-		if errstr := roi.lom.Fill(roi.bucketProvider, cluster.LomCksum); errstr == "" {
+		if errstr := roi.lom.Fill(roi.bckProvider, cluster.LomCksum); errstr == "" {
 			if cmn.EqCksum(roi.lom.Cksum, roi.cksumToCheck) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s is valid %s: PUT is a no-op", roi.lom, roi.cksumToCheck)

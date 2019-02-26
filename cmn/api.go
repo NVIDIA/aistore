@@ -131,14 +131,13 @@ const (
 // URL Query "?name1=val1&name2=..."
 const (
 	// user/app API
-	URLParamWhat           = "what"         // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
-	URLParamProps          = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
-	URLParamCheckCached    = "check_cached" // true: check if object is cached in AIStore
-	URLParamOffset         = "offset"       // Offset from where the object should be read
-	URLParamLength         = "length"       // the total number of bytes that need to be read from the offset
-	URLParamBucketProvider = "bprovider"    // "local" | "cloud"
+	URLParamWhat        = "what"         // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
+	URLParamProps       = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
+	URLParamCheckCached = "check_cached" // true: check if object is cached in AIStore
+	URLParamOffset      = "offset"       // Offset from where the object should be read
+	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
+	URLParamBckProvider = "bprovider"    // "local" | "cloud"
 	// internal use
-	URLParamLocal            = "loc" // true: bucket is local
 	URLParamFromID           = "fid" // source target ID
 	URLParamToID             = "tid" // destination target ID
 	URLParamProxyID          = "pid" // ID of the redirecting proxy

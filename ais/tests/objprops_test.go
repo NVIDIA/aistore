@@ -109,7 +109,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL, bucket, bucketProvider string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL, bucket, bckProvider string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -128,7 +128,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, bucketProvider string, objMap ma
 		}
 	}
 
-	err := tutils.EvictList(proxyURL, bucket, bucketProvider, toEvictList, true, 0)
+	err := tutils.EvictList(proxyURL, bucket, bckProvider, toEvictList, true, 0)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()

@@ -207,7 +207,7 @@ Given the url of an existing proxy in a cluster, `GetBucketNames` returns the na
 |----------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| bucketProvider | string       | One of "" (empty), "cloud", "local". If value is empty, returns all bucket names. Otherwise, return "cloud" or "local" buckets.|
+| bckProvider | string       | One of "" (empty), "cloud", "local". If value is empty, returns all bucket names. Otherwise, return "cloud" or "local" buckets.|
 
 ##### Return
 Two lists: one for the names of local buckets, and the other for the names of cloud buckets
@@ -314,7 +314,7 @@ Returns the size and version of an object identified by a combination of its buc
 | httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket         | string       | Name of the bucket storing the object                                                 |
-| bucketProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
 | object         | string       | Name of the object                                                                    |
 
 ##### Return
@@ -431,7 +431,7 @@ Deletes an object identified by the combination of its bucket and object name
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket         | string       | Name of the bucket storing the object                                                 |
 | object         | string       | Name of the object to be replicated                                                   |
-| bucketProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
 
 ##### Return
 Error from AIStore in completing the request

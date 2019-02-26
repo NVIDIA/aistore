@@ -118,7 +118,7 @@ type RequestSpec struct {
 	IgnoreMissingFiles bool          `json:"ignore_missing_files"`      // Default: false
 	Algorithm          SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
 	MaxMemUsage        string        `json:"max_mem_usage"`             // Default: "80%"
-	IsLocalBucket      bool          `json:"local"`                     // Default: false
+	BckProvider        string        `json:"bck_provider"`              // Default: "local"
 	ExtractConcLimit   int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
 	CreateConcLimit    int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
 	ExtendedMetrics    bool          `json:"extended_metrics"`          // Default: false
@@ -133,7 +133,7 @@ type ParsedRequestSpec struct {
 	IgnoreMissingFiles bool                  `json:"ignore_missing_files"`
 	Algorithm          *SortAlgorithm        `json:"algorithm"`
 	MaxMemUsage        *parsedMemUsage       `json:"max_mem_usage"`
-	IsLocalBucket      bool                  `json:"local"`
+	BckProvider        string                `json:"bck_provider"`
 	TargetOrderSalt    []byte                `json:"target_order_salt"`
 	ExtractConcLimit   int                   `json:"extract_concurrency_limit"`
 	CreateConcLimit    int                   `json:"create_concurrency_limit"`
@@ -163,7 +163,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.Bucket = rs.Bucket
 
-	parsedRS.IsLocalBucket = rs.IsLocalBucket
+	parsedRS.BckProvider = rs.BckProvider
 
 	var err error
 

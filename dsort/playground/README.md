@@ -146,7 +146,7 @@ all possible settings, for more advanced usage please refer to API).
 | -ext | `.tar` | Extension for output shards (either `.tar`, `.tgz` or `.zip`)|
 | -bucket | `dsort-testing` | Bucket where shards objects are stored |
 | -url | `http://localhost:8080` | Proxy url to which requests will be made |
-| -input | `shard-{0..10}` | Name template for input shard |
+| -input | `shard-{0..9}` | Name template for input shard |
 | -output | `new-shard-{0000..1000}` | Name template for output shard |
 | -size | `1024*1024*10` | Size output of shard; note that the actual size will be rounded |
 | -elimit | `20` | Limits number of concurrent shards extracted |
@@ -157,9 +157,9 @@ all possible settings, for more advanced usage please refer to API).
 Example:
 
 ```shell
-$ go run start_dsort.go -url http://proxyurl:9801 -shards 100 -size 10240 -elimit 40 -climit 20 -mem 80 -refresh 2 | tee dsort.log
+$ go run start_dsort.go -url http://proxyurl:9801 -size 10240 -elimit 40 -climit 20 -mem 80% -refresh 2 | tee dsort.log
 ```
 
-This will create new shards named: `OUTPUT_PREFIX+NUMBER+EXTENSION` like `new-shard-10.tar` with
+This will create new shards named: `OUTPUT_PREFIX+NUMBER+EXTENSION` like `new-shard-9.tar` with
 specified size. Note that size will be rounded - if files are `1024` bytes and specified output
 shard size is `2200` bytes the shard size will be `3*1024=3072`.

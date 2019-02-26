@@ -182,13 +182,13 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 
 // GetBucketNames API
 //
-// bucketProvider takes one of "" (empty), "cloud" or "local". If bucketProvider is empty, return all bucketnames.
+// bckProvider takes one of "" (empty), "cloud" or "local". If bckProvider is empty, return all bucketnames.
 // Otherwise return "cloud" or "local" buckets.
-func GetBucketNames(baseParams *BaseParams, bucketProvider string) (*cmn.BucketNames, error) {
+func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
 	var bucketNames cmn.BucketNames
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
-		fmt.Sprintf("?%s=%s", cmn.URLParamBucketProvider, bucketProvider)
+		fmt.Sprintf("?%s=%s", cmn.URLParamBckProvider, bckProvider)
 	b, err := DoHTTPRequest(baseParams, path, nil)
 	if err != nil {
 		return nil, err

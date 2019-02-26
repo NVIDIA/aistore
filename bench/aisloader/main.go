@@ -45,21 +45,21 @@ const (
 
 type (
 	workOrder struct {
-		op        int
-		proxyURL  string
-		bucket    string
-		isLocal   bool
-		objName   string // In the format of 'virtual dir' + "/" + objname
-		size      int64
-		err       error
-		start     time.Time
-		end       time.Time
-		latencies tutils.HTTPLatencies
+		op          int
+		proxyURL    string
+		bucket      string
+		bckProvider string
+		objName     string // In the format of 'virtual dir' + "/" + objname
+		size        int64
+		err         error
+		start       time.Time
+		end         time.Time
+		latencies   tutils.HTTPLatencies
 	}
 
 	params struct {
 		proxyURL          string
-		isLocal           bool
+		bckProvider       string //If bucket is "local" or "cloud" bucket
 		bucket            string
 		putPct            int           // % of puts, rest are gets
 		duration          time.Duration // Stops after run at least this long
@@ -130,7 +130,7 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&port, "port", "8080", "Port number for proxy server")
 	flag.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
 	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	flag.BoolVar(&p.isLocal, "local", true, "True if using local bucket")
+	flag.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "'local' if using local bucket, otherwise 'cloud'")
 	flag.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
 		"If duration is 0 and totalputsize is also 0, it is a no op.")
 	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
@@ -298,7 +298,7 @@ func main() {
 		}
 	}
 
-	if runParams.isLocal {
+	if runParams.bckProvider == cmn.LocalBs {
 		exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
 		if err != nil {
 			fmt.Println("Failed to get local bucket lists", runParams.bucket, "err = ", err)
@@ -462,7 +462,7 @@ L:
 func logRunParams(p params, to *os.File) {
 	b, _ := json.MarshalIndent(struct {
 		URL           string `json:"proxy"`
-		IsLocal       bool   `json:"local"`
+		BckProvider   string `json:"bprovider"`
 		Bucket        string `json:"bucket"`
 		Duration      string `json:"duration"`
 		MaxPutBytes   int64  `json:"put upper bound"`
@@ -475,7 +475,7 @@ func logRunParams(p params, to *os.File) {
 		Cleanup       bool   `json:"cleanup"`
 	}{
 		URL:           p.proxyURL,
-		IsLocal:       p.isLocal,
+		BckProvider:   p.bckProvider,
 		Bucket:        p.bucket,
 		Duration:      p.duration.String(),
 		MaxPutBytes:   p.putSizeUpperBound,
@@ -623,12 +623,12 @@ func newPutWorkOrder() *workOrder {
 
 	putPending++
 	return &workOrder{
-		proxyURL: runParams.proxyURL,
-		bucket:   runParams.bucket,
-		isLocal:  runParams.isLocal,
-		op:       opPut,
-		objName:  myName + "/" + tutils.FastRandomFilename(rnd, 32),
-		size:     int64(size * 1024),
+		proxyURL:    runParams.proxyURL,
+		bucket:      runParams.bucket,
+		bckProvider: runParams.bckProvider,
+		op:          opPut,
+		objName:     myName + "/" + tutils.FastRandomFilename(rnd, 32),
+		size:        int64(size * 1024),
 	}
 }
 
@@ -640,11 +640,11 @@ func newGetWorkOrder() *workOrder {
 
 	getPending++
 	return &workOrder{
-		proxyURL: runParams.proxyURL,
-		bucket:   runParams.bucket,
-		isLocal:  runParams.isLocal,
-		op:       opGet,
-		objName:  allObjects[rnd.Intn(n)],
+		proxyURL:    runParams.proxyURL,
+		bucket:      runParams.bucket,
+		bckProvider: runParams.bckProvider,
+		op:          opGet,
+		objName:     allObjects[rnd.Intn(n)],
 	}
 }
 
@@ -859,10 +859,6 @@ func completeWorkOrder(wo *workOrder) {
 
 func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Clean up ...")
-	bucketProvider := cmn.LocalBs
-	if !runParams.isLocal {
-		bucketProvider = cmn.CloudBs
-	}
 
 	var wg sync.WaitGroup
 	f := func(objs []string, wg *sync.WaitGroup) {
@@ -872,14 +868,14 @@ func cleanUp() {
 		b := cmn.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
-			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, bucketProvider, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, runParams.bckProvider, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
 		}
 
 		if t%b != 0 {
-			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, bucketProvider, objs[n*b:], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, runParams.bckProvider, objs[n*b:], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
@@ -909,7 +905,7 @@ func cleanUp() {
 
 	wg.Wait()
 
-	if runParams.isLocal {
+	if runParams.bckProvider == cmn.LocalBs {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 		api.DestroyLocalBucket(baseParams, runParams.bucket)
 	}
@@ -920,10 +916,7 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	var err error
-	bucketProvider := cmn.LocalBs
-	if !runParams.isLocal {
-		bucketProvider = cmn.CloudBs
-	}
-	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, bucketProvider, myName, 0)
+
+	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, runParams.bckProvider, myName, 0)
 	return err
 }

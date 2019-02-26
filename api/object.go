@@ -48,8 +48,8 @@ type PutObjectArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, bucketProvider, object string) (*cmn.ObjectProps, error) {
-	bucketProviderStr := "?" + cmn.URLParamBucketProvider + "=" + bucketProvider
+func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string) (*cmn.ObjectProps, error) {
+	bucketProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
 	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr)
 	if err != nil {
 		return nil, err
@@ -79,8 +79,8 @@ func HeadObject(baseParams *BaseParams, bucket, bucketProvider, object string) (
 // DeleteObject API
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(baseParams *BaseParams, bucket, object, bucketProvider string) error {
-	bucketProviderStr := "?" + cmn.URLParamBucketProvider + "=" + bucketProvider
+func DeleteObject(baseParams *BaseParams, bucket, object, bckProvider string) error {
+	bucketProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
 
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr
@@ -193,7 +193,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 // PutObject API
 //
 // Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
-// If there is a local bucket and cloud bucket with the same name, specify with bucketProvider ("local", "cloud")
+// If there is a local bucket and cloud bucket with the same name, specify with bckProvider ("local", "cloud")
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
@@ -206,7 +206,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 
 	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
 	var query = url.Values{}
-	query.Add(cmn.URLParamBucketProvider, args.BucketProvider)
+	query.Add(cmn.URLParamBckProvider, args.BucketProvider)
 	reqURL := args.BaseParams.URL + path + "?" + query.Encode()
 
 	req, err := http.NewRequest(http.MethodPut, reqURL, handle)

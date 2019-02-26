@@ -7,6 +7,7 @@
 package dsort
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -16,7 +17,7 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse minimal spec", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
-				IsLocalBucket:   true,
+				BckProvider:     cmn.LocalBs,
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -28,7 +29,7 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.Bucket).To(Equal("test"))
-			Expect(parsed.IsLocalBucket).To(Equal(true))
+			Expect(parsed.BckProvider).To(Equal(cmn.LocalBs))
 			Expect(parsed.Extension).To(Equal(extTar))
 
 			Expect(parsed.InputFormat.Type).To(Equal(templBash))

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -28,7 +29,7 @@ func init() {
 	flag.StringVar(&ext, "ext", ".tar", "extension for output shards (either `.tar`, `.tgz` or `.zip`)")
 	flag.StringVar(&bucket, "bucket", "dsort-testing", "bucket where shards objects are stored")
 	flag.StringVar(&proxyURL, "url", "http://localhost:8080", "proxy url to which requests will be made")
-	flag.StringVar(&inputTemplate, "input", "shard-{0..10}", "name template for input shard")
+	flag.StringVar(&inputTemplate, "input", "shard-{0..9}", "name template for input shard")
 	flag.StringVar(&outputTemplate, "output", "new-shard-{0000..1000}", "name template for output shard")
 	flag.Int64Var(&outputShardSize, "size", 1024*1024*10, "size of output of shard")
 	flag.IntVar(&extractConcLimit, "elimit", 20, "limits number of concurrent shards extracted")
@@ -45,7 +46,7 @@ func main() {
 		IntputFormat:     inputTemplate,
 		OutputFormat:     outputTemplate,
 		OutputShardSize:  outputShardSize,
-		IsLocalBucket:    true,
+		BckProvider:      cmn.LocalBs,
 		ExtractConcLimit: extractConcLimit,
 		CreateConcLimit:  createConcLimit,
 		MaxMemUsage:      memUsage,

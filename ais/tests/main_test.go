@@ -494,8 +494,8 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bucketName) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
-	queryLocal.Add(cmn.URLParamBucketProvider, cmn.LocalBs)
-	queryCloud.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
+	queryLocal.Add(cmn.URLParamBckProvider, cmn.LocalBs)
+	queryCloud.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams:     baseParams,
@@ -534,22 +534,22 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tutils.Logf("Validating responses for empty bprovider for cloud bucket operations ...\n")
 	err = tutils.PrefetchList(proxyURL, clibucket, "", files, true, 0)
 	if err == nil {
-		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
 	err = tutils.PrefetchRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
-		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
 	err = tutils.EvictList(proxyURL, bucketName, "", files, true, 0)
 	if err == nil {
-		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
 	err = tutils.EvictRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
-		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBucketProvider, cmn.CloudBs)
+		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
@@ -630,8 +630,8 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	queryLocal.Add(cmn.URLParamBucketProvider, cmn.LocalBs)
-	queryCloud.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
+	queryLocal.Add(cmn.URLParamBckProvider, cmn.LocalBs)
+	queryCloud.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
@@ -1335,7 +1335,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	if !bProps.MirrorEnabled {
 		t.Fatalf("Test property not changed")
 	}
-	query.Add(cmn.URLParamBucketProvider, cmn.CloudBs)
+	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 	api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
 
 	for _, fname := range fileslist {
@@ -1811,8 +1811,8 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 	getsGroup.Wait()
 }
 
-func evictobjects(t *testing.T, proxyURL, bucketProvider string, fileslist []string) {
-	err := tutils.EvictList(proxyURL, clibucket, bucketProvider, fileslist, true, 0)
+func evictobjects(t *testing.T, proxyURL, bckProvider string, fileslist []string) {
+	err := tutils.EvictList(proxyURL, clibucket, bckProvider, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}
