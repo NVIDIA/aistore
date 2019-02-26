@@ -25,7 +25,7 @@ The Generated docker image can be tagged and pushed to any docker repo (DockerHu
 
  Once we have the hosts with the K8S cluster, the following configurations need to be applied:
  1. Set the MTU of the hosts to the required value
- 2. Install stat and debugging utilities (if required) - like sysstat,iostat, pidstat, Intel PCM tools
+ 2. Install stat and debugging utilities (if required) - like `sysstat`, `iostat`, `pidstat`, Intel PCM tools
  3. Use XFS and create file system on the disks and mount them to the host.
  
  `ais_datafs_mkfs.yml` - This playbook setups up the disk as a filesystem and mounts it to the host.
