@@ -20,8 +20,8 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	globalConfig := getDaemonConfig(t, proxyURL)
 
 	return &cmn.BucketProps{
-		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-		LRUConf:   globalConfig.LRU,
+		Cksum: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		LRU:   globalConfig.LRU,
 	}
 }
 
@@ -36,13 +36,13 @@ func TestResetBucketProps(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
-	bucketProps.Checksum = cmn.ChecksumNone
-	bucketProps.ValidateWarmGet = true
-	bucketProps.EnableReadRangeChecksum = true
+	bucketProps.Cksum.Checksum = cmn.ChecksumNone
+	bucketProps.Cksum.ValidateWarmGet = true
+	bucketProps.Cksum.EnableReadRangeChecksum = true
 
 	globalProps.CloudProvider = cmn.ProviderAIS
-	globalProps.CksumConf = globalConfig.Cksum
-	globalProps.LRUConf = testBucketProps(t).LRUConf
+	globalProps.Cksum = globalConfig.Cksum
+	globalProps.LRU = testBucketProps(t).LRU
 
 	err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
@@ -178,14 +178,14 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if !p.ECEnabled {
+		if !p.EC.Enabled {
 			t.Error("EC was not enabled")
 		}
-		if p.DataSlices != 2 {
-			t.Errorf("Number of data slices is incorrect: %d (expected 2)", p.DataSlices)
+		if p.EC.DataSlices != 2 {
+			t.Errorf("Number of data slices is incorrect: %d (expected 2)", p.EC.DataSlices)
 		}
-		if p.ParitySlices != 2 {
-			t.Errorf("Number of parity slices is incorrect: %d (expected 2)", p.DataSlices)
+		if p.EC.ParitySlices != 2 {
+			t.Errorf("Number of parity slices is incorrect: %d (expected 2)", p.EC.DataSlices)
 		}
 	}
 
@@ -195,11 +195,11 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if !p.MirrorEnabled {
+		if !p.Mirror.Enabled {
 			t.Error("Mirroring was not enabled")
 		}
-		if p.Copies != 2 {
-			t.Errorf("Number of copies is incorrect: %d (expected 2)", p.Copies)
+		if p.Mirror.Copies != 2 {
+			t.Errorf("Number of copies is incorrect: %d (expected 2)", p.Mirror.Copies)
 		}
 	}
 
@@ -216,14 +216,14 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if p.DataSlices != dataSlices {
-			t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.DataSlices)
+		if p.EC.DataSlices != dataSlices {
+			t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
 		}
-		if p.ParitySlices != paritySlices {
-			t.Errorf("Number of parity slices was not changed to %d. Current value %d", paritySlices, p.ParitySlices)
+		if p.EC.ParitySlices != paritySlices {
+			t.Errorf("Number of parity slices was not changed to %d. Current value %d", paritySlices, p.EC.ParitySlices)
 		}
-		if p.ECObjSizeLimit != objLimit {
-			t.Errorf("Minimal EC object size was not changed to %d. Current value %d", objLimit, p.ECObjSizeLimit)
+		if p.EC.ObjSizeLimit != objLimit {
+			t.Errorf("Minimal EC object size was not changed to %d. Current value %d", objLimit, p.EC.ObjSizeLimit)
 		}
 	}
 
@@ -232,8 +232,8 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if p.MirrorUtilThresh != mirrorThreshold {
-			t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.MirrorUtilThresh)
+		if p.Mirror.UtilThresh != mirrorThreshold {
+			t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
 		}
 	}
 
@@ -243,7 +243,7 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if p.ECEnabled {
+		if p.EC.Enabled {
 			t.Error("EC was not disabled")
 		}
 	}
@@ -254,7 +254,7 @@ func TestBucketSingleProp(t *testing.T) {
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 		tutils.CheckFatal(err, t)
-		if p.MirrorEnabled {
+		if p.Mirror.Enabled {
 			t.Error("Mirroring was not disabled")
 		}
 	}

@@ -218,14 +218,14 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		lom.Cksumcfg = &lom.Config.Cksum
 		lom.Mirror = &lom.Config.Mirror
 		if lom.Bprops != nil {
-			if lom.Bprops.Checksum != cmn.ChecksumInherit {
-				lom.Cksumcfg = &lom.Bprops.CksumConf
+			if lom.Bprops.Cksum.Checksum != cmn.ChecksumInherit {
+				lom.Cksumcfg = &lom.Bprops.Cksum
 			}
-			lom.Mirror = &lom.Bprops.MirrorConf
+			lom.Mirror = &lom.Bprops.Mirror
 		}
 	}
 	// [local copy] always enforce LomCopy if the following is true
-	if (lom.Misplaced() || action&LomFstat != 0) && lom.Bprops != nil && lom.Bprops.Copies != 0 {
+	if (lom.Misplaced() || action&LomFstat != 0) && lom.Bprops != nil && lom.Bprops.Mirror.Copies != 0 {
 		action |= LomCopy
 	}
 	//
@@ -345,7 +345,7 @@ func (lom *LOM) ChooseMirror() (fqn string) {
 	}
 	_, currMain := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
 	_, currRepl := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-	if currRepl.Max < currMain.Max-float32(lom.Mirror.MirrorUtilThresh) && currRepl.Min <= currMain.Min {
+	if currRepl.Max < currMain.Max-float32(lom.Mirror.UtilThresh) && currRepl.Min <= currMain.Min {
 		fqn = lom.CopyFQN
 		if glog.V(4) {
 			glog.Infof("GET %s from a mirror %s", lom, parsedCpyFQN.MpathInfo)

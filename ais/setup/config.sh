@@ -3,24 +3,24 @@ cat > $CONFFILE <<EOL
 	"confdir":       "${CONFDIR}",
 	"cloudprovider": "${CLDPROVIDER}",
 	"mirror": {
-		"copies":              2,
-		"mirror_burst_buffer": 512,
-		"mirror_util_thresh":  ${MIRROR_UTIL_THRESH:-20},
-		"mirror_optimize_put": false,
-		"mirror_enabled":      ${MIRROR_ENABLED:-false}
+		"copies":       2,
+		"burst_buffer": 512,
+		"util_thresh":  ${MIRROR_UTIL_THRESH:-20},
+		"optimize_put": false,
+		"enabled":      ${MIRROR_ENABLED:-false}
 	},
 	"readahead": {
-		"rahobjectmem":		1048576,
-		"rahtotalmem":		1073741824,
-		"rahbyproxy":		true,
-		"rahdiscard":		false,
-		"rahenabled":		false
+		"object_mem": 1048576,
+		"total_mem":  1073741824,
+		"by_proxy":   true,
+		"discard":    false,
+		"enabled":    false
 	},
 	"log": {
-		"logdir":      "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",
-		"loglevel":    "${LOGLEVEL:-3}",
-		"logmaxsize":  4194304,
-		"logmaxtotal": 67108864
+		"dir":       "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",
+		"level":     "${LOGLEVEL:-3}",
+		"max_size":  4194304,
+		"max_total": 67108864
 	},
 	"periodic": {
 		"stats_time":		"10s",
@@ -36,40 +36,40 @@ cat > $CONFFILE <<EOL
 		"send_file_time":	"5m",
 		"startup_time":		"1m"
 	},
-	"proxyconfig": {
+	"proxy": {
 		"non_electable": ${NON_ELECTABLE:-false},
 		"primary_url":   "${PROXYURL}",
 		"original_url":  "${PROXYURL}",
 		"discovery_url": "${DISCOVERYURL}"
 	},
-	"lru_config": {
-		"lowwm":		75,
-		"highwm":		90,
-		"out_of_space":		95,
-		"atime_cache_max":	65536,
-		"dont_evict_time":	"120m",
-		"capacity_upd_time":	"10m",
-		"lru_local_buckets": 	false,
-		"lru_enabled":		true
+	"lru": {
+		"lowwm":             75,
+		"highwm":            90,
+		"out_of_space":      95,
+		"atime_cache_max":   65536,
+		"dont_evict_time":   "120m",
+		"capacity_upd_time": "10m",
+		"local_buckets":     false,
+		"enabled":           true
 	},
-	"xaction_config":{
-	    "disk_util_low_wm":      20,
-	    "disk_util_high_wm":     80
+	"xaction":{
+	    "disk_util_low_wm":  20,
+	    "disk_util_high_wm": 80
 	},
-	"rebalance_conf": {
-		"dest_retry_time":	"2m",
-		"rebalancing_enabled": 	true
+	"rebalance": {
+		"enabled":         true,
+		"dest_retry_time": "2m"
 	},
-	"cksum_config": {
+	"cksum": {
 		"checksum":                   "xxhash",
 		"validate_checksum_cold_get": true,
 		"validate_checksum_warm_get": false,
 		"validate_cluster_migration": false,
 		"enable_read_range_checksum": false
 	},
-	"version_config": {
-		"validate_version_warm_get":    false,
-		"versioning":                   "all"
+	"version": {
+		"validate_version_warm_get": false,
+		"versioning":                "all"
 	},
 	"fspaths": {
 		$FSPATHS
@@ -79,7 +79,7 @@ cat > $CONFFILE <<EOL
 		"count":    ${TEST_FSPATH_COUNT:-0},
 		"instance": ${INSTANCE:-0}
 	},
-	"netconfig": {
+	"net": {
 		"ipv4":               "${IPV4LIST}",
 		"ipv4_intra_control": "${IPV4LIST_INTRA_CONTROL}",
 		"ipv4_intra_data":    "${IPV4LIST_INTRA_DATA}",
@@ -100,9 +100,9 @@ cat > $CONFFILE <<EOL
 		}
 	},
 	"fshc": {
-		"fshc_enabled":		true,
-		"fshc_test_files":	4,
-		"fshc_error_limit":	2
+		"enabled":     true,
+		"test_files":  4,
+		"error_limit": 2
 	},
 	"auth": {
 		"secret":  "$SECRETKEY",

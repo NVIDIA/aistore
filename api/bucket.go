@@ -21,8 +21,8 @@ import (
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
 	querystr := ""
-	if props.Checksum == "" {
-		props.Checksum = cmn.ChecksumInherit
+	if props.Cksum.Checksum == "" {
+		props.Cksum.Checksum = cmn.ChecksumInherit
 	}
 
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
@@ -109,62 +109,59 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 			bucket, r.StatusCode, string(b))
 	}
 
-	cksumconf := cmn.CksumConf{
+	cksumProps := cmn.CksumConf{
 		Checksum: r.Header.Get(cmn.HeaderBucketChecksumType),
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
-		cksumconf.ValidateColdGet = b
+		cksumProps.ValidateColdGet = b
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
-		cksumconf.ValidateWarmGet = b
+		cksumProps.ValidateWarmGet = b
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateRange)); err == nil {
-		cksumconf.EnableReadRangeChecksum = b
+		cksumProps.EnableReadRangeChecksum = b
 	}
 
-	lruprops := cmn.LRUConf{
+	lruProps := cmn.LRUConf{
 		DontEvictTimeStr:   r.Header.Get(cmn.HeaderBucketDontEvictTime),
 		CapacityUpdTimeStr: r.Header.Get(cmn.HeaderBucketCapUpdTime),
 	}
-
 	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRULowWM), 10, 32); err == nil {
-		lruprops.LowWM = int64(b)
+		lruProps.LowWM = int64(b)
 	}
 	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUHighWM), 10, 32); err == nil {
-		lruprops.HighWM = int64(b)
+		lruProps.HighWM = int64(b)
 	}
-
 	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
-		lruprops.AtimeCacheMax = b
+		lruProps.AtimeCacheMax = b
 	}
-
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
-		lruprops.LRUEnabled = b
+		lruProps.Enabled = b
 	}
 
-	mirror := cmn.MirrorConf{}
+	mirrorProps := cmn.MirrorConf{}
 	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
-		mirror.Copies = b
+		mirrorProps.Copies = b
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
-		mirror.MirrorEnabled = b
+		mirrorProps.Enabled = b
 	}
 	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketMirrorThresh), 10, 32); err == nil {
-		mirror.MirrorUtilThresh = n
+		mirrorProps.UtilThresh = n
 	}
 
-	ecprops := cmn.ECConf{}
+	ecProps := cmn.ECConf{}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
-		ecprops.ECEnabled = b
+		ecProps.Enabled = b
 	}
 	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECMinSize), 10, 64); err == nil {
-		ecprops.ECObjSizeLimit = n
+		ecProps.ObjSizeLimit = n
 	}
 	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECData), 10, 32); err == nil {
-		ecprops.DataSlices = int(n)
+		ecProps.DataSlices = int(n)
 	}
 	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECParity), 10, 32); err == nil {
-		ecprops.ParitySlices = int(n)
+		ecProps.ParitySlices = int(n)
 	}
 
 	return &cmn.BucketProps{
@@ -173,10 +170,10 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
 		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
-		CksumConf:     cksumconf,
-		LRUConf:       lruprops,
-		MirrorConf:    mirror,
-		ECConf:        ecprops,
+		Cksum:    cksumProps,
+		LRU:      lruProps,
+		Mirror:   mirrorProps,
+		EC:       ecProps,
 	}, nil
 }
 

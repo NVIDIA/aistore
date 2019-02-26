@@ -42,10 +42,10 @@ func (c *putJogger) run() {
 	for {
 		select {
 		case req := <-c.workCh:
+			ecConf := req.LOM.Bprops.EC
+
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
-			memRequired := req.LOM.Size *
-				int64(req.LOM.Bprops.DataSlices+req.LOM.Bprops.ParitySlices) /
-				int64(req.LOM.Bprops.ParitySlices)
+			memRequired := req.LOM.Size * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 			c.toDisk = useDisk(memRequired)
 			req.tm = time.Now()
 			c.ec(req)
@@ -112,11 +112,12 @@ func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
+	ecConf := req.LOM.Bprops.EC
 	_, cksumValue := req.LOM.Cksum.Get()
 	meta := &Metadata{
 		Size:     req.LOM.Size,
-		Data:     req.LOM.Bprops.DataSlices,
-		Parity:   req.LOM.Bprops.ParitySlices,
+		Data:     ecConf.DataSlices,
+		Parity:   ecConf.ParitySlices,
 		IsCopy:   req.IsCopy,
 		Checksum: cksumValue,
 	}
@@ -124,9 +125,9 @@ func (c *putJogger) encode(req *Request) error {
 	// calculate the number of targets required to encode the object
 	// For replicated: ParitySlices + original object
 	// For encoded: ParitySlices + DataSlices + original object
-	reqTargets := req.LOM.Bprops.ParitySlices + 1
+	reqTargets := ecConf.ParitySlices + 1
 	if !req.IsCopy {
-		reqTargets += req.LOM.Bprops.DataSlices
+		reqTargets += ecConf.DataSlices
 	}
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
@@ -200,7 +201,7 @@ func (c *putJogger) cleanup(req *Request) error {
 // uploads the main replica
 func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	var (
-		copies = req.LOM.Bprops.ParitySlices
+		copies = req.LOM.Bprops.EC.ParitySlices
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
@@ -378,7 +379,8 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 // Returns:
 // * list of all slices, sent to targets
 func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
-	totalCnt := req.LOM.Bprops.ParitySlices + req.LOM.Bprops.DataSlices
+	ecConf := req.LOM.Bprops.EC
+	totalCnt := ecConf.ParitySlices + ecConf.DataSlices
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes
 	// gets a slice each
@@ -394,9 +396,9 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		err       error
 	)
 	if c.toDisk {
-		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
 	} else {
-		objReader, slices, err = generateSlicesToMemory(req.LOM.FQN, req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices)
+		objReader, slices, err = generateSlicesToMemory(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
 	}
 	if err != nil {
 		freeObject(objReader)
@@ -406,8 +408,8 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	wg := sync.WaitGroup{}
 	ch := make(chan error, totalCnt)
-	mainObj := &slice{refCnt: int32(req.LOM.Bprops.DataSlices), obj: objReader}
-	sliceSize := SliceSize(req.LOM.Size, req.LOM.Bprops.DataSlices)
+	mainObj := &slice{refCnt: int32(ecConf.DataSlices), obj: objReader}
+	sliceSize := SliceSize(req.LOM.Size, ecConf.DataSlices)
 
 	// transfer a slice to remote target
 	// If the slice is data one - no immediate cleanup is required because this
@@ -417,7 +419,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		defer wg.Done()
 
 		var data *slice
-		if i < req.LOM.Bprops.DataSlices {
+		if i < ecConf.DataSlices {
 			// the slice is just a reader that does not allocate new memory
 			data = mainObj
 		} else {
@@ -482,10 +484,10 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	if err, ok := <-ch; ok {
 		glog.Errorf("Error while copying %d slices (with %d parity) for %q: %v",
-			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.FQN, err)
+			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
 	} else if glog.V(4) {
 		glog.Infof("EC created %d slices (with %d parity) for %q: %v",
-			req.LOM.Bprops.DataSlices, req.LOM.Bprops.ParitySlices, req.LOM.FQN, err)
+			ecConf.DataSlices, ecConf.ParitySlices, req.LOM.FQN, err)
 	}
 
 	return slices, nil

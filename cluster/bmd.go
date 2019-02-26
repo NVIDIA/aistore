@@ -44,7 +44,7 @@ func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
 func (m *BMD) LRUenabled(bucket string) bool {
 	p, ok := m.Get(bucket, m.IsLocal(bucket))
 	if !ok {
-		return cmn.GCO.Get().LRU.LRUEnabled
+		return cmn.GCO.Get().LRU.Enabled
 	}
-	return p.LRUEnabled
+	return p.LRU.Enabled
 }

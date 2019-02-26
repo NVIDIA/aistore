@@ -12,36 +12,36 @@ import (
 
 type config struct {
 	ConfDir string        `json:"confdir"`
-	Proxy   proxyconfig   `json:"proxy"`
-	Log     logconfig     `json:"log"`
-	Net     netconfig     `json:"net"`
-	Auth    authconfig    `json:"auth"`
-	Timeout timeoutconfig `json:"timeout"`
+	Proxy   proxyConfig   `json:"proxy"`
+	Log     logConfig     `json:"log"`
+	Net     netConfig     `json:"net"`
+	Auth    authConfig    `json:"auth"`
+	Timeout timeoutConfig `json:"timeout"`
 }
-type proxyconfig struct {
+type proxyConfig struct {
 	URL string `json:"url"`
 }
-type logconfig struct {
-	Dir   string `json:"logdir"`
-	Level string `json:"loglevel"`
+type logConfig struct {
+	Dir   string `json:"dir"`
+	Level string `json:"level"`
 }
-type netconfig struct {
-	HTTP httpconfig `json:"http"`
+type netConfig struct {
+	HTTP httpConfig `json:"http"`
 }
-type httpconfig struct {
+type httpConfig struct {
 	Port        int    `json:"port"`
 	UseHTTPS    bool   `json:"use_https"`
 	Certificate string `json:"server_cert"`
 	Key         string `json:"server_key"`
 }
-type authconfig struct {
+type authConfig struct {
 	Secret          string        `json:"secret"`
 	Username        string        `json:"username"`
 	Password        string        `json:"password"`
 	ExpirePeriodStr string        `json:"expiration_time"`
 	ExpirePeriod    time.Duration `json:"-"`
 }
-type timeoutconfig struct {
+type timeoutConfig struct {
 	DefaultStr string        `json:"default_timeout"`
 	Default    time.Duration `json:"-"` // omitempty
 }

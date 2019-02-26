@@ -696,9 +696,9 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bucketProps := &cmn.BucketProps{
-		CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-		LRUConf:    cmn.GCO.Get().LRU,
-		MirrorConf: config.Mirror,
+		Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		LRU:    cmn.GCO.Get().LRU,
+		Mirror: config.Mirror,
 	}
 	if !clone.add(bucket, true, bucketProps) {
 		p.bmdowner.Unlock()
@@ -887,9 +887,9 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	if !exists {
 		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
-			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:    config.LRU,
-			MirrorConf: config.Mirror,
+			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRU:    config.LRU,
+			Mirror: config.Mirror,
 		}
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
@@ -903,55 +903,55 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	case cmn.HeaderBucketECEnabled:
 		if v, err := strconv.ParseBool(value); err == nil {
 			if v {
-				if bprops.DataSlices == 0 {
-					bprops.DataSlices = 2
+				if bprops.EC.DataSlices == 0 {
+					bprops.EC.DataSlices = 2
 				}
-				if bprops.ParitySlices == 0 {
-					bprops.ParitySlices = 2
+				if bprops.EC.ParitySlices == 0 {
+					bprops.EC.ParitySlices = 2
 				}
 			}
-			bprops.ECEnabled = v
+			bprops.EC.Enabled = v
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, err)
 		}
 	case cmn.HeaderBucketECData:
 		if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
-			bprops.DataSlices = int(v)
+			bprops.EC.DataSlices = int(v)
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
 	case cmn.HeaderBucketECParity:
 		if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
-			bprops.ParitySlices = int(v)
+			bprops.EC.ParitySlices = int(v)
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
 	case cmn.HeaderBucketECMinSize:
 		if v, err := strconv.ParseInt(value, 10, 64); err == nil {
-			bprops.ECObjSizeLimit = v
+			bprops.EC.ObjSizeLimit = v
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
 	case cmn.HeaderBucketCopies:
 		if v, err := cmn.ParseIntRanged(value, 10, 32, 2, 2); err == nil {
-			bprops.Copies = v
+			bprops.Mirror.Copies = v
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
 	case cmn.HeaderBucketMirrorThresh:
 		if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
-			bprops.MirrorUtilThresh = v
+			bprops.Mirror.UtilThresh = v
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
 	case cmn.HeaderBucketMirrorEnabled:
 		if v, err := strconv.ParseBool(value); err == nil {
 			if v {
-				if bprops.Copies == 0 {
-					bprops.Copies = 2
+				if bprops.Mirror.Copies == 0 {
+					bprops.Mirror.Copies = 2
 				}
 			}
-			bprops.MirrorEnabled = v
+			bprops.Mirror.Enabled = v
 		} else {
 			errStr = fmt.Sprintf(errFmt, propName, value, err)
 		}
@@ -1029,9 +1029,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
-			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:    config.LRU,
-			MirrorConf: config.Mirror,
+			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRU:    config.LRU,
+			Mirror: config.Mirror,
 		}
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
@@ -1045,10 +1045,10 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// forbid changing EC properties if EC is already enabled (for now)
-		if bprops.ECEnabled && nprops.ECEnabled &&
-			(bprops.ParitySlices != nprops.ParitySlices ||
-				bprops.DataSlices != nprops.DataSlices ||
-				bprops.ECObjSizeLimit != nprops.ECObjSizeLimit) {
+		if bprops.EC.Enabled && nprops.EC.Enabled &&
+			(bprops.EC.ParitySlices != nprops.EC.ParitySlices ||
+				bprops.EC.DataSlices != nprops.EC.DataSlices ||
+				bprops.EC.ObjSizeLimit != nprops.EC.ObjSizeLimit) {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, "Cannot change EC configuration after it is enabled",
 				http.StatusBadRequest)
@@ -1057,16 +1057,16 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 		p.copyBucketProps(bprops /*to*/, nprops /*from*/, bucket)
 	case cmn.ActResetProps:
-		if bprops.ECEnabled {
+		if bprops.EC.Enabled {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, "Cannot reset bucket properties after EC is enabled",
 				http.StatusBadRequest)
 			return
 		}
 		bprops = &cmn.BucketProps{
-			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:    config.LRU,
-			MirrorConf: config.Mirror,
+			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRU:    config.LRU,
+			Mirror: config.Mirror,
 		}
 	}
 	clone.set(bucket, proxyLocal, bprops)
@@ -2928,56 +2928,56 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 			props.WritePolicy = cmn.RWPolicyNextTier
 		}
 	}
-	if props.Checksum != cmn.ChecksumInherit &&
-		props.Checksum != cmn.ChecksumNone && props.Checksum != cmn.ChecksumXXHash {
+	if props.Cksum.Checksum != cmn.ChecksumInherit &&
+		props.Cksum.Checksum != cmn.ChecksumNone && props.Cksum.Checksum != cmn.ChecksumXXHash {
 		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
-			props.Checksum, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
+			props.Cksum.Checksum, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
 	}
-	lwm, hwm := props.LowWM, props.HighWM
+	lwm, hwm := props.LRU.LowWM, props.LRU.HighWM
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
 		return fmt.Errorf("invalid WM configuration. LowWM: %d, HighWM: %d", lwm, hwm)
 	}
-	if props.DontEvictTimeStr != "" {
-		dontEvictTime, err := time.ParseDuration(props.DontEvictTimeStr)
+	if props.LRU.DontEvictTimeStr != "" {
+		dontEvictTime, err := time.ParseDuration(props.LRU.DontEvictTimeStr)
 		if err != nil {
 			return fmt.Errorf("bad dont_evict_time format %s, err: %v", dontEvictTime, err)
 		}
-		props.DontEvictTime = dontEvictTime
+		props.LRU.DontEvictTime = dontEvictTime
 	}
-	if props.CapacityUpdTimeStr != "" {
-		capacityUpdTime, err := time.ParseDuration(props.CapacityUpdTimeStr)
+	if props.LRU.CapacityUpdTimeStr != "" {
+		capacityUpdTime, err := time.ParseDuration(props.LRU.CapacityUpdTimeStr)
 		if err != nil {
 			return fmt.Errorf("bad capacity_upd_time format %s, err: %v", capacityUpdTime, err)
 		}
-		props.CapacityUpdTime = capacityUpdTime
+		props.LRU.CapacityUpdTime = capacityUpdTime
 	}
 
-	if props.ECEnabled {
+	if props.EC.Enabled {
 		if !isLocal {
 			return fmt.Errorf("erasure coding does not support cloud buckets")
 		}
 
-		if props.ECObjSizeLimit < 0 {
-			return fmt.Errorf("bad EC file size %d: must be 0(default) or greater than 0", props.ECObjSizeLimit)
+		if props.EC.ObjSizeLimit < 0 {
+			return fmt.Errorf("bad EC file size %d: must be 0(default) or greater than 0", props.EC.ObjSizeLimit)
 		}
-		if props.DataSlices < ec.MinSliceCount || props.DataSlices > ec.MaxSliceCount {
+		if props.EC.DataSlices < ec.MinSliceCount || props.EC.DataSlices > ec.MaxSliceCount {
 			return fmt.Errorf("bad number of data slices %d: must be between %d and %d",
-				props.DataSlices, ec.MinSliceCount, ec.MaxSliceCount)
+				props.EC.DataSlices, ec.MinSliceCount, ec.MaxSliceCount)
 		}
 		// TODO: warn about performance if number is OK but large?
-		if props.ParitySlices < ec.MinSliceCount || props.ParitySlices > ec.MaxSliceCount {
+		if props.EC.ParitySlices < ec.MinSliceCount || props.EC.ParitySlices > ec.MaxSliceCount {
 			return fmt.Errorf("bad number of parity slices %d: must be between %d and %d",
-				props.ParitySlices, ec.MinSliceCount, ec.MaxSliceCount)
+				props.EC.ParitySlices, ec.MinSliceCount, ec.MaxSliceCount)
 		}
 
 		// data slices + parity slices + original object
-		required := props.DataSlices + props.ParitySlices + 1
+		required := props.EC.DataSlices + props.EC.ParitySlices + 1
 		targetCnt := len(p.smapowner.get().Tmap)
 		if targetCnt < required {
 			return fmt.Errorf(
 				"it requires %d targets to use %d data and %d parity slices "+
 					"(the cluster has only %d targets)",
-				required, props.DataSlices, props.ParitySlices, targetCnt)
+				required, props.EC.DataSlices, props.EC.ParitySlices, targetCnt)
 		}
 	}
 
@@ -3063,38 +3063,39 @@ func (p *proxyrunner) copyBucketProps(bprops /*to*/, nprops /*from*/ *cmn.Bucket
 	if nprops.WritePolicy != "" {
 		bprops.WritePolicy = nprops.WritePolicy
 	}
-	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, bprops.Checksum, nprops.Checksum) {
+	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, bprops.Cksum.Checksum, nprops.Cksum.Checksum) {
 		go p.notifyTargetsRechecksum(bucket)
 	}
-	if nprops.Checksum != "" {
-		bprops.Checksum = nprops.Checksum
-		if nprops.Checksum != cmn.ChecksumInherit {
-			bprops.ValidateColdGet = nprops.ValidateColdGet
-			bprops.ValidateWarmGet = nprops.ValidateWarmGet
-			bprops.EnableReadRangeChecksum = nprops.EnableReadRangeChecksum
+	if nprops.Cksum.Checksum != "" {
+		bprops.Cksum.Checksum = nprops.Cksum.Checksum
+		if nprops.Cksum.Checksum != cmn.ChecksumInherit {
+			bprops.Cksum.ValidateColdGet = nprops.Cksum.ValidateColdGet
+			bprops.Cksum.ValidateWarmGet = nprops.Cksum.ValidateWarmGet
+			bprops.Cksum.EnableReadRangeChecksum = nprops.Cksum.EnableReadRangeChecksum
 		}
 	}
-	bprops.LowWM = nprops.LowWM // can't conditionally assign if value != 0 since 0 is valid
-	bprops.HighWM = nprops.HighWM
-	bprops.AtimeCacheMax = nprops.AtimeCacheMax
-	if nprops.DontEvictTimeStr != "" {
-		bprops.DontEvictTimeStr = nprops.DontEvictTimeStr
-		bprops.DontEvictTime = nprops.DontEvictTime // parsing done in validateBucketProps()
+	bprops.LRU.LowWM = nprops.LRU.LowWM // can't conditionally assign if value != 0 since 0 is valid
+	bprops.LRU.HighWM = nprops.LRU.HighWM
+	bprops.LRU.AtimeCacheMax = nprops.LRU.AtimeCacheMax
+	if nprops.LRU.DontEvictTimeStr != "" {
+		bprops.LRU.DontEvictTimeStr = nprops.LRU.DontEvictTimeStr
+		bprops.LRU.DontEvictTime = nprops.LRU.DontEvictTime // parsing done in validateBucketProps()
 	}
-	if nprops.CapacityUpdTimeStr != "" {
-		bprops.CapacityUpdTimeStr = nprops.CapacityUpdTimeStr
-		bprops.CapacityUpdTime = nprops.CapacityUpdTime // parsing done in validateBucketProps()
+	if nprops.LRU.CapacityUpdTimeStr != "" {
+		bprops.LRU.CapacityUpdTimeStr = nprops.LRU.CapacityUpdTimeStr
+		bprops.LRU.CapacityUpdTime = nprops.LRU.CapacityUpdTime // parsing done in validateBucketProps()
 	}
-	bprops.LRUEnabled = nprops.LRUEnabled
-	bprops.MirrorEnabled = nprops.MirrorEnabled
-	if bprops.MirrorEnabled {
-		bprops.Copies = 2 // 2-way mirror, or none
-	}
-	bprops.MirrorBurst = nprops.MirrorBurst
-	bprops.MirrorUtilThresh = nprops.MirrorUtilThresh
+	bprops.LRU.Enabled = nprops.LRU.Enabled
 
-	bprops.ECEnabled = nprops.ECEnabled
-	bprops.ECObjSizeLimit = nprops.ECObjSizeLimit
-	bprops.DataSlices = nprops.DataSlices
-	bprops.ParitySlices = nprops.ParitySlices
+	bprops.Mirror.Enabled = nprops.Mirror.Enabled
+	if bprops.Mirror.Enabled {
+		bprops.Mirror.Copies = 2 // 2-way mirror, or none
+	}
+	bprops.Mirror.Burst = nprops.Mirror.Burst
+	bprops.Mirror.UtilThresh = nprops.Mirror.UtilThresh
+
+	bprops.EC.Enabled = nprops.EC.Enabled
+	bprops.EC.ObjSizeLimit = nprops.EC.ObjSizeLimit
+	bprops.EC.DataSlices = nprops.EC.DataSlices
+	bprops.EC.ParitySlices = nprops.EC.ParitySlices
 }

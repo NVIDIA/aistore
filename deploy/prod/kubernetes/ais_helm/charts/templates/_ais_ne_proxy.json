@@ -4,23 +4,23 @@
 	"cloudprovider":		"{{ .Values.common_config.cloudprovider }}",
 	"mirror": {
 		"copies":		2,
-		"mirror_burst_buffer":	512,
-		"mirror_util_thresh":	{{ .Values.common_config.mirror.mirror_util_tresh }},
-		"mirror_optimize_put":	false,
-		"mirror_enabled": 	{{ .Values.common_config.mirror.mirror_enabled }}
+		"burst_buffer":	512,
+		"util_thresh":	{{ .Values.common_config.mirror.util_tresh }},
+		"optimize_put":	false,
+		"enabled": 	{{ .Values.common_config.mirror.enabled }}
 	},
 	"readahead": {
-		"rahobjectmem":		1048576,
-		"rahtotalmem":		1073741824,
-		"rahbyproxy":		true,
-		"rahdiscard":		false,
-		"rahenabled":		false
+		"object_mem":		1048576,
+		"total_mem":		1073741824,
+		"by_proxy":		true,
+		"discard":		false,
+		"enabled":		false
 	},
 	"log": {
-		"logdir":		"{{ .Values.common_config.log.dir }}",
-		"loglevel": 		"{{ .Values.common_config.log.loglevel }}",
-		"logmaxsize": 		4194304,
-		"logmaxtotal":		67108864
+		"dir":       "{{ .Values.common_config.log.dir }}",
+		"level":     "{{ .Values.common_config.log.level }}",
+		"max_size":  4194304,
+		"max_total": 67108864
 	},
 	"periodic": {
 		"stats_time":		"10s",
@@ -36,38 +36,38 @@
 		"send_file_time":	"5m",
 		"startup_time":		"1m"
 	},
-	"proxyconfig": {
-		"non_electable":	{{ .Values.ne_proxy.config.proxyconfig.non_electable }},
+	"proxy": {
+		"non_electable":	{{ .Values.ne_proxy.config.proxy.non_electable }},
 		"primary_url":		"http://{{ template "ais.fullname" . }}-proxy:{{ .Values.proxy.service.port }}",
 		"original_url": 	"http://{{ template "ais.fullname" . }}-proxy:{{ .Values.proxy.service.port }}",
-		"discovery_url": 	"{{ .Values.ne_proxy.config.proxyconfig.discovery_url }}"
+		"discovery_url": 	"{{ .Values.ne_proxy.config.proxy.discovery_url }}"
 	},
-	"lru_config": {
+	"lru": {
 		"lowwm":		75,
 		"highwm":		90,
 		"out_of_space":		95,
 		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
-		"lru_local_buckets": false,
-		"lru_enabled":  	true
+		"local_buckets": false,
+		"enabled":  	true
 	},
-	"xaction_config":{
+	"xaction":{
 	    "disk_util_low_wm":      20,
 	    "disk_util_high_wm":     80
 	},
-	"rebalance_conf": {
+	"rebalance": {
 		"dest_retry_time":	"2m",
-		"rebalancing_enabled": 	true
+		"enabled": 	true
 	},
-	"cksum_config": {
+	"cksum": {
 		"checksum":                   "xxhash",
 		"validate_checksum_cold_get": true,
 		"validate_checksum_warm_get": false,
 		"validate_cluster_migration": false,
 		"enable_read_range_checksum": false
 	},
-	"version_config": {
+	"version": {
 		"validate_version_warm_get":    false,
 		"versioning":                   "all"
 	},
@@ -86,15 +86,15 @@
 		"count":		{{ .Values.ne_proxy.config.test_fspaths.count }},
 		"instance":		{{ .Values.ne_proxy.config.test_fspaths.instance }}
 	},
-	"netconfig": {
-		"ipv4":               "{{ .Values.ne_proxy.config.netconfig.ipv4 }}",
-		"ipv4_intra_control": "{{ .Values.ne_proxy.config.netconfig.ipv4_intra_control }}",
-		"ipv4_intra_data":     "{{ .Values.ne_proxy.config.netconfig.ipv4_intra_data }}",
+	"net": {
+		"ipv4":               "{{ .Values.ne_proxy.config.net.ipv4 }}",
+		"ipv4_intra_control": "{{ .Values.ne_proxy.config.net.ipv4_intra_control }}",
+		"ipv4_intra_data":     "{{ .Values.ne_proxy.config.net.ipv4_intra_data }}",
 		"l4": {
 			"proto":              "tcp",
-			"port":	              "{{ .Values.ne_proxy.config.netconfig.l4_port }}",
-			"port_intra_control": "{{ .Values.ne_proxy.config.netconfig.l4_port_intra_control }}",
-			"port_intra_data":    "{{ .Values.ne_proxy.config.netconfig.l4_port_intra_data }}"
+			"port":	              "{{ .Values.ne_proxy.config.net.l4_port }}",
+			"port_intra_control": "{{ .Values.ne_proxy.config.net.l4_port_intra_control }}",
+			"port_intra_data":    "{{ .Values.ne_proxy.config.net.l4_port_intra_data }}"
 		},
 		"http": {
 			"proto":		"http",
@@ -103,13 +103,13 @@
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
 			"max_num_targets":	16,
-			"use_https":		{{ .Values.ne_proxy.config.netconfig.http.use_https }}
+			"use_https":		{{ .Values.ne_proxy.config.net.http.use_https }}
 		}
 	},
 	"fshc": {
-		"fshc_enabled":		true,
-		"fshc_test_files":	4,
-		"fshc_error_limit":	2
+		"enabled":     true,
+		"test_files":  4,
+		"error_limit": 2
 	},
 	"auth": {
 		"secret": "{{ .Values.common_config.auth.secret }}",

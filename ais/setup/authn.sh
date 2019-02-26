@@ -2,8 +2,8 @@ cat > $CONFFILE <<EOL
 {
 	"confdir": "$CONFDIR",
 	"log": {
-		"logdir": "$LOGDIR",
-		"loglevel": "$LOGLEVEL"
+		"dir":   "$LOGDIR",
+		"level": "${LOGLEVEL:-3}"
 	},
 	"proxy": {
 		"url": "$PROXYURL"

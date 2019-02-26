@@ -314,9 +314,8 @@ func readFile(fqn string) (sgl *memsys.SGL, err error) {
 	return sgl, nil
 }
 
-func IsECCopy(size int64, bprops *cmn.BucketProps) bool {
-	return size < bprops.ECObjSizeLimit ||
-		(bprops.ECObjSizeLimit == 0 && size < DefaultSizeLimit)
+func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
+	return size < ecConf.ObjSizeLimit || (ecConf.ObjSizeLimit == 0 && size < DefaultSizeLimit)
 }
 
 // returns whether EC must use disk instead of keeping everything in memory.

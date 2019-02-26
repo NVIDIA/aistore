@@ -14,11 +14,11 @@ common_config:
   cloud_buckets: cloud
   local_buckets: local
   mirror:
-    mirror_util_tresh: 0
-    mirror_enabled: false
+    util_tresh: 0
+    enabled: false
   log:
     dir: /var/log/ais
-    loglevel : 3
+    level : 3
   periodic:
     iostat_time: "2s"
   auth:
@@ -30,13 +30,13 @@ common_config:
 proxy:
   name : "proxy"    # A component label for selector
   config:
-    proxyconfig:
+    proxy:
       non_electable : false
       discovery_url : ""
     test_fspaths:
       count         : 0
       instance      : 0
-    netconfig:
+    net:
       ipv4          : ""
       l4_port       : 8080
       ipv4_intra_control: ""
@@ -66,13 +66,13 @@ proxy:
 ne_proxy:
   name : "ne_proxy"    # A component label for selector
   config:
-    proxyconfig:
+    proxy:
       non_electable : true
       discovery_url : ""
     test_fspaths:
       count         : 0
       instance      : 0
-    netconfig:
+    net:
       ipv4          : ""
       l4_port       : 8080
       ipv4_intra_control: ""
@@ -98,13 +98,13 @@ ne_proxy:
 target:
   name : "target"   # A component label for selector
   config:
-    proxyconfig:  
+    proxy:  
       non_electable : false
       discovery_url : ""
     test_fspaths:
       count         : 0
       instance      : 0
-    netconfig:
+    net:
       ipv4          : ""
       l4_port       : 8081
       ipv4_intra_control: ""

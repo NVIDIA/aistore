@@ -1495,7 +1495,7 @@ func TestAtimeRebalance(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Enable bucket level LRU properties
-	bucketProps.LRUEnabled = true
+	bucketProps.LRU.Enabled = true
 	err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), m.bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 
@@ -1604,15 +1604,15 @@ func testLocalMirror(t *testing.T, erase bool) {
 		tutils.CheckFatal(err, t)
 
 		// copy default config and change one field
-		bucketProps.MirrorConf = config.Mirror
-		bucketProps.MirrorConf.MirrorEnabled = true
+		bucketProps.Mirror = config.Mirror
+		bucketProps.Mirror.Enabled = true
 		err = api.SetBucketProps(baseParams, m.bucket, bucketProps)
 		tutils.CheckFatal(err, t)
 
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
 		tutils.CheckFatal(err, t)
-		if p.Copies != 2 {
-			t.Fatalf("%d copies != 2", p.Copies)
+		if p.Mirror.Copies != 2 {
+			t.Fatalf("%d copies != 2", p.Mirror.Copies)
 		}
 	}
 

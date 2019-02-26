@@ -1253,7 +1253,7 @@ components:
           type: string
         write_policy:
           type: string
-        cksum_config:
+        cksum:
           $ref: '#/components/schemas/BucketPropsCksum'
     BucketPropsCksum:
       type: object
@@ -1541,14 +1541,14 @@ components:
         log:
           type: object
           properties:
-            logdir:
+            dir:
               type: string
-            loglevel:
+            level:
               type: string
-            logmaxsize:
+            max_size:
               type: integer
               format: int64
-            logmaxtotal:
+            max_total:
               type: integer
               format: int64
         periodic:
@@ -1575,14 +1575,14 @@ components:
               type: string
             startup_time:
               type: string
-        proxyconfig:
+        proxy:
           type: object
           properties:
             primary:
               $ref: '#/components/schemas/ProxyConfiguration'
             original:
               $ref: '#/components/schemas/ProxyConfiguration'
-        lru_config:
+        lru:
           type: object
           properties:
             lowwm:
@@ -1598,18 +1598,18 @@ components:
               type: string
             capacity_upd_time:
               type: string
-            lru_enabled:
+            enabled:
               type: boolean
-        rebalance_conf:
+        rebalance:
           type: object
           properties:
             startup_delay_time:
               type: string
             dest_retry_time:
               type: string
-            rebalancing_enabled:
+            enabled:
               type: boolean
-        cksum_config:
+        cksum:
           type: object
           properties:
             checksum:
@@ -1620,7 +1620,7 @@ components:
               type: boolean
             enable_read_range_checksum:
               type: boolean
-        version_config:
+        version:
           type: object
           properties:
             validate_version_warm_get:
@@ -1642,7 +1642,7 @@ components:
             instance:
               type: integer
               format: int32
-        netconfig:
+        net:
           type: object
           properties:
             ipv4:

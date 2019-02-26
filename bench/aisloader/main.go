@@ -198,39 +198,39 @@ func parseCmdLine() (params, error) {
 		}
 
 		p.bProps = bprops
-		if p.bProps.ECEnabled {
+		if p.bProps.EC.Enabled {
 			// fill EC defaults
-			if p.bProps.ParitySlices == 0 {
-				p.bProps.ParitySlices = 2
+			if p.bProps.EC.ParitySlices == 0 {
+				p.bProps.EC.ParitySlices = 2
 			}
-			if p.bProps.DataSlices == 0 {
-				p.bProps.DataSlices = 2
+			if p.bProps.EC.DataSlices == 0 {
+				p.bProps.EC.DataSlices = 2
 			}
 
-			if p.bProps.ParitySlices < 1 || p.bProps.ParitySlices > 32 {
+			if p.bProps.EC.ParitySlices < 1 || p.bProps.EC.ParitySlices > 32 {
 				return params{}, fmt.Errorf(
 					"invalid number of parity slices: %d, it must be between 1 and 32",
-					p.bProps.ParitySlices)
+					p.bProps.EC.ParitySlices)
 			}
-			if p.bProps.DataSlices < 1 || p.bProps.DataSlices > 32 {
+			if p.bProps.EC.DataSlices < 1 || p.bProps.EC.DataSlices > 32 {
 				return params{}, fmt.Errorf(
 					"invalid number of data slices: %d, it must be between 1 and 32",
-					p.bProps.DataSlices)
+					p.bProps.EC.DataSlices)
 			}
 		}
 
-		if p.bProps.MirrorEnabled {
+		if p.bProps.Mirror.Enabled {
 			// fill mirror default properties
-			if p.bProps.MirrorUtilThresh == 0 {
-				p.bProps.MirrorUtilThresh = 5
+			if p.bProps.Mirror.UtilThresh == 0 {
+				p.bProps.Mirror.UtilThresh = 5
 			}
-			if p.bProps.Copies == 0 {
-				p.bProps.Copies = 2
+			if p.bProps.Mirror.Copies == 0 {
+				p.bProps.Mirror.Copies = 2
 			}
-			if p.bProps.Copies != 2 {
+			if p.bProps.Mirror.Copies != 2 {
 				return params{}, fmt.Errorf(
 					"invalid number of mirror copies: %d, it must equal 2",
-					p.bProps.Copies)
+					p.bProps.Mirror.Copies)
 			}
 		}
 	}
@@ -320,26 +320,26 @@ func main() {
 			return
 		}
 		change := false
-		if runParams.bProps.ECEnabled != oldProps.ECEnabled {
-			if !runParams.bProps.ECEnabled {
-				oldProps.ECEnabled = false
+		if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
+			if !runParams.bProps.EC.Enabled {
+				oldProps.EC.Enabled = false
 			} else {
-				oldProps.ECConf = cmn.ECConf{
-					ECEnabled:      true,
-					ECObjSizeLimit: runParams.bProps.ECObjSizeLimit,
-					DataSlices:     runParams.bProps.DataSlices,
-					ParitySlices:   runParams.bProps.ParitySlices,
+				oldProps.EC = cmn.ECConf{
+					Enabled:      true,
+					ObjSizeLimit: runParams.bProps.EC.ObjSizeLimit,
+					DataSlices:   runParams.bProps.EC.DataSlices,
+					ParitySlices: runParams.bProps.EC.ParitySlices,
 				}
 			}
 			change = true
 		}
-		if runParams.bProps.MirrorEnabled != oldProps.MirrorEnabled {
-			if runParams.bProps.MirrorEnabled {
-				oldProps.MirrorEnabled = runParams.bProps.MirrorEnabled
-				oldProps.Copies = runParams.bProps.Copies
-				oldProps.MirrorUtilThresh = runParams.bProps.MirrorUtilThresh
+		if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
+			if runParams.bProps.Mirror.Enabled {
+				oldProps.Mirror.Enabled = runParams.bProps.Mirror.Enabled
+				oldProps.Mirror.Copies = runParams.bProps.Mirror.Copies
+				oldProps.Mirror.UtilThresh = runParams.bProps.Mirror.UtilThresh
 			} else {
-				oldProps.MirrorEnabled = false
+				oldProps.Mirror.Enabled = false
 			}
 			change = true
 		}

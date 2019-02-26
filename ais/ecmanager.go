@@ -106,7 +106,7 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 }
 
 func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
-	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
+	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 	cmn.Assert(lom.FQN != "")
@@ -115,9 +115,6 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	if lom.T.OOS() {
 		return errors.New("OOS") // out of space
 	}
-	if !lom.Bprops.ECEnabled {
-		return nil
-	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
 		return nil
@@ -125,7 +122,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 
 	req := &ec.Request{
 		Action: ec.ActSplit,
-		IsCopy: ec.IsECCopy(lom.Size, lom.Bprops),
+		IsCopy: ec.IsECCopy(lom.Size, &lom.Bprops.EC),
 		LOM:    lom,
 	}
 	if mgr.xact == nil || mgr.xact.Finished() {
@@ -140,15 +137,11 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 }
 
 func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
-	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
+	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
 		return
 	}
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
-
-	if !lom.Bprops.ECEnabled {
-		return
-	}
 	req := &ec.Request{
 		Action: ec.ActDelete,
 		LOM:    lom,
@@ -160,7 +153,7 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
-	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
+	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 

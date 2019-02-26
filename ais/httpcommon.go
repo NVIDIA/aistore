@@ -906,7 +906,7 @@ func (h *httprunner) setconfig(name, value string) (persist bool, errstr string)
 		if err := cmn.SetGLogVModule(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
 		}
-	case "loglevel", "log.loglevel":
+	case "log_level", "log.level":
 		if err := cmn.SetLogLevel(config, value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
 		}
@@ -958,128 +958,128 @@ func (h *httprunner) setconfig(name, value string) (persist bool, errstr string)
 		} else {
 			config.Timeout.MaxKeepalive, config.Timeout.MaxKeepaliveStr = v, value
 		}
-	case "dont_evict_time", "lru_config.dont_evict_time":
+	case "dont_evict_time", "lru.dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
 		}
-	case "capacity_upd_time", "lru_config.capacity_upd_time":
+	case "capacity_upd_time", "lru.capacity_upd_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
 		}
-	case "lowwm", "lru_config.lowwm":
+	case "lowwm", "lru.lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.LowWM, checkwm = v, true
 		}
-	case "highwm", "lru_config.highwm":
+	case "highwm", "lru.highwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.HighWM, checkwm = v, true
 		}
-	case "lru_enabled", "lru_config.lru_enabled":
+	case "lru_enabled", "lru.enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.LRU.LRUEnabled = v
+			config.LRU.Enabled = v
 		}
-	case "lru_local_buckets", "lru_config.lru_local_buckets":
+	case "lru_local_buckets", "lru.local_buckets":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.LRU.LRULocalBuckets = v
+			config.LRU.LocalBuckets = v
 		}
-	case "disk_util_low_wm", "xaction_config.disk_util_low_wm":
+	case "disk_util_low_wm", "xaction.disk_util_low_wm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Xaction.DiskUtilLowWM = v
 		}
-	case "disk_util_high_wm", "xaction_config.disk_util_high_wm":
+	case "disk_util_high_wm", "xaction.disk_util_high_wm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Xaction.DiskUtilHighWM = v
 		}
-	case "dest_retry_time", "rebalance_conf.dest_retry_time":
+	case "dest_retry_time", "rebalance.dest_retry_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
 		}
-	case "rebalancing_enabled", "rebalance_conf.rebalancing_enabled":
+	case "rebalance_enabled", "rebalance.enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Rebalance.Enabled = v
 		}
-	case "validate_checksum_cold_get", "cksum_config.validate_checksum_cold_get":
+	case "validate_checksum_cold_get", "cksum.validate_checksum_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateColdGet = v
 		}
-	case "validate_checksum_warm_get", "cksum_config.validate_checksum_warm_get":
+	case "validate_checksum_warm_get", "cksum.validate_checksum_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateWarmGet = v
 		}
-	case "enable_read_range_checksum", "cksum_config.enable_read_range_checksum":
+	case "enable_read_range_checksum", "cksum.enable_read_range_checksum":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.EnableReadRangeChecksum = v
 		}
-	case "checksum", "cksum_config.checksum":
+	case "checksum", "cksum.checksum":
 		if value == cmn.ChecksumXXHash || value == cmn.ChecksumNone {
 			config.Cksum.Checksum = value
 		} else {
 			errstr = fmt.Sprintf("%s: invalid %s type %s (expecting %s or %s)",
 				cmn.ActSetConfig, name, value, cmn.ChecksumXXHash, cmn.ChecksumNone)
 		}
-	case "validate_version_warm_get", "version_config.validate_version_warm_get":
+	case "validate_version_warm_get", "version.validate_version_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Ver.ValidateWarmGet = v
 		}
-	case "versioning", "version_config.versioning":
+	case "versioning", "version.versioning":
 		if err := cmn.ValidateVersion(value); err != nil {
 			errstr = err.Error()
 		} else {
 			config.Ver.Versioning = value
 		}
-	case "fshc_enabled", "fshc.fshc_enabled":
+	case "fshc_enabled", "fshc.enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.FSHC.Enabled = v
 		}
-	case "mirror_enabled", "mirror.mirror_enabled":
+	case "mirror_enabled", "mirror.enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.Mirror.MirrorEnabled = v
+			config.Mirror.Enabled = v
 		}
-	case "mirror_burst_buffer", "mirror.mirror_burst_buffer":
+	case "mirror_burst_buffer", "mirror.burst_buffer":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.Mirror.MirrorBurst = v
+			config.Mirror.Burst = v
 		}
-	case "mirror_util_thresh", "mirror.mirror_util_thresh":
+	case "mirror_util_thresh", "mirror.util_thresh":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else if v <= 0 || v > 100 {
 			errstr = fmt.Sprintf("%s: invalid %s=%d", cmn.ActSetConfig, name, v)
 		} else {
-			config.Mirror.MirrorUtilThresh = v
+			config.Mirror.UtilThresh = v
 		}
 	case "keepalivetracker.proxy.interval":
 		if v, err := time.ParseDuration(value); err != nil {

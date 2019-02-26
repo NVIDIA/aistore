@@ -42,17 +42,17 @@ class TestDaemonApi(unittest.TestCase):
         """
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "loglevel", "4")
+            "log.level", "4")
         self.daemon.perform_operation(input_params)
 
         config = DictParser.parse(self.daemon.get(
             self.models.GetWhat.CONFIG))
-        self.assertTrue(config.log.loglevel == "4",
+        self.assertTrue(config.log.level == "4",
                         "Set config value not getting reflected.")
 
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "loglevel", "3")
+            "log.level", "3")
         self.daemon.perform_operation(input_params)
 
     @unittest.skip("Test fails due to the fact that it takes some time to distribute SMAP across nodes")

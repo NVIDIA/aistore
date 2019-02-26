@@ -104,23 +104,23 @@ const (
 	HeaderWritePolicy = "write_policy"  // Policy used for writing in a AIStore multi-tier environment
 
 	// bucket props
-	HeaderBucketChecksumType    = "cksum_config-checksum"                   // Checksum type used for objects in the bucket
-	HeaderBucketValidateColdGet = "cksum_config-validate_checksum_cold_get" // Cold get validation policy used for objects in the bucket
-	HeaderBucketValidateWarmGet = "cksum_config-validate_checksum_warm_get" // Warm get validation policy used for objects in the bucket
-	HeaderBucketValidateRange   = "cksum_config-enable_read_range_checksum" // Byte range validation policy used for objects in the bucket
-	HeaderBucketLRULowWM        = "lru_props-lowwm"                         // Capacity usage low water mark
-	HeaderBucketLRUHighWM       = "lru_props-highwm"                        // Capacity usage high water mark
-	HeaderBucketAtimeCacheMax   = "lru_props-atime_cache_max"               // Maximum Number of Entires in the Cache
-	HeaderBucketDontEvictTime   = "lru_props-dont_evict_time"               // Enforces an eviction-free time period between [atime, atime+dontevicttime]
-	HeaderBucketCapUpdTime      = "lru_props-capacity_upd_time"             // Minimum time to update the capacity
-	HeaderBucketLRUEnabled      = "lru_props-lru_enabled"                   // LRU is run on a bucket only if this field is true
-	HeaderBucketCopies          = "mirror-copies"                           // # local copies
-	HeaderBucketMirrorThresh    = "mirror-mirror_util_thresh"               // utilizations are considered equivalent when below this threshold
-	HeaderBucketMirrorEnabled   = "mirror-mirror_enabled"                   // will only generate local copies when set to true
-	HeaderBucketECEnabled       = "ec_config-enabled"                       // EC is on for a bucket
-	HeaderBucketECMinSize       = "ec_config-objsize_limit"                 // Objects under MinSize copied instead of being EC'ed
-	HeaderBucketECData          = "ec_config-data_slices"                   // number of data chunks for EC
-	HeaderBucketECParity        = "ec_config-parity_slices"                 // number of parity chunks for EC/copies for small files
+	HeaderBucketChecksumType    = "cksum.checksum"                   // Checksum type used for objects in the bucket
+	HeaderBucketValidateColdGet = "cksum.validate_checksum_cold_get" // Cold get validation policy used for objects in the bucket
+	HeaderBucketValidateWarmGet = "cksum.validate_checksum_warm_get" // Warm get validation policy used for objects in the bucket
+	HeaderBucketValidateRange   = "cksum.enable_read_range_checksum" // Byte range validation policy used for objects in the bucket
+	HeaderBucketLRUEnabled      = "lru.enabled"                      // LRU is run on a bucket only if this field is true
+	HeaderBucketLRULowWM        = "lru.lowwm"                        // Capacity usage low water mark
+	HeaderBucketLRUHighWM       = "lru.highwm"                       // Capacity usage high water mark
+	HeaderBucketAtimeCacheMax   = "lru.atime_cache_max"              // Maximum Number of Entires in the Cache
+	HeaderBucketDontEvictTime   = "lru.dont_evict_time"              // Enforces an eviction-free time period between [atime, atime+dontevicttime]
+	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"            // Minimum time to update the capacity
+	HeaderBucketMirrorEnabled   = "mirror.enabled"                   // will only generate local copies when set to true
+	HeaderBucketCopies          = "mirror.copies"                    // # local copies
+	HeaderBucketMirrorThresh    = "mirror.util_thresh"               // utilizations are considered equivalent when below this threshold
+	HeaderBucketECEnabled       = "ec.enabled"                       // EC is on for a bucket
+	HeaderBucketECMinSize       = "ec.objsize_limit"                 // Objects under MinSize copied instead of being EC'ed
+	HeaderBucketECData          = "ec.data_slices"                   // number of data chunks for EC
+	HeaderBucketECParity        = "ec.parity_slices"                 // number of parity chunks for EC/copies for small files
 
 	// object meta
 	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
@@ -439,25 +439,25 @@ type BucketProps struct {
 	// specified by NextTierURL. Default: "cloud"
 	WritePolicy string `json:"write_policy,omitempty"`
 
-	// CksumConf is the embedded struct of the same name
-	CksumConf `json:"cksum_config"`
+	// Cksum is the embedded struct of the same name
+	Cksum CksumConf `json:"cksum"`
 
-	// LRUConf is the embedded struct of the same name
-	LRUConf `json:"lru_props"`
+	// LRU is the embedded struct of the same name
+	LRU LRUConf `json:"lru"`
 
-	// MirrorConf defines local-mirroring policy for the bucket
-	MirrorConf `json:"mirror"`
+	// Mirror defines local-mirroring policy for the bucket
+	Mirror MirrorConf `json:"mirror"`
 
-	// Erasure coding setting for the bucket
-	ECConf `json:"ec_config"`
+	// EC defines erasure coding setting for the bucket
+	EC ECConf `json:"ec"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
 type ECConf struct {
-	ECObjSizeLimit int64 `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
-	DataSlices     int   `json:"data_slices"`   // number of data slices
-	ParitySlices   int   `json:"parity_slices"` // number of parity slices/replicas
-	ECEnabled      bool  `json:"enabled"`       // EC is enabled
+	ObjSizeLimit int64 `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
+	DataSlices   int   `json:"data_slices"`   // number of data slices
+	ParitySlices int   `json:"parity_slices"` // number of parity slices/replicas
+	Enabled      bool  `json:"enabled"`       // EC is enabled
 }
 
 // ObjectProps

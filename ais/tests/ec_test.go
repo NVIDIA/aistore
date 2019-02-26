@@ -256,7 +256,7 @@ func compareSlicesCount(t *testing.T, orig, found map[string]int) {
 
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
-func TestECPropsChange(t *testing.T) {
+func TestECChange(t *testing.T) {
 	var (
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
@@ -265,12 +265,12 @@ func TestECPropsChange(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     1,
-		ParitySlices:   1,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   1,
+		ParitySlices: 1,
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
@@ -279,16 +279,16 @@ func TestECPropsChange(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	tutils.Logln("Trying to set too many slices")
-	bucketProps.DataSlices = 25
-	bucketProps.ParitySlices = 25
+	bucketProps.EC.DataSlices = 25
+	bucketProps.EC.ParitySlices = 25
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	if err == nil {
 		t.Error("Enabling EC must fail in case of the number of targets fewer than the number of slices")
 	}
 
 	tutils.Logln("Enabling EC")
-	bucketProps.DataSlices = 1
-	bucketProps.ParitySlices = 1
+	bucketProps.EC.DataSlices = 1
+	bucketProps.EC.ParitySlices = 1
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
@@ -297,22 +297,22 @@ func TestECPropsChange(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	tutils.Logln("Trying to disable EC")
-	bucketProps.ECEnabled = false
+	bucketProps.EC.Enabled = false
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	if err != nil {
 		t.Errorf("Disabling EC failed: %v", err)
 	}
 
 	tutils.Logln("Trying to re-enable EC")
-	bucketProps.ECEnabled = true
+	bucketProps.EC.Enabled = true
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	if err != nil {
 		t.Errorf("Enabling EC failed: %v", err)
 	}
 
 	tutils.Logln("Trying to modify EC options when EC is enabled")
-	bucketProps.ECEnabled = true
-	bucketProps.ECObjSizeLimit = 300000
+	bucketProps.EC.Enabled = true
+	bucketProps.EC.ObjSizeLimit = 300000
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	if err == nil {
 		t.Error("Modifiying EC properties must fail")
@@ -368,12 +368,12 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
@@ -577,12 +577,12 @@ func TestECStress(t *testing.T) {
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(seed))
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		ecSliceCnt, ecParityCnt, seed, concurr)
@@ -784,12 +784,12 @@ func TestECExtraStress(t *testing.T) {
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(seed))
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n", ecSliceCnt, ecParityCnt, seed, concurr)
 	baseParams := tutils.BaseAPIParams(proxyURL)
@@ -914,13 +914,13 @@ func TestECXattrs(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CksumConf.Checksum = "inherit"
+	bucketProps.Cksum.Checksum = "inherit"
 	bucketProps.Versioning = "all"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
@@ -1078,8 +1078,8 @@ func TestECEmergencyTarget(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	setClusterConfig(t, proxyURL, "rebalancing_enabled", false)
-	defer setClusterConfig(t, proxyURL, "rebalancing_enabled", true)
+	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
+	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -1087,12 +1087,12 @@ func TestECEmergencyTarget(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
@@ -1258,8 +1258,8 @@ func TestECEmergencyMpath(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	setClusterConfig(t, proxyURL, "rebalancing_enabled", false)
-	defer setClusterConfig(t, proxyURL, "rebalancing_enabled", true)
+	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
+	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
@@ -1267,12 +1267,12 @@ func TestECEmergencyMpath(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CksumConf.Checksum = "inherit"
-	bucketProps.ECConf = cmn.ECConf{
-		ECEnabled:      true,
-		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   ecSliceCnt,
+		ParitySlices: ecParityCnt,
 	}
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)

@@ -637,12 +637,12 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
 
 	//Common
-	globalProps.CksumConf = globalConfig.Cksum
-	globalProps.LRUConf = testBucketProps(t).LRUConf
+	globalProps.Cksum = globalConfig.Cksum
+	globalProps.LRU = testBucketProps(t).LRU
 
 	// Local bucket props
 	bucketPropsLocal := defaultBucketProps()
-	bucketPropsLocal.Checksum = cmn.ChecksumNone
+	bucketPropsLocal.Cksum.Checksum = cmn.ChecksumNone
 
 	// Cloud bucket props
 	bucketPropsCloud := defaultBucketProps()
@@ -854,8 +854,8 @@ func TestHeadLocalBucket(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
-	bucketProps.ValidateWarmGet = true
-	bucketProps.LRUEnabled = true
+	bucketProps.Cksum.ValidateWarmGet = true
+	bucketProps.LRU.Enabled = true
 
 	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
@@ -877,9 +877,9 @@ func TestHeadCloudBucket(t *testing.T) {
 	}
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderAmazon
-	bucketProps.ValidateWarmGet = true
-	bucketProps.ValidateColdGet = true
-	bucketProps.LRUEnabled = true
+	bucketProps.Cksum.ValidateWarmGet = true
+	bucketProps.Cksum.ValidateColdGet = true
+	bucketProps.LRU.Enabled = true
 
 	err := api.SetBucketProps(baseParams, clibucket, bucketProps)
 	tutils.CheckFatal(err, t)
@@ -1332,7 +1332,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	api.SetBucketProp(tutils.DefaultBaseAPIParams(t), bucket, cmn.HeaderBucketMirrorEnabled, true)
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 	tutils.CheckFatal(err, t)
-	if !bProps.MirrorEnabled {
+	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property not changed")
 	}
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
@@ -1345,7 +1345,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 	tutils.CheckFatal(err, t)
-	if bProps.MirrorEnabled {
+	if bProps.Mirror.Enabled {
 		t.Fatalf("Test property not reset ")
 	}
 }
@@ -1873,43 +1873,43 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 		t.Errorf("Expected next tier URL: %s, received next tier URL: %s",
 			expected.NextTierURL, actual.NextTierURL)
 	}
-	if actual.Checksum != expected.Checksum {
+	if actual.Cksum.Checksum != expected.Cksum.Checksum {
 		t.Errorf("Expected checksum type: %s, received checksum type: %s",
-			expected.Checksum, actual.Checksum)
+			expected.Cksum.Checksum, actual.Cksum.Checksum)
 	}
-	if actual.ValidateColdGet != expected.ValidateColdGet {
+	if actual.Cksum.ValidateColdGet != expected.Cksum.ValidateColdGet {
 		t.Errorf("Expected cold GET validation setting: %t, received: %t",
-			expected.ValidateColdGet, actual.ValidateColdGet)
+			expected.Cksum.ValidateColdGet, actual.Cksum.ValidateColdGet)
 	}
-	if actual.ValidateWarmGet != expected.ValidateWarmGet {
+	if actual.Cksum.ValidateWarmGet != expected.Cksum.ValidateWarmGet {
 		t.Errorf("Expected warm GET validation setting: %t, received: %t",
-			expected.ValidateWarmGet, actual.ValidateWarmGet)
+			expected.Cksum.ValidateWarmGet, actual.Cksum.ValidateWarmGet)
 	}
-	if actual.EnableReadRangeChecksum != expected.EnableReadRangeChecksum {
+	if actual.Cksum.EnableReadRangeChecksum != expected.Cksum.EnableReadRangeChecksum {
 		t.Errorf("Expected byte range validation setting: %t, received: %t",
-			expected.EnableReadRangeChecksum, actual.EnableReadRangeChecksum)
+			expected.Cksum.EnableReadRangeChecksum, actual.Cksum.EnableReadRangeChecksum)
 	}
-	if actual.LowWM != expected.LowWM {
-		t.Errorf("Expected LowWM setting: %d, received %d", expected.LowWM, actual.LowWM)
+	if actual.LRU.LowWM != expected.LRU.LowWM {
+		t.Errorf("Expected LowWM setting: %d, received %d", expected.LRU.LowWM, actual.LRU.LowWM)
 	}
-	if actual.HighWM != expected.HighWM {
-		t.Errorf("Expected HighWM setting: %d, received %d", expected.HighWM, actual.HighWM)
+	if actual.LRU.HighWM != expected.LRU.HighWM {
+		t.Errorf("Expected HighWM setting: %d, received %d", expected.LRU.HighWM, actual.LRU.HighWM)
 	}
-	if actual.AtimeCacheMax != expected.AtimeCacheMax {
+	if actual.LRU.AtimeCacheMax != expected.LRU.AtimeCacheMax {
 		t.Errorf("Expected AtimeCacheMax setting: %d, received %d",
-			expected.AtimeCacheMax, actual.AtimeCacheMax)
+			expected.LRU.AtimeCacheMax, actual.LRU.AtimeCacheMax)
 	}
-	if actual.DontEvictTimeStr != expected.DontEvictTimeStr {
+	if actual.LRU.DontEvictTimeStr != expected.LRU.DontEvictTimeStr {
 		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s",
-			expected.DontEvictTimeStr, actual.DontEvictTimeStr)
+			expected.LRU.DontEvictTimeStr, actual.LRU.DontEvictTimeStr)
 	}
-	if actual.CapacityUpdTimeStr != expected.CapacityUpdTimeStr {
+	if actual.LRU.CapacityUpdTimeStr != expected.LRU.CapacityUpdTimeStr {
 		t.Errorf("Expected CapacityUpdTimeStr setting: %s, received %s",
-			expected.CapacityUpdTimeStr, actual.CapacityUpdTimeStr)
+			expected.LRU.CapacityUpdTimeStr, actual.LRU.CapacityUpdTimeStr)
 	}
-	if actual.LRUEnabled != expected.LRUEnabled {
+	if actual.LRU.Enabled != expected.LRU.Enabled {
 		t.Errorf("Expected LRU enabled setting: %t, received: %t",
-			expected.LRUEnabled, actual.LRUEnabled)
+			expected.LRU.Enabled, actual.LRU.Enabled)
 	}
 }
 
@@ -1919,19 +1919,19 @@ func defaultBucketProps() cmn.BucketProps {
 		NextTierURL:   "http://foo.com",
 		ReadPolicy:    cmn.RWPolicyNextTier,
 		WritePolicy:   cmn.RWPolicyNextTier,
-		CksumConf: cmn.CksumConf{
+		Cksum: cmn.CksumConf{
 			Checksum:                cmn.ChecksumXXHash,
 			ValidateColdGet:         false,
 			ValidateWarmGet:         false,
 			EnableReadRangeChecksum: false,
 		},
-		LRUConf: cmn.LRUConf{
+		LRU: cmn.LRUConf{
 			LowWM:              int64(10),
 			HighWM:             int64(50),
 			AtimeCacheMax:      int64(9999),
 			DontEvictTimeStr:   "1m",
 			CapacityUpdTimeStr: "2m",
-			LRUEnabled:         false,
+			Enabled:            false,
 		},
 	}
 }

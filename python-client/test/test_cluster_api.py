@@ -77,7 +77,7 @@ class TestClusterApi(unittest.TestCase):
 
             config = DictParser.parse(self.daemon.get(
                 self.models.GetWhat.CONFIG))
-            self.assertTrue(config.cksum_config.enable_read_range_checksum,
+            self.assertTrue(config.cksum.enable_read_range_checksum,
                             "Set config value not getting reflected.")
 
         self.cluster.api_client.configuration.host = old_host

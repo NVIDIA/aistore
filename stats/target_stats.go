@@ -177,7 +177,7 @@ func (r *Trunner) log() (runlru bool) {
 
 func (r *Trunner) housekeep(runlru bool) {
 	var config = cmn.GCO.Get()
-	if runlru && config.LRU.LRUEnabled {
+	if runlru && config.LRU.Enabled {
 		go r.T.RunLRU()
 	}
 

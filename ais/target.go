@@ -641,7 +641,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if lom.Mirror.MirrorEnabled {
+	if lom.Mirror.Enabled {
 		if errstr = lom.Fill(bckProvider, cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
@@ -1307,8 +1307,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	config := cmn.GCO.Get()
 	cksumcfg := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if ok && props.Checksum != cmn.ChecksumInherit {
-		cksumcfg = &props.CksumConf
+	if ok && props.Cksum.Checksum != cmn.ChecksumInherit {
+		cksumcfg = &props.Cksum
 	}
 	// transfer bucket props via http header;
 	// (it is totally legal for Cloud buckets to not have locally cached props)
@@ -1319,24 +1319,24 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
 	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
 	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
-	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LowWM, 10))
-	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.HighWM, 10))
-	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
-	hdr.Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
-	hdr.Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
-	hdr.Add(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.MirrorEnabled))
-	hdr.Add(cmn.HeaderBucketMirrorThresh, strconv.FormatInt(props.MirrorUtilThresh, 10))
-	hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
-	if props.MirrorEnabled {
-		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.MirrorConf.Copies, 10))
+	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
+	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
+	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.LRU.AtimeCacheMax, 10))
+	hdr.Add(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
+	hdr.Add(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
+	hdr.Add(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
+	hdr.Add(cmn.HeaderBucketMirrorThresh, strconv.FormatInt(props.Mirror.UtilThresh, 10))
+	hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRU.Enabled))
+	if props.Mirror.Enabled {
+		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.Mirror.Copies, 10))
 	} else {
 		hdr.Add(cmn.HeaderBucketCopies, "0")
 	}
 
-	hdr.Add(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.ECEnabled))
-	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.ECObjSizeLimit), 10))
-	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.DataSlices), 10))
-	hdr.Add(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.ParitySlices), 10))
+	hdr.Add(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
+	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
+	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
+	hdr.Add(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -2414,7 +2414,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 }
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
-	if !lom.Mirror.MirrorEnabled || dryRun.disk {
+	if !lom.Mirror.Enabled || dryRun.disk {
 		return
 	}
 
@@ -2767,11 +2767,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if !t.setConfigMany(w, r, query) {
 			return
 		}
-		if msg.Name == "lru_enabled" && value == "false" {
+		if msg.Name == "lru.enabled" && value == "false" {
 			lruxact := t.xactions.findU(cmn.ActLRU)
 			if lruxact != nil {
 				if glog.V(3) {
-					glog.Infof("Aborting LRU due to lru_enabled config change")
+					glog.Infof("Aborting LRU due to lru.enabled config change")
 				}
 				lruxact.Abort()
 			}
@@ -3392,7 +3392,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 			// (needed in part for cloud buckets)
 			t.xactions.abortBucketSpecific(bucket)
 		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
-			if bprops.MirrorConf.MirrorEnabled && !nprops.MirrorConf.MirrorEnabled {
+			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
 				t.xactions.abortPutCopies(bucket)
 			}
 		}

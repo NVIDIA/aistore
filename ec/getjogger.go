@@ -711,7 +711,7 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 
 // Entry point: restores main objects and slices if possible
 func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
-	if req.LOM.Bprops == nil || !req.LOM.Bprops.ECEnabled {
+	if req.LOM.Bprops == nil || !req.LOM.Bprops.EC.Enabled {
 		return ErrorECDisabled
 	}
 

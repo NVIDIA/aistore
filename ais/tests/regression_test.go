@@ -65,7 +65,7 @@ var (
 		"capacity_upd_time": fmt.Sprintf("%v", UpdTime),
 		"lowwm":             fmt.Sprintf("%d", LowWaterMark),
 		"highwm":            fmt.Sprintf("%d", HighWaterMark),
-		"lru_enabled":       "true",
+		"lru.enabled":       "true",
 	}
 )
 
@@ -740,13 +740,13 @@ func TestConfig(t *testing.T) {
 	} else {
 		setClusterConfig(t, proxyURL, "lowwm", olruconfig.LowWM)
 	}
-	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
-		t.Fatalf("Error parsing LRUEnabled: %v", err)
-	} else if nlruconfig.LRUEnabled != pt {
-		t.Errorf("LRUEnabled was not set properly: %v, should be %v",
-			nlruconfig.LRUEnabled, pt)
+	if pt, err := strconv.ParseBool(configRegression["lru.enabled"]); err != nil {
+		t.Fatalf("Error parsing lru.enabled: %v", err)
+	} else if nlruconfig.Enabled != pt {
+		t.Errorf("lru.enabled was not set properly: %v, should be %v",
+			nlruconfig.Enabled, pt)
 	} else {
-		setClusterConfig(t, proxyURL, "lru_enabled", olruconfig.LRUEnabled)
+		setClusterConfig(t, proxyURL, "lru.enabled", olruconfig.Enabled)
 	}
 }
 

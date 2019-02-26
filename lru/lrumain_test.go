@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -71,8 +70,8 @@ func newTargetLRUMock() *cluster.TargetMock {
 	bo := cluster.BownerMock{BMD: cluster.BMD{
 		LBmap: map[string]*cmn.BucketProps{
 			bucketName: &cmn.BucketProps{
-				LRUConf:   cmn.LRUConf{LRUEnabled: true},
-				CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumNone},
+				Cksum: cmn.CksumConf{Checksum: cmn.ChecksumNone},
+				LRU:   cmn.LRUConf{Enabled: true},
 			},
 		},
 	}}
@@ -106,8 +105,8 @@ func initConfig() {
 	config.LRU.DontEvictTime = 0
 	config.LRU.HighWM = hwm
 	config.LRU.LowWM = lwm
-	config.LRU.LRUEnabled = true
-	config.LRU.LRULocalBuckets = true
+	config.LRU.Enabled = true
+	config.LRU.LocalBuckets = true
 	cmn.GCO.CommitUpdate(config)
 }
 

@@ -56,7 +56,7 @@ func (r *XactCopy) InitAndRun() error {
 	if err := checkErrNumMp(r, l); err != nil {
 		return err
 	}
-	r.workCh = make(chan *cluster.LOM, r.Mirror.MirrorBurst)
+	r.workCh = make(chan *cluster.LOM, r.Mirror.Burst)
 	r.copiers = make(map[string]*copier, l)
 	r.wg = &sync.WaitGroup{}
 	r.wg.Add(1)
@@ -109,8 +109,8 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	// [throttle]
 	// when the optimization objective is write perf,
 	// we start dropping requests to make sure callers don't block
-	pending, max := r.Pending(), r.Mirror.MirrorBurst
-	if r.Mirror.MirrorOptimizePUT {
+	pending, max := r.Pending(), r.Mirror.Burst
+	if r.Mirror.OptimizePUT {
 		if pending > 1 && pending >= max {
 			r.dropped++
 			if (r.dropped % logNumDropped) == 0 {
@@ -125,7 +125,7 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	// [throttle]
 	// a bit of back-pressure when approaching the fixed boundary
 	if pending > 1 && max > 10 {
-		if pending >= max-max/8 && !r.Mirror.MirrorOptimizePUT {
+		if pending >= max-max/8 && !r.Mirror.OptimizePUT {
 			time.Sleep(cmn.ThrottleSleepMax)
 		} else if pending > max-max/4 {
 			time.Sleep((cmn.ThrottleSleepAvg + cmn.ThrottleSleepMax) / 2)
@@ -201,7 +201,7 @@ func (j *copier) stop() {
 func (j *copier) jog() {
 	glog.Infof("copier[%s] started", j.mpathInfo)
 	j.parent.wg.Done()
-	j.workCh = make(chan *cluster.LOM, j.parent.Mirror.MirrorBurst)
+	j.workCh = make(chan *cluster.LOM, j.parent.Mirror.Burst)
 	j.stopCh = make(chan struct{}, 1)
 	j.buf = j.parent.Slab.Alloc()
 loop:

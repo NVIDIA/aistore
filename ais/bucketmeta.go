@@ -89,7 +89,7 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 //lint:ignore U1000 unused
 func (m *bucketMD) ecEnabled(bucket string) bool {
 	p, ok := m.Get(bucket, m.IsLocal(bucket))
-	return ok && p.ECEnabled
+	return ok && p.EC.Enabled
 }
 
 func (m *bucketMD) clone() *bucketMD {

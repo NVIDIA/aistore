@@ -171,42 +171,42 @@ type Config struct {
 	Log              LogConf         `json:"log"`
 	Periodic         PeriodConf      `json:"periodic"`
 	Timeout          TimeoutConf     `json:"timeout"`
-	Proxy            ProxyConf       `json:"proxyconfig"`
-	LRU              LRUConf         `json:"lru_config"`
-	Xaction          XactionConf     `json:"xaction_config"`
-	Rebalance        RebalanceConf   `json:"rebalance_conf"`
+	Proxy            ProxyConf       `json:"proxy"`
+	LRU              LRUConf         `json:"lru"`
+	Xaction          XactionConf     `json:"xaction"`
+	Rebalance        RebalanceConf   `json:"rebalance"`
 	Replication      ReplicationConf `json:"replication"`
-	Cksum            CksumConf       `json:"cksum_config"`
-	Ver              VersionConf     `json:"version_config"`
+	Cksum            CksumConf       `json:"cksum"`
+	Ver              VersionConf     `json:"version"`
 	FSpaths          SimpleKVs       `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`
-	Net              NetConf         `json:"netconfig"`
+	Net              NetConf         `json:"net"`
 	FSHC             FSHCConf        `json:"fshc"`
 	Auth             AuthConf        `json:"auth"`
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
 }
 
 type MirrorConf struct {
-	Copies            int64 `json:"copies"`              // num local copies
-	MirrorBurst       int64 `json:"mirror_burst_buffer"` // channel buffer size
-	MirrorUtilThresh  int64 `json:"mirror_util_thresh"`  // utilizations are considered equivalent when below this threshold
-	MirrorOptimizePUT bool  `json:"mirror_optimize_put"` // optimization objective
-	MirrorEnabled     bool  `json:"mirror_enabled"`      // will only generate local copies when set to true
+	Copies      int64 `json:"copies"`       // num local copies
+	Burst       int64 `json:"burst_buffer"` // channel buffer size
+	UtilThresh  int64 `json:"util_thresh"`  // utilizations are considered equivalent when below this threshold
+	OptimizePUT bool  `json:"optimize_put"` // optimization objective
+	Enabled     bool  `json:"enabled"`      // will only generate local copies when set to true
 }
 
 type RahConf struct {
-	ObjectMem int64 `json:"rahobjectmem"`
-	TotalMem  int64 `json:"rahtotalmem"`
-	ByProxy   bool  `json:"rahbyproxy"`
-	Discard   bool  `json:"rahdiscard"`
-	Enabled   bool  `json:"rahenabled"`
+	ObjectMem int64 `json:"object_mem"`
+	TotalMem  int64 `json:"total_mem"`
+	ByProxy   bool  `json:"by_proxy"`
+	Discard   bool  `json:"discard"`
+	Enabled   bool  `json:"enabled"`
 }
 
 type LogConf struct {
-	Dir      string `json:"logdir"`      // log directory
-	Level    string `json:"loglevel"`    // log level aka verbosity
-	MaxSize  uint64 `json:"logmaxsize"`  // size that triggers log rotation
-	MaxTotal uint64 `json:"logmaxtotal"` // max total size of all the logs in the log directory
+	Dir      string `json:"dir"`       // log directory
+	Level    string `json:"level"`     // log level aka verbosity
+	MaxSize  uint64 `json:"max_size"`  // size that triggers log rotation
+	MaxTotal uint64 `json:"max_total"` // max total size of all the logs in the log directory
 }
 
 type PeriodConf struct {
@@ -275,11 +275,11 @@ type LRUConf struct {
 	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
 	CapacityUpdTime time.Duration `json:"-"`
 
-	// LRULocalBuckets: Enables or disables LRU for local buckets
-	LRULocalBuckets bool `json:"lru_local_buckets"`
+	// LocalBuckets: Enables or disables LRU for local buckets
+	LocalBuckets bool `json:"local_buckets"`
 
-	// LRUEnabled: LRU will only run when set to true
-	LRUEnabled bool `json:"lru_enabled"`
+	// Enabled: LRU will only run when set to true
+	Enabled bool `json:"enabled"`
 }
 
 type XactionConf struct {
@@ -290,13 +290,13 @@ type XactionConf struct {
 type RebalanceConf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"`
 	DestRetryTime    time.Duration `json:"-"` //
-	Enabled          bool          `json:"rebalancing_enabled"`
+	Enabled          bool          `json:"enabled"`
 }
 
 type ReplicationConf struct {
-	ReplicateOnColdGet     bool `json:"replicate_on_cold_get"`     // object replication on cold GET request
-	ReplicateOnPut         bool `json:"replicate_on_put"`          // object replication on PUT request
-	ReplicateOnLRUEviction bool `json:"replicate_on_lru_eviction"` // object replication on LRU eviction
+	OnColdGet     bool `json:"on_cold_get"`     // object replication on cold GET request
+	OnPut         bool `json:"on_put"`          // object replication on PUT request
+	OnLRUEviction bool `json:"on_lru_eviction"` // object replication on LRU eviction
 }
 
 type CksumConf struct {
@@ -364,9 +364,9 @@ type HTTPConf struct {
 }
 
 type FSHCConf struct {
-	Enabled       bool `json:"fshc_enabled"`
-	TestFileCount int  `json:"fshc_test_files"`  // the number of files to read and write during a test
-	ErrorLimit    int  `json:"fshc_error_limit"` // max number of errors (exceeding any results in disabling mpath)
+	Enabled       bool `json:"enabled"`
+	TestFileCount int  `json:"test_files"`  // the number of files to read and write during a test
+	ErrorLimit    int  `json:"error_limit"` // max number of errors (exceeding any results in disabling mpath)
 }
 
 type AuthConf struct {
@@ -518,10 +518,10 @@ func validateConfig(config *Config) (err error) {
 	if hwm <= 0 || lwm <= 0 || oos <= 0 || hwm < lwm || oos < hwm || lwm > 100 || hwm > 100 || oos > 100 {
 		return fmt.Errorf("invalid LRU configuration %+v", lru)
 	}
-	if mirror.MirrorUtilThresh < 0 || mirror.MirrorUtilThresh > 100 || mirror.MirrorBurst < 0 {
+	if mirror.UtilThresh < 0 || mirror.UtilThresh > 100 || mirror.Burst < 0 {
 		return fmt.Errorf("invalid mirror configuration %+v", mirror)
 	}
-	if mirror.MirrorEnabled && mirror.Copies != 2 {
+	if mirror.Enabled && mirror.Copies != 2 {
 		return fmt.Errorf("invalid mirror configuration %+v", mirror)
 	}
 
