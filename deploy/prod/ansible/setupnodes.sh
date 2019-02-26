@@ -13,12 +13,12 @@ mkdir -p ~/ais/{bin,pkg,src}
 
 if [ ! -d "/usr/local/go" ]; then
     GOLANG_VERSION="1.12"
-    
+
     echo 'Download go'
     curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz
     shasum -a 256 go1.*
     sudo tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null
-    sudo ln -s /usr/loca/go/bin/go /usr/bin/go
+    sudo ln -s /usr/local/go/bin/go /usr/bin/go
     rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 fi
 echo 'Setup go dep binary'
