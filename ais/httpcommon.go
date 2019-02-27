@@ -41,6 +41,23 @@ const ( //  h.call(timeout)
 	longTimeout    = time.Duration(0)
 )
 
+var (
+	// Translates the various query values for URLParamBckProvider for cluster use
+	bckProviderMap = map[string]string{
+		// Cloud values
+		cmn.CloudBs:        cmn.CloudBs,
+		cmn.ProviderAmazon: cmn.CloudBs,
+		cmn.ProviderGoogle: cmn.CloudBs,
+
+		// Local values
+		cmn.LocalBs:     cmn.LocalBs,
+		cmn.ProviderAIS: cmn.LocalBs,
+
+		// unset
+		"": "",
+	}
+)
+
 type (
 	metric = statsd.Metric // type alias
 
@@ -783,30 +800,25 @@ func validCloudProvider(bckProvider, cloudProvider string) bool {
 func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bool, errstr string) {
 	bckProvider = strings.ToLower(bckProvider)
 	config := cmn.GCO.Get()
-
-	// Translates the various query values for URLParamBckProvider for cluster use
-	bckProviderMap := map[string]string{
-		// Cloud values
-		cmn.CloudBs:        cmn.CloudBs,
-		cmn.ProviderAmazon: cmn.CloudBs,
-		cmn.ProviderGoogle: cmn.CloudBs,
-
-		// Local values
-		cmn.LocalBs:     cmn.LocalBs,
-		cmn.ProviderAIS: cmn.LocalBs,
-
-		// unset
-		"": "",
-	}
 	val, ok := bckProviderMap[bckProvider]
 	if !ok {
 		errstr = fmt.Sprintf("Invalid value %s for %s", bckProvider, cmn.URLParamBckProvider)
 		return
 	}
 
+	// Get bucket names
+	if bucket == "*" {
+		return
+	}
+
 	bckIsLocal := h.bmdowner.get().IsLocal(bucket)
 	switch val {
 	case cmn.LocalBs:
+		// Check if local bucket does exist
+		if !bckIsLocal {
+			errstr = fmt.Sprintf("Local bucket %s %s", bucket, cmn.DoesNotExist)
+			return
+		}
 		isLocal = true
 	case cmn.CloudBs:
 		// Check if user does have the associated cloud
@@ -818,14 +830,6 @@ func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bo
 		isLocal = false
 	default:
 		isLocal = bckIsLocal
-	}
-
-	// Get bucket names
-	if bucket == "*" {
-		return
-	}
-	if isLocal && !bckIsLocal {
-		errstr = fmt.Sprintf("Local bucket %s does not exist", bucket)
 	}
 
 	return

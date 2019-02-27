@@ -1283,16 +1283,13 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 
 func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, bucket string) (redirect string) {
 	var (
-		query       = url.Values{}
-		bucketmd    = p.bmdowner.get()
-		bckProvider = r.URL.Query().Get(cmn.URLParamBckProvider)
+		query    = url.Values{}
+		bucketmd = p.bmdowner.get()
 	)
 	redirect = to + r.URL.Path + "?"
 	if r.URL.RawQuery != "" {
 		redirect += r.URL.RawQuery + "&"
 	}
-	_, errstr := p.validateBckProvider(bckProvider, bucket)
-	cmn.Assert(errstr == "")
 
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
 	query.Add(cmn.URLParamBMDVersion, bucketmd.vstr)
@@ -1313,9 +1310,6 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 			id:      dinfo.DaemonID,
 		}, err
 	}
-
-	_, errstr := p.validateBckProvider(bckProvider, bucket)
-	cmn.Assert(errstr == "")
 
 	var header http.Header
 	if r != nil {
