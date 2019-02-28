@@ -454,36 +454,55 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		glog.Warningf("No other proxies to elect")
 		return
 	}
-	nextPrimaryProxy, errstr := hrwProxy(smap, smap.ProxySI.DaemonID)
-	if errstr != "" {
-		glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", errstr)
-		return
-	}
 
-	if glog.V(4) {
-		glog.Infof("Primary proxy %s failure detected {url: %s}", smap.ProxySI, smap.ProxySI.PublicNet.DirectURL)
-	}
-	if nextPrimaryProxy.DaemonID == p.si.DaemonID {
-		// If this proxy is the next primary proxy candidate, it starts the election directly.
-		glog.Infof("%s: Starting election (candidate = self)", pname(p.si))
-		vr := &VoteRecord{
-			Candidate: nextPrimaryProxy.DaemonID,
-			Primary:   smap.ProxySI.DaemonID,
-			StartTime: time.Now(),
-			Initiator: p.si.DaemonID,
+	// find out the first proxy(using HRW algorithm) that is running and
+	// can be elected as the primary one
+	for {
+		// Generate the next candidate
+		nextPrimaryProxy, errstr := hrwProxy(smap, smap.ProxySI.DaemonID)
+		if errstr != "" {
+			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", errstr)
+			return
 		}
-		smap.deepcopy(&vr.Smap)
-		p.proxyElection(vr, smap.ProxySI)
-	} else {
-		glog.Infof("%s: Requesting election (candidate = %s)", pname(p.si), pname(nextPrimaryProxy))
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Trying %s as the primary candidate", nextPrimaryProxy.DaemonID)
+		}
+		if nextPrimaryProxy.DaemonID == p.si.DaemonID {
+			// If this proxy is the next primary proxy candidate, it starts the election directly.
+			glog.Infof("%s: Starting election (candidate = self)", pname(p.si))
+			vr := &VoteRecord{
+				Candidate: nextPrimaryProxy.DaemonID,
+				Primary:   smap.ProxySI.DaemonID,
+				StartTime: time.Now(),
+				Initiator: p.si.DaemonID,
+			}
+			smap.deepcopy(&vr.Smap)
+			p.proxyElection(vr, smap.ProxySI)
+			return
+		}
+
+		// ask the current primary candidate to start election
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   smap.ProxySI.DaemonID,
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
-		smap.deepcopy(&vr.Smap)
-		p.sendElectionRequest(vr, nextPrimaryProxy)
+		vr.Smap = *smap.clone()
+		if p.sendElectionRequest(vr, nextPrimaryProxy) == nil {
+			// the candidate has accepted request and started election
+			return
+		}
+
+		// no response from the candidate or it failed to start election.
+		// Remove it from the Smap and try the next candidate
+		if smap.GetProxy(nextPrimaryProxy.DaemonID) != nil {
+			smap.delProxy(nextPrimaryProxy.DaemonID)
+		}
+		if smap.CountProxies() <= 1 {
+			glog.Warningf("No other proxies to elect")
+			return
+		}
 	}
 }
 
@@ -491,28 +510,46 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	smap := t.smapowner.get()
 	glog.Infof("%s: primary proxy (%s @ %v) failed\n", tname(t.si), smap.ProxySI, smap.ProxySI.PublicNet.DirectURL)
 
-	nextPrimaryProxy, errstr := hrwProxy(smap, smap.ProxySI.DaemonID)
-	if errstr != "" {
-		glog.Errorf("Failed to execute hrwProxy after primary proxy Failure: %v", errstr)
-	}
+	// find out the first proxy(using HRW algorithm) that is running and
+	// can be elected as the primary one
+	for {
+		// Generate the next candidate
+		nextPrimaryProxy, errstr := hrwProxy(smap, smap.ProxySI.DaemonID)
+		if errstr != "" {
+			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", errstr)
+			return
+		}
+		if nextPrimaryProxy == nil {
+			// There is only one proxy, so we cannot select a next in line
+			glog.Warningf("primary proxy failed, but there are no candidates to fall back on.")
+			return
+		}
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Trying %s as the primary candidate", nextPrimaryProxy.DaemonID)
+		}
 
-	if nextPrimaryProxy == nil {
-		// There is only one proxy, so we cannot select a next in line
-		glog.Warningf("primary proxy failed, but there are no candidates to fall back on.")
-		return
-	}
+		// ask the current primary candidate to start election
+		vr := &VoteInitiation{
+			Candidate: nextPrimaryProxy.DaemonID,
+			Primary:   smap.ProxySI.DaemonID,
+			StartTime: time.Now(),
+			Initiator: t.si.DaemonID,
+		}
+		vr.Smap = *smap.clone()
+		if t.sendElectionRequest(vr, nextPrimaryProxy) == nil {
+			// the candidate has accepted request and started election
+			break
+		}
 
-	vr := &VoteInitiation{
-		Candidate: nextPrimaryProxy.DaemonID,
-		Primary:   smap.ProxySI.DaemonID,
-		StartTime: time.Now(),
-		Initiator: t.si.DaemonID,
+		// no response from the candidate or it failed to start election.
+		// Remove it from the Smap
+		if smap.GetProxy(nextPrimaryProxy.DaemonID) != nil {
+			smap.delProxy(nextPrimaryProxy.DaemonID)
+		}
 	}
-	smap.deepcopy(&vr.Smap)
-	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 
-func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) {
+func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) error {
 	msg := VoteInitiationMessage{Request: *vr}
 	body, err := jsoniter.Marshal(&msg)
 	cmn.AssertNoErr(err)
@@ -529,18 +566,20 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	}
 	res := h.call(args)
 	if res.err != nil {
+		sleepTime := cmn.GCO.Get().Timeout.CplaneOperation
 		if cmn.IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
-				time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
+				time.Sleep(sleepTime)
 				res = h.call(args)
 				if res.err == nil {
 					break
 				}
+				sleepTime = sleepTime + sleepTime/2
 			}
 		}
 		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
-		return
 	}
+	return res.err
 }
 
 func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {

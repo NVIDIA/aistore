@@ -81,6 +81,8 @@ ubuntu           soft    nofile          999999
 # End of file
 ```
 
+> If the change in the ` /etc/security/limits.conf` (above) does not cause `ulimit -n` to show expected numbers, try then modifying `/etc/systemd/user.conf` and `/etc/systemd/system.conf`. In both configurations files, look for the line `#DefaultLimitNOFILE=` and uncomment it as `DefaultLimitNOFILE=999999`. A brief discussion of the topic can be found [here](https://superuser.com/questions/1200539/cannot-increase-open-file-limit-past-4096-ubuntu).
+
 ### Storage
 
 Storage-wise, each local `ais.json` config must be looking as follows:

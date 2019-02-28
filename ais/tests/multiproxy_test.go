@@ -47,6 +47,7 @@ var (
 		{"ConcurrentPutGetDel", concurrentPutGetDel},
 		{"ProxyStress", proxyStress},
 		{"NetworkFailure", networkFailure},
+		{"PrimaryAndNextCrash", primaryAndNextCrash},
 	}
 )
 
@@ -1305,4 +1306,64 @@ func networkFailure(t *testing.T) {
 	t.Run("Target network disconnect", networkFailureTarget)
 	t.Run("Secondary proxy network disconnect", networkFailureProxy)
 	t.Run("Primary proxy network disconnect", networkFailurePrimary)
+}
+
+// primaryAndNextCrash kills the primary proxy and a proxy that should be selected
+// after the current primary dies, verifies the second in line proxy becomes
+// the new primary, restore all proxies
+func primaryAndNextCrash(t *testing.T) {
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	smap := getClusterMap(t, proxyURL)
+	origProxyCount := len(smap.Pmap)
+
+	if origProxyCount < 4 {
+		t.Skip("The test requires at least 4 proxies, found only ", origProxyCount)
+	}
+
+	// get next primary
+	firstPrimaryID, firstPrimaryURL, err := chooseNextProxy(&smap)
+	tutils.CheckFatal(err, t)
+	// Cluster map is re-read to have a clone of original smap that the test
+	// can modify in any way it needs. Because original smap got must be preserved
+	smapNext := getClusterMap(t, proxyURL)
+	// get next next primary
+	firstPrimary := smapNext.Pmap[firstPrimaryID]
+	delete(smapNext.Pmap, firstPrimaryID)
+	finalPrimaryID, finalPrimaryURL, err := chooseNextProxy(&smapNext)
+	tutils.CheckFatal(err, t)
+
+	// kill the current primary
+	oldPrimaryURL, oldPrimaryID := smap.ProxySI.PublicNet.DirectURL, smap.ProxySI.DaemonID
+	tutils.Logf("Killing primary proxy: %s - %s\n", oldPrimaryURL, oldPrimaryID)
+	cmdFirst, argsFirst, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
+	tutils.CheckFatal(err, t)
+
+	// kill the next primary
+	tutils.Logf("Killing next to primary proxy: %s - %s\n", firstPrimaryID, firstPrimaryURL)
+	cmdSecond, argsSecond, errSecond := kill(firstPrimaryID, firstPrimary.PublicNet.DaemonPort)
+	// if kill fails it does not make sense to wait for the cluster is stable
+	if errSecond == nil {
+		// the cluster should vote, so the smap version should be increased at
+		// least by 100, that is why +99
+		smap, err = waitForPrimaryProxy(finalPrimaryURL, "to designate new primary", smap.Version+99, testing.Verbose(), origProxyCount-2)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+
+	tutils.Logln("Checking current primary")
+	if smap.ProxySI.DaemonID != finalPrimaryID {
+		t.Errorf("Expected primary %s but real primary is %s",
+			finalPrimaryID, smap.ProxySI.DaemonID)
+	}
+
+	// restore next and prev primaries in the reversed order
+	err = restore(cmdSecond, argsSecond, true, "proxy (next primary)")
+	tutils.CheckFatal(err, t)
+	smap, err = waitForPrimaryProxy(finalPrimaryURL, "to restore next primary", smap.Version, testing.Verbose(), origProxyCount-1)
+	tutils.CheckFatal(err, t)
+	err = restore(cmdFirst, argsFirst, true, "proxy (prev primary)")
+	tutils.CheckFatal(err, t)
+	smap, err = waitForPrimaryProxy(finalPrimaryURL, "to restore prev primary", smap.Version, testing.Verbose(), origProxyCount)
+	tutils.CheckFatal(err, t)
 }
