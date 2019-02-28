@@ -72,10 +72,8 @@ spec:
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       serviceAccount: {{ template "ais.name" . }}-sa
-    {{- with .Values.target.nodeSelector }}
       nodeSelector:
-{{ toYaml . | indent 8 }}
-    {{- end }}
+         {{ .Values.target.nodeSelector.key }}: {{ .Values.target.nodeSelector.value | quote }}
       volumes:
         - name: config-mount
           configMap:

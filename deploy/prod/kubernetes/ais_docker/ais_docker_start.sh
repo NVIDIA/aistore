@@ -6,7 +6,6 @@ echo $AIS_PRIMARYPROXY
 rm -f /var/ais_env/env
 
 # Leave everything except the smap as /etc/ais is persistent to hold the bucket metadata - this happens anytime a new container is run
-rm -f /etc/ais/smap.json
 cp -fv $CONFFILE /etc/ais || exit 1 
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
 cp -fv $COLLECTDCONF /etc/collectd/collectd.conf || exit 1

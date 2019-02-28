@@ -49,7 +49,8 @@ proxy:
     type: ClusterIP
     port: 8080
   nodeSelector:
-    ais-proxy-type : "electable"
+    key: ais-proxy-type 
+    value: "electable"
   # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
   initialPrimaryProxyNodeLabel:
     name: initial_primary_proxy
@@ -84,7 +85,8 @@ ne_proxy:
     type: ClusterIP
     port: 8080
   nodeSelector:
-    ais-proxy-type : "nonelectable"
+    key: ais-proxy-type 
+    value: "nonelectable"
   # The path of the environment file to be passed into the ais container
   envMountPath:
     hostPath: /tmp/
@@ -115,7 +117,8 @@ target:
     type: ClusterIP
     port: 8081
   nodeSelector:
-    ais-target-node : "yes"
+    key: ais-target-node 
+    value: "yes"
   etcMountPath:
     hostPath: /etc/ais/target
     # No pod path as it should be the same as config.dir
@@ -165,3 +168,9 @@ affinity: {}
 graphite_server:
   port  : 2003
   ip    : 52.41.234.112 
+
+pre_install_hook:
+  etcMountPath:
+    hostPath: /etc/ais 
+ 
+

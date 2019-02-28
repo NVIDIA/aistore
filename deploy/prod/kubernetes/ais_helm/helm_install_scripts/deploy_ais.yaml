@@ -1,6 +1,8 @@
 ---
 - hosts: bastion
   gather_facts: true
+  vars:
+    app_name: devops-ais
   tasks:
   - name: copy the helm charts to the bastion
     synchronize:
@@ -17,6 +19,19 @@
        src: admin.conf
        dest: /tmp/ais_deploy/kube.conf
        mode: 0755
+  - name: copy the docker image_tag.txt to the bastion
+    copy:
+       src: image_tag.txt
+       dest: /tmp/ais_deploy/image_tag.txt
+       mode: 0644
+  - name: add ais_node labels
+    command: kubectl label nodes "{{ item }}" ais-node=yes --overwrite
+    with_inventory_hostnames:
+       -  proxy-node
+       -  target-node
+       -  neproxy-node
+    environment:
+        KUBECONFIG='/tmp/ais_deploy/kube.conf'
   - name: add node proxy labels
     command: kubectl label nodes "{{ item }}" ais-proxy-type=electable --overwrite
     with_inventory_hostnames:
@@ -36,4 +51,4 @@
     environment:
         KUBECONFIG=/tmp/ais_deploy/kube.com
   - name: run the deploy script
-    command: chdir=/tmp/ais_deploy  ./deploy_ais.sh kube.conf devops-ais
+    command: chdir=/tmp/ais_deploy  ./deploy_ais.sh kube.conf {{ app_name }}

@@ -33,7 +33,7 @@ spec:
                   fieldPath: spec.nodeName
           command:
             - "/bin/bash"
-          args: ["-c", "/bin/bash /var/ais_config/set_initial_primary_proxy_env.sh; ls -al /var/ais_env/ " ]
+
           volumeMounts:
             - name: config-mount
               mountPath: "/var/ais_config"
@@ -85,10 +85,8 @@ spec:
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       serviceAccount: {{ template "ais.name" . }}-sa
-    {{- with .Values.proxy.nodeSelector }}
       nodeSelector:
-{{ toYaml . | indent 8 }}
-    {{- end }}
+         {{ .Values.proxy.nodeSelector.key }}: {{ .Values.proxy.nodeSelector.value | quote }}
       volumes:
         - name: config-mount
           configMap:

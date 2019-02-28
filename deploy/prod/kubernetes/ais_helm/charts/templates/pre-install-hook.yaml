@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ template "ais.fullname" . }}-pre-install-hook
+  labels:
+    app: {{ template "ais.name" . }}
+    chart: {{ template "ais.chart" . }}
+    component: "pre-install-hook"
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  selector:
+    matchLabels:
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      name: "{{.Release.Name}}"
+      labels:
+        app: {{ template "ais.name" . }}
+        component: "pre-install-hook"
+        release: {{ .Release.Name }}
+    spec:
+      #restartPolicy: Never
+      containers:
+      - name: pre-install-job
+        image: "alpine:3.3"
+        command: ["/bin/sh"]
+        #Currently cleaning up only the smap.json on a re-deploy. TODO: Update if any other files need to be cleaned up as well
+        args: ["-c","rm -f /etc/ais/proxy/smap.json /etc/ais/target/smap.json"]
+        volumeMounts:
+           - name: etc-mount
+             mountPath: "{{ .Values.common_config.dir }}"
+      volumes:
+        - name: etc-mount
+          hostPath:
+            path: {{ .Values.pre_install_hook.etcMountPath.hostPath }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.proxy.nodeSelector.key }}
+                operator: In
+                values:
+                 - {{ .Values.proxy.nodeSelector.value | quote }}
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.ne_proxy.nodeSelector.key }}
+                operator: In
+                values:
+                  - {{ .Values.ne_proxy.nodeSelector.value | quote }}
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.target.nodeSelector.key }}
+                operator: In
+                values:
+                  - {{ .Values.target.nodeSelector.value | quote }}
+
