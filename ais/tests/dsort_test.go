@@ -312,7 +312,7 @@ func TestDistributedSort(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -355,7 +355,7 @@ func TestDistributedSortParallel(t *testing.T) {
 	}
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -389,7 +389,7 @@ func TestDistributedSortChain(t *testing.T) {
 	}
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -430,7 +430,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -485,7 +485,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -546,7 +546,7 @@ func TestDistributedSortZip(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -601,7 +601,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -660,7 +660,7 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -719,7 +719,7 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -778,7 +778,7 @@ func TestDistributedSortWithContentString(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -833,7 +833,7 @@ func TestDistributedSortAbort(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -899,7 +899,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -969,7 +969,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -1014,7 +1014,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			}
 		}
 
-		doReregisterTarget(targets[idx], m)
+		m.reregisterTarget(targets[idx])
 		time.Sleep(time.Second)
 	}
 }
@@ -1044,7 +1044,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
@@ -1067,7 +1067,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 	waitForDSortPhase(t, m.proxyURL, managerUUID, "sorting", func() {
 		// Reregister target 0
-		doReregisterTarget(targets[0], m)
+		m.reregisterTarget(targets[0])
 		tutils.Logln("reregistering complete")
 	})
 
@@ -1112,7 +1112,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	dsortFW.init()
 
 	// Initialize metadata
-	saveClusterState(m)
+	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
