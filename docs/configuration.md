@@ -1,15 +1,14 @@
 ## Table of Contents
-- [Configuration](#configuration)
-    - [Runtime configuration](#runtime-configuration)
-    - [Managing filesystems](#managing-filesystems)
-    - [Disabling extended attributes](#disabling-extended-attributes)
-    - [Enabling HTTPS](#enabling-https)
-    - [Filesystem Health Checker](#filesystem-health-checker)
-    - [Networking](#networking)
-    - [Reverse proxy](#reverse-proxy)
-    - [Examples](#examples)
-
-## Configuration
+- [Runtime configuration](#runtime-configuration)
+- [Configuration persistence](#configuration-persistence)
+- [Startup override](#startup-override)
+- [Managing filesystems](#managing-filesystems)
+- [Disabling extended attributes](#disabling-extended-attributes)
+- [Enabling HTTPS](#enabling-https)
+- [Filesystem Health Checker](#filesystem-health-checker)
+- [Networking](#networking)
+- [Reverse proxy](#reverse-proxy)
+- [Examples](#examples)
 
 AIStore configuration is consolidated in a single [JSON file](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
 
@@ -31,47 +30,45 @@ An example of 12 fspaths (and 12 local filesystems) follows below:
 
 <img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
 
-### Runtime configuration
+## Runtime configuration
 
 First, some basic facts:
 
 * AIS cluster is a collection of nodes - members of the cluster.
-* A node can be a proxy (aka gateway) or a storage target (target).
-* In either case, HTTP request to read (get) or write (set) the specific node's configuration will have `/v1/daemon` in the URL path.
-* On the other hand, the capability to carry out cluster-wide configuration updates is also supported.
+* A node can be an AIS proxy (aka gateway) or an AIS target.
+* In either case, HTTP request to read (get) or write (set) specific node's configuration will have `/v1/daemon` in its URL path.
+* The capability to carry out cluster-wide configuration updates is also supported. The corresponding HTTP URL will have `/v1/cluster` in its path.
 
-> Please see [AIS API](http_api.md) for naming conventions, supported RESTful resources, API references and details.
+> Both `daemon` and `cluster` are the two RESTful resource abstractions supported by the API. Please see [AIS API](http_api.md) for naming conventions, RESTful resources, as well as API reference and details.
 
 * To get the node's up-to-date configuration, execute:
 
 ```shell
-curl -X GET 'http://G-or-T/v1/daemon?what=config'
+# curl -X GET 'http://G-or-T/v1/daemon?what=config'
 ```
 where `G-or-T` denotes a **(hostname:port)** pair of **any AIS node** member of the cluster.
 
-This will result in a JSON structure that'll contain all configuration sections and all the *knobs* - i.e., configuration variables and their current values.
+This will result in a JSON structure that'll contain all configuration sections and all the named *knobs* - i.e., configuration variables and their current values.
 
-Each configuration option can be set on an individual (target | proxy) daemon, by sending a request to the daemon URL (`/v1/daemon`) - or, for the entire cluster, by sending a request to the cluster URL (`/v1/cluster`) of any AIS gateway.
+Most configuration options can be updated - on an individual (target or proxy) daemon or the entire cluster. For example:
 
-For example:
+* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: entire **cluster**)
+```shell
+# curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time=4s'
+```
 
 > As of v2.0, AIS configuration includes a section called `periodic`. The `periodic` in turn contains several knobs - one of those knobs is `stats_time`, another - `iostat_time`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 
-* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: entire cluster)
+* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: **one AIS node**)
 ```shell
-curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time=4s'
-```
-
-* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: one AIS node)
-```shell
-curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&iostat_time=4s'
+# curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&iostat_time=4s'
 ```
 
 > Notice the **naming convention**: an AIS knob can be referred to by its fully-qualified name: `section-tag.variable-tag`. When there's no ambiguity, the name of the configuration section can be omitted. For instance, `periodic.stats_time` and `stats_time` both reference the same knob and can be used interchangeably.
 
-For more examples, please see [examples below](#examples).
+For more examples and for alternative ways to format configuration-updating requests, please see [examples below](#examples).
 
-Following is a table-summary that contains a (growing) subset of all *settable* knobs:
+Following is a table-summary that contains a *subset* of all *settable* knobs:
 
 | Option | Default value | Description |
 |---|---|---|
@@ -101,7 +98,51 @@ Following is a table-summary that contains a (growing) subset of all *settable* 
 | mirror.burst_buffer | 512 | the maximum length of queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
 | mirror.util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
 
-### Managing filesystems
+## Configuration persistence
+
+By default, configuration updates are transient. To persist the configuration across restarts, use a special knob named `persist`, for instance:
+
+```shell
+# curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&persist=true'
+```
+
+This (above) does two things: updates `stats_time` to 1 minute and stores the updated configuration into local respective locations of all AIS nodes. To *scope* the same request to one specific AIS node, run:
+
+```shell
+# curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=1m&persist=true'
+```
+
+## Startup override
+
+AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
+
+```shell
+# ais -config=/etc/ais.json -role=target -persist=true -confjson="{\"default_timeout\": \"13s\" }"
+```
+
+As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
+
+```shell
+# ais -config=/etc/ais.json -role=target -confjson="{\"default_timeout\": \"13s\", \"persist\": \"true\" }"
+```
+
+Another example. To temporarily override locally-configured address of the primary proxy, run:
+
+```shell
+# ais -config=/etc/ais.json -role=target -proxyurl=http://G
+
+where G denotes the designated primary's hostname and port.
+```
+
+To achieve the same on a more permanent basis, add `-persist=true` as follows:
+
+```shell
+# ais -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true
+```
+
+> Please see [AIS command-line](command_line.md) for other command-line options and details.
+
+## Managing filesystems
 
 Configuration option `fspaths` specifies the list of local directories where storage targets store objects. An `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory serviced by a local filesystem.
 
@@ -109,15 +150,15 @@ NOTE: there must be a 1-to-1 relationship between `fspath` and an underlying loc
 
 AIStore [HTTP API](/docs/http_api.md) makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC, please refer to [FSHC readme](/health/fshc.md).
 
-### Disabling extended attributes
+## Disabling extended attributes
 
 To make sure that AIStore does not utilize xattrs, configure `checksum`=`none` and `versioning`=`none` for all targets in a AIStore cluster. This can be done via the [common configuration "part"](/ais/setup/config.sh) that'd be further used to deploy the cluster.
 
-### Enabling HTTPS
+## Enabling HTTPS
 
 To switch from HTTP protocol to an encrypted HTTPS, configure `use_https`=`true` and modify `server_certificate` and `server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/ais/setup/config.sh)).
 
-### Filesystem Health Checker
+## Filesystem Health Checker
 
 Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/ais/setup/config.sh).
 
@@ -125,36 +166,46 @@ When enabled, FSHC gets notified on every I/O error upon which it performs exten
 
 Please see [FSHC readme](/health/fshc.md) for further details.
 
-### Networking
+## Networking
 
 In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/ais/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](/docs/ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
-### Reverse proxy
+## Reverse proxy
 
 AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the version 2.0, this functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
 
-### Examples
+## Examples
 
 The following assumes that `G` and `T` are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.
 
-#### Cluster-wide operation (all nodes): set the stats logging period to 1 second
+#### Cluster-wide operation (all nodes): set the stats logging interval to 1 second
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'
+# curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'
+
+or, same:
+
+# curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1s'
 ```
 
-#### Cluster-wide operation (all nodes): set the stats logging period to 2 minutes
+> Notice the two alternative ways to form the requests.
+
+#### Cluster-wide operation (all nodes): set the stats logging interval to 2 minutes
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "2m"}' 'http://G/v1/cluster'
+# curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "2m"}' 'http://G/v1/cluster'
 ```
 
 #### Cluster-wide operation (all nodes): elevate log verbosity to `4` for all sources matching `ais/targ*` regex
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
+# curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=4"}' 'http://G/v1/cluster'
 ```
 
 #### Single-node operation (target at port `Tport`): set log verbosity to `1` for all source files that match the `ais/targ*` regex
 ```shell
-~ # curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
+# curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "vmodule", "value": "ais/targ*=1"}' 'http://T/v1/daemon'
+
+or, same:
+
+# curl -i -X PUT 'http://G/v1/daemon/setconfig?vmodule=ais/targ*=1'
 ```

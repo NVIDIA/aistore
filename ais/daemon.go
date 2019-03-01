@@ -129,18 +129,18 @@ func init() {
 	flag.StringVar(&clivars.role, "role", "", "role of this AIS daemon: proxy | target")
 
 	// config itself and its command line overrides
-	flag.StringVar(&clivars.config.ConfFile, "config", "", "config filename")
+	flag.StringVar(&clivars.config.ConfFile, "config", "", "config filename: local file that stores this daemon's configuration")
 	flag.StringVar(&clivars.config.LogLevel, "loglevel", "", "log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
 	flag.DurationVar(&clivars.config.StatsTime, "statstime", 0, "stats reporting (logging) interval")
-	flag.StringVar(&clivars.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local config")
+	flag.StringVar(&clivars.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local configuration")
 	flag.StringVar(&clivars.confjson, "confjson", "", "JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
-	flag.BoolVar(&clivars.persist, "persist", false, "true: make clivars config settings permanent, false: transient (this run only)")
+	flag.BoolVar(&clivars.persist, "persist", false, "true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")
 
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 
-	flag.BoolVar(&dryRun.disk, "nodiskio", false, "if true, no disk operations for GET and PUT")
-	flag.BoolVar(&dryRun.network, "nonetio", false, "if true, no network operations for GET and PUT")
-	flag.StringVar(&dryRun.sizeStr, "dryobjsize", "8m", "in-memory random content")
+	flag.BoolVar(&dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
+	flag.BoolVar(&dryRun.network, "nonetio", false, "dry-run: if true, no network operations for GET and PUT")
+	flag.StringVar(&dryRun.sizeStr, "dryobjsize", "8m", "dry-run: in-memory random content")
 }
 
 // dry-run environment overrides dry-run clivars
