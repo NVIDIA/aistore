@@ -257,8 +257,8 @@ func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
 
 	origURL := config.Proxy.PrimaryURL
 	config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
-	if err := cmn.LocalSave(clivars.conffile, config); err != nil {
-		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.conffile, err)
+	if err := cmn.LocalSave(clivars.config.ConfFile, config); err != nil {
+		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.config.ConfFile, err)
 		config.Proxy.PrimaryURL = origURL
 		return
 	}

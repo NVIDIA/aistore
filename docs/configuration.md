@@ -7,10 +7,11 @@
     - [Filesystem Health Checker](#filesystem-health-checker)
     - [Networking](#networking)
     - [Reverse proxy](#reverse-proxy)
+    - [Examples](#examples)
 
 ## Configuration
 
-AIStore configuration is consolidated in a single [JSON file](/ais/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
+AIStore configuration is consolidated in a single [JSON file](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
 
 <img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600">
 
@@ -32,9 +33,45 @@ An example of 12 fspaths (and 12 local filesystems) follows below:
 
 ### Runtime configuration
 
+First, some basic facts:
+
+* AIS cluster is a collection of nodes - members of the cluster.
+* A node can be a proxy (aka gateway) or a storage target (target).
+* In either case, HTTP request to read (get) or write (set) the specific node's configuration will have `/v1/daemon` in the URL path.
+* On the other hand, the capability to carry out cluster-wide configuration updates is also supported.
+
+> Please see [AIS API](http_api.md) for naming conventions, supported RESTful resources, API references and details.
+
+* To get the node's up-to-date configuration, execute:
+
+```shell
+curl -X GET 'http://G-or-T/v1/daemon?what=config'
+```
+where `G-or-T` denotes a **(hostname:port)** pair of **any AIS node** member of the cluster.
+
+This will result in a JSON structure that'll contain all configuration sections and all the *knobs* - i.e., configuration variables and their current values.
+
 Each configuration option can be set on an individual (target | proxy) daemon, by sending a request to the daemon URL (`/v1/daemon`) - or, for the entire cluster, by sending a request to the cluster URL (`/v1/cluster`) of any AIS gateway.
 
-Both a proxy and a storage target support the same set of runtime options but a proxy uses only a few of them. The list of options which affect proxy includes `loglevel`, `vmodule`, `dest_retry_time`, `default_timeout`, and `default_long_timeout`.
+For example:
+
+> As of v2.0, AIS configuration includes a section called `periodic`. The `periodic` in turn contains several knobs - one of those knobs is `stats_time`, another - `iostat_time`. To update one or both of those named variables on all or one of the clustered nodes, you could:
+
+* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: entire cluster)
+```shell
+curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time=4s'
+```
+
+* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: one AIS node)
+```shell
+curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&iostat_time=4s'
+```
+
+> Notice the **naming convention**: an AIS knob can be referred to by its fully-qualified name: `section-tag.variable-tag`. When there's no ambiguity, the name of the configuration section can be omitted. For instance, `periodic.stats_time` and `stats_time` both reference the same knob and can be used interchangeably.
+
+For more examples, please see [examples below](#examples).
+
+Following is a table-summary that contains a (growing) subset of all *settable* knobs:
 
 | Option | Default value | Description |
 |---|---|---|
@@ -59,7 +96,7 @@ Both a proxy and a storage target support the same set of runtime options but a 
 | enable_read_range_checksum | false | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
 | versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
 | validate_version_warm_get | false | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
-| fschecker_enabled | true | Enables and disables filesystem health checker (FSHC) |
+| fshc_enabled | true | Enables and disables filesystem health checker (FSHC) |
 | mirror_enabled | false | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
 | mirror_burst_buffer | 512 | the maximum length of queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
 | mirror_util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |

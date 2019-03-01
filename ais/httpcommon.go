@@ -394,6 +394,7 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI() {
+	var s string
 	config := cmn.GCO.Get()
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
 	addrList, err := getLocalIPv4List(allowLoopback)
@@ -403,28 +404,37 @@ func (h *httprunner) initSI() {
 
 	ipAddr, err := getipv4addr(addrList, config.Net.IPv4)
 	if err != nil {
-		glog.Fatalf("Failed to get public network address: %v", err)
+		glog.Fatalf("Failed to get PUBLIC IPv4/hostname: %v", err)
 	}
-	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, config.Net.L4.Port, config.Net.IPv4)
+	if config.Net.IPv4 != "" {
+		s = " (config: " + config.Net.IPv4 + ")"
+	}
+	glog.Infof("PUBLIC (user) access: [%s:%d]%s", ipAddr, config.Net.L4.Port, s)
 
 	ipAddrIntraControl := net.IP{}
 	if config.Net.UseIntraControl {
 		ipAddrIntraControl, err = getipv4addr(addrList, config.Net.IPv4IntraControl)
 		if err != nil {
-			glog.Fatalf("Failed to get intra control network address: %v", err)
+			glog.Fatalf("Failed to get INTRA-CONTROL IPv4/hostname: %v", err)
 		}
-		glog.Infof("Configured INTRA CONTROL NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.IPv4IntraControl)
+		s = ""
+		if config.Net.IPv4IntraControl != "" {
+			s = " (config: " + config.Net.IPv4IntraControl + ")"
+		}
+		glog.Infof("INTRA-CONTROL access: [%s:%d]%s", ipAddrIntraControl, config.Net.L4.PortIntraControl, s)
 	}
 
 	ipAddrIntraData := net.IP{}
 	if config.Net.UseIntraData {
 		ipAddrIntraData, err = getipv4addr(addrList, config.Net.IPv4IntraData)
 		if err != nil {
-			glog.Fatalf("Failed to get intra data network address: %v", err)
+			glog.Fatalf("Failed to get INTRA-DATA IPv4/hostname: %v", err)
 		}
-		glog.Infof("Configured INTRA DATA NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.IPv4IntraData)
+		s = ""
+		if config.Net.IPv4IntraData != "" {
+			s = " (config: " + config.Net.IPv4IntraData + ")"
+		}
+		glog.Infof("INTRA-DATA access: [%s:%d]%s", ipAddrIntraData, config.Net.L4.PortIntraData, s)
 	}
 
 	publicAddr := &net.TCPAddr{
@@ -873,13 +883,20 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 }
 
-// FIXME: redundant vs. validateBucketProps; flat naming (#235)
-func (h *httprunner) setconfig(name, value string) (errstr string) {
-	config := cmn.GCO.BeginUpdate()
+//
+// FIXME: redundant vs. validateBucketProps and CLI; table of config Values{} (#235)
+//
+func (h *httprunner) setconfig(name, value string) (persist bool, errstr string) {
+	const (
+		fmtFailedParse = "setconfig: failed to parse '%s=%s', err: %v"
+		fmtFailedApply = "setconfig: failed to apply '%s=%s', err: %v"
+	)
+	var (
+		config  = cmn.GCO.BeginUpdate()
+		lm, hm  = config.LRU.LowWM, config.LRU.HighWM
+		checkwm bool
+	)
 	defer cmn.GCO.CommitUpdate(config)
-
-	lm, hm := config.LRU.LowWM, config.LRU.HighWM
-	checkwm := false
 	atoi := func(value string) (int64, error) {
 		v, err := strconv.Atoi(value)
 		return int64(v), err
@@ -887,180 +904,253 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 	switch name {
 	case "vmodule":
 		if err := cmn.SetGLogVModule(value); err != nil {
-			errstr = fmt.Sprintf("Failed to set vmodule = %s, err: %v", value, err)
+			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
 		}
-	case "loglevel":
+	case "loglevel", "log.loglevel":
 		if err := cmn.SetLogLevel(config, value); err != nil {
-			errstr = fmt.Sprintf("Failed to set log level = %s, err: %v", value, err)
+			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
 		}
-	case "stats_time":
+	case "stats_time", "periodic.stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Periodic.StatsTime, config.Periodic.StatsTimeStr = v, value
 		}
-	case "dont_evict_time":
+	case "iostat_time", "periodic.iostat_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
+			config.Periodic.IostatTime, config.Periodic.IostatTimeStr = v, value
 		}
-	case "disk_util_low_wm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert disk_util_low_wm, err: %v", err)
-		} else {
-			config.Xaction.DiskUtilLowWM = v
-		}
-	case "disk_util_high_wm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert disk_util_high_wm, err: %v", err)
-		} else {
-			config.Xaction.DiskUtilHighWM = v
-		}
-	case "capacity_upd_time":
+	case "send_file_time", "timeout.send_file_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)
-		} else {
-			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
-		}
-	case "dest_retry_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse dest_retry_time, err: %v", err)
-		} else {
-			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
-		}
-	case "send_file_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse send_file_time, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Timeout.SendFile, config.Timeout.SendFileStr = v, value
 		}
-	case "default_timeout":
+	case "default_timeout", "timeout.default_timeout":
 		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse default_timeout, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Timeout.Default, config.Timeout.DefaultStr = v, value
 		}
-	case "default_long_timeout":
+	case "default_long_timeout", "timeout.default_long_timeout":
 		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse default_long_timeout, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Timeout.DefaultLong, config.Timeout.DefaultLongStr = v, value
 		}
-	case "lowwm":
+	case "proxy_ping", "timeout.proxy_ping":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.ProxyPing, config.Timeout.ProxyPingStr = v, value
+		}
+	case "cplane_operation", "timeout.cplane_operation":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.CplaneOperation, config.Timeout.CplaneOperationStr = v, value
+		}
+	case "max_keepalive", "timeout.max_keepalive":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.MaxKeepalive, config.Timeout.MaxKeepaliveStr = v, value
+		}
+	case "dont_evict_time", "lru_config.dont_evict_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
+		}
+	case "capacity_upd_time", "lru_config.capacity_upd_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
+		}
+	case "lowwm", "lru_config.lowwm":
 		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.LowWM, checkwm = v, true
 		}
-	case "highwm":
+	case "highwm", "lru_config.highwm":
 		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert highwm, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.HighWM, checkwm = v, true
 		}
-	case "lru_enabled":
+	case "lru_enabled", "lru_config.lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.LRU.LRUEnabled = v
 		}
-	case "rebalancing_enabled":
+	case "lru_local_buckets", "lru_config.lru_local_buckets":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.LRULocalBuckets = v
+		}
+	case "disk_util_low_wm", "xaction_config.disk_util_low_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Xaction.DiskUtilLowWM = v
+		}
+	case "disk_util_high_wm", "xaction_config.disk_util_high_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Xaction.DiskUtilHighWM = v
+		}
+	case "dest_retry_time", "rebalance_conf.dest_retry_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
+		}
+	case "rebalancing_enabled", "rebalance_conf.rebalancing_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Rebalance.Enabled = v
 		}
-	case "replicate_on_cold_get":
+	case "validate_checksum_cold_get", "cksum_config.validate_checksum_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse replicate_on_cold_get, err: %v", err)
-		} else {
-			config.Replication.ReplicateOnColdGet = v
-		}
-	case "replicate_on_put":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse replicate_on_put, err: %v", err)
-		} else {
-			config.Replication.ReplicateOnPut = v
-		}
-	case "replicate_on_lru_eviction":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse replicate_on_lru_eviction, err: %v", err)
-		} else {
-			config.Replication.ReplicateOnLRUEviction = v
-		}
-	case "validate_checksum_cold_get":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse validate_checksum_cold_get, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateColdGet = v
 		}
-	case "validate_checksum_warm_get":
+	case "validate_checksum_warm_get", "cksum_config.validate_checksum_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse validate_checksum_warm_get, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateWarmGet = v
 		}
-	case "enable_read_range_checksum":
+	case "enable_read_range_checksum", "cksum_config.enable_read_range_checksum":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse enable_read_range_checksum, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.EnableReadRangeChecksum = v
 		}
-	case "validate_version_warm_get":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse validate_version_warm_get, err: %v", err)
-		} else {
-			config.Ver.ValidateWarmGet = v
-		}
-	case "checksum":
+	case "checksum", "cksum_config.checksum":
 		if value == cmn.ChecksumXXHash || value == cmn.ChecksumNone {
 			config.Cksum.Checksum = value
 		} else {
-			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, cmn.ChecksumXXHash, cmn.ChecksumNone)
+			errstr = fmt.Sprintf("%s: invalid %s type %s (expecting %s or %s)",
+				cmn.ActSetConfig, name, value, cmn.ChecksumXXHash, cmn.ChecksumNone)
 		}
-	case "versioning":
-		if err := cmn.ValidateVersion(value); err == nil {
-			config.Ver.Versioning = value
-		} else {
-			return err.Error()
-		}
-	case "fschecker_enabled":
+	case "validate_version_warm_get", "version_config.validate_version_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse fschecker_enabled, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Ver.ValidateWarmGet = v
+		}
+	case "versioning", "version_config.versioning":
+		if err := cmn.ValidateVersion(value); err != nil {
+			errstr = err.Error()
+		} else {
+			config.Ver.Versioning = value
+		}
+	case "fshc_enabled", "fshc.fshc_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.FSHC.Enabled = v
 		}
-	case "mirror_enabled":
+	case "mirror_enabled", "mirror.mirror_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse mirror_enabled, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Mirror.MirrorEnabled = v
 		}
-	case "mirror_burst_buffer":
+	case "mirror_burst_buffer", "mirror.mirror_burst_buffer":
 		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert mirror_burst_buffer, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Mirror.MirrorBurst = v
 		}
-	case "mirror_util_thresh":
+	case "mirror_util_thresh", "mirror.mirror_util_thresh":
 		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf("Failed to convert mirror_util_thresh, err: %v", err)
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else if v <= 0 || v > 100 {
-			errstr = fmt.Sprintf("Invalid mirror_util_thresh=%d", v)
+			errstr = fmt.Sprintf("%s: invalid %s=%d", cmn.ActSetConfig, name, v)
 		} else {
 			config.Mirror.MirrorUtilThresh = v
 		}
+	case "keepalivetracker.proxy.interval":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Proxy.Interval, config.KeepaliveTracker.Proxy.IntervalStr = v, value
+		}
+	case "keepalivetracker.proxy.factor":
+		if v, err := strconv.Atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Proxy.Factor = uint8(v)
+		}
+	case "keepalivetracker.target.interval":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Target.Interval, config.KeepaliveTracker.Target.IntervalStr = v, value
+		}
+	case "keepalivetracker.target.factor":
+		if v, err := strconv.Atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Target.Factor = uint8(v)
+		}
+	case cmn.ActPersist:
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			persist = v
+		}
 	default:
-		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
+		errstr = fmt.Sprintf("%s: '%s' is readonly or invalid", cmn.ActSetConfig, name) // FIXME: remove "or" (#235)
 	}
-	if checkwm {
+	if checkwm && errstr == "" {
 		hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 			config.LRU.LowWM, config.LRU.HighWM = lm, hm
-			errstr = fmt.Sprintf("Invalid LRU watermarks hwm=%d, lwm=%d", hwm, lwm)
+			errstr = fmt.Sprintf("%s: invalid LRU watermarks hwm=%d, lwm=%d", cmn.ActSetConfig, hwm, lwm)
 		}
 	}
+	return
+}
+
+func (h *httprunner) setConfigMany(w http.ResponseWriter, r *http.Request, query url.Values) (ok bool) {
+	if len(query) == 0 {
+		h.invalmsghdlr(w, r, "setconfig: empty nvlist")
+		return
+	}
+	var persist bool
+	for name := range query {
+		value := query.Get(name)
+		if pers, errstr := h.setconfig(name, value); errstr != "" {
+			h.invalmsghdlr(w, r, errstr)
+			return
+		} else {
+			glog.Infof("%s: %s=%s", cmn.ActSetConfig, name, value)
+			if pers {
+				persist = pers
+			}
+		}
+	}
+	if persist {
+		config := cmn.GCO.Get()
+		if err := cmn.LocalSave(clivars.config.ConfFile, config); err != nil {
+			glog.Errorf("%s: failed to write, err: %v", cmn.ActSetConfig, err)
+		} else {
+			glog.Infof("%s: stored", cmn.ActSetConfig)
+		}
+	}
+	ok = true
 	return
 }
 

@@ -35,12 +35,18 @@ In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief
 
 2. Hostname (or IPv4 address) and TCP port of one of the AIStore daemons.
 
-By convention, a RESTful operation performed on a AIStore proxy server usually implies a "clustered" scope. Exceptions include querying
-proxy's own configuration via `?what=config` query string parameter.
+Most RESTful operation performed on an AIStore proxy/gateway will likely have a *clustered* scope. Exceptions may include querying proxy's own configuration via `?what=config`, and more.
 
-3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
+3. URL path: version of the REST API, RESTful *resource* that is operated upon, and possibly more forward-slash delimited specifiers.
 
-For example: /v1/cluster where `v1` is the currently supported API version and `cluster` is the resource.
+For example: /v1/cluster where `v1` is the currently supported API version and `cluster` is the (RESTful) resource. Other *resources* include:
+
+| RESTful resource | Description |
+| --- | ---|
+| `cluster` | cluster-wide control-plane operation |
+| `daemon` | control-plane request to update or query specific AIS daemon (proxy or target) |
+| `buckets` | create, destroy, rename and list bucket(s), get bucket names, get bucket properties |
+| `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 
 4. Control message in the query string parameter, e.g. `?what=config`.
 
@@ -55,9 +61,11 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Unregister storage target | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE 'http://G/v1/cluster/daemon/15205:8083'` |
 | Register storage target | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' 'http://localhost:8083/v1/cluster/register'` |
 | Set primary proxy (primary proxy only)| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT 'http://G-primary/v1/cluster/proxy/26869:8080'` |
-| Set primary proxy forcefully(primary proxy)| PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"`  <sup id="a6">[6](#ft6)</sup>|
-| Update individual AIStore daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
-| Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
+| Force-Set primary proxy (primary proxy)| PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G 'http://G-primary/v1/daemon/proxy/23ef189ed'  --data-urlencode "frc=true" --data-urlencode "can=http://G-new-designated-primary"`  <sup id="a6">[6](#ft6)</sup>|
+| Set individual AIStore daemon (proxy or target) configuration **via JSON message** | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G-or-T/v1/daemon'`<br>• For the list of named options, see [runtime configuration](#runtime-configuration) |
+| Set individual AIStore daemon (proxy or target) configuration **via URL query** | PUT /v1/daemon/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](#runtime-configuration) |
+| Set cluster-wide configuration **via JSON message** (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' 'http://G/v1/cluster'`<br>• Note below the alternative way to update cluster configuration<br>• For the list of named options, see [runtime configuration](#runtime-configuration) |
+| Set cluster-wide configuration **via URL query** (proxy) | PUT /v1/cluster/setconfig/?name1=value1&name2=value2&... | `curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=33s&log.loglevel=4'`<br>• Allows to update multiple values in one shot<br>• For the list of named configuration options, see [runtime configuration](#runtime-configuration) |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-or-T/v1/daemon'` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' 'http://G/v1/cluster'` |
@@ -65,7 +73,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Destroy local [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
 | Rename local [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
 | Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mylocalbucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
-| Check if an object is cached (i.e. present in the specified AIStore) | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
+| Check if an object *is cached*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?offset=1024&length=512' -o myobject` |
 | Get [bucket](bucket.md) names | GET /v1/buckets/\* | `curl -X GET 'http://G/v1/buckets/*'` |

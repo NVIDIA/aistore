@@ -2739,7 +2739,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
 			return
-		default:
+		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+			query := r.URL.Query()
+			_ = t.setConfigMany(w, r, query)
+			return
 		}
 	}
 	//
@@ -2750,21 +2753,27 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActSetConfig:
-		if value, ok := msg.Value.(string); !ok {
+	case cmn.ActSetConfig: // setconfig #2 - via action message
+		var (
+			query = url.Values{}
+			value string
+			ok    bool
+		)
+		if value, ok = msg.Value.(string); !ok {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse cmn.ActionMsg value: Not a string"))
-		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		} else {
-			glog.Infof("setconfig %s=%s", msg.Name, value)
-			if msg.Name == "lru_enabled" && value == "false" {
-				lruxact := t.xactions.findU(cmn.ActLRU)
-				if lruxact != nil {
-					if glog.V(3) {
-						glog.Infof("Aborting LRU due to lru_enabled config change")
-					}
-					lruxact.Abort()
+			return
+		}
+		query.Add(msg.Name, value)
+		if !t.setConfigMany(w, r, query) {
+			return
+		}
+		if msg.Name == "lru_enabled" && value == "false" {
+			lruxact := t.xactions.findU(cmn.ActLRU)
+			if lruxact != nil {
+				if glog.V(3) {
+					glog.Infof("Aborting LRU due to lru_enabled config change")
 				}
+				lruxact.Abort()
 			}
 		}
 	case cmn.ActShutdown:

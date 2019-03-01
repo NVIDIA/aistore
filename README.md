@@ -319,7 +319,9 @@ This command runs test that matches the specified string ("download"). The test 
 > For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 > For other useful commands, see the [Makefile](ais/Makefile).
 
-> For tips and help pertaining to local non-containerized deployment, please see [the tips](docs/local-tips.md).
+> For tips and help pertaining to local non-containerized deployment, please see [the tips](docs/local_tips.md).
+
+> For info on how to run AIS executables, see [command-line arguments](docs/command_line.md).
 
 > For helpful links and background on Go, AWS, GCP, and Deep Learning, please see [helpful links](docs/helpful-links.md).
 
@@ -375,6 +377,7 @@ In both of these cases, Grafana will be accessible at [localhost:3000](http://lo
 > For information on AIS statistics, please see [Statistics, Collected Metrics, Visualization](docs/metrics.md)
 
 ## Guides and References
+- [AIS command-line](docs/command_line.md)
 - [Batch List and Range Operations: Prefetch, and more](docs/batch.md)
 - [Object Checksums: Brief Theory of Operations](docs/checksum.md)
 - [Configuration](docs/configuration.md)

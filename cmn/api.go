@@ -74,6 +74,9 @@ const (
 	ActMountpathDisable = "disable"
 	ActMountpathAdd     = "add"
 	ActMountpathRemove  = "remove"
+
+	// auxiliary actions
+	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
 // Cloud Provider enum

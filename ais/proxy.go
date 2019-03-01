@@ -1926,22 +1926,24 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			}
 			if !newsmap.isValid() {
 				s := fmt.Sprintf("Received invalid Smap at startup/registration: %s", newsmap.pp())
-				glog.Errorln(s)
 				p.invalmsghdlr(w, r, s)
 				return
 			}
 			if !newsmap.isPresent(p.si, true) {
 				s := fmt.Sprintf("Not finding self %s in the %s", p.si, newsmap.pp())
-				glog.Errorln(s)
 				p.invalmsghdlr(w, r, s)
 				return
 			}
 			if s := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); s != "" {
 				p.invalmsghdlr(w, r, s)
+				return
 			}
 			glog.Infof("%s: %s v%d done", pname(p.si), cmn.SyncSmap, newsmap.version())
 			return
-		default:
+		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+			query := r.URL.Query()
+			_ = p.setConfigMany(w, r, query)
+			return
 		}
 	}
 
@@ -1953,8 +1955,9 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case cmn.ActSetConfig:
+	case cmn.ActSetConfig: // setconfig #2 - via action message
 		var (
+			query = url.Values{}
 			value string
 			ok    bool
 		)
@@ -1962,14 +1965,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
 			return
 		}
-		if errstr := p.setconfig(msg.Name, value); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-		} else {
-			// NOTE: "loglevel", "stats_time", "vmodule" are supported by both proxies and targets;
-			// other knobs are being set so that all proxies remain in-sync in the case when
-			// the primary broadcasts the change to all nodes...
-			glog.Infof("setconfig %s=%s", msg.Name, value)
-		}
+		query.Add(msg.Name, value)
+		_ = p.setConfigMany(w, r, query)
 	case cmn.ActShutdown:
 		q := r.URL.Query()
 		force, _ := parsebool(q.Get(cmn.URLParamForce))
@@ -2737,9 +2734,35 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// cluster-wide: designate a new primary proxy administratively
-	if len(apitems) > 0 && apitems[0] == cmn.Proxy {
-		p.httpclusetprimaryproxy(w, r)
-		return
+	if len(apitems) > 0 {
+		switch apitems[0] {
+		case cmn.Proxy:
+			p.httpclusetprimaryproxy(w, r)
+			return
+		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
+			query := r.URL.Query()
+			if !p.setConfigMany(w, r, query) {
+				return
+			}
+			results := p.broadcastTo(
+				cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
+				query,
+				http.MethodPut,
+				nil,
+				p.smapowner.get(),
+				defaultTimeout,
+				cmn.NetworkIntraControl,
+				cluster.AllNodes,
+			)
+			for result := range results {
+				if result.err != nil {
+					p.invalmsghdlr(w, r, result.err.Error())
+					p.keepalive.onerr(err, result.status)
+					return
+				}
+			}
+			return
+		}
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
@@ -2750,37 +2773,44 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case cmn.ActSetConfig:
-		if value, ok := msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T)", msg.Value, msg.Value))
-		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-		} else {
-			glog.Infof("setconfig %s=%s", msg.Name, value)
-			msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
-			cmn.AssertNoErr(err)
+		var (
+			value string
+			ok    bool
+		)
+		if value, ok = msg.Value.(string); !ok {
+			p.invalmsghdlr(w, r, fmt.Sprintf("%s: invalid value format (%+v, %T)", cmn.ActSetConfig, msg.Value, msg.Value))
+			return
+		}
+		query := url.Values{}
+		query.Add(msg.Name, value)
+		if !p.setConfigMany(w, r, query) {
+			return
+		}
+		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
+		cmn.AssertNoErr(err)
 
-			results := p.broadcastTo(
-				cmn.URLPath(cmn.Version, cmn.Daemon),
-				nil, // query
-				http.MethodPut,
-				msgbytes,
-				p.smapowner.get(),
-				defaultTimeout,
-				cmn.NetworkIntraControl,
-				cluster.AllNodes,
-			)
-
-			for result := range results {
-				if result.err != nil {
-					p.invalmsghdlr(
-						w,
-						r,
-						fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.errstr),
-					)
-					p.keepalive.onerr(err, result.status)
-				}
+		results := p.broadcastTo(
+			cmn.URLPath(cmn.Version, cmn.Daemon),
+			nil, // query
+			http.MethodPut,
+			msgbytes,
+			p.smapowner.get(),
+			defaultTimeout,
+			cmn.NetworkIntraControl,
+			cluster.AllNodes,
+		)
+		for result := range results {
+			if result.err != nil {
+				p.invalmsghdlr(
+					w,
+					r,
+					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.errstr),
+				)
+				p.keepalive.onerr(err, result.status)
+				return
 			}
 		}
+
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets
