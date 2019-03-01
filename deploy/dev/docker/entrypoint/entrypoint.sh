@@ -6,11 +6,12 @@ export LOGDIR=${TEST_FSPATH_ROOT}/log
 mkdir -p ${CONFDIR}
 mkdir -p ${TEST_FSPATH_ROOT}
 mkdir -p ${LOGDIR}
+export GOCACHE=/tmp/.gocache
 touch ${LOGDIR}/statsd.log
 
 if [ -n "${QUICK}" ]; then
     go get -u -v github.com/NVIDIA/aistore/ais && /bin/bash
-else    
+else
     cd ${GOPATH}/src/github.com/NVIDIA/aistore/ais
     source /config.sh
 
