@@ -2003,8 +2003,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
 	if !smap.isValid() {
 		return nil, fmt.Sprintf("Invalid Smap from %s: %s", baseURL, smap.pp())
 	}
-
-	return smap, ""
+	return
 }
 
 // forceful primary change - is used when the original primary network is down
@@ -2014,41 +2013,34 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
 // primary connect to the new primary
 func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
 	newPrimaryURL := r.URL.Query().Get(cmn.URLParamPrimaryCandidate)
-	glog.Infof("Force new primary %s (URL: %s)", proxyID, newPrimaryURL)
+	glog.Infof("%s: force new primary %s (URL: %s)", pname(p.si), proxyID, newPrimaryURL)
 
 	if p.si.DaemonID == proxyID {
 		glog.Warningf("%s is already the primary", pname(p.si))
 		return
 	}
-
 	smap := p.smapowner.get()
 	psi := smap.GetProxy(proxyID)
-
 	if psi == nil && newPrimaryURL == "" {
-		s := fmt.Sprintf("Failed to find new primary %s in local smap: %s",
-			proxyID, smap.pp())
+		s := fmt.Sprintf("%s: failed to find new primary %s in local %s", pname(p.si), proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-
 	if newPrimaryURL == "" {
-		newPrimaryURL = psi.PublicNet.DirectURL
+		newPrimaryURL = psi.IntraControlNet.DirectURL
 	}
-
 	if newPrimaryURL == "" {
-		s := fmt.Sprintf("Failed to get new primary %s direct URL", proxyID)
+		s := fmt.Sprintf("%s: failed to get new primary %s direct URL", pname(p.si), proxyID)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-
 	newSmap, errstr := p.smapFromURL(newPrimaryURL)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-
 	if proxyID != newSmap.ProxySI.DaemonID {
-		s := fmt.Sprintf("Proxy %s is not the primary. Current Smap: %s", proxyID, newSmap.pp())
+		s := fmt.Sprintf("%s: proxy %s is not the primary, current %s", pname(p.si), proxyID, newSmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2056,7 +2048,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	// notify metasync to cancel all pending sync requests
 	p.metasyncer.becomeNonPrimary()
 	p.smapowner.put(newSmap)
-	res := p.registerToURL(newSmap.ProxySI.PublicNet.DirectURL, newSmap.ProxySI, defaultTimeout, true, nil, false)
+	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, defaultTimeout, true, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
 		return

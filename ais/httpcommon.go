@@ -1392,7 +1392,7 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 		return
 	}
 	if smap.ProxySI.DaemonID != "" {
-		url, proxysi = smap.ProxySI.PublicNet.DirectURL, smap.ProxySI
+		url, proxysi = smap.ProxySI.IntraControlNet.DirectURL, smap.ProxySI
 		return
 	}
 	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI

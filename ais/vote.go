@@ -293,7 +293,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xele *xactElection) {
 	// First, ping current proxy with a short timeout: (Primary? State)
-	primaryURL := curPrimary.PublicNet.DirectURL
+	primaryURL := curPrimary.IntraControlNet.DirectURL
 	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
@@ -438,7 +438,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			glog.Warningf(
 				"Broadcast committing result for %s(%s) failed: %v",
 				r.si.DaemonID,
-				r.si.PublicNet.DirectURL,
+				r.si.IntraControlNet.DirectURL,
 				r.err,
 			)
 			errors[r.si.DaemonID] = true
