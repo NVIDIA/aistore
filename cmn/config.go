@@ -5,9 +5,12 @@
 package cmn
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +48,55 @@ const (
 	ThrottleSleepMin = time.Millisecond * 10
 	ThrottleSleepAvg = time.Millisecond * 100
 	ThrottleSleepMax = time.Second
+
+	// EC
+	MinSliceCount = 1  // minimum number of data or parity slices
+	MaxSliceCount = 32 // maximum number of data or parity slices
+)
+
+const (
+	// L4
+	tcpProto = "tcp"
+
+	// L7
+	httpProto  = "http"
+	httpsProto = "https"
+)
+
+type (
+	ValidationArgs struct {
+		BckIsLocal bool
+		TargetCnt  int // for EC
+	}
+
+	Validator interface {
+		Validate() error
+	}
+	PropsValidator interface {
+		ValidateAsProps(args *ValidationArgs) error
+	}
+)
+
+var (
+	supportedL4Protos = []string{tcpProto}
+	supportedL7Protos = []string{httpProto, httpsProto}
+
+	_ Validator = &Config{}
+	_ Validator = &CksumConf{}
+	_ Validator = &LRUConf{}
+	_ Validator = &MirrorConf{}
+	_ Validator = &ECConf{}
+	_ Validator = &VersionConf{}
+	_ Validator = &KeepaliveConf{}
+	_ Validator = &PeriodConf{}
+	_ Validator = &TimeoutConf{}
+	_ Validator = &RebalanceConf{}
+	_ Validator = &NetConf{}
+
+	_ PropsValidator = &CksumConf{}
+	_ PropsValidator = &LRUConf{}
+	_ PropsValidator = &MirrorConf{}
+	_ PropsValidator = &ECConf{}
 )
 
 //
@@ -429,19 +481,25 @@ func LoadConfig(clivars *ConfigCLI) (changed bool) {
 	defer GCO.CommitUpdate(config)
 
 	err := LocalLoad(clivars.ConfFile, &config)
+
+	// NOTE: glog.Errorf + os.Exit is used instead of glog.Fatalf to not crash
+	// with dozens of backtraces on screen - this is user error not some
+	// internal error.
+
 	if err != nil {
-		glog.Errorf("Failed to load config %q, err: %v", clivars.ConfFile, err)
+		glog.Errorf("failed to load config %q, err: %v", clivars.ConfFile, err)
 		os.Exit(1)
 	}
 	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		glog.Errorf("Failed to flag-set glog dir %q, err: %v", config.Log.Dir, err)
+		glog.Errorf("failed to flag-set glog dir %q, err: %v", config.Log.Dir, err)
 		os.Exit(1)
 	}
 	if err = CreateDir(config.Log.Dir); err != nil {
-		glog.Errorf("Failed to create log dir %q, err: %v", config.Log.Dir, err)
+		glog.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
 		os.Exit(1)
 	}
-	if err = validateConfig(config); err != nil {
+	if err := config.Validate(); err != nil {
+		glog.Errorf("%v", err)
 		os.Exit(1)
 	}
 
@@ -512,143 +570,14 @@ func ValidateVersion(version string) error {
 	return nil
 }
 
-func validateConfig(config *Config) (err error) {
-	const badfmt = "bad %q format, err: %v"
-	var (
-		periodic  = &config.Periodic
-		lru       = &config.LRU
-		mirror    = &config.Mirror
-		timeout   = &config.Timeout
-		keepalive = &config.KeepaliveTracker
-		net       = &config.Net
-	)
-	// durations
-	if periodic.StatsTime, err = time.ParseDuration(periodic.StatsTimeStr); err != nil {
-		return fmt.Errorf(badfmt, periodic.StatsTimeStr, err)
+func (c *Config) Validate() error {
+	validators := []Validator{
+		&c.Xaction, &c.LRU, &c.Mirror, &c.Cksum,
+		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
 	}
-	if periodic.IostatTime, err = time.ParseDuration(periodic.IostatTimeStr); err != nil {
-		return fmt.Errorf(badfmt, periodic.IostatTimeStr, err)
-	}
-	if periodic.RetrySyncTime, err = time.ParseDuration(periodic.RetrySyncTimeStr); err != nil {
-		return fmt.Errorf(badfmt, periodic.RetrySyncTimeStr, err)
-	}
-	if lru.DontEvictTime, err = time.ParseDuration(lru.DontEvictTimeStr); err != nil {
-		return fmt.Errorf(badfmt, lru.DontEvictTimeStr, err)
-	}
-	if lru.CapacityUpdTime, err = time.ParseDuration(lru.CapacityUpdTimeStr); err != nil {
-		return fmt.Errorf(badfmt, lru.CapacityUpdTimeStr, err)
-	}
-	if config.Rebalance.DestRetryTime, err = time.ParseDuration(config.Rebalance.DestRetryTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.Rebalance.DestRetryTimeStr, err)
-	}
-
-	hwm, lwm, oos := lru.HighWM, lru.LowWM, lru.OOS
-	if hwm <= 0 || lwm <= 0 || oos <= 0 || hwm < lwm || oos < hwm || lwm > 100 || hwm > 100 || oos > 100 {
-		return fmt.Errorf("invalid LRU configuration %+v", lru)
-	}
-	if mirror.UtilThresh < 0 || mirror.UtilThresh > 100 || mirror.Burst < 0 {
-		return fmt.Errorf("invalid mirror configuration %+v", mirror)
-	}
-	if mirror.Enabled && mirror.Copies != 2 {
-		return fmt.Errorf("invalid mirror configuration %+v", mirror)
-	}
-
-	diskUtilHWM, diskUtilLWM := config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM
-	if diskUtilHWM <= 0 || diskUtilLWM <= 0 || diskUtilHWM <= diskUtilLWM || diskUtilLWM > 100 || diskUtilHWM > 100 {
-		return fmt.Errorf("invalid Xaction configuration %+v", config.Xaction)
-	}
-
-	if config.Cksum.Type != ChecksumXXHash && config.Cksum.Type != ChecksumNone {
-		return fmt.Errorf("invalid checksum: %s - expecting %s or %s", config.Cksum.Type, ChecksumXXHash, ChecksumNone)
-	}
-	if err := ValidateVersion(config.Ver.Versioning); err != nil {
-		return err
-	}
-	if timeout.Default, err = time.ParseDuration(timeout.DefaultStr); err != nil {
-		return fmt.Errorf(badfmt, timeout.DefaultStr, err)
-	}
-	if timeout.DefaultLong, err = time.ParseDuration(timeout.DefaultLongStr); err != nil {
-		return fmt.Errorf(badfmt, timeout.DefaultLongStr, err)
-	}
-	if timeout.MaxKeepalive, err = time.ParseDuration(timeout.MaxKeepaliveStr); err != nil {
-		return fmt.Errorf("bad timeout max_keepalive format %s, err %v", timeout.MaxKeepaliveStr, err)
-	}
-	if timeout.ProxyPing, err = time.ParseDuration(timeout.ProxyPingStr); err != nil {
-		return fmt.Errorf("bad timeout proxy_ping format %s, err %v", timeout.ProxyPingStr, err)
-	}
-	if timeout.CplaneOperation, err = time.ParseDuration(timeout.CplaneOperationStr); err != nil {
-		return fmt.Errorf("bad timeout vote_request format %s, err %v", timeout.CplaneOperationStr, err)
-	}
-	if timeout.SendFile, err = time.ParseDuration(timeout.SendFileStr); err != nil {
-		return fmt.Errorf("bad timeout send_file_time format %s, err %v", timeout.SendFileStr, err)
-	}
-	if timeout.Startup, err = time.ParseDuration(timeout.StartupStr); err != nil {
-		return fmt.Errorf("bad proxy startup_time format %s, err %v", timeout.StartupStr, err)
-	}
-	keepalive.Proxy.Interval, err = time.ParseDuration(keepalive.Proxy.IntervalStr)
-	if err != nil {
-		return fmt.Errorf("bad proxy keep alive interval %s", keepalive.Proxy.IntervalStr)
-	}
-
-	keepalive.Target.Interval, err = time.ParseDuration(keepalive.Target.IntervalStr)
-	if err != nil {
-		return fmt.Errorf("bad target keep alive interval %s", keepalive.Target.IntervalStr)
-	}
-
-	if !validKeepaliveType(keepalive.Proxy.Name) {
-		return fmt.Errorf("bad proxy keepalive tracker type %s", keepalive.Proxy.Name)
-	}
-
-	if !validKeepaliveType(keepalive.Target.Name) {
-		return fmt.Errorf("bad target keepalive tracker type %s", keepalive.Target.Name)
-	}
-
-	// NETWORK
-
-	// Parse ports
-	if net.L4.Port, err = ParsePort(net.L4.PortStr); err != nil {
-		return fmt.Errorf("bad public port specified: %v", err)
-	}
-
-	net.L4.PortIntraControl = 0
-	if net.L4.PortIntraControlStr != "" {
-		if net.L4.PortIntraControl, err = ParsePort(net.L4.PortIntraControlStr); err != nil {
-			return fmt.Errorf("bad internal port specified: %v", err)
-		}
-	}
-	net.L4.PortIntraData = 0
-	if net.L4.PortIntraDataStr != "" {
-		if net.L4.PortIntraData, err = ParsePort(net.L4.PortIntraDataStr); err != nil {
-			return fmt.Errorf("bad replication port specified: %v", err)
-		}
-	}
-
-	net.IPv4 = strings.Replace(net.IPv4, " ", "", -1)
-	net.IPv4IntraControl = strings.Replace(net.IPv4IntraControl, " ", "", -1)
-	net.IPv4IntraData = strings.Replace(net.IPv4IntraData, " ", "", -1)
-
-	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraControl); overlap {
-		return fmt.Errorf(
-			"public and internal addresses overlap: %s (public: %s; internal: %s)",
-			addr, net.IPv4, net.IPv4IntraControl,
-		)
-	}
-	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraData); overlap {
-		return fmt.Errorf(
-			"public and replication addresses overlap: %s (public: %s; replication: %s)",
-			addr, net.IPv4, net.IPv4IntraData,
-		)
-	}
-	if overlap, addr := ipv4ListsOverlap(net.IPv4IntraControl, net.IPv4IntraData); overlap {
-		return fmt.Errorf(
-			"internal and replication addresses overlap: %s (internal: %s; replication: %s)",
-			addr, net.IPv4IntraControl, net.IPv4IntraData,
-		)
-	}
-	if net.HTTP.RevProxy != "" {
-		if net.HTTP.RevProxy != RevProxyCloud && net.HTTP.RevProxy != RevProxyTarget {
-			return fmt.Errorf("invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
-				net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
+	for _, validator := range validators {
+		if err := validator.Validate(); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -714,270 +643,386 @@ func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }
 
-//
-// FIXME: redundant vs. validateBucketProps and CLI; table of config Values{} (#235)
-//
-func setConfig(config *Config, name, value string) (errstr string) {
-	const (
-		fmtFailedParse = ActSetConfig + ": failed to parse '%s=%s', err: %v"
-		fmtFailedApply = ActSetConfig + ": failed to apply '%s=%s', err: %v"
-	)
-	atoi := func(value string) (int64, error) {
-		v, err := strconv.Atoi(value)
-		return int64(v), err
+func (c *XactionConf) Validate() error {
+	lwm, hwm := c.DiskUtilLowWM, c.DiskUtilHighWM
+	if lwm <= 0 || hwm <= lwm || hwm > 100 {
+		return fmt.Errorf("invalid xaction (disk_util_lwm, disk_util_hwm) configuration %+v", c)
 	}
-	switch name {
-	case "vmodule":
-		if err := SetGLogVModule(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
-		}
-	case "log_level", "log.level":
-		if err := SetLogLevel(config, value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
-		}
-	case "stats_time", "periodic.stats_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Periodic.StatsTime, config.Periodic.StatsTimeStr = v, value
-		}
-	case "iostat_time", "periodic.iostat_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Periodic.IostatTime, config.Periodic.IostatTimeStr = v, value
-		}
-	case "send_file_time", "timeout.send_file_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.SendFile, config.Timeout.SendFileStr = v, value
-		}
-	case "default_timeout", "timeout.default_timeout":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.Default, config.Timeout.DefaultStr = v, value
-		}
-	case "default_long_timeout", "timeout.default_long_timeout":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.DefaultLong, config.Timeout.DefaultLongStr = v, value
-		}
-	case "proxy_ping", "timeout.proxy_ping":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.ProxyPing, config.Timeout.ProxyPingStr = v, value
-		}
-	case "cplane_operation", "timeout.cplane_operation":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.CplaneOperation, config.Timeout.CplaneOperationStr = v, value
-		}
-	case "max_keepalive", "timeout.max_keepalive":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Timeout.MaxKeepalive, config.Timeout.MaxKeepaliveStr = v, value
-		}
-	case "dont_evict_time", "lru.dont_evict_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
-		}
-	case "capacity_upd_time", "lru.capacity_upd_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
-		}
-	case "lowwm", "lru.lowwm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.LowWM = v
-		}
-	case "highwm", "lru.highwm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.HighWM = v
-		}
-	case "lru_enabled", "lru.enabled":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.Enabled = v
-		}
-	case "lru_local_buckets", "lru.local_buckets":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.LRU.LocalBuckets = v
-		}
-	case "disk_util_low_wm", "xaction.disk_util_low_wm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Xaction.DiskUtilLowWM = v
-		}
-	case "disk_util_high_wm", "xaction.disk_util_high_wm":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Xaction.DiskUtilHighWM = v
-		}
-	case "dest_retry_time", "rebalance.dest_retry_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
-		}
-	case "rebalance_enabled", "rebalance.enabled":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Rebalance.Enabled = v
-		}
-	case "validate_checksum_cold_get", "cksum.validate_cold_get":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Cksum.ValidateColdGet = v
-		}
-	case "validate_checksum_warm_get", "cksum.validate_warm_get":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Cksum.ValidateWarmGet = v
-		}
-	case "enable_read_range_checksum", "cksum.enable_read_range":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Cksum.EnableReadRange = v
-		}
-	case "checksum", "cksum.type":
-		if value == ChecksumXXHash || value == ChecksumNone {
-			config.Cksum.Type = value
-		} else {
-			errstr = fmt.Sprintf("%s: invalid %s type %s (expecting %s or %s)",
-				ActSetConfig, name, value, ChecksumXXHash, ChecksumNone)
-		}
-	case "validate_version_warm_get", "version.validate_warm_get":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Ver.ValidateWarmGet = v
-		}
-	case "versioning", "version.versioning":
-		if err := ValidateVersion(value); err != nil {
-			errstr = err.Error()
-		} else {
-			config.Ver.Versioning = value
-		}
-	case "fshc_enabled", "fshc.enabled":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.FSHC.Enabled = v
-		}
-	case "mirror_enabled", "mirror.enabled":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Mirror.Enabled = v
-		}
-	case "mirror_burst_buffer", "mirror.burst_buffer":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.Mirror.Burst = v
-		}
-	case "mirror_util_thresh", "mirror.util_thresh":
-		if v, err := atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else if v <= 0 || v > 100 {
-			errstr = fmt.Sprintf("%s: invalid %s=%d", ActSetConfig, name, v)
-		} else {
-			config.Mirror.UtilThresh = v
-		}
-	case "keepalivetracker.proxy.interval":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.KeepaliveTracker.Proxy.Interval, config.KeepaliveTracker.Proxy.IntervalStr = v, value
-		}
-	case "keepalivetracker.proxy.factor":
-		if v, err := strconv.Atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.KeepaliveTracker.Proxy.Factor = uint8(v)
-		}
-	case "keepalivetracker.target.interval":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.KeepaliveTracker.Target.Interval, config.KeepaliveTracker.Target.IntervalStr = v, value
-		}
-	case "keepalivetracker.target.factor":
-		if v, err := strconv.Atoi(value); err != nil {
-			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
-		} else {
-			config.KeepaliveTracker.Target.Factor = uint8(v)
-		}
-	default:
-		errstr = fmt.Sprintf("%s: '%s' is readonly or invalid", ActSetConfig, name) // FIXME: remove "or" (#235)
-	}
-	if errstr == "" {
-		lwm, hwm := config.LRU.LowWM, config.LRU.HighWM
-		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			errstr = fmt.Sprintf("%s: invalid LRU watermarks hwm=%d, lwm=%d", ActSetConfig, hwm, lwm)
-		}
-
-		lwm, hwm = config.Xaction.DiskUtilLowWM, config.Xaction.DiskUtilHighWM
-		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			errstr = fmt.Sprintf("%s: invalid Xaction disk util watermarks hwm=%d, lwm=%d", ActSetConfig, hwm, lwm)
-		}
-	}
-	return
+	return nil
 }
 
-func SetConfigMany(nvmap SimpleKVs) (errstr string) {
-	if len(nvmap) == 0 {
-		errstr = "setConfig: empty nvmap"
-		return
+func (c *LRUConf) Validate() (err error) {
+	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
+	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
+		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration %+v", c)
+	}
+	if c.DontEvictTime, err = time.ParseDuration(c.DontEvictTimeStr); err != nil {
+		return fmt.Errorf("invalid lru.dont_evict_time format: %v", err)
+	}
+	if c.CapacityUpdTime, err = time.ParseDuration(c.CapacityUpdTimeStr); err != nil {
+		return fmt.Errorf("invalid lru.capacity_upd_time format: %v", err)
+	}
+	return nil
+}
+
+func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
+	if !c.Enabled {
+		return nil
+	}
+	return c.Validate()
+}
+
+func (c *CksumConf) Validate() error {
+	if c.Type != ChecksumXXHash && c.Type != ChecksumNone {
+		return fmt.Errorf("invalid checksum.type: %s (expected one of [%s, %s])", c.Type, ChecksumXXHash, ChecksumNone)
+	}
+	return nil
+}
+
+func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
+	if c.Type != ChecksumInherit && c.Type != ChecksumNone && c.Type != ChecksumXXHash {
+		return fmt.Errorf("invalid checksum.type: %s (expected one of: [%s, %s, %s])",
+			c.Type, ChecksumXXHash, ChecksumNone, ChecksumInherit)
+	}
+	return nil
+}
+
+func (c *MirrorConf) Validate() error {
+	if c.UtilThresh < 0 || c.UtilThresh > 100 {
+		return fmt.Errorf("bad mirror.util_thresh: %v (expected value in range [0, 100])", c.UtilThresh)
+	}
+	if c.Burst < 0 {
+		return fmt.Errorf("bad mirror.burst: %v (expected >0)", c.UtilThresh)
+	}
+	if c.Enabled && c.Copies != 2 {
+		return fmt.Errorf("bad mirror.copies: %d (expected 2)", c.Copies)
+	}
+	return nil
+}
+
+func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
+	if !c.Enabled {
+		return nil
+	}
+	return c.Validate()
+}
+
+func (c *ECConf) Validate() error {
+	if c.ObjSizeLimit < 0 {
+		return fmt.Errorf("bad ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
+	}
+	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
+		return fmt.Errorf("bad ec.data_slices: %d (expected value in range [%d, %d])", c.DataSlices, MinSliceCount, MaxSliceCount)
+	}
+	// TODO: warn about performance if number is OK but large?
+	if c.ParitySlices < MinSliceCount || c.ParitySlices > MaxSliceCount {
+		return fmt.Errorf("bad ec.parity_slices: %d (expected value in range [%d, %d])", c.ParitySlices, MinSliceCount, MaxSliceCount)
+	}
+	return nil
+}
+
+func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
+	if !c.Enabled {
+		return nil
+	}
+	if !args.BckIsLocal {
+		return fmt.Errorf("erasure coding does not support cloud buckets")
+	}
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	// data slices + parity slices + original object
+	required := c.DataSlices + c.ParitySlices + 1
+	if args.TargetCnt < required {
+		return fmt.Errorf(
+			"erasure coding requires %d targets to use %d data and %d parity slices "+
+				"(the cluster has only %d targets)",
+			required, c.DataSlices, c.ParitySlices, args.TargetCnt)
+	}
+	return nil
+}
+
+func (c *TimeoutConf) Validate() (err error) {
+	if c.Default, err = time.ParseDuration(c.DefaultStr); err != nil {
+		return fmt.Errorf("bad timeout.default format %s, err %v", c.DefaultStr, err)
+	}
+	if c.DefaultLong, err = time.ParseDuration(c.DefaultLongStr); err != nil {
+		return fmt.Errorf("bad timeout.default_long format %s, err %v", c.DefaultLongStr, err)
+	}
+	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
+		return fmt.Errorf("bad timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
+	}
+	if c.ProxyPing, err = time.ParseDuration(c.ProxyPingStr); err != nil {
+		return fmt.Errorf("bad timeout.proxy_ping format %s, err %v", c.ProxyPingStr, err)
+	}
+	if c.CplaneOperation, err = time.ParseDuration(c.CplaneOperationStr); err != nil {
+		return fmt.Errorf("bad timeout.vote_request format %s, err %v", c.CplaneOperationStr, err)
+	}
+	if c.SendFile, err = time.ParseDuration(c.SendFileStr); err != nil {
+		return fmt.Errorf("bad timeout.send_file_time format %s, err %v", c.SendFileStr, err)
+	}
+	if c.Startup, err = time.ParseDuration(c.StartupStr); err != nil {
+		return fmt.Errorf("bad timeout.startup_time format %s, err %v", c.StartupStr, err)
+	}
+	return nil
+}
+
+func (c *RebalanceConf) Validate() (err error) {
+	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
+		return fmt.Errorf("bad rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
+	}
+	return nil
+}
+
+func (c *PeriodConf) Validate() (err error) {
+	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
+		return fmt.Errorf("bad periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
+	}
+	if c.IostatTime, err = time.ParseDuration(c.IostatTimeStr); err != nil {
+		return fmt.Errorf("bad periodic.iostat_time format %s, err %v", c.IostatTimeStr, err)
+	}
+	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
+		return fmt.Errorf("bad periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
+	}
+	return nil
+}
+
+func (c *VersionConf) Validate() error {
+	return ValidateVersion(c.Versioning)
+}
+
+func (c *KeepaliveConf) Validate() (err error) {
+	if c.Proxy.Interval, err = time.ParseDuration(c.Proxy.IntervalStr); err != nil {
+		return fmt.Errorf("bad keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
+	}
+	if c.Target.Interval, err = time.ParseDuration(c.Target.IntervalStr); err != nil {
+		return fmt.Errorf("bad keepalivetracker.target.interval %s", c.Target.IntervalStr)
+	}
+	if !validKeepaliveType(c.Proxy.Name) {
+		return fmt.Errorf("bad keepalivetracker.proxy.name %s", c.Proxy.Name)
+	}
+	if !validKeepaliveType(c.Target.Name) {
+		return fmt.Errorf("bad keepalivetracker.target.name %s", c.Target.Name)
+	}
+	return nil
+}
+
+func (c *NetConf) Validate() (err error) {
+	if !StringInSlice(c.L4.Proto, supportedL4Protos) {
+		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s", c.L4.Proto, supportedL4Protos)
 	}
 
-	config := GCO.BeginUpdate()
+	if !StringInSlice(c.HTTP.Proto, supportedL7Protos) {
+		return fmt.Errorf("http proto is not recognized %s, expected one of: %s", c.HTTP.Proto, supportedL7Protos)
+	}
+
+	// Parse ports
+	if c.L4.Port, err = ParsePort(c.L4.PortStr); err != nil {
+		return fmt.Errorf("bad public port specified: %v", err)
+	}
+	if c.L4.PortIntraControl != 0 {
+		if c.L4.PortIntraControl, err = ParsePort(c.L4.PortIntraControlStr); err != nil {
+			return fmt.Errorf("bad intra control port specified: %v", err)
+		}
+	}
+	if c.L4.PortIntraData != 0 {
+		if c.L4.PortIntraData, err = ParsePort(c.L4.PortIntraDataStr); err != nil {
+			return fmt.Errorf("bad intra data port specified: %v", err)
+		}
+	}
+
+	c.IPv4 = strings.Replace(c.IPv4, " ", "", -1)
+	c.IPv4IntraControl = strings.Replace(c.IPv4IntraControl, " ", "", -1)
+	c.IPv4IntraData = strings.Replace(c.IPv4IntraData, " ", "", -1)
+
+	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraControl); overlap {
+		return fmt.Errorf(
+			"public and internal addresses overlap: %s (public: %s; internal: %s)",
+			addr, c.IPv4, c.IPv4IntraControl,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraData); overlap {
+		return fmt.Errorf(
+			"public and replication addresses overlap: %s (public: %s; replication: %s)",
+			addr, c.IPv4, c.IPv4IntraData,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(c.IPv4IntraControl, c.IPv4IntraData); overlap {
+		return fmt.Errorf(
+			"internal and replication addresses overlap: %s (internal: %s; replication: %s)",
+			addr, c.IPv4IntraControl, c.IPv4IntraData,
+		)
+	}
+	if c.HTTP.RevProxy != "" {
+		if c.HTTP.RevProxy != RevProxyCloud && c.HTTP.RevProxy != RevProxyTarget {
+			return fmt.Errorf("invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
+				c.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
+		}
+	}
+	return nil
+}
+
+func (conf *Config) update(key, value string) error {
+	// updateValue sets `to` value (required to be pointer) and runs number of
+	// provided validators which would check if the value which was just set is
+	// correct.
+	updateValue := func(to interface{}, validators ...Validator) error {
+		// `to` parameter needs to pointer so we can set it
+		Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
+
+		tmpValue := value
+		switch to.(type) {
+		case *string:
+			// Strings must be quoted so that Unmarshal treat it well
+			tmpValue = strconv.Quote(tmpValue)
+		default:
+			break
+		}
+
+		// Unmarshal not only tries to parse `tmpValue` but since `to` is pointer,
+		// it will set value of it.
+		if err := json.Unmarshal([]byte(tmpValue), to); err != nil {
+			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
+		}
+
+		for _, v := range validators {
+			if err := v.Validate(); err != nil {
+				return fmt.Errorf("failed to set %q, err: %v", key, err)
+			}
+		}
+		return nil
+	}
+
+	switch key {
+	// TOP LEVEL CONFIG
+	case "vmodule":
+		if err := SetGLogVModule(value); err != nil {
+			return fmt.Errorf("Failed to set vmodule = %s, err: %v", value, err)
+		}
+	case "log_level", "log.level":
+		if err := SetLogLevel(conf, value); err != nil {
+			return fmt.Errorf("Failed to set log level = %s, err: %v", value, err)
+		}
+
+	// PERIODIC
+	case "stats_time", "periodic.stats_time":
+		return updateValue(&conf.Periodic.StatsTimeStr, &conf.Periodic)
+	case "iostat_time", "periodic.iostat_time":
+		return updateValue(&conf.Periodic.IostatTimeStr, &conf.Periodic)
+
+	// LRU
+	case "lru_enabled", "lru.enabled":
+		return updateValue(&conf.LRU.Enabled, &conf.LRU)
+	case "lowwm", "lru.lowwm":
+		return updateValue(&conf.LRU.LowWM, &conf.LRU)
+	case "highwm", "lru.highwm":
+		return updateValue(&conf.LRU.HighWM, &conf.LRU)
+	case "dont_evict_time", "lru.dont_evict_time":
+		return updateValue(&conf.LRU.DontEvictTimeStr, &conf.LRU)
+	case "capacity_upd_time", "lru.capacity_upd_time":
+		return updateValue(&conf.LRU.CapacityUpdTimeStr, &conf.LRU)
+	case "lru_local_buckets", "lru.local_buckets":
+		return updateValue(&conf.LRU.LocalBuckets, &conf.LRU)
+
+	// XACTION
+	case "disk_util_low_wm", "xaction.disk_util_low_wm":
+		return updateValue(&conf.Xaction.DiskUtilLowWM, &conf.Xaction)
+	case "disk_util_high_wm", "xaction.disk_util_high_wm":
+		return updateValue(&conf.Xaction.DiskUtilHighWM, &conf.Xaction)
+
+	// REBALANCE
+	case "dest_retry_time", "rebalance.dest_retry_time":
+		return updateValue(&conf.Rebalance.DestRetryTimeStr, &conf.Rebalance)
+	case "rebalance_enabled", "rebalance.enabled":
+		return updateValue(&conf.Rebalance.Enabled)
+
+	// TIMEOUT
+	case "send_file_time", "timeout.send_file_time":
+		return updateValue(&conf.Timeout.SendFileStr, &conf.Timeout)
+	case "default_timeout", "timeout.default_timeout":
+		return updateValue(&conf.Timeout.DefaultStr, &conf.Timeout)
+	case "default_long_timeout", "timeout.default_long_timeout":
+		return updateValue(&conf.Timeout.DefaultLongStr, &conf.Timeout)
+	case "proxy_ping", "timeout.proxy_ping":
+		return updateValue(&conf.Timeout.ProxyPingStr, &conf.Timeout)
+	case "cplane_operation", "timeout.cplane_operation":
+		return updateValue(&conf.Timeout.CplaneOperationStr, &conf.Timeout)
+	case "max_keepalive", "timeout.max_keepalive":
+		return updateValue(&conf.Timeout.MaxKeepaliveStr, &conf.Timeout)
+
+	// CHECKSUM
+	case "checksum", "cksum.type":
+		return updateValue(&conf.Cksum.Type, &conf.Cksum)
+	case "validate_checksum_cold_get", "cksum.validate_cold_get":
+		return updateValue(&conf.Cksum.ValidateColdGet, &conf.Cksum)
+	case "validate_checksum_warm_get", "cksum.validate_warm_get":
+		return updateValue(&conf.Cksum.ValidateWarmGet, &conf.Cksum)
+	case "enable_read_range_checksum", "cksum.enable_read_range":
+		return updateValue(&conf.Cksum.EnableReadRange, &conf.Cksum)
+
+	// VERSION
+	case "versioning", "version.versioning":
+		return updateValue(&conf.Ver.Versioning, &conf.Ver)
+	case "validate_version_warm_get", "version.validate_warm_get":
+		return updateValue(&conf.Ver.ValidateWarmGet)
+
+	// FSHC
+	case "fshc_enabled", "fshc.enabled":
+		return updateValue(&conf.FSHC.Enabled)
+
+	// MIRROR
+	case "mirror_enabled", "mirror.enabled":
+		return updateValue(&conf.Mirror.Enabled, &conf.Mirror)
+	case "mirror_burst_buffer", "mirror.burst_buffer":
+		return updateValue(&conf.Mirror.Burst, &conf.Mirror)
+	case "mirror_util_thresh", "mirror.util_thresh":
+		return updateValue(&conf.Mirror.UtilThresh, &conf.Mirror)
+
+	// KEEPALIVE
+	case "keepalivetracker.proxy.interval":
+		return updateValue(&conf.KeepaliveTracker.Proxy.IntervalStr, &conf.KeepaliveTracker)
+	case "keepalivetracker.proxy.factor":
+		return updateValue(&conf.KeepaliveTracker.Proxy.Factor, &conf.KeepaliveTracker)
+	case "keepalivetracker.target.interval":
+		return updateValue(&conf.KeepaliveTracker.Target.IntervalStr, &conf.KeepaliveTracker)
+	case "keepalivetracker.target.factor":
+		return updateValue(&conf.KeepaliveTracker.Target.Factor, &conf.KeepaliveTracker)
+
+	default:
+		return fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
+	}
+	return nil
+}
+
+func SetConfigMany(nvmap SimpleKVs) (err error) {
+	if len(nvmap) == 0 {
+		return errors.New("setConfig: empty nvmap")
+	}
+
+	conf := GCO.BeginUpdate()
 
 	var (
 		persist bool
-		err     error
 	)
 	for name, value := range nvmap {
 		if name == ActPersist {
 			if persist, err = strconv.ParseBool(value); err != nil {
-				errstr = fmt.Sprintf("invalid value set for %s, err: %v", name, err)
+				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
 				GCO.DiscardUpdate()
 				return
 			}
-		} else if errstr = setConfig(config, name, value); errstr != "" {
+		} else if err = conf.update(name, value); err != nil {
 			GCO.DiscardUpdate()
 			return
 		}
 
 		glog.Infof("%s: %s=%s", ActSetConfig, name, value)
 	}
-	GCO.CommitUpdate(config)
+	GCO.CommitUpdate(conf)
 
 	if persist {
-		config := GCO.Get()
-		if err := LocalSave(GCO.GetConfigFile(), config); err != nil {
+		conf := GCO.Get()
+		if err := LocalSave(GCO.GetConfigFile(), conf); err != nil {
 			glog.Errorf("%s: failed to write, err: %v", ActSetConfig, err)
 		} else {
 			glog.Infof("%s: stored", ActSetConfig)

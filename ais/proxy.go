@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -1946,8 +1945,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-			if errstr := cmn.SetConfigMany(kvs); errstr != "" {
-				p.invalmsghdlr(w, r, errstr)
+			if err := cmn.SetConfigMany(kvs); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
 			return
@@ -1972,8 +1971,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if errstr := cmn.SetConfigMany(kvs); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
+		if err := cmn.SetConfigMany(kvs); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	case cmn.ActShutdown:
@@ -2792,8 +2791,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			query := r.URL.Query()
 			kvs := cmn.NewSimpleKVsFromQuery(query)
-			if errstr := cmn.SetConfigMany(kvs); errstr != "" {
-				p.invalmsghdlr(w, r, errstr)
+			if err := cmn.SetConfigMany(kvs); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
 			results := p.broadcastTo(
@@ -2834,8 +2833,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if errstr := cmn.SetConfigMany(kvs); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
+		if err := cmn.SetConfigMany(kvs); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
@@ -2981,59 +2980,15 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 			props.WritePolicy = cmn.RWPolicyNextTier
 		}
 	}
-	if props.Cksum.Type != cmn.ChecksumInherit &&
-		props.Cksum.Type != cmn.ChecksumNone && props.Cksum.Type != cmn.ChecksumXXHash {
-		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
-			props.Cksum.Type, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
-	}
-	lwm, hwm := props.LRU.LowWM, props.LRU.HighWM
-	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
-		return fmt.Errorf("invalid WM configuration. LowWM: %d, HighWM: %d", lwm, hwm)
-	}
-	if props.LRU.DontEvictTimeStr != "" {
-		dontEvictTime, err := time.ParseDuration(props.LRU.DontEvictTimeStr)
-		if err != nil {
-			return fmt.Errorf("bad dont_evict_time format %s, err: %v", dontEvictTime, err)
-		}
-		props.LRU.DontEvictTime = dontEvictTime
-	}
-	if props.LRU.CapacityUpdTimeStr != "" {
-		capacityUpdTime, err := time.ParseDuration(props.LRU.CapacityUpdTimeStr)
-		if err != nil {
-			return fmt.Errorf("bad capacity_upd_time format %s, err: %v", capacityUpdTime, err)
-		}
-		props.LRU.CapacityUpdTime = capacityUpdTime
-	}
 
-	if props.EC.Enabled {
-		if !isLocal {
-			return fmt.Errorf("erasure coding does not support cloud buckets")
-		}
-
-		if props.EC.ObjSizeLimit < 0 {
-			return fmt.Errorf("bad EC file size %d: must be 0(default) or greater than 0", props.EC.ObjSizeLimit)
-		}
-		if props.EC.DataSlices < ec.MinSliceCount || props.EC.DataSlices > ec.MaxSliceCount {
-			return fmt.Errorf("bad number of data slices %d: must be between %d and %d",
-				props.EC.DataSlices, ec.MinSliceCount, ec.MaxSliceCount)
-		}
-		// TODO: warn about performance if number is OK but large?
-		if props.EC.ParitySlices < ec.MinSliceCount || props.EC.ParitySlices > ec.MaxSliceCount {
-			return fmt.Errorf("bad number of parity slices %d: must be between %d and %d",
-				props.EC.ParitySlices, ec.MinSliceCount, ec.MaxSliceCount)
-		}
-
-		// data slices + parity slices + original object
-		required := props.EC.DataSlices + props.EC.ParitySlices + 1
-		targetCnt := len(p.smapowner.get().Tmap)
-		if targetCnt < required {
-			return fmt.Errorf(
-				"it requires %d targets to use %d data and %d parity slices "+
-					"(the cluster has only %d targets)",
-				required, props.EC.DataSlices, props.EC.ParitySlices, targetCnt)
+	targetCnt := p.smapowner.Get().CountTargets()
+	validationArgs := &cmn.ValidationArgs{BckIsLocal: isLocal, TargetCnt: targetCnt}
+	validators := []cmn.PropsValidator{&props.Cksum, &props.LRU, &props.Mirror, &props.EC}
+	for _, validator := range validators {
+		if err := validator.ValidateAsProps(validationArgs); err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
 

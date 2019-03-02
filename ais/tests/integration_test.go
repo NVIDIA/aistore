@@ -1481,7 +1481,7 @@ func TestAtimeRebalance(t *testing.T) {
 			num:             50,
 			numGetsEachFile: 2,
 		}
-		bucketProps cmn.BucketProps
+		bucketProps = defaultBucketProps()
 	)
 
 	// Initialize metadata
@@ -1595,7 +1595,7 @@ func testLocalMirror(t *testing.T, erase bool) {
 
 	{
 		var (
-			bucketProps cmn.BucketProps
+			bucketProps = defaultBucketProps()
 			config      *cmn.Config
 			err         error
 		)

@@ -2759,8 +2759,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (errstr string) {
 	prevConfig := cmn.GCO.Get()
-	if errstr = cmn.SetConfigMany(kvs); errstr != "" {
-		return
+	if err := cmn.SetConfigMany(kvs); err != nil {
+		return err.Error()
 	}
 
 	config := cmn.GCO.Get()

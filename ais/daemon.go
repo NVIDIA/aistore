@@ -312,8 +312,8 @@ func aisinit(version, build string) {
 			glog.Errorf("Failed to unmarshal JSON [%s], err: %v", clivars.confjson, err)
 			os.Exit(1)
 		}
-		if errstr := cmn.SetConfigMany(nvmap); errstr != "" {
-			glog.Errorf("Failed to set config: %s", errstr)
+		if err := cmn.SetConfigMany(nvmap); err != nil {
+			glog.Errorf("Failed to set config: %v", err)
 			os.Exit(1)
 		}
 	}
