@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,9 +56,9 @@ var (
 
 type (
 	// ConfigOwner is interface for interacting with config. For updating we
-	// introduce two functions: BeginUpdate and CommitUpdate. These two should
-	// protect config from being updated simultaneously (update should work
-	// as transaction).
+	// introduce three functions: BeginUpdate, CommitUpdate and DiscardUpdate.
+	// These funcs should protect config from being updated simultaneously
+	// (update should work as transaction).
 	//
 	// Subscribe method should be used by services which require to be notified
 	// about any config changes.
@@ -65,7 +66,12 @@ type (
 		Get() *Config
 		BeginUpdate() *Config
 		CommitUpdate(config *Config)
+		DiscardUpdate()
+
 		Subscribe(cl ConfigListener)
+
+		SetConfigFile(path string)
+		GetConfigFile() string
 	}
 
 	// ConfigListener is interface for listeners which require to be notified
@@ -92,6 +98,7 @@ type globalConfigOwner struct {
 	c         unsafe.Pointer
 	lmtx      sync.Mutex // mutex for protecting listeners
 	listeners []ConfigListener
+	confFile  string
 }
 
 var (
@@ -142,6 +149,25 @@ func (gco *globalConfigOwner) CommitUpdate(config *Config) {
 	gco.notifyListeners(oldConf)
 
 	gco.mtx.Unlock()
+}
+
+// CommitUpdate ends transaction but contrary to CommitUpdate it does not update
+// the config nor it notifies listeners.
+//
+// NOTE: CommitUpdate should be preceded by BeginUpdate.
+func (gco *globalConfigOwner) DiscardUpdate() {
+	gco.mtx.Unlock()
+}
+
+func (gco *globalConfigOwner) SetConfigFile(path string) {
+	gco.mtx.Lock()
+	gco.confFile = path
+	gco.mtx.Unlock()
+}
+func (gco *globalConfigOwner) GetConfigFile() string {
+	gco.mtx.Lock()
+	defer gco.mtx.Unlock()
+	return gco.confFile
 }
 
 func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
@@ -397,6 +423,8 @@ type KeepaliveConf struct {
 //
 //==============================
 func LoadConfig(clivars *ConfigCLI) (changed bool) {
+	GCO.SetConfigFile(clivars.ConfFile)
+
 	config := GCO.BeginUpdate()
 	defer GCO.CommitUpdate(config)
 
@@ -684,4 +712,276 @@ func ipv4ListsOverlap(alist, blist string) (overlap bool, addr string) {
 // validKeepaliveType returns true if the keepalive type is supported.
 func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
+}
+
+//
+// FIXME: redundant vs. validateBucketProps and CLI; table of config Values{} (#235)
+//
+func setConfig(config *Config, name, value string) (errstr string) {
+	const (
+		fmtFailedParse = ActSetConfig + ": failed to parse '%s=%s', err: %v"
+		fmtFailedApply = ActSetConfig + ": failed to apply '%s=%s', err: %v"
+	)
+	atoi := func(value string) (int64, error) {
+		v, err := strconv.Atoi(value)
+		return int64(v), err
+	}
+	switch name {
+	case "vmodule":
+		if err := SetGLogVModule(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
+		}
+	case "log_level", "log.level":
+		if err := SetLogLevel(config, value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedApply, name, value, err)
+		}
+	case "stats_time", "periodic.stats_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Periodic.StatsTime, config.Periodic.StatsTimeStr = v, value
+		}
+	case "iostat_time", "periodic.iostat_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Periodic.IostatTime, config.Periodic.IostatTimeStr = v, value
+		}
+	case "send_file_time", "timeout.send_file_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.SendFile, config.Timeout.SendFileStr = v, value
+		}
+	case "default_timeout", "timeout.default_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.Default, config.Timeout.DefaultStr = v, value
+		}
+	case "default_long_timeout", "timeout.default_long_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.DefaultLong, config.Timeout.DefaultLongStr = v, value
+		}
+	case "proxy_ping", "timeout.proxy_ping":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.ProxyPing, config.Timeout.ProxyPingStr = v, value
+		}
+	case "cplane_operation", "timeout.cplane_operation":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.CplaneOperation, config.Timeout.CplaneOperationStr = v, value
+		}
+	case "max_keepalive", "timeout.max_keepalive":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Timeout.MaxKeepalive, config.Timeout.MaxKeepaliveStr = v, value
+		}
+	case "dont_evict_time", "lru.dont_evict_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
+		}
+	case "capacity_upd_time", "lru.capacity_upd_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
+		}
+	case "lowwm", "lru.lowwm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.LowWM = v
+		}
+	case "highwm", "lru.highwm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.HighWM = v
+		}
+	case "lru_enabled", "lru.enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.Enabled = v
+		}
+	case "lru_local_buckets", "lru.local_buckets":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.LRU.LocalBuckets = v
+		}
+	case "disk_util_low_wm", "xaction.disk_util_low_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Xaction.DiskUtilLowWM = v
+		}
+	case "disk_util_high_wm", "xaction.disk_util_high_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Xaction.DiskUtilHighWM = v
+		}
+	case "dest_retry_time", "rebalance.dest_retry_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
+		}
+	case "rebalance_enabled", "rebalance.enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Rebalance.Enabled = v
+		}
+	case "validate_checksum_cold_get", "cksum.validate_checksum_cold_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Cksum.ValidateColdGet = v
+		}
+	case "validate_checksum_warm_get", "cksum.validate_checksum_warm_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Cksum.ValidateWarmGet = v
+		}
+	case "enable_read_range_checksum", "cksum.enable_read_range_checksum":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Cksum.EnableReadRangeChecksum = v
+		}
+	case "checksum", "cksum.checksum":
+		if value == ChecksumXXHash || value == ChecksumNone {
+			config.Cksum.Checksum = value
+		} else {
+			errstr = fmt.Sprintf("%s: invalid %s type %s (expecting %s or %s)",
+				ActSetConfig, name, value, ChecksumXXHash, ChecksumNone)
+		}
+	case "validate_version_warm_get", "version.validate_version_warm_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Ver.ValidateWarmGet = v
+		}
+	case "versioning", "version.versioning":
+		if err := ValidateVersion(value); err != nil {
+			errstr = err.Error()
+		} else {
+			config.Ver.Versioning = value
+		}
+	case "fshc_enabled", "fshc.enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.FSHC.Enabled = v
+		}
+	case "mirror_enabled", "mirror.enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Mirror.Enabled = v
+		}
+	case "mirror_burst_buffer", "mirror.burst_buffer":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.Mirror.Burst = v
+		}
+	case "mirror_util_thresh", "mirror.util_thresh":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else if v <= 0 || v > 100 {
+			errstr = fmt.Sprintf("%s: invalid %s=%d", ActSetConfig, name, v)
+		} else {
+			config.Mirror.UtilThresh = v
+		}
+	case "keepalivetracker.proxy.interval":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Proxy.Interval, config.KeepaliveTracker.Proxy.IntervalStr = v, value
+		}
+	case "keepalivetracker.proxy.factor":
+		if v, err := strconv.Atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Proxy.Factor = uint8(v)
+		}
+	case "keepalivetracker.target.interval":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Target.Interval, config.KeepaliveTracker.Target.IntervalStr = v, value
+		}
+	case "keepalivetracker.target.factor":
+		if v, err := strconv.Atoi(value); err != nil {
+			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
+		} else {
+			config.KeepaliveTracker.Target.Factor = uint8(v)
+		}
+	default:
+		errstr = fmt.Sprintf("%s: '%s' is readonly or invalid", ActSetConfig, name) // FIXME: remove "or" (#235)
+	}
+	if errstr == "" {
+		lwm, hwm := config.LRU.LowWM, config.LRU.HighWM
+		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+			errstr = fmt.Sprintf("%s: invalid LRU watermarks hwm=%d, lwm=%d", ActSetConfig, hwm, lwm)
+		}
+
+		lwm, hwm = config.Xaction.DiskUtilLowWM, config.Xaction.DiskUtilHighWM
+		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+			errstr = fmt.Sprintf("%s: invalid Xaction disk util watermarks hwm=%d, lwm=%d", ActSetConfig, hwm, lwm)
+		}
+	}
+	return
+}
+
+func SetConfigMany(nvmap SimpleKVs) (errstr string) {
+	if len(nvmap) == 0 {
+		errstr = "setConfig: empty nvmap"
+		return
+	}
+
+	config := GCO.BeginUpdate()
+
+	var (
+		persist bool
+		err     error
+	)
+	for name, value := range nvmap {
+		if name == ActPersist {
+			if persist, err = strconv.ParseBool(value); err != nil {
+				errstr = fmt.Sprintf("invalid value set for %s, err: %v", name, err)
+				GCO.DiscardUpdate()
+				return
+			}
+		} else if errstr = setConfig(config, name, value); errstr != "" {
+			GCO.DiscardUpdate()
+			return
+		}
+
+		glog.Infof("%s: %s=%s", ActSetConfig, name, value)
+	}
+	GCO.CommitUpdate(config)
+
+	if persist {
+		config := GCO.Get()
+		if err := LocalSave(GCO.GetConfigFile(), config); err != nil {
+			glog.Errorf("%s: failed to write, err: %v", ActSetConfig, err)
+		} else {
+			glog.Infof("%s: stored", ActSetConfig)
+		}
+	}
+	return
 }

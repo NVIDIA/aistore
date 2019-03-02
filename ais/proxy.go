@@ -1941,8 +1941,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s: %s v%d done", pname(p.si), cmn.SyncSmap, newsmap.version())
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			query := r.URL.Query()
-			_ = p.setConfigMany(w, r, query)
+			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
+			if errstr := cmn.SetConfigMany(kvs); errstr != "" {
+				p.invalmsghdlr(w, r, errstr)
+				return
+			}
 			return
 		}
 	}
@@ -1957,7 +1960,6 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		var (
-			query = url.Values{}
 			value string
 			ok    bool
 		)
@@ -1965,8 +1967,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
 			return
 		}
-		query.Add(msg.Name, value)
-		_ = p.setConfigMany(w, r, query)
+		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
+		if errstr := cmn.SetConfigMany(kvs); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
 	case cmn.ActShutdown:
 		q := r.URL.Query()
 		force, _ := parsebool(q.Get(cmn.URLParamForce))
@@ -2733,7 +2738,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			query := r.URL.Query()
-			if !p.setConfigMany(w, r, query) {
+			kvs := cmn.NewSimpleKVsFromQuery(query)
+			if errstr := cmn.SetConfigMany(kvs); errstr != "" {
+				p.invalmsghdlr(w, r, errstr)
 				return
 			}
 			results := p.broadcastTo(
@@ -2773,11 +2780,12 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s: invalid value format (%+v, %T)", cmn.ActSetConfig, msg.Value, msg.Value))
 			return
 		}
-		query := url.Values{}
-		query.Add(msg.Name, value)
-		if !p.setConfigMany(w, r, query) {
+		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
+		if errstr := cmn.SetConfigMany(kvs); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
 			return
 		}
+
 		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
 		cmn.AssertNoErr(err)
 

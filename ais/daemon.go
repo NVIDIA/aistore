@@ -178,7 +178,6 @@ func dryinit() {
 //==================
 func aisinit(version, build string) {
 	var (
-		h           *httprunner
 		err         error
 		confChanged bool
 	)
@@ -195,6 +194,14 @@ func aisinit(version, build string) {
 		os.Exit(2)
 	}
 	confChanged = cmn.LoadConfig(&clivars.config)
+	if confChanged {
+		config := cmn.GCO.Get()
+		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config); err != nil {
+			glog.Errorf("CLI %s: failed to write, err: %v", cmn.ActSetConfig, err)
+			os.Exit(1)
+		}
+		glog.Infof("CLI %s: stored", cmn.ActSetConfig)
+	}
 
 	glog.Infof("git: %s | build-time: %s\n", version, build)
 
@@ -210,7 +217,6 @@ func aisinit(version, build string) {
 		p := &proxyrunner{}
 		p.initSI()
 		ctx.rg.add(p, xproxy)
-		h = &p.httprunner
 
 		ps := &stats.Prunner{}
 		ps.Init()
@@ -224,7 +230,6 @@ func aisinit(version, build string) {
 		t := &targetrunner{}
 		t.initSI()
 		ctx.rg.add(t, xtarget)
-		h = &t.httprunner
 
 		ts := &stats.Trunner{T: t} // iostat below
 		ts.Init()
@@ -307,29 +312,10 @@ func aisinit(version, build string) {
 			glog.Errorf("Failed to unmarshal JSON [%s], err: %v", clivars.confjson, err)
 			os.Exit(1)
 		}
-		if len(nvmap) > 0 {
-			confChanged = true
-			for n, v := range nvmap {
-				if pers, errstr := h.setconfig(n, v); errstr != "" {
-					glog.Errorln(errstr)
-					os.Exit(1)
-				} else {
-					if pers {
-						clivars.persist = true
-					} else {
-						glog.Infof("CLI %s: %s=%s", cmn.ActSetConfig, n, v)
-					}
-				}
-			}
-		}
-	}
-	if confChanged && clivars.persist {
-		config := cmn.GCO.Get()
-		if err := cmn.LocalSave(clivars.config.ConfFile, config); err != nil {
-			glog.Errorf("CLI %s: failed to write, err: %v", cmn.ActSetConfig, err)
+		if errstr := cmn.SetConfigMany(nvmap); errstr != "" {
+			glog.Errorf("Failed to set config: %s", errstr)
 			os.Exit(1)
 		}
-		glog.Infof("CLI %s: stored", cmn.ActSetConfig)
 	}
 }
 

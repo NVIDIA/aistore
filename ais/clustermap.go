@@ -252,13 +252,14 @@ func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr boo
 }
 
 func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
+	confFile := cmn.GCO.GetConfigFile()
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
 	origURL := config.Proxy.PrimaryURL
 	config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
-	if err := cmn.LocalSave(clivars.config.ConfFile, config); err != nil {
-		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.config.ConfFile, err)
+	if err := cmn.LocalSave(confFile, config); err != nil {
+		errstr = fmt.Sprintf("Error writing config file %s, err: %v", confFile, err)
 		config.Proxy.PrimaryURL = origURL
 		return
 	}

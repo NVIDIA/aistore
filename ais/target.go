@@ -2740,8 +2740,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			t.handleMountpathReq(w, r)
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			query := r.URL.Query()
-			_ = t.setConfigMany(w, r, query)
+			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
+			if errstr := t.setConfig(kvs); errstr != "" {
+				t.invalmsghdlr(w, r, errstr)
+				return
+			}
 			return
 		}
 	}
@@ -2755,7 +2758,6 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActSetConfig: // setconfig #2 - via action message
 		var (
-			query = url.Values{}
 			value string
 			ok    bool
 		)
@@ -2763,18 +2765,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse cmn.ActionMsg value: Not a string"))
 			return
 		}
-		query.Add(msg.Name, value)
-		if !t.setConfigMany(w, r, query) {
+		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
+		if errstr := t.setConfig(kvs); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
 			return
-		}
-		if msg.Name == "lru.enabled" && value == "false" {
-			lruxact := t.xactions.findU(cmn.ActLRU)
-			if lruxact != nil {
-				if glog.V(3) {
-					glog.Infof("Aborting LRU due to lru.enabled config change")
-				}
-				lruxact.Abort()
-			}
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -2782,6 +2776,23 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
 	}
+}
+
+func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (errstr string) {
+	prevConfig := cmn.GCO.Get()
+	if errstr = cmn.SetConfigMany(kvs); errstr != "" {
+		return
+	}
+
+	config := cmn.GCO.Get()
+	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
+		lruXaction := t.xactions.findU(cmn.ActLRU)
+		if lruXaction != nil {
+			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
+			lruXaction.Abort()
+		}
+	}
+	return
 }
 
 func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apitems []string) {

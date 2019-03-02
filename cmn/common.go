@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -57,9 +58,13 @@ const (
 )
 
 type (
-	StringSet map[string]struct{}
-	SimpleKVs map[string]string
-	PairF32   struct {
+	StringSet      map[string]struct{}
+	SimpleKVs      map[string]string
+	SimpleKVsEntry struct {
+		Key   string
+		Value string
+	}
+	PairF32 struct {
 		Min float32
 		Max float32
 	}
@@ -68,6 +73,22 @@ type (
 		Max uint32
 	}
 )
+
+func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {
+	kvs := make(SimpleKVs, len(entries))
+	for _, entry := range entries {
+		kvs[entry.Key] = entry.Value
+	}
+	return kvs
+}
+
+func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
+	kvs := make(SimpleKVs, len(query))
+	for key := range query {
+		kvs[key] = query.Get(key)
+	}
+	return kvs
+}
 
 //
 // PairU32 & PairF32
