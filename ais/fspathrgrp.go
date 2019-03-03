@@ -61,7 +61,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 		r.ReqEnableMountpath(mpath)
 	}
 	glog.Infof("Re-enabled mountpath %s", mpath)
-	go g.t.runLocalRebalance()
+	go g.t.rebManager.runLocalReb()
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 1 {
@@ -102,7 +102,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	for _, r := range g.runners {
 		r.ReqAddMountpath(mpath)
 	}
-	go g.t.runLocalRebalance()
+	go g.t.rebManager.runLocalReb()
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) > 1 {

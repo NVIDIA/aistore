@@ -143,11 +143,9 @@ type (
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
 		ecmanager      *ecManager
-		streams        struct {
-			rebalance *transport.StreamBundle
-		}
-		gfn      getFromNeighbors
-		regstate regstate // the state of being registered with the primary (can be en/disabled via API)
+		rebManager     *rebManager
+		gfn            getFromNeighbors
+		regstate       regstate // the state of being registered with the primary (can be en/disabled via API)
 	}
 )
 
@@ -257,7 +255,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	if err := t.setupStreams(); err != nil {
+	if err := t.setupRebalanceManager(); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
@@ -270,14 +268,12 @@ func (t *targetrunner) Run() error {
 	ec.Init()
 	t.ecmanager = newECM(t)
 
-	aborted, _ := t.xactions.isAbortedOrRunningLocalRebalance()
+	aborted, _ := t.xactions.localRebStatus()
 	if aborted {
-		// resume local rebalance
-		f := func() {
+		go func() {
 			glog.Infoln("resuming local rebalance...")
-			t.runLocalRebalance()
-		}
-		go runLocalRebalanceOnce.Do(f) // only once at startup
+			t.rebManager.runLocalReb()
+		}()
 	}
 
 	dsort.RegisterNode(t.smapowner, t.si, t, t.rtnamemap)
@@ -289,7 +285,7 @@ func (t *targetrunner) Run() error {
 	return nil
 }
 
-func (t *targetrunner) setupStreams() error {
+func (t *targetrunner) setupRebalanceManager() error {
 	var (
 		network = cmn.NetworkIntraData
 	)
@@ -299,13 +295,18 @@ func (t *targetrunner) setupStreams() error {
 		network = cmn.NetworkPublic
 	}
 
-	if _, err := transport.Register(network, "rebalance", t.recvRebalanceObj); err != nil {
+	t.rebManager = &rebManager{
+		t: t,
+	}
+
+	if _, err := transport.Register(network, "rebalance", t.rebManager.recvRebalanceObj); err != nil {
 		return err
 	}
 
 	client := transport.NewDefaultClient()
+
 	// TODO: stream bundle multiplier (currently default) should be adjustable at runtime (#253)
-	t.streams.rebalance = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, 4)
+	t.rebManager.streams = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, 4)
 	return nil
 }
 
@@ -331,10 +332,10 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
 	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
 	// rebalance
-	t.statsif.Register(stats.RebalGlobalCount, stats.KindCounter)
-	t.statsif.Register(stats.RebalLocalCount, stats.KindCounter)
-	t.statsif.Register(stats.RebalGlobalSize, stats.KindCounter)
-	t.statsif.Register(stats.RebalLocalSize, stats.KindCounter)
+	t.statsif.Register(stats.RebGlobalCount, stats.KindCounter)
+	t.statsif.Register(stats.RebLocalCount, stats.KindCounter)
+	t.statsif.Register(stats.RebGlobalSize, stats.KindCounter)
+	t.statsif.Register(stats.RebLocalSize, stats.KindCounter)
 	// replication
 	t.statsif.Register(stats.ReplPutCount, stats.KindCounter)
 	t.statsif.Register(stats.ReplPutLatency, stats.KindLatency)
@@ -442,8 +443,8 @@ func (t *targetrunner) OOS(oos ...bool) bool {
 }
 
 func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactions.isAbortedOrRunningRebalance()
-	_, runningLocal := t.xactions.isAbortedOrRunningLocalRebalance()
+	_, running := t.xactions.globalRebStatus()
+	_, runningLocal := t.xactions.localRebStatus()
 	return running || runningLocal
 }
 
@@ -739,7 +740,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, started time.Time) (errstr string, errcode int) {
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	// check FS-wide if local rebalance is running
-	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
+	aborted, running := t.xactions.localRebStatus()
 	if aborted || running {
 		// FIXME: move this part to lom
 		oldFQN, oldSize := t.getFromOtherLocalFS(lom)
@@ -754,7 +755,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		}
 	}
 	// check cluster-wide ("ask neighbors")
-	aborted, running = t.xactions.isAbortedOrRunningRebalance()
+	aborted, running = t.xactions.globalRebStatus()
 	if t.gfn.lookup {
 		if aborted || running {
 			t.gfn.lookup = false
@@ -1459,9 +1460,9 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 
 // GET /v1/health
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	aborted, running := t.xactions.isAbortedOrRunningRebalance()
+	aborted, running := t.xactions.globalRebStatus()
 	if !aborted && !running {
-		aborted, running = t.xactions.isAbortedOrRunningLocalRebalance()
+		aborted, running = t.xactions.localRebStatus()
 	}
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
@@ -2441,39 +2442,6 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) recvRebalanceObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-
-	roi := &recvObjInfo{
-		t:            t,
-		objname:      hdr.Objname,
-		bucket:       hdr.Bucket,
-		migrated:     true,
-		r:            ioutil.NopCloser(objReader),
-		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
-	}
-	if err := roi.init(); err != nil {
-		glog.Error(err)
-		return
-	}
-	roi.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
-	roi.lom.Version = hdr.ObjAttrs.Version
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
-	}
-
-	if err, _ := roi.recv(); err != nil {
-		glog.Error(err)
-		return
-	}
-
-	t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, hdr.ObjAttrs.Size})
-}
-
 func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict bool) error {
 	var (
 		errstr  string
@@ -2585,6 +2553,8 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
 			bucketFrom, objnameFrom, tname(t.si), bucketTo, objnameTo, tname(si))
 	}
+
+	// TODO: fill and send should be general function in `rebManager`: from, to, object
 	if file, err = cmn.NewFileHandle(fqn); err != nil {
 		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
 	}
@@ -2614,7 +2584,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		err = cbErr
 		wg.Done()
 	}
-	if err := t.streams.rebalance.SendV(hdr, file, cb, si); err != nil {
+	if err := t.rebManager.streams.SendV(hdr, file, cb, si); err != nil {
 		glog.Errorf("failed to migrate: %s, err: %v", lom.FQN, err)
 		return err.Error()
 	}
@@ -3453,7 +3423,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb {
-		go t.runRebalance(newsmap, newTargetID)
+		go t.rebManager.runGlobalReb(newsmap, newTargetID)
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -3464,7 +3434,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname(t.si), newTargetID)
-	go t.runRebalance(newsmap, newTargetID)
+	go t.rebManager.runGlobalReb(newsmap, newTargetID)
 	return
 }
 

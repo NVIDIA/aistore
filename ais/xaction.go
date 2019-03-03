@@ -8,9 +8,9 @@
 package ais
 
 import (
+	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -30,16 +30,17 @@ type (
 		nextid  int64
 		cleanup bool
 	}
-	xactRebalance struct {
-		cmn.XactBase
-		curversion int64
-		runnerCnt  int
-		confirmCh  chan struct{}
-	}
-	xactLocalRebalance struct {
+	xactRebBase struct {
 		cmn.XactBase
 		runnerCnt int
 		confirmCh chan struct{}
+	}
+	xactGlobalReb struct {
+		xactRebBase
+		smapVersion int64 // smap version on which this rebalance has started
+	}
+	xactLocalReb struct {
+		xactRebBase
 	}
 	xactLRU struct {
 		cmn.XactBase
@@ -60,6 +61,24 @@ type (
 		bucket string
 	}
 )
+
+func makeXactRebBase(id int64, rebType int, runnerCnt int) xactRebBase {
+	kind := ""
+	switch rebType {
+	case localRebType:
+		kind = cmn.ActLocalReb
+	case globalRebType:
+		kind = cmn.ActGlobalReb
+	default:
+		cmn.AssertMsg(false, fmt.Sprintf("unknown rebalance type: %d", rebType))
+	}
+
+	return xactRebBase{
+		XactBase:  *cmn.NewXactBase(id, kind),
+		runnerCnt: runnerCnt,
+		confirmCh: make(chan struct{}, runnerCnt),
+	}
+}
 
 //===================
 //
@@ -133,51 +152,39 @@ func (xs *xactions) delAt(k int) {
 	xs.v = xs.v[:l-1]
 }
 
-func (xs *xactions) renewRebalance(curversion int64, runnerCnt int) *xactRebalance {
+func (xs *xactions) renewGlobalReb(smapVersion int64, runnerCnt int) *xactRebBase {
 	xs.Lock()
 	xx := xs.findU(cmn.ActGlobalReb)
 	if xx != nil {
-		xreb := xx.(*xactRebalance)
-		if xreb.curversion > curversion {
-			glog.Errorf("(reb: %s) %d version is greater than curversion %d", xreb, xreb.curversion, curversion)
+		xGlobalReb := xx.(*xactGlobalReb)
+		if xGlobalReb.smapVersion > smapVersion {
+			glog.Errorf("(reb: %s) %d version is greater than smapVersion %d", xGlobalReb, xGlobalReb.smapVersion, smapVersion)
 			xs.Unlock()
 			return nil
 		}
-		if xreb.curversion == curversion {
-			glog.Infof("%s already running, nothing to do", xreb)
+		if xGlobalReb.smapVersion == smapVersion {
+			glog.Infof("%s already running, nothing to do", xGlobalReb)
 			xs.Unlock()
 			return nil
 		}
-		xreb.Abort()
-		for i := 0; i < xreb.runnerCnt; i++ {
-			<-xreb.confirmCh
+		xGlobalReb.Abort()
+		for i := 0; i < xGlobalReb.runnerCnt; i++ {
+			<-xGlobalReb.confirmCh
 		}
-		close(xreb.confirmCh)
+		close(xGlobalReb.confirmCh)
 	}
 	id := xs.uniqueid()
-	xreb := &xactRebalance{
-		XactBase:   *cmn.NewXactBase(id, cmn.ActGlobalReb),
-		curversion: curversion,
-		runnerCnt:  runnerCnt,
-		confirmCh:  make(chan struct{}, runnerCnt),
+	xGlobalReb := &xactGlobalReb{
+		xactRebBase: makeXactRebBase(id, globalRebType, runnerCnt),
+		smapVersion: smapVersion,
 	}
-	xs.add(xreb)
+	xs.add(xGlobalReb)
 	xs.Unlock()
-	return xreb
+	return &xGlobalReb.xactRebBase
 }
 
-// persistent mark indicating rebalancing in progress
-func (xs *xactions) rebalanceInProgress() (pmarker string) {
-	return filepath.Join(cmn.GCO.Get().Confdir, cmn.RebalanceMarker)
-}
-
-// persistent mark indicating rebalancing in progress
-func (xs *xactions) localRebalanceInProgress() (pmarker string) {
-	return filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebalanceMarker)
-}
-
-func (xs *xactions) isAbortedOrRunningRebalance() (aborted, running bool) {
-	pmarker := xs.rebalanceInProgress()
+func (xs *xactions) globalRebStatus() (aborted, running bool) {
+	pmarker := persistentMarker(globalRebType)
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
@@ -186,7 +193,7 @@ func (xs *xactions) isAbortedOrRunningRebalance() (aborted, running bool) {
 	xs.Lock()
 	xx := xs.findU(cmn.ActGlobalReb)
 	if xx != nil {
-		xreb := xx.(*xactRebalance)
+		xreb := xx.(*xactGlobalReb)
 		if !xreb.Finished() {
 			running = true
 		}
@@ -195,8 +202,8 @@ func (xs *xactions) isAbortedOrRunningRebalance() (aborted, running bool) {
 	return
 }
 
-func (xs *xactions) isAbortedOrRunningLocalRebalance() (aborted, running bool) {
-	pmarker := xs.localRebalanceInProgress()
+func (xs *xactions) localRebStatus() (aborted, running bool) {
+	pmarker := persistentMarker(localRebType)
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
@@ -205,17 +212,20 @@ func (xs *xactions) isAbortedOrRunningLocalRebalance() (aborted, running bool) {
 	xs.Lock()
 	xx := xs.findU(cmn.ActLocalReb)
 	if xx != nil {
-		running = true
+		xreb := xx.(*xactLocalReb)
+		if !xreb.Finished() {
+			running = true
+		}
 	}
 	xs.Unlock()
 	return
 }
 
-func (xs *xactions) renewLocalRebalance(runnerCnt int) *xactLocalRebalance {
+func (xs *xactions) renewLocalReb(runnerCnt int) *xactRebBase {
 	xs.Lock()
 	xx := xs.findU(cmn.ActLocalReb)
 	if xx != nil {
-		xLocalReb := xx.(*xactLocalRebalance)
+		xLocalReb := xx.(*xactLocalReb)
 		xLocalReb.Abort()
 		for i := 0; i < xLocalReb.runnerCnt; i++ {
 			<-xLocalReb.confirmCh
@@ -223,14 +233,12 @@ func (xs *xactions) renewLocalRebalance(runnerCnt int) *xactLocalRebalance {
 		close(xLocalReb.confirmCh)
 	}
 	id := xs.uniqueid()
-	xLocalReb := &xactLocalRebalance{
-		XactBase:  *cmn.NewXactBase(id, cmn.ActLocalReb),
-		runnerCnt: runnerCnt,
-		confirmCh: make(chan struct{}, runnerCnt),
+	xLocalReb := &xactLocalReb{
+		xactRebBase: makeXactRebBase(id, localRebType, runnerCnt),
 	}
 	xs.add(xLocalReb)
 	xs.Unlock()
-	return xLocalReb
+	return &xLocalReb.xactRebBase
 }
 
 func (xs *xactions) renewLRU() *xactLRU {
