@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -54,7 +53,7 @@ func (sis SysInfoStat) writeStat(f *os.File) {
 	f.WriteString(
 		strings.Join(
 			[]string{
-				sis.Timestamp.Format(time.RFC3339Nano),
+				sis.Timestamp.Format(csvTimeFormat),
 				sis.DaemonID,
 				sis.Type,
 				fmt.Sprintf("%d", (sis.MemUsed)),

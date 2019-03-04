@@ -3,8 +3,13 @@ package stats
 
 import (
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+)
+
+const (
+	csvTimeFormat = time.RFC3339Nano
 )
 
 type Stat interface {

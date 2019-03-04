@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	short     bool //if true, will skip the longer recipes
+	short     bool //if true, skips the longer recipes
 	numCycles int  //number of cycles to run, 0=infinite
 	reportDir string
 
@@ -29,7 +29,7 @@ var (
 
 func parseCmdLine() {
 	// Command line options
-	flag.BoolVar(&short, "short", false, "If true, will skip the longer recipes")
+	flag.BoolVar(&short, "short", false, "If true, skips the longer recipes")
 	flag.IntVar(&numCycles, "numcycles", 0, "Number of cycles to run, 0=infinite")
 	flag.StringVar(&reportDir, "reportdir", "", fmt.Sprintf("Folder to place report, places in '%s' if empty", report.DefaultDir))
 
@@ -59,6 +59,12 @@ func main() {
 		fmt.Println("ip specified without port")
 		return
 	}
+
+	if err := tutils.Tcping(ip + ":" + port); err != nil {
+		fmt.Printf("Cannot connect to %s:%s, reason: %v\n", ip, port, err)
+		return
+	}
+
 	soakprim.SetPrimaryURL(ip, port)
 
 	scheduler.RunShort = short

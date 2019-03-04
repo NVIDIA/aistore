@@ -20,7 +20,7 @@ var (
 		&Recipe{"Cycle Put", recCyclePut, false},
 	}
 
-	rnd = rand.New(rand.NewSource(1234))
+	rnd = rand.New(rand.NewSource(1))
 )
 
 type Recipe struct {

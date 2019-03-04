@@ -1372,6 +1372,7 @@ components:
         - xaction
         - mountpaths
         - daemoninfo
+        - sysinfo
         - bucketmd
     GetProps:
       type: string

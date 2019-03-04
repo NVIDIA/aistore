@@ -82,8 +82,8 @@ func (rs RecipeStats) writeStat(f *os.File) {
 	f.WriteString(
 		strings.Join(
 			[]string{
-				rs.BeginTime.Format(time.RFC3339Nano),
-				rs.EndTime.Format(time.RFC3339Nano),
+				rs.BeginTime.Format(csvTimeFormat),
+				rs.EndTime.Format(csvTimeFormat),
 				rs.RecipeName,
 				strconv.Itoa(rs.RecipeNum),
 				rs.OpType,

@@ -170,10 +170,10 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
 		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
-		Cksum:    cksumProps,
-		LRU:      lruProps,
-		Mirror:   mirrorProps,
-		EC:       ecProps,
+		Cksum:         cksumProps,
+		LRU:           lruProps,
+		Mirror:        mirrorProps,
+		EC:            ecProps,
 	}, nil
 }
 

@@ -248,6 +248,8 @@ Note that these are called on the api instances [cluster_api](#cluster) and [dae
 | Get proxy/target info	 | `daemon_api.get(openapi_models.GetWhat.DAEMONINFO`) | dict | 
 | Get cluster statistics (proxy) | `cluster_api.get(openapi_models.GetWhat.STATS)` | dict | 
 | Get target statistics | `daemon_api.get(openapi_models.GetWhat.STATS)` | dict | 
+| Get process info for all nodes in cluster (proxy) | `cluster_api.get(openapi_models.GetWhat.SYSINFO)` | dict | 
+| Get proxy or target process info | `daemon_api.get(openapi_models.GetWhat.SYSINFO)` | dict | 
 | Get rebalance statistics (proxy) | `cluster_api.get(openapi_models.GetWhat.XACTION, props=openapi_models.GetProps.REBALANCE)` | dict | 
 | Get prefetch statistics (proxy) | `cluster_api.get(openapi_models.GetWhat.XACTION, props=openapi_models.GetProps.PREFETCH)` | dict |
 | Get list of target's filesystems (target) | `daemon_api.get(openapi_models.GetWhat.MOUNTPATHS)` | dict | 

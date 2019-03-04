@@ -142,6 +142,8 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get proxy/target info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=daemoninfo` |
 | Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
 | Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
+| Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` | 
+| Get proxy or target process info | GET /v1/daemon | dict | `curl -X GET http://G-or-T/v1/cluster?what=sysinfo` | 
 | Get rebalance statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://G/v1/cluster?what=xaction&props=rebalance'` |
 | Get prefetch statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://G/v1/cluster?what=xaction&props=prefetch'` |
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |

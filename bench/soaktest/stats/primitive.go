@@ -55,7 +55,7 @@ func (ps *PrimitiveStat) writeStat(f *os.File) {
 		f.WriteString(
 			strings.Join(
 				[]string{
-					ps.StartTime.Format(time.RFC3339Nano),
+					ps.StartTime.Format(csvTimeFormat),
 					ps.RecipeName,
 					strconv.Itoa(ps.RecipeNum),
 					ps.ID,
@@ -86,7 +86,7 @@ func (ps *PrimitiveStat) writeStat(f *os.File) {
 	f.WriteString(
 		strings.Join(
 			[]string{
-				ps.StartTime.Format(time.RFC3339Nano),
+				ps.StartTime.Format(csvTimeFormat),
 				ps.RecipeName,
 				strconv.Itoa(ps.RecipeNum),
 				ps.ID,

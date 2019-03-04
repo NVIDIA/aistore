@@ -395,8 +395,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 // FIXME: use atime
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
-		httpReq        = req.httpReq
-		lom            = &cluster.LOM{T: r.t, FQN: req.fqn}
+		httpReq     = req.httpReq
+		lom         = &cluster.LOM{T: r.t, FQN: req.fqn}
 		bckProvider = httpReq.URL.Query().Get(cmn.URLParamBckProvider)
 	)
 	if errstr := lom.Fill(bckProvider, 0); errstr != "" {
