@@ -326,31 +326,31 @@ type ReplicationConf struct {
 }
 
 type CksumConf struct {
-	// Checksum: hashing algorithm used to check for object corruption
+	// Type of hashing algorithm used to check for object corruption
 	// Values: none, xxhash, md5, inherit
 	// Value of 'none' disables hash checking
-	Checksum string `json:"checksum"`
+	Type string `json:"type"`
 
 	// ValidateColdGet determines whether or not the checksum of received object
 	// is checked after downloading it from the cloud or next tier
-	ValidateColdGet bool `json:"validate_checksum_cold_get"`
+	ValidateColdGet bool `json:"validate_cold_get"`
 
 	// ValidateWarmGet: if enabled, the object's version (if in Cloud-based bucket)
 	// and checksum are checked. If either value fail to match, the object
 	// is removed from local storage
-	ValidateWarmGet bool `json:"validate_checksum_warm_get"`
+	ValidateWarmGet bool `json:"validate_warm_get"`
 
 	// ValidateClusterMigration determines if the migrated objects across single cluster
 	// should have their checksum validated.
 	ValidateClusterMigration bool `json:"validate_cluster_migration"`
 
-	// EnableReadRangeChecksum: Return read range checksum otherwise return entire object checksum
-	EnableReadRangeChecksum bool `json:"enable_read_range_checksum"`
+	// EnableReadRange: Return read range checksum otherwise return entire object checksum
+	EnableReadRange bool `json:"enable_read_range"`
 }
 
 type VersionConf struct {
-	ValidateWarmGet bool   `json:"validate_version_warm_get"` // True: validate object version upon warm GET
-	Versioning      string `json:"versioning"`                // types of objects versioning is enabled for: all, cloud, local, none
+	Versioning      string `json:"versioning"`        // types of objects versioning is enabled for: all, cloud, local, none
+	ValidateWarmGet bool   `json:"validate_warm_get"` // True: validate object version upon warm GET
 }
 
 type TestfspathConf struct {
@@ -558,8 +558,8 @@ func validateConfig(config *Config) (err error) {
 		return fmt.Errorf("invalid Xaction configuration %+v", config.Xaction)
 	}
 
-	if config.Cksum.Checksum != ChecksumXXHash && config.Cksum.Checksum != ChecksumNone {
-		return fmt.Errorf("invalid checksum: %s - expecting %s or %s", config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
+	if config.Cksum.Type != ChecksumXXHash && config.Cksum.Type != ChecksumNone {
+		return fmt.Errorf("invalid checksum: %s - expecting %s or %s", config.Cksum.Type, ChecksumXXHash, ChecksumNone)
 	}
 	if err := ValidateVersion(config.Ver.Versioning); err != nil {
 		return err
@@ -843,32 +843,32 @@ func setConfig(config *Config, name, value string) (errstr string) {
 		} else {
 			config.Rebalance.Enabled = v
 		}
-	case "validate_checksum_cold_get", "cksum.validate_checksum_cold_get":
+	case "validate_checksum_cold_get", "cksum.validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateColdGet = v
 		}
-	case "validate_checksum_warm_get", "cksum.validate_checksum_warm_get":
+	case "validate_checksum_warm_get", "cksum.validate_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
 			config.Cksum.ValidateWarmGet = v
 		}
-	case "enable_read_range_checksum", "cksum.enable_read_range_checksum":
+	case "enable_read_range_checksum", "cksum.enable_read_range":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {
-			config.Cksum.EnableReadRangeChecksum = v
+			config.Cksum.EnableReadRange = v
 		}
-	case "checksum", "cksum.checksum":
+	case "checksum", "cksum.type":
 		if value == ChecksumXXHash || value == ChecksumNone {
-			config.Cksum.Checksum = value
+			config.Cksum.Type = value
 		} else {
 			errstr = fmt.Sprintf("%s: invalid %s type %s (expecting %s or %s)",
 				ActSetConfig, name, value, ChecksumXXHash, ChecksumNone)
 		}
-	case "validate_version_warm_get", "version.validate_version_warm_get":
+	case "validate_version_warm_get", "version.validate_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf(fmtFailedParse, name, value, err)
 		} else {

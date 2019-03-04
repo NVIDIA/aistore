@@ -13,19 +13,19 @@ By default, buckets inherit [global configuration](/ais/setup/config.sh). Howeve
 
 Checksumming on bucket level is configured by setting bucket properties:
 
-* `cksum.checksum`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
+* `cksum.type`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
 `"inherit"` indicates that the global checksumming configuration should be used.
-* `cksum.validate_checksum_cold_get`: `true` or `false` indicate
+* `cksum.validate_cold_get`: `true` or `false` indicate
 whether to perform checksum validation during cold GET.
-* `cksum.validate_checksum_warm_get`: `true` or `false` indicate
+* `cksum.validate_warm_get`: `true` or `false` indicate
 whether to perform checksum validation during warm GET.
-* `cksum.enable_read_range_checksum`: `true` or `false` indicate whether to perform checksum validation during byte serving.
+* `cksum.enable_read_range`: `true` or `false` indicate whether to perform checksum validation during byte serving.
 
-Value for the `checksum` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise the request will be rejected.
+Value for the `type` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise the request will be rejected.
 
 Example of setting bucket properties:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"checksum": "xxhash", "validate_checksum_cold_get": true, "validate_checksum_warm_get": false, "enable_read_range_checksum": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
 ### LRU
@@ -42,7 +42,7 @@ Overriding the global configuration can be achieved by specifying the fields of 
 **NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified is defaulted to the data type's zero value.
 Example of setting bucket properties:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"checksum":"none","validate_checksum_cold_get":true,"validate_checksum_warm_get":true,"enable_read_range_checksum":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
 To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:

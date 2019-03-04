@@ -259,7 +259,7 @@ func (tctx *testContext) setup() {
 	ctx.t = cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
 		LBmap: map[string]*cmn.BucketProps{
 			testBucket: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Checksum: cmn.ChecksumXXHash},
+				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
 			},
 		},
 		CBmap:   map[string]*cmn.BucketProps{},

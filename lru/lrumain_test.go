@@ -75,7 +75,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 	bo := cluster.BownerMock{BMD: cluster.BMD{
 		LBmap: map[string]*cmn.BucketProps{
 			bucketName: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Checksum: cmn.ChecksumNone},
+				Cksum: cmn.CksumConf{Type: cmn.ChecksumNone},
 				LRU:   cmn.LRUConf{Enabled: true},
 			},
 		},

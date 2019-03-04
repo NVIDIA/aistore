@@ -20,7 +20,7 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	globalConfig := getDaemonConfig(t, proxyURL)
 
 	return &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		Cksum: cmn.CksumConf{Type: cmn.ChecksumInherit},
 		LRU:   globalConfig.LRU,
 	}
 }
@@ -36,9 +36,9 @@ func TestResetBucketProps(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
-	bucketProps.Cksum.Checksum = cmn.ChecksumNone
+	bucketProps.Cksum.Type = cmn.ChecksumNone
 	bucketProps.Cksum.ValidateWarmGet = true
-	bucketProps.Cksum.EnableReadRangeChecksum = true
+	bucketProps.Cksum.EnableReadRange = true
 
 	globalProps.CloudProvider = cmn.ProviderAIS
 	globalProps.Cksum = globalConfig.Cksum

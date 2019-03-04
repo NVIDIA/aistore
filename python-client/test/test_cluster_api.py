@@ -66,7 +66,7 @@ class TestClusterApi(unittest.TestCase):
         """
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "enable_read_range_checksum", "true")
+            "enable_read_range", "true")
         self.cluster.perform_operation(input_params)
         target_ids = self.daemon.get(self.models.GetWhat.SMAP)["tmap"].keys()
         target_ports = [target_id.split(":")[1] for target_id in target_ids]
@@ -77,13 +77,13 @@ class TestClusterApi(unittest.TestCase):
 
             config = DictParser.parse(self.daemon.get(
                 self.models.GetWhat.CONFIG))
-            self.assertTrue(config.cksum.enable_read_range_checksum,
+            self.assertTrue(config.cksum.enable_read_range,
                             "Set config value not getting reflected.")
 
         self.cluster.api_client.configuration.host = old_host
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "enable_read_range_checksum", "false")
+            "enable_read_range", "false")
         self.cluster.perform_operation(input_params)
 
     @unittest.skip("Running this test will cause the cluster to shutdown.")

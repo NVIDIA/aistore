@@ -418,7 +418,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	oldVersioning := config.Ver.Versioning
 
 	if oldChkVersion != chkVersion {
-		setClusterConfig(t, proxyURL, "validate_version_warm_get", chkVersion)
+		setClusterConfig(t, proxyURL, "version.validate_warm_get", chkVersion)
 	}
 	if oldVersioning != versioning {
 		setClusterConfig(t, proxyURL, "versioning", versioning)
@@ -428,7 +428,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setClusterConfig(t, proxyURL, "validate_version_warm_get", oldChkVersion)
+			setClusterConfig(t, proxyURL, "version.validate_warm_get", oldChkVersion)
 		}
 		if oldVersioning != versioning {
 			setClusterConfig(t, proxyURL, "versioning", oldVersioning)

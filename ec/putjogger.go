@@ -42,7 +42,7 @@ func (c *putJogger) run() {
 	for {
 		select {
 		case req := <-c.workCh:
-			ecConf := req.LOM.Bprops.EC
+			ecConf := req.LOM.BckProps.EC
 
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
 			memRequired := req.LOM.Size * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
@@ -112,7 +112,7 @@ func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
-	ecConf := req.LOM.Bprops.EC
+	ecConf := req.LOM.BckProps.EC
 	_, cksumValue := req.LOM.Cksum.Get()
 	meta := &Metadata{
 		Size:     req.LOM.Size,
@@ -201,7 +201,7 @@ func (c *putJogger) cleanup(req *Request) error {
 // uploads the main replica
 func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	var (
-		copies = req.LOM.Bprops.EC.ParitySlices
+		copies = req.LOM.BckProps.EC.ParitySlices
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
@@ -379,7 +379,7 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 // Returns:
 // * list of all slices, sent to targets
 func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
-	ecConf := req.LOM.Bprops.EC
+	ecConf := req.LOM.BckProps.EC
 	totalCnt := ecConf.ParitySlices + ecConf.DataSlices
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes

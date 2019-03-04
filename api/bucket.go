@@ -21,8 +21,8 @@ import (
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
 	querystr := ""
-	if props.Cksum.Checksum == "" {
-		props.Cksum.Checksum = cmn.ChecksumInherit
+	if props.Cksum.Type == "" {
+		props.Cksum.Type = cmn.ChecksumInherit
 	}
 
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
@@ -110,7 +110,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 	}
 
 	cksumProps := cmn.CksumConf{
-		Checksum: r.Header.Get(cmn.HeaderBucketChecksumType),
+		Type: r.Header.Get(cmn.HeaderBucketChecksumType),
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
 		cksumProps.ValidateColdGet = b
@@ -119,7 +119,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 		cksumProps.ValidateWarmGet = b
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateRange)); err == nil {
-		cksumProps.EnableReadRangeChecksum = b
+		cksumProps.EnableReadRange = b
 	}
 
 	lruProps := cmn.LRUConf{

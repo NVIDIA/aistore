@@ -141,23 +141,23 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		CloudProvider: cmn.ProviderAIS,
 		NextTierURL:   "http://foo.com",
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket3", false, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket4", false, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 
@@ -576,14 +576,14 @@ func TestMetaSyncData(t *testing.T) {
 	bucketmd.add("bucket1", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		NextTierURL:   "http://localhost:8082",
 		Cksum: cmn.CksumConf{
-			Checksum: cmn.ChecksumInherit,
+			Type: cmn.ChecksumInherit,
 		},
 	})
 	b, err = bucketmd.marshal()
@@ -604,7 +604,7 @@ func TestMetaSyncData(t *testing.T) {
 	// after rejecting a few sync requests
 	bucketmd = bucketmd.clone()
 	bprops := &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		Cksum: cmn.CksumConf{Type: cmn.ChecksumInherit},
 		LRU:   cmn.GCO.Get().LRU,
 	}
 	bucketmd.add("bucket3", true, bprops)

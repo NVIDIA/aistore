@@ -88,7 +88,7 @@ const (
 
 // Header Key enum
 // Constant values conventions:
-// - the constant equals the path of a value in cmn.BucketProps structure
+// - the constant equals the path of a value in BucketProps structure
 // - if a property is a root one, then the constant is just a lowercased propery name
 // - if a property is nested, then its value is propertie's parent and propery
 //	 name separated with a dash
@@ -104,23 +104,23 @@ const (
 	HeaderWritePolicy = "write_policy"  // Policy used for writing in a AIStore multi-tier environment
 
 	// bucket props
-	HeaderBucketChecksumType    = "cksum.checksum"                   // Checksum type used for objects in the bucket
-	HeaderBucketValidateColdGet = "cksum.validate_checksum_cold_get" // Cold get validation policy used for objects in the bucket
-	HeaderBucketValidateWarmGet = "cksum.validate_checksum_warm_get" // Warm get validation policy used for objects in the bucket
-	HeaderBucketValidateRange   = "cksum.enable_read_range_checksum" // Byte range validation policy used for objects in the bucket
-	HeaderBucketLRUEnabled      = "lru.enabled"                      // LRU is run on a bucket only if this field is true
-	HeaderBucketLRULowWM        = "lru.lowwm"                        // Capacity usage low water mark
-	HeaderBucketLRUHighWM       = "lru.highwm"                       // Capacity usage high water mark
-	HeaderBucketAtimeCacheMax   = "lru.atime_cache_max"              // Maximum Number of Entires in the Cache
-	HeaderBucketDontEvictTime   = "lru.dont_evict_time"              // Enforces an eviction-free time period between [atime, atime+dontevicttime]
-	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"            // Minimum time to update the capacity
-	HeaderBucketMirrorEnabled   = "mirror.enabled"                   // will only generate local copies when set to true
-	HeaderBucketCopies          = "mirror.copies"                    // # local copies
-	HeaderBucketMirrorThresh    = "mirror.util_thresh"               // utilizations are considered equivalent when below this threshold
-	HeaderBucketECEnabled       = "ec.enabled"                       // EC is on for a bucket
-	HeaderBucketECMinSize       = "ec.objsize_limit"                 // Objects under MinSize copied instead of being EC'ed
-	HeaderBucketECData          = "ec.data_slices"                   // number of data chunks for EC
-	HeaderBucketECParity        = "ec.parity_slices"                 // number of parity chunks for EC/copies for small files
+	HeaderBucketChecksumType    = "cksum.type"              // Checksum type used for objects in the bucket
+	HeaderBucketValidateColdGet = "cksum.validate_cold_get" // Cold get validation policy used for objects in the bucket
+	HeaderBucketValidateWarmGet = "cksum.validate_warm_get" // Warm get validation policy used for objects in the bucket
+	HeaderBucketValidateRange   = "cksum.enable_read_range" // Byte range validation policy used for objects in the bucket
+	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true
+	HeaderBucketLRULowWM        = "lru.lowwm"               // Capacity usage low water mark
+	HeaderBucketLRUHighWM       = "lru.highwm"              // Capacity usage high water mark
+	HeaderBucketAtimeCacheMax   = "lru.atime_cache_max"     // Maximum Number of Entires in the Cache
+	HeaderBucketDontEvictTime   = "lru.dont_evict_time"     // Enforces an eviction-free time period between [atime, atime+dontevicttime]
+	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"   // Minimum time to update the capacity
+	HeaderBucketMirrorEnabled   = "mirror.enabled"          // will only generate local copies when set to true
+	HeaderBucketCopies          = "mirror.copies"           // # local copies
+	HeaderBucketMirrorThresh    = "mirror.util_thresh"      // utilizations are considered equivalent when below this threshold
+	HeaderBucketECEnabled       = "ec.enabled"              // EC is on for a bucket
+	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
+	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
+	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
 
 	// object meta
 	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)

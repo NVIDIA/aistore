@@ -144,10 +144,10 @@ class TestBucketApi(unittest.TestCase):
         bucket_name = self.__create_local_bucket()
         input_params = self.models.InputParameters(self.models.Actions.SETPROPS)
         cksum_conf = self.models.BucketPropsCksum(
-            checksum="inherit",
-            validate_checksum_cold_get=False,
-            validate_checksum_warm_get=False,
-            enable_read_range_checksum=False,
+            type="inherit",
+            validate_cold_get=False,
+            validate_warm_get=False,
+            enable_read_range=False,
         )
         input_params.value = self.models.BucketProps(
             self.models.CloudProvider.AIS,

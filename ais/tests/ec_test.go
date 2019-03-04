@@ -264,7 +264,7 @@ func TestECChange(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,
@@ -363,7 +363,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,
@@ -568,7 +568,7 @@ func TestECStress(t *testing.T) {
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(seed))
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,
@@ -771,7 +771,7 @@ func TestECExtraStress(t *testing.T) {
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(seed))
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,
@@ -897,7 +897,7 @@ func TestECXattrs(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.Versioning = "all"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
@@ -1066,7 +1066,7 @@ func TestECEmergencyTarget(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,
@@ -1242,7 +1242,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.Cksum.Checksum = "inherit"
+	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
 		Enabled:      true,
 		ObjSizeLimit: ecObjLimit,

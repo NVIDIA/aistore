@@ -106,7 +106,7 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 }
 
 func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
-	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
+	if lom.BckProps == nil || !lom.BckProps.EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 	cmn.Assert(lom.FQN != "")
@@ -122,7 +122,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 
 	req := &ec.Request{
 		Action: ec.ActSplit,
-		IsCopy: ec.IsECCopy(lom.Size, &lom.Bprops.EC),
+		IsCopy: ec.IsECCopy(lom.Size, &lom.BckProps.EC),
 		LOM:    lom,
 	}
 	if mgr.xact == nil || mgr.xact.Finished() {
@@ -137,7 +137,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 }
 
 func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
-	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
+	if lom.BckProps == nil || !lom.BckProps.EC.Enabled {
 		return
 	}
 	cmn.Assert(lom.FQN != "")
@@ -153,7 +153,7 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
-	if lom.Bprops == nil || !lom.Bprops.EC.Enabled {
+	if lom.BckProps == nil || !lom.BckProps.EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 

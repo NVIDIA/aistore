@@ -61,15 +61,15 @@ cat > $CONFFILE <<EOL
 		"dest_retry_time": "2m"
 	},
 	"cksum": {
-		"checksum":                   "xxhash",
-		"validate_checksum_cold_get": true,
-		"validate_checksum_warm_get": false,
+		"type":                       "xxhash",
+		"validate_cold_get":          true,
+		"validate_warm_get":          false,
 		"validate_cluster_migration": false,
-		"enable_read_range_checksum": false
+		"enable_read_range":          false
 	},
 	"version": {
-		"validate_version_warm_get": false,
-		"versioning":                "all"
+		"versioning":        "all",
+		"validate_warm_get": false
 	},
 	"fspaths": {
 		$FSPATHS

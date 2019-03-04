@@ -50,9 +50,9 @@ type (
 		Bucketmd    *BMD
 		AtimeRespCh chan *atime.Response
 		Config      *cmn.Config
-		Cksumcfg    *cmn.CksumConf
-		Mirror      *cmn.MirrorConf
-		Bprops      *cmn.BucketProps
+		CksumConf   *cmn.CksumConf
+		MirrorConf  *cmn.MirrorConf
+		BckProps    *cmn.BucketProps
 		// names
 		FQN             string
 		Bucket, Objname string
@@ -215,17 +215,17 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s)", lom, cprovider)
 			return
 		}
-		lom.Cksumcfg = &lom.Config.Cksum
-		lom.Mirror = &lom.Config.Mirror
-		if lom.Bprops != nil {
-			if lom.Bprops.Cksum.Checksum != cmn.ChecksumInherit {
-				lom.Cksumcfg = &lom.Bprops.Cksum
+		lom.CksumConf = &lom.Config.Cksum
+		lom.MirrorConf = &lom.Config.Mirror
+		if lom.BckProps != nil {
+			if lom.BckProps.Cksum.Type != cmn.ChecksumInherit {
+				lom.CksumConf = &lom.BckProps.Cksum
 			}
-			lom.Mirror = &lom.Bprops.Mirror
+			lom.MirrorConf = &lom.BckProps.Mirror
 		}
 	}
 	// [local copy] always enforce LomCopy if the following is true
-	if (lom.Misplaced() || action&LomFstat != 0) && lom.Bprops != nil && lom.Bprops.Mirror.Copies != 0 {
+	if (lom.Misplaced() || action&LomFstat != 0) && lom.BckProps != nil && lom.BckProps.Mirror.Copies != 0 {
 		action |= LomCopy
 	}
 	//
@@ -345,7 +345,7 @@ func (lom *LOM) ChooseMirror() (fqn string) {
 	}
 	_, currMain := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
 	_, currRepl := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-	if currRepl.Max < currMain.Max-float32(lom.Mirror.UtilThresh) && currRepl.Min <= currMain.Min {
+	if currRepl.Max < currMain.Max-float32(lom.MirrorConf.UtilThresh) && currRepl.Min <= currMain.Min {
 		fqn = lom.CopyFQN
 		if glog.V(4) {
 			glog.Infof("GET %s from a mirror %s", lom, parsedCpyFQN.MpathInfo)
@@ -382,7 +382,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 	if err := lom.initBckIsLocal(bckProvider); err != nil {
 		return err.Error()
 	}
-	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)
+	lom.BckProps, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.FQN == "" {
 		lom.FQN, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
 	}
@@ -442,12 +442,12 @@ func (lom *LOM) checksum(action int) (errstr string) {
 	var (
 		storedCksum, computedCksum string
 		b                          []byte
-		algo                       = lom.Cksumcfg.Checksum
+		cksumType                  = lom.CksumConf.Type
 	)
-	if algo == cmn.ChecksumNone {
+	if cksumType == cmn.ChecksumNone {
 		return
 	}
-	cmn.AssertMsg(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
+	cmn.AssertMsg(cksumType == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", cksumType))
 	if lom.Cksum != nil {
 		_, storedCksum = lom.Cksum.Get()
 	} else if b, errstr = fs.GetXattr(lom.FQN, cmn.XattrXXHash); errstr != "" {
@@ -455,7 +455,7 @@ func (lom *LOM) checksum(action int) (errstr string) {
 		return
 	} else if b != nil {
 		storedCksum = string(b)
-		lom.Cksum = cmn.NewCksum(algo, storedCksum)
+		lom.Cksum = cmn.NewCksum(cksumType, storedCksum)
 	} else {
 		glog.Warningf("%s is not checksummed", lom)
 	}
@@ -472,14 +472,14 @@ func (lom *LOM) checksum(action int) (errstr string) {
 			lom.T.FSHC(errors.New(errstr), lom.FQN)
 			return
 		}
-		lom.Cksum = cmn.NewCksum(algo, computedCksum)
+		lom.Cksum = cmn.NewCksum(cksumType, computedCksum)
 		return
 	}
 	if storedCksum != "" && action&LomCksumPresentRecomp != 0 {
 		if computedCksum, errstr = lom.recomputeXXHash(lom.FQN, lom.Size); errstr != "" {
 			return
 		}
-		v := cmn.NewCksum(algo, computedCksum)
+		v := cmn.NewCksum(cksumType, computedCksum)
 		if !cmn.EqCksum(lom.Cksum, v) {
 			lom.BadCksum = true
 			errstr = lom.BadCksumErr(v)

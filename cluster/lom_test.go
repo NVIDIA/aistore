@@ -51,10 +51,10 @@ var _ = Describe("LOM", func() {
 		LBmap: map[string]*cmn.BucketProps{
 			// Map local buckets here referenced by test lom
 			bucketLocalA: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Checksum: cmn.ChecksumNone},
+				Cksum: cmn.CksumConf{Type: cmn.ChecksumNone},
 			},
 			bucketLocalB: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Checksum: cmn.ChecksumXXHash},
+				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
 				LRU:   cmn.LRUConf{Enabled: true},
 			},
 			sameBucketName: &cmn.BucketProps{},

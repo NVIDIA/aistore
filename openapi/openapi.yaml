@@ -1258,15 +1258,15 @@ components:
     BucketPropsCksum:
       type: object
       properties:
-        checksum: 
+        type: 
           type: string
           enum: [xxhash, none, inherit]
           default: inherit
-        validate_checksum_cold_get:
+        validate_cold_get:
           type: boolean
-        validate_checksum_warm_get:
+        validate_warm_get:
           type: boolean
-        enable_read_range_checksum:
+        enable_read_range:
           type: boolean
     BucketNames:
       type: object
@@ -1613,21 +1613,21 @@ components:
         cksum:
           type: object
           properties:
-            checksum:
+            type:
               type: string
-            validate_checksum_cold_get:
+            validate_cold_get:
               type: boolean
-            validate_checksum_warm_get:
+            validate_warm_get:
               type: boolean
-            enable_read_range_checksum:
+            enable_read_range:
               type: boolean
         version:
           type: object
           properties:
-            validate_version_warm_get:
-              type: boolean
             versioning:
               type: string
+            validate_warm_get:
+              type: boolean
         fspaths:
           type: object
           additionalProperties:

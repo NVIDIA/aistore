@@ -696,7 +696,7 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bucketProps := &cmn.BucketProps{
-		Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
 		LRU:    cmn.GCO.Get().LRU,
 		Mirror: config.Mirror,
 	}
@@ -887,7 +887,7 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	if !exists {
 		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
 			LRU:    config.LRU,
 			Mirror: config.Mirror,
 		}
@@ -1029,7 +1029,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		cmn.Assert(!proxyLocal)
 		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
 			LRU:    config.LRU,
 			Mirror: config.Mirror,
 		}
@@ -1064,7 +1064,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
 			LRU:    config.LRU,
 			Mirror: config.Mirror,
 		}
@@ -2977,10 +2977,10 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 			props.WritePolicy = cmn.RWPolicyNextTier
 		}
 	}
-	if props.Cksum.Checksum != cmn.ChecksumInherit &&
-		props.Cksum.Checksum != cmn.ChecksumNone && props.Cksum.Checksum != cmn.ChecksumXXHash {
+	if props.Cksum.Type != cmn.ChecksumInherit &&
+		props.Cksum.Type != cmn.ChecksumNone && props.Cksum.Type != cmn.ChecksumXXHash {
 		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
-			props.Cksum.Checksum, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
+			props.Cksum.Type, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
 	}
 	lwm, hwm := props.LRU.LowWM, props.LRU.HighWM
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
@@ -3112,15 +3112,15 @@ func (p *proxyrunner) copyBucketProps(bprops /*to*/, nprops /*from*/ *cmn.Bucket
 	if nprops.WritePolicy != "" {
 		bprops.WritePolicy = nprops.WritePolicy
 	}
-	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, bprops.Cksum.Checksum, nprops.Cksum.Checksum) {
+	if rechecksumRequired(cmn.GCO.Get().Cksum.Type, bprops.Cksum.Type, nprops.Cksum.Type) {
 		go p.notifyTargetsRechecksum(bucket)
 	}
-	if nprops.Cksum.Checksum != "" {
-		bprops.Cksum.Checksum = nprops.Cksum.Checksum
-		if nprops.Cksum.Checksum != cmn.ChecksumInherit {
+	if nprops.Cksum.Type != "" {
+		bprops.Cksum.Type = nprops.Cksum.Type
+		if nprops.Cksum.Type != cmn.ChecksumInherit {
 			bprops.Cksum.ValidateColdGet = nprops.Cksum.ValidateColdGet
 			bprops.Cksum.ValidateWarmGet = nprops.Cksum.ValidateWarmGet
-			bprops.Cksum.EnableReadRangeChecksum = nprops.Cksum.EnableReadRangeChecksum
+			bprops.Cksum.EnableReadRange = nprops.Cksum.EnableReadRange
 		}
 	}
 	bprops.LRU.LowWM = nprops.LRU.LowWM // can't conditionally assign if value != 0 since 0 is valid

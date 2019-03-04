@@ -642,7 +642,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if lom.Mirror.Enabled {
+	if lom.MirrorConf.Enabled {
 		if errstr = lom.Fill(bckProvider, cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
@@ -697,7 +697,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// checksum validation, if requested
-	if !coldGet && lom.Cksumcfg.ValidateWarmGet {
+	if !coldGet && lom.CksumConf.ValidateWarmGet {
 		errstr = lom.Fill(bckProvider, cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 		if lom.BadCksum {
 			glog.Errorln(errstr)
@@ -840,7 +840,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}()
 
-	cksumRange := lom.Cksumcfg.Checksum != cmn.ChecksumNone && rangeLen > 0 && lom.Cksumcfg.EnableReadRangeChecksum
+	cksumRange := lom.CksumConf.Type != cmn.ChecksumNone && rangeLen > 0 && lom.CksumConf.EnableReadRange
 	hdr := w.Header()
 
 	if lom.Cksum != nil && !cksumRange {
@@ -902,7 +902,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 			}
 			reader = rangeReader
-			hdr.Add(cmn.HeaderObjCksumType, lom.Cksumcfg.Checksum)
+			hdr.Add(cmn.HeaderObjCksumType, lom.CksumConf.Type)
 			hdr.Add(cmn.HeaderObjCksumVal, cksum)
 		} else {
 			reader = io.NewSectionReader(file, rangeOff, rangeLen)
@@ -1307,19 +1307,19 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config := cmn.GCO.Get()
-	cksumcfg := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if ok && props.Cksum.Checksum != cmn.ChecksumInherit {
-		cksumcfg = &props.Cksum
+	cksumConf := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
+	if ok && props.Cksum.Type != cmn.ChecksumInherit {
+		cksumConf = &props.Cksum
 	}
 	// transfer bucket props via http header;
 	// (it is totally legal for Cloud buckets to not have locally cached props)
 	hdr.Add(cmn.HeaderNextTierURL, props.NextTierURL)
 	hdr.Add(cmn.HeaderReadPolicy, props.ReadPolicy)
 	hdr.Add(cmn.HeaderWritePolicy, props.WritePolicy)
-	hdr.Add(cmn.HeaderBucketChecksumType, cksumcfg.Checksum)
-	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
-	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
-	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
+	hdr.Add(cmn.HeaderBucketChecksumType, cksumConf.Type)
+	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
+	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
+	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumConf.EnableReadRange))
 	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
 	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.LRU.AtimeCacheMax, 10))
@@ -1705,14 +1705,14 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 
 // TODO
 func (t *targetrunner) getFromTier(lom *cluster.LOM) (ok bool) {
-	if lom.Bprops == nil || lom.Bprops.NextTierURL == "" {
+	if lom.BckProps == nil || lom.BckProps.NextTierURL == "" {
 		return
 	}
-	inNextTier, _, _ := t.objectInNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname)
+	inNextTier, _, _ := t.objectInNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname)
 	if !inNextTier {
 		return
 	}
-	props, errstr, _ := t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, lom.FQN)
+	props, errstr, _ := t.getObjectNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname, lom.FQN)
 	if errstr == "" {
 		lom.RestoredReceived(props)
 		ok = true
@@ -1753,7 +1753,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 				coldGet = vchanged
 			}
 		}
-		if !coldGet && lom.Cksumcfg.ValidateWarmGet {
+		if !coldGet && lom.CksumConf.ValidateWarmGet {
 			errstr := lom.Fill("", cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 			if lom.BadCksum {
 				coldGet = true
@@ -1776,11 +1776,11 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	//
 	// next tier if
 	//
-	if lom.Bprops != nil && lom.Bprops.NextTierURL != "" && lom.Bprops.ReadPolicy == cmn.RWPolicyNextTier {
+	if lom.BckProps != nil && lom.BckProps.NextTierURL != "" && lom.BckProps.ReadPolicy == cmn.RWPolicyNextTier {
 		var inNextTier bool
-		if inNextTier, errstr, errcode = t.objectInNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname); errstr == "" {
+		if inNextTier, errstr, errcode = t.objectInNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname); errstr == "" {
 			if inNextTier {
-				if props, errstr, errcode = t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, workFQN); errstr == "" {
+				if props, errstr, errcode = t.getObjectNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname, workFQN); errstr == "" {
 					coldGet = false
 				}
 			}
@@ -2415,7 +2415,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 }
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
-	if !lom.Mirror.Enabled || dryRun.disk {
+	if !lom.MirrorConf.Enabled || dryRun.disk {
 		return
 	}
 
@@ -3022,11 +3022,11 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		hashes              []hash.Hash
 	)
 
-	if !roi.cold && roi.lom.Cksumcfg.Checksum != cmn.ChecksumNone {
-		checkCksumType = roi.lom.Cksumcfg.Checksum
+	if !roi.cold && roi.lom.CksumConf.Type != cmn.ChecksumNone {
+		checkCksumType = roi.lom.CksumConf.Type
 		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
 
-		if !roi.migrated || roi.lom.Cksumcfg.ValidateClusterMigration {
+		if !roi.migrated || roi.lom.CksumConf.ValidateClusterMigration {
 			saveHash = xxhash.New64()
 			hashes = []hash.Hash{saveHash}
 
@@ -3049,7 +3049,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		hashes = []hash.Hash{saveHash}
 
 		// if configured and the cksum is provied we should also check md5 hash (aws, gcp)
-		if roi.lom.Cksumcfg.ValidateColdGet && roi.cksumToCheck != nil {
+		if roi.lom.CksumConf.ValidateColdGet && roi.cksumToCheck != nil {
 			expectedCksum = roi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
 			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5, checkCksumType)
