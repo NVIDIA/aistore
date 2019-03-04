@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -346,7 +345,6 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	}
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		sema        = make(chan struct{}, semaCnt)
@@ -357,11 +355,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -552,7 +547,6 @@ func TestECStress(t *testing.T) {
 	)
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
@@ -566,11 +560,8 @@ func TestECStress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
@@ -759,7 +750,6 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		waitAllTime = time.Minute * 4              // should be enough for all object to complete EC
@@ -773,11 +763,8 @@ func TestECExtraStress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
@@ -893,7 +880,6 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 	)
@@ -903,11 +889,8 @@ func TestECXattrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -1062,7 +1045,6 @@ func TestECEmergencyTarget(t *testing.T) {
 	}
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
@@ -1073,11 +1055,8 @@ func TestECEmergencyTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
 	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
 
@@ -1232,7 +1211,6 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 
 	var (
-		sgl         *memsys.SGL
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		baseParams  = tutils.BaseAPIParams(proxyURL)
@@ -1253,11 +1231,8 @@ func TestECEmergencyMpath(t *testing.T) {
 		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(0)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
 	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
 	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
 

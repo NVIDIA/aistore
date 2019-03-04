@@ -164,7 +164,6 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 func TestFSCheckerDetection(t *testing.T) {
 	const filesize = 64 * 1024
 	var (
-		sgl        *memsys.SGL
 		seed       = baseseed + 300
 		numObjs    = 100
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
@@ -216,10 +215,8 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 
 	// generate some filenames to PUT to them in a loop
 	generateRandomData(t, seed, numObjs)

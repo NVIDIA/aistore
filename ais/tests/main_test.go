@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -205,7 +204,6 @@ func Test_putdeleteRange(t *testing.T) {
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 		objSize      = 16 * 1024
 	)
-	var sgl *memsys.SGL
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 
 	if err := cmn.CreateDir(DeleteDir); err != nil {
@@ -218,10 +216,8 @@ func Test_putdeleteRange(t *testing.T) {
 	errCh := make(chan error, numfiles*5)
 	objsPutCh := make(chan string, numfiles)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(objSize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(objSize)
+	defer sgl.Free()
 	objList := make([]string, 0, numfiles)
 	for i := 0; i < numfiles/2; i++ {
 		fname := fmt.Sprintf("a-%04d", i)
@@ -317,11 +313,6 @@ func Test_putdeleteRange(t *testing.T) {
 		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
 	}
 
-	if usingFile {
-		for name := range objsPutCh {
-			os.Remove(filepath.Join(DeleteDir, name))
-		}
-	}
 	num := 0
 	for _, entry := range bktlst.Entries {
 		keynameChans[num%numworkers] <- entry.Name
@@ -343,7 +334,6 @@ func Test_putdelete(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	var sgl *memsys.SGL
 	if err := cmn.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
@@ -356,10 +346,8 @@ func Test_putdelete(t *testing.T) {
 		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, clibucket, DeleteDir, readerType, DeleteStr, filesize, numfiles, errCh, filesPutCh, sgl)
 	close(filesPutCh)
 	selectErr(errCh, "put", t, true)
@@ -381,10 +369,6 @@ func Test_putdelete(t *testing.T) {
 
 	num := 0
 	for name := range filesPutCh {
-		if usingFile {
-			os.Remove(filepath.Join(DeleteDir, name))
-		}
-
 		keynameChans[num%numworkers] <- filepath.Join(DeleteStr, name)
 		num++
 	}
@@ -777,7 +761,6 @@ func Test_coldgetmd5(t *testing.T) {
 		wg         = &sync.WaitGroup{}
 		bucket     = clibucket
 		totalsize  = numPuts * largefilesize
-		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
@@ -793,10 +776,8 @@ func Test_coldgetmd5(t *testing.T) {
 	config := getDaemonConfig(t, proxyURL)
 	bcoldget := config.Cksum.ValidateColdGet
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ColdValidStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
@@ -832,10 +813,6 @@ func Test_coldgetmd5(t *testing.T) {
 cleanup:
 	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", bcoldget)
 	for _, fn := range fileslist {
-		if usingFile {
-			_ = os.Remove(filepath.Join(LocalSrcDir, fn))
-		}
-
 		wg.Add(1)
 		go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, !testing.Verbose())
 	}
@@ -1157,7 +1134,6 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		numFiles    = 3
 		errCh       = make(chan error, numFiles*5)
 		fileNameCh  = make(chan string, numfiles)
-		sgl         *memsys.SGL
 		fqn         string
 		fileName    string
 		oldFileInfo os.FileInfo
@@ -1173,11 +1149,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if tutils.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
-
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(fileSize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
 
 	tutils.Logf("Creating %d objects\n", numFiles)
 	tutils.PutRandObjs(proxyURL, clibucket, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
@@ -1259,10 +1232,6 @@ cleanup:
 	setClusterConfig(t, proxyURL, "validate_checksum_warm_get", oldWarmGet)
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
-		if usingFile {
-			_ = os.Remove(filepath.Join(LocalSrcDir, fn))
-		}
-
 		wg.Add(1)
 		go tutils.Del(proxyURL, clibucket, fn, "", wg, errCh, !testing.Verbose())
 	}
@@ -1282,7 +1251,6 @@ func Test_evictCloudBucket(t *testing.T) {
 		err        error
 		wg         = &sync.WaitGroup{}
 		bucket     = clibucket
-		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bProps     *cmn.BucketProps
 		query      = url.Values{}
@@ -1311,10 +1279,8 @@ func Test_evictCloudBucket(t *testing.T) {
 		resetBucketProps(proxyURL, clibucket, t)
 	}()
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, EvictCBStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
@@ -1379,7 +1345,6 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		numFiles   = 3
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
-		sgl        *memsys.SGL
 		bucketName = TestLocalBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		fqn        string
@@ -1392,12 +1357,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
-
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(fileSize)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucketName, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, false)
 
@@ -1491,17 +1452,13 @@ func TestRangeRead(t *testing.T) {
 		numFiles   = 1
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, numFiles)
-		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bucketName = clibucket
 		fileName   string
 	)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(fileSize)
-		defer sgl.Free()
-	}
-
+	sgl := tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	tutils.PutRandObjs(proxyURL, bucketName, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, false)
@@ -1540,10 +1497,6 @@ func TestRangeRead(t *testing.T) {
 cleanup:
 	tutils.Logln("Cleaning up...")
 	wg := &sync.WaitGroup{}
-
-	if usingFile {
-		_ = os.Remove(filepath.Join(LocalSrcDir, fileName))
-	}
 
 	wg.Add(1)
 	go tutils.Del(proxyURL, clibucket, filepath.Join(RangeGetStr, fileName), "", wg, errCh, !testing.Verbose())
@@ -1670,7 +1623,6 @@ func Test_checksum(t *testing.T) {
 		bucket      = clibucket
 		start, curr time.Time
 		duration    time.Duration
-		sgl         *memsys.SGL
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 	)
@@ -1686,10 +1638,8 @@ func Test_checksum(t *testing.T) {
 	ocoldget := config.Cksum.ValidateColdGet
 	ochksum := config.Cksum.Checksum
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ChksumValidStr, filesize, int(numPuts), errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
@@ -1774,13 +1724,6 @@ func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []s
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
-		if usingFile {
-			err := os.Remove(filepath.Join(LocalSrcDir, fn))
-			if err != nil {
-				errCh <- err
-			}
-		}
-
 		wg.Add(1)
 		go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, true)
 	}

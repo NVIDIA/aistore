@@ -7,8 +7,6 @@ package ais_test
 import (
 	"fmt"
 	"math/rand"
-	"os"
-	"path"
 	"sync"
 	"testing"
 	"time"
@@ -55,12 +53,6 @@ func Test_smoke(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	errCh := make(chan error, len(objSizes)*len(ratios)*numops*numworkers)
 	for file := range fp {
-		if usingFile {
-			err := os.Remove(path.Join(SmokeDir, file))
-			if err != nil {
-				t.Error(err)
-			}
-		}
 		wg.Add(1)
 		go tutils.Del(proxyURL, clibucket, "smoke/"+file, "", wg, errCh, true)
 	}
@@ -88,26 +80,20 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, bseed
 	)
 
 	// Get the workers started
-	if usingSG {
-		for i := 0; i < numworkers; i++ {
-			sgls[i] = tutils.Mem2.NewSGL(objSize)
-		}
-		defer func() {
-			for _, sgl := range sgls {
-				sgl.Free()
-			}
-		}()
+	for i := 0; i < numworkers; i++ {
+		sgls[i] = tutils.Mem2.NewSGL(objSize)
 	}
+	defer func() {
+		for _, sgl := range sgls {
+			sgl.Free()
+		}
+	}()
 
 	for i := 0; i < numworkers; i++ {
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
 			go func(i int) {
-				var sgl *memsys.SGL
-				if usingSG {
-					sgl = sgls[i]
-				}
-
+				sgl := sgls[i]
 				tutils.PutRandObjs(proxyURL, clibucket, SmokeDir, readerType, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, sgl)
 				wg.Done()
 			}(i)

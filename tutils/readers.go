@@ -26,8 +26,6 @@ const (
 	ReaderTypeSG = "sg"
 	// ReaderTypeRand defines the name for rand reader
 	ReaderTypeRand = "rand"
-	// ReaderTypeInMem defines the name for inmem reader
-	ReaderTypeInMem = "inmem"
 )
 
 // Reader is the interface a client works with to read in data and send to a HTTP server
@@ -183,14 +181,6 @@ func (rr *rrLimited) Read(p []byte) (n int, err error) {
 	return
 }
 
-type inMemReader struct {
-	bytes.Reader
-	data   *bytes.Buffer
-	xxHash string
-}
-
-var _ Reader = &inMemReader{}
-
 // bytesReaderCloser is a helper for being able to do multi read on a byte buffer
 type bytesReaderCloser struct {
 	bytes.Reader
@@ -198,39 +188,6 @@ type bytesReaderCloser struct {
 
 func (q *bytesReaderCloser) Close() error {
 	return nil
-}
-
-// Open implements the Reader interface.
-func (r *inMemReader) Open() (io.ReadCloser, error) {
-	return &bytesReaderCloser{*bytes.NewReader(r.data.Bytes())}, nil
-}
-
-// Close implements the Reader interface.
-func (r *inMemReader) Close() error {
-	return nil
-}
-
-// Description implements the Reader interface.
-func (r *inMemReader) Description() string {
-	return description("InMemReader", r.xxHash)
-}
-
-// XXHash implements the Reader interface.
-func (r *inMemReader) XXHash() string {
-	return r.xxHash
-}
-
-// NewInMemReader returns a new inMemReader
-func NewInMemReader(size int64, withHash bool) (Reader, error) {
-	data := bytes.NewBuffer(make([]byte, size))
-	data.Reset()
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	hash, err := copyRandWithHash(data, size, withHash, rnd)
-	if err != nil {
-		return nil, err
-	}
-
-	return &inMemReader{*bytes.NewReader(data.Bytes()), data, hash}, nil
 }
 
 type fileReader struct {
@@ -386,8 +343,6 @@ func NewReader(p ParamReader) (Reader, error) {
 		return NewSGReader(p.SGL, p.Size, true /* withHash */)
 	case ReaderTypeRand:
 		return NewRandReader(p.Size, true /* withHash */)
-	case ReaderTypeInMem:
-		return NewInMemReader(p.Size, true /* withHash */)
 	case ReaderTypeFile:
 		return NewFileReader(p.Path, p.Name, p.Size, true /* withHash */)
 	default:

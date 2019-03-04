@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -328,14 +327,11 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"
-		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)

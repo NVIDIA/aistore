@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -146,7 +145,6 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	)
 	var (
 		bucket       = TestLocalBucketName
-		sgl          *memsys.SGL
 		err          error
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		proxyURLNext string
@@ -157,10 +155,8 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 		t.Skip("Skipping test in short mode.")
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(objSize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(objSize)
+	defer sgl.Free()
 
 	if !tutils.DockerRunning() || tutils.ClusterCount() < 2 {
 		t.Skip("test requires a docker running with two clusters")
@@ -225,7 +221,6 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	)
 	var (
 		bucket       = clibucket
-		sgl          *memsys.SGL
 		err          error
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		proxyURLNext string
@@ -244,10 +239,8 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 		t.Skip("test requires docker running with two clusters")
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(objSize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(objSize)
+	defer sgl.Free()
 
 	proxyURLNext = getPrimaryURL(t, proxyNextTierURLReadOnly)
 
@@ -313,7 +306,6 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		bucket       = clibucket
 		size         = int64(objSize)
 		r            tutils.Reader
-		sgl          *memsys.SGL
 		errCnt       int
 		err          error
 	)
@@ -339,10 +331,8 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		size = int64(random.Intn(1024)+1) * 1024
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(size)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(size)
+	defer sgl.Free()
 
 	for idx, fname := range objList {
 		object := path.Join(SmokeStr, fname)

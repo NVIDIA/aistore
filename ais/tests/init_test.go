@@ -36,6 +36,7 @@ const (
 	proxyURL                = "http://localhost:8080"      // the url for the cluster's proxy (local)
 	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)
 	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
+	readerType              = tutils.ReaderTypeSG
 )
 
 var (
@@ -49,7 +50,6 @@ var (
 	objlimit               int64
 	prefix                 string
 	abortonerr             = false
-	readerType             = tutils.ReaderTypeSG
 	prefetchPrefix         = "__bench/test-"
 	prefetchRegex          = "^\\d22\\d?"
 	prefetchRange          = "0:2000"
@@ -65,8 +65,6 @@ var (
 	clibucket                string
 	proxyURLReadOnly         string // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
 	proxyNextTierURLReadOnly string // user-defined primary proxy URL for the second cluster - it is read-only variable and tests mustn't change it
-	usingSG                  bool   // True if using SGL as reader backing memory
-	usingFile                bool   // True if using file as reader backing
 
 	envVars        = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
 	primaryHostIP  = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
@@ -88,9 +86,6 @@ func init() {
 	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
-	flag.StringVar(&readerType, "readertype", tutils.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", tutils.ReaderTypeSG,
-			tutils.ReaderTypeFile, tutils.ReaderTypeInMem, tutils.ReaderTypeRand))
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
 	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
@@ -107,9 +102,6 @@ func init() {
 	flag.DurationVar(&proxyChangeLatency, "proxychangelatency", time.Minute*2, "Time for cluster to stabilize after a proxy change")
 
 	flag.Parse()
-
-	usingSG = readerType == tutils.ReaderTypeSG
-	usingFile = readerType == tutils.ReaderTypeFile
 
 	if tutils.DockerRunning() && proxyURLReadOnly == proxyURL {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port

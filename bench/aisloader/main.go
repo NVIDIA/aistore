@@ -161,8 +161,7 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.minSize, "minsize", 1024, "Minimal object size in KB")
 	flag.IntVar(&p.maxSize, "maxsize", 1048576, "Maximal object size in KB")
 	flag.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", tutils.ReaderTypeSG,
-			tutils.ReaderTypeFile, tutils.ReaderTypeInMem, tutils.ReaderTypeRand))
+		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
 	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
 	flag.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")

@@ -87,11 +87,8 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
-
+	sgl = tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
@@ -168,10 +165,8 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(fileSize)
-		defer sgl.Free()
-	}
+	sgl = tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucketName, SmokeDir, readerType, prefix, fileSize, numberOfFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, true)
 	close(fileNameCh)
@@ -254,11 +249,8 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
-
+	sgl = tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
@@ -342,12 +334,10 @@ func TestListObjectsPrefix(t *testing.T) {
 		filesPutCh = make(chan string, numfiles)
 		dir        = DeleteDir
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
-		sgl        *memsys.SGL
 	)
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(fileSize)
-		defer sgl.Free()
-	}
+
+	sgl := tutils.Mem2.NewSGL(fileSize)
+	defer sgl.Free()
 	tutils.Logf("Create a list of %d objects\n", numFiles)
 	if isCloudBucket(t, proxyURL, bucket) {
 		tutils.Logf("Cleaning up the cloud bucket %s\n", bucket)
@@ -435,12 +425,6 @@ func TestListObjectsPrefix(t *testing.T) {
 				idx+1, test.title, len(reslist.Entries), test.expected)
 		}
 	}
-
-	if usingFile {
-		for name := range filesPutCh {
-			os.Remove(filepath.Join(dir, name))
-		}
-	}
 }
 
 func TestRenameObjects(t *testing.T) {
@@ -468,15 +452,6 @@ func TestRenameObjects(t *testing.T) {
 			go tutils.Del(proxyURL, RenameLocalBucketName, newObj, "", wg, errCh, !testing.Verbose())
 		}
 
-		if usingFile {
-			for _, fname := range basenames {
-				err = os.Remove(path.Join(RenameDir, fname))
-				if err != nil {
-					t.Errorf("Failed to remove file %s: %v", fname, err)
-				}
-			}
-		}
-
 		wg.Wait()
 		selectErr(errCh, "delete", t, false)
 		close(errCh)
@@ -489,11 +464,8 @@ func TestRenameObjects(t *testing.T) {
 		t.Errorf("Error creating dir: %v", err)
 	}
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(1024 * 1024)
-		defer sgl.Free()
-	}
-
+	sgl = tutils.Mem2.NewSGL(1024 * 1024)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, RenameLocalBucketName, RenameDir, readerType, RenameStr, 0, numPuts, errCh, objsPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(objsPutCh)
@@ -592,10 +564,8 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 3. put random files => (cluster - 1)
 	//
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl = tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, clibucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 
@@ -637,13 +607,6 @@ func TestRebalance(t *testing.T) {
 	//
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
-		if usingFile {
-			err := os.Remove(path.Join(SmokeDir, fname))
-			if err != nil {
-				t.Error(err)
-			}
-		}
-
 		wg.Add(1)
 		go tutils.Del(proxyURL, clibucket, "smoke/"+fname, "", wg, errCh, !testing.Verbose())
 	}
@@ -1304,14 +1267,11 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		filesPutCh = make(chan string, numPuts)
 		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
-		sgl        *memsys.SGL
 		bucket     = rtd.bucket
 	)
 
-	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
-		defer sgl.Free()
-	}
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	close(filesPutCh)
 	selectErr(errCh, "put", t, true)
@@ -1324,13 +1284,6 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, nil, errCh)
 	selectErr(errCh, "get", t, false)
 	for fname := range filesPutCh {
-		if usingFile {
-			err := os.Remove(path.Join(SmokeDir, fname))
-			if err != nil {
-				t.Error(err)
-			}
-		}
-
 		wg.Add(1)
 		go tutils.Del(proxyURL, bucket, "smoke/"+fname, "", wg, errCh, !testing.Verbose())
 	}
