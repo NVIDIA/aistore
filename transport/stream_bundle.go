@@ -51,18 +51,27 @@ type (
 		i       int64
 	}
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
+
+	SBArgs struct {
+		Network      string
+		Trname       string
+		Extra        *Extra
+		Ntype        int // cluster.Target (0) by default
+		Multiplier   int
+		ManualResync bool // auto-resync by default
+	}
 )
 
 //
 // API
 //
 
-func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Client, network, trname string,
-	extra *Extra, ntype int, multiplier ...int) (sb *StreamBundle) {
-	if !cmn.NetworkIsKnown(network) {
-		glog.Errorf("Unknown network %s, expecting one of: %v", network, cmn.KnownNetworks)
+func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Client, sbArgs SBArgs) (sb *StreamBundle) {
+	if !cmn.NetworkIsKnown(sbArgs.Network) {
+		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
 	}
-	cmn.Assert(ntype == cluster.Targets || ntype == cluster.Proxies || ntype == cluster.AllNodes)
+
+	cmn.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &StreamBundle{
 		sowner:     sowner,
@@ -70,24 +79,31 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Clie
 		smaplock:   &sync.Mutex{},
 		lsnode:     lsnode,
 		client:     cl,
-		network:    network,
-		trname:     trname,
-		rxNodeType: ntype,
-		multiplier: 1,
+		network:    sbArgs.Network,
+		trname:     sbArgs.Trname,
+		rxNodeType: sbArgs.Ntype,
+		multiplier: sbArgs.Multiplier,
 	}
-	if extra != nil {
-		sb.extra = *extra
+
+	if sbArgs.Extra != nil {
+		sb.extra = *sbArgs.Extra
 	}
-	if len(multiplier) > 0 {
-		cmn.Assert(multiplier[0] > 1 && multiplier[0] < 256)
-		sb.multiplier = multiplier[0]
+
+	if sb.multiplier == 0 {
+		sb.multiplier = 1
 	}
+	cmn.Assert(sb.multiplier > 0 && sb.multiplier < 256)
+
 	//
 	// finish construction: establish streams and register this stream-bundle as Smap listener
 	//
-	sb.resync()
+	sb.Resync()
 
-	listeners.Reg(sb)
+	// update streams when smap changes
+	if !sbArgs.ManualResync {
+		listeners.Reg(sb)
+	}
+
 	return
 }
 
@@ -179,12 +195,21 @@ func (sb *StreamBundle) String() string {
 }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
-func (sb *StreamBundle) SmapChanged() {
-	smap := sb.sowner.Get()
-	if smap.Version == sb.smap.Version {
-		return
+func (sb *StreamBundle) ListenSmapChanged(newSmapVersionChannel chan int64) {
+	for {
+		newSmapVersion, ok := <-newSmapVersionChannel
+
+		if !ok {
+			// channel closed by Unreg, it's safe to end listening
+			return
+		}
+
+		if newSmapVersion <= sb.smap.Version {
+			continue
+		}
+
+		sb.Resync()
 	}
-	sb.resync()
 }
 
 func (sb *StreamBundle) apply(action int) {
@@ -253,15 +278,14 @@ func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenClo
 	return
 }
 
-// "resync" streams asynchronously (is a slowpath); calls stream.Stop()
-func (sb *StreamBundle) resync() {
+// "Resync" streams asynchronously (is a slowpath); calls stream.Stop()
+func (sb *StreamBundle) Resync() {
 	sb.smaplock.Lock()
 	defer sb.smaplock.Unlock()
 	smap := sb.sowner.Get()
-	if smap.Version == sb.smap.Version {
+	if smap.Version <= sb.smap.Version {
 		return
 	}
-	cmn.Assert(smap.Version > sb.smap.Version)
 
 	var old, new []cluster.NodeMap
 	switch sb.rxNodeType {

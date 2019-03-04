@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	Targets = iota
+	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
 	Proxies
 	AllNodes
 )
@@ -181,8 +181,8 @@ func NodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
 //==================================================================
 type (
 	Slistener interface {
-		SmapChanged()
 		String() string
+		ListenSmapChanged(chan int64)
 	}
 	SmapListeners interface {
 		Reg(sl Slistener)

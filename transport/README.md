@@ -19,7 +19,7 @@ A stream preserves ordering: the objects posted for sending will get *completed*
 | Registering receive callback | An API to establish the one-to-one correspondence between the stream sender and the stream receiver | For instance, to register the same receive callback `foo` with two different HTTP endpoints named "ep1" and "ep2", we could call `transport.Register("n1", "ep1", foo)` and `transport.Register("n1", "ep2", foo)`, where `n1` is an http request multiplexer ("muxer") that corresponds to one of the documented networking options - see [README, section Networking](README.md). The transport will then be calling `foo()` to separately deliver the "ep1" stream to the "ep1" endpoint and "ep2" - to, respectively, "ep2". Needless to say that a per-endpoint callback is also supported and permitted. To allow registering endpoints to different http request multiplexers, one can change network parameter `transport.Register("different-network", "ep1", foo)` |
 | Object-has-been-sent callback (not to be confused with the Receive callback above) | A function or a method of the following signature: `SendCallback func(Header, io.ReadCloser, error)`, where `transport.Header` and `io.ReadCloser` represent the object that has been transmitted and error is the send error or nil | This callback can optionally be defined on a) per-stream basis (via NewStream constructor) and/or b) for a given object that is being sent (for instance, to support some sort of batch semantics). Note that object callback *overrides* the per-stream one: when (object callback) is defined i.e., non-nil, the stream callback is ignored and skipped.<br/><br/>**BEWARE:**<br/>Latency of this callback adds to the latency of the entire stream operation on the send side. It is critically important, therefore, that user implementations do not take extra locks, do not execute system calls and, generally, return as soon as possible. |
 | Header-only objects | Header-only (data-less) objects are supported - when there's no data to send (that is, when the `transport.Header.Dsize` field is set to zero), the reader (`io.ReadCloser`) is not required and the corresponding argument in the the `Send()` API can be set to nil | Header-only objects can be used to implement L6 control plane over streams, where the header's `Opaque` field gets utilized to transfer the entire (control message's) payload |
-| Stream bundle | A higher-level (cluster level) API to aggregate multiple streams and broadcast objects replicas to all or some of the established nodes of the cluster while aggregating completions and preserving FIFO ordering | `transport.NewStreamBundle(smap, si, client, cmn.NetworkPublic, "path-name", &extra, cluster.Targets, 4)` |
+| Stream bundle | A higher-level (cluster level) API to aggregate multiple streams and broadcast objects replicas to all or some of the established nodes of the cluster while aggregating completions and preserving FIFO ordering | `transport.NewStreamBundle(smap, si, client, transport.SBArgs{Network: transport.cmn.NetworkPublic, Trname: "path-name", Extra: &extra, Ntype: cluster.Targets, ManualResync: false, Multiplier: 4})` |
 
 ## Closing and completions
 
@@ -155,15 +155,20 @@ The important distinction, though, is that while transport streams are devoid of
 The provided API includes `StreamBundle` constructor that allows to establish streams between the local node and (a) all storage argets, (b) all gateways, or (c) all nodes in the cluster - in one shot:
 
 ```
+sbArgs := &SBArgs{
+  Network	string,		// network, one of `cmn.KnownNetworks`
+  Trname	string,		// transport endpoint name
+  Extra		*Extra, // additional stream control parameters
+  Ntype 	int,		// destination type: all targets, ..., all nodes
+  ManualResync bool,		// if false, establishes/removes connections with new/old nodes when new smap is received
+  Multiplier int,		// number of streams per destination, with subsequent round-robin selection
+}
+
 NewStreamBundle(
   sowner	cluster.Sowner,		// Smap (cluster map) owner interface
   lsnode	*cluster.Snode,		// local node
-  cl		*http.Client,	// http client
-  network	string,		// network, one of `cmn.KnownNetworks`
-  trname	string,		// transport endpoint name
-  extra		*Extra, // additional stream control parameters
-  ntype 	int,		// destination type: all targets, ..., all nodes
-  multiplier	...int,		// number of streams per destination, with subsequent round-robin selection
+  cl		*http.Client,		// http client
+  sbArgs	*SbArgs			// additional stream bundle arguments
 )
 ```
 

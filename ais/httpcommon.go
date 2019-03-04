@@ -386,7 +386,7 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		}
 	}
 
-	h.smaplisteners = &smaplisteners{listeners: make([]cluster.Slistener, 0, 8)}
+	h.smaplisteners = newSmapListeners()
 	h.smapowner = &smapowner{listeners: h.smaplisteners}
 	h.bmdowner = &bmdowner{}
 	h.xactions = newXs() // extended actions

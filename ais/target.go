@@ -52,6 +52,8 @@ const (
 	getFromNeighRetries   = 10
 	getFromNeighSleep     = 300 * time.Millisecond
 	getFromNeighAfterJoin = time.Second * 30
+
+	rebalanceStreamName = "rebalance"
 )
 
 type (
@@ -306,7 +308,14 @@ func (t *targetrunner) setupRebalanceManager() error {
 	client := transport.NewDefaultClient()
 
 	// TODO: stream bundle multiplier (currently default) should be adjustable at runtime (#253)
-	t.rebManager.streams = transport.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, 4)
+	sbArgs := transport.SBArgs{
+		ManualResync: true,
+		Multiplier:   4,
+		Network:      network,
+		Trname:       rebalanceStreamName,
+	}
+
+	t.rebManager.streams = transport.NewStreamBundle(t.smapowner, t.si, client, sbArgs)
 	return nil
 }
 

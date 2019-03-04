@@ -159,7 +159,9 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// smap, nameLocker setup
 	m.ctx = ctx
 	m.smap = m.ctx.smap.Get()
+
 	m.ctx.smap.Listeners().Reg(m)
+
 	targetCount := m.smap.CountTargets()
 
 	m.rs = rs
@@ -933,14 +935,28 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 	return n, <-errCh
 }
 
-// SmapChanged implements Slistener interface
-func (m *Manager) SmapChanged() {
-	newSmap := m.ctx.smap.Get()
-	// check if some target has been removed - abort in case it does
-	for sid := range m.smap.Tmap {
-		if newSmap.GetTarget(sid) == nil {
-			go m.abort() // FIXME: once the smap notification logic will change we could remove `go`
+func (m *Manager) ListenSmapChanged(ch chan int64) {
+	for {
+		newSmapVersion, ok := <-ch
+
+		if !ok {
+			// channel was closed by unregister
 			return
+		}
+
+		if newSmapVersion <= m.smap.Version {
+			// We initialized with the same/older smap, safe to skip
+			continue
+		}
+
+		newSmap := m.ctx.smap.Get()
+		// check if some target has been removed - abort in case it does
+		for sid := range m.smap.Tmap {
+			if newSmap.GetTarget(sid) == nil {
+				m.abort()
+				// return from the listener as the whole manager is aborted
+				return
+			}
 		}
 	}
 }

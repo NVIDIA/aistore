@@ -474,7 +474,11 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		return
 	}
 
+	// establish connections with nodes, as they are not created on change of smap
+	reb.streams.Resync()
+
 	pmarker := persistentMarker(globalRebType)
+
 	file, err := cmn.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)

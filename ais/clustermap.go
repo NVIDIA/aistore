@@ -217,9 +217,8 @@ func (r *smapowner) put(smap *smapX) {
 	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 
-	// TODO: the logic for notification should be rewritten: see #237
 	if r.listeners != nil {
-		r.listeners.notify() // notify of Smap change all listeners (cluster.Slistener)
+		r.listeners.notify(smap.version()) // notify of Smap change all listeners (cluster.Slistener)
 	}
 }
 
@@ -314,49 +313,64 @@ var _ cluster.SmapListeners = &smaplisteners{}
 
 type smaplisteners struct {
 	sync.RWMutex
-	listeners []cluster.Slistener
+	listenersChannels map[cluster.Slistener]chan int64
+	listenersNames    map[string]uint
+}
+
+func newSmapListeners() *smaplisteners {
+	return &smaplisteners{
+		listenersChannels: make(map[cluster.Slistener]chan int64),
+		listenersNames:    make(map[string]uint),
+	}
 }
 
 func (sls *smaplisteners) Reg(sl cluster.Slistener) {
 	sls.Lock()
-	l := len(sls.listeners)
-	for k := 0; k < l; k++ {
-		if sls.listeners[k] == sl {
-			cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
-		}
-		if sls.listeners[k].String() == sl.String() {
-			glog.Warningf("duplicate smap-listener %s", sl)
-		}
+
+	smapVersionCh := make(chan int64, 8)
+
+	if _, ok := sls.listenersChannels[sl]; ok {
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
 	}
-	sls.listeners = append(sls.listeners, sl)
+
+	if _, ok := sls.listenersNames[sl.String()]; ok {
+		glog.Warningf("duplicate smap-listener %s", sl)
+	} else {
+		sls.listenersNames[sl.String()] = 0
+	}
+
+	sls.listenersChannels[sl] = smapVersionCh
+	sls.listenersNames[sl.String()]++
+
 	sls.Unlock()
 	glog.Infof("registered smap-listener %s", sl)
+
+	go sl.ListenSmapChanged(smapVersionCh)
 }
 
 func (sls *smaplisteners) Unreg(sl cluster.Slistener) {
 	sls.Lock()
-	l := len(sls.listeners)
-	for k := 0; k < l; k++ {
-		if sls.listeners[k] != sl {
-			continue
-		}
 
-		sls.listeners[k] = sls.listeners[l-1]
-		sls.listeners[l-1] = nil
-		sls.listeners = sls.listeners[:l-1]
-		sls.Unlock()
-		glog.Infof("unregistered smap-listener %s", sl)
-		return
+	if _, ok := sls.listenersChannels[sl]; !ok {
+		cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
 	}
+
+	close(sls.listenersChannels[sl])
+
+	delete(sls.listenersChannels, sl)
+	sls.listenersNames[sl.String()]--
+
+	if sls.listenersNames[sl.String()] == 0 {
+		delete(sls.listenersNames, sl.String())
+	}
+
 	sls.Unlock()
-	cmn.AssertMsg(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
 }
 
-func (sls *smaplisteners) notify() {
+func (sls *smaplisteners) notify(newMapVersion int64) {
 	sls.RLock()
-	l := len(sls.listeners)
-	for k := 0; k < l; k++ {
-		sls.listeners[k].SmapChanged()
+	for _, ch := range sls.listenersChannels {
+		ch <- newMapVersion
 	}
 	sls.RUnlock()
 }

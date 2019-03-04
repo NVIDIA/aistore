@@ -36,7 +36,7 @@ var (
 
 func (sowner *sowner) Get() *cluster.Smap               { return &smap }
 func (sowner *sowner) Listeners() cluster.SmapListeners { return &listeners }
-func (listeners *slisteners) Reg(cluster.Slistener)     {}
+func (listeners *slisteners) Reg(sl cluster.Slistener)  {}
 func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 
 func Test_Bundle(t *testing.T) {
@@ -80,7 +80,8 @@ func Test_Bundle(t *testing.T) {
 
 	random := newRand(time.Now().UnixNano())
 	multiplier := int(random.Int63()%13) + 4
-	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient, network, trname, nil, cluster.Targets, multiplier)
+
+	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient, transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier})
 
 	size, num, prevsize := int64(0), 0, int64(0)
 
