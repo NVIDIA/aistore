@@ -297,16 +297,6 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	}
 }
 
-func BenchmarkInMemReaderCreateWithHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewInMemReader(cmn.MiB, true /* withHash */)
-		r.Close()
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		r, err := tutils.NewRandReader(cmn.MiB, true /* withHash */)
@@ -339,16 +329,6 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
 		r.Close()
 		os.Remove(path.Join(filepath, fn))
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkInMemReaderCreateNoHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewInMemReader(cmn.MiB, false /* withHash */)
-		r.Close()
 		if err != nil {
 			b.Fatal(err)
 		}

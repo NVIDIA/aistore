@@ -66,22 +66,6 @@ func putFile(size int64, withHash bool) error {
 	return err
 }
 
-func putInMem(size int64, withHash bool) error {
-	r, err := tutils.NewInMemReader(size, withHash)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	putArgs := api.PutObjectArgs{
-		BaseParams: baseParams,
-		Bucket:     "bucket",
-		Object:     "key",
-		Hash:       r.XXHash(),
-		Reader:     r,
-	}
-	return api.PutObject(putArgs)
-}
-
 func putRand(size int64, withHash bool) error {
 	r, err := tutils.NewRandReader(size, withHash)
 	if err != nil {
@@ -124,15 +108,6 @@ func BenchmarkPutFileWithHash1M(b *testing.B) {
 	}
 }
 
-func BenchmarkPutInMemWithHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		err := putInMem(1024*1024, true /* withHash */)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func BenchmarkPutRandWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		err := putRand(1024*1024, true /* withHash */)
@@ -157,15 +132,6 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 func BenchmarkPutFileNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		err := putFile(1024*1024, false /* withHash */)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkPutInMemNoHash1M(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		err := putInMem(1024*1024, false /* withHash */)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -197,17 +163,6 @@ func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			err := putFile(1024*1024, true /* withHash */)
-			if err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-}
-
-func BenchmarkPutInMemWithHash1MParallel(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			err := putInMem(1024*1024, true /* withHash */)
 			if err != nil {
 				b.Fatal(err)
 			}
