@@ -147,6 +147,7 @@ func (m *Manager) extractLocalShards() (err error) {
 	// unfortunately it can happen when we underestimate the amount of memory
 	// which we will use when extracting compressed file.
 	ticker := time.NewTicker(memoryUpdateInterval)
+	defer ticker.Stop()
 	go func() {
 		for range ticker.C {
 			curMem := sigar.Mem{}
