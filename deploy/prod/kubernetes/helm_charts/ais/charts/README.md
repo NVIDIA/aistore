@@ -20,7 +20,7 @@ The key (default: initial_primary_proxy) and value (default: yes) can be customi
 
 TO INSTALL
 ==========
-Usage: helm install --name=devops-ais .
+Usage: helm install --name=devops-ais --set image.dockerRepoToken=<token-to-pull-docker-image> .
 
 
 TO DESTROY

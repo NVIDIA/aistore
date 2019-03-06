@@ -20,7 +20,7 @@ image:
   repository: quay.io/nvidia/ais_k8s
   tag: 10
   pullPolicy: IfNotPresent
-
+  dockerRepoToken: ""
 common_config:
   dir: /etc/ais
   cloudprovider: aws

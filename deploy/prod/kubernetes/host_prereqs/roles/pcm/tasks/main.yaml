@@ -2,7 +2,7 @@
 
 - name: Check PCM directory exists .
   stat:
-    path: /home/ngn-gia-storage-user/pcm-master
+    path: ~/pcm-master
   register: pcm_dir_exists
 
 - name: Get PCM code as zip
@@ -15,11 +15,11 @@
 - name: Unarchive pcm.zip
   unarchive:
     src: /tmp/pcm.zip
-    dest: /home/ngn-gia-storage-user
+    dest: ~/
     remote_src: yes
   when: not pcm_dir_exists.stat.exists
    
 - name: Install PCM tool
   command: make
   args:
-     chdir: /home/ngn-gia-storage-user/pcm-master
+     chdir: ~/pcm-master

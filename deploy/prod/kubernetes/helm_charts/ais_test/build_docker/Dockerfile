@@ -9,8 +9,8 @@ ENV GOBIN  $GOPATH/bin
 ENV AISSRC $GOPATH/src/github.com/NVIDIA/aistore/ais
 
 RUN apt-get update && apt-get install -y \
-        curl \
-        git
+        curl \ 
+        jq
 
 RUN mkdir -p "${GOPATH}/bin" && chmod -R 777 "$GOPATH"
 RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\

@@ -1,0 +1,32 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: {{ template "ais_test.name" . }}
+    run: {{ template "ais_test.name" . }}
+  name: ais-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "ais_test.name" . }}
+      run: {{ template "ais_test.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "ais_test.name" . }}
+        run: {{ template "ais_test.name" . }}
+    spec:
+      containers:
+      - name: ais-test
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/bin/sh"]
+        args: ["-c", "/root/unittest.sh {{ .Values.test_params.proxy_endpoint }}  {{ .Values.test_params.proxy_port }} {{ .Values.test_params.num_targets }} {{ .Values.test_params.test_bucket }} {{ .Values.test_params.test_duration }} "]
+        env:
+          - name: MY_NODE
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+      imagePullSecrets:
+        - name: test-containerbuilder-pull-secret

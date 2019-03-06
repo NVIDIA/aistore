@@ -35,8 +35,3 @@ fi
     helm install --name=${APP_NAME} ${helm_args}  .
 #fi
 
-
-echo "Waiting ${APP_NAME} to come up..."
-
-kubectl rollout status ds/${APP_NAME}-proxy
-kubectl rollout status ds/${APP_NAME}-target

@@ -1,0 +1,34 @@
+---
+- hosts: bastion
+  gather_facts: true
+  vars:
+    app_name: devops-ais
+    chart_name: ais
+    ais_node_labels: false
+    ais_proxy_filter: "ais-proxy-type=electable"
+    initial_primary_proxy_label: "initial_primary_proxy=yes"    
+  tasks:
+  - name: copy the helm charts to the bastion
+    synchronize:
+     src: ../helm_charts/{{ chart_name }}/charts
+     dest: /tmp/helm_deploy
+     recursive: True
+  - name: copy the script to bastion
+    copy:
+       src: deploy_helm.sh
+       dest: /tmp/helm_deploy
+       mode: 0755
+  - name: copy the kubeconfig to the bastion
+    copy:
+       src: admin.conf
+       dest: /tmp/helm_deploy/kube.conf
+       mode: 0755
+  - name: copy the docker image_tag.txt to the bastion
+    copy:
+       src: image_tag.txt
+       dest: /tmp/helm_deploy/image_tag.txt
+       mode: 0644
+  - import_tasks: setup_node_labels.yaml
+    when: ais_node_labels
+  - name: run the deploy script
+    command: chdir=/tmp/helm_deploy ./deploy_helm.sh kube.conf {{ app_name }}

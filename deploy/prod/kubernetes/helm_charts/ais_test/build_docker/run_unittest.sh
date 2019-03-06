@@ -4,24 +4,26 @@ set -e
 
 usage() {
     echo
-    echo "Usage: $0 proxy_endpoint  port test_bucket duration";
+    echo "Usage: $0 proxy_endpoint port num_targets test_bucket duration";
     echo " where :"
     echo "  proxy_endpoint  : endpoint of the proxy (primary proxy or not, or k8s svc) for client to talk to."
     echo "  port            : proxy port to connect "
+    echo "  num_targets     : number of targets expected in the AIS cluster"
     echo "  test_bucket     : the local bucket name to be used for testing"
     echo "  duration        : duration of the test"
     echo
     exit -1
 }
 
-if [ $# != 4 ]; then
+if [ $# != 5 ]; then
     usage
 fi
 
 proxy_endpoint=$1
 proxy_port=$2
-bucket=$3
-duration=$4
+num_targets_expected=$3
+bucket=$4
+duration=$5
 
 
 # Bash shell has return value 0-255, so we can't return http code, which can be bigger than 255
@@ -40,10 +42,20 @@ list_objects() {
     fi
 }
 
+#Validate that the AIS cluster has the specified number of targets
+num_targets=$(curl -s -X GET http://$proxy_endpoint:$proxy_port/v1/daemon?what=smap | jq ".tmap" | jq length)
+
+if [[ $num_targets -ne $num_targets_expected ]];then
+  echo "ERROR: NUMBER OF TARGETS LAUNCHED - $num_targets does not match required count - $num_targets_expected  " >&2
+  exit 1
+else
+  echo "TARGET NUMBER CHECK SUCCEEDED!"
+fi
+
 echo "Generating a list of random objects to populate a test bucket: $bucket"
 cd $AISSRC/../bench/aisloader;
 upload_test=$(go run main.go worker.go -ip=$proxy_endpoint \
-		 -port=$proxy_port -duration=${duration}s -numworkers=4 -pctput=10 \
+		 -port=$proxy_port -duration=${duration} -numworkers=4 -pctput=10 \
 		 -local=true -cleanup=false -maxsize=2048 -readertype=rand -bucket=$bucket)
 
 test_status=$(echo $upload_test | grep 'Actual run duration')
@@ -53,11 +65,11 @@ rc=$?
 echo "$upload_test"
 
 if [[ $rc != 0 ]]; then
-    echo "ERROR: UPLOAD TEST FAILED!!!!!!!!!!" >&2
+    echo "ERROR: UPLOAD TEST FAILED!" >&2
     echo "$upload_test"
     exit 1
 else
-    echo "UPLOAD TEST SUCCEEDED!!!!!!!!!!!!!" 
+    echo "UPLOAD TEST SUCCEEDED!" 
 fi
 echo
 
@@ -66,10 +78,10 @@ echo "Verify if the list of objects in the bucket: $bucket"
 list_objects 200
 rc=$?;
 if [[ $rc != 0 ]];then
-    echo "ERROR: LIST OBJECTS TEST FAILED!!!!!!!!!!!!!!!!!!!!" >&2
+    echo "ERROR: LIST OBJECTS TEST FAILED!" >&2
     exit 1
 else
-    echo "LIST OBJECTS TEST SUCCEEDED!!!!!!!!!!!!!!!!!"
+    echo "LIST OBJECTS TEST SUCCEEDED!"
 fi
 echo 
 
@@ -77,10 +89,10 @@ echo "Destroy the bucket: $bucket"
 rc=$(curl -X DELETE -s -w "%{http_code}\n" -H 'Content-Type: application/json' \
 	  -d '{"action": "destroylb" }' http://$proxy_endpoint:$proxy_port/v1/buckets/$bucket)
 if [[ $rc != 200 ]];then
-    echo "ERROR: DELETE BUCKET TEST FAILED!!!!!!!!!!!!!!!!!!!!" >&2
+    echo "ERROR: DELETE BUCKET TEST FAILED!" >&2
     exit 1
 else
-    echo "DELETE BUCKET TEST SUCCEEDED!!!!!!!!!!!!!!!!!"
+    echo "DELETE BUCKET TEST SUCCEEDED!"
 fi
 
 echo 
@@ -89,10 +101,10 @@ echo "Get list of objects in bucket: $bucket.  Expect there is none"
 list_objects 400
 rc=$?
 if [[ $rc != 0 ]];then
-    echo "ERROR: LIST OBJECTS FROM DESTROYED BUCKET TEST FAILED!!!!!!!!!!!!!!!!!!!!" >&2
+    echo "ERROR: LIST OBJECTS FROM DESTROYED BUCKET TEST FAILED!" >&2
     exit 1
 else
-    echo "LIST OBJECTS FROM DESTROYED BUCKET TEST SUCCEEDED!!!!!!!!!!!!!!!!!"
+    echo "LIST OBJECTS FROM DESTROYED BUCKET TEST SUCCEEDED!"
 fi
 echo 
 

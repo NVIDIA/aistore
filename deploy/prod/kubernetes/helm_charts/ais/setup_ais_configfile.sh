@@ -1,5 +1,5 @@
 #!/bin/bash
-AISSRC="../../../../ais/"
+AISSRC="../../../../../ais/"
 source config_defaults proxy
 bash ${AISSRC}/setup/config.sh
 source config_defaults target
