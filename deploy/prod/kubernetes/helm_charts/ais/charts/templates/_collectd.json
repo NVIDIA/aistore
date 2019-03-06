@@ -27,8 +27,8 @@ LoadPlugin write_graphite
 
 <Plugin write_graphite>
 	<Node "graphiting">
-		Host "{{ .Values.graphite_server.ip }}"
-		Port "{{ .Values.graphite_server.port }}"
+		Host "{{ if .Values.tags.builtin_monitoring }}{{ .Release.Name }}-graphite{{ else }}{{ .Values.external_monitoring.graphite_host }}{{ end }}"
+		Port "{{ if .Values.tags.builtin_monitoring }}2003{{ else }}{{ .Values.external_monitoring.graphite_port }}{{ end }}"
 		Protocol "tcp"
 		LogSendErrors true
 		StoreRates true
@@ -39,6 +39,6 @@ LoadPlugin write_graphite
 
 <Include "/etc/collectd/collectd.conf.d">
 	Filter "*.conf"
-</Include>i
+</Include>
 
 {{- end -}}

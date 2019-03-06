@@ -1,6 +1,6 @@
 {{- define "statsd.config" -}}
 {
-	graphitePort: {{ .Values.graphite_server.port }},
-	graphiteHost: "{{ .Values.graphite_server.ip }}"
+	graphiteHost: {{ if .Values.tags.builtin_monitoring }}{{ .Release.Name }}-graphite{{ else }}{{ .Values.external_monitoring.graphite_host }}{{ end }},
+	graphitePort: {{ if .Values.tags.builtin_monitoring }}2003{{ else }}{{ .Values.external_monitoring.graphite_port }}{{ end }}
 }
 {{- end -}}

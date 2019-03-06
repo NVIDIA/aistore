@@ -1,0 +1,23 @@
+dependencies:
+  #
+  # Graphite server.
+  #
+  # Requires that we have already run 'helm repo add kiwigrid https://kiwigrid.github.io'
+  #
+  - name: graphite
+    version: ">=0.3.4"
+    repository: https://kiwigrid.github.io
+    tags:
+      - builtin_monitoring
+  #
+  # Grafana server.
+  #
+  # Install from the standard repo (present if helm init has been run; if absent
+  # 'helm init --client-only' assuming Tiller is already installed on k8s (as
+  # kubespray does for us) or simply 'helm repo add stable https://kubernetes-charts.storage.googleapis.com'
+  #
+  - name: grafana
+    version: ">=2.2.1"
+    repository: https://kubernetes-charts.storage.googleapis.com/
+    tags:
+      - builtin_monitoring

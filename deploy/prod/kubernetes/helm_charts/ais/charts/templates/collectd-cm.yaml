@@ -3,6 +3,6 @@ kind: ConfigMap
 metadata:
   name: {{ template "ais.name" . }}-collectd
 data:
-  collectd.json: |-
+  collectd.json: |
 {{ include "collectd.config" .   | indent 4 }}
 

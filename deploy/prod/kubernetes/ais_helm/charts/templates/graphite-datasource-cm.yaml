@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ais-grafana-graphite-datasource
+  labels:
+     ais_grafana_datasource: "anyvalue"
+data:
+  datasource.yaml: |-
+    #
+    # Based on https://github.com/helm/charts/tree/master/stable/grafana
+    #
+    # We deploy Grafana with the sidecar for datasources enabled and monitoring
+    # ConfigMap objects labelled with a key 'ais_grafana_datasource'. This ConfigMap
+    # serves to connect our new Grafana instance with our new Graphite instance.
+    # Other datasources could be added by the same means.
+    #
+    # config file version
+    apiVersion: 1
+    deleteDatasources:
+      - name: Graphite
+        orgId: 1
+    datasources:
+    - name: AIS Graphite
+      type: graphite
+      access: proxy
+      orgId: 1
+      url: http://{{ if .Values.tags.builtin_monitoring }}{{ .Release.Name }}-graphite{{ else }}{{ .Values.external_monitoring.graphite_host }}{{ end }}:{{ if .Values.tags.builtin_monitoring }}8080{{ else }}{{ .Values.external_monitoring.graphite_port }}{{ end }}
+      # password:
+      # user:
+      # database:
+      # basicAuth: false
+      # basicAuthUser:
+      # basicAuthPassword:
+      # withCredentials:
+      isDefault: true
+      version: 1
+      # <bool> allow users to edit datasources from the UI.
+      editable: false

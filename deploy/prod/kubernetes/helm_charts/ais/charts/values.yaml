@@ -181,9 +181,50 @@ affinity: {}
 #          values:
 #            - d1.8xlarge
 
-graphite_server:
-  port  : 2003
-  ip    : 52.41.234.112 
+#
+# If you have an existing graphite installation then set the following
+# tag to false and supply the host (or IP) and port for graphite in
+# map external_monitoring.
+#
+tags:
+  builtin_monitoring: true
+
+
+#
+# Alternatively, leave the builtin-monitoring tag true (the default) and
+# we'll use subchart dependencies to deploy graphite and grafana within the k8s
+# cluster.
+#
+# XXX TODO:
+#
+#   - As a lightweight initial effort we disable persistence for both graphite and grafana.
+#   - would be nice to add some standard dashboards; do this via another sidecar
+#   - need to report NodePort on which Grafana can be contacted (and if behind a jumpbox
+#     or similar how to use ssh -NL to forward a local port to that port)
+#
+graphite:
+  persistence:
+    enabled: false
+
+grafana:
+  persistence:
+    enabled: false
+  service:
+    type: NodePort
+  sidecar:
+    datasources:
+      enabled: true
+      label: ais_grafana_datasource
+    dashboards:
+      enabled: false
+      label: ais_grafana_dashboard
+
+#
+# Used only if builtin_monitoring is over-ridden to false
+#
+external_monitoring:
+  graphite_host: somehost
+  graphite_port: 2003
 
 pre_install_hook:
   etcMountPath:
