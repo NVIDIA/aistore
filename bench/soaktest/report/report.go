@@ -59,7 +59,7 @@ func (rctx *ReportContext) BeginRecipe(name string) {
 }
 
 func (rctx *ReportContext) WriteSystemInfoStats(systemInfoStats *cmn.ClusterSysInfo) {
-	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats)
+	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats, time.Now())
 	for _, st := range sysinfoStats {
 		sysinfoWriter.WriteStat(st)
 	}

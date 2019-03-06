@@ -10,9 +10,9 @@
 // 1. No put or get, just clean up:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
 // 2. Time based local bucket put only:
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -local=true
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -bckprovider=local
 // 3. Put limit based cloud bucket mixed put(30%) and get(70%):
-//    aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -local=false -totalputsize=10240
+//    aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240
 
 package main
 
@@ -60,36 +60,48 @@ type (
 	}
 
 	params struct {
-		proxyURL          string
-		bckProvider       string //If bucket is "local" or "cloud" bucket
-		bucket            string
-		putPct            int           // % of puts, rest are gets
-		duration          time.Duration // Stops after run at least this long
-		putSizeUpperBound int64         // Stops after written at least this much data
-		putSizeDelete     bool          // Starts deleting instead of stopping after reaching putSizeUpperBound
-		minSize           int
-		maxSize           int
-		numWorkers        int
-		verifyHash        bool // verify xxHash during get
-		cleanUp           bool
-		statsShowInterval int
-		readerType        string
-		usingSG           bool
-		usingFile         bool
-		tmpDir            string // only used when usingFile is true
-		loaderID          int    // when multiple of instances of loader running on the same host
+		putSizeUpperBound int64
+		minSize           int64
+		maxSize           int64
+
+		readOff int64 // read offset \
+		readLen int64 // read length / to test range read
+
+		putSizeUpperBoundStr string // Stops after written at least this much data
+		minSizeStr           string
+		maxSizeStr           string
+
+		readOffStr string // read offset \
+		readLenStr string // read length / to test range read
+
+		duration time.Duration // Stops after run at least this long
+
+		proxyURL    string
+		bckProvider string //If bucket is "local" or "cloud" bucket
+		bucket      string
+
+		readerType  string
+		tmpDir      string // only used when usingFile is true
+		statsOutput string
+
 		statsdIP          string
 		statsdPort        int
-		batchSize         int    // batch is used for bootstraping(list) and delete
-		getConfig         bool   // true if only run get proxy config request
-		readOffStr        string // read offset \
-		readLenStr        string // read length / to test range read
-		readOff           int64  // read offset \
-		readLen           int64  // read length / to test range read
-		randomize         bool
-		jsonFormat        bool
-		statsOutput       string
-		stopable          bool // if true, will stop when `stop` is sent through stdin
+		statsShowInterval int
+
+		loaderID   int // when multiple of instances of loader running on the same host
+		putPct     int // % of puts, rest are gets
+		numWorkers int
+		batchSize  int // batch is used for bootstraping(list) and delete
+
+		verifyHash bool // verify xxHash during get
+		cleanUp    bool
+		usingSG    bool
+		usingFile  bool
+		getConfig  bool // true if only run get proxy config request
+		randomize  bool
+		jsonFormat bool
+
+		stopable bool // if true, will stop when `stop` is sent through stdin
 
 		// bucket-related options
 		bPropsStr string
@@ -154,12 +166,11 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
 	flag.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests")
 	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
-	flag.Int64Var(&p.putSizeUpperBound, "totalputsize", 0, "Stops after total put size exceeds this (in KB); 0 = no limit")
-	flag.BoolVar(&p.putSizeDelete, "putsizedelete", false, "Start deleting instead of stoping after total put size exceeds this")
+	flag.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify units with suffix; 0 = no limit")
 	flag.BoolVar(&p.cleanUp, "cleanup", true, "True if clean up after run")
 	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
-	flag.IntVar(&p.minSize, "minsize", 1024, "Minimal object size in KB")
-	flag.IntVar(&p.maxSize, "maxsize", 1048576, "Maximal object size in KB")
+	flag.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify units with suffix")
+	flag.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify units with suffix")
 	flag.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
 	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
@@ -168,12 +179,14 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
 	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
-	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset")
-	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length (0 - read the entire object)")
 	flag.BoolVar(&p.randomize, "randomize", false, "Determines if the random source should be nondeterministic")
 	flag.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
+	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify units with suffix; 0 = read the entire object")
+
+	//Advanced Usage
+	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify units with suffix")
 	flag.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
-	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving SIGHUP")
+	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
 
 	flag.Parse()
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
@@ -181,6 +194,28 @@ func parseCmdLine() (params, error) {
 
 	if p.randomize {
 		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+
+	if p.putSizeUpperBoundStr != "" {
+		if p.putSizeUpperBound, err = cmn.S2B(p.putSizeUpperBoundStr); err != nil {
+			return params{}, fmt.Errorf("failed to parse total put size %s: %v", p.putSizeUpperBoundStr, err)
+		}
+	}
+
+	if p.minSizeStr != "" {
+		if p.minSize, err = cmn.S2B(p.minSizeStr); err != nil {
+			return params{}, fmt.Errorf("failed to parse min size %s: %v", p.minSizeStr, err)
+		}
+	} else {
+		p.minSize = cmn.MiB
+	}
+
+	if p.maxSizeStr != "" {
+		if p.maxSize, err = cmn.S2B(p.maxSizeStr); err != nil {
+			return params{}, fmt.Errorf("failed to parse max size %s: %v", p.maxSizeStr, err)
+		}
+	} else {
+		p.maxSize = cmn.GiB
 	}
 
 	// Sanity check
@@ -265,7 +300,6 @@ func parseCmdLine() (params, error) {
 	}
 
 	p.proxyURL = "http://" + ip + ":" + port
-	p.putSizeUpperBound *= 1024
 	return p, nil
 }
 
@@ -297,7 +331,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	// If neither duration nor put upper bound is specified while not stopable, it is a no op.
+	// If neither duration nor put upper bound is specified, it is a no op.
+	// Note that stopable prevents being a no op
 	// This can be used as a cleaup only run (no put no get).
 	if runParams.duration == 0 {
 		if runParams.putSizeUpperBound == 0 && !runParams.stopable {
@@ -387,9 +422,9 @@ func main() {
 		fmt.Printf("Found %d existing objects\n", len(allObjects))
 	}
 
-	osSigChan := make(chan os.Signal, 1)
+	osSigChan := make(chan os.Signal, 2)
 	if runParams.stopable {
-		signal.Notify(osSigChan, syscall.SIGHUP)
+		signal.Notify(osSigChan, syscall.SIGINT, syscall.SIGTERM)
 	}
 
 	logRunParams(runParams, os.Stdout)
@@ -513,8 +548,8 @@ func logRunParams(p params, to *os.File) {
 		Duration      string `json:"duration"`
 		MaxPutBytes   int64  `json:"put upper bound"`
 		PutPct        int    `json:"put %"`
-		MinSize       int    `json:"minimal object size in KB"`
-		MaxSize       int    `json:"maximal object size in KB"`
+		MinSize       int64  `json:"minimal object size in Bytes"`
+		MaxSize       int64  `json:"maximal object size in Bytes"`
 		NumWorkers    int    `json:"# workers"`
 		StatsInterval string `json:"stats interval"`
 		Backing       string `json:"backed by"`
@@ -739,12 +774,12 @@ func writeStats(to *os.File, jsonFormat, final bool, s, t sts) {
 }
 
 func newPutWorkOrder() *workOrder {
-	var size int
+	var size int64
 
 	if runParams.maxSize == runParams.minSize {
 		size = runParams.minSize
 	} else {
-		size = rnd.Intn(runParams.maxSize-runParams.minSize) + runParams.minSize
+		size = rnd.Int63n(runParams.maxSize-runParams.minSize) + runParams.minSize
 	}
 
 	putPending++
@@ -754,7 +789,7 @@ func newPutWorkOrder() *workOrder {
 		bckProvider: runParams.bckProvider,
 		op:          opPut,
 		objName:     myName + "/" + tutils.FastRandomFilename(rnd, 32),
-		size:        int64(size * 1024),
+		size:        size,
 	}
 }
 

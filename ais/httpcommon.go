@@ -875,9 +875,6 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatDaemonInfo:
 		jsbytes, err = jsoniter.Marshal(h.si)
 		cmn.AssertNoErr(err)
-	case cmn.GetWhatSysInfo:
-		jsbytes, err = jsoniter.Marshal(gmem2.FetchSysInfo())
-		cmn.AssertNoErr(err)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)

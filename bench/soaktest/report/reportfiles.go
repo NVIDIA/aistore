@@ -74,6 +74,16 @@ func InitReportFiles(dir string) {
 
 	fdetail, err = cmn.CreateFile(fdetailPath)
 	cmn.AssertNoErr(err)
+
+	fmt.Printf("----- Writing Reports to Disk -----\n")
+	fmt.Printf("Summary Logs: %v\n", fsummaryPath)
+	fmt.Printf("Detailed Logs: %v\n", fdetailPath)
+	fmt.Println()
+	fmt.Printf("Summary Data: %v\n", summaryWriter.Path)
+	fmt.Printf("Detailed Data: %v\n", detailWriter.Path)
+	fmt.Printf("Regression Data: %v\n", regressionWriter.Path)
+	fmt.Printf("System Info Data: %v\n", sysinfoWriter.Path)
+	fmt.Printf("----- Writing Reports to Disk -----\n")
 }
 
 func Writef(level int, format string, args ...interface{}) {

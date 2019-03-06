@@ -106,7 +106,8 @@ func GetDaemonConfig(baseParams *BaseParams) (config *cmn.Config, err error) {
 // GetDaemonSysInfo API
 //
 // Returns the system info of a specific daemon in the cluster
-func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.SysInfo, err error) {
+// Note that FSCapacity will be zero if proxy
+func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.TSysInfo, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}

@@ -7,6 +7,11 @@ Run `go build` to create an executable for `aisloader` or run
 ```
 $ go run main.go worker.go [ARGS ...]
 ```
+
+## Byte Size Suffix
+
+Some parameters in AISLoader that specify a number of bytes can be suffixed. For example: `8M` would specify 8 MiB. The following suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB, 'b' or 'B' - bytes. Note that if no suffix is specified, bytes are assumed.
+
 ## Using AIS Loader
 
 AIS Loader allows for configurable PUT and GET tests directly from the command line
@@ -19,11 +24,11 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-numworkers` - Number of go routines sending requests in parallel
  - `-pctput` - Percentage of put request (0% - 100%, remaining is allocated for GET)
  - `-tmpdir` - Local temporary directory used to store temporary files
- - `-totalputsize` - Stops after total put size exceeds this (in KB); 0 = no limit
+ - `-totalputsize` - Stops after total put size exceeds this (supports [byte size suffix](#byte-size-suffix)); 0 = no limit
  - `-cleanup` - True if clean up after run
  - `-verifyhash` - True if verify xxhash during get
- - `-minsize` - Minimal object size in KB
- - `-maxsize` - Maximal object size in KB
+ - `-minsize` - Minimal object size (supports [byte size suffix](#byte-size-suffix))
+ - `-maxsize` - Maximal object size (supports [byte size suffix](#byte-size-suffix))
  - `-readertype` - Type of reader: sg (default) | file | inmem | rand
  - `-loaderid` - ID to identify a loader when multiple instances of loader running on the same host
  - `-statsdip` - IP for statsd server
@@ -50,8 +55,8 @@ Run configuration:
     "duration": "10s",
     "put upper bound": 0,
     "put %": 50,
-    "minimal object size in KB": 1024,
-    "maximal object size in KB": 1048576,
+    "minimal object size in Bytes": 1024,
+    "maximal object size in Bytes": 1048576,
     "# workers": 3,
     "stats interval": "10s",
     "backed by": "sg",

@@ -1034,10 +1034,10 @@ components:
           type: string
           description: Name of the bucket from where data is read and written
           example: "dsort-bucket"
-        local:
-          type: boolean
-          description: Describes if the bucket is local or not
-          default: false
+        bck_provider:
+          type: string
+          description: Describes if the bucket is local or cloud
+          default: "local"
         extension:
           type: string
           example: ".tar"

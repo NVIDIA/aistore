@@ -78,10 +78,10 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 		spf("-numworkers=%v", numWorkers),
 		spf("-pctput=%v", params.pctput),
 		spf("-duration=%s", params.duration),
-		spf("-totalputsize=%v", params.totalputsize/cmn.KiB),
+		spf("-totalputsize=%v", params.totalputsize),
 		spf("-verifyhash=%t", params.verifyhash),
-		spf("-minsize=%v", params.minsize/cmn.KiB),
-		spf("-maxsize=%v", params.maxsize/cmn.KiB),
+		spf("-minsize=%v", params.minsize),
+		spf("-maxsize=%v", params.maxsize),
 		spf("-readoff=%v", params.readoff),
 		spf("-readlen=%v", params.readlen),
 		spf("-stats-output=%s", filename),
@@ -95,7 +95,7 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 	if params.stopable {
 		cmd.Start()
 		<-params.stopCh
-		err = cmd.Process.Signal(syscall.SIGHUP)
+		err = cmd.Process.Signal(syscall.SIGTERM)
 		if err != nil {
 			cmd.Process.Kill()
 		} else {

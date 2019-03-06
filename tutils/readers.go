@@ -181,15 +181,6 @@ func (rr *rrLimited) Read(p []byte) (n int, err error) {
 	return
 }
 
-// bytesReaderCloser is a helper for being able to do multi read on a byte buffer
-type bytesReaderCloser struct {
-	bytes.Reader
-}
-
-func (q *bytesReaderCloser) Close() error {
-	return nil
-}
-
 type fileReader struct {
 	*os.File
 	fullName string // Example: "/dir/ais/smoke/bGzhWKWoxHDSePnELftx"

@@ -56,7 +56,7 @@
 #
 # Kubespray today is using Docker 18.06.2-ce, and is reluctant to agree to install later versions.
 # So instead (having configued nvidia repos and using apt-cache madison nvidia-docker2 nvidia-container-runtime
-# to see available versions) we'll avoid selecting the latest nvidia packages (wich want Docker 18.09)
+# to see available versions) we'll avoid selecting the latest nvidia packages (which want Docker 18.09)
 # and instead use those listed as depending on Docker 18.06.2.
 #
 # We must install both packages in a single apt instance.

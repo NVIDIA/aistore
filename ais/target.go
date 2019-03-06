@@ -2816,8 +2816,12 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo, cmn.GetWhatSysInfo:
+	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo:
 		t.httprunner.httpdaeget(w, r)
+	case cmn.GetWhatSysInfo:
+		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: gmem2.FetchFSInfo()})
+		cmn.AssertNoErr(err)
+		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
 		jsbytes, err := rst.GetWhatStats()

@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
@@ -74,15 +73,24 @@ type (
 		Max uint32
 	}
 	SysInfo struct {
-		MemUsed    uint64    `json:"mem_used"`
-		MemAvail   uint64    `json:"mem_avail"`
-		PctMemUsed float64   `json:"pct_mem_used"`
-		PctCPUUsed float64   `json:"pct_cpu_used"`
-		Timestamp  time.Time `json:"timestamp"`
+		MemUsed    uint64  `json:"mem_used"`
+		MemAvail   uint64  `json:"mem_avail"`
+		PctMemUsed float64 `json:"pct_mem_used"`
+		PctCPUUsed float64 `json:"pct_cpu_used"`
+	}
+	FSInfo struct {
+		FSUsed     uint64  `json:"fs_used"`
+		FSCapacity uint64  `json:"fs_capacity"`
+		PctFSUsed  float64 `json:"pct_fs_used"`
+	}
+
+	TSysInfo struct {
+		SysInfo
+		FSInfo
 	}
 	ClusterSysInfo struct {
-		Proxy  map[string]*SysInfo `json:"proxy"`
-		Target map[string]*SysInfo `json:"target"`
+		Proxy  map[string]*SysInfo  `json:"proxy"`
+		Target map[string]*TSysInfo `json:"target"`
 	}
 	ClusterSysInfoRaw struct {
 		Proxy  map[string]jsoniter.RawMessage `json:"proxy"`

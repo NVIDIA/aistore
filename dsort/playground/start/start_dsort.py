@@ -34,7 +34,7 @@ algorithm = openapi_client.models.SortSpecAlgorithm(
 
 spec = openapi_client.models.SortSpec(
     bucket=args.bucket,
-    local=True,
+    bck_provider='local',
     extension=args.ext,
     input_format=args.input,
     output_format=args.output,

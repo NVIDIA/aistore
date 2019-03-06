@@ -1882,11 +1882,15 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo, cmn.GetWhatSysInfo:
+	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
 		jsbytes, err := rst.GetWhatStats()
+		cmn.AssertNoErr(err)
+		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+	case cmn.GetWhatSysInfo:
+		jsbytes, err := jsoniter.Marshal(gmem2.FetchSysInfo())
 		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatSmap:
