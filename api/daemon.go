@@ -103,6 +103,30 @@ func GetDaemonConfig(baseParams *BaseParams) (config *cmn.Config, err error) {
 	return
 }
 
+// GetDaemonSysInfo API
+//
+// Returns the system info of a specific daemon in the cluster
+func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.SysInfo, err error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}
+	optParams := OptionalParams{Query: query}
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	err = jsoniter.Unmarshal(b, &sysInfo)
+	if err != nil {
+		return nil, err
+	}
+	return
+}
+
 // SetDaemonConfig API
 //
 // Given a key and a value for a specific configuration parameter
