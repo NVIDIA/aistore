@@ -3,7 +3,14 @@
 package recipes
 
 import (
+	"html/template"
 	"math/rand"
+	"os"
+	"text/tabwriter"
+
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
+
+	"github.com/NVIDIA/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 
@@ -12,22 +19,49 @@ import (
 
 //Special file for registering recipes
 
+const (
+	recipeTmpl = "RecipeID\t Name\t Short\t Description\n" +
+		"{{ range $key, $value := . }}" +
+		"{{$value.RecipeID}}\t {{$value.Name}}\t {{$value.Short}}\t {{$value.Description}}\n" +
+		"{{end}}\n"
+)
+
 var (
 	loadedRecipes = []*Recipe{
-		&Recipe{"Basic Put", recBasicPut, true},
-		&Recipe{"Basic Target Down", recBasicTargDown, true},
+		&Recipe{
+			1, "Basic Put", true,
+			"basic recipe that PUTs into buckets, considered the `hello world` of recipes",
+			recBasicPut,
+		},
+		&Recipe{
+			2, "Basic Target Down", true,
+			"basic recipe where a target goes down and comes back up during PUT/GET",
+			recBasicTargDown,
+		},
+		&Recipe{
+			3, "EC Target Down", true,
+			"basic recipe for EC by performing GET while a target is down",
+			recECTargDown,
+		},
 
-		&Recipe{"Cycle Put", recCyclePut, false},
+		&Recipe{
+			4, "Cycle Put", false,
+			"constantly cycles through buckets, running PUT in one, GET in another, and deleting the last",
+			recCyclePut,
+		},
 	}
 
 	rnd = rand.New(rand.NewSource(1))
 )
 
 type Recipe struct {
-	Name string
+	RecipeID int
+	Name     string
 
-	run   func(*soakprim.RecipeContext)
-	short bool
+	Short       bool
+	Description string
+
+	run func(*soakprim.RecipeContext)
 }
 
 func (rec *Recipe) RunRecipe(rctx *soakprim.RecipeContext) {
@@ -48,12 +82,17 @@ func (rec *Recipe) RunRecipe(rctx *soakprim.RecipeContext) {
 	report.Writef(report.ConsoleLevel, "[recipe %s finished]\n", rec.Name)
 }
 
-func GetShuffledRecipeList(short bool) []*Recipe {
+func GetShuffledRecipeList() []*Recipe {
 	var shuffledRecipes []*Recipe
 	perm := rnd.Perm(len(loadedRecipes))
 	for _, randIndex := range perm {
 		r := loadedRecipes[randIndex]
-		if short && !r.short {
+
+		if soakcmn.Params.RecSet != nil {
+			if _, ok := soakcmn.Params.RecSet[r.RecipeID]; !ok {
+				continue
+			}
+		} else if soakcmn.Params.Short && !r.Short {
 			continue
 		}
 
@@ -61,4 +100,24 @@ func GetShuffledRecipeList(short bool) []*Recipe {
 	}
 
 	return shuffledRecipes
+}
+
+func GetValidRecipeIDs() map[int]struct{} {
+	v := make(map[int]struct{})
+	for _, x := range loadedRecipes {
+		v[x.RecipeID] = struct{}{}
+	}
+	return v
+}
+
+func PrintRecipes() {
+	tmpl, err := template.New("List Template").Parse(recipeTmpl)
+	cmn.AssertNoErr(err)
+
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
+	err = tmpl.Execute(w, loadedRecipes)
+	cmn.AssertNoErr(err)
+
+	w.Flush()
 }

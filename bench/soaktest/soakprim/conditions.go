@@ -63,7 +63,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 		for _, bckName := range toDelete {
 			prefixedBckName := bckNamePrefix(bckName)
 			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), prefixedBckName)
-			report.Writef(report.DetailLevel, "Pre: deleted extraneous bucket: %v\n", prefixedBckName)
+			report.Writef(report.SummaryLevel, "Pre: deleted extraneous bucket: %v\n", prefixedBckName)
 		}
 	}
 
@@ -107,6 +107,8 @@ func (rctx *RecipeContext) Post(conds *PostConds) {
 		if numTargets != conds.NumTargets {
 			report.Writef(report.SummaryLevel, "Post: wrong # of targets, exp: %v, actual %v\n", conds.NumTargets, numTargets)
 		}
+
+		updateSysInfo() //fetch new capacity since # of targets changed
 	}
 }
 

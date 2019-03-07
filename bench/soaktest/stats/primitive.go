@@ -70,6 +70,11 @@ func (ps *PrimitiveStat) writeStat(f *os.File) {
 		return
 	}
 
+	safeRecipeNum := ""
+	if ps.RecipeNum > 0 {
+		safeRecipeNum = strconv.Itoa(ps.RecipeNum)
+	}
+
 	safeLatency := ""
 	if ps.RequestCount > 0 {
 		safeLatency = fmt.Sprintf("%f", ps.Latency.Seconds())
@@ -88,7 +93,7 @@ func (ps *PrimitiveStat) writeStat(f *os.File) {
 			[]string{
 				ps.StartTime.Format(csvTimeFormat),
 				ps.RecipeName,
-				strconv.Itoa(ps.RecipeNum),
+				safeRecipeNum,
 				ps.ID,
 
 				ps.OpType,

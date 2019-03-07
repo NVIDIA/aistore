@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/soaktest/constants"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -52,17 +52,10 @@ func (rctx *ReportContext) BeginRecipe(name string) {
 	rctx.currentRecipe = name
 
 	timestamp := time.Now()
-	rctx.recipeGetStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: constants.OpTypeGet, BeginTime: timestamp}
-	rctx.recipePutStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: constants.OpTypePut, BeginTime: timestamp}
+	rctx.recipeGetStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: soakcmn.OpTypeGet, BeginTime: timestamp}
+	rctx.recipePutStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: soakcmn.OpTypePut, BeginTime: timestamp}
 
 	rctx.phaseNumber = 0
-}
-
-func (rctx *ReportContext) WriteSystemInfoStats(systemInfoStats *cmn.ClusterSysInfo) {
-	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats, time.Now())
-	for _, st := range sysinfoStats {
-		sysinfoWriter.WriteStat(st)
-	}
 }
 
 // EndRecipe should be called after the recipe
@@ -73,6 +66,8 @@ func (rctx *ReportContext) EndRecipe() error {
 
 	summaryWriter.WriteStat(rctx.recipeGetStats)
 	summaryWriter.WriteStat(rctx.recipePutStats)
+
+	rctx.currentRecipe = ""
 
 	return nil
 }
@@ -100,9 +95,9 @@ func (rctx *ReportContext) FlushRecipePhase() {
 
 		detailWriter.WriteStat(stat)
 
-		if stat.OpType == constants.OpTypeGet || stat.Fatal {
+		if stat.OpType == soakcmn.OpTypeGet || stat.Fatal {
 			rctx.recipeGetStats.Add(stat)
-		} else if stat.OpType == constants.OpTypePut || stat.Fatal {
+		} else if stat.OpType == soakcmn.OpTypePut || stat.Fatal {
 			rctx.recipePutStats.Add(stat)
 		}
 	}
@@ -114,4 +109,12 @@ func (rctx *ReportContext) PutPrimitiveStats(p *stats.PrimitiveStat) {
 	rctx.primStatsMux.Lock()
 	rctx.primitiveStatsPhaseQueue = append(rctx.primitiveStatsPhaseQueue, p)
 	rctx.primStatsMux.Unlock()
+}
+
+// The system info stats don't need a context
+func WriteSystemInfoStats(systemInfoStats *cmn.ClusterSysInfo) {
+	sysinfoStats := stats.ParseClusterSysInfo(systemInfoStats, time.Now())
+	for _, st := range sysinfoStats {
+		sysinfoWriter.WriteStat(st)
+	}
 }

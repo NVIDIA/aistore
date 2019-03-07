@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 
 	"github.com/NVIDIA/aistore/api"
@@ -49,7 +50,7 @@ func (rctx *RecipeContext) finishPrim(tag *primTag) {
 	rctx.wg.Done()
 }
 
-func (rctx *RecipeContext) MakeBucket(bucketname string, bprops *cmn.BucketProps) {
+func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	tag := rctx.startPrim("MakeBucket")
 	go func() {
 		defer rctx.finishPrim(tag)
@@ -58,37 +59,57 @@ func (rctx *RecipeContext) MakeBucket(bucketname string, bprops *cmn.BucketProps
 	}()
 }
 
-func (rctx *RecipeContext) Put(bucketname string, size int64, minSize int, maxSize int, numWorkers int) {
+func (rctx *RecipeContext) SetBucketProps(bucketname string, bckprops cmn.BucketProps) {
+	tag := rctx.startPrim("SetBucketProps")
+	go func() {
+		defer rctx.finishPrim(tag)
+		err := api.SetBucketProps(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), bckprops)
+		cmn.AssertNoErr(err)
+	}()
+}
+
+// Put is the primitive that puts into an existing bucket
+// pctSize is the percent of capacity allocated to recipes, recipe assumes responsibility to ensure at most 100 is used
+func (rctx *RecipeContext) Put(bucketname string, maxDuration time.Duration, pctSize float64) {
 	tag := rctx.startPrim("PUT")
+
+	if pctSize > 100 {
+		cmn.AssertNoErr(fmt.Errorf("attempted to use %v pct of recipe capacity", pctSize))
+	}
+
+	primPutSize := int64(float64(recCapacity) / 100 * pctSize)
+
 	params := &AISLoaderExecParams{
 		pctput:       100,
-		totalputsize: size,
-		minsize:      minSize,
-		maxsize:      maxSize,
+		duration:     maxDuration,
+		totalputsize: primPutSize,
+		minsize:      soakcmn.Params.RecMinFilesize,
+		maxsize:      soakcmn.Params.RecMaxFilesize,
 	}
 	go func() {
 		defer rctx.finishPrim(tag)
 		ch := make(chan *stats.PrimitiveStat, 1)
-		AISExec(ch, bckNamePrefix(bucketname), numWorkers, params)
+		AISExec(ch, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)
 	}()
 }
 
-func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checksum bool, numWorkers int, readoff int, readlen int) {
+// Function Get has readoffpct and readlenpct as a pct of soakcmn.Params.RecMinFilesize
+func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checksum bool, readoffpct float64, readlenpct float64) {
 	tag := rctx.startPrim("GET")
 	params := &AISLoaderExecParams{
 		pctput:     0,
 		duration:   duration,
 		verifyhash: checksum,
-		readoff:    readoff,
-		readlen:    readlen,
+		readoff:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readoffpct),
+		readlen:    int64(float64(soakcmn.Params.RecMinFilesize/100) * readlenpct),
 	}
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, bckNamePrefix(bucketname), numWorkers, params)
+		AISExec(ch, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)

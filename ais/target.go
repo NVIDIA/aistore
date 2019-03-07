@@ -2878,7 +2878,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
-		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: gmem2.FetchFSInfo()})
+		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
 		cmn.AssertNoErr(err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatStats:

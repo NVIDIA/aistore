@@ -3,17 +3,17 @@ package soakprim
 import (
 	"sync"
 
+	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
+
 	"github.com/NVIDIA/aistore/tutils"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	regBucket   = "soaktest-reg-0"
-	numRegFiles = 200
-	regFilesize = 2 * cmn.MiB
+	regBucket = "soaktest-reg-0"
 )
 
 type regressionContext struct {
@@ -31,16 +31,28 @@ func init() {
 	api.CreateLocalBucket(tutils.BaseAPIParams(primaryURL), regBucket)
 }
 
+func cleanupRegression() {
+	if exists, _ := tutils.DoesLocalBucketExist(primaryURL, regBucket); exists {
+		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), regBucket)
+	}
+}
+
 func setupRegression() *regressionContext {
+	report.Writef(report.ConsoleLevel, "Setting up regression (maximum %v)...\n", regCapacity)
+
 	params := &AISLoaderExecParams{
 		pctput:       100,
-		totalputsize: numRegFiles * regFilesize,
-		minsize:      regFilesize,
-		maxsize:      regFilesize,
+		totalputsize: regCapacity,
+		duration:     soakcmn.Params.RegSetupDuration,
+		minsize:      soakcmn.Params.RegMinFilesize,
+		maxsize:      soakcmn.Params.RegMaxFilesize,
 	}
 	aisStopCh := make(chan *stats.PrimitiveStat, 1)
-	AISExec(aisStopCh, regBucket, 1, params)
+	AISExec(aisStopCh, regBucket, soakcmn.Params.RegSetupWorkers, params)
+	setupStat := <-aisStopCh
 	close(aisStopCh)
+
+	report.Writef(report.ConsoleLevel, "Done setting up regression (actual size %v) ...\n", setupStat.TotalSize)
 
 	regctx := &regressionContext{}
 	regctx.bckName = regBucket //all regression tests share a bucket for now
@@ -53,9 +65,10 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 	wg.Add(1)
 
 	aisLoaderExecParams := &AISLoaderExecParams{
-		pctput:   0,
-		stopable: true,
-		stopCh:   make(chan struct{}),
+		pctput:     0,
+		stopable:   true,
+		stopCh:     make(chan struct{}),
+		verifyhash: false,
 
 		duration:     0,
 		totalputsize: 0,
@@ -68,7 +81,7 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 
 	go func() {
 		defer aisExecWg.Done()
-		AISExec(aisExecResultCh, regBucket, 1, aisLoaderExecParams)
+		AISExec(aisExecResultCh, regBucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
 	}()
 
 	<-stopCh
@@ -82,7 +95,10 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 	wg.Done()
 }
 
-func (rctx *RecipeContext) startRegression() {
+func (rctx *RecipeContext) StartRegression() {
+	//Record system stats when we start
+	updateSysInfo()
+
 	if rctx.regCtx == nil {
 		rctx.regCtx = setupRegression()
 	}
@@ -90,15 +106,21 @@ func (rctx *RecipeContext) startRegression() {
 	regCtx := rctx.regCtx
 	regCtx.stopCh = make(chan struct{})
 	regCtx.wg = &sync.WaitGroup{}
+	if rctx.repCtx == nil {
+		rctx.repCtx = report.NewReportContext()
+	}
 	go regressionWorker(regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
 }
 
-func (rctx *RecipeContext) finishRegression() {
+func (rctx *RecipeContext) FinishRegression() {
 	regCtx := rctx.regCtx
 
 	if regCtx == nil {
 		return
 	}
+
+	//Record system stats when we finish
+	updateSysInfo()
 
 	if regCtx.wg != nil {
 		regCtx.stopCh <- struct{}{}

@@ -480,12 +480,13 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
+		p.bmdowner.Lock()
 		bucketmd := p.bmdowner.get()
 		if !bucketmd.IsLocal(bucket) {
+			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not appear to be local", bucket))
 			return
 		}
-		p.bmdowner.Lock()
 		clone := bucketmd.clone()
 		if !clone.del(bucket, true) {
 			p.bmdowner.Unlock()

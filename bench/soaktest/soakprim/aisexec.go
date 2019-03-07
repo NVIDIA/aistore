@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/soaktest/constants"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/tutils"
@@ -33,13 +33,14 @@ type (
 		pctput       int
 		duration     time.Duration
 		totalputsize int64
-		verifyhash   bool
-		minsize      int
-		maxsize      int
-		readoff      int
-		readlen      int
-		stopable     bool
+		minsize      int64
+		maxsize      int64
+		readoff      int64
+		readlen      int64
 		stopCh       chan struct{}
+		stopable     bool
+
+		verifyhash bool
 	}
 )
 
@@ -111,7 +112,7 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 		report.Writef(report.DetailLevel, "-----aisloader output-----\n%v\n-----end aisloader output-----\n\n", string(out))
 		ch <- &stats.PrimitiveStat{Fatal: true, AISLoaderStat: stats.AISLoaderStat{StartTime: time.Now()}}
 		if strings.Contains(err.Error(), "signal: interrupt") {
-			Terminated = true
+			Terminate()
 		}
 		return
 	}
@@ -151,7 +152,7 @@ func parseAisloaderResponse(response []byte, totalputsize int) (*stats.Primitive
 	if totalputsize < 50 {
 		primitiveStat := stats.PrimitiveStat{
 			AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Get,
-			OpType:        constants.OpTypeGet,
+			OpType:        soakcmn.OpTypeGet,
 		}
 		return &primitiveStat, nil
 	}
@@ -160,7 +161,7 @@ func parseAisloaderResponse(response []byte, totalputsize int) (*stats.Primitive
 	// we might make use of the rest as well at some point
 	primitiveStat := stats.PrimitiveStat{
 		AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Put,
-		OpType:        constants.OpTypePut,
+		OpType:        soakcmn.OpTypePut,
 	}
 
 	return &primitiveStat, nil

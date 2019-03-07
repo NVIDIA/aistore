@@ -181,10 +181,10 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
 	flag.BoolVar(&p.randomize, "randomize", false, "Determines if the random source should be nondeterministic")
 	flag.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
+	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify units with suffix")
 	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify units with suffix; 0 = read the entire object")
 
 	//Advanced Usage
-	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify units with suffix")
 	flag.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
 	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
 

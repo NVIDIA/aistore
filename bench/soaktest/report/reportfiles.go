@@ -7,6 +7,8 @@ import (
 	"path"
 	"time"
 
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
+
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -34,7 +36,9 @@ var (
 	sysinfoWriter    stats.StatWriter
 )
 
-func InitReportFiles(dir string) {
+func InitReportFiles() {
+	dir := soakcmn.Params.ReportDir
+
 	if dir == "" {
 		err := os.MkdirAll(DefaultDir, 0755)
 		cmn.AssertNoErr(err)

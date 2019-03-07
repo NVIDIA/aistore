@@ -1,4 +1,4 @@
-package constants
+package soakcmn
 
 const (
 	// Operation types, for distinguishing between the types of aisloader

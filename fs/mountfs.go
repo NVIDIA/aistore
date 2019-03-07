@@ -445,6 +445,39 @@ func (mfs *MountedFS) EvictCloudBucket(bucket string) {
 	mfs.createDestroyBuckets(false, false, passMsg, failMsg, bucket)
 }
 
+func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
+	fsInfo := cmn.FSInfo{}
+
+	availableMountpaths, _ := mfs.Get()
+
+	visitedFS := make(map[syscall.Fsid]struct{})
+
+	for mpath := range availableMountpaths {
+		statfs := &syscall.Statfs_t{}
+
+		if err := syscall.Statfs(mpath, statfs); err != nil {
+			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
+			continue
+		}
+
+		if _, ok := visitedFS[statfs.Fsid]; ok {
+			continue
+		}
+
+		visitedFS[statfs.Fsid] = struct{}{}
+
+		fsInfo.FSUsed += (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
+		fsInfo.FSCapacity += statfs.Blocks * uint64(statfs.Bsize)
+	}
+
+	if fsInfo.FSCapacity > 0 {
+		//FIXME: assuming that each mountpath has the same capacity and gets distributed the same files
+		fsInfo.PctFSUsed = float64(fsInfo.FSUsed*100) / float64(fsInfo.FSCapacity)
+	}
+
+	return fsInfo
+}
+
 //
 // private methods
 //

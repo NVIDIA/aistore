@@ -10,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
+
 	"github.com/NVIDIA/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/api"
@@ -24,10 +26,15 @@ const (
 
 var (
 	Terminated bool
+	RunningCh  chan struct{} // chan with nothing written, closed when Terimated is true
 
 	primaryIP   string
 	primaryPort string
 	primaryURL  string // protected, we ensure this never changes
+
+	totalCapacity uint64
+	recCapacity   int64
+	regCapacity   int64
 )
 
 type RecipeContext struct {
@@ -42,20 +49,51 @@ type RecipeContext struct {
 
 func init() {
 	Terminated = false
+	RunningCh = make(chan struct{})
+
 	terminateCh := make(chan os.Signal, 2)
 	signal.Notify(terminateCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-terminateCh
-		Terminated = true
+		Terminate()
 	}()
+}
 
+func Terminate() {
+	defer func() {
+		recover() //Prevents panic from double close of RunningCh
+	}()
+	Terminated = true
+	close(RunningCh)
 }
 
 // SetPrimaryURL should be called once at start of script
-func SetPrimaryURL(ip string, port string) {
-	primaryIP = ip
-	primaryPort = port
+func SetPrimaryURL() {
+	primaryIP = soakcmn.Params.IP
+	primaryPort = soakcmn.Params.Port
 	primaryURL = "http://" + primaryIP + ":" + primaryPort
+}
+
+func CleanupSoak() {
+	cleanupRecipeBuckets()
+	cleanupRegression()
+}
+
+func updateSysInfo() {
+	systemInfoStats, err := api.GetClusterSysInfo(tutils.BaseAPIParams(primaryURL))
+	if err == nil {
+		report.WriteSystemInfoStats(&systemInfoStats)
+	} else {
+		report.Writef(report.SummaryLevel, "Encountered error while writing systemInfoStats: %v\n", err)
+	}
+
+	totalCapacity = 0
+	for _, v := range systemInfoStats.Target {
+		totalCapacity += v.FSCapacity
+	}
+
+	recCapacity = int64(float64(totalCapacity/100) * soakcmn.Params.RecPctCapacity)
+	regCapacity = int64(float64(totalCapacity/100) * soakcmn.Params.RegPctCapacity)
 }
 
 func (rctx *RecipeContext) PreRecipe(recipeName string) {
@@ -79,7 +117,9 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 
 	rctx.repCtx.BeginRecipe(recipeName)
 
-	rctx.startRegression()
+	if !soakcmn.Params.RecRegDisable {
+		rctx.StartRegression()
+	}
 }
 
 func (rctx *RecipeContext) PostRecipe() error {
@@ -109,23 +149,23 @@ func (rctx *RecipeContext) PostRecipe() error {
 		report.Writef(report.DetailLevel, "post recipe target count unchanged\n")
 	}
 
-	bckNames := fetchBuckets("PostRecipe")
-	for _, bckName := range bckNames {
-		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
-	}
+	cleanupRecipeBuckets()
 
-	systemInfoStats, err := api.GetClusterSysInfo(tutils.BaseAPIParams(primaryURL))
-	if err != nil {
-		return err
+	if !soakcmn.Params.RecRegDisable {
+		rctx.FinishRegression()
 	}
-	rctx.repCtx.WriteSystemInfoStats(&systemInfoStats)
-
-	rctx.finishRegression()
 
 	if err := rctx.repCtx.EndRecipe(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func cleanupRecipeBuckets() {
+	bckNames := fetchBuckets("PostRecipe")
+	for _, bckName := range bckNames {
+		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
+	}
 }
 
 func bckNamePrefix(bucketname string) string {

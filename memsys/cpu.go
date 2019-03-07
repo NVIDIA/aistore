@@ -8,11 +8,8 @@ package memsys
 
 import (
 	"os"
-	"syscall"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	sigar "github.com/cloudfoundry/gosigar"
 )
 
@@ -36,37 +33,4 @@ func (r *Mem2) FetchSysInfo() cmn.SysInfo {
 	sysInfo.PctCPUUsed = cpu.Percent
 
 	return sysInfo
-}
-
-func (r *Mem2) FetchFSInfo() cmn.FSInfo {
-	fsInfo := cmn.FSInfo{}
-
-	availableMountpaths, _ := fs.Mountpaths.Get()
-
-	vistedFS := make(map[syscall.Fsid]bool)
-
-	for mpath := range availableMountpaths {
-		statfs := &syscall.Statfs_t{}
-
-		if err := syscall.Statfs(mpath, statfs); err != nil {
-			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-			continue
-		}
-
-		if _, ok := vistedFS[statfs.Fsid]; ok {
-			continue
-		}
-
-		vistedFS[statfs.Fsid] = true
-
-		fsInfo.FSUsed += (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
-		fsInfo.FSCapacity += statfs.Blocks * uint64(statfs.Bsize)
-	}
-
-	if fsInfo.FSCapacity > 0 {
-		//FIXME: assuming that each mountpath has the same capacity and gets distributed the same files
-		fsInfo.PctFSUsed = float64(fsInfo.FSUsed*100) / float64(fsInfo.FSCapacity)
-	}
-
-	return fsInfo
 }

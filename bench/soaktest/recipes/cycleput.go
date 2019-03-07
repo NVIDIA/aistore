@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 func recCyclePut(rctx *soakprim.RecipeContext) {
@@ -24,23 +23,23 @@ func recCyclePut(rctx *soakprim.RecipeContext) {
 	}
 
 	rctx.Pre(conds)
-	rctx.MakeBucket(genBckName(cur), &cmn.BucketProps{})
-	rctx.MakeBucket(genBckName(last), &cmn.BucketProps{})
-	rctx.MakeBucket(genBckName(last2), &cmn.BucketProps{})
+	rctx.MakeBucket(genBckName(cur))
+	rctx.MakeBucket(genBckName(last))
+	rctx.MakeBucket(genBckName(last2))
 	rctx.Post(nil)
 
 	conds.ExpBuckets = []string{genBckName(cur), genBckName(last), genBckName(last2)}
 	rctx.Pre(conds)
-	rctx.Put(genBckName(last), 4*cmn.GiB, 1024*cmn.KiB, 500*cmn.MiB, 2)
-	rctx.Put(genBckName(last2), 4*cmn.GiB, 1024*cmn.KiB, 500*cmn.MiB, 2)
+	rctx.Put(genBckName(last), time.Second*20, 25)
+	rctx.Put(genBckName(last2), time.Second*20, 25)
 	rctx.Post(nil)
 
 	for i := 0; i < 50; i++ {
 		conds.ExpBuckets = []string{genBckName(cur), genBckName(last), genBckName(last2)}
 		next := cur + 1
-		rctx.MakeBucket(genBckName(next), &cmn.BucketProps{})
-		rctx.Put(genBckName(cur), 500*cmn.MiB, 5*cmn.MiB, 100*cmn.MiB, 2)
-		rctx.Get(genBckName(last), time.Second*3, true, 4, 0, 0)
+		rctx.MakeBucket(genBckName(next))
+		rctx.Put(genBckName(cur), time.Minute, 25)
+		rctx.Get(genBckName(last), time.Second*50, true, 0, 0)
 		rctx.Destroy(genBckName(last2))
 		rctx.Post(nil)
 
@@ -49,7 +48,7 @@ func recCyclePut(rctx *soakprim.RecipeContext) {
 		cur = next
 	}
 
-	conds.ExpBuckets = []string{genBckName(last), genBckName(last2)}
+	conds.ExpBuckets = []string{genBckName(cur), genBckName(last), genBckName(last2)}
 	rctx.Pre(conds)
 	rctx.Destroy(genBckName(last))
 	rctx.Destroy(genBckName(last2))
