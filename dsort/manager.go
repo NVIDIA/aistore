@@ -383,12 +383,19 @@ func (m *Manager) finalCleanup() {
 
 // abort stops currently running sort job and frees associated resources.
 func (m *Manager) abort() {
-	glog.Infof("manager %s has been aborted", m.ManagerUUID)
 	m.lock()
+	if m.aborted() { // do not abort if already aborted
+		m.unlock()
+		return
+	}
+
+	glog.Infof("manager %s has been aborted", m.ManagerUUID)
 	m.setAbortedTo(true)
+	inProgress := m.inProgress()
 	m.unlock()
+
 	// If job has already finished we just free resources.
-	if m.inProgress() {
+	if inProgress {
 		m.waitForFinish()
 	}
 
