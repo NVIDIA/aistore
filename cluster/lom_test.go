@@ -272,7 +272,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Fill("", cluster.LomAtime)).To(BeEmpty())
 
 				Expect(lom.Atime).To(BeEquivalentTo(desiredAtime))
-				Expect(lom.Atimestr).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
+				Expect(lom.Atimestr()).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
 				setupMockRunner(tMock)
@@ -286,7 +286,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Fill("", cluster.LomAtime)).To(BeEmpty())
 
 				Expect(lom.Atime).To(BeEquivalentTo(desiredAtime))
-				Expect(lom.Atimestr).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
+				Expect(lom.Atimestr()).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
 			})
 		})
 

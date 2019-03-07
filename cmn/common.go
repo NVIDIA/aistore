@@ -681,3 +681,26 @@ func validateBoundaries(start, end, step int) error {
 	}
 	return nil
 }
+
+//
+// time formatting
+//
+
+func FormatTime(t time.Time, format string) string {
+	switch format {
+	case "", RFC822:
+		return t.Format(time.RFC822)
+	default:
+		return t.Format(format)
+	}
+}
+
+func ParseTime(timeStr string) (t time.Time, errstr string) {
+	timeInt, err := strconv.ParseInt(timeStr, 10, 64)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to parse atime string: %s to int, err: %v", timeStr, err)
+		return
+	}
+	t = time.Unix(0, timeInt)
+	return
+}

@@ -671,7 +671,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	coldGet := !lom.Exists()
 
 	if !coldGet {
-		if errstr = lom.Fill(bckProvider, cluster.LomVersion|cluster.LomCksum); errstr != "" {
+		if errstr = lom.Fill(bckProvider, cluster.LomVersion|cluster.LomCksum|cluster.LomAtime); errstr != "" {
 			_ = lom.Fill(bckProvider, cluster.LomFstat)
 			if lom.Exists() {
 				t.rtnamemap.Unlock(lom.Uname, false)
@@ -862,6 +862,12 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}
 	hdr.Add(cmn.HeaderObjSize, strconv.FormatInt(lom.Size, 10))
 
+	timeInt := lom.Atime.UnixNano()
+	if lom.Atime.IsZero() {
+		timeInt = 0
+	}
+	hdr.Add(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+
 	// loopback if disk IO is disabled
 	if dryRun.disk {
 		if !dryRun.network {
@@ -935,7 +941,8 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		return
 	}
 
-	if !coldGet {
+	// Don't update atime if the request is a GFN.
+	if !coldGet && r.URL.Query().Get(cmn.URLParamIsGFNRequest) != "true" {
 		lom.UpdateAtime(started)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1678,6 +1685,8 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		errstr = fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
 		return
 	}
+	newr.URL.Query().Add(cmn.URLParamIsGFNRequest, "true") // This is a GFN request
+
 	// Do
 	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config.Timeout.SendFile)
 	defer cancel()
@@ -1694,9 +1703,16 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 		version    = response.Header.Get(cmn.HeaderObjVersion)
 		workFQN    = lom.GenFQN(fs.WorkfileType, fs.WorkfileRemote)
+		atimeStr   = response.Header.Get(cmn.HeaderObjAtime)
 	)
 
-	remoteLOM = lom.Copy(cluster.LOMCopyProps{Cksum: cksum, Version: version})
+	// The string in the header is an int represented as a string, NOT a formatted date string.
+	atime, errstr := cmn.ParseTime(atimeStr)
+	if errstr != "" {
+		return
+	}
+
+	remoteLOM = lom.Copy(cluster.LOMCopyProps{Cksum: cksum, Version: version, Atime: atime})
 
 	roi := &recvObjInfo{
 		t:        t,
@@ -1715,7 +1731,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		errstr = err.Error()
 		return
 	}
-	if errstr = remoteLOM.Persist(); errstr != "" {
+	if errstr = remoteLOM.Persist(false); errstr != "" {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1831,7 +1847,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		return
 	}
 	lom.RestoredReceived(props)
-	if errstr = lom.Persist(); errstr != "" {
+	if errstr = lom.Persist(false); errstr != "" {
 		return
 	}
 ret:
@@ -2207,18 +2223,10 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 		lom.Fill("", lomAction)
 	}
 	if ci.needAtime {
-		fileInfo.Atime = lom.Atimestr
+		fileInfo.Atime = cmn.FormatTime(lom.Atime, ci.msg.GetTimeFormat)
 	}
 	if ci.needCtime {
-		t := osfi.ModTime()
-		switch ci.msg.GetTimeFormat {
-		case "":
-			fallthrough
-		case cmn.RFC822:
-			fileInfo.Ctime = t.Format(time.RFC822)
-		default:
-			fileInfo.Ctime = t.Format(ci.msg.GetTimeFormat)
-		}
+		fileInfo.Ctime = cmn.FormatTime(osfi.ModTime(), ci.msg.GetTimeFormat)
 	}
 	if ci.needChkSum && lom.Cksum != nil {
 		_, storedCksum := lom.Cksum.Get()
@@ -2478,7 +2486,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		errstr = fmt.Sprintf("MvFile failed => %s: %v", roi.lom, err)
 		return
 	}
-	if errstr = roi.lom.Persist(); errstr != "" {
+	if errstr = roi.lom.Persist(roi.migrated); errstr != "" {
 		glog.Errorf("Failed to persist %s: %s", roi.lom, errstr)
 	}
 	roi.t.rtnamemap.Unlock(roi.lom.Uname, true)

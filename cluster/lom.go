@@ -42,6 +42,7 @@ type (
 		Cksum          cmn.CksumProvider
 		Version        string
 		BucketProvider string
+		Atime          time.Time
 	}
 
 	LOM struct {
@@ -63,7 +64,6 @@ type (
 		// props
 		Version  string
 		Atime    time.Time
-		Atimestr string
 		Size     int64
 		Cksum    cmn.CksumProvider
 		// flags
@@ -79,9 +79,6 @@ func (lom *LOM) RestoredReceived(props *LOM) {
 	}
 	if !props.Atime.IsZero() {
 		lom.Atime = props.Atime
-	}
-	if props.Atimestr != "" {
-		lom.Atimestr = props.Atimestr
 	}
 	if props.Size != 0 {
 		lom.Size = props.Size
@@ -100,6 +97,16 @@ func (lom *LOM) HasCopy() bool         { return lom.CopyFQN != "" && lom.FQN == 
 
 func (lom *LOM) GenFQN(ty, prefix string) string {
 	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
+}
+
+func (lom *LOM) Atimestr(format ...string) string {
+	f := time.RFC822
+
+	if len(format) > 0 {
+		f = format[0]
+	}
+
+	return lom.Atime.Format(f)
 }
 
 func (lom *LOM) Copy(props LOMCopyProps) *LOM {
@@ -121,6 +128,7 @@ func (lom *LOM) Copy(props LOMCopyProps) *LOM {
 		dstLOM.FQN = props.FQN
 		dstLOM.init(props.BucketProvider)
 	}
+	dstLOM.Atime = props.Atime
 
 	return dstLOM
 }
@@ -155,7 +163,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
 	if err = cmn.CopyFile(lom.FQN, dstLOM.FQN, buf); err != nil {
 		return
 	}
-	if errstr := dstLOM.Persist(); errstr != "" {
+	if errstr := dstLOM.Persist(false); errstr != "" {
 		err = errors.New(errstr)
 	}
 	return
@@ -251,7 +259,13 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		lom.Version = string(version)
 	}
 	if action&LomAtime != 0 { // FIXME: RFC822 format
-		lom.Atimestr, lom.Atime, _ = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
+		var err error
+		_, lom.Atime, err = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
+
+		if err != nil {
+			errstr = err.Error()
+			return
+		}
 	}
 	if action&LomCksum != 0 {
 		cksumAction := action&LomCksumMissingRecomp | action&LomCksumPresentRecomp
@@ -279,7 +293,7 @@ func (lom *LOM) BadCksumErr(cksum cmn.CksumProvider) (errstr string) {
 }
 
 // xattrs
-func (lom *LOM) Persist() (errstr string) {
+func (lom *LOM) Persist(setAtime bool) (errstr string) {
 	if lom.Cksum != nil {
 		_, cksumValue := lom.Cksum.Get()
 		if errstr = fs.SetXattr(lom.FQN, cmn.XattrXXHash, []byte(cksumValue)); errstr != "" {
@@ -289,7 +303,10 @@ func (lom *LOM) Persist() (errstr string) {
 	if lom.Version != "" {
 		errstr = fs.SetXattr(lom.FQN, cmn.XattrVersion, []byte(lom.Version))
 	}
-	// NOTE: atime is updated explicitly, via UpdateAtime() below
+	if setAtime {
+		lom.UpdateAtime(lom.Atime)
+	}
+
 	//       cmn.XattrCopies is also updated separately by the 2-way mirroring code
 	return
 }
@@ -299,7 +316,6 @@ func (lom *LOM) UpdateAtime(at time.Time) {
 	if at.IsZero() {
 		return
 	}
-	lom.Atimestr = at.Format(cmn.RFC822) // TODO: add support for cmn.StampMicro
 	if !lom.LRUEnabled() {
 		return
 	}

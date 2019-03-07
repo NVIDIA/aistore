@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -339,7 +340,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUEnabled())
+	_, atime, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUEnabled())
 
 	// obtain the version of the file
 	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrVersion); errstr != "" {
@@ -355,8 +356,9 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		httpReq.Header.Add(cmn.HeaderObjCksumType, cksumType)
 		httpReq.Header.Add(cmn.HeaderObjCksumVal, cksumValue)
 	}
-	if atimestr != "" {
-		httpReq.Header.Add(cmn.HeaderObjAtime, atimestr)
+
+	if !atime.IsZero() {
+		httpReq.Header.Add(cmn.HeaderObjAtime, strconv.FormatInt(atime.UnixNano(), 10))
 	}
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
@@ -403,10 +405,12 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 	if timeStr := httpReq.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
-		lom.Atimestr = timeStr
-		if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
-			lom.Atime = tm // FIXME: not used
+		atimeInt, err := strconv.ParseInt(timeStr, 10, 64)
+		if err != nil {
+			errstr := fmt.Sprintf("Failed to parse atime string: %s to int, err: %v", timeStr, err)
+			return errors.New(errstr)
 		}
+		lom.Atime = time.Unix(0, atimeInt) // FIXME: not used
 	}
 	if err, _ := r.t.doPut(httpReq, lom.Bucket, lom.Objname); err != nil {
 		return err

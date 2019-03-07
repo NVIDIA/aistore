@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -233,14 +232,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 			if !attrs.Updated.IsZero() {
 				t = attrs.Updated
 			}
-			switch msg.GetTimeFormat {
-			case "":
-				fallthrough
-			case cmn.RFC822:
-				entry.Ctime = t.Format(time.RFC822)
-			default:
-				entry.Ctime = t.Format(msg.GetTimeFormat)
-			}
+			entry.Ctime = cmn.FormatTime(t, msg.GetTimeFormat)
 		}
 		if strings.Contains(msg.GetProps, cmn.GetPropsChecksum) {
 			entry.Checksum = hex.EncodeToString(attrs.MD5)

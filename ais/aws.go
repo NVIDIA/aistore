@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -226,14 +225,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 		}
 		if strings.Contains(msg.GetProps, cmn.GetPropsCtime) {
 			t := *(key.LastModified)
-			switch msg.GetTimeFormat {
-			case "":
-				fallthrough
-			case cmn.RFC822:
-				entry.Ctime = t.Format(time.RFC822)
-			default:
-				entry.Ctime = t.Format(msg.GetTimeFormat)
-			}
+			entry.Ctime = cmn.FormatTime(t, msg.GetTimeFormat)
 		}
 		if strings.Contains(msg.GetProps, cmn.GetPropsChecksum) {
 			omd5, _ := strconv.Unquote(*key.ETag)

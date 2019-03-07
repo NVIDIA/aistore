@@ -1478,7 +1478,7 @@ func TestAtimeRebalance(t *testing.T) {
 	var (
 		m = metadata{
 			t:               t,
-			num:             50,
+			num:             900,
 			numGetsEachFile: 2,
 		}
 		bucketProps = defaultBucketProps()
@@ -1517,12 +1517,14 @@ func TestAtimeRebalance(t *testing.T) {
 	// Put random files
 	m.puts()
 
-	objNames := make(cmn.SimpleKVs, 10)
-	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	// Get atime in a format that includes nanoseconds to properly check if it was updated in atime cache (if it wasn't,
+	// then the returned atime would be different from the original one, but the difference could be very small).
+	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, GetTimeFormat: time.StampNano}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
+	objNames := make(cmn.SimpleKVs, 10)
 	for _, entry := range bucketList.Entries {
 		objNames[entry.Name] = entry.Atime
 	}
@@ -1543,6 +1545,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
+	msg = &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, GetTimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 

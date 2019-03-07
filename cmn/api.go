@@ -157,6 +157,7 @@ const (
 	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 	URLParamReadahead        = "rah" // Proxy to target: readeahed
+	URLParamIsGFNRequest     = "gfn" // true if the request is a Get From Neighbor request
 
 	// dsort
 	URLParamTotalCompressedSize   = "tcs"

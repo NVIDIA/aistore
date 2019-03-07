@@ -288,7 +288,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 				lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 			}
 
-			if errstr := lom.Persist(); errstr != "" {
+			if errstr := lom.Persist(false); errstr != "" {
 				err = errors.New(errstr)
 			}
 		}

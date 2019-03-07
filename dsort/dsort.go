@@ -388,7 +388,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	if errStr := lom.Persist(); errStr != "" {
+	if errStr := lom.Persist(false); errStr != "" {
 		return errors.New(errStr)
 	}
 
