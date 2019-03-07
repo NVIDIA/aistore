@@ -326,6 +326,45 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 	return reslist, nil
 }
 
+// ListBuckeFast returns list of objects in a bucket.
+// Build an object list with minimal set of properties: name and size.
+// All GetMsg fields except prefix do not work and are skipped.
+// Function always returns the whole list of objects without paging
+func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, query ...url.Values) (*cmn.BucketList, error) {
+	var (
+		querystr = ""
+		b        []byte
+		err      error
+	)
+	baseParams.Method = http.MethodPost
+	if len(query) > 0 {
+		querystr = "?" + query[0].Encode()
+	}
+
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActListObjects) + querystr
+	reslist := &cmn.BucketList{}
+	if msg != nil {
+		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	optParams := OptionalParams{Header: http.Header{
+		"Content-Type": []string{"application/json"},
+	}}
+	respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
+	}
+
+	return reslist, nil
+}
+
 // EraseCopies API
 //
 // EraseCopies starts an extended action (xaction) to reduce redundancy of a given bucket to 1 (single copy)

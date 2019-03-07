@@ -519,6 +519,31 @@ func ListObjects(proxyURL, bucket, bckProvider, prefix string, objectCountLimit 
 	return objs, nil
 }
 
+// ListObjects returns a slice of object names of all objects that match the prefix in a bucket
+func ListObjectsFast(proxyURL, bucket, bckProvider, prefix string) ([]string, error) {
+	baseParams := BaseAPIParams(proxyURL)
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, bckProvider)
+	if prefix != "" {
+		query.Add(cmn.URLParamPrefix, prefix)
+	}
+
+	data, err := api.ListBucketFast(baseParams, bucket, nil, query)
+	if err != nil {
+		return nil, err
+	}
+
+	objs := make([]string, 0, len(data.Entries))
+	for _, obj := range data.Entries {
+		// Skip directories
+		if obj.Name[len(obj.Name)-1] != '/' {
+			objs = append(objs, obj.Name)
+		}
+	}
+
+	return objs, nil
+}
+
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {

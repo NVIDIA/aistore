@@ -718,7 +718,7 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var msg cmn.ActionMsg
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
@@ -732,6 +732,18 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
+
+	if len(apitems) > 1 {
+		switch apitems[1] {
+		case cmn.ActListObjects:
+			p.listBucketAndCollectStats(w, r, bucket, bckProvider, msg, started)
+			return
+		default:
+			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid bucket action: %s", apitems[1]))
+			return
+		}
+	}
+
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
@@ -1487,7 +1499,7 @@ func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, listmsgjson []byte) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, listmsgjson []byte, quick bool, query ...url.Values) (allEntries *cmn.BucketList, err error) {
 	type targetReply struct {
 		resp *bucketResp
 		err  error
@@ -1498,6 +1510,16 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, listmsgj
 	msg := &cmn.GetMsg{}
 	if err = jsoniter.Unmarshal(listmsgjson, msg); err != nil {
 		return
+	}
+	if quick {
+		msg.GetFast = true
+	}
+	// override prefix if it is set in URL query values
+	if len(query) > 0 {
+		q := query[0]
+		if prefix := q.Get(cmn.URLParamPrefix); prefix != "" {
+			msg.GetPrefix = prefix
+		}
 	}
 	pageSize := cmn.DefaultPageSize
 	if msg.GetPageSize != 0 {
@@ -1561,21 +1583,41 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, listmsgj
 	}
 	sort.Slice(allEntries.Entries, entryLess)
 
-	// shrink the result to `pageSize` entries. If the page is full than
-	// mark the result incomplete by setting PageMarker
-	if len(allEntries.Entries) >= pageSize {
-		for i := pageSize; i < len(allEntries.Entries); i++ {
-			allEntries.Entries[i] = nil
+	if msg.GetFast {
+		j := 0
+		// keep all objects in the list but squeeze the same names into one
+		for i := 1; i < len(allEntries.Entries); i++ {
+			if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
+				continue
+			}
+			j++
+			if j != i {
+				allEntries.Entries[j] = allEntries.Entries[i]
+			}
 		}
+		if j < len(allEntries.Entries)-1 {
+			for i := j; i < len(allEntries.Entries); i++ {
+				allEntries.Entries[i] = nil
+			}
+			allEntries.Entries = allEntries.Entries[:j]
+		}
+	} else {
+		// shrink the result to `pageSize` entries. If the page is full than
+		// mark the result incomplete by setting PageMarker
+		if len(allEntries.Entries) >= pageSize {
+			for i := pageSize; i < len(allEntries.Entries); i++ {
+				allEntries.Entries[i] = nil
+			}
 
-		allEntries.Entries = allEntries.Entries[:pageSize]
-		allEntries.PageMarker = allEntries.Entries[pageSize-1].Name
+			allEntries.Entries = allEntries.Entries[:pageSize]
+			allEntries.PageMarker = allEntries.Entries[pageSize-1].Name
+		}
 	}
 
 	return allEntries, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider string, listmsgjson []byte, query ...url.Values) (allentries *cmn.BucketList, err error) {
 	const (
 		cachedObjects = false
 	)
@@ -1589,6 +1631,13 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider
 	}
 	if msg.GetPageSize > maxPageSize {
 		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, maxPageSize)
+	}
+	// override prefix if it is set in URL query values
+	if len(query) > 0 {
+		q := query[0]
+		if prefix := q.Get(cmn.URLParamPrefix); prefix != "" {
+			msg.GetPrefix = prefix
+		}
 	}
 
 	// first, get the cloud object list from a random target
@@ -1651,9 +1700,15 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket,
 	}
 
 	if bckProvider == cmn.CloudBs || !p.bmdowner.get().IsLocal(bucket) {
-		allentries, err = p.getCloudBucketObjects(r, bucket, bckProvider, listmsgjson)
+		allentries, err = p.getCloudBucketObjects(r, bucket, bckProvider, listmsgjson, r.URL.Query())
 	} else {
-		allentries, err = p.getLocalBucketObjects(bucket, bckProvider, listmsgjson)
+		apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		quick := len(apitems) > 1 && apitems[1] == cmn.ActListObjects
+		allentries, err = p.getLocalBucketObjects(bucket, bckProvider, listmsgjson, quick, r.URL.Query())
 	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())

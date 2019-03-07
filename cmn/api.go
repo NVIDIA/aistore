@@ -140,6 +140,7 @@ const (
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
 	URLParamBckProvider = "bprovider"    // "local" | "cloud"
+	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
 	// internal use
 	URLParamFromID           = "fid" // source target ID
 	URLParamToID             = "tid" // destination target ID
@@ -169,6 +170,7 @@ type GetMsg struct {
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
 	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
+	GetFast       bool   `json:"fast"`        // return only names and sizes of all objects
 }
 
 // ListRangeMsgBase contains fields common to Range and List operations
@@ -268,7 +270,7 @@ const (
 // contains file and directory metadata as per the GetMsg
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
-	Size      int64  `json:"size"`                // size in bytes
+	Size      int64  `json:"size,omitempty"`      // size in bytes
 	Ctime     string `json:"ctime,omitempty"`     // formatted as per GetMsg.GetTimeFormat
 	Checksum  string `json:"checksum,omitempty"`  // checksum
 	Type      string `json:"type,omitempty"`      // "file" OR "directory"
@@ -277,8 +279,8 @@ type BucketEntry struct {
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc
-	Copies    int64  `json:"copies"`              // ## copies (non-replicated = 1)
-	IsCached  bool   `json:"iscached"`            // if the file is cached on one of targets
+	Copies    int64  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
+	IsCached  bool   `json:"iscached,omitempty"`  // if the file is cached on one of targets
 }
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'

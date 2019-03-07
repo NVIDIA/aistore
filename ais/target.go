@@ -1891,6 +1891,10 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
 		r := &mresp{t.newFileWalk(bucket, msg), "", nil}
+		if msg.GetFast {
+			// for "quick" request return all objects in one response
+			r.infos.limit = 1<<63 - 1
+		}
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.failedPath = dir
@@ -1901,10 +1905,22 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 			return
 		}
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
-		if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
-			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-			r.failedPath = dir
-			r.err = err
+		if msg.GetFast {
+			// Special path for "quick" response: no object properties check,
+			// msg.GetProps is skipped: only object name and size returned.
+			// All other msg props do not work except msg.GetPrefix
+			// Always returns all objects
+			if err := filepath.Walk(dir, r.infos.listwalkfFast); err != nil {
+				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
+				r.failedPath = dir
+				r.err = err
+			}
+		} else {
+			if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
+				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
+				r.failedPath = dir
+				r.err = err
+			}
 		}
 		ch <- r
 		wg.Done()
@@ -2063,6 +2079,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return // ======================================>
 	}
 	// cloud bucket
+	msg.GetFast = false // quick mode does not make sense for Cloud buckets
 	if useCache {
 		tag = "cloud cached"
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
@@ -2204,6 +2221,39 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	fileInfo.Size = osfi.Size()
 	ci.files = append(ci.files, fileInfo)
 	ci.lastFilePath = lom.FQN
+	return nil
+}
+
+// fast alternative of generic listwalk: do not fetch any object information
+// besides one that passed by filepath.Walk. Always returns all objects - no
+// paging required. But the result may have 'ghost' or misplaced objects.
+// The only supported GetMsg feature is 'GetPrefix' - it does not slow down.
+func (ci *allfinfos) listwalkfFast(fqn string, osfi os.FileInfo, err error) error {
+	if err != nil {
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
+		}
+		return nil
+	}
+	if osfi.IsDir() {
+		return ci.processDir(fqn)
+	}
+
+	relname := fqn[ci.rootLength:]
+	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
+		return nil
+	}
+	if ci.marker != "" && relname <= ci.marker {
+		return nil
+	}
+	ci.fileCount++
+	fileInfo := &cmn.BucketEntry{
+		Name:   relname,
+		Status: cmn.ObjStatusOK,
+		Size:   osfi.Size(),
+	}
+	ci.files = append(ci.files, fileInfo)
 	return nil
 }
 

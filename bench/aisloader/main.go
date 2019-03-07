@@ -1078,6 +1078,6 @@ func cleanUp() {
 func bootStrap() error {
 	var err error
 
-	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, runParams.bckProvider, myName, 0)
+	allObjects, err = tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, myName)
 	return err
 }

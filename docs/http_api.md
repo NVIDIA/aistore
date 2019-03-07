@@ -78,6 +78,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?offset=1024&length=512' -o myobject` |
 | Get [bucket](bucket.md) names | GET /v1/buckets/\* | `curl -X GET 'http://G/v1/buckets/*'` |
 | List objects in a given [bucket](bucket.md) | POST {"action": "listobjects", "value":{  properties-and-options... }} /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' 'http://G/v1/buckets/myS3bucket'` <sup id="a2">[2](#ft2)</sup> |
+| List object names in a given [bucket](bucket.md) fast | POST /v1/buckets/bucket-name/listobjects?prefix= | `curl -X POST -L 'http://G/v1/buckets/myS3bucket/listobjects?prefix=image01'` <sup id="a8">[8](#ft8)</sup> |
 | Get [bucket properties](bucket.md#properties-and-options) | HEAD /v1/buckets/bucket-name | `curl -L --head 'http://G/v1/buckets/mybucket'` |
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject'` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT 'http://G/v1/objects/myS3bucket/myobject' -T filenameToUpload` |
@@ -111,6 +112,8 @@ ___
 
 <a name="ft7">7</a>: The difference between "Set bucket props" and "Set single bucket prop" is that the single property action requires non-empty `name` and `value`whereby the `value` must be a string. In the case of "Set bucket props", the `value` must be correctly-filled `cmn.BucketProps` structure. For the list of supported propertes, see [API constants](/cmn/api.go) and look for a section titled 'Header Key enum'[↩](#a7)
 
+<a name="ft8">8</a>: The request does not use payload and returns only object names and sizes sorted in alphabetical order. It makes the request much faster for local buckets comparing to getting a list of objects using URL `/v1/buckets/bucket-name` and payload. Requests to cloud buckets do not get any performance boost. The only supported parameter is URL query value `prefix` that filters out from the result objects which names do not start with the prefix. NOTE for local buckets: the request does not do extra checks for object correct location, that may result in the list containing moved or deleted objects that are not accessible any longer. [↩](#a8)
+
 ### Bucket Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
@@ -142,8 +145,8 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 | Get proxy/target info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=daemoninfo` |
 | Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
 | Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
-| Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` | 
-| Get proxy/target system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` | 
+| Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |
+| Get proxy/target system info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=sysinfo` |
 | Get rebalance statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://G/v1/cluster?what=xaction&props=rebalance'` |
 | Get prefetch statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://G/v1/cluster?what=xaction&props=prefetch'` |
 | Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://T/v1/daemon?what=mountpaths` |
