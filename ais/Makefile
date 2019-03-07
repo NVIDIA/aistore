@@ -93,16 +93,16 @@ endif
 	@CHECK="test-env" $(SHELL) ./setup/preflight_check.sh
 
 test-short: test-envcheck
-	@CHECK="test-short" BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-short" BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
 
 test-long: test-envcheck
-	@CHECK="test-long" BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-long" BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
 
 test-run: test-envcheck #runs tests matching a specific regex
 ifeq ($(RE),)
 	$(error missing environment variable: RE="testnameregex")
 endif
-	@CHECK="test-run" RE=$(RE) BUCKET=$(BUCKET) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-run" RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
 
 test: test-envcheck spell-check fmt-check lint-install lint test-short #main preflight test
 

@@ -375,7 +375,12 @@ func TestFS(t *testing.T) {
 	if tutils.DockerRunning() {
 		t.Skip("TestFS requires direct access to local filesystem, not compatible with docker")
 	}
-	leader, err := tutils.GetPrimaryProxy("http://127.0.0.1:8080")
+	proxyURL := tutils.DefaultBaseAPIParams(t).URL
+	cliAISURL := os.Getenv("AISURL")
+	if len(cliAISURL) != 0 {
+		proxyURL = "http://" + cliAISURL
+	}
+	leader, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {
 		t.Fatal(err)
 	}

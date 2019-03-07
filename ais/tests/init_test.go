@@ -73,7 +73,6 @@ var (
 )
 
 func init() {
-	flag.StringVar(&proxyURLReadOnly, "url", proxyURL, "Proxy URL")
 	flag.StringVar(&proxyNextTierURLReadOnly, "urlnext", proxyURLNext, "Proxy URL Next Tier")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
@@ -103,6 +102,7 @@ func init() {
 
 	flag.Parse()
 
+	proxyURLReadOnly = proxyURL
 	if tutils.DockerRunning() && proxyURLReadOnly == proxyURL {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
 
@@ -118,6 +118,13 @@ func TestMain(m *testing.M) {
 	if len(clibucket) == 0 {
 		fmt.Println("Bucket name is empty.")
 		os.Exit(1)
+	}
+
+	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
+	// Many of the other packages do not accept the 'url' flag
+	cliAISURL := os.Getenv("AISURL")
+	if len(cliAISURL) != 0 {
+		proxyURLReadOnly = "http://" + cliAISURL
 	}
 	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test.
 	// finds who is the current primary proxy

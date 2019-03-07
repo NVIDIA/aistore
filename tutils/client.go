@@ -545,7 +545,7 @@ func GetConfig(server string) (HTTPLatencies, error) {
 
 // GetPrimaryProxy returns the primary proxy's url of a cluster
 func GetPrimaryProxy(proxyURL string) (string, error) {
-	readProxyURL = proxyURL //Sets the appropriate proxy url based on local, docker or url flag
+	readProxyURL = proxyURL //Sets the appropriate proxy url based on local, docker or AISURL environment var
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {

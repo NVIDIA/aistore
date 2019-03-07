@@ -63,17 +63,34 @@ if [ "$?" == "0" ]; then
         exit 0 
     fi
 fi
+if [ "$(echo $KUBERNETES_SERVICE_HOST)" != "" ]; then 
+  echo "AIStore running on Kubernetes..." >&2
+  if [ "${AISURL}" != "" ]; then
+      ip=(${AISURL//:/ }[0])
+      if [ "$(ping -c 1 ${ip} | grep '1 received')" != "" ]; then
+          echo "AIStore connection to ${ip} is working..." >&2
+          exit 0
+      else 
+          echo "Error connecting to ${ip}. Did you specify the correct address?" >&2
+          exit 1
+      fi
+  else
+      echo "Error missing environment variable: 'AISURL=<IP>:<PORT>'" >&2
+      exit 1
+  fi
+fi
 if [ "$(ps aux | grep -v -e 'grep' | grep bin/ais)" != "" ]; then
     echo "AIStore running locally..." >&2
     exit 0 
 fi
+
 echo "AIStore is not running, this causes some tests to fail! (to run, see: https://github.com/NVIDIA/aistore#local-non-containerized)" >&2
 echo -n "continue? [y/N] " >&2 && read ans && [ ${ans:-N} == y ]
 exit $?
   ;;
 test-short)
   echo "Running short tests..." >&2
-  errs=$(BUCKET=${BUCKET} go test -v -p 1 -count 1  -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
@@ -84,7 +101,7 @@ test-short)
   ;;
 test-long)
   echo "Running long tests..." >&2
-  errs=$(BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 1h ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
@@ -95,7 +112,7 @@ test-long)
   ;;
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} go test -v -p 1 -count 1 -timeout 1h -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 1h  -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
