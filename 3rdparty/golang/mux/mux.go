@@ -220,7 +220,15 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 		_, pattern = mux.handler(host, path)
 		url := *r.URL
 		url.Path = path
-		return http.RedirectHandler(url.String(), http.StatusMovedPermanently), pattern
+		// Return HTTP status 308 instead of 301 if clean path does not match
+		// the original URL path.
+		// Some clients(including Go HTTP.Client) resend POST, DELETE, and PUT
+		// requests as GET ones when a server responds with 301 or 302 status.
+		// As it is described in (sections 10.3.2 and 10.3.3):
+		// https://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
+		// Returning 307 and 308 statuses makes clients to use the original
+		// HTTP request method without modification
+		return http.RedirectHandler(url.String(), http.StatusPermanentRedirect), pattern
 	}
 
 	return mux.handler(host, r.URL.Path)
