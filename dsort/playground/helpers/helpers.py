@@ -38,7 +38,7 @@ def unify_metrics(metrics):
         phase = phases[1]
         max_recv = 0
         for target_metrics in metrics.values():
-            max_recv = max(max_recv, target_metrics[phase]['recv_count'])
+            max_recv = max(max_recv, target_metrics[phase]['recv_stats']['count'])
 
         if six.PY2:
             progress = [min(float(max_recv) / math.log(len(metrics), 2) * 100, 100)]
