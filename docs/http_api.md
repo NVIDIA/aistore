@@ -47,6 +47,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `daemon` | control-plane request to update or query specific AIS daemon (proxy or target) |
 | `buckets` | create, destroy, rename and list bucket(s), get bucket names, get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
+| `download` | download external resources (datasets, files) into cluster |
 
 4. Control message in the query string parameter, e.g. `?what=config`.
 

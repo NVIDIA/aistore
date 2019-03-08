@@ -380,11 +380,18 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 	}
 
 	if len(objs) != 0 {
-		done := make(chan struct{}, 1)
-		defer close(done)
+		var (
+			done  chan struct{}
+			errCh chan error
+		)
 
-		errCh := make(chan error)
-		defer close(errCh)
+		if listMsg.Wait {
+			done = make(chan struct{}, 1)
+			defer close(done)
+
+			errCh = make(chan error)
+			defer close(errCh)
+		}
 
 		// Asynchronously perform function
 		go func() {
@@ -393,7 +400,9 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 				glog.Errorf("Error performing list function: %v", err)
 				t.statsif.Add(stats.ErrListCount, 1)
 			}
-			errCh <- err
+			if errCh != nil {
+				errCh <- err
+			}
 		}()
 
 		if listMsg.Wait {

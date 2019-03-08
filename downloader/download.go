@@ -148,12 +148,14 @@ type (
 	// for a downlad request. These objects are used by Downloader to process
 	// the request, and are then dispatched to the correct jogger to be handled.
 	request struct {
-		action     string // one of: adminCancel, adminStatus, taskDownload
-		link       string
-		bucket     string
-		objname    string
-		fqn        string         // fqn of the object after it has been committed
-		responseCh chan *response // where the outcome of the request is written
+		action      string // one of: adminCancel, adminStatus, taskDownload
+		link        string
+		bucket      string
+		bckProvider string
+		objname     string
+		timeout     string
+		fqn         string         // fqn of the object after it has been committed
+		responseCh  chan *response // where the outcome of the request is written
 	}
 
 	// task embeds cmn.XactBase, but it is not part of the targetrunner's xactions member
@@ -206,7 +208,7 @@ func (req *request) String() (str string) {
 	}
 
 	if req.bucket != "" {
-		str += fmt.Sprintf("bucket: %q, ", req.bucket)
+		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.bckProvider)
 	}
 
 	if req.objname != "" {
@@ -293,7 +295,7 @@ func (d *Downloader) removeJogger(mpath string) {
 /*
  * Downloader constructors
  */
-func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind, bucket string) (d *Downloader) {
+func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
 	return &Downloader{
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
@@ -302,7 +304,7 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		t:              t,
 		stats:          stats,
 		mountpaths:     f,
-		XactDemandBase: *cmn.NewXactDemandBase(id, kind, bucket),
+		XactDemandBase: *cmn.NewXactDemandBase(id, kind, ""),
 	}
 }
 
@@ -384,11 +386,13 @@ func (d *Downloader) Download(body *cmn.DlBody) (resp string, err error, statusC
 	t := &task{
 		parent: d,
 		request: &request{
-			action:     taskDownload,
-			link:       body.Link,
-			bucket:     body.Bucket,
-			objname:    body.Objname,
-			responseCh: make(chan *response, 1),
+			action:      taskDownload,
+			link:        body.Link,
+			bucket:      body.Bucket,
+			bckProvider: body.BckProvider,
+			objname:     body.Objname,
+			timeout:     body.Timeout,
+			responseCh:  make(chan *response, 1),
 		},
 		headers:    body.Headers,
 		finishedCh: make(chan error, 1),
@@ -443,7 +447,7 @@ func (d *Downloader) Status(body *cmn.DlBody) (resp string, err error, statusCod
 
 func (d *Downloader) dispatchDownload(t *task) {
 	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.objname}
-	errstr := lom.Fill("", cluster.LomFstat)
+	errstr := lom.Fill(t.bckProvider, cluster.LomFstat)
 	if errstr != "" {
 		t.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -467,7 +471,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 
 func (d *Downloader) dispatchCancel(req *request) {
 	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill("", cluster.LomFstat)
+	errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -506,7 +510,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 
 func (d *Downloader) dispatchStatus(req *request) {
 	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill("", cluster.LomFstat)
+	errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
 	if errstr != "" {
 		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
 		return
@@ -607,7 +611,7 @@ func (j *jogger) stop() {
 func (t *task) download() {
 	t.Lock()
 	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.objname}
-	if errstr := lom.Fill("", cluster.LomFstat); errstr != "" {
+	if errstr := lom.Fill(t.bckProvider, cluster.LomFstat); errstr != "" {
 		t.abort(errors.New(errstr))
 		t.Unlock()
 		return
@@ -634,8 +638,14 @@ func (t *task) download() {
 		}
 	}
 
+	timeout := cmn.GCO.Get().Timeout.SendFile
+	if t.timeout != "" {
+		timeout, err = time.ParseDuration(t.timeout)
+		cmn.AssertNoErr(err) // this should be checked beforehand
+	}
+
 	// Do
-	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.SendFile)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t.cancelDownloadFunc = cancel
 	t.Unlock()
 	requestWithContext := httpReq.WithContext(ctx)

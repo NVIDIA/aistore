@@ -299,6 +299,17 @@ func DownloadObject(baseParams *BaseParams, bucket, objname, link string) error 
 	return err
 }
 
+func DownloadObjectWithParam(baseParams *BaseParams, dlBody cmn.DlBody) error {
+	msg, err := jsoniter.Marshal(dlBody)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadSingle)
+	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
 func DownloadObjectMulti(baseParams *BaseParams, bucket string, m map[string]string) error {
 	body := cmn.DlMultiBody{
 		ObjectMap: m,
@@ -311,6 +322,22 @@ func DownloadObjectMulti(baseParams *BaseParams, bucket string, m map[string]str
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadMulti)
 	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
+func DownloadObjectBucketList(baseParams *BaseParams, bucket, prefix, suffix string) error {
+	body := cmn.DlBucketBody{
+		Prefix: prefix,
+		Suffix: suffix,
+	}
+	query := body.AsQuery()
+
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadBucket, bucket)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 

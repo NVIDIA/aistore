@@ -127,3 +127,71 @@ func TestDownloadObjectMulti(t *testing.T) {
 		t.Errorf("expected objects (%s), got: %s", m, objs)
 	}
 }
+
+func TestDownloadObjectTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		objname  = "object"
+		link     = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+	)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	body := cmn.DlBody{
+		Objname: objname,
+		Link:    link,
+	}
+	body.Bucket = bucket
+	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
+
+	err := api.DownloadObjectWithParam(tutils.DefaultBaseAPIParams(t), body)
+	tutils.CheckFatal(err, t)
+
+	time.Sleep(time.Second)
+
+	if resp, err := api.DownloadObjectStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
+	}
+
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	tutils.CheckFatal(err, t)
+	if len(objs) != 0 {
+		t.Errorf("expected 0 objects, got: %s", objs)
+	}
+}
+
+// NOTE: For now this test is disabled since we don't have a clear way to wait
+// for the download.
+func TestDownloadObjectBucketList(t *testing.T) {
+	t.Skip("Not yet fully implemented")
+
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = "lpr-vision"
+		prefix   = "imagenet/imagenet_train-"
+		suffix   = ".tgz"
+	)
+
+	if !isCloudBucket(t, proxyURL, bucket) {
+		t.Skip("test requires a Cloud bucket")
+	}
+
+	_, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	tutils.CheckFatal(err, t)
+
+	err = api.DownloadObjectBucketList(tutils.DefaultBaseAPIParams(t), bucket, prefix, suffix)
+	tutils.CheckFatal(err, t)
+
+	// FIXME: How to wait?
+}

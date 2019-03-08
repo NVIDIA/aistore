@@ -24,18 +24,6 @@ import (
 // PROXY //
 ///////////
 
-// [METHOD] /v1/download
-func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet, http.MethodDelete:
-		p.httpDownloadAdmin(w, r)
-	case http.MethodPost:
-		p.httpDownloadPost(w, r)
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
-	}
-}
-
 func (p *proxyrunner) downloadRedirectURL(bucket, objname string, started time.Time) (redirectURL, daemonID, err string) {
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
@@ -50,116 +38,6 @@ func (p *proxyrunner) downloadRedirectURL(bucket, objname string, started time.T
 	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(started.UnixNano()), 10))
 	redirectURL += query.Encode()
 	return
-}
-
-// httpDownloadAdmin is meant for cancelling and getting status updates for
-// downloads.
-// GET /v1/download or DELETE /v1/download
-func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
-	var (
-		started                       = time.Now()
-		redirectURL, daemonID, errstr string
-		payload                       = cmn.DlBody{}
-	)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if glog.V(4) {
-		glog.Infof("httpDownloadAdmin payload %v", payload)
-	}
-
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if !p.validatebckname(w, r, payload.Bucket) {
-		return
-	}
-
-	if redirectURL, daemonID, errstr = p.downloadRedirectURL(payload.Bucket, payload.Objname, started); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	if glog.V(4) {
-		glog.Infof("Download %s %s/%s => %s", r.Method, payload.Bucket, payload.Objname, daemonID)
-	}
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-}
-
-// POST /v1/download
-func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Download)
-	if err != nil {
-		return
-	}
-	if len(apitems) == 1 {
-		switch apitems[0] {
-		case cmn.DownloadMulti:
-			p.multiDownloadHandler(w, r)
-			return
-		case cmn.DownloadList:
-			p.listDownloadHandler(w, r)
-			return
-		case cmn.DownloadSingle:
-			p.singleDownloadHandler(w, r)
-			return
-		}
-	}
-	p.invalmsghdlr(w, r, fmt.Sprintf("%q is not a valid download request", apitems))
-}
-
-// POST /v1/download/single
-func (p *proxyrunner) singleDownloadHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		started                       = time.Now()
-		redirectURL, daemonID, errstr string
-		payload                       = cmn.DlBody{}
-	)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if glog.V(4) {
-		glog.Infof("singleDownloadHandler payload %v", payload)
-	}
-
-	if payload.Objname == "" {
-		objName := path.Base(payload.Link)
-		if objName == "." || objName == "/" {
-			p.invalmsghdlr(w, r, "can not extract a valid objName from the provided download link")
-			return
-		}
-		payload.Objname = objName
-	}
-
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	// check if the bucket exists
-	if !p.validatebckname(w, r, payload.Bucket) {
-		return
-	}
-	bucketmd := p.bmdowner.get()
-	if _, ok := bucketmd.LBmap[payload.Bucket]; !ok {
-		p.invalmsghdlr(w, r, "bucket does not exist")
-		return
-	}
-
-	if redirectURL, daemonID, errstr = p.downloadRedirectURL(payload.Bucket, payload.Objname, started); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	if glog.V(4) {
-		glog.Infof("Download %s %s/%s => %s", r.Method, payload.Bucket, payload.Objname, daemonID)
-	}
-
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-	p.statsif.Add(stats.PutCount, 1)
-
 }
 
 func (p *proxyrunner) targetDownloadRequest(bucket, objname string, body []byte) (int, error) {
@@ -190,22 +68,12 @@ func (p *proxyrunner) targetDownloadRequest(bucket, objname string, body []byte)
 
 // objects is a map of objnames (keys) where the corresponding
 // value is the link that the download will be saved as.
-func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter, r *http.Request, bucket string, objects cmn.SimpleKVs, headers map[string]string) {
+func (p *proxyrunner) bulkDownloadProcessor(bucket string, bckIsLocal bool, objects cmn.SimpleKVs, headers map[string]string) error {
 	var (
 		failures     = cmn.SimpleKVs{}
 		failureMutex = &sync.Mutex{}
 		wg           = &sync.WaitGroup{}
 	)
-
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
-	// check if the bucket exists
-	bucketmd := p.bmdowner.get()
-	if _, ok := bucketmd.LBmap[bucket]; !ok {
-		p.invalmsghdlr(w, r, "specified bucket does not exist")
-		return
-	}
 
 	for objname, link := range objects {
 		wg.Add(1)
@@ -237,70 +105,168 @@ func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter, r *http.Reque
 	wg.Wait()
 	// FIXME: consider adding new stats: downloader failures
 	if len(failures) > 0 {
-		p.invalmsghdlr(w, r, fmt.Sprintf("following downloads failed: %v", failures))
+		return fmt.Errorf("following downloads failed: %v", failures)
 	}
+	return nil
+}
+
+// [METHOD] /v1/download
+func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet, http.MethodDelete:
+		p.httpDownloadAdmin(w, r)
+	case http.MethodPost:
+		p.httpDownloadPost(w, r)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
+	}
+}
+
+// httpDownloadAdmin is meant for cancelling and getting status updates for
+// downloads.
+// GET /v1/download or DELETE /v1/download
+func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
+	var (
+		started                       = time.Now()
+		redirectURL, daemonID, errstr string
+		payload                       = cmn.DlBody{}
+	)
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err := payload.Validate(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	glog.V(4).Infof("httpDownloadAdmin payload %v", payload)
+
+	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+		return
+	}
+
+	if redirectURL, daemonID, errstr = p.downloadRedirectURL(payload.Bucket, payload.Objname, started); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	glog.V(4).Infof("Download %s %s/%s => %s", r.Method, payload.Bucket, payload.Objname, daemonID)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+// POST /v1/download
+func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
+	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Download)
+	if err != nil {
+		return
+	}
+	if len(apitems) >= 1 {
+		switch apitems[0] {
+		case cmn.DownloadSingle:
+			p.singleDownloadHandler(w, r)
+			return
+		case cmn.DownloadList:
+			p.listDownloadHandler(w, r)
+			return
+		case cmn.DownloadMulti:
+			p.multiDownloadHandler(w, r)
+			return
+		case cmn.DownloadBucket:
+			p.bucketDownloadHandler(w, r)
+			return
+		}
+	}
+	p.invalmsghdlr(w, r, fmt.Sprintf("%q is not a valid download request", apitems))
+}
+
+// POST /v1/download/single
+func (p *proxyrunner) singleDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		started                       = time.Now()
+		redirectURL, daemonID, errstr string
+		payload                       = &cmn.DlBody{}
+	)
+	if err := cmn.ReadJSON(w, r, payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err := payload.Validate(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	glog.V(4).Infof("singleDownloadHandler payload %v", payload)
+
+	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+		return
+	}
+
+	if redirectURL, daemonID, errstr = p.downloadRedirectURL(payload.Bucket, payload.Objname, started); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	glog.V(4).Infof("Download %s %s/%s => %s", r.Method, payload.Bucket, payload.Objname, daemonID)
+
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	p.statsif.Add(stats.PutCount, 1)
+
 }
 
 // POST /v1/download/list
 func (p *proxyrunner) listDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		payload = cmn.DlListBody{}
+		payload = &cmn.DlListBody{}
 		// link -> objname
-		objects = make(cmn.SimpleKVs)
+		objects        = make(cmn.SimpleKVs)
+		bckIsLocal, ok bool
 	)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+	if err := cmn.ReadJSON(w, r, payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if err := payload.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if payload.Base == "" {
-		glog.Errorf("No base provided for list download request.")
-		p.invalmsghdlr(w, r, "no prefix for list found, prefix is required")
-		return
-	} else if !strings.HasSuffix(payload.Base, "/") {
-		payload.Base += "/"
-	}
+	glog.V(4).Infof("listDownloadHandler payload: %s", payload)
 
-	if payload.Step == 0 {
-		payload.Step = 1
-	}
-
-	if payload.Start > payload.End {
-		p.invalmsghdlr(w, r, "start value greater than end")
+	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
 
-	if glog.V(4) {
-		glog.Infof("List Download. %v", payload)
-	}
 	for i := payload.Start; i <= payload.End; i += payload.Step {
 		objname := fmt.Sprintf("%s%0*d%s", payload.Prefix, payload.DigitCount, i, payload.Suffix)
 		objects[objname] = payload.Base + objname
 	}
-	if glog.V(4) {
-		glog.Infof("got a request to download the following objects: %v", objects)
+	glog.V(4).Infof("got a request to download the following objects: %v", objects)
+
+	if err := p.bulkDownloadProcessor(payload.Bucket, bckIsLocal, objects, payload.Headers); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 	}
-	p.bulkDownloadProcessor(w, r, payload.Bucket, objects, payload.Headers)
 }
 
 // POST /v1/download/multi
 func (p *proxyrunner) multiDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	var (
-		payload = cmn.DlMultiBody{}
+		payload = &cmn.DlMultiBody{}
 		objects = make(cmn.SimpleKVs)
-	)
 
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		bckIsLocal, ok bool
+	)
+	if err := cmn.ReadJSON(w, r, payload); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if glog.V(4) {
-		glog.Infof("multiDownloadHandler payload %v", payload)
+	if err := payload.Validate(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
 	}
 
-	// check if an objectMap or objectList is present
-	if len(payload.ObjectMap) == 0 && len(payload.ObjectList) == 0 {
-		p.invalmsghdlr(w, r, "missing object map or object list for multi download request")
+	glog.V(4).Infof("multiDownloadHandler payload: %s", payload)
+
+	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
 
@@ -322,10 +288,73 @@ func (p *proxyrunner) multiDownloadHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// process the downloads
-	if glog.V(4) {
-		glog.Infof("Got a request to download the following objects: %v", objects)
+	if err := p.bulkDownloadProcessor(payload.Bucket, bckIsLocal, objects, payload.Headers); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 	}
-	p.bulkDownloadProcessor(w, r, payload.Bucket, objects, payload.Headers)
+}
+
+// POST /v1/download/bucket/name?provider=...&prefix=...&suffix=...&timeout=...
+func (p *proxyrunner) bucketDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		payload = &cmn.DlBucketBody{}
+	)
+
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Download, cmn.DownloadBucket)
+	if err != nil {
+		return
+	}
+	payload.Bucket = apiItems[0]
+
+	query := r.URL.Query()
+	payload.InitWithQuery(query)
+
+	if bckIsLocal, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+		return
+	} else if bckIsLocal {
+		p.invalmsghdlr(w, r, "/download/bucket requires cloud bucket")
+		return
+	}
+
+	msg := cmn.GetMsg{
+		GetPrefix:     payload.Prefix,
+		GetPageMarker: "",
+		GetFast:       true,
+	}
+
+	bckEntries := make([]*cmn.BucketEntry, 0, 1024)
+	for {
+		curBckEntries, err := p.listBucket(r, payload.Bucket, payload.BckProvider, msg)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		// filter only with matching suffix
+		for _, entry := range curBckEntries.Entries {
+			if strings.HasSuffix(entry.Name, payload.Suffix) {
+				bckEntries = append(bckEntries, entry)
+			}
+		}
+
+		msg.GetPageMarker = curBckEntries.PageMarker
+		if msg.GetPageMarker == "" {
+			break
+		}
+	}
+
+	objects := make([]string, len(bckEntries))
+	for idx, entry := range bckEntries {
+		objects[idx] = entry.Name
+	}
+	actionMsg := &cmn.ActionMsg{
+		Action: cmn.ActPrefetch,
+		Name:   "download/bucket",
+		Value:  map[string]interface{}{"objnames": objects},
+	}
+	if err := p.listRange(http.MethodPost, payload.Bucket, payload.BckProvider, actionMsg, nil); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+	}
+	return
 }
 
 ////////////
@@ -339,14 +368,10 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if glog.V(4) {
-		glog.Infof("downloadHandler payload %v", payload)
-	}
 
-	if err := payload.Validate(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
+	cmn.AssertNoErr(payload.Validate())
+
+	glog.V(4).Infof("downloadHandler payload %s", payload)
 
 	if !t.verifyProxyRedirection(w, r, payload.Bucket, payload.Objname, cmn.Download) {
 		return
@@ -359,18 +384,14 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	switch r.Method {
 	case http.MethodGet:
-		if glog.V(4) {
-			glog.Infof("Getting status of download: %s", payload)
-		}
-		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Status(&payload)
+		glog.V(4).Infof("Getting status of download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Status(&payload)
 	case http.MethodDelete:
-		glog.Infof("Cancelling download: %s", payload)
-		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Cancel(&payload)
+		glog.V(4).Infof("Cancelling download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Cancel(&payload)
 	case http.MethodPost:
-		if glog.V(4) {
-			glog.Infof("Downloading: %s", payload)
-		}
-		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Download(&payload)
+		glog.V(4).Infof("Downloading: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Download(&payload)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
 		return

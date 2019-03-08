@@ -23,6 +23,7 @@ Rest of this document is structured around these 3 supported types of downloads:
 - [Single-object download](#single-object-download)
 - [Multi-object download](#multi-object-download)
 - [List download](#list-download)
+- [Cloud bucket download](#bucket-download)
 - [Cancellation](#cancellation)
 - [Status of the download](#status-of-the-download)
 
@@ -34,9 +35,11 @@ The request (described below) downloads a *single* object and is the most basic 
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
+**bucket** | **string** | Bucket where the download will be saved to |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
+**timeout** | **string** | Timeout for request to external resource | Yes
 **link** | **string** | URL of where the object will be downloaded from. |
-**bucket** | **string** | bucket where the download will be saved to |
-**objname** | **string** | name of the object the download will be saved as. If no objname is provided, then the objname will be the last element in the URL's path. | Yes
+**objname** | **string** | Name of the object the download will be saved as. If no objname is provided, then the objname will be the last element in the URL's path. | Yes
 **headers** | **JSON object** | JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download the object from the link. | Yes
 
 ### Sample Request
@@ -54,6 +57,8 @@ A *multi* object download requires either a map (denoted as **object_map** below
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects will be saved to. |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
+**timeout** | **string** | Timeout for request to external resource | Yes
 **headers** | **object** | JSON object where the key is a header name and the value is the corresponding header value(string). These values are used as the header values for when AIS actually makes the GET request to download the object. | Yes
 **object_map** | **JSON object** | JSON object where the key (string) is the objname the object will be saved as and value (string) is a URL pointing to some file. | Yes
 **object_list** | **JSON array** | JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path. | Yes
@@ -87,6 +92,8 @@ To populate AIStore with objects in the range from `object200log.txt` to `object
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects will be saved to. |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
+**timeout** | **string** | Timeout for request to external resource | Yes
 **headers** | **JSON object** | JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download each object. | Yes
 **base** | **string** | The base URL of the object that will be used to formulate the download url |
 **prefix** | **string** | Is the first thing appended to the base string to formulate the download url | Yes
@@ -102,6 +109,16 @@ Name | Type | Description | Optional?
 |--|--|--|
 | Download a List of Objects | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"download_action": "download_list", "bucket": "test321",  "base": "randomwebsite.com/somedirectory/",  "prefix": "object",  "suffix": "log.txt",  "start": 200,  "end": 300, "step": 1, "digit_count": 0 }' http://localhost:8080/v1/download/list`|
 
+## Bucket download
+
+A *bucket* download prefetches multiple objects which are contained in given cloud bucket.
+
+### Sample Request
+
+| Operation | HTTP action | Example |
+|--|--|--|
+| Download a list of objects from cloud bucket | POST /v1/download/bucket | `curl -L -X POST 'http://localhost:8080/v1/download/bucket/lpr-vision?prefix=imagenet/imagenet_train-&suffix=.tgz'`|
+
 ## Cancellation
 
 Any download request can be cancelled at any time by making a DELETE request to the **downloader**.
@@ -110,9 +127,10 @@ Any download request can be cancelled at any time by making a DELETE request to 
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
+**bucket** | **string** | Bucket where the download was supposed to be saved to |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
 **link** | **string** | URL of the object that was added to the download queue |
-**bucket** | **string** | bucket where the download was supposed to be saved to |
-**objname** | **string** | name of the object the download was supposed to be saved as |
+**objname** | **string** | Name of the object the download was supposed to be saved as |
 
 ### Sample Request
 
@@ -128,9 +146,10 @@ Status of any download request can be queried at any time.
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
+**bucket** | **string** | Bucket where the download was supposed to be saved to |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
 **link** | **string** | URL of the object that was added to the download queue |
-**bucket** | **string** | bucket where the download was supposed to be saved to |
-**objname** | **string** | name of the object the download was supposed to be saved as |
+**objname** | **string** | Name of the object the download was supposed to be saved as |
 
 ### Sample Request
 

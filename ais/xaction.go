@@ -428,7 +428,7 @@ func (xs *xactions) abortBucketSpecific(bucket string) {
 	}
 }
 
-func (xs *xactions) renewDownloader(t *targetrunner, bucket string) (xdl *downloader.Downloader) {
+func (xs *xactions) renewDownloader(t *targetrunner) (xdl *downloader.Downloader) {
 	kind := cmn.Download
 	xs.Lock()
 	xx := xs.findU(kind)
@@ -439,7 +439,7 @@ func (xs *xactions) renewDownloader(t *targetrunner, bucket string) (xdl *downlo
 		return
 	}
 	id := xs.uniqueid()
-	xdl = downloader.NewDownloader(t, t.statsif, fs.Mountpaths, id, kind, bucket)
+	xdl = downloader.NewDownloader(t, t.statsif, fs.Mountpaths, id, kind)
 	xs.add(xdl)
 	go xdl.Run()
 	xs.Unlock()

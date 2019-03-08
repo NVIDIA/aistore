@@ -845,6 +845,20 @@ func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bo
 	return
 }
 
+func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bckIsLocal, ok bool) {
+	var (
+		errstr string
+	)
+	if !h.validatebckname(w, r, bucket) {
+		return
+	}
+	if bckIsLocal, errstr = h.validateBckProvider(bckProvider, bucket); errstr != "" {
+		h.invalmsghdlr(w, r, errstr)
+		return
+	}
+	return bckIsLocal, true
+}
+
 //=========================
 //
 // common http req handlers
