@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	requestBufSizeGlobal = 800
-	requestBufSizeFS     = 200
+	requestBufSizeGlobal = 100
+	requestBufSizeFS     = 50
 	maxBgJobsPerJogger   = 32
 )
 
@@ -45,6 +45,7 @@ type (
 		smap       cluster.Sowner        // cluster map
 		si         *cluster.Snode        // target daemonInfo
 		stats      stats                 // EC statistics
+		bckName    string                // which bucket xact belongs to
 
 		dOwner *dataOwner // data slice manager
 
@@ -68,8 +69,8 @@ type (
 	}
 )
 
-func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
-	si *cluster.Snode) *XactEC {
+func NewXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactEC {
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	runner := &XactEC{
@@ -81,6 +82,7 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 		bmd:        bmd,
 		smap:       smap,
 		si:         si,
+		bckName:    bucket,
 
 		dOwner: &dataOwner{
 			mtx:    sync.Mutex{},
@@ -88,30 +90,8 @@ func NewXact(netReq, netResp string, t cluster.Target, bmd cluster.Bowner, smap 
 		},
 	}
 
-	cbReq := func(hdr transport.Header, reader io.ReadCloser, err error) {
-		if err != nil {
-			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.Objname, err)
-		}
-	}
-
-	client := transport.NewDefaultClient()
-	extraReq := transport.Extra{Callback: cbReq}
-
-	reqSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
-		Extra:      &extraReq,
-		Network:    netReq,
-		Trname:     ReqStreamName,
-	}
-
-	respSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
-		Trname:     RespStreamName,
-		Network:    netResp,
-	}
-
-	runner.reqBundle = transport.NewStreamBundle(smap, si, client, reqSbArgs)
-	runner.respBundle = transport.NewStreamBundle(smap, si, client, respSbArgs)
+	runner.reqBundle = reqBundle
+	runner.respBundle = respBundle
 
 	// create all runners but do not start them until Run is called
 	for mpath := range availablePaths {
@@ -540,7 +520,9 @@ func (r *XactEC) Run() (err error) {
 					glog.Infof("Idle time is over: %v. Last action at: %v",
 						time.Now(), lastAction)
 				}
+				// it's ok not to notify ecmanager, he'll just have stoped xact in a map
 				r.stop()
+
 				return nil
 			}
 		case <-r.ChanAbort():
@@ -671,8 +653,9 @@ func (r *XactEC) stop() {
 	for _, jog := range r.putJoggers {
 		jog.stop()
 	}
-	r.reqBundle.Close(true)
-	r.respBundle.Close(true)
+
+	// Don't close bundles, they are shared between bucket's EC actions
+
 	r.EndTime(time.Now())
 }
 
@@ -681,7 +664,7 @@ func (r *XactEC) Encode(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
 	if glog.V(4) {
-		glog.Infof("ECXAction (queue = %d): encode object %s", len(r.ecCh), req.LOM.Uname)
+		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s", r.bckName, len(r.ecCh), req.LOM.Uname)
 	}
 	r.ecCh <- req
 }

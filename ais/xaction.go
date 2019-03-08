@@ -458,10 +458,10 @@ func (xs *xactions) abortAll() (sleep bool) {
 	return
 }
 
-func (xs *xactions) renewEC() *ec.XactEC {
-	kind := cmn.ActEC
+func (xs *xactions) renewEC(bucket string) *ec.XactEC {
+	kind := path.Join(cmn.ActEC, bucket)
 	xs.Lock()
-	xx := xs.findU(cmn.ActEC)
+	xx := xs.findU(kind)
 	if xx != nil {
 		xec := xx.(*ec.XactEC)
 		xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
@@ -471,8 +471,8 @@ func (xs *xactions) renewEC() *ec.XactEC {
 	}
 
 	id := xs.uniqueid()
-	xec := ECM.newXact()
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, "" /* all buckets */)
+	xec := ECM.newXact(bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, bucket)
 	go xec.Run()
 	xs.add(xec)
 	xs.Unlock()

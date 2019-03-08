@@ -27,7 +27,7 @@ type putJogger struct {
 	parent *XactEC
 	slab   *memsys.Slab2
 	buffer []byte
-	mpath  string // mountpath that the jogger manages
+	mpath  string // a bucket's mountpath that the jogger manages
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
 	stopCh chan struct{} // jogger management channel: to stop it
@@ -36,7 +36,7 @@ type putJogger struct {
 }
 
 func (c *putJogger) run() {
-	glog.Infof("Started EC for mountpath: %s", c.mpath)
+	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
 	c.buffer, c.slab = mem2.AllocFromSlab2(cmn.MiB)
 
 	for {
@@ -60,7 +60,7 @@ func (c *putJogger) run() {
 }
 
 func (c *putJogger) stop() {
-	glog.Infof("Stopping EC for mountpath: %s", c.mpath)
+	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
 	c.stopCh <- struct{}{}
 	close(c.stopCh)
 }

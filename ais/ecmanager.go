@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -21,13 +22,14 @@ import (
 )
 
 type ecManager struct {
-	t        *targetrunner
-	xact     *ec.XactEC
-	bmd      cluster.Bowner // bucket manager
-	netReq   string         // network used to send object request
-	netResp  string         // network used to send/receive slices
-	respPath string         // URL path for constructing response requests
-	reqPath  string         // URL path for constructing request requests
+	sync.RWMutex
+	t          *targetrunner
+	xacts      map[string]*ec.XactEC // bckName -> xact map, only local buckets allowed, no naming collisions
+	bowner     cluster.Bowner        // bucket manager
+	netReq     string                // network used to send object request
+	netResp    string                // network used to send/receive slices
+	reqBundle  *transport.StreamBundle
+	respBundle *transport.StreamBundle
 }
 
 var ECM *ecManager
@@ -46,15 +48,18 @@ func newECM(t *targetrunner) *ecManager {
 		netReq:  netReq,
 		netResp: netResp,
 		t:       t,
-		bmd:     t.bmdowner,
+		bowner:  t.bmdowner,
+		xacts:   make(map[string]*ec.XactEC),
 	}
 
+	ECM.initECBundles()
+
 	var err error
-	if ECM.reqPath, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.makeRecvRequest()); err != nil {
+	if _, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.makeRecvRequest()); err != nil {
 		glog.Errorf("Failed to register recvRequest: %v", err)
 		return nil
 	}
-	if ECM.respPath, err = transport.Register(ECM.netResp, ec.RespStreamName, ECM.makeRecvResponse()); err != nil {
+	if _, err = transport.Register(ECM.netResp, ec.RespStreamName, ECM.makeRecvResponse()); err != nil {
 		glog.Errorf("Failed to register respResponse: %v", err)
 		return nil
 	}
@@ -62,9 +67,62 @@ func newECM(t *targetrunner) *ecManager {
 	return ECM
 }
 
-func (mgr *ecManager) newXact() *ec.XactEC {
-	return ec.NewXact(mgr.netReq, mgr.netResp, mgr.t, mgr.t.bmdowner,
-		mgr.t.smapowner, mgr.t.si)
+func (mgr *ecManager) initECBundles() {
+	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
+
+	cbReq := func(hdr transport.Header, reader io.ReadCloser, err error) {
+		if err != nil {
+			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.Objname, err)
+		}
+	}
+
+	client := transport.NewDefaultClient()
+	extraReq := transport.Extra{Callback: cbReq}
+
+	reqSbArgs := transport.SBArgs{
+		Multiplier: transport.IntraBundleMultiplier,
+		Extra:      &extraReq,
+		Network:    mgr.netReq,
+		Trname:     ec.ReqStreamName,
+	}
+
+	respSbArgs := transport.SBArgs{
+		Multiplier: transport.IntraBundleMultiplier,
+		Trname:     ec.RespStreamName,
+		Network:    mgr.netResp,
+	}
+
+	mgr.reqBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, reqSbArgs)
+	mgr.respBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, respSbArgs)
+}
+
+func (mgr *ecManager) newXact(bucket string) *ec.XactEC {
+	return ec.NewXact(mgr.t, mgr.t.bmdowner,
+		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
+}
+
+func (mgr *ecManager) getBckXact(bckName string) *ec.XactEC {
+	mgr.RLock()
+	defer mgr.RUnlock()
+
+	return mgr.xacts[bckName]
+}
+
+func (mgr *ecManager) setBckXact(bckName string, xact *ec.XactEC) {
+	mgr.Lock()
+	mgr.xacts[bckName] = xact
+	mgr.Unlock()
+}
+
+func (mgr *ecManager) restoreBckXact(bckName string) *ec.XactEC {
+	xact := mgr.getBckXact(bckName)
+	if xact == nil || xact.Finished() {
+		newXact := mgr.t.xactions.renewEC(bckName)
+		mgr.setBckXact(bckName, newXact)
+		return newXact
+	}
+
+	return xact
 }
 
 // A function to process command requests from other targets
@@ -79,10 +137,8 @@ func (mgr *ecManager) makeRecvRequest() transport.Receive {
 			glog.Error("Empty request")
 			return
 		}
-		if mgr.xact == nil || mgr.xact.Finished() {
-			mgr.xact = mgr.t.xactions.renewEC()
-		}
-		mgr.xact.DispatchReq(w, hdr, object)
+
+		mgr.restoreBckXact(hdr.Bucket).DispatchReq(w, hdr, object)
 	}
 }
 
@@ -98,10 +154,8 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 			glog.Error("Empty request")
 			return
 		}
-		if mgr.xact == nil || mgr.xact.Finished() {
-			mgr.xact = mgr.t.xactions.renewEC()
-		}
-		mgr.xact.DispatchResp(w, hdr, object)
+
+		mgr.restoreBckXact(hdr.Bucket).DispatchResp(w, hdr, object)
 	}
 }
 
@@ -125,13 +179,13 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		IsCopy: ec.IsECCopy(lom.Size, &lom.BckProps.EC),
 		LOM:    lom,
 	}
-	if mgr.xact == nil || mgr.xact.Finished() {
-		mgr.xact = mgr.t.xactions.renewEC()
-	}
+
+	xact := mgr.restoreBckXact(lom.Bucket)
+
 	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		return errors.New(errstr)
 	}
-	mgr.xact.Encode(req)
+	xact.Encode(req)
 
 	return nil
 }
@@ -146,10 +200,8 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 		Action: ec.ActDelete,
 		LOM:    lom,
 	}
-	if mgr.xact == nil || mgr.xact.Finished() {
-		mgr.xact = mgr.t.xactions.renewEC()
-	}
-	mgr.xact.Cleanup(req)
+
+	mgr.restoreBckXact(lom.Bucket).Cleanup(req)
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
@@ -163,10 +215,8 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		LOM:    lom,
 		ErrCh:  make(chan error), // unbuffered
 	}
-	if mgr.xact == nil || mgr.xact.Finished() {
-		mgr.xact = mgr.t.xactions.renewEC()
-	}
-	mgr.xact.Decode(req)
+
+	mgr.restoreBckXact(lom.Bucket).Decode(req)
 	// wait for EC completes restoring the object
 	return <-req.ErrCh
 }
