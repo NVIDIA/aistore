@@ -41,3 +41,42 @@
 - name: Apply netplan if changed
   command: netplan apply
   when: netplan.changed
+
+- name: Set CPU frequency governor to requested mode
+  command: cpupower frequency-set -r -g {{ ais_cpufreq_governor }}
+
+- name: Make sure we have a /usr/local/bin
+  file:
+    dest: /usr/local/bin
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Install /usr/local/bin/ais_host_config.sh
+  template:
+    src: ais_host_config.sh.j2
+    dest: /usr/local/bin/ais_host_config.sh
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create aishostconfig systemctl unit
+  copy:
+    src: aishostconfig.service
+    dest: /etc/systemd/system
+    mode: 0444
+  register: configservice
+
+- name: (Re)start aishostconfig service
+  systemd:
+    name: aishostconfig
+    daemon-reload: yes
+    enabled: yes
+    state: restarted
+  when: configservice.changed
+
+
+
+
+  

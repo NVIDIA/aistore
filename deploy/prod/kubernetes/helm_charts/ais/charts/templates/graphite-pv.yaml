@@ -1,0 +1,29 @@
+#
+# Create a Persistent Volume for Graphite to claim use of.
+# See https://kubernetes.io/blog/2018/04/13/local-persistent-volumes-beta/
+#
+{{ if and .Values.tags.builtin_monitoring .Values.graphite.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ template "ais.fullname" . }}-graphite-pv
+  labels:
+    consumer: "graphite"
+spec:
+  capacity:
+    storage: {{ required "graphite PV capacity required" .Values.graphite.ais.pv.capacity | quote }}
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: {{ required "graphite PV path required" .Values.graphite.ais.pv.path | quote }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ required "graphite PV node required" .Values.graphite.ais.pv.node }}
+{{ end }}

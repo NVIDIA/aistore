@@ -17,7 +17,7 @@
   Both Graphite and Grafana have been deployed as part of this release.
 
   Grafana can be accessed via NodePort service at http://<any-k8s-node>:<nodeport>,
-  where <nodeport> can be found via 'kubectl get service {{ template "ais.fullname" }}-grafana'
+  where <nodeport> can be found via 'kubectl get service {{ template "ais.fullname" . }}-grafana'
   (it's the one in the local port range).  To browse to that Grafana URL from behind a
   jumpbox or similar, forward a local port on your desktop to <any-k8s-node>:<nodeport>
   via the jumpbox using something like

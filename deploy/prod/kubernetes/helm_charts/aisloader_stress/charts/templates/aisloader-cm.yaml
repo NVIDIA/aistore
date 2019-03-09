@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "chart.name" . }}-startscript
+  labels:
+     ais_aisloader: "anyvalue"
+data:
+  config.sh: |-
+    #
+    # This bash shell snippet is sourced from the container start script, and then the
+    # function run_aisloader below is called.
+    #
+    # If the defaults are not suitable, the suggested usage is as follows (until
+    # something more elegant is implemented):
+    #
+    # - remove node labels for the daemonset nodeSelector
+    # - helm install this chart
+    # - edit the config map with kubectl edit
+    # - label nodes for the daemonset nodeSelector
+    #
+
+    set -x
+
+    #
+    # Initialize associative arrays with default arguments
+    #
+    declare -A bucket=( [_default]="{{ .Values.aisloaderArg.bucket.default }}" ) 
+    declare -A duration=( [_default]="{{ .Values.aisloaderArg.duration.default }}" )
+    declare -A pctput=( [_default]="{{ .Values.aisloaderArg.pctput.default }}" )
+    declare -A cleanup=( [_default]="{{ .Values.aisloaderArg.cleanup.default }}" )
+    declare -A readertype=( [_default]="{{ .Values.aisloaderArg.readertype.default }}" )
+    declare -A numworkers=( [_default]="{{ .Values.aisloaderArg.numworkers.default }}" )
+    declare -A ip=( [_default]="{{ .Values.ais_release}}-ais-proxy" )
+    declare -A port=( [_default]="{{ .Values.aisloaderArg.port.default }}" )
+    declare -A minsize=( [_default]="{{ .Values.aisloaderArg.minsize.default }}" )
+    declare -A maxsize=( [_default]="{{ .Values.aisloaderArg.maxsize.default }}" )
+
+    # Node-specific values for bucket, if any
+    {{ range .Values.aisloaderArg.bucket.specific }}
+    bucket[{{ .node | quote }}]={{ .value | quote }}
+    {{ end }}
+  
+    # Node-specific values for duration, if any
+    {{ range .Values.aisloaderArg.duration.specific }}
+    duration[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+
+    # Node-specific values for pctput, if any
+    {{ range .Values.aisloaderArg.pctput.specific }}
+    pctput[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for cleanup, if any
+    {{ range .Values.aisloaderArg.cleanup.specific }}
+    cleanup[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for readertype, if any
+    {{ range .Values.aisloaderArg.readertype.specific }}
+    readertype[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for numworkers, if any
+    {{ range .Values.aisloaderArg.numworkers.specific }}
+    numworkers[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for ip, if any
+    {{ range .Values.aisloaderArg.ip.specific }}
+    ip[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for port, if any
+    {{ range .Values.aisloaderArg.port.specific }}
+    port[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for minsize, if any
+    {{ range .Values.aisloaderArg.minsize.specific }}
+    minsize[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for maxsize, if any
+    {{ range .Values.aisloaderArg.maxsize.specific }}
+    maxsize[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    #
+    # Called from the container start script, with aisloader in PATH.
+    # The stdout of aisloader can be seen in kubectl logs.
+    #
+    function run_aisloader {
+      n=$1
+
+      bktpat=${bucket[$n]:-${bucket['_default']}}
+      mybkt=${bktpat/%%s/$n}
+
+      #
+      # Use a consistent seed per node
+      # XXX Could pass a seed via the values.yaml as for all others?
+      #
+      SEED=${MY_HOSTIP#[0-9]*\.[0-9]*\.[0-9]*\.}
+  
+      aisloader \
+        -bucket=$mybkt \
+        -check-statsd=true \
+        -seed=$SEED \
+        -duration=${duration[$n]:-${duration['_default']}} \
+        -pctput=${pctput[$n]:-${pctput['_default']}} \
+        -cleanup=${cleanup[$n]:-${cleanup['_default']}} \
+        -readertype=${readertype[$n]:-${readertype['_default']}} \
+        -numworkers=${numworkers[$n]:-${numworkers['_default']}} \
+        -ip=${ip[$n]:-${ip['_default']}} \
+        -port=${port[$n]:-${port['_default']}} \
+        -minsize=${minsize[$n]:-${minsize['_default']}} \
+        -maxsize=${maxsize[$n]:-${maxsize['_default']}}
+
+      echo "aisloader exit code was $?"
+    }

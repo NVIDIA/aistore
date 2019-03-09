@@ -7,4 +7,4 @@ rules:
   # to have a primary proxy to start
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["*"]
+    verbs: ["*"]  # XXX TODO - this is too liberal!

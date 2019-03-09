@@ -1,0 +1,12 @@
+[Unit]
+Description=AIS host config tweaks
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ais_host_config.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

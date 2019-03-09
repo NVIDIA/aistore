@@ -33,7 +33,6 @@ ais_packages:
   - bpfcc-tools
   - linux-headers-{{ ansible_kernel }}
   - systemtap
-  - gcc
   - fio
   - iperf
   - attr
@@ -123,64 +122,87 @@ ais_pam_limits:
     value: 1048576
     comment: required in AIS docs (but also need to change in pods)
 
+#
+# CPU frequency governor selection
+#
+ais_cpufreq_governor: performance
+
+#
+# Block device tweaks suitable for xfs on scsi HDD
+# See e.g. https://www.beegfs.io/wiki/StorageServerTuning
+#
+blkdevtune:
+  scheduler: deadline
+  nr_requests: 4096
+  read_ahead: 4096
 
 #
 # Items to add/tweak in /etc/sysctl.conf. The 'default' is just for reference/comparison,
-# as is the 'comment' field.
-#
-# XXX TODO Explain/document these choices in the comment fields provided.
+# as is the 'comment' field. These values assume a fat network of 50Gbit/s upwards.
+# Validation has been on storage nodes with 50Gbit/s ethernet serving GPU nodes with
+# 100Bgit/s ethernet all connected via the same top-of-rack switch.
 #
 ais_host_sysctl:
   - name: net.core.somaxconn
     value: 1024
     default: 128
     state: present
-    comment:
+    comment: Maximum number of connection requests that can be queued to a given listening socket. Needs to absorb burst of connection requests. AIS clients will usually keep connections open to proxy and targets, so we do not expect ongoing high new connection rate.
   - name: net.core.rmem_max
-    value: 16777216
+    value: 268435456
     default: 212992
     state: present
-    comment:
+    comment: Max receive socket buffer size for all protocols. AIS uses TCP, so net.ipv4.tcp_rmem over-rides there. Tweak to allow apps using SO_RCVBUF wide range. Will not apply to AIS.
   - name: net.core.wmem_max
+    value: 268435456
+    default: 212992
+    state: present
+    comment: Max send socket buffer size for all protocols. TCP over-rides, as above. Tweak to allow apps using SO_SNDBUF wide range. Will not apply to AIS.
+  - name: net.core.rmem_default
     value: 25165824
     default: 212992
     state: present
-    comment:
+    comment: Default  receive socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS.
   - name: net.core.wmem_default
     value: 25165824
     default: 212992
     state: present
-    comment:
+    comment: Default send socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS.
   - name: net.core.optmem_max
     value: 25165824
     default: 20480
     state: present
-    comment:
+    comment: Max ancillary buffer size. Some say must tune up, some say no difference.
+  - name: net.core.netdev_max_backlog
+    value: 250000
+    default: 1000
+    state: present
+    comment: Maximum number of packets queued on input side if kernel is unable to process packet fast enough to keep up with receive rate. Value per Mellanox tuning guide.
   - name: net.ipv4.tcp_wmem
-    value:   4096    12582912 16777216
-    default: 4096       16384  4194304
+    value:   4096    12582912  268435456
+    default: 4096       16384  4194304 (max is calculated)
     state: present
-    comment:
+    comment: Min guaranteed under memory pressure, default, and maximum TCP send socket size. Applies only to automatically-sized buffers (as used in AIS) - apps that set SO_SNDBUF get what they request. Allow automatic sizing up to 128M.
   - name: net.ipv4.tcp_rmem
-    value:   4096    12582912 16777216
-    default: 4096       87380  6291456
+    value:   4096    12582912 268435456
+    default: 4096       87380  6291456 (max is calculated)
     state: present
-    comment:
+    comment: Min guaranteed under memory pressure, default, and maximum TCP receive socket size. Applies only to automatically-sized buffers (as used in AIS) - apps that set SO_RCVBUF get what they request. Allow automatic sizing up to 128M.
+  - name: net.ipv4.tcp_adv_win_scale
+    value: 1
+    default: 2
+    state: present
+    comment: Advised by Melanox docs (https://community.mellanox.com/s/article/linux-sysctl-tuning); share socket buffer equally between app and kernel, default is app gets 1/4.
   - name: net.ipv4.tcp_mtu_probing
     value: 2
     default: 0
     state: present
-    comment: We control the MTU within the cluster nodes and k8s pods, so we can always use an initial MSS of tcp_base_mss. XXX should we be tweaking tcp_base_mss??
+    comment: We control the MTU within the cluster nodes and k8s pods, so we can always use an initial MSS of tcp_base_mss.
   - name: net.ipv4.tcp_slow_start_after_idle
     value: 0
     default: 1
     state: present
-    comment:
-    # - name: net.core.netdev_max_backlog
-    # value: 13888
-    # default:
-    # state:
-    # comment: A large device backlog queue can lead to greater latencies, so avoiding this one for now.
+    comment: No RFC2861 decay of the congestion window when all on same fast LAN
   - name: net.ipv4.tcp_tw_reuse
     value: 1
     default: 0
@@ -196,3 +218,13 @@ ais_host_sysctl:
     default:  262144
     state: present
     comment: See comment for tw_reuse
+  - name: net.ipv4.tcp_low_latency
+    value: 1
+    default: 0
+    state: present
+    comment: Per Mellanox tuning guide
+  - name: net.ipv4.tcp_timestamps
+    value: 0
+    state: present
+    default: 1
+    comment: Per Mellanox tuning guide

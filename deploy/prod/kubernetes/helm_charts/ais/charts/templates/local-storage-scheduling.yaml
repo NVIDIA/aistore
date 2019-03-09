@@ -1,0 +1,10 @@
+#
+# See https://kubernetes.io/blog/2018/04/13/local-persistent-volumes-beta/
+# We enable this in order to use local persistent volumes with smarter scheduling.
+#
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer

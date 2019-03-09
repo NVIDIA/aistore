@@ -1,0 +1,30 @@
+#
+# Create a Persistent Volume for Grafana to claim use of.
+# See https://kubernetes.io/blog/2018/04/13/local-persistent-volumes-beta/
+#
+{{ if and .Values.tags.builtin_monitoring .Values.grafana.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ template "ais.fullname" . }}-grafana-pv
+  labels:
+    consumer: "grafana"
+    
+spec:
+  capacity:
+    storage: {{ required "grafana PV capacity required" .Values.grafana.ais.pv.capacity | quote }}
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: {{ required "grafana PV path required" .Values.grafana.ais.pv.path | quote }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - {{ required "grafana PV node required" .Values.grafana.ais.pv.node | quote }}
+{{ end }}

@@ -1,0 +1,74 @@
+replicaCount: 1
+
+image:
+  repository: quay.io/nvidia/grmaisloader
+  tag: 1
+  pullPolicy: IfNotPresent
+  pullSecret: requireoverride
+
+# the release name for AIS, ie the name used in 'helm install --name=foo .'' for the AIS install
+ais_release: "stress"
+
+#
+# Arguments with which to run aisloader.
+#
+# 'ip' default is not listed below, it defaults to "{{ .Values.ais_release}}-ais-proxy }}"
+#
+# In each case we first look for an argument indexed by node name, and fall back to the
+# default.
+#
+#
+aisloaderArg:
+  # If the 'bucket' name includes %s it will be substituted with the node name
+  bucket:
+    default: "stressbkt_%s"
+    specific: []
+  duration:
+    default: "30m"
+    specific:
+      - node: "cpu01"
+        value: "29m"
+  pctput:
+    default: "0"
+    specific: []
+  cleanup:
+    default: "false"
+    specific: []
+  readertype:
+    default: "sg"
+    specific: []
+  numworkers:
+    default: "50"
+    specific: []
+  ip:
+    # no default - see above
+    specific: []
+  port:
+    default: "8080"
+    specific: []
+  minsize:
+    default: 8192
+    specific: []
+  maxsize:
+    default: 8192 
+    specific: []
+
+resources: {}
+
+#
+# Quick hack to use the Graphite instance created during AIS install. Requires cmd over-ride of graphite_host
+# if the helm install used anything other than --name ais
+#
+tags:
+  builtin_monitoring: false
+
+external_monitoring:
+  graphite_host: ais-graphite
+  graphite_port: 2003
+
+nodeSelector:
+  aisloader: "yes"
+
+tolerations: []
+
+affinity: {}

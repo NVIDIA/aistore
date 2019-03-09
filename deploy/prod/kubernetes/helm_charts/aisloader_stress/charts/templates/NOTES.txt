@@ -1,0 +1,3 @@
+When each aisloader instance completes the pod will simply sit around so that
+logs can be harvested etc.  When all logs are collected, simply helm delete the
+aisloader release.

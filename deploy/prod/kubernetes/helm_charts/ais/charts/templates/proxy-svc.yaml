@@ -15,6 +15,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: {{ template "ais.name" . }}
-    component: "{{ .Values.proxy.name }}"
-    release: {{ .Release.Name }}
+      app: "{{ template "ais.name" . }}"
+      release: "{{ .Release.Name }}"
+      gw: "{{ .Values.common_config.clusterIP_gw_label }}"

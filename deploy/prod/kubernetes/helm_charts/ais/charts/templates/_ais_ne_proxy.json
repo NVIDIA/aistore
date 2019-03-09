@@ -38,8 +38,8 @@
 	},
 	"proxy": {
 		"non_electable":	{{ .Values.ne_proxy.config.proxy.non_electable }},
-		"primary_url":		"http://{{ template "ais.fullname" . }}-proxy:{{ .Values.proxy.config.net.l4_port }}",
-		"original_url": 	"http://{{ template "ais.fullname" . }}-proxy:{{ .Values.proxy.config.net.l4_port }}",
+		"primary_url":		"http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4_port }}",
+		"original_url": 	"http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4_port }}",
 		"discovery_url": 	"{{ .Values.ne_proxy.config.proxy.discovery_url }}"
 	},
 	"lru": {

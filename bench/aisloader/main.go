@@ -954,7 +954,7 @@ func completeWorkOrder(wo *workOrder) {
 			statsd.Metric{
 				Type:  statsd.Timer,
 				Name:  "latency.targetresponse",
-				Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
+				Value: cmn.MaxF64(float64(wo.latencies.TargetFirstResponse/time.Millisecond), 0),
 			},
 		}
 	}

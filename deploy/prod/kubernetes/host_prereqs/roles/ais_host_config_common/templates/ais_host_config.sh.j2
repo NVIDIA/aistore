@@ -1,0 +1,39 @@
+#!/bin/bash -p
+
+#
+# Quick 'n' dirty host tuning for AIS. This is run as a oneshot service.
+# We should apply triggers to restart that service for disk replacement
+# etc.
+#
+# These parameters are not configurable in /etc/sysctl.d, sadly. The IO scheduler
+# can be applied as a default by updating /etc/default/grub, but we do it here
+# for now.
+#
+
+#
+# first arg is path relative to /sys/block/sd*, eg 'queue/scheduler'
+# second arg is the value to write to all paths /sys/block/sd*
+#
+function update_blk_sd_value {
+    what=$1
+    val=$2
+
+    echo "sd*/$what values before:"
+    cat /sys/block/sd*/$what | sort -u
+    echo
+
+    for p in /sys/block/sd*/$what
+    do
+        echo "$val" > $p
+    done
+
+    echo "sd*/$what values after:"
+    cat /sys/block/sd*/$what | sort -u
+    echo
+}
+
+update_blk_sd_value queue/scheduler "{{ blkdevtune.scheduler }}"
+update_blk_sd_value queue/nr_requests {{ blkdevtune.nr_requests }}
+update_blk_sd_value queue/read_ahead {{ blkdevtune.read_ahead }}
+
+exit 0

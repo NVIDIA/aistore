@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "chart.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    helm.sh/chart: {{ include "chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "chart.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "chart.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecret }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MY_HOSTIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP 
+            - name: STATSDCONF
+              value: "/var/statsd_config/statsd.json"
+            - name: COLLECTDCONF
+              value: "/var/collectd_config/collectd.json"
+            - name: RUNSCRIPTSOURCE
+              value: "/var/aisloader_script/config.sh"
+          volumeMounts:
+            - name: statsd-config
+              mountPath: "/var/statsd_config"
+            - name: collectd-config
+              mountPath: "/var/collectd_config"
+            - name: aisloader-script
+              mountPath: "/var/aisloader_script"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      serviceAccount: {{ template "chart.name" . }}-sa
+      volumes:
+        - name: statsd-config
+          configMap:
+            name: {{ template "chart.name" . }}-statsd
+        - name: collectd-config
+          configMap:
+            name: {{ template "chart.name" . }}-collectd
+        - name: aisloader-script
+          configMap:
+            name: {{ template "chart.name" . }}-startscript
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

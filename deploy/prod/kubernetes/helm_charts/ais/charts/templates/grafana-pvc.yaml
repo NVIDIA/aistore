@@ -1,0 +1,14 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: grafana-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ required "grafana PV capacity required" .Values.grafana.ais.pv.capacity | quote }}
+  storageClassName: local-storage
+  selector:
+    matchLabels:
+      consumer: grafana

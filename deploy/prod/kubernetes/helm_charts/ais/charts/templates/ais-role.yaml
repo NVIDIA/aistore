@@ -5,4 +5,4 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets", "daemonsets", "services", "pods", "configmaps"]
-    verbs: ["*"]
+    verbs: ["*"]  # XXX TODO thid is too liberal!

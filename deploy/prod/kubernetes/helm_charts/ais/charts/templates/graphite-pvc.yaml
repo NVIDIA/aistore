@@ -1,0 +1,14 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: graphite-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ required "graphite PV capacity required" .Values.graphite.ais.pv.capacity | quote }}
+  storageClassName: local-storage
+  selector:
+    matchLabels:
+      consumer: graphite

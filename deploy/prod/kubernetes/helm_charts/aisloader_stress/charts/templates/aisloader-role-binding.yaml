@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "chart.name" . }}-rb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "chart.name" . }}-r
+subjects:
+- kind: ServiceAccount
+  name: {{ template "chart.name" . }}-sa

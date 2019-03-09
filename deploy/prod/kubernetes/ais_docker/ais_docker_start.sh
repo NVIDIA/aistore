@@ -5,8 +5,7 @@ cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
 cp -fv $COLLECTDCONF /etc/collectd/collectd.conf || exit 1
 
 service collectd start
-node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF&
-
+node /opt/statsd/stats.js /opt/statsd/statsd.conf &
 
 #
 # If this pod is part of the proxy daemonset then the initContainer in that
@@ -68,11 +67,11 @@ fi
 # everyone *except* the initial primary proxy.
 #
 ping_result="failure"
+total_wait=0
 if [[  -f /etc/ais/smap.json ]]; then
     # A contactable/resolvable initial primary is expressly not a requirement after initial deployment!
     echo "Cached smap.json present - assuming not initial AIS cluster deployment"
 elif ! $is_primary; then
-        total_wait=0
         # k8s liveness will likely fail and restart us before the 120s period is over, anyway
         while [[ $total_wait -lt 120 ]]; do
             # Single success will end, otherwise wait at most 10s
@@ -94,9 +93,17 @@ elif ! $is_primary; then
 
         echo "Ping $ping_result; waited a total of around $total_wait seconds"
 
-        # can resolve and ping, or gave up; regardless, introduce a brief snooze before retry
+        #
+        # Can resolve and ping, or gave up; regardless, introduce a brief snooze before proceeding
+        # in the case of initial cluster deployment. The intention here is to give the initial
+        # primary a few moments to establish before ais starts trying to register.
+        #
+        # XXX Should also consider the pingability of the proxy clusterIP service.
         [[ -f /etc/ais/smap.json ]] || sleep 5
 fi
+
+# token effort to allow statsd to set up shop before ais tries to connect
+[[ $total_wait -le 2 ]] && sleep 2
 
 ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true"
 

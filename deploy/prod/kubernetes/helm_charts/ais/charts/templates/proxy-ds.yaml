@@ -22,6 +22,7 @@ spec:
         app: {{ template "ais.name" . }}
         component: "{{ .Values.proxy.name }}"
         release: {{ .Release.Name }}
+        gw: "{{ .Values.proxy.gw_label }}"
     spec:
       initContainers:
         - name: populate-env

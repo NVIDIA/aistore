@@ -18,7 +18,7 @@
 
 image:
   repository: quay.io/nvidia/ais_k8s
-  tag: 10
+  tag: stable
   pullPolicy: IfNotPresent
   dockerRepoToken: ""
   initContainers:
@@ -29,6 +29,7 @@ common_config:
   cloudprovider: aws
   cloud_buckets: cloud
   local_buckets: local
+  clusterIP_gw_label: shared
   mirror:
     util_tresh: 0
     enabled: false
@@ -47,7 +48,8 @@ common_config:
 
 
 proxy:
-  name : "proxy"    # A component label for selector
+  name : "proxy"      # A component label for selector
+  gw_label: "shared"  # shared means in proxy clusterIP service
   config:
     proxy:
       non_electable : false
@@ -84,6 +86,7 @@ proxy:
 
 ne_proxy:
   name : "ne_proxy"    # A component label for selector
+  gw_label: "shared"   # shared means in proxy clusterIP service
   config:
     proxy:
       non_electable : true
@@ -102,7 +105,7 @@ ne_proxy:
         use_https   : false
   service:
     type: ClusterIP
-    port: 8080
+    port: 8080      # must match that of proxy since they go behind same clusterIP service
   nodeSelector:
     key: ais-proxy-type 
     value: "nonelectable"
@@ -133,7 +136,6 @@ target:
       http:
         use_https   : false
   service:
-    type: ClusterIP
     port: 8081
   nodeSelector:
     key: ais-target-node 
@@ -201,20 +203,43 @@ tags:
 # we'll use subchart dependencies to deploy graphite and grafana within the k8s
 # cluster.
 #
+# If data persistence is enabled for Graphite and Grafana then local storage
+# must already have been assigned on the indicated node and path combinations
+# below - we don't create the underlying storage here, we're just creating a PV
+# from existing local storage to satisfy the PVC made from graphite and grafana.
+#
 # XXX TODO:
 #
-#   - As a lightweight initial effort we disable persistence for both graphite and grafana.
 #   - would be nice to add some standard dashboards; do this via another sidecar
-#   - need to report NodePort on which Grafana can be contacted (and if behind a jumpbox
-#     or similar how to use ssh -NL to forward a local port to that port)
+#
+
+#
+# Key paths here that match those of https://github.com/kiwigrid/helm-charts/tree/master/charts/graphite
+# will over-ride default values in the graphite dependency. Local additions are all within the ais map.
 #
 graphite:
   persistence:
-    enabled: false
+    enabled: true
+    existingClaim: graphite-pvc
+  ais:
+    pv:
+      capacity: "250Gi"
+      path: ""
+      node: ""
 
+#
+# Key paths here that match those of https://github.com/helm/charts/tree/master/stable/grafana
+# will over-ride default values in the grafana dependency. Local additions are all within the ais map.
+#
 grafana:
   persistence:
-    enabled: false
+    enabled: true
+    existingClaim: grafana-pvc
+  ais:
+    pv:
+      capacity: "250Gi"
+      path: ""
+      node: ""
   service:
     type: NodePort
   sidecar:
@@ -224,6 +249,7 @@ grafana:
     dashboards:
       enabled: false
       label: ais_grafana_dashboard
+
 
 #
 # Used only if builtin_monitoring is over-ridden to false

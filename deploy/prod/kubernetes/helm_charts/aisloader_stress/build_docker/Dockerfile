@@ -1,16 +1,14 @@
 #
 # Dockerfile to build an AIS docker image in which we include a copy of
-# your GOPATH tree. Must be run from the intended $GOPATH, ie something
-# like:
+# your GOPATH tree. Must be run from the intended $GOPATH, and must pass the
+# path to the start script at build time, ie something like:
 #
 # cd $GOPATH
-# docker build -f blah/blah/Dockerfile_debug ...
-#
-# The entry point CMD expects that at $GOPATH/bin/ais is the ais binary, or if that
-# is absent that is should go run setup/ais.go
+# docker build -f blah/blah/Dockerfile --build-arg start_script=blah/blah/aisloader_docker_start.sh
 #
 
 FROM ubuntu:bionic
+ARG start_script
 RUN mkdir -p /usr/local/bin
 
 RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs collectd collectd-utils git iputils-ping netcat golang-go
@@ -25,7 +23,7 @@ COPY src /go/src
 COPY bin /go/bin
 COPY pkg /go/pkg
 
-COPY src/github.com/NVIDIA/aistore/deploy/prod/kubernetes/ais_docker/ais_docker_start.sh /ais_docker_start.sh
-RUN chmod a+x ais_docker_start.sh
+COPY $start_script /docker_start.sh
+RUN chmod a+x /docker_start.sh
 
-CMD ["bash","-c", "./ais_docker_start.sh"]
+CMD ["bash","-c", "/docker_start.sh"]
