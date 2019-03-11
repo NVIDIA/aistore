@@ -402,13 +402,8 @@ func (b *DlBody) Validate() error {
 
 type DlListBody struct {
 	dlBase
-	Base       string `json:"base"`
-	Prefix     string `json:"prefix"`
-	Suffix     string `json:"suffix"`
-	Start      uint   `json:"start"`
-	End        uint   `json:"end"`
-	Step       uint   `json:"step"`
-	DigitCount uint   `json:"digit_count"`
+	Base     string `json:"base"`
+	Template string `json:"template"`
 }
 
 func (b *DlListBody) Validate() error {
@@ -421,20 +416,14 @@ func (b *DlListBody) Validate() error {
 	if !strings.HasSuffix(b.Base, "/") {
 		b.Base += "/"
 	}
-	if b.Step == 0 {
-		b.Step = 1
-	}
-	if b.Start > b.End {
-		return errors.New("start value greater than end")
+	if b.Template == "" {
+		return errors.New("no template for lsit found, template is required")
 	}
 	return nil
 }
 
 func (b *DlListBody) String() (str string) {
-	return fmt.Sprintf(
-		"bucket: %q, base: %q, prefix: %q, suffix: %q, start %v, end %v, step %v, digit_count %v",
-		b.Bucket, b.Base, b.Prefix, b.Suffix, b.Start, b.End, b.Step, b.DigitCount,
-	)
+	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
 }
 
 type DlMultiBody struct {

@@ -230,17 +230,22 @@ func (p *proxyrunner) listDownloadHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	glog.V(4).Infof("listDownloadHandler payload: %s", payload)
-
 	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
 
-	for i := payload.Start; i <= payload.End; i += payload.Step {
-		objname := fmt.Sprintf("%s%0*d%s", payload.Prefix, payload.DigitCount, i, payload.Suffix)
+	glog.V(4).Infof("listDownloadHandler payload: %s", payload)
+
+	prefix, suffix, start, end, step, digitCount, err := cmn.ParseBashTemplate(payload.Template)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	for i := start; i <= end; i += step {
+		objname := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
 		objects[objname] = payload.Base + objname
 	}
-	glog.V(4).Infof("got a request to download the following objects: %v", objects)
 
 	if err := p.bulkDownloadProcessor(payload.Bucket, bckIsLocal, objects, payload.Headers); err != nil {
 		p.invalmsghdlr(w, r, err.Error())

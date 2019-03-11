@@ -341,6 +341,22 @@ func DownloadObjectBucketList(baseParams *BaseParams, bucket, prefix, suffix str
 	return err
 }
 
+func DownloadObjectList(baseParams *BaseParams, bucket, base, template string) error {
+	body := cmn.DlListBody{
+		Base:     base,
+		Template: template,
+	}
+	body.Bucket = bucket
+	msg, err := jsoniter.Marshal(body)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadList)
+	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
 func DownloadObjectStatus(baseParams *BaseParams, bucket, objname, link string) (resp []byte, err error) {
 	body := cmn.DlBody{
 		Objname: objname,

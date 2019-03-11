@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -194,4 +195,32 @@ func TestDownloadObjectBucketList(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// FIXME: How to wait?
+}
+
+func TestDownloadObjectList(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		base     = "https://storage.googleapis.com/lpr-vision/"
+		template = "imagenet/imagenet_train-{000000..000007}.tgz"
+	)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	err := api.DownloadObjectList(tutils.DefaultBaseAPIParams(t), bucket, base, template)
+	tutils.CheckFatal(err, t)
+
+	time.Sleep(3 * time.Second)
+
+	for i := 0; i <= 7; i++ {
+		objname := fmt.Sprintf("imagenet/imagenet_train-00000%d.tgz", i)
+		err := api.DownloadObjectCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, base+objname)
+		tutils.CheckFatal(err, t)
+	}
 }

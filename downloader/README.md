@@ -78,7 +78,7 @@ Namely, the *list* download expects the object name to consist of prefix + index
 
 ### List Format
 
-Consider a website named `randomwebsite.com/somedirectory/` that contains the following files:
+Consider a website named `randomwebsite.com/some_dir/` that contains the following files:
 - object1log.txt
 - object2log.txt
 - object3log.txt
@@ -96,18 +96,14 @@ Name | Type | Description | Optional?
 **timeout** | **string** | Timeout for request to external resource | Yes
 **headers** | **JSON object** | JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download each object. | Yes
 **base** | **string** | The base URL of the object that will be used to formulate the download url |
-**prefix** | **string** | Is the first thing appended to the base string to formulate the download url | Yes
-**suffix** | **string** | the suffix follows the object index to formulate the download url of the object being downloaded. | Yes
-**start** | **int** | The index of the first object in the object space to be downloaded. Default is 0 if not provided. | Yes
-**end** | **int** | The upper bound of the range of objects to be downloaded in the object space. Default is 0 if not provided. | Yes
-**step** | **int** | Used to download every nth object (where n = step) in the object space starting from start and ending at end. Default is 1 if not provided. | Yes
-**digit_count** | **int** | Used to ensure that each key coforms to n digits (where n = digit_count). Basically prepends as many 0s as needed. i.e. if n == 4, then the key 45 will be 0045 and if n == 5, then key 45 wil be 00045. Not providing this field will mean no 0s are prepended to any index in the key space. | Yes
+**template** | **string** | Bash template describing names of the objects |
 
 ### Sample Request
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a List of Objects | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"download_action": "download_list", "bucket": "test321",  "base": "randomwebsite.com/somedirectory/",  "prefix": "object",  "suffix": "log.txt",  "start": 200,  "end": 300, "step": 1, "digit_count": 0 }' http://localhost:8080/v1/download/list`|
+| Download a list of objects | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"bucket": "test321",  "base": "randomwebsite.com/some_dir/",  "template": "object{1..1000}log.txt"}' http://localhost:8080/v1/download/list` |
+| Download a list of objects, selecting ever tenth | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"bucket": "test321",  "base": "randomwebsite.com/",  "template": "some_dir/object{1..1000..10}log.txt"}' http://localhost:8080/v1/download/list` |
 
 ## Bucket download
 

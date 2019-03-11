@@ -46,12 +46,6 @@ var (
 	errInvalidInputFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
 	errInvalidOutputFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
 
-	errInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010}suffix`")
-	errInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix`")
-	errStartAfterEnd     = errors.New("'start' cannot be greater than 'end'")
-	errNegativeStart     = errors.New("'start' is negative")
-	errNonPositiveStep   = errors.New("'step' is non positive number")
-
 	errInvalidMemUsage      = errors.New("invalid memory usage specified, format should be '81%' or '1GB'")
 	errInvalidMaxMemPercent = errors.New("max memory usage percent must be 0 (defaults to 80%) or in the range [1, 99]")
 	errInvalidMaxMemNumber  = errors.New("max memory usage value must be non-negative")
@@ -227,96 +221,16 @@ func validateExtension(ext string) bool {
 	return cmn.StringInSlice(ext, supportedExtensions)
 }
 
-func parseBashTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
-	// "prefix-{00001..00010..2}-suffix"
-	left := strings.Index(template, "{")
-	if left == -1 {
-		return "", "", 0, 0, 0, 0, errInvalidBashFormat
-	}
-	right := strings.Index(template, "}")
-	if right == -1 {
-		return "", "", 0, 0, 0, 0, errInvalidBashFormat
-	}
-	if right < left {
-		return "", "", 0, 0, 0, 0, errInvalidBashFormat
-	}
-	prefix = template[:left]
-	if len(template) > right+1 {
-		suffix = template[right+1:]
-	}
-	inside := template[left+1 : right]
-	numbers := strings.Split(inside, "..")
-	if len(numbers) < 2 || len(numbers) > 3 {
-		return "", "", 0, 0, 0, 0, errInvalidBashFormat
-	} else if len(numbers) == 2 { // {0001..0999} case
-		if start, err = strconv.Atoi(numbers[0]); err != nil {
-			return "", "", 0, 0, 0, 0, err
-		}
-		if end, err = strconv.Atoi(numbers[1]); err != nil {
-			return "", "", 0, 0, 0, 0, err
-		}
-		step = 1
-		digitCount = cmn.Min(len(numbers[0]), len(numbers[1]))
-	} else if len(numbers) == 3 { // {0001..0999..2} case
-		if start, err = strconv.Atoi(numbers[0]); err != nil {
-			return "", "", 0, 0, 0, 0, err
-		}
-		if end, err = strconv.Atoi(numbers[1]); err != nil {
-			return "", "", 0, 0, 0, 0, err
-		}
-		if step, err = strconv.Atoi(numbers[2]); err != nil {
-			return "", "", 0, 0, 0, 0, err
-		}
-		digitCount = cmn.Min(len(numbers[0]), len(numbers[1]))
-	}
-	return
-}
-
-func parseAtTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
-	// "prefix-@00001-suffix"
-	left := strings.Index(template, "@")
-	if left == -1 {
-		return "", "", 0, 0, 0, 0, errInvalidAtFormat
-	}
-	prefix = template[:left]
-	number := ""
-	for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
-		number += string(template[left])
-	}
-
-	if len(template) > left {
-		suffix = template[left:]
-	}
-
-	start = 0
-	if end, err = strconv.Atoi(number); err != nil {
-		return "", "", 0, 0, 0, 0, err
-	}
-	step = 1
-	digitCount = len(number)
-	return
-}
-
 // parseInputFormat checks if input format was specified correctly
 func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
 	template := strings.TrimSpace(inputFormat)
 	pt := &parsedInputTemplate{}
-	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = parseBashTemplate(template); err == nil {
+	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseBashTemplate(template); err == nil {
 		pt.Type = templBash
-	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = parseAtTemplate(template); err == nil {
+	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseAtTemplate(template); err == nil {
 		pt.Type = templAt
 	} else {
 		return nil, errInvalidInputFormat
-	}
-
-	if pt.Start > pt.End {
-		return nil, errStartAfterEnd
-	}
-	if pt.Start < 0 {
-		return nil, errNegativeStart
-	}
-	if pt.Step <= 0 {
-		return nil, errNonPositiveStep
 	}
 
 	pt.RangeCount = ((pt.End - pt.Start) / pt.Step) + 1
@@ -327,22 +241,12 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
 	template := strings.TrimSpace(outputFormat)
 	pt := &parsedOutputTemplate{}
-	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = parseBashTemplate(template); err == nil {
+	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseBashTemplate(template); err == nil {
 		// Pass
-	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = parseAtTemplate(template); err == nil {
+	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseAtTemplate(template); err == nil {
 		// Pass
 	} else {
 		return nil, errInvalidOutputFormat
-	}
-
-	if pt.Start > pt.End {
-		return nil, errStartAfterEnd
-	}
-	if pt.Start < 0 {
-		return nil, errNegativeStart
-	}
-	if pt.Step <= 0 {
-		return nil, errNonPositiveStep
 	}
 
 	pt.RangeCount = ((pt.End - pt.Start) / pt.Step) + 1

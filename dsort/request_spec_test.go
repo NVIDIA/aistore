@@ -185,7 +185,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errStartAfterEnd))
+			Expect(err).To(Equal(errInvalidInputFormat))
 		})
 
 		It("should fail due to start after end in output format", func() {
@@ -199,7 +199,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errStartAfterEnd))
+			Expect(err).To(Equal(errInvalidOutputFormat))
 		})
 
 		It("should fail due invalid parentheses", func() {

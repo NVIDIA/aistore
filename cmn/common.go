@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
@@ -562,4 +564,112 @@ func Ratio(high, low, curr int64) float32 {
 		return 1
 	}
 	return float32(curr-low) / float32(high-low)
+}
+
+//
+// TEMPLATES/PARSING
+//
+
+var (
+	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix`")
+	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix`")
+
+	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
+	ErrNegativeStart   = errors.New("'start' is negative")
+	ErrNonPositiveStep = errors.New("'step' is non positive number")
+)
+
+func ParseBashTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
+	// "prefix-{00001..00010..2}-suffix"
+	left := strings.Index(template, "{")
+	if left == -1 {
+		err = ErrInvalidBashFormat
+		return
+	}
+	right := strings.Index(template, "}")
+	if right == -1 {
+		err = ErrInvalidBashFormat
+		return
+	}
+	if right < left {
+		err = ErrInvalidBashFormat
+		return
+	}
+	prefix = template[:left]
+	if len(template) > right+1 {
+		suffix = template[right+1:]
+	}
+	inside := template[left+1 : right]
+	numbers := strings.Split(inside, "..")
+	if len(numbers) < 2 || len(numbers) > 3 {
+		err = ErrInvalidBashFormat
+		return
+	} else if len(numbers) == 2 { // {0001..0999} case
+		if start, err = strconv.Atoi(numbers[0]); err != nil {
+			return
+		}
+		if end, err = strconv.Atoi(numbers[1]); err != nil {
+			return
+		}
+		step = 1
+		digitCount = Min(len(numbers[0]), len(numbers[1]))
+	} else if len(numbers) == 3 { // {0001..0999..2} case
+		if start, err = strconv.Atoi(numbers[0]); err != nil {
+			return
+		}
+		if end, err = strconv.Atoi(numbers[1]); err != nil {
+			return
+		}
+		if step, err = strconv.Atoi(numbers[2]); err != nil {
+			return
+		}
+		digitCount = Min(len(numbers[0]), len(numbers[1]))
+	}
+	if err = validateBoundaries(start, end, step); err != nil {
+		return
+	}
+	return
+}
+
+func ParseAtTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
+	// "prefix-@00001-suffix"
+	left := strings.Index(template, "@")
+	if left == -1 {
+		err = ErrInvalidAtFormat
+		return
+	}
+	prefix = template[:left]
+	number := ""
+	for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
+		number += string(template[left])
+	}
+
+	if len(template) > left {
+		suffix = template[left:]
+	}
+
+	start = 0
+	if end, err = strconv.Atoi(number); err != nil {
+		return
+	}
+	step = 1
+	digitCount = len(number)
+
+	if err = validateBoundaries(start, end, step); err != nil {
+		return
+	}
+	return
+}
+
+func validateBoundaries(start, end, step int) error {
+	if start > end {
+		return ErrStartAfterEnd
+	}
+	if start < 0 {
+		return ErrNegativeStart
+	}
+	if step <= 0 {
+		return ErrNonPositiveStep
+	}
+	return nil
 }

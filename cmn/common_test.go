@@ -12,6 +12,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
 )
 
 const (
@@ -231,6 +235,78 @@ func TestMvFile(t *testing.T) {
 
 	os.RemoveAll(tmpDir)
 }
+
+var _ = Describe("Common file", func() {
+	Context("ParseBashTemplate", func() {
+		DescribeTable("parse bash template without error",
+			func(template, expectedPrefix, expectedSuffix string, expectedStart, expectedEnd, expectedStep, expectedDigitCount int) {
+				prefix, suffix, start, end, step, digitCount, err := ParseBashTemplate(template)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(prefix).To(Equal(expectedPrefix))
+				Expect(suffix).To(Equal(expectedSuffix))
+				Expect(start).To(Equal(expectedStart))
+				Expect(end).To(Equal(expectedEnd))
+				Expect(step).To(Equal(expectedStep))
+				Expect(digitCount).To(Equal(expectedDigitCount))
+			},
+			Entry("with step", "prefix-{0010..0111..2}-suffix", "prefix-", "-suffix", 10, 111, 2, 4),
+			Entry("without step and suffix", "prefix-{0010..0111}", "prefix-", "", 10, 111, 1, 4),
+			Entry("minimal", "{1..2}", "", "", 1, 2, 1, 1),
+			Entry("minimal multiple digits", "{110..220..10}", "", "", 110, 220, 10, 3),
+			Entry("minimal with digit count", "{1..02}", "", "", 1, 2, 1, 1),
+			Entry("minimal with special suffix", "{1..02}}", "", "}", 1, 2, 1, 1),
+		)
+
+		DescribeTable("parse bash template with error",
+			func(template string) {
+				_, _, _, _, _, _, err := ParseBashTemplate(template)
+				Expect(err).Should(HaveOccurred())
+			},
+			Entry("missing {", "prefix-0010..0111..2}-suffix"),
+			Entry("missing }", "prefix-{001..009-suffix"),
+			Entry("start after end", "prefix-{002..001}-suffix"),
+			Entry("negative start", "prefix-{-001..009}-suffix"),
+			Entry("negative step", "prefix-{001..009..-1}-suffix"),
+			Entry("invalid step", "prefix-{0010..0111..2s}-suffix"),
+			Entry("invalid end", "prefix-{0010..0111s..2}-suffix"),
+			Entry("invalid start", "prefix-{0010s..0111..2}-suffix"),
+			Entry("too many arms", "prefix-{00..10..0111..2}-suffix"),
+			Entry("missing end", "prefix-{010..}-suffix"),
+			Entry("missing start", "prefix-{..009}-suffix"),
+			Entry("missing start and end", "prefix-{..}-suffix"),
+			Entry("empty template with prefix and suffix", "prefix-{}-suffix"),
+			Entry("empty template", "{}"),
+		)
+	})
+
+	Context("ParseAtTemplate", func() {
+		DescribeTable("parse at template without error",
+			func(template, expectedPrefix, expectedSuffix string, expectedStart, expectedEnd, expectedDigitCount int) {
+				prefix, suffix, start, end, step, digitCount, err := ParseAtTemplate(template)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(prefix).To(Equal(expectedPrefix))
+				Expect(suffix).To(Equal(expectedSuffix))
+				Expect(start).To(Equal(expectedStart))
+				Expect(end).To(Equal(expectedEnd))
+				Expect(step).To(Equal(1))
+				Expect(digitCount).To(Equal(expectedDigitCount))
+			},
+			Entry("full featured template", "prefix-@010-suffix", "prefix-", "-suffix", 0, 10, 3),
+			Entry("minimal with prefix", "pref@9", "pref", "", 0, 9, 1),
+			Entry("minimal", "@0010", "", "", 0, 10, 4),
+		)
+
+		DescribeTable("parse at template with error",
+			func(template string) {
+				_, _, _, _, _, _, err := ParseAtTemplate(template)
+				Expect(err).Should(HaveOccurred())
+			},
+			Entry("missing @", "prefix-01-suffix"),
+			Entry("negative end", "prefix-@-0001-suffix"),
+			Entry("additional @", "prefix-@@0010-suffix"),
+		)
+	})
+})
 
 func ensurePathExists(t *testing.T, path string, dir bool) {
 	if fi, err := os.Stat(path); err != nil {
