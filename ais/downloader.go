@@ -359,7 +359,6 @@ func (p *proxyrunner) bucketDownloadHandler(w http.ResponseWriter, r *http.Reque
 	if err := p.listRange(http.MethodPost, payload.Bucket, payload.BckProvider, actionMsg, nil); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
-	return
 }
 
 ////////////

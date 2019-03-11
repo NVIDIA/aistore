@@ -29,8 +29,8 @@ const (
 var (
 	loadedRecipes = []*Recipe{
 		&Recipe{
-			1, "Basic Put", true,
-			"basic recipe that PUTs into buckets, considered the `hello world` of recipes",
+			1, "Basic PUT GET", true,
+			"basic recipe that PUTs and GETs into buckets, considered the `hello world` of recipes",
 			recBasicPut,
 		},
 		&Recipe{
@@ -43,9 +43,14 @@ var (
 			"basic recipe for EC by performing GET while a target is down",
 			recECTargDown,
 		},
+		&Recipe{
+			4, "Read Part Config", true,
+			"recipe that reads parts of files and config from bucket",
+			recReadPartCfg,
+		},
 
 		&Recipe{
-			4, "Cycle Put", false,
+			5, "Cycle PUT GET", false,
 			"constantly cycles through buckets, running PUT in one, GET in another, and deleting the last",
 			recCyclePut,
 		},

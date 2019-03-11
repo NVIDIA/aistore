@@ -89,14 +89,14 @@ func (rctx *RecipeContext) Put(bucketname string, maxDuration time.Duration, pct
 	go func() {
 		defer rctx.finishPrim(tag)
 		ch := make(chan *stats.PrimitiveStat, 1)
-		AISExec(ch, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypePut, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)
 	}()
 }
 
-// Function Get has readoffpct and readlenpct as a pct of soakcmn.Params.RecMinFilesize
+// Get has parameters readoffpct and readlenpct as a 100 pct of min filesize
 func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checksum bool, readoffpct float64, readlenpct float64) {
 	tag := rctx.startPrim("GET")
 	params := &AISLoaderExecParams{
@@ -109,7 +109,24 @@ func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checks
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypeGet, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
+		stat := <-ch
+		stat.ID = tag.String()
+		rctx.repCtx.PutPrimitiveStats(stat)
+	}()
+}
+
+func (rctx *RecipeContext) GetCfg(bucketname string, duration time.Duration) {
+	tag := rctx.startPrim("GetCFG")
+	params := &AISLoaderExecParams{
+		pctput:   0,
+		duration: duration,
+	}
+
+	go func() {
+		ch := make(chan *stats.PrimitiveStat, 1)
+		defer rctx.finishPrim(tag)
+		AISExec(ch, soakcmn.OpTypeCfg, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)

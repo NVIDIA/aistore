@@ -39,6 +39,10 @@ func (rs *RecipeStats) Add(p *PrimitiveStat) {
 	rs.duration += p.Duration
 }
 
+func (rs *RecipeStats) HasData() bool {
+	return rs.requestCount > 0
+}
+
 func (rs RecipeStats) writeHeadings(f *os.File) {
 	f.WriteString(
 		strings.Join(

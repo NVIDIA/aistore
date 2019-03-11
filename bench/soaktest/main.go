@@ -82,7 +82,7 @@ func parseCmdLine() {
 
 	f.BoolVar(&soakcmn.Params.Short, "short", false, "Skips the longer recipes, makes the default reg-phaseduration shorter")
 
-	f.BoolVar(&soakcmn.Params.RecDisable, "rec-disable", false, "Skips running recipes, if true will if true will just continuously run regression phases")
+	f.BoolVar(&soakcmn.Params.RecDisable, "rec-disable", false, "Skips running recipes, and just continuously run regression phases")
 	f.StringVar(&recipeListStr, "rec-list", "", "Comma-delimited list of RecipeIDs to run, if set '--short' will be ignored")
 	f.IntVar(&soakcmn.Params.NumCycles, "rec-cycles", 0, "Stop after cycling through all the recipes this many times, 0=infinite")
 	f.BoolVar(&soakcmn.Params.RecRegDisable, "rec-regdisable", false, "Disables running regression while recipe is running")
@@ -91,7 +91,7 @@ func parseCmdLine() {
 	f.StringVar(&recMaxFilesizeStr, "rec-maxsize", "", fmt.Sprintf("Max filesize in recipes (default %s), can specify units with suffix", cmn.B2S(recMaxFilesizeDefault, 2)))
 	f.IntVar(&soakcmn.Params.RecPrimWorkers, "rec-primworkers", 1, "Number of workers that are run by a primitive within a recipe")
 
-	f.BoolVar(&soakcmn.Params.RegPhaseDisable, "reg-phasedisable", false, "Skips running regression phases, if true will just continuously run recipes")
+	f.BoolVar(&soakcmn.Params.RegPhaseDisable, "reg-phasedisable", false, "Skips running regression phases, and just continuously run recipes")
 	f.DurationVar(&soakcmn.Params.RegPhaseDuration, "reg-phaseduration", 0, fmt.Sprintf("Duration of regression phases (default: %v short, %v long)", regPhaseDurationShortDefault, regPhaseDurationLongDefault))
 	f.Float64Var(&soakcmn.Params.RegPctCapacity, "reg-pctcap", 2.0/5.0, "Pct (0-100) of total storage capacity allocated to regression")
 	f.DurationVar(&soakcmn.Params.RegSetupDuration, "reg-setupduration", time.Second*12, "The maximum amount of time to spend setting up the bucket for regression")
@@ -112,7 +112,6 @@ func parseCmdLine() {
 		switch f.Arg(0) {
 		case "usage":
 			printUsage(f)
-			os.Exit(0)
 		case "ls":
 			recipes.PrintRecipes()
 		default:
@@ -142,20 +141,20 @@ func main() {
 			if x != "" {
 				newID, err := strconv.Atoi(x)
 				if err != nil {
-					fmt.Printf("can't parse RecipeID list: %v\n", recipeListStr)
-					return
+					fmt.Fprintf(os.Stderr, "can't parse RecipeID list: %v\n", recipeListStr)
+					os.Exit(1)
 				}
 				if _, ok := valid[newID]; !ok {
-					fmt.Printf("invalid RecipeID: %v\n", newID)
-					return
+					fmt.Fprintf(os.Stderr, "invalid RecipeID: %v\n", newID)
+					os.Exit(1)
 				}
 				recipeList = append(recipeList, newID)
 			}
 		}
 
 		if len(recipeList) == 0 {
-			fmt.Println("RecipeID list empty")
-			return
+			fmt.Fprintln(os.Stderr, "RecipeID list empty")
+			os.Exit(1)
 		}
 
 		//de-dup
@@ -166,43 +165,50 @@ func main() {
 	}
 
 	// Sanity check for filesizes
-	checkFilesize := func(inp string, def int64, outp *int64) bool {
+	checkFilesize := func(inp string, def int64, outp *int64) {
 		if inp == "" {
 			*outp = def
 		} else {
 			var err error
 			if *outp, err = cmn.S2B(inp); err != nil {
-				fmt.Printf("%v is not a size\n", inp)
-				return false
+				fmt.Fprintf(os.Stderr, "%v is not a size\n", inp)
+				os.Exit(1)
 			}
 		}
 		if *outp <= 0 {
-			fmt.Printf("%v must be positive number\n", inp)
-			return false
+			fmt.Fprintf(os.Stderr, "%v must be positive number\n", inp)
+			os.Exit(1)
 		}
-		return true
 	}
 
 	// Sanity check filesizes for recipe
-	if !checkFilesize(recMinFilesizeStr, recMinFilesizeDefault, &soakcmn.Params.RecMinFilesize) {
-		return
-	}
-	if !checkFilesize(recMaxFilesizeStr, recMaxFilesizeDefault, &soakcmn.Params.RecMaxFilesize) {
-		return
-	}
+	checkFilesize(recMinFilesizeStr, recMinFilesizeDefault, &soakcmn.Params.RecMinFilesize)
+	checkFilesize(recMaxFilesizeStr, recMaxFilesizeDefault, &soakcmn.Params.RecMaxFilesize)
 	if soakcmn.Params.RecMaxFilesize < soakcmn.Params.RecMinFilesize {
-		fmt.Printf("recipe filesize: max %v must be at least min %v\n", recMaxFilesizeStr, recMinFilesizeStr)
+		fmt.Fprintf(os.Stderr, "recipe filesize: max %v must be at least min %v\n", recMaxFilesizeStr, recMinFilesizeStr)
+		os.Exit(1)
 	}
 
 	// Sanity check filesizes for regression
-	if !checkFilesize(regMinFilesizeStr, regMinFilesizeDefault, &soakcmn.Params.RegMinFilesize) {
-		return
-	}
-	if !checkFilesize(regMaxFilesizeStr, regMaxFilesizeDefault, &soakcmn.Params.RegMaxFilesize) {
-		return
-	}
+	checkFilesize(regMinFilesizeStr, regMinFilesizeDefault, &soakcmn.Params.RegMinFilesize)
+	checkFilesize(regMaxFilesizeStr, regMaxFilesizeDefault, &soakcmn.Params.RegMaxFilesize)
 	if soakcmn.Params.RegMaxFilesize < soakcmn.Params.RegMinFilesize {
-		fmt.Printf("regression filesize: max %v must be at least min %v\n", regMaxFilesizeStr, regMinFilesizeStr)
+		fmt.Fprintf(os.Stderr, "regression filesize: max %v must be at least min %v\n", regMaxFilesizeStr, regMinFilesizeStr)
+		os.Exit(1)
+	}
+
+	// Sanity check for number of workers
+	if soakcmn.Params.RecPrimWorkers < 1 {
+		fmt.Fprintln(os.Stderr, "rec-primworkers must be at least 1")
+		os.Exit(1)
+	}
+	if soakcmn.Params.RegSetupWorkers < 1 {
+		fmt.Fprintln(os.Stderr, "reg-setupworkers must be at least 1")
+		os.Exit(1)
+	}
+	if soakcmn.Params.RegWorkers < 1 {
+		fmt.Fprintln(os.Stderr, "reg-workers must be at least 1")
+		os.Exit(1)
 	}
 
 	// Sanity check for ip and port
@@ -217,15 +223,15 @@ func main() {
 			soakcmn.Params.Port = "8080"
 		}
 	} else if soakcmn.Params.IP == "" {
-		fmt.Println("port specified without ip")
-		return
+		fmt.Fprintln(os.Stderr, "port specified without ip")
+		os.Exit(1)
 	} else if soakcmn.Params.Port == "" {
-		fmt.Println("ip specified without port")
-		return
+		fmt.Fprintln(os.Stderr, "ip specified without port")
+		os.Exit(1)
 	}
 	if err := tutils.Tcping(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
-		fmt.Printf("Cannot connect to %s:%s, reason: %v\n", soakcmn.Params.IP, soakcmn.Params.Port, err)
-		return
+		fmt.Fprintf(os.Stderr, "Cannot connect to %s:%s, reason: %v\n", soakcmn.Params.IP, soakcmn.Params.Port, err)
+		os.Exit(1)
 	}
 	soakprim.SetPrimaryURL()
 

@@ -897,11 +897,11 @@ func (conf *Config) update(key, value string) error {
 	// TOP LEVEL CONFIG
 	case "vmodule":
 		if err := SetGLogVModule(value); err != nil {
-			return fmt.Errorf("Failed to set vmodule = %s, err: %v", value, err)
+			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
 	case "log_level", "log.level":
 		if err := SetLogLevel(conf, value); err != nil {
-			return fmt.Errorf("Failed to set log level = %s, err: %v", value, err)
+			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
 		}
 
 	// PERIODIC

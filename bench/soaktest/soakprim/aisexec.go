@@ -64,11 +64,16 @@ func init() {
 	cmn.AssertNoErr(err)
 }
 
-func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params *AISLoaderExecParams) {
+func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWorkers int, params *AISLoaderExecParams) {
 	randomSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
 	filebasename := tutils.FastRandomFilename(randomSrc, 13)
 	filename := path.Join(soaktestDirname, filebasename+".json")
 	defer os.Remove(filename)
+
+	getConfig := false
+	if opType == soakcmn.OpTypeCfg {
+		getConfig = true
+	}
 
 	spf := fmt.Sprintf
 
@@ -79,6 +84,7 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 		spf("-numworkers=%v", numWorkers),
 		spf("-pctput=%v", params.pctput),
 		spf("-duration=%s", params.duration),
+		spf("-getconfig=%t", getConfig),
 		spf("-totalputsize=%v", params.totalputsize),
 		spf("-verifyhash=%t", params.verifyhash),
 		spf("-minsize=%v", params.minsize),
@@ -124,7 +130,7 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 		return
 	}
 
-	aisloaderStats, err := parseAisloaderResponse(result, params.pctput)
+	aisloaderStats, err := parseAisloaderResponse(opType, result, params.pctput)
 
 	if err != nil {
 		report.Writef(report.SummaryLevel, "error parsing aisloader response")
@@ -135,7 +141,7 @@ func AISExec(ch chan *stats.PrimitiveStat, bucket string, numWorkers int, params
 	ch <- aisloaderStats
 }
 
-func parseAisloaderResponse(response []byte, totalputsize int) (*stats.PrimitiveStat, error) {
+func parseAisloaderResponse(opType string, response []byte, totalputsize int) (*stats.PrimitiveStat, error) {
 	aisloaderresp := make([]aisloaderResponse, 0)
 	err := jsoniter.Unmarshal(response, &aisloaderresp)
 
@@ -147,22 +153,29 @@ func parseAisloaderResponse(response []byte, totalputsize int) (*stats.Primitive
 		return nil, errors.New("aisloader returned empty response, expected at least summary")
 	}
 
-	// TODO: figure out better way of distingushing primitive type
-	// Maybe just pass from primitive
-	if totalputsize < 50 {
+	if opType == soakcmn.OpTypeGet {
 		primitiveStat := stats.PrimitiveStat{
-			AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Get,
+			AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Get, // The last element of aisloader response is the summary
 			OpType:        soakcmn.OpTypeGet,
 		}
 		return &primitiveStat, nil
 	}
 
-	// TODO: the last element of aisloader response is always a summary
-	// we might make use of the rest as well at some point
-	primitiveStat := stats.PrimitiveStat{
-		AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Put,
-		OpType:        soakcmn.OpTypePut,
+	if opType == soakcmn.OpTypePut {
+		primitiveStat := stats.PrimitiveStat{
+			AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Put, // The last element of aisloader response is the summary
+			OpType:        soakcmn.OpTypePut,
+		}
+		return &primitiveStat, nil
 	}
 
-	return &primitiveStat, nil
+	if opType == soakcmn.OpTypeCfg {
+		primitiveStat := stats.PrimitiveStat{
+			AISLoaderStat: aisloaderresp[len(aisloaderresp)-1].Cfg, // The last element of aisloader response is the summary
+			OpType:        soakcmn.OpTypeCfg,
+		}
+		return &primitiveStat, nil
+	}
+
+	return nil, fmt.Errorf("not a valid operation type %v", opType)
 }

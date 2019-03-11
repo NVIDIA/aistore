@@ -48,7 +48,7 @@ func setupRegression() *regressionContext {
 		maxsize:      soakcmn.Params.RegMaxFilesize,
 	}
 	aisStopCh := make(chan *stats.PrimitiveStat, 1)
-	AISExec(aisStopCh, regBucket, soakcmn.Params.RegSetupWorkers, params)
+	AISExec(aisStopCh, soakcmn.OpTypePut, regBucket, soakcmn.Params.RegSetupWorkers, params)
 	setupStat := <-aisStopCh
 	close(aisStopCh)
 
@@ -81,7 +81,7 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 
 	go func() {
 		defer aisExecWg.Done()
-		AISExec(aisExecResultCh, regBucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
+		AISExec(aisExecResultCh, soakcmn.OpTypeGet, regBucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
 	}()
 
 	<-stopCh

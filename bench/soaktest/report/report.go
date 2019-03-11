@@ -24,6 +24,8 @@ type ReportContext struct {
 
 	recipeGetStats stats.RecipeStats
 	recipePutStats stats.RecipeStats
+
+	recipeCfgStats stats.RecipeStats
 }
 
 func NewReportContext() *ReportContext {
@@ -55,6 +57,8 @@ func (rctx *ReportContext) BeginRecipe(name string) {
 	rctx.recipeGetStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: soakcmn.OpTypeGet, BeginTime: timestamp}
 	rctx.recipePutStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: soakcmn.OpTypePut, BeginTime: timestamp}
 
+	rctx.recipeCfgStats = stats.RecipeStats{RecipeName: name, RecipeNum: val, OpType: soakcmn.OpTypeCfg, BeginTime: timestamp}
+
 	rctx.phaseNumber = 0
 }
 
@@ -66,6 +70,12 @@ func (rctx *ReportContext) EndRecipe() error {
 
 	summaryWriter.WriteStat(rctx.recipeGetStats)
 	summaryWriter.WriteStat(rctx.recipePutStats)
+
+	rctx.recipeCfgStats.EndTime = timestamp
+	//not all recipes get cfg, don't log if not used
+	if rctx.recipeCfgStats.HasData() {
+		summaryWriter.WriteStat(rctx.recipeCfgStats)
+	}
 
 	rctx.currentRecipe = ""
 
@@ -97,8 +107,12 @@ func (rctx *ReportContext) FlushRecipePhase() {
 
 		if stat.OpType == soakcmn.OpTypeGet || stat.Fatal {
 			rctx.recipeGetStats.Add(stat)
-		} else if stat.OpType == soakcmn.OpTypePut || stat.Fatal {
+		}
+		if stat.OpType == soakcmn.OpTypePut || stat.Fatal {
 			rctx.recipePutStats.Add(stat)
+		}
+		if stat.OpType == soakcmn.OpTypeCfg || stat.Fatal {
+			rctx.recipeCfgStats.Add(stat)
 		}
 	}
 

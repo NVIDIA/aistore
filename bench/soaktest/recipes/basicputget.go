@@ -7,7 +7,7 @@ import (
 )
 
 func recBasicPut(rctx *soakprim.RecipeContext) {
-	//most basic recipe that puts some stuff in buckets,
+	//most basic recipe that puts and gets some stuff in buckets,
 	// the 'hello world' of recipes
 
 	conds := &soakprim.PreConds{

@@ -1776,10 +1776,10 @@ func (p *proxyrunner) listRange(method, bucket, bckProvider string, actionMsg *c
 
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
-		return fmt.Errorf("Failed to unmarshal JSMAP: Not a map[string]interface")
+		return fmt.Errorf("failed to unmarshal JSMAP: Not a map[string]interface")
 	} else if waitstr, ok := jsmap["wait"]; ok {
 		if wait, ok = waitstr.(bool); !ok {
-			return fmt.Errorf("Failed to read ListRangeMsgBase Wait: Not a bool")
+			return fmt.Errorf("failed to read ListRangeMsgBase Wait: Not a bool")
 		}
 	}
 	// Send json message to all
@@ -1809,7 +1809,7 @@ func (p *proxyrunner) listRange(method, bucket, bckProvider string, actionMsg *c
 	for result := range results {
 		if result.err != nil {
 			return fmt.Errorf(
-				"Failed to execute List/Range request: %v (%d: %s)",
+				"failed to execute List/Range request: %v (%d: %s)",
 				result.err,
 				result.status,
 				result.errstr,
