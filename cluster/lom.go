@@ -47,7 +47,7 @@ type (
 	LOM struct {
 		// this object's runtime context
 		T           Target
-		Bucketmd    *BMD
+		bucketMD    *BMD
 		AtimeRespCh chan *atime.Response
 		Config      *cmn.Config
 		CksumConf   *cmn.CksumConf
@@ -93,7 +93,7 @@ func (lom *LOM) RestoredReceived(props *LOM) {
 
 func (lom *LOM) SetExists(exists bool) { lom.exists = exists }
 func (lom *LOM) Exists() bool          { return lom.exists }
-func (lom *LOM) LRUenabled() bool      { return lom.Bucketmd.LRUenabled(lom.Bucket) }
+func (lom *LOM) LRUEnabled() bool      { return lom.BckProps.LRU.Enabled }
 func (lom *LOM) Misplaced() bool       { return lom.HrwFQN != lom.FQN && !lom.IsCopy() }         // misplaced (subj to rebalancing)
 func (lom *LOM) IsCopy() bool          { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a mirrored copy of an object
 func (lom *LOM) HasCopy() bool         { return lom.CopyFQN != "" && lom.FQN == lom.HrwFQN }     // has one mirrored copy
@@ -215,17 +215,14 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s)", lom, cprovider)
 			return
 		}
-		lom.CksumConf = &lom.Config.Cksum
-		lom.MirrorConf = &lom.Config.Mirror
-		if lom.BckProps != nil {
-			if lom.BckProps.Cksum.Type != cmn.ChecksumInherit {
-				lom.CksumConf = &lom.BckProps.Cksum
-			}
-			lom.MirrorConf = &lom.BckProps.Mirror
+		lom.CksumConf = &lom.BckProps.Cksum
+		if lom.CksumConf.Type == cmn.ChecksumInherit {
+			lom.CksumConf = &lom.Config.Cksum
 		}
+		lom.MirrorConf = &lom.BckProps.Mirror
 	}
 	// [local copy] always enforce LomCopy if the following is true
-	if (lom.Misplaced() || action&LomFstat != 0) && lom.BckProps != nil && lom.BckProps.Mirror.Copies != 0 {
+	if (lom.Misplaced() || action&LomFstat != 0) && lom.MirrorConf.Copies != 0 {
 		action |= LomCopy
 	}
 	//
@@ -254,7 +251,7 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		lom.Version = string(version)
 	}
 	if action&LomAtime != 0 { // FIXME: RFC822 format
-		lom.Atimestr, lom.Atime, _ = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUenabled())
+		lom.Atimestr, lom.Atime, _ = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
 	}
 	if action&LomCksum != 0 {
 		cksumAction := action&LomCksumMissingRecomp | action&LomCksumPresentRecomp
@@ -303,7 +300,7 @@ func (lom *LOM) UpdateAtime(at time.Time) {
 		return
 	}
 	lom.Atimestr = at.Format(cmn.RFC822) // TODO: add support for cmn.StampMicro
-	if !lom.LRUenabled() {
+	if !lom.LRUEnabled() {
 		return
 	}
 	ratime := lom.T.GetAtimeRunner()
@@ -378,11 +375,11 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 
 	lom.Uname = Uname(lom.Bucket, lom.Objname)
 	// bucketmd, bckIsLocal, bprops
-	lom.Bucketmd = bowner.Get()
+	lom.bucketMD = bowner.Get()
 	if err := lom.initBckIsLocal(bckProvider); err != nil {
 		return err.Error()
 	}
-	lom.BckProps, _ = lom.Bucketmd.Get(lom.Bucket, lom.BckIsLocal)
+	lom.BckProps, _ = lom.bucketMD.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.FQN == "" {
 		lom.FQN, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
 	}
@@ -409,12 +406,12 @@ func (lom *LOM) initBckIsLocal(bckProvider string) error {
 	if bckProvider == cmn.CloudBs {
 		lom.BckIsLocal = false
 	} else if bckProvider == cmn.LocalBs {
-		if !lom.Bucketmd.IsLocal(lom.Bucket) {
+		if !lom.bucketMD.IsLocal(lom.Bucket) {
 			return fmt.Errorf("bucket provider set to 'local' but %s local bucket does not exist", lom.Bucket)
 		}
 		lom.BckIsLocal = true
 	} else {
-		lom.BckIsLocal = lom.Bucketmd.IsLocal(lom.Bucket)
+		lom.BckIsLocal = lom.bucketMD.IsLocal(lom.Bucket)
 	}
 	return nil
 }

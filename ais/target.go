@@ -1714,7 +1714,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 
 // TODO
 func (t *targetrunner) getFromTier(lom *cluster.LOM) (ok bool) {
-	if lom.BckProps == nil || lom.BckProps.NextTierURL == "" {
+	if lom.BckProps.NextTierURL == "" {
 		return
 	}
 	inNextTier, _, _ := t.objectInNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname)
@@ -1785,7 +1785,7 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	//
 	// next tier if
 	//
-	if lom.BckProps != nil && lom.BckProps.NextTierURL != "" && lom.BckProps.ReadPolicy == cmn.RWPolicyNextTier {
+	if lom.BckProps.NextTierURL != "" && lom.BckProps.ReadPolicy == cmn.RWPolicyNextTier {
 		var inNextTier bool
 		if inNextTier, errstr, errcode = t.objectInNextTier(lom.BckProps.NextTierURL, lom.Bucket, lom.Objname); errstr == "" {
 			if inNextTier {

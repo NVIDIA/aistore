@@ -339,7 +339,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUenabled())
+	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUEnabled())
 
 	// obtain the version of the file
 	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrVersion); errstr != "" {

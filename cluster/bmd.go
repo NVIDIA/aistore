@@ -35,16 +35,8 @@ func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
 	if !local {
 		mm = m.CBmap
 	}
-	p, ok := mm[b]
-	return p, ok
-}
-
-// lruEnabled returns whether or not LRU is enabled
-// for the bucket. Returns the global setting if bucket not found
-func (m *BMD) LRUenabled(bucket string) bool {
-	p, ok := m.Get(bucket, m.IsLocal(bucket))
-	if !ok {
-		return cmn.GCO.Get().LRU.Enabled
+	if p, ok := mm[b]; ok {
+		return p, true
 	}
-	return p.LRU.Enabled
+	return cmn.DefaultBucketProps(), false
 }

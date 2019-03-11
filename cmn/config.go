@@ -116,6 +116,7 @@ type (
 	// about any config changes.
 	ConfigOwner interface {
 		Get() *Config
+		Clone() *Config
 		BeginUpdate() *Config
 		CommitUpdate(config *Config)
 		DiscardUpdate()
@@ -169,13 +170,7 @@ func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(atomic.LoadPointer(&gco.c))
 }
 
-// When updating we need to make sure that the update is transaction and no
-// other update can happen when other transaction is in progress. Therefore,
-// we introduce locking mechanism which targets this problem.
-//
-// NOTE: BeginUpdate should be followed by CommitUpdate.
-func (gco *globalConfigOwner) BeginUpdate() *Config {
-	gco.mtx.Lock()
+func (gco *globalConfigOwner) Clone() *Config {
 	config := &Config{}
 
 	// FIXME: CopyStruct is actually shallow copy but because Config
@@ -183,8 +178,17 @@ func (gco *globalConfigOwner) BeginUpdate() *Config {
 	// deepcopy. This may break in the future, so we need solution
 	// to make sure that we do *proper* deepcopy with good performance.
 	CopyStruct(config, gco.Get())
-
 	return config
+}
+
+// When updating we need to make sure that the update is transaction and no
+// other update can happen when other transaction is in progress. Therefore,
+// we introduce locking mechanism which targets this problem.
+//
+// NOTE: BeginUpdate should be followed by CommitUpdate.
+func (gco *globalConfigOwner) BeginUpdate() *Config {
+	gco.mtx.Lock()
+	return gco.Clone()
 }
 
 // CommitUpdate ends transaction of updating config and notifies listeners

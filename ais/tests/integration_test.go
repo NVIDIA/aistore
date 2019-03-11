@@ -338,8 +338,8 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		m = metadata{
 			t:                   t,
 			otherTasksToTrigger: 1,
-			num:                 20000,
-			numGetsEachFile:     5,
+			num:                 150000,
+			numGetsEachFile:     1,
 		}
 	)
 

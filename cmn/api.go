@@ -545,3 +545,94 @@ type ObjectProps struct {
 	Size    int
 	Version string
 }
+
+func DefaultBucketProps() *BucketProps {
+	c := GCO.Clone()
+
+	c.Cksum.Type = ChecksumInherit
+	return &BucketProps{
+		Cksum:  c.Cksum,
+		LRU:    c.LRU,
+		Mirror: c.Mirror,
+	}
+}
+
+func (to *BucketProps) CopyFrom(from *BucketProps) {
+	to.NextTierURL = from.NextTierURL
+	to.CloudProvider = from.CloudProvider
+	if from.ReadPolicy != "" {
+		to.ReadPolicy = from.ReadPolicy
+	}
+	if from.WritePolicy != "" {
+		to.WritePolicy = from.WritePolicy
+	}
+	if from.Cksum.Type != "" {
+		to.Cksum.Type = from.Cksum.Type
+		if from.Cksum.Type != ChecksumInherit {
+			to.Cksum = from.Cksum
+		}
+	}
+
+	to.LRU = from.LRU
+	to.Mirror = from.Mirror
+	to.EC = from.EC
+}
+
+func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluster func(string) bool) error {
+	if bp.NextTierURL != "" {
+		if _, err := url.ParseRequestURI(bp.NextTierURL); err != nil {
+			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.NextTierURL, err)
+		}
+		if !urlOutsideCluster(bp.NextTierURL) {
+			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.NextTierURL)
+		}
+	}
+	if err := validateCloudProvider(bp.CloudProvider, bckIsLocal); err != nil {
+		return err
+	}
+	if bp.ReadPolicy != "" && bp.ReadPolicy != RWPolicyCloud && bp.ReadPolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid read policy: %s", bp.ReadPolicy)
+	}
+	if bp.ReadPolicy == RWPolicyCloud && bckIsLocal {
+		return fmt.Errorf("read policy for local bucket cannot be '%s'", RWPolicyCloud)
+	}
+	if bp.WritePolicy != "" && bp.WritePolicy != RWPolicyCloud && bp.WritePolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid write policy: %s", bp.WritePolicy)
+	}
+	if bp.WritePolicy == RWPolicyCloud && bckIsLocal {
+		return fmt.Errorf("write policy for local bucket cannot be '%s'", RWPolicyCloud)
+	}
+	if bp.NextTierURL != "" {
+		if bp.CloudProvider == "" {
+			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
+				ProviderAmazon, ProviderGoogle, ProviderAIS)
+		}
+		if bp.ReadPolicy == "" {
+			bp.ReadPolicy = RWPolicyNextTier
+		}
+		if bp.WritePolicy == "" && !bckIsLocal {
+			bp.WritePolicy = RWPolicyCloud
+		} else if bp.WritePolicy == "" && bckIsLocal {
+			bp.WritePolicy = RWPolicyNextTier
+		}
+	}
+
+	validationArgs := &ValidationArgs{BckIsLocal: bckIsLocal, TargetCnt: targetCnt}
+	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
+	for _, validator := range validators {
+		if err := validator.ValidateAsProps(validationArgs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCloudProvider(provider string, bckIsLocal bool) error {
+	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderAIS {
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
+			ProviderAmazon, ProviderGoogle, ProviderAIS)
+	} else if bckIsLocal && provider != ProviderAIS && provider != "" {
+		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", ProviderAIS)
+	}
+	return nil
+}

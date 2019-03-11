@@ -696,11 +696,7 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := &cmn.BucketProps{
-		Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
-		LRU:    cmn.GCO.Get().LRU,
-		Mirror: config.Mirror,
-	}
+	bucketProps := cmn.DefaultBucketProps()
 	if !clone.add(bucket, true, bucketProps) {
 		p.bmdowner.Unlock()
 		return fmt.Errorf("local bucket %s already exists", bucket)
@@ -934,11 +930,7 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	bprops, exists := clone.Get(bucket, proxyLocal)
 	if !exists {
 		cmn.Assert(!proxyLocal)
-		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
-			LRU:    config.LRU,
-			Mirror: config.Mirror,
-		}
+		bprops = cmn.DefaultBucketProps()
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
 
@@ -1055,7 +1047,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Second, try to treat it as a cmn.BucketProps
-	nprops := &cmn.BucketProps{} // every field has to have zero value
+	nprops := cmn.DefaultBucketProps()
 	msg = cmn.ActionMsg{Value: nprops}
 	if err = jsoniter.Unmarshal(b, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
@@ -1076,17 +1068,14 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	bprops, exists := clone.Get(bucket, proxyLocal)
 	if !exists {
 		cmn.Assert(!proxyLocal)
-		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
-			LRU:    config.LRU,
-			Mirror: config.Mirror,
-		}
+		bprops = cmn.DefaultBucketProps()
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
 
 	switch msg.Action {
 	case cmn.ActSetProps:
-		if err := p.validateBucketProps(nprops, proxyLocal); err != nil {
+		targetCnt := p.smapowner.Get().CountTargets()
+		if err := nprops.Validate(proxyLocal, targetCnt, p.urlOutsideCluster); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -1103,7 +1092,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		p.copyBucketProps(bprops /*to*/, nprops /*from*/, bucket)
+		recksum := rechecksumRequired(cmn.GCO.Get().Cksum.Type, bprops.Cksum.Type, nprops.Cksum.Type)
+		bprops.CopyFrom(nprops)
+		if recksum {
+			go p.notifyTargetsRechecksum(bucket)
+		}
 	case cmn.ActResetProps:
 		if bprops.EC.Enabled {
 			p.bmdowner.Unlock()
@@ -1111,11 +1104,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 				http.StatusBadRequest)
 			return
 		}
-		bprops = &cmn.BucketProps{
-			Cksum:  cmn.CksumConf{Type: cmn.ChecksumInherit},
-			LRU:    config.LRU,
-			Mirror: config.Mirror,
-		}
+		bprops = cmn.DefaultBucketProps()
 	}
 	clone.set(bucket, proxyLocal, bprops)
 	if e := p.savebmdconf(clone, config); e != "" {
@@ -2979,57 +2968,6 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 	return true
 }
 
-// FIXME: copy-paste vs. httprunner.setconfig; flat naming
-func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) error {
-	if props.NextTierURL != "" {
-		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
-			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
-		}
-		if !p.urlOutsideCluster(props.NextTierURL) {
-			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", props.NextTierURL)
-		}
-	}
-	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
-		return err
-	}
-	if props.ReadPolicy != "" && props.ReadPolicy != cmn.RWPolicyCloud && props.ReadPolicy != cmn.RWPolicyNextTier {
-		return fmt.Errorf("invalid read policy: %s", props.ReadPolicy)
-	}
-	if props.ReadPolicy == cmn.RWPolicyCloud && isLocal {
-		return fmt.Errorf("read policy for local bucket cannot be '%s'", cmn.RWPolicyCloud)
-	}
-	if props.WritePolicy != "" && props.WritePolicy != cmn.RWPolicyCloud && props.WritePolicy != cmn.RWPolicyNextTier {
-		return fmt.Errorf("invalid write policy: %s", props.WritePolicy)
-	}
-	if props.WritePolicy == cmn.RWPolicyCloud && isLocal {
-		return fmt.Errorf("write policy for local bucket cannot be '%s'", cmn.RWPolicyCloud)
-	}
-	if props.NextTierURL != "" {
-		if props.CloudProvider == "" {
-			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
-				cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAIS)
-		}
-		if props.ReadPolicy == "" {
-			props.ReadPolicy = cmn.RWPolicyNextTier
-		}
-		if props.WritePolicy == "" && !isLocal {
-			props.WritePolicy = cmn.RWPolicyCloud
-		} else if props.WritePolicy == "" && isLocal {
-			props.WritePolicy = cmn.RWPolicyNextTier
-		}
-	}
-
-	targetCnt := p.smapowner.Get().CountTargets()
-	validationArgs := &cmn.ValidationArgs{BckIsLocal: isLocal, TargetCnt: targetCnt}
-	validators := []cmn.PropsValidator{&props.Cksum, &props.LRU, &props.Mirror, &props.EC}
-	for _, validator := range validators {
-		if err := validator.ValidateAsProps(validationArgs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketChecksumNew string) bool {
 	checksumOld := globalChecksum
 	if bucketChecksumOld != cmn.ChecksumInherit {
@@ -3087,61 +3025,4 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 	err := jsoniter.Unmarshal(res.outjson, si)
 	cmn.AssertNoErr(err)
 	return !nsi.Equals(si)
-}
-
-func validateCloudProvider(provider string, isLocal bool) error {
-	if provider != "" && provider != cmn.ProviderAmazon && provider != cmn.ProviderGoogle && provider != cmn.ProviderAIS {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
-			cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAIS)
-	} else if isLocal && provider != cmn.ProviderAIS && provider != "" {
-		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", cmn.ProviderAIS)
-	}
-	return nil
-}
-
-// FIXME: redundant vs. setconfig; will always miss when adding new props
-func (p *proxyrunner) copyBucketProps(bprops /*to*/, nprops /*from*/ *cmn.BucketProps, bucket string) {
-	bprops.NextTierURL = nprops.NextTierURL
-	bprops.CloudProvider = nprops.CloudProvider
-	if nprops.ReadPolicy != "" {
-		bprops.ReadPolicy = nprops.ReadPolicy
-	}
-	if nprops.WritePolicy != "" {
-		bprops.WritePolicy = nprops.WritePolicy
-	}
-	if rechecksumRequired(cmn.GCO.Get().Cksum.Type, bprops.Cksum.Type, nprops.Cksum.Type) {
-		go p.notifyTargetsRechecksum(bucket)
-	}
-	if nprops.Cksum.Type != "" {
-		bprops.Cksum.Type = nprops.Cksum.Type
-		if nprops.Cksum.Type != cmn.ChecksumInherit {
-			bprops.Cksum.ValidateColdGet = nprops.Cksum.ValidateColdGet
-			bprops.Cksum.ValidateWarmGet = nprops.Cksum.ValidateWarmGet
-			bprops.Cksum.EnableReadRange = nprops.Cksum.EnableReadRange
-		}
-	}
-	bprops.LRU.LowWM = nprops.LRU.LowWM // can't conditionally assign if value != 0 since 0 is valid
-	bprops.LRU.HighWM = nprops.LRU.HighWM
-	bprops.LRU.AtimeCacheMax = nprops.LRU.AtimeCacheMax
-	if nprops.LRU.DontEvictTimeStr != "" {
-		bprops.LRU.DontEvictTimeStr = nprops.LRU.DontEvictTimeStr
-		bprops.LRU.DontEvictTime = nprops.LRU.DontEvictTime // parsing done in validateBucketProps()
-	}
-	if nprops.LRU.CapacityUpdTimeStr != "" {
-		bprops.LRU.CapacityUpdTimeStr = nprops.LRU.CapacityUpdTimeStr
-		bprops.LRU.CapacityUpdTime = nprops.LRU.CapacityUpdTime // parsing done in validateBucketProps()
-	}
-	bprops.LRU.Enabled = nprops.LRU.Enabled
-
-	bprops.Mirror.Enabled = nprops.Mirror.Enabled
-	if bprops.Mirror.Enabled {
-		bprops.Mirror.Copies = 2 // 2-way mirror, or none
-	}
-	bprops.Mirror.Burst = nprops.Mirror.Burst
-	bprops.Mirror.UtilThresh = nprops.Mirror.UtilThresh
-
-	bprops.EC.Enabled = nprops.EC.Enabled
-	bprops.EC.ObjSizeLimit = nprops.EC.ObjSizeLimit
-	bprops.EC.DataSlices = nprops.EC.DataSlices
-	bprops.EC.ParitySlices = nprops.EC.ParitySlices
 }
