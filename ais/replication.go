@@ -340,7 +340,10 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	_, atime, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUEnabled())
+	_, atime, err := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUEnabled())
+	if err != nil {
+		return fmt.Errorf("failed to get atime: %v", err)
+	}
 
 	// obtain the version of the file
 	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrVersion); errstr != "" {
@@ -356,10 +359,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		httpReq.Header.Add(cmn.HeaderObjCksumType, cksumType)
 		httpReq.Header.Add(cmn.HeaderObjCksumVal, cksumValue)
 	}
-
-	if !atime.IsZero() {
-		httpReq.Header.Add(cmn.HeaderObjAtime, strconv.FormatInt(atime.UnixNano(), 10))
-	}
+	httpReq.Header.Add(cmn.HeaderObjAtime, strconv.FormatInt(atime.UnixNano(), 10))
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
 	if err != nil {

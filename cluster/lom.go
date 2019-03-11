@@ -261,10 +261,8 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 	if action&LomAtime != 0 { // FIXME: RFC822 format
 		var err error
 		_, lom.Atime, err = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
-
 		if err != nil {
-			errstr = err.Error()
-			return
+			return err.Error()
 		}
 	}
 	if action&LomCksum != 0 {
