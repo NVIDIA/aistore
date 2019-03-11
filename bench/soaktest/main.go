@@ -17,8 +17,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
-	"gitlab-master.nvidia.com/aistorage/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/recipes"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
