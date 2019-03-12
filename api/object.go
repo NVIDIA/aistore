@@ -279,54 +279,69 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 	return err
 }
 
-func DownloadObject(baseParams *BaseParams, bucket, objname, link string) error {
-	body := cmn.DlBody{
+func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) error {
+	dlBody := cmn.DlBody{
 		Objname: objname,
 		Link:    link,
 	}
-	body.Bucket = bucket
-	msg, err := jsoniter.Marshal(body)
-	if err != nil {
-		return err
-	}
+	dlBody.Bucket = bucket
+	return DownloadSingleWithParam(baseParams, dlBody)
+}
+
+func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlBody) error {
+	query := dlBody.AsQuery()
+
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadSingle)
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 
-func DownloadObjectWithParam(baseParams *BaseParams, dlBody cmn.DlBody) error {
-	msg, err := jsoniter.Marshal(dlBody)
-	if err != nil {
-		return err
+func DownloadRange(baseParams *BaseParams, bucket, base, template string) error {
+	dlBody := cmn.DlRangeBody{
+		Base:     base,
+		Template: template,
 	}
+	dlBody.Bucket = bucket
+	query := dlBody.AsQuery()
+
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadSingle)
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadRange)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 
-func DownloadObjectMulti(baseParams *BaseParams, bucket string, m map[string]string) error {
-	body := cmn.DlMultiBody{
-		ObjectMap: m,
-	}
-	body.Bucket = bucket
-	msg, err := jsoniter.Marshal(body)
+func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) error {
+	dlBody := cmn.DlMultiBody{}
+	dlBody.Bucket = bucket
+	query := dlBody.AsQuery()
+
+	msg, err := jsoniter.Marshal(m)
 	if err != nil {
 		return err
 	}
+
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadMulti)
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err = DoHTTPRequest(baseParams, path, msg, optParams)
 	return err
 }
 
-func DownloadObjectBucketList(baseParams *BaseParams, bucket, prefix, suffix string) error {
-	body := cmn.DlBucketBody{
+func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error {
+	dlBody := cmn.DlBucketBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
-	query := body.AsQuery()
+	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadBucket, bucket)
@@ -337,50 +352,36 @@ func DownloadObjectBucketList(baseParams *BaseParams, bucket, prefix, suffix str
 	return err
 }
 
-func DownloadObjectList(baseParams *BaseParams, bucket, base, template string) error {
-	body := cmn.DlListBody{
-		Base:     base,
-		Template: template,
-	}
-	body.Bucket = bucket
-	msg, err := jsoniter.Marshal(body)
-	if err != nil {
-		return err
-	}
-	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadList)
-	_, err = DoHTTPRequest(baseParams, path, msg)
-	return err
-}
-
-func DownloadObjectStatus(baseParams *BaseParams, bucket, objname, link string) (resp []byte, err error) {
-	body := cmn.DlBody{
+func DownloadStatus(baseParams *BaseParams, bucket, objname, link string) (resp []byte, err error) {
+	dlBody := cmn.DlBody{
 		Objname: objname,
 		Link:    link,
 	}
-	body.Bucket = bucket
-	msg, err := jsoniter.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
+	dlBody.Bucket = bucket
+	query := dlBody.AsQuery()
+
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Download)
-	resp, err = DoHTTPRequest(baseParams, path, msg)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	resp, err = DoHTTPRequest(baseParams, path, nil, optParams)
 	return resp, err
 }
 
-func DownloadObjectCancel(baseParams *BaseParams, bucket, objname, link string) error {
-	body := cmn.DlBody{
+func DownloadCancel(baseParams *BaseParams, bucket, objname, link string) error {
+	dlBody := cmn.DlBody{
 		Objname: objname,
 		Link:    link,
 	}
-	body.Bucket = bucket
-	msg, err := jsoniter.Marshal(body)
-	if err != nil {
-		return err
-	}
+	dlBody.Bucket = bucket
+	query := dlBody.AsQuery()
+
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Download)
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }

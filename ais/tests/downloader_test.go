@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -15,16 +16,31 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 )
 
-func waitForDownload(t *testing.T, bucket string, m map[string]string) {
+func waitForDownload(t *testing.T, bucket string, v interface{}) {
 	for {
 		all := true
-		for objname, link := range m {
-			if resp, err := api.DownloadObjectStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
-				if !strings.Contains(string(resp), "total size") {
-					all = false
+		switch ty := v.(type) {
+		case map[string]string:
+			for objname, link := range ty {
+				if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+					if !strings.Contains(string(resp), "total size") {
+						all = false
+					}
 				}
 			}
+		case []string:
+			for _, link := range ty {
+				objname := path.Base(link)
+				if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+					if !strings.Contains(string(resp), "total size") {
+						all = false
+					}
+				}
+			}
+		default:
+			t.Fatalf("invalid type: %T", ty)
 		}
+
 		if all {
 			break
 		}
@@ -33,7 +49,7 @@ func waitForDownload(t *testing.T, bucket string, m map[string]string) {
 
 }
 
-func TestDownloadObject(t *testing.T) {
+func TestDownloadSingle(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
@@ -43,7 +59,7 @@ func TestDownloadObject(t *testing.T) {
 		bucket        = TestLocalBucketName
 		objname       = "object"
 		objnameSecond = "object-second"
-		link          = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+		link          = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 		linkSmall     = "https://github.com/NVIDIA/aistore"
 	)
 
@@ -51,43 +67,43 @@ func TestDownloadObject(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadObject(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
+	err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(time.Second * 3)
 
-	if err := api.DownloadObject(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
 		t.Error("expected error when trying to download currently downloading file")
 	}
 
 	// Schedule second object
-	err = api.DownloadObject(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
+	err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
 	tutils.CheckFatal(err, t)
 
 	// Cancel second object
-	err = api.DownloadObjectCancel(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
 	tutils.CheckFatal(err, t)
 
-	resp, err := api.DownloadObjectStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
+	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
 	tutils.CheckFatal(err, t)
 	if len(resp) < 10 {
 		t.Errorf("expected longer response, got: %s", string(resp))
 	}
 
-	err = api.DownloadObjectCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(time.Second)
 
-	if resp, err = api.DownloadObjectStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
 		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
 	}
 
-	if err = api.DownloadObjectCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
 		t.Error("expected error when cancelling for link that is not being downloaded and is not in queue")
 	}
 
-	err = api.DownloadObject(tutils.DefaultBaseAPIParams(t), bucket, objname, linkSmall)
+	err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, linkSmall)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, bucket, map[string]string{objname: linkSmall})
@@ -99,7 +115,35 @@ func TestDownloadObject(t *testing.T) {
 	}
 }
 
-func TestDownloadObjectMulti(t *testing.T) {
+func TestDownloadRange(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		base     = "https://storage.googleapis.com/lpr-vision/"
+		template = "imagenet/imagenet_train-{000000..000007}.tgz"
+	)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), bucket, base, template)
+	tutils.CheckFatal(err, t)
+
+	time.Sleep(3 * time.Second)
+
+	for i := 0; i <= 7; i++ {
+		objname := fmt.Sprintf("imagenet/imagenet_train-00000%d.tgz", i)
+		err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, base+objname)
+		tutils.CheckFatal(err, t)
+	}
+}
+
+func TestDownloadMultiMap(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
@@ -117,7 +161,7 @@ func TestDownloadObjectMulti(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadObjectMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
+	err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, bucket, m)
@@ -129,7 +173,37 @@ func TestDownloadObjectMulti(t *testing.T) {
 	}
 }
 
-func TestDownloadObjectTimeout(t *testing.T) {
+func TestDownloadMultiList(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		l        = []string{
+			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE",
+		}
+	)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, l)
+	tutils.CheckFatal(err, t)
+
+	waitForDownload(t, bucket, l)
+
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	tutils.CheckFatal(err, t)
+	if len(objs) != len(l) {
+		t.Errorf("expected objects (%s), got: %s", l, objs)
+	}
+}
+
+func TestDownloadTimeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
@@ -138,7 +212,7 @@ func TestDownloadObjectTimeout(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
 		objname  = "object"
-		link     = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 	)
 
 	// Create local bucket
@@ -152,12 +226,12 @@ func TestDownloadObjectTimeout(t *testing.T) {
 	body.Bucket = bucket
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
-	err := api.DownloadObjectWithParam(tutils.DefaultBaseAPIParams(t), body)
+	err := api.DownloadSingleWithParam(tutils.DefaultBaseAPIParams(t), body)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(time.Second)
 
-	if resp, err := api.DownloadObjectStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
 		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
 	}
 
@@ -170,7 +244,7 @@ func TestDownloadObjectTimeout(t *testing.T) {
 
 // NOTE: For now this test is disabled since we don't have a clear way to wait
 // for the download.
-func TestDownloadObjectBucketList(t *testing.T) {
+func TestDownloadBucket(t *testing.T) {
 	t.Skip("Not yet fully implemented")
 
 	if testing.Short() {
@@ -191,36 +265,8 @@ func TestDownloadObjectBucketList(t *testing.T) {
 	_, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
 	tutils.CheckFatal(err, t)
 
-	err = api.DownloadObjectBucketList(tutils.DefaultBaseAPIParams(t), bucket, prefix, suffix)
+	err = api.DownloadBucket(tutils.DefaultBaseAPIParams(t), bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
 	// FIXME: How to wait?
-}
-
-func TestDownloadObjectList(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
-	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
-		base     = "https://storage.googleapis.com/lpr-vision/"
-		template = "imagenet/imagenet_train-{000000..000007}.tgz"
-	)
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
-
-	err := api.DownloadObjectList(tutils.DefaultBaseAPIParams(t), bucket, base, template)
-	tutils.CheckFatal(err, t)
-
-	time.Sleep(3 * time.Second)
-
-	for i := 0; i <= 7; i++ {
-		objname := fmt.Sprintf("imagenet/imagenet_train-00000%d.tgz", i)
-		err := api.DownloadObjectCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, base+objname)
-		tutils.CheckFatal(err, t)
-	}
 }

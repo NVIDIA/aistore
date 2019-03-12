@@ -394,7 +394,6 @@ func (d *Downloader) Download(body *cmn.DlBody) (resp string, err error, statusC
 			timeout:     body.Timeout,
 			responseCh:  make(chan *response, 1),
 		},
-		headers:    body.Headers,
 		finishedCh: make(chan error, 1),
 	}
 	d.downloadCh <- t

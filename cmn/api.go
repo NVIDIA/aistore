@@ -341,22 +341,35 @@ const (
 
 	//====== download endpoint (l3) =======
 	DownloadSingle = "single"
-	DownloadList   = "list"
+	DownloadRange  = "range"
 	DownloadMulti  = "multi"
 	DownloadBucket = "bucket"
 )
 
 type dlBase struct {
-	Headers     map[string]string `json:"headers,omitempty"`
-	Bucket      string            `json:"bucket"`
-	BckProvider string            `json:"bck_provider"`
-	Timeout     string            `json:"timeout"`
+	Bucket      string `json:"bucket"`
+	BckProvider string `json:"bck_provider"`
+	Timeout     string `json:"timeout"`
 }
 
-type DlBody struct {
-	dlBase
-	Link    string `json:"link"`
-	Objname string `json:"objname"`
+func (b dlBase) AsQuery() url.Values {
+	query := url.Values{}
+	if b.Bucket != "" {
+		query.Add("bucket", b.Bucket)
+	}
+	if b.BckProvider != "" {
+		query.Add("bck_provider", b.BckProvider)
+	}
+	if b.Bucket != "" {
+		query.Add("timeout", b.Timeout)
+	}
+	return query
+}
+
+func (b *dlBase) InitWithQuery(query url.Values) {
+	b.Bucket = query.Get("bucket")
+	b.BckProvider = query.Get("bck_provider")
+	b.Timeout = query.Get("timeout")
 }
 
 func (b *dlBase) Validate() error {
@@ -371,12 +384,23 @@ func (b *dlBase) Validate() error {
 	return nil
 }
 
-func (b *DlBody) String() (str string) {
-	str = fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
-	if len(b.Headers) != 0 {
-		str += fmt.Sprintf("\nHeaders: %v", b.Headers)
-	}
-	return
+type DlBody struct {
+	dlBase
+	Link    string `json:"link"`
+	Objname string `json:"objname"`
+}
+
+func (b *DlBody) InitWithQuery(query url.Values) {
+	b.dlBase.InitWithQuery(query)
+	b.Link = query.Get("link")
+	b.Objname = query.Get("objname")
+}
+
+func (b *DlBody) AsQuery() url.Values {
+	query := b.dlBase.AsQuery()
+	query.Add("link", b.Link)
+	query.Add("objname", b.Objname)
+	return query
 }
 
 func (b *DlBody) Validate() error {
@@ -386,7 +410,7 @@ func (b *DlBody) Validate() error {
 	if b.Objname == "" {
 		objName := path.Base(b.Link)
 		if objName == "." || objName == "/" {
-			return errors.New("can not extract a valid objName from the provided download link")
+			return errors.New("can not extract a valid `object name` from the provided download link")
 		}
 		b.Objname = objName
 	}
@@ -400,54 +424,66 @@ func (b *DlBody) Validate() error {
 	return nil
 }
 
-type DlListBody struct {
+func (b *DlBody) String() (str string) {
+	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
+}
+
+type DlRangeBody struct {
 	dlBase
 	Base     string `json:"base"`
 	Template string `json:"template"`
 }
 
-func (b *DlListBody) Validate() error {
+func (b *DlRangeBody) InitWithQuery(query url.Values) {
+	b.dlBase.InitWithQuery(query)
+	b.Base = query.Get("base")
+	b.Template = query.Get("template")
+}
+
+func (b *DlRangeBody) AsQuery() url.Values {
+	query := b.dlBase.AsQuery()
+	query.Add("base", b.Base)
+	query.Add("template", b.Template)
+	return query
+}
+
+func (b *DlRangeBody) Validate() error {
 	if err := b.dlBase.Validate(); err != nil {
 		return err
 	}
 	if b.Base == "" {
-		return errors.New("no prefix for list found, prefix is required")
+		return errors.New("no `base` for range found, `base` is required")
 	}
 	if !strings.HasSuffix(b.Base, "/") {
 		b.Base += "/"
 	}
 	if b.Template == "" {
-		return errors.New("no template for lsit found, template is required")
+		return errors.New("no `template` for range found, `template` is required")
 	}
 	return nil
 }
 
-func (b *DlListBody) String() (str string) {
+func (b *DlRangeBody) String() (str string) {
 	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
 }
 
 type DlMultiBody struct {
 	dlBase
-	ObjectMap  map[string]string `json:"object_map"`
-	ObjectList []string          `json:"object_list"`
+}
+
+func (b *DlMultiBody) InitWithQuery(query url.Values) {
+	b.dlBase.InitWithQuery(query)
 }
 
 func (b *DlMultiBody) Validate() error {
 	if err := b.dlBase.Validate(); err != nil {
 		return err
 	}
-	// check if an objectMap or objectList is present
-	if len(b.ObjectMap) == 0 && len(b.ObjectList) == 0 {
-		return errors.New("missing object map or object list for multi download request")
-	}
 	return nil
 }
 
 func (b *DlMultiBody) String() (str string) {
-	return fmt.Sprintf(
-		"bucket: %q, map_len: %d, list_len: %d",
-		b.Bucket, len(b.ObjectMap), len(b.ObjectList),
-	)
+	return fmt.Sprintf("bucket: %q", b.Bucket)
 }
 
 type DlBucketBody struct {
@@ -457,7 +493,7 @@ type DlBucketBody struct {
 }
 
 func (b *DlBucketBody) InitWithQuery(query url.Values) {
-	b.BckProvider = query.Get("provider")
+	b.dlBase.InitWithQuery(query)
 	b.Prefix = query.Get("prefix")
 	b.Suffix = query.Get("suffix")
 }
@@ -470,8 +506,7 @@ func (b *DlBucketBody) Validate() error {
 }
 
 func (b DlBucketBody) AsQuery() url.Values {
-	query := url.Values{}
-	query.Add("provider", b.BckProvider)
+	query := b.dlBase.AsQuery()
 	query.Add("prefix", b.Prefix)
 	query.Add("suffix", b.Suffix)
 	return query
