@@ -1419,6 +1419,8 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		t.metasyncHandlerPut(w, r)
+	case http.MethodPost:
+		t.metasyncHandlerPost(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /metasync path")
 	}
@@ -1465,6 +1467,16 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 	t.authn.updateRevokedList(revokedTokens)
+}
+
+// POST /v1/metasync
+func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
+	var msgInt actionMsgInternal
+	if err := cmn.ReadJSON(w, r, &msgInt); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	glog.Infof("metasync NIY: %+v", msgInt) // TODO
 }
 
 // GET /v1/health

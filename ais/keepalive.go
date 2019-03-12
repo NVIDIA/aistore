@@ -284,7 +284,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	pkr.p.smapowner.Unlock()
 
 	msgInt := pkr.p.newActionMsgInternalStr(metaction, clone, nil)
-	pkr.p.metasyncer.sync(true, clone, msgInt)
+	pkr.p.metasyncer.sync(true, revspair{clone, msgInt})
 	return
 }
 

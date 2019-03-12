@@ -503,7 +503,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Unlock()
 
 		msgInt := p.newActionMsgInternal(&msg, nil, clone)
-		p.metasyncer.sync(true, clone, msgInt)
+		p.metasyncer.sync(true, revspair{clone, msgInt})
 	case cmn.ActEvictCB:
 		// Check that users didn't specify bprovider=cloud
 		if bckProvider == "" {
@@ -532,7 +532,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.bmdowner.Unlock()
 
 			msgInt := p.newActionMsgInternal(&msg, nil, clone)
-			p.metasyncer.sync(false, clone, msgInt)
+			p.metasyncer.sync(false, revspair{clone, msgInt})
 		} else {
 			// metadata doesn't exists or got deleted
 			p.bmdowner.Unlock()
@@ -616,6 +616,8 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		p.metasyncHandlerPut(w, r)
+	case http.MethodPost:
+		p.metasyncHandlerPost(w, r)
 	default:
 		p.invalmsghdlr(w, r, "invalid method for metasync", http.StatusBadRequest)
 	}
@@ -675,6 +677,16 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	p.authn.updateRevokedList(revokedTokens)
 }
 
+// POST /v1/metasync
+func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
+	var msgInt actionMsgInternal
+	if err := cmn.ReadJSON(w, r, &msgInt); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	glog.Infof("metasync NIY: %+v", msgInt) // TODO
+}
+
 // GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
@@ -708,7 +720,7 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
-	p.metasyncer.sync(true, clone, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 	return nil
 }
 
@@ -788,7 +800,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		bmd := p.bmdowner.get()
 		msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-		p.metasyncer.sync(false, bmd, msgInt)
+		p.metasyncer.sync(false, revspair{bmd, msgInt})
 	case cmn.ActPrefetch:
 		// Check that users didn't specify bprovider=cloud
 		if bckProvider == "" {
@@ -1012,7 +1024,7 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 	msgInt := p.newActionMsgInternalStr(cmn.ActSetProps, nil, clone)
-	p.metasyncer.sync(true, clone, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 
 // PUT /v1/buckets/bucket-name
@@ -1113,7 +1125,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 	msgInt := p.newActionMsgInternal(&msg, nil, clone)
-	p.metasyncer.sync(true, clone, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1248,7 +1260,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 	msgInt = p.newActionMsgInternal(actionMsg, smap4bcast, clone)
-	p.metasyncer.sync(true, clone, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 	return true
 }
 
@@ -1834,7 +1846,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 
 	if p.smapowner.get().isPrimary(p.si) {
 		msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, nil, nil)
-		p.metasyncer.sync(false, p.authn.revokedTokenList(), msgInt)
+		p.metasyncer.sync(false, revspair{p.authn.revokedTokenList(), msgInt})
 	}
 }
 
@@ -2190,7 +2202,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 		glog.Infof("Distributing %s v%d as well", bmdTermName, bucketmd.version())
 	}
 	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-	p.metasyncer.sync(true, clone, msgInt, bucketmd, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt}, revspair{bucketmd, msgInt})
 	return
 }
 
@@ -2622,6 +2634,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	// update and distribute Smap
 	go func(nsi *cluster.Snode, isProxy, nonElectable bool) {
+
+		// TODO: trigger GFN if need be
+		// failCnt := p.metasyncer.notify(true, &actionMsgInternal{ActionMsg: cmn.ActionMsg{Action: "metasync-start-gfn"}})
+		// ...
+
 		p.smapowner.Lock()
 
 		p.registerToSmap(nsi, isProxy, nonElectable)
@@ -2639,15 +2656,15 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		msgInt.SmapVersion = smap.Version
 
 		// metasync
-		params := []interface{}{smap, msgInt}
+		pairs := []revspair{revspair{smap, msgInt}}
 		if !isProxy {
 			bmd := p.bmdowner.get()
-			params = append(params, bmd, msgInt)
+			pairs = append(pairs, revspair{bmd, msgInt})
 		}
 		if len(tokens.Tokens) > 0 {
-			params = append(params, tokens, msgInt)
+			pairs = append(pairs, revspair{tokens, msgInt})
 		}
-		p.metasyncer.sync(false, params...)
+		p.metasyncer.sync(false, pairs...)
 	}(&nsi, isProxy, nonElectable)
 }
 
@@ -2796,7 +2813,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msgInt := p.newActionMsgInternal(msg, smap, nil)
-	p.metasyncer.sync(true, clone, msgInt)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -2912,7 +2929,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActGlobalReb:
 		smap := p.smapowner.get()
 		msgInt := p.newActionMsgInternal(&msg, smap, nil)
-		p.metasyncer.sync(false, smap, msgInt)
+		p.metasyncer.sync(false, revspair{smap, msgInt})
 
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)

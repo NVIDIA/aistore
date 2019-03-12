@@ -721,19 +721,16 @@ func (h *httprunner) newActionMsgInternalStr(msgStr string, smap *smapX, bmdowne
 
 func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX, bmdowner *bucketMD) *actionMsgInternal {
 	msgInt := &actionMsgInternal{ActionMsg: *actionMsg}
-
 	if smap != nil {
 		msgInt.SmapVersion = smap.Version
 	} else {
 		msgInt.SmapVersion = h.smapowner.Get().Version
 	}
-
 	if bmdowner != nil {
 		msgInt.BMDVersion = bmdowner.Version
 	} else {
 		msgInt.BMDVersion = h.bmdowner.Get().Version
 	}
-
 	return msgInt
 }
 

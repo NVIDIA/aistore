@@ -267,7 +267,7 @@ func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpo
 
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(true, smap, msgInt)
+	syncer.sync(true, revspair{smap, msgInt})
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p2", 1},
@@ -293,7 +293,7 @@ func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(true, smap, msgInt)
+	syncer.sync(true, revspair{smap, msgInt})
 	if len(ch) != len(servers) {
 		t.Fatalf("sync call wait returned before sync is completed")
 	}
@@ -321,7 +321,7 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(false, smap, msgInt)
+	syncer.sync(false, revspair{smap, msgInt})
 	if len(ch) == len(servers) {
 		t.Fatalf("sync call no wait returned after sync is completed")
 	}
@@ -350,7 +350,7 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(true, smap, msgInt)
+	syncer.sync(true, revspair{smap, msgInt})
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p1", 2},
@@ -379,9 +379,9 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(true, smap, msgInt)
-	syncer.sync(false, smap, msgInt)
-	syncer.sync(true, smap, msgInt)
+	syncer.sync(true, revspair{smap, msgInt})
+	syncer.sync(false, revspair{smap, msgInt})
+	syncer.sync(true, revspair{smap, msgInt})
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p1", 2},
@@ -441,7 +441,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	// testcase #1: short delay
 	smap := primary.smapowner.get()
 	msgInt := primary.newActionMsgInternalStr("", smap, nil)
-	syncer.sync(false, smap, msgInt)
+	syncer.sync(false, revspair{smap, msgInt})
 	time.Sleep(time.Millisecond)
 	// sync will return even though the sync actually failed, and there is no error return
 	f(1)
@@ -451,7 +451,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	clone.Version++
 	primary.smapowner.put(clone)
 	msgInt = primary.newActionMsgInternalStr("", clone, nil)
-	syncer.sync(false, clone, msgInt)
+	syncer.sync(false, revspair{clone, msgInt})
 	time.Sleep(time.Second * 2)
 	f(2)
 
@@ -569,7 +569,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[smaptag+actiontag] = string(emptyActionMsgInt)
 	expRetry[smaptag+actiontag] = string(emptyActionMsgInt)
 
-	syncer.sync(false, smap, &actionMsgInternal{})
+	syncer.sync(false, revspair{smap, &actionMsgInternal{}})
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
@@ -596,7 +596,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[bucketmdtag+actiontag] = string(emptyActionMsgInt)
 	expRetry[bucketmdtag+actiontag] = string(emptyActionMsgInt)
 
-	syncer.sync(false, bucketmd, &actionMsgInternal{})
+	syncer.sync(false, revspair{bucketmd, &actionMsgInternal{}})
 	match(t, exp, ch, 1)
 	match(t, expRetry, ch, 1)
 
@@ -615,7 +615,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	exp[bucketmdtag] = string(b)
 	msgInt := primary.newActionMsgInternalStr("", smap, bucketmd)
-	syncer.sync(false, bucketmd, msgInt)
+	syncer.sync(false, revspair{bucketmd, msgInt})
 }
 
 // TestMetaSyncMembership tests metasync's logic when accessing proxy's smap directly
@@ -646,7 +646,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone.addTarget(newSnode(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 		msgInt := primary.newActionMsgInternalStr("", clone, nil)
-		syncer.sync(true, clone, msgInt)
+		syncer.sync(true, revspair{clone, msgInt})
 		time.Sleep(time.Millisecond * 300)
 
 		clone = primary.smapowner.get().clone()
@@ -690,13 +690,13 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone := primary.smapowner.get().clone()
 		clone.addTarget(di)
 		primary.smapowner.put(clone)
-		bmdowner := primary.bmdowner.get()
-		msgInt := primary.newActionMsgInternalStr("", clone, bmdowner)
-		syncer.sync(true, bmdowner, msgInt)
+		bmd := primary.bmdowner.get()
+		msgInt := primary.newActionMsgInternalStr("", clone, bmd)
+		syncer.sync(true, revspair{bmd, msgInt})
 		<-ch
 
 		// sync smap so metasyncer has a smap
-		syncer.sync(true, clone, msgInt)
+		syncer.sync(true, revspair{clone, msgInt})
 		<-ch
 	}
 
@@ -715,9 +715,9 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone.addTarget(di)
 		primary.smapowner.put(clone)
 
-		bmdowner := primary.bmdowner.get()
-		msgInt := primary.newActionMsgInternalStr("", clone, bmdowner)
-		syncer.sync(true, bmdowner, msgInt)
+		bmd := primary.bmdowner.get()
+		msgInt := primary.newActionMsgInternalStr("", clone, bmd)
+		syncer.sync(true, revspair{bmd, msgInt})
 		<-ch // target 1
 		<-ch // target 2
 		if len(ch) != 0 {
@@ -793,7 +793,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
 
-		syncer.sync(true, primary.smapowner.get(), &actionMsgInternal{})
+		syncer.sync(true, revspair{primary.smapowner.get(), &actionMsgInternal{}})
 		payload := <-chProxy
 
 		newSMap, actMsg, errStr = proxy1.extractSmap(payload)

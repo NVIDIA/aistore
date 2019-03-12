@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -22,6 +23,10 @@ const (
 	bucketmdtag = "bucketmdtag" //
 	tokentag    = "tokentag"    //
 	actiontag   = "-action"     // to make a pair (revs, action)
+)
+const (
+	revsReqSync = iota
+	revsReqNotify
 )
 
 // ===================== Theory Of Operations (TOO) =============================
@@ -94,10 +99,15 @@ type (
 		msgInt *actionMsgInternal
 	}
 	revsReq struct {
-		pairs []revspair
-		wg    *sync.WaitGroup
+		pairs     []revspair
+		wg        *sync.WaitGroup
+		msgInt    *actionMsgInternal
+		failedCnt *int32 // TODO: add cluster.NodeMap to identify the failed ones
+		reqType   int    // enum: revsReqSync, etc.
 	}
-	revsdaemon map[string]int64 // by tag; used to track daemon => (versions) info
+	revsdaemon struct {
+		vermap map[string]int64 // by tag; used to track daemon => (versions) info
+	}
 )
 
 type metasyncer struct {
@@ -111,6 +121,11 @@ type metasyncer struct {
 	retryTimer   *time.Timer           // timer to sync pending
 	timerStopped bool                  // true if retryTimer has been stopped, false otherwise
 }
+
+//
+// inner helpers
+//
+func (req revsReq) isNil() bool { return len(req.pairs) == 0 && req.msgInt == nil }
 
 //
 // c-tor, register, and runner
@@ -132,28 +147,31 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Getname())
-
 	for {
 		config := cmn.GCO.Get()
 		select {
 		case revsReq, ok := <-y.workCh:
-			if ok {
-				if revsReq.pairs == nil { // <== see becomeNonPrimary()
-					y.revsmap = make(map[string]revsdaemon)
-					y.last = make(map[string]revs)
-					y.lastclone = make(cmn.SimpleKVs)
-					y.retryTimer.Stop()
-					y.timerStopped = true
-					break
+			if !ok {
+				break
+			}
+			if revsReq.isNil() { // <== see becomeNonPrimary()
+				y.revsmap = make(map[string]revsdaemon)
+				y.last = make(map[string]revs)
+				y.lastclone = make(cmn.SimpleKVs)
+				y.retryTimer.Stop()
+				y.timerStopped = true
+				break
+			}
+			cnt := y.doSync(revsReq.pairs, revsReq.msgInt, revsReq.reqType)
+			if revsReq.wg != nil {
+				if revsReq.failedCnt != nil {
+					atomic.StoreInt32(revsReq.failedCnt, int32(cnt))
 				}
-				cnt := y.doSync(revsReq.pairs)
-				if revsReq.wg != nil {
-					revsReq.wg.Done()
-				}
-				if cnt > 0 && y.timerStopped {
-					y.retryTimer.Reset(config.Periodic.RetrySyncTime)
-					y.timerStopped = false
-				}
+				revsReq.wg.Done()
+			}
+			if cnt > 0 && y.timerStopped && len(revsReq.pairs) > 0 {
+				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
+				y.timerStopped = false
 			}
 		case <-y.retryTimer.C:
 			cnt := y.handlePending()
@@ -178,23 +196,42 @@ func (y *metasyncer) Stop(err error) {
 }
 
 //
-// API
+// methods (notify, sync, becomeNonPrimary) consistute internal API
 //
-func (y *metasyncer) sync(wait bool, params ...interface{}) {
+
+func (y *metasyncer) notify(wait bool, msg *actionMsgInternal) (failedCnt int) {
 	if !y.checkPrimary() {
 		return
 	}
-	l := len(params) / 2
-	cmn.Assert(l > 0 && len(params) == l*2)
-	revsReq := revsReq{pairs: make([]revspair, l)}
-	for i := 0; i < len(params); i += 2 {
-		revs := params[i].(revs)
-		msgInt := params[i+1].(*actionMsgInternal)
-		revsReq.pairs[i/2] = revspair{revs, msgInt}
-	}
+	var (
+		failedCnt32 int32
+		revsReq     = revsReq{msgInt: msg}
+	)
 	if wait {
 		revsReq.wg = &sync.WaitGroup{}
 		revsReq.wg.Add(1)
+		revsReq.failedCnt = &failedCnt32
+		revsReq.reqType = revsReqNotify
+	}
+	y.workCh <- revsReq
+
+	if wait {
+		revsReq.wg.Wait()
+		failedCnt = int(failedCnt32)
+	}
+	return
+}
+
+func (y *metasyncer) sync(wait bool, pairs ...revspair) {
+	if !y.checkPrimary() {
+		return
+	}
+	cmn.Assert(len(pairs) > 0)
+	revsReq := revsReq{pairs: pairs}
+	if wait {
+		revsReq.wg = &sync.WaitGroup{}
+		revsReq.wg.Add(1)
+		revsReq.reqType = revsReqSync
 	}
 	y.workCh <- revsReq
 
@@ -203,26 +240,29 @@ func (y *metasyncer) sync(wait bool, params ...interface{}) {
 	}
 }
 
-// become non-primary
-// (used to serialize cleanup of the internal state and stopping the timer)
+// become non-primary (to serialize cleanup of the internal state and stop the timer)
 func (y *metasyncer) becomeNonPrimary() {
 	y.workCh <- revsReq{}
 	glog.Infof("becoming non-primary")
 }
 
 //
-// methods used internally by the metasync
+// methods internal to metasync.go
 //
-// metasync main method - see top of the file; returns number of "sync" failures
-func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
+
+// main method; see top of the file; returns number of "sync" failures
+func (y *metasyncer) doSync(pairs []revspair, msgInt *actionMsgInternal, revsReqType int) (cnt int) {
 	var (
 		jsbytes, jsmsg []byte
 		err            error
 		refused        cluster.NodeMap
-		payload        = make(cmn.SimpleKVs)
-		smap           = y.p.smapowner.get()
-		config         = cmn.GCO.Get()
+		pairsToSend    []revspair
 		newTargetID    string
+		//
+		payload = make(cmn.SimpleKVs)
+		smap    = y.p.smapowner.get()
+		config  = cmn.GCO.Get()
+		method  = http.MethodPut
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -237,9 +277,15 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 			}
 		}
 	}
-
-	pairsToSend := pairs[:0] // share original slice
-OUTER:
+	if revsReqType == revsReqNotify {
+		cmn.Assert(len(pairs) == 0)
+		method = http.MethodPost
+		jsbytes, err = jsoniter.Marshal(msgInt)
+		goto bcast
+	}
+	cmn.Assert(msgInt == nil && revsReqType == revsReqSync)
+	pairsToSend = pairs[:0] // share original slice
+outer:
 	for _, pair := range pairs {
 		var (
 			revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
@@ -259,12 +305,12 @@ OUTER:
 		case lversion == revs.version():
 			if newCnt == 0 {
 				glog.Errorf("%s duplicated - already sync-ed or pending", s)
-				continue OUTER
+				continue outer
 			}
 			glog.Infof("%s duplicated - proceeding to sync %d new member(s)", s, newCnt)
 		case lversion > revs.version():
 			glog.Errorf("skipping %s: < current v%d", s, lversion)
-			continue OUTER
+			continue outer
 		}
 
 		pairsToSend = append(pairsToSend, pair)
@@ -293,14 +339,15 @@ OUTER:
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
 	jsbytes, err = jsoniter.Marshal(payload)
-	cmn.AssertNoErr(err)
 
 	// step 3: b-cast
+bcast:
+	cmn.AssertNoErr(err)
 	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
 	res := y.p.broadcastTo(
 		urlPath,
 		nil, // query
-		http.MethodPut,
+		method,
 		jsbytes,
 		smap,
 		config.Timeout.CplaneOperation*2, // making exception for this critical op
@@ -311,7 +358,9 @@ OUTER:
 	// step 4: count failures and fill-in refused
 	for r := range res {
 		if r.err == nil {
-			y.syncDone(r.si.DaemonID, pairsToSend)
+			if len(pairsToSend) > 0 {
+				y.syncDone(r.si.DaemonID, pairsToSend)
+			}
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
@@ -336,7 +385,7 @@ OUTER:
 			y.becomeNonPrimary()
 			return
 		}
-		y.handleRefused(urlPath, jsbytes, refused, pairsToSend, config, smap)
+		y.handleRefused(method, urlPath, jsbytes, refused, pairsToSend, config, smap)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.smapowner.get()
@@ -349,24 +398,24 @@ OUTER:
 	return
 }
 
-// keeping track of per-daemon versioning
+// keeping track of per-daemon versioning - FIXME TODO: extend to take care of msgInt where pais may be empty
 func (y *metasyncer) syncDone(sid string, pairs []revspair) {
-	revsdaemon := y.revsmap[sid]
-	if revsdaemon == nil {
-		revsdaemon = make(map[string]int64)
-		y.revsmap[sid] = revsdaemon
+	rvd, ok := y.revsmap[sid]
+	if !ok {
+		rvd = revsdaemon{vermap: make(map[string]int64)}
+		y.revsmap[sid] = rvd
 	}
 	for _, revspair := range pairs {
 		revs := revspair.revs
-		revsdaemon[revs.tag()] = revs.version()
+		rvd.vermap[revs.tag()] = revs.version()
 	}
 }
 
-func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
+func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
 	config *cmn.Config, smap *smapX) {
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
-			method: http.MethodPut,
+			method: method,
 			path:   urlPath,
 			body:   body,
 		},
@@ -398,10 +447,10 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, 
 	}
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for id, si := range serverMap {
-			revsdaemon, ok := y.revsmap[id]
+			rvd, ok := y.revsmap[id]
 			if !ok {
-				revsdaemon = make(map[string]int64)
-				y.revsmap[id] = revsdaemon
+				rvd = revsdaemon{vermap: make(map[string]int64)}
+				y.revsmap[id] = rvd
 				count++
 				if !needMap {
 					continue
@@ -409,7 +458,7 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap, 
 			} else {
 				inSync := true
 				for tag, revs := range y.last {
-					v, ok := revsdaemon[tag]
+					v, ok := rvd.vermap[tag]
 					if !ok || v != revs.version() {
 						cmn.Assert(!ok || v < revs.version())
 						count++
