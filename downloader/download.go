@@ -638,7 +638,7 @@ func (t *task) download() {
 		}
 	}
 
-	timeout := cmn.GCO.Get().Timeout.SendFile
+	timeout := cmn.GCO.Get().Downloader.Timeout
 	if t.timeout != "" {
 		timeout, err = time.ParseDuration(t.timeout)
 		cmn.AssertNoErr(err) // this should be checked beforehand

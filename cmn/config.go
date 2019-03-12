@@ -92,6 +92,7 @@ var (
 	_ Validator = &TimeoutConf{}
 	_ Validator = &RebalanceConf{}
 	_ Validator = &NetConf{}
+	_ Validator = &DownloaderConf{}
 
 	_ PropsValidator = &CksumConf{}
 	_ PropsValidator = &LRUConf{}
@@ -266,6 +267,7 @@ type Config struct {
 	FSHC             FSHCConf        `json:"fshc"`
 	Auth             AuthConf        `json:"auth"`
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
+	Downloader       DownloaderConf  `json:"downloader"`
 }
 
 type MirrorConf struct {
@@ -473,6 +475,11 @@ type KeepaliveConf struct {
 	TimeoutFactor uint8                `json:"timeout_factor"`
 }
 
+type DownloaderConf struct {
+	TimeoutStr string        `json:"timeout"`
+	Timeout    time.Duration `json:"-"`
+}
+
 //==============================
 //
 // config functions
@@ -578,6 +585,7 @@ func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Xaction, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
+		&c.Downloader,
 	}
 	for _, validator := range validators {
 		if err := validator.Validate(); err != nil {
@@ -862,6 +870,13 @@ func (c *NetConf) Validate() (err error) {
 			return fmt.Errorf("invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
 				c.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
 		}
+	}
+	return nil
+}
+
+func (c *DownloaderConf) Validate() (err error) {
+	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
+		return fmt.Errorf("bad downloader.timeout %s", c.TimeoutStr)
 	}
 	return nil
 }

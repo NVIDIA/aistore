@@ -122,6 +122,9 @@ cat > $CONFFILE <<EOL
 		},
 		"retry_factor":   5,
 		"timeout_factor": 3
+	},
+	"downloader": {
+		"timeout": "1h"
 	}
 }
 EOL
