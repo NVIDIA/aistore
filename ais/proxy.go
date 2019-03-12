@@ -1114,6 +1114,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
+
 	msgInt := p.newActionMsgInternal(&msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 }

@@ -13,6 +13,7 @@ import (
 
 // internal EC stats in raw format: only counters
 type stats struct {
+	bckName    string
 	queueLen   int64
 	queueCnt   int64
 	waitTime   int64
@@ -61,6 +62,8 @@ type ECStats struct {
 	GetReq int64
 	// total number of encode requests
 	PutReq int64
+	// name of the bucket
+	BckName string
 }
 
 func (s *stats) updateQueue(l int) {
@@ -113,7 +116,7 @@ func (s *stats) updateObjTime(d time.Duration) {
 }
 
 func (s *stats) stats() *ECStats {
-	st := &ECStats{}
+	st := &ECStats{BckName: s.bckName}
 
 	val := atomic.SwapInt64(&s.queueLen, 0)
 	cnt := atomic.SwapInt64(&s.queueCnt, 0)
@@ -170,6 +173,7 @@ func (s *ECStats) String() string {
 
 	lines := make([]string, 0, 8)
 	lines = append(lines,
+		fmt.Sprintf("EC stats for bucket %s", s.BckName),
 		fmt.Sprintf("Queue avg len: %.4f, avg wait time: %v", s.QueueLen, s.WaitTime),
 		fmt.Sprintf("Avg object processing time: %v", s.ObjTime),
 	)

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -38,6 +39,10 @@ type (
 		t          cluster.Target
 		mpathReqCh chan mpathReq // notify about mountpath changes
 		ecCh       chan *Request // to request object encoding
+
+		controlCh chan RequestsControlMsg
+
+		rejectReq int32 // marker if EC requests should be rejected
 
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
 		getJoggers map[string]*getJogger // mountpath joggers for GET
@@ -69,6 +74,10 @@ type (
 	}
 )
 
+//
+// XactEC
+//
+
 func NewXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactEC {
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
@@ -79,9 +88,11 @@ func NewXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
 		getJoggers: make(map[string]*getJogger, totalPaths),
 		putJoggers: make(map[string]*putJogger, totalPaths),
 		ecCh:       make(chan *Request, requestBufSizeGlobal),
+		controlCh:  make(chan RequestsControlMsg, 8),
 		bmd:        bmd,
 		smap:       smap,
 		si:         si,
+		stats:      stats{bckName: bucket},
 		bckName:    bucket,
 
 		dOwner: &dataOwner{
@@ -525,10 +536,38 @@ func (r *XactEC) Run() (err error) {
 
 				return nil
 			}
+		case msg := <-r.controlCh:
+
+			if msg.Action == ActEnableRequests {
+				r.setEcRequestsEnabled()
+				break
+			}
+			cmn.Assert(msg.Action == ActClearRequests)
+
+			r.setEcRequestsDisabled()
+
+			// drain pending bucket's EC requests, return them with an error
+			// note: loop can't be replaced with channel range, as the channel is never closed
+			for {
+				select {
+				case req := <-r.ecCh:
+					r.abortECRequestWhenDisabled(req)
+				default:
+					r.stop()
+					return nil
+				}
+			}
 		case <-r.ChanAbort():
 			r.stop()
 			return fmt.Errorf("%s aborted, exiting", r)
 		}
+	}
+}
+
+func (r *XactEC) abortECRequestWhenDisabled(req *Request) {
+	if req.ErrCh != nil {
+		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bckName)
+		close(req.ErrCh)
 	}
 }
 
@@ -666,7 +705,8 @@ func (r *XactEC) Encode(req *Request) {
 	if glog.V(4) {
 		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s", r.bckName, len(r.ecCh), req.LOM.Uname)
 	}
-	r.ecCh <- req
+
+	r.dispatchEncodingRequest(req)
 }
 
 // Decode schedules an object to be restored from existing slices.
@@ -678,17 +718,67 @@ func (r *XactEC) Encode(req *Request) {
 func (r *XactEC) Decode(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
-	r.ecCh <- req
+
+	r.dispatchEncodingRequest(req)
 }
 
 // Cleanup deletes all object slices or copies after the main object is removed
 func (r *XactEC) Cleanup(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
+
+	r.dispatchEncodingRequest(req)
+}
+
+// ClearRequests disables receiving new EC requests, they will be terminated with error
+// Then it starts draining a channel from pending EC requests
+// It does not enable receiving new EC requests, it has to be done explicitly, when EC is enabled again
+func (r *XactEC) ClearRequests() {
+	msg := RequestsControlMsg{
+		Action: ActClearRequests,
+	}
+
+	r.controlCh <- msg
+}
+
+func (r *XactEC) EnableRequests() {
+	msg := RequestsControlMsg{
+		Action: ActEnableRequests,
+	}
+
+	r.controlCh <- msg
+}
+
+func (r *XactEC) dispatchEncodingRequest(req *Request) {
+	if !r.ecRequestsEnabled() {
+		r.abortECRequestWhenDisabled(req)
+		return
+	}
+
 	r.ecCh <- req
 }
 
+func (r *XactEC) setEcRequestsDisabled() {
+	atomic.CompareAndSwapInt32(&r.rejectReq, 0, 1)
+}
+
+func (r *XactEC) setEcRequestsEnabled() {
+	atomic.CompareAndSwapInt32(&r.rejectReq, 1, 0)
+}
+
+func (r *XactEC) ecRequestsEnabled() bool {
+	return atomic.LoadInt32(&r.rejectReq) == 0
+}
+
 func (r *XactEC) dispatchRequest(req *Request) {
+	if !r.ecRequestsEnabled() {
+		if req.ErrCh != nil {
+			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bckName)
+			close(req.ErrCh)
+		}
+		return
+	}
+
 	r.IncPending()
 	switch req.Action {
 	case ActRestore:

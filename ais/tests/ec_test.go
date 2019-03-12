@@ -400,6 +400,32 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 	}
 }
 
+func assertBucketSize(t *testing.T, baseParams *api.BaseParams, bckName string, numFiles int) {
+	bckObjectsCnt := bucketSize(t, baseParams, bckName)
+	if bckObjectsCnt != numFiles {
+		t.Fatalf("Invalid number of objects: %d, expected %d", bckObjectsCnt, numFiles)
+	}
+}
+
+func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
+	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	reslist, err := api.ListBucket(baseParams, bckName, msg, 0)
+	tutils.CheckFatal(err, t)
+	reslist.Entries = filterObjListOK(reslist.Entries)
+
+	return len(reslist.Entries)
+}
+
+func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, objPath string, size int) {
+	r, err := tutils.NewRandReader(int64(size), false)
+	tutils.CheckFatal(err, t)
+	defer r.Close()
+
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bckName, Object: objPath, Reader: r}
+	err = api.PutObject(putArgs)
+	tutils.CheckFatal(err, t)
+}
+
 func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, seed int64, concurr int, baseParams *api.BaseParams) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, name)
 
@@ -411,6 +437,36 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, s
 		tutils.DestroyLocalBucket(t, proxyURL, name)
 	}
 	tutils.CheckFatal(err, t)
+}
+
+func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string) {
+	tutils.Logln("Deleting objects...")
+	wg := sync.WaitGroup{}
+
+	wg.Add(numFiles)
+	for idx := 0; idx < numFiles; idx++ {
+		go func(i int) {
+			defer wg.Done()
+			objName := fmt.Sprintf(objPatt, i)
+			objPath := ecTestDir + objName
+			err := tutils.Del(proxyURL, TestLocalBucketName, objPath, "", nil, nil, true)
+			tutils.CheckFatal(err, t)
+
+			deadline := time.Now().Add(time.Second * 10)
+			var partsAfterDelete map[string]int64
+			for time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond * 250)
+				partsAfterDelete, _ := ecGetAllLocalSlices(fullPath, objName)
+				if len(partsAfterDelete) == 0 {
+					break
+				}
+			}
+			if len(partsAfterDelete) != 0 {
+				t.Errorf("Some slices were not cleaned up after DEL: %#v", partsAfterDelete)
+			}
+		}(idx)
+	}
+	wg.Wait()
 }
 
 // Short test to make sure that EC options cannot be changed after
@@ -484,6 +540,112 @@ func TestECChange(t *testing.T) {
 	}
 }
 
+func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, objName string, idx int, sema chan struct{}, rnd *rand.Rand, fullPath string) {
+	const (
+		sleepRestoreTime = 5 * time.Second // wait time after GET restores slices
+		smallEvery       = 7               // Every N-th object is small
+		sliceDelPct      = 50              // %% of objects that have damaged body and a slice
+	)
+
+	sema <- struct{}{}
+	defer func() {
+		<-sema
+	}()
+
+	delSlice := false // delete only main object
+	deletedFiles := 1
+	if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
+		// delete a random slice, too
+		delSlice = true
+		deletedFiles = 2
+	}
+
+	totalCnt, objSize, sliceSize, doEC := randObjectSize(rnd, idx, smallEvery)
+	objPath := ecTestDir + objName
+	ecStr, delStr := "-", "obj"
+	if doEC {
+		ecStr = "EC"
+	}
+	if delSlice {
+		delStr = "obj+slice"
+	}
+	tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
+	r, err := tutils.NewRandReader(int64(objSize), false)
+	tutils.CheckFatal(err, t)
+	defer r.Close()
+
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+	err = api.PutObject(putArgs)
+	tutils.CheckFatal(err, t)
+
+	tutils.Logf("Waiting for %s\n", objPath)
+	foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)
+
+	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	if mainObjPath == "" {
+		t.Errorf("Full copy is not found")
+		return
+	}
+
+	tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
+	tutils.CheckFatal(os.Remove(mainObjPath), t)
+	metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
+	tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
+	tutils.CheckFatal(os.Remove(metafile), t)
+	if delSlice {
+		sliceToDel := ""
+		for k := range foundParts {
+			if k != mainObjPath && strings.Contains(k, ecSliceDir) && doEC {
+				sliceToDel = k
+				break
+			} else if k != mainObjPath && strings.Contains(k, ecDataDir) && !doEC {
+				sliceToDel = k
+				break
+			}
+		}
+		if sliceToDel == "" {
+			t.Errorf("Failed to select random slice for %s", objName)
+			return
+		}
+		tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
+		tutils.CheckFatal(os.Remove(sliceToDel), t)
+		if doEC {
+			metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
+			tutils.Logf("Removing slice meta %s\n", metafile)
+			tutils.CheckFatal(os.Remove(metafile), t)
+		} else {
+			metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
+			tutils.Logf("Removing replica meta %s\n", metafile)
+			tutils.CheckFatal(os.Remove(metafile), t)
+		}
+	}
+
+	partsAfterRemove, _ := ecGetAllLocalSlices(fullPath, objName)
+	_, ok := partsAfterRemove[mainObjPath]
+	if ok || len(partsAfterRemove) != len(foundParts)-deletedFiles*2 {
+		t.Errorf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
+		return
+	}
+
+	tutils.Logf("Restoring %s\n", objPath)
+	_, err = api.GetObject(baseParams, TestLocalBucketName, objPath)
+	tutils.CheckFatal(err, t)
+
+	if doEC {
+		deadline := time.Now().Add(sleepRestoreTime)
+		var partsAfterRestore map[string]int64
+		for time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond * 250)
+			partsAfterRestore, _ = ecGetAllLocalSlices(fullPath, objName)
+			if len(partsAfterRestore) == totalCnt {
+				break
+			}
+		}
+		ecCheckSlices(t, partsAfterRestore, fullPath+objName,
+			objSize, sliceSize, totalCnt)
+	}
+}
+
 // Quick check that EC can restore a damaged object and a missing slice
 //  - PUTs an object to the bucket
 //  - filepath.Walk checks that the number of metafiles and slices are correct
@@ -492,12 +654,9 @@ func TestECChange(t *testing.T) {
 //  - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
 	const (
-		objPatt          = "obj-rest-%04d"
-		numFiles         = 50
-		semaCnt          = 8
-		smallEvery       = 7               // Every N-th object is small
-		sliceDelPct      = 50              // %% of objects that have damaged body and a slice
-		sleepRestoreTime = time.Second * 5 // wait time after GET restores slices
+		objPatt  = "obj-rest-%04d"
+		numFiles = 50
+		semaCnt  = 8
 	)
 
 	if testing.Short() {
@@ -528,112 +687,13 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	oneObj := func(objName string, idx int) {
-		sema <- struct{}{}
-		defer func() {
-			wg.Done()
-			<-sema
-		}()
-
-		delSlice := false // delete only main object
-		deletedFiles := 1
-		if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
-			// delete a random slice, too
-			delSlice = true
-			deletedFiles = 2
-		}
-
-		totalCnt, objSize, sliceSize, doEC := randObjectSize(rnd, idx, smallEvery)
-		objPath := ecTestDir + objName
-		ecStr, delStr := "-", "obj"
-		if doEC {
-			ecStr = "EC"
-		}
-		if delSlice {
-			delStr = "obj+slice"
-		}
-		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
-		r, err := tutils.NewRandReader(int64(objSize), false)
-		tutils.CheckFatal(err, t)
-		defer r.Close()
-
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
-		err = api.PutObject(putArgs)
-		tutils.CheckFatal(err, t)
-
-		tutils.Logf("Waiting for %s\n", objPath)
-		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)
-
-		ecCheckSlices(t, foundParts, fullPath+objName,
-			objSize, sliceSize, totalCnt)
-		if mainObjPath == "" {
-			t.Errorf("Full copy is not found")
-			return
-		}
-
-		tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
-		tutils.CheckFatal(os.Remove(mainObjPath), t)
-		metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
-		tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
-		tutils.CheckFatal(os.Remove(metafile), t)
-		if delSlice {
-			sliceToDel := ""
-			for k := range foundParts {
-				if k != mainObjPath && strings.Contains(k, ecSliceDir) && doEC {
-					sliceToDel = k
-					break
-				} else if k != mainObjPath && strings.Contains(k, ecDataDir) && !doEC {
-					sliceToDel = k
-					break
-				}
-			}
-			if sliceToDel == "" {
-				t.Errorf("Failed to select random slice for %s", objName)
-				return
-			}
-			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
-			tutils.CheckFatal(os.Remove(sliceToDel), t)
-			if doEC {
-				metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
-				tutils.Logf("Removing slice meta %s\n", metafile)
-				tutils.CheckFatal(os.Remove(metafile), t)
-			} else {
-				metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
-				tutils.Logf("Removing replica meta %s\n", metafile)
-				tutils.CheckFatal(os.Remove(metafile), t)
-			}
-		}
-
-		partsAfterRemove, _ := ecGetAllLocalSlices(fullPath, objName)
-		_, ok := partsAfterRemove[mainObjPath]
-		if ok || len(partsAfterRemove) != len(foundParts)-deletedFiles*2 {
-			t.Errorf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
-			return
-		}
-
-		tutils.Logf("Restoring %s\n", objPath)
-		_, err = api.GetObject(baseParams, TestLocalBucketName, objPath)
-		tutils.CheckFatal(err, t)
-
-		if doEC {
-			deadline := time.Now().Add(sleepRestoreTime)
-			var partsAfterRestore map[string]int64
-			for time.Now().Before(deadline) {
-				time.Sleep(time.Millisecond * 250)
-				partsAfterRestore, _ = ecGetAllLocalSlices(fullPath, objName)
-				if len(partsAfterRestore) == totalCnt {
-					break
-				}
-			}
-			ecCheckSlices(t, partsAfterRestore, fullPath+objName,
-				objSize, sliceSize, totalCnt)
-		}
-	}
-
 	wg.Add(numFiles)
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
-		go oneObj(objName, i)
+		go func(i int) {
+			createDamageRestoreECFile(t, baseParams, objName, i, sema, rnd, fullPath)
+			wg.Done()
+		}(i)
 	}
 	wg.Wait()
 
@@ -641,40 +701,230 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		t.FailNow()
 	}
 
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
-	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
-	tutils.CheckFatal(err, t)
-	reslist.Entries = filterObjListOK(reslist.Entries)
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles)
 
-	if len(reslist.Entries) != numFiles {
-		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), 1)
+	clearAllECObjects(t, numFiles, objPatt, fullPath)
+}
+
+func TestECEnabledDisabledEnabled(t *testing.T) {
+	const (
+		objPatt  = "obj-rest-%04d"
+		numFiles = 25
+		semaCnt  = 8
+	)
+	if testing.Short() {
+		t.Skip(skipping)
 	}
 
-	tutils.Logln("Deleting objects...")
-	wg.Add(numFiles)
-	for idx := 0; idx < numFiles; idx++ {
-		go func(i int) {
-			defer wg.Done()
-			objName := fmt.Sprintf(objPatt, i)
-			objPath := ecTestDir + objName
-			err = tutils.Del(proxyURL, TestLocalBucketName, objPath, "", nil, nil, true)
-			tutils.CheckFatal(err, t)
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		sema     = make(chan struct{}, semaCnt)
+	)
 
-			deadline := time.Now().Add(time.Second * 10)
-			var partsAfterDelete map[string]int64
-			for time.Now().Before(deadline) {
-				time.Sleep(time.Millisecond * 250)
-				partsAfterDelete, _ := ecGetAllLocalSlices(fullPath, objName)
-				if len(partsAfterDelete) == 0 {
-					break
-				}
-			}
-			if len(partsAfterDelete) != 0 {
-				t.Errorf("Some slices were not cleaned up after DEL: %#v", partsAfterDelete)
-			}
-		}(idx)
+	smap := getClusterMap(t, proxyURL)
+	if err := ecSliceNumInit(t, smap); err != nil {
+		t.Fatal(err)
+	}
+
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
+
+	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
+
+	seed := time.Now().UnixNano()
+	rnd := rand.New(rand.NewSource(seed))
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, 0, baseParams)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	// End of preparation, create files with EC enabled, check if are restored properly
+
+	wg := sync.WaitGroup{}
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func(i int) {
+			createDamageRestoreECFile(t, baseParams, objName, i, sema, rnd, fullPath)
+			wg.Done()
+		}(i)
 	}
 	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles)
+
+	// Disable EC, put normal files, check if were created properly
+	err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+	tutils.CheckError(err, t)
+
+	wg.Add(numFiles)
+	for i := numFiles; i < 2*numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func() {
+			putRandomFile(t, baseParams, TestLocalBucketName, objName, cmn.MiB)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles*2)
+
+	// Enable EC again, check if EC was started properly and creates files with EC correctly
+	err = api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+	tutils.CheckError(err, t)
+
+	wg.Add(numFiles)
+	for i := 2 * numFiles; i < 3*numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func(i int) {
+			createDamageRestoreECFile(t, baseParams, objName, i, sema, rnd, fullPath)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles*3)
+}
+
+func TestECDisableEnableDuringLoad(t *testing.T) {
+	const (
+		objPatt  = "obj-disable-enable-load-%04d"
+		numFiles = 5
+		semaCnt  = 8
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		sema     = make(chan struct{}, semaCnt)
+	)
+
+	smap := getClusterMap(t, proxyURL)
+	if err := ecSliceNumInit(t, smap); err != nil {
+		t.Fatal(err)
+	}
+
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
+
+	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
+
+	seed := time.Now().UnixNano()
+	rnd := rand.New(rand.NewSource(seed))
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, 0, baseParams)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	// End of preparation, create files with EC enabled, check if are restored properly
+
+	wg := &sync.WaitGroup{}
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func(i int) {
+			createDamageRestoreECFile(t, baseParams, objName, i, sema, rnd, fullPath)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles)
+
+	abortCh := make(chan struct{}, 1)
+	numCreated := 0
+
+	go func() {
+		ticker := time.NewTicker(3 * time.Millisecond)
+		for {
+			select {
+			case <-abortCh:
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				objName := fmt.Sprintf(objPatt, numFiles+numCreated)
+				go putRandomFile(t, baseParams, TestLocalBucketName, objName, cmn.KiB)
+				numCreated++
+			}
+		}
+	}()
+
+	time.Sleep(time.Second)
+
+	// Create different disable/enable actions to test if system persists behaving well
+	go func() {
+		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		tutils.CheckError(err, t)
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+		tutils.CheckError(err, t)
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		tutils.CheckError(err, t)
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		tutils.CheckError(err, t)
+	}()
+
+	time.Sleep(300 * time.Millisecond)
+
+	go func() {
+		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+		tutils.CheckError(err, t)
+	}()
+
+	close(abortCh)
+	time.Sleep(1 * time.Second) // wait for everything to settle down
+
+	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles+numCreated)
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	wg = &sync.WaitGroup{}
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		j := i + numFiles + numCreated
+		objName := fmt.Sprintf(objPatt, j)
+
+		go func(i int) {
+			createDamageRestoreECFile(t, baseParams, objName, i, sema, rnd, fullPath)
+			wg.Done()
+		}(j)
+	}
+
+	wg.Wait()
+
+	// Disabling and enabling EC should not result in put's failing
+	assertBucketSize(t, baseParams, TestLocalBucketName, 2*numFiles+numCreated)
 }
 
 // Stress test to check that EC works as expected.

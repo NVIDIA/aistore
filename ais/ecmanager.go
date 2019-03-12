@@ -117,9 +117,8 @@ func (mgr *ecManager) setBckXact(bckName string, xact *ec.XactEC) {
 func (mgr *ecManager) restoreBckXact(bckName string) *ec.XactEC {
 	xact := mgr.getBckXact(bckName)
 	if xact == nil || xact.Finished() {
-		newXact := mgr.t.xactions.renewEC(bckName)
-		mgr.setBckXact(bckName, newXact)
-		return newXact
+		xact = mgr.t.xactions.renewEC(bckName)
+		mgr.setBckXact(bckName, xact)
 	}
 
 	return xact
@@ -180,12 +179,11 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		LOM:    lom,
 	}
 
-	xact := mgr.restoreBckXact(lom.Bucket)
-
 	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		return errors.New(errstr)
 	}
-	xact.Encode(req)
+
+	mgr.restoreBckXact(lom.Bucket).Encode(req)
 
 	return nil
 }
@@ -217,6 +215,19 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 	}
 
 	mgr.restoreBckXact(lom.Bucket).Decode(req)
+
 	// wait for EC completes restoring the object
 	return <-req.ErrCh
+}
+
+// DisableEC starts to reject new EC requests, rejects pending ones
+func (mgr *ecManager) DisableEC(bckName string) {
+	mgr.restoreBckXact(bckName).ClearRequests()
+}
+
+// EnableEC aborts xact disable and starts to accept new EC requests
+// EnableEC uses the same channel as DisableEC, so order of executing them is the same as
+// order which they arrived to a target in
+func (mgr *ecManager) EnableEC(bckName string) {
+	mgr.restoreBckXact(bckName).EnableRequests()
 }

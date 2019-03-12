@@ -119,6 +119,9 @@ const (
 	RespStreamName = "ec-resp"
 	ReqStreamName  = "ec-req"
 
+	ActClearRequests  = "clear-requests"
+	ActEnableRequests = "enable-requests"
+
 	// EC switches to disk from SGL when memory pressure is high and the amount of
 	// memory required to encode an object exceeds the limit
 	objSizeHighMem = 50 * cmn.MiB
@@ -166,6 +169,10 @@ type (
 		// private properties
 		putTime time.Time // time when the object is put into main queue
 		tm      time.Time // to measure different steps
+	}
+
+	RequestsControlMsg struct {
+		Action string
 	}
 )
 

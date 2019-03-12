@@ -241,19 +241,19 @@ func (t *targetrunner) Run() error {
 		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux)
 	}
 	networkHandlers := []networkHandler{
-		networkHandler{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
-		networkHandler{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
-		networkHandler{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Push, h: t.pushHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Buckets, h: t.bucketHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
+		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Push, h: t.pushHandler, net: []string{cmn.NetworkPublic}},
 
-		networkHandler{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 
-		networkHandler{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
@@ -1443,6 +1443,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
+
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -3461,11 +3462,22 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 
 	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
-	for bucket := range newbucketmd.LBmap {
-		if _, ok := bucketmd.LBmap[bucket]; !ok {
-			bucketsToCreate = append(bucketsToCreate, bucket)
+	for bckName, newBck := range newbucketmd.LBmap {
+		if _, ok := bucketmd.LBmap[bckName]; !ok {
+			bucketsToCreate = append(bucketsToCreate, bckName)
+		}
+
+		// Disable EC for buckets that existed and have changed EC.Enabled to false
+		// Enable EC for buckets that existed and have change EC.Enabled to true
+		if oldBck, existed := bucketmd.LBmap[bckName]; existed {
+			if !oldBck.EC.Enabled && newBck.EC.Enabled {
+				t.ecmanager.EnableEC(bckName)
+			} else if oldBck.EC.Enabled && !newBck.EC.Enabled {
+				t.ecmanager.DisableEC(bckName)
+			}
 		}
 	}
+
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*create*/, bucketsToCreate...)
 
 	return
