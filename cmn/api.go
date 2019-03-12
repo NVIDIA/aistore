@@ -5,7 +5,6 @@
 package cmn
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -161,8 +160,18 @@ const (
 
 	// dsort
 	URLParamTotalCompressedSize   = "tcs"
-	URLParamTotalUncompressedSize = "tunc"
 	URLParamTotalInputShardsSeen  = "tiss"
+	URLParamTotalUncompressedSize = "tunc"
+
+	// downloader
+	URLParamBase     = "base"
+	URLParamBucket   = "bucket"
+	URLParamID       = "id"
+	URLParamLink     = "link"
+	URLParamObjName  = "objname"
+	URLParamSuffix   = "suffix"
+	URLParamTemplate = "template"
+	URLParamTimeout  = "timeout"
 )
 
 // TODO: sort and some props are TBD
@@ -353,33 +362,35 @@ const (
 
 type dlBase struct {
 	Bucket      string `json:"bucket"`
-	BckProvider string `json:"bck_provider"`
+	BckProvider string `json:"bprovider"`
 	Timeout     string `json:"timeout"`
 }
 
-func (b dlBase) AsQuery() url.Values {
+func (b *dlBase) InitWithQuery(query url.Values) {
+	if b.Bucket == "" {
+		b.Bucket = query.Get(URLParamBucket)
+	}
+	b.BckProvider = query.Get(URLParamBckProvider)
+	b.Timeout = query.Get("timeout")
+}
+
+func (b *dlBase) AsQuery() url.Values {
 	query := url.Values{}
 	if b.Bucket != "" {
-		query.Add("bucket", b.Bucket)
+		query.Add(URLParamBucket, b.Bucket)
 	}
 	if b.BckProvider != "" {
-		query.Add("bck_provider", b.BckProvider)
+		query.Add(URLParamBckProvider, b.BckProvider)
 	}
 	if b.Bucket != "" {
-		query.Add("timeout", b.Timeout)
+		query.Add(URLParamTimeout, b.Timeout)
 	}
 	return query
 }
 
-func (b *dlBase) InitWithQuery(query url.Values) {
-	b.Bucket = query.Get("bucket")
-	b.BckProvider = query.Get("bck_provider")
-	b.Timeout = query.Get("timeout")
-}
-
 func (b *dlBase) Validate() error {
 	if b.Bucket == "" {
-		return errors.New("missing the bucket name from the request body")
+		return fmt.Errorf("missing the %q which is required", URLParamBucket)
 	}
 	if b.Timeout != "" {
 		if _, err := time.ParseDuration(b.Timeout); err != nil {
@@ -389,50 +400,112 @@ func (b *dlBase) Validate() error {
 	return nil
 }
 
-type DlBody struct {
-	dlBase
+type DlObj struct {
 	Link    string `json:"link"`
 	Objname string `json:"objname"`
 }
 
-func (b *DlBody) InitWithQuery(query url.Values) {
-	b.dlBase.InitWithQuery(query)
-	b.Link = query.Get("link")
-	b.Objname = query.Get("objname")
+func (b *DlObj) Validate() error {
+	if b.Objname == "" {
+		objName := path.Base(b.Link)
+		if objName == "." || objName == "/" {
+			return fmt.Errorf("can not extract a valid %q from the provided download link", URLParamObjName)
+		}
+		b.Objname = objName
+	}
+	if b.Link == "" {
+		return fmt.Errorf("missing the %q from the request body", URLParamLink)
+	}
+	if b.Objname == "" {
+		return fmt.Errorf("missing the %q from the request body", URLParamObjName)
+	}
+	return nil
 }
 
-func (b *DlBody) AsQuery() url.Values {
-	query := b.dlBase.AsQuery()
-	query.Add("link", b.Link)
-	query.Add("objname", b.Objname)
+// Internal status/delete request body
+type DlAdminBody struct {
+	ID string `json:"id"`
+}
+
+func (b *DlAdminBody) InitWithQuery(query url.Values) {
+	b.ID = query.Get(URLParamID)
+}
+
+func (b *DlAdminBody) AsQuery() url.Values {
+	query := url.Values{}
+	query.Add(URLParamID, b.ID)
 	return query
+}
+
+func (b *DlAdminBody) Validate() error {
+	if b.ID == "" {
+		return fmt.Errorf("missing downloader job %q", URLParamID)
+	}
+	return nil
+}
+
+// Internal download request body
+type DlBody struct {
+	dlBase
+	ID   string  `json:"id"`
+	Objs []DlObj `json:"objs"`
 }
 
 func (b *DlBody) Validate() error {
 	if err := b.dlBase.Validate(); err != nil {
 		return err
 	}
-	if b.Objname == "" {
-		objName := path.Base(b.Link)
-		if objName == "." || objName == "/" {
-			return errors.New("can not extract a valid `object name` from the provided download link")
+	if b.ID == "" {
+		return fmt.Errorf("missing %q, something went wrong", URLParamID)
+	}
+	for _, obj := range b.Objs {
+		if err := obj.Validate(); err != nil {
+			return err
 		}
-		b.Objname = objName
-	}
-
-	if b.Link == "" {
-		return errors.New("missing the download url from the request body")
-	}
-	if b.Objname == "" {
-		return errors.New("missing the objname name from the request body")
 	}
 	return nil
 }
 
-func (b *DlBody) String() (str string) {
+// Internal status response body
+type DlStatusResp struct {
+	Finished int `json:"finished"`
+	Total    int `json:"total"`
+}
+
+// Single request
+type DlSingle struct {
+	dlBase
+	DlObj
+}
+
+func (b *DlSingle) InitWithQuery(query url.Values) {
+	b.dlBase.InitWithQuery(query)
+	b.Link = query.Get(URLParamLink)
+	b.Objname = query.Get(URLParamObjName)
+}
+
+func (b *DlSingle) AsQuery() url.Values {
+	query := b.dlBase.AsQuery()
+	query.Add(URLParamLink, b.Link)
+	query.Add(URLParamObjName, b.Objname)
+	return query
+}
+
+func (b *DlSingle) Validate() error {
+	if err := b.dlBase.Validate(); err != nil {
+		return err
+	}
+	if err := b.DlObj.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *DlSingle) String() (str string) {
 	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
 }
 
+// Range request
 type DlRangeBody struct {
 	dlBase
 	Base     string `json:"base"`
@@ -441,14 +514,14 @@ type DlRangeBody struct {
 
 func (b *DlRangeBody) InitWithQuery(query url.Values) {
 	b.dlBase.InitWithQuery(query)
-	b.Base = query.Get("base")
-	b.Template = query.Get("template")
+	b.Base = query.Get(URLParamBase)
+	b.Template = query.Get(URLParamTemplate)
 }
 
 func (b *DlRangeBody) AsQuery() url.Values {
 	query := b.dlBase.AsQuery()
-	query.Add("base", b.Base)
-	query.Add("template", b.Template)
+	query.Add(URLParamBase, b.Base)
+	query.Add(URLParamTemplate, b.Template)
 	return query
 }
 
@@ -457,13 +530,13 @@ func (b *DlRangeBody) Validate() error {
 		return err
 	}
 	if b.Base == "" {
-		return errors.New("no `base` for range found, `base` is required")
+		return fmt.Errorf("no %q for range found, %q is required", URLParamBase, URLParamBase)
 	}
 	if !strings.HasSuffix(b.Base, "/") {
 		b.Base += "/"
 	}
 	if b.Template == "" {
-		return errors.New("no `template` for range found, `template` is required")
+		return fmt.Errorf("no %q for range found, %q is required", URLParamTemplate, URLParamTemplate)
 	}
 	return nil
 }
@@ -472,6 +545,7 @@ func (b *DlRangeBody) String() (str string) {
 	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
 }
 
+// Multi request
 type DlMultiBody struct {
 	dlBase
 }
@@ -491,6 +565,7 @@ func (b *DlMultiBody) String() (str string) {
 	return fmt.Sprintf("bucket: %q", b.Bucket)
 }
 
+// Bucket request
 type DlBucketBody struct {
 	dlBase
 	Prefix string `json:"prefix"`
@@ -499,8 +574,8 @@ type DlBucketBody struct {
 
 func (b *DlBucketBody) InitWithQuery(query url.Values) {
 	b.dlBase.InitWithQuery(query)
-	b.Prefix = query.Get("prefix")
-	b.Suffix = query.Get("suffix")
+	b.Prefix = query.Get(URLParamPrefix)
+	b.Suffix = query.Get(URLParamSuffix)
 }
 
 func (b *DlBucketBody) Validate() error {
@@ -510,10 +585,10 @@ func (b *DlBucketBody) Validate() error {
 	return nil
 }
 
-func (b DlBucketBody) AsQuery() url.Values {
+func (b *DlBucketBody) AsQuery() url.Values {
 	query := b.dlBase.AsQuery()
-	query.Add("prefix", b.Prefix)
-	query.Add("suffix", b.Suffix)
+	query.Add(URLParamPrefix, b.Prefix)
+	query.Add(URLParamSuffix, b.Suffix)
 	return query
 }
 

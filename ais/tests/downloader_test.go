@@ -5,8 +5,6 @@
 package ais_test
 
 import (
-	"fmt"
-	"path"
 	"strings"
 	"testing"
 	"time"
@@ -16,29 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 )
 
-func waitForDownload(t *testing.T, bucket string, v interface{}) {
+func waitForDownload(t *testing.T, id string) {
 	for {
 		all := true
-		switch ty := v.(type) {
-		case map[string]string:
-			for objname, link := range ty {
-				if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
-					if !strings.Contains(string(resp), "total size") {
-						all = false
-					}
-				}
+		if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
+			if !strings.Contains(string(resp), "pct: 100") {
+				all = false
 			}
-		case []string:
-			for _, link := range ty {
-				objname := path.Base(link)
-				if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
-					if !strings.Contains(string(resp), "total size") {
-						all = false
-					}
-				}
-			}
-		default:
-			t.Fatalf("invalid type: %T", ty)
 		}
 
 		if all {
@@ -67,49 +49,46 @@ func TestDownloadSingle(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
-	tutils.CheckFatal(err, t)
+	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
+	tutils.CheckError(err, t)
 
 	time.Sleep(time.Second * 3)
 
-	if err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
-		t.Error("expected error when trying to download currently downloading file")
-	}
-
 	// Schedule second object
-	err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
-	tutils.CheckFatal(err, t)
+	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
+	tutils.CheckError(err, t)
 
 	// Cancel second object
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
-	tutils.CheckFatal(err, t)
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), idSecond)
+	tutils.CheckError(err, t)
 
-	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
-	tutils.CheckFatal(err, t)
+	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id)
+	tutils.CheckError(err, t)
 	if len(resp) < 10 {
 		t.Errorf("expected longer response, got: %s", string(resp))
 	}
+	tutils.Logln(string(resp))
 
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
-	tutils.CheckFatal(err, t)
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	tutils.CheckError(err, t)
 
 	time.Sleep(time.Second)
 
-	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
 		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
 	}
 
-	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
+	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id); err == nil {
 		t.Error("expected error when cancelling for link that is not being downloaded and is not in queue")
 	}
 
-	err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, linkSmall)
-	tutils.CheckFatal(err, t)
+	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, linkSmall)
+	tutils.CheckError(err, t)
 
-	waitForDownload(t, bucket, map[string]string{objname: linkSmall})
+	waitForDownload(t, id)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
-	tutils.CheckFatal(err, t)
+	tutils.CheckError(err, t)
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
 	}
@@ -131,16 +110,13 @@ func TestDownloadRange(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), bucket, base, template)
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), bucket, base, template)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(3 * time.Second)
 
-	for i := 0; i <= 7; i++ {
-		objname := fmt.Sprintf("imagenet/imagenet_train-00000%d.tgz", i)
-		err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), bucket, objname, base+objname)
-		tutils.CheckFatal(err, t)
-	}
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	tutils.CheckFatal(err, t)
 }
 
 func TestDownloadMultiMap(t *testing.T) {
@@ -161,10 +137,10 @@ func TestDownloadMultiMap(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, bucket, m)
+	waitForDownload(t, id)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
@@ -191,10 +167,10 @@ func TestDownloadMultiList(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, l)
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, l)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, bucket, l)
+	waitForDownload(t, id)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
@@ -219,20 +195,25 @@ func TestDownloadTimeout(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	body := cmn.DlBody{
-		Objname: objname,
-		Link:    link,
+	body := cmn.DlSingle{
+		DlObj: cmn.DlObj{
+			Objname: objname,
+			Link:    link,
+		},
 	}
 	body.Bucket = bucket
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
-	err := api.DownloadSingleWithParam(tutils.DefaultBaseAPIParams(t), body)
+	id, err := api.DownloadSingleWithParam(tutils.DefaultBaseAPIParams(t), body)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(time.Second)
 
-	if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), bucket, objname, link); err == nil {
-		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
+	if _, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
+		// TODO: we should get response that some files has been canceled or not finished.
+		// For now we cannot do that since we don't collect information about
+		// task being canceled.
+		// t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
 	}
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)

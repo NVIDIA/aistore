@@ -24,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -149,6 +150,11 @@ func (fpair PairF32) String() string {
 //
 // common utils
 //
+
+func GenUUID() (string, error) {
+	generatedUUID, err := uuid.NewRandom()
+	return generatedUUID.String(), err
+}
 
 func S2B(s string) (int64, error) {
 	if s == "" {

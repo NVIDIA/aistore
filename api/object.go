@@ -279,16 +279,20 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 	return err
 }
 
-func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) error {
-	dlBody := cmn.DlBody{
-		Objname: objname,
-		Link:    link,
+// Downloader API
+
+func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) (string, error) {
+	dlBody := cmn.DlSingle{
+		DlObj: cmn.DlObj{
+			Objname: objname,
+			Link:    link,
+		},
 	}
 	dlBody.Bucket = bucket
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
 
-func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlBody) error {
+func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingle) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -296,11 +300,11 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlBody) error {
 	optParams := OptionalParams{
 		Query: query,
 	}
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	id, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	return string(id), err
 }
 
-func DownloadRange(baseParams *BaseParams, bucket, base, template string) error {
+func DownloadRange(baseParams *BaseParams, bucket, base, template string) (string, error) {
 	dlBody := cmn.DlRangeBody{
 		Base:     base,
 		Template: template,
@@ -313,18 +317,18 @@ func DownloadRange(baseParams *BaseParams, bucket, base, template string) error 
 	optParams := OptionalParams{
 		Query: query,
 	}
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	id, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	return string(id), err
 }
 
-func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) error {
+func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string, error) {
 	dlBody := cmn.DlMultiBody{}
 	dlBody.Bucket = bucket
 	query := dlBody.AsQuery()
 
 	msg, err := jsoniter.Marshal(m)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	baseParams.Method = http.MethodPost
@@ -332,8 +336,8 @@ func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) error {
 	optParams := OptionalParams{
 		Query: query,
 	}
-	_, err = DoHTTPRequest(baseParams, path, msg, optParams)
-	return err
+	id, err := DoHTTPRequest(baseParams, path, msg, optParams)
+	return string(id), err
 }
 
 func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error {
@@ -352,12 +356,10 @@ func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error
 	return err
 }
 
-func DownloadStatus(baseParams *BaseParams, bucket, objname, link string) (resp []byte, err error) {
-	dlBody := cmn.DlBody{
-		Objname: objname,
-		Link:    link,
+func DownloadStatus(baseParams *BaseParams, id string) (resp []byte, err error) {
+	dlBody := cmn.DlAdminBody{
+		ID: id,
 	}
-	dlBody.Bucket = bucket
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodGet
@@ -369,12 +371,10 @@ func DownloadStatus(baseParams *BaseParams, bucket, objname, link string) (resp 
 	return resp, err
 }
 
-func DownloadCancel(baseParams *BaseParams, bucket, objname, link string) error {
-	dlBody := cmn.DlBody{
-		Objname: objname,
-		Link:    link,
+func DownloadCancel(baseParams *BaseParams, id string) error {
+	dlBody := cmn.DlAdminBody{
+		ID: id,
 	}
-	dlBody.Bucket = bucket
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodDelete

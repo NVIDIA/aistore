@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
-	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -91,8 +90,7 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	generatedUUID, err := uuid.NewRandom()
-	managerUUID := generatedUUID.String()
+	managerUUID, err := cmn.GenUUID()
 	if err != nil {
 		s := fmt.Sprintf("unable to create new uuid for manager: %v", err)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)

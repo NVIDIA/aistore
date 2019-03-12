@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	scribble "github.com/nanobox-io/golang-scribble"
+	"github.com/nanobox-io/golang-scribble"
 )
 
 const (

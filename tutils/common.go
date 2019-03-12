@@ -39,14 +39,16 @@ func CheckError(err error, t *testing.T) {
 	}
 }
 
+func Logln(msg string) {
+	if testing.Verbose() {
+		fmt.Fprintln(os.Stdout, msg)
+	}
+}
+
 func Logf(msg string, args ...interface{}) {
 	if testing.Verbose() {
 		fmt.Fprintf(os.Stdout, msg, args...)
 	}
-}
-
-func Logln(msg string) {
-	Logf(msg + "\n")
 }
 
 func Progress(id int, period int) {

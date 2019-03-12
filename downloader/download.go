@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package downloader
 
 import (
@@ -8,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -62,7 +66,7 @@ import (
 //
 // When Downloader receives a cancel request, it cancels running task or
 // if the task is scheduled but is not yet processed, then it is removed
-// from queue (see: put, get). If the task is running, cancelDownloadFunc is
+// from queue (see: put, get). If the task is running, cancelFunc is
 // invoked to cancel task's request.
 //
 // ====== Status Updates ======
@@ -98,10 +102,10 @@ import (
 // ================================ Summary ====================================
 
 const (
-	adminCancel    = "CANCEL"
-	adminStatus    = "STATUS"
-	taskDownload   = "DOWNLOAD"
-	downloadChSize = 200
+	adminCancel  = "CANCEL"
+	adminStatus  = "STATUS"
+	taskDownload = "DOWNLOAD"
+	queueChSize  = 200
 
 	putInQueueTimeout = time.Second * 10
 )
@@ -129,6 +133,8 @@ type (
 		adminCh    chan *request
 		downloadCh chan *task
 		joggers    map[string]*jogger // mpath -> jogger
+
+		db *downloaderDB
 	}
 )
 
@@ -138,7 +144,7 @@ type (
 	// in a response object, which is used to communicate the outcome of the
 	// request.
 	response struct {
-		resp       string
+		resp       interface{}
 		err        error
 		statusCode int
 	}
@@ -149,10 +155,10 @@ type (
 	// the request, and are then dispatched to the correct jogger to be handled.
 	request struct {
 		action      string // one of: adminCancel, adminStatus, taskDownload
-		link        string
+		id          string // id of the job task
+		obj         cmn.DlObj
 		bucket      string
 		bckProvider string
-		objname     string
 		timeout     string
 		fqn         string         // fqn of the object after it has been committed
 		responseCh  chan *response // where the outcome of the request is written
@@ -164,11 +170,12 @@ type (
 		parent *Downloader
 		*request
 
-		sync.Mutex
-		headers            map[string]string  // the headers that are forwarded to the get request to download the object.
-		cancelDownloadFunc context.CancelFunc // used to cancel the download after the request commences
-		currentSize        int64              // the current size of the file (updated as the download progresses)
-		finishedCh         chan error         // when a jogger finishes downloading a dlTask
+		headers     map[string]string // the headers that are forwarded to the get request to download the object.
+		currentSize int64             // the current size of the file (updated as the download progresses)
+		finishedCh  chan error        // when a jogger finishes downloading a dlTask
+
+		downloadCtx context.Context    // context with cancel function
+		cancelFunc  context.CancelFunc // used to cancel the download after the request commences
 	}
 
 	queue struct {
@@ -203,21 +210,19 @@ type (
 //==================================== Requests ===========================================
 
 func (req *request) String() (str string) {
-	if req.link != "" {
-		str += fmt.Sprintf("link: %q, ", req.link)
-	}
-
+	str += fmt.Sprintf("id: %q, objname: %q, link: %q, ", req.id, req.obj.Objname, req.obj.Link)
 	if req.bucket != "" {
 		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.bckProvider)
 	}
 
-	if req.objname != "" {
-		str += fmt.Sprintf("objname: %q, ", req.objname)
-	}
 	return "{" + strings.TrimSuffix(str, ", ") + "}"
 }
 
-func (req *request) write(resp string, err error, statusCode int) {
+func (req *request) uid() string {
+	return fmt.Sprintf("%s|%s|%s", req.obj.Link, req.bucket, req.obj.Objname)
+}
+
+func (req *request) write(resp interface{}, err error, statusCode int) {
 	req.responseCh <- &response{
 		resp:       resp,
 		err:        err,
@@ -227,15 +232,15 @@ func (req *request) write(resp string, err error, statusCode int) {
 }
 
 func (req *request) writeErrResp(err error, statusCode int) {
-	req.write("", err, statusCode)
+	req.write(nil, err, statusCode)
 }
 
-func (req *request) writeResp(response string) {
-	req.write(response, nil, http.StatusOK)
+func (req *request) writeResp(resp interface{}) {
+	req.write(resp, nil, http.StatusOK)
 }
 
 func (req *request) equals(rhs *request) bool {
-	return req.objname == rhs.objname && req.bucket == rhs.bucket && req.link == rhs.link
+	return req.uid() == rhs.uid()
 }
 
 // ========================== progressReader ===================================
@@ -295,17 +300,23 @@ func (d *Downloader) removeJogger(mpath string) {
 /*
  * Downloader constructors
  */
-func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
+func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader, err error) {
+	db, err := newDownloadDB()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Downloader{
+		XactDemandBase: *cmn.NewXactDemandBase(id, kind, ""),
+		t:              t,
+		stats:          stats,
+		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
 		downloadCh:     make(chan *task),
 		joggers:        make(map[string]*jogger, 8),
-		t:              t,
-		stats:          stats,
-		mountpaths:     f,
-		XactDemandBase: *cmn.NewXactDemandBase(id, kind, ""),
-	}
+		db:             db,
+	}, nil
 }
 
 func (d *Downloader) newJogger(mpath string) *jogger {
@@ -381,38 +392,55 @@ func (d *Downloader) Stop(err error) {
  * Downloader's exposed methods
  */
 
-func (d *Downloader) Download(body *cmn.DlBody) (resp string, err error, statusCode int) {
+func (d *Downloader) Download(body *cmn.DlBody) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
-	t := &task{
-		parent: d,
-		request: &request{
-			action:      taskDownload,
-			link:        body.Link,
-			bucket:      body.Bucket,
-			bckProvider: body.BckProvider,
-			objname:     body.Objname,
-			timeout:     body.Timeout,
-			responseCh:  make(chan *response, 1),
-		},
-		finishedCh: make(chan error, 1),
-	}
-	d.downloadCh <- t
+	defer d.DecPending()
 
-	// await the response
-	r := <-t.responseCh
-	if r.err != nil {
-		d.DecPending()
+	if err := d.db.setJob(body.ID, body); err != nil {
+		return err.Error(), err, http.StatusInternalServerError
 	}
-	return r.resp, r.err, r.statusCode
+
+	responses := make([]chan *response, 0, len(body.Objs))
+	for _, obj := range body.Objs {
+		// Invariant: either there was an error before adding to queue, or file
+		// was deleted from queue (on cancel or successful run). In both cases
+		// we decrease pending.
+		d.IncPending()
+
+		rch := make(chan *response, 1)
+		responses = append(responses, rch)
+		t := &task{
+			parent: d,
+			request: &request{
+				action:      taskDownload,
+				id:          body.ID,
+				obj:         obj,
+				bucket:      body.Bucket,
+				bckProvider: body.BckProvider,
+				timeout:     body.Timeout,
+				responseCh:  rch,
+			},
+			finishedCh: make(chan error, 1),
+		}
+		d.downloadCh <- t
+	}
+
+	for _, response := range responses {
+		// await the response
+		r := <-response
+		if r.err != nil {
+			d.Cancel(body.ID) // cancel whole job
+			return r.resp, r.err, r.statusCode
+		}
+	}
+	return nil, nil, http.StatusOK
 }
 
-func (d *Downloader) Cancel(body *cmn.DlBody) (resp string, err error, statusCode int) {
+func (d *Downloader) Cancel(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     adminCancel,
-		link:       body.Link,
-		bucket:     body.Bucket,
-		objname:    body.Objname,
+		id:         id,
 		responseCh: make(chan *response, 1),
 	}
 	d.adminCh <- req
@@ -423,13 +451,11 @@ func (d *Downloader) Cancel(body *cmn.DlBody) (resp string, err error, statusCod
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) Status(body *cmn.DlBody) (resp string, err error, statusCode int) {
+func (d *Downloader) Status(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     adminStatus,
-		link:       body.Link,
-		bucket:     body.Bucket,
-		objname:    body.Objname,
+		id:         id,
 		responseCh: make(chan *response, 1),
 	}
 	d.adminCh <- req
@@ -445,115 +471,183 @@ func (d *Downloader) Status(body *cmn.DlBody) (resp string, err error, statusCod
  */
 
 func (d *Downloader) dispatchDownload(t *task) {
-	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.objname}
+	var (
+		resp      response
+		added, ok bool
+		j         *jogger
+	)
+
+	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.obj.Objname}
 	errstr := lom.Fill(t.bckProvider, cluster.LomFstat)
 	if errstr != "" {
-		t.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
-		return
+		resp.err, resp.statusCode = errors.New(errstr), http.StatusInternalServerError
+		goto finalize
 	}
 	if lom.Exists() {
-		t.writeErrResp(fmt.Errorf("download task with %v failed, object with the same bucket and objname already exists", t), http.StatusConflict)
-		return
+		resp.resp = fmt.Sprintf("object %q already exists - skipping", t.obj.Objname)
+		goto finalize
 	}
 	t.fqn = lom.FQN
 
 	if lom.ParsedFQN.MpathInfo == nil {
 		err := fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
 		glog.Error(err.Error())
-		t.writeErrResp(err, http.StatusInternalServerError)
-		return
+		resp.err, resp.statusCode = err, http.StatusInternalServerError
+		goto finalize
 	}
-	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
+	j, ok = d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
-	j.addToDownloadQueue(t)
+
+	resp, added = j.putIntoDownloadQueue(t)
+
+finalize:
+	t.write(resp.resp, resp.err, resp.statusCode)
+
+	// Following can happen:
+	//  * in case of error
+	//  * object already exists
+	//  * object already in queue
+	//
+	// In all of these cases we need to decrease pending since it was not added
+	// to the queue.
+	if !added {
+		d.DecPending()
+	}
 }
 
 func (d *Downloader) dispatchCancel(req *request) {
-	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
-	if errstr != "" {
-		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
-		return
-	}
-	if lom.Exists() {
-		req.writeErrResp(fmt.Errorf("cancel request with %s failed, download has already finished", req), http.StatusBadRequest)
-		return
-	}
-	req.fqn = lom.FQN
-
-	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("cancel request with %v failed. Failed to obtain mountpath for request's fqn: %q", req, req.fqn)
-		glog.Error(err.Error())
+	body, err := d.db.getJob(req.id)
+	if err != nil {
+		if err == errJobNotFound {
+			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)
+			return
+		}
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
-	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("cancel request with %v failed. No corresponding mpath exists", req))
 
-	// Cancel currently running task
-	j.Lock()
-	if j.task != nil && j.task.request.equals(req) {
-		j.task.cancel()
-		req.writeResp(fmt.Sprintf("Currently running request has been canceled: %s", req))
+	errs := make([]response, 0, len(body.Objs))
+	for _, j := range d.joggers {
+		j.Lock()
+		for _, obj := range body.Objs {
+			req.obj = obj
+			req.bucket = body.Bucket
+			req.bckProvider = body.BckProvider
+
+			lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.obj.Objname}
+			errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
+			if errstr != "" {
+				errs = append(errs, response{
+					err:        errors.New(errstr),
+					statusCode: http.StatusInternalServerError,
+				})
+				continue
+			}
+			if lom.Exists() {
+				continue
+			}
+
+			// Cancel currently running task
+			if j.task != nil && j.task.request.equals(req) {
+				// Task is running
+				j.task.cancel()
+				continue
+			}
+
+			// If not running but in queue we need to decrease number of pending
+			if existed := j.q.delete(req); existed {
+				d.DecPending()
+			}
+		}
 		j.Unlock()
-		return
 	}
-	j.Unlock()
 
-	if !j.q.delete(req) {
-		req.writeErrResp(fmt.Errorf("download for %s is not in the queue", req), http.StatusBadRequest)
+	if len(errs) > 0 {
+		r := errs[0] // TODO: we should probably print all errors
+		req.writeErrResp(r.err, r.statusCode)
 		return
 	}
-	req.writeResp(fmt.Sprintf("Request has been canceled: %s", req))
+
+	err = d.db.delJob(req.id)
+	cmn.AssertNoErr(err) // everything should be okay since getReqFromDB
+	req.writeResp(nil)
 }
 
 func (d *Downloader) dispatchStatus(req *request) {
-	lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.objname}
-	errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
-	if errstr != "" {
-		req.writeErrResp(errors.New(errstr), http.StatusInternalServerError)
-		return
-	}
-	if lom.Exists() {
-		// It is possible this file already existed on cluster and was never downloaded.
-		resp := fmt.Sprintf("Download 100%% complete, total size %s, for %v.", cmn.B2S(lom.Size, 3), req)
-		req.writeResp(resp)
-		return
-	}
-	req.fqn = lom.FQN
+	body, err := d.db.getJob(req.id)
+	if err != nil {
+		if err == errJobNotFound {
+			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)
+			return
+		}
 
-	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
-		glog.Error(err.Error())
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
-	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
 
-	var written bool
-	j.Lock()
-	if j.task != nil {
-		go j.task.downloadProgress(req)
-		written = true
-	}
-	j.Unlock()
+	total := len(body.Objs)
+	finished := 0
 
-	if !written {
-		req.writeErrResp(fmt.Errorf("object is not currently being downloaded for %v", req), http.StatusNotFound)
+	errs := make([]response, 0, len(body.Objs))
+	for _, obj := range body.Objs {
+		lom := &cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname}
+		errstr := lom.Fill(body.BckProvider, cluster.LomFstat)
+		if errstr != "" {
+			errs = append(errs, response{
+				err:        err,
+				statusCode: http.StatusInternalServerError,
+			})
+			continue
+		}
+		if lom.Exists() {
+			// It is possible this file already existed on cluster and was never downloaded.
+			finished++
+			continue
+		}
+		req.fqn = lom.FQN
+
+		if lom.ParsedFQN.MpathInfo == nil {
+			err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
+			glog.Error(err.Error())
+			errs = append(errs, response{
+				err:        err,
+				statusCode: http.StatusInternalServerError,
+			})
+			continue
+		}
+		_, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
+		cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
+
+		// TODO: calculating progress should take into account progress of currently downloaded task
 	}
+
+	if len(errs) > 0 {
+		r := errs[0] // TODO: we should probably print all errors
+		req.writeErrResp(r.err, r.statusCode)
+		return
+	}
+
+	req.writeResp(cmn.DlStatusResp{
+		Finished: finished,
+		Total:    total,
+	})
 }
 
 //==================================== jogger =====================================
 
-func (j *jogger) addToDownloadQueue(task *task) {
+func (j *jogger) putIntoDownloadQueue(task *task) (response, bool) {
 	cmn.Assert(task != nil)
-	if err, errCode := j.q.put(task); err != nil {
-		task.writeErrResp(err, errCode)
-		return
+	added, err, errCode := j.q.put(task)
+	if err != nil {
+		return response{
+			err:        err,
+			statusCode: errCode,
+		}, false
 	}
 
-	task.writeResp(fmt.Sprintf("Download request %s added to queue", task))
+	return response{
+		resp: fmt.Sprintf("Download request %s added to queue", task),
+	}, added
 }
 
 func (j *jogger) jog() {
@@ -583,9 +677,9 @@ Loop:
 		j.Lock()
 		j.task = nil
 		j.Unlock()
-		j.q.delete(t.request)
-		j.parent.DecPending()
-
+		if exists := j.q.delete(t.request); exists {
+			j.parent.DecPending()
+		}
 	}
 
 	j.q.cleanup()
@@ -608,25 +702,21 @@ func (j *jogger) stop() {
 }
 
 func (t *task) download() {
-	t.Lock()
-	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.objname}
+	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}
 	if errstr := lom.Fill(t.bckProvider, cluster.LomFstat); errstr != "" {
 		t.abort(errors.New(errstr))
-		t.Unlock()
 		return
 	}
 	if lom.Exists() {
 		t.abort(errors.New("object with the same bucket and objname already exists"))
-		t.Unlock()
 		return
 	}
 	postFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
 
 	// create request
-	httpReq, err := http.NewRequest(http.MethodGet, t.link, nil)
+	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)
 	if err != nil {
 		t.abort(err)
-		t.Unlock()
 		return
 	}
 
@@ -637,17 +727,7 @@ func (t *task) download() {
 		}
 	}
 
-	timeout := cmn.GCO.Get().Downloader.Timeout
-	if t.timeout != "" {
-		timeout, err = time.ParseDuration(t.timeout)
-		cmn.AssertNoErr(err) // this should be checked beforehand
-	}
-
-	// Do
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	t.cancelDownloadFunc = cancel
-	t.Unlock()
-	requestWithContext := httpReq.WithContext(ctx)
+	requestWithContext := httpReq.WithContext(t.downloadCtx)
 	if glog.V(4) {
 		glog.Infof("Starting download for %v", t)
 	}
@@ -666,9 +746,7 @@ func (t *task) download() {
 	progressReader := &progressReader{
 		r: response.Body,
 		reporter: func(n int64) {
-			t.Lock()
-			t.currentSize += n
-			t.Unlock()
+			atomic.AddInt64(&t.currentSize, n)
 		},
 	}
 
@@ -685,13 +763,12 @@ func (t *task) download() {
 }
 
 func (t *task) cancel() {
-	t.Lock()
-	if t.cancelDownloadFunc != nil {
-		t.cancelDownloadFunc()
-	}
-	t.Unlock()
+	t.cancelFunc()
 }
 
+// TODO: this should also inform somehow downloader status about being aborted/canceled
+// Probably we need to extend the persistent database (db.go) so that it will contain
+// also information about specific tasks.
 func (t *task) abort(err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 	t.finishedCh <- err
@@ -701,51 +778,36 @@ func (t *task) waitForFinish() <-chan error {
 	return t.finishedCh
 }
 
-func (t *task) downloadProgress(req *request) {
-	t.Lock()
-	if !t.request.equals(req) {
-		t.Unlock()
-		// Current object being downloaded does not match status request
-		resp := fmt.Errorf("object is not currently being downloaded for %v", req)
-		req.writeErrResp(resp, http.StatusNotFound)
-	} else {
-		currentSize := t.currentSize
-		t.Unlock()
-		size := cmn.B2S(currentSize, 3)
-		resp := fmt.Sprintf("Downloaded %s so far for %v.", size, req)
-		req.writeResp(resp)
-	}
-}
-
 func (t *task) String() string {
 	return t.request.String()
 }
 
 func newQueue() *queue {
 	return &queue{
-		ch: make(chan *task, downloadChSize),
+		ch: make(chan *task, queueChSize),
 		m:  make(map[string]struct{}),
 	}
 }
 
-func (q *queue) put(t *task) (err error, errCode int) {
+func (q *queue) put(t *task) (added bool, err error, errCode int) {
 	timer := time.NewTimer(putInQueueTimeout)
 
 	q.Lock()
 	defer q.Unlock()
-	if _, exists := q.m[t.request.String()]; exists {
-		return fmt.Errorf("download with this link %q was already scheduled", t.link), http.StatusBadRequest
+	if _, exists := q.m[t.request.uid()]; exists {
+		// If request already exists we should just omit this
+		return false, nil, 0
 	}
 
 	select {
 	case q.ch <- t:
 		break
 	case <-timer.C:
-		return fmt.Errorf("timeout when trying to put task %v in queue, try later", t), http.StatusRequestTimeout
+		return false, fmt.Errorf("timeout when trying to put task %v in queue, try later", t), http.StatusRequestTimeout
 	}
 	timer.Stop()
-	q.m[t.request.String()] = struct{}{}
-	return nil, 0
+	q.m[t.request.uid()] = struct{}{}
+	return true, nil, 0
 }
 
 // get try to find first task which was not yet canceled
@@ -758,20 +820,32 @@ func (q *queue) get() (foundTask *task) {
 		}
 
 		q.RLock()
-		if _, exists := q.m[t.request.String()]; exists {
-			// NOTE: task is deleted when it has finished to prevent situation
-			// where we put task which is being downloaded.
+		if _, exists := q.m[t.request.uid()]; exists {
+			// NOTE: We do not delete task here but postpone it until the task
+			// has finished to prevent situation where we put task which is being
+			// downloaded.
 			foundTask = t
 		}
 		q.RUnlock()
 	}
+
+	timeout := cmn.GCO.Get().Downloader.Timeout
+	if foundTask.timeout != "" {
+		var err error
+		timeout, err = time.ParseDuration(foundTask.timeout)
+		cmn.AssertNoErr(err) // this should be checked beforehand
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	foundTask.downloadCtx = ctx
+	foundTask.cancelFunc = cancel
 	return
 }
 
 func (q *queue) delete(req *request) bool {
 	q.Lock()
-	_, exists := q.m[req.String()]
-	delete(q.m, req.String())
+	_, exists := q.m[req.uid()]
+	delete(q.m, req.uid())
 	q.Unlock()
 	return exists
 }

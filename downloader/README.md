@@ -31,13 +31,14 @@ The rest of this document is structured around all supported types of downloads:
 ## Single download
 
 The request (described below) downloads a *single* object and is considered the most basic.
+This request returns *id* on successful request which can then be used to check the status or cancel the download job.
 
 ### Request Query Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded object is saved to. |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically | Yes
+**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **link** | **string** | URL of where the object is downloaded from. |
 **objname** | **string** | Name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path. | Yes
@@ -51,13 +52,14 @@ Name | Type | Description | Optional?
 ## Multi download
 
 A *multi* object download requires either a map or a list (**object_list**) in JSON body.
+This request returns *id* on successful request which can then be used to check the status or cancel the download job.
 
 ### Request Query Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 
 ### Sample Request
@@ -67,13 +69,14 @@ Name | Type | Description | Optional?
 | Multi Download Using Object Map | POST /v1/download/multi | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"t10k-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1-ubyte.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download/multi?bucket=yann-lecun` |
 | Multi Download Using Object List |  POST /v1/download/multi  | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download/multi?bucket=yann-lecun` |
 
-## List download
+## Range download
 
-A *list* download retrieves (in one shot) multiple objects while expecting (and relying upon) a certain naming convention which happens to be often used.
+A *range* download retrieves (in one shot) multiple objects while expecting (and relying upon) a certain naming convention which happens to be often used.
+This request returns *id* on successful request which can then be used to check the status or cancel the download job.
 
-Namely, the *list* download expects the object name to consist of prefix + index + suffix, as described below:
+Namely, the *range* download expects the object name to consist of prefix + index + suffix, as described below:
 
-### List Format
+### Range Format
 
 Consider a website named `randomwebsite.com/some_dir/` that contains the following files:
 - object1log.txt
@@ -82,14 +85,14 @@ Consider a website named `randomwebsite.com/some_dir/` that contains the followi
 - ...
 - object1000log.txt
 
-To populate AIStore with objects in the range from `object200log.txt` to `object300log.txt` (101 objects total), use the *list* download.
+To populate AIStore with objects in the range from `object200log.txt` to `object300log.txt` (101 objects total), use the *range* download.
 
 ### Request Query Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** |  Bucket where the downloaded objects are saved to. |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **base** | **string** | Base URL of the object used to formulate the download URL. |
 **template** | **string** | Bash template describing names of the objects in the URL. |
@@ -98,8 +101,10 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a list of objects | POST /v1/download/list | `curl -Liv -X POST http://localhost:8080/v1/download/list?bucket=test321&base=randomwebsite.com/some_dir/&template=object{200..300}log.txt` |
-| Download a list of objects, selecting every tenth | POST /v1/download/list | `curl -Liv -X POST http://localhost:8080/v1/download/list?bucket=test321&base=randomwebsite.com/some_dir/&template=object{1..1000..10}log.txt` |
+| Download a list of objects | POST /v1/download/range | `curl -Livg -X POST 'http://localhost:8080/v1/download/range?bucket=test321&base=randomwebsite.com/some_dir/&template=object{200..300}log.txt'` |
+| Download a list of objects, selecting every tenth | POST /v1/download/range | `curl -Livg -X POST 'http://localhost:8080/v1/download/range?bucket=test321&base=randomwebsite.com/some_dir/&template=object{1..1000..10}log.txt'` |
+
+**Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.
 
 ## Bucket download
 
@@ -127,16 +132,13 @@ Any download request can be cancelled at any time by making a DELETE request to 
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the download was supposed to be saved to |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) was used. By default, locality is determined automatically. | Yes
-**link** | **string** | URL of the object that was added to the download queue |
-**objname** | **string** | Name of the object the download was supposed to be saved as |
+**id** | **string** | Unique identifier of download job returned upon job creation. |
 
 ### Sample Request
 
 | Operation | HTTP action  | Example |
 |--|--|--|
-| Cancel Download | DELETE v1/download | `curl -Liv -X DELETE http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`|
+| Cancel Download | DELETE v1/download | `curl -Liv -X DELETE http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
 
 ### Status of the download
 
@@ -146,13 +148,10 @@ The status of any download request can be queried at any time.
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the download was supposed to be saved to |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
-**link** | **string** | URL of the object that was added to the download queue |
-**objname** | **string** | Name of the object that the download was supposed to be saved as |
+**id** | **string** | Unique identifier of download job returned upon job creation. |
 
 ### Sample Request
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Get Download Status | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`|
+| Get Download Status | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
