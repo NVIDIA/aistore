@@ -787,7 +787,11 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	return
 }
 
-func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, bucket string) bool {
+func isValidCloudProvider(bckProvider, cloudProvider string) bool {
+	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
+}
+
+func (h *httprunner) validateBckName(w http.ResponseWriter, r *http.Request, bucket string) bool {
 	if strings.Contains(bucket, string(filepath.Separator)) {
 		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		if _, file, line, ok := runtime.Caller(1); ok {
@@ -798,10 +802,6 @@ func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, buc
 		return false
 	}
 	return true
-}
-
-func validCloudProvider(bckProvider, cloudProvider string) bool {
-	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
 }
 
 func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bool, errstr string) {
@@ -829,7 +829,7 @@ func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bo
 		isLocal = true
 	case cmn.CloudBs:
 		// Check if user does have the associated cloud
-		if !validCloudProvider(bckProvider, config.CloudProvider) {
+		if !isValidCloudProvider(bckProvider, config.CloudProvider) {
 			errstr = fmt.Sprintf("Cluster cloud provider '%s', mis-match bucket provider '%s'",
 				config.CloudProvider, bckProvider)
 			return
@@ -846,7 +846,7 @@ func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, buck
 	var (
 		errstr string
 	)
-	if !h.validatebckname(w, r, bucket) {
+	if !h.validateBckName(w, r, bucket) {
 		return
 	}
 	if bckIsLocal, errstr = h.validateBckProvider(bckProvider, bucket); errstr != "" {

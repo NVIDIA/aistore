@@ -107,8 +107,6 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 	msg := VoteMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		s := fmt.Sprintf("Error reading Vote Request body: %v", err)
-		h.invalmsghdlr(w, r, s)
 		return
 	}
 	candidate := msg.Record.Candidate
@@ -178,8 +176,6 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 
 	msg := VoteResultMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		s := fmt.Sprintf("Error reading Vote Message body: %v", err)
-		h.invalmsghdlr(w, r, s)
 		return
 	}
 
@@ -220,8 +216,6 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 	msg := VoteInitiationMessage{}
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
-		s := fmt.Sprintf("Error reading Vote Request body: %v", err)
-		p.invalmsghdlr(w, r, s)
 		return
 	}
 	newsmap := &msg.Request.Smap

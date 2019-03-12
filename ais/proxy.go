@@ -301,14 +301,11 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
 	// all bucket names
 	if bucket == "*" {
 		p.getbucketnames(w, r, bucket, bckProvider)
@@ -326,7 +323,8 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	if !p.validatebckname(w, r, bucket) {
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
 	smap := p.smapowner.get()
@@ -369,17 +367,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	if !p.validatebckname(w, r, bucket) {
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -427,18 +422,14 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	//
-	// FIXME: add protection against putting into non-existing local bucket
-	//
 	bucket, objname := apitems[0], apitems[1]
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
+		return
+	}
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -460,19 +451,21 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 // DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	var msg cmn.ActionMsg
+	var (
+		msg            cmn.ActionMsg
+		bckIsLocal, ok bool
+	)
+
 	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
 	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
+	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bckIsLocal, errstr := p.validateBckProvider(bckProvider, bucket)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if bckIsLocal, ok = p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
 	switch msg.Action {
@@ -592,8 +585,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
 	smap := p.smapowner.get()
@@ -635,7 +627,6 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	}
 	var payload = make(cmn.SimpleKVs)
 	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -727,19 +718,17 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	var msg cmn.ActionMsg
+	var (
+		msg            cmn.ActionMsg
+		bckIsLocal, ok bool
+	)
 	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
 	bucket := apitems[0]
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bckIsLocal, errstr := p.validateBckProvider(bckProvider, bucket)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if bckIsLocal, ok = p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
 
@@ -881,8 +870,9 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	lbucket := apitems[0]
-	if !p.validatebckname(w, r, lbucket) {
+	// We only support actions for local buckets
+	bucket := apitems[0]
+	if _, ok := p.validateBucket(w, r, bucket, cmn.LocalBs); !ok {
 		return
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
@@ -910,14 +900,11 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
 	var si *cluster.Snode
 	// Use random map iteration order to choose a random target to redirect to
 	smap := p.smapowner.get()
@@ -1029,20 +1016,20 @@ func (p *proxyrunner) updateBucketProp(w http.ResponseWriter, r *http.Request, b
 
 // PUT /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
+	var (
+		proxyLocal, ok bool
+	)
+
 	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
 	bucket := apitems[0]
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	proxyLocal, errstr := p.validateBckProvider(bckProvider, bucket)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if proxyLocal, ok = p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
 	b, _, err := cmn.ReadBytes(r)
 	if err != nil {
 		return
@@ -1138,14 +1125,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	if !p.validatebckname(w, r, bucket) {
-		return
-	}
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
@@ -1758,18 +1742,17 @@ func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, a
 		return
 	}
 	bucket := apitems[0]
-	if _, errstr := p.validateBckProvider(bckProvider, bucket); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
 
-	if p.listRange(method, bucket, bckProvider, actionMsg, query); err != nil {
+	if p.listRange(method, bucket, actionMsg, query); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 }
 
-func (p *proxyrunner) listRange(method, bucket, bckProvider string, actionMsg *cmn.ActionMsg, query url.Values) error {
+func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg, query url.Values) error {
 	var (
 		timeout time.Duration
 		results chan callResult
@@ -1837,8 +1820,6 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
-		s := fmt.Sprintf("Invalid token list: %v", err)
-		p.invalmsghdlr(w, r, s)
 		return
 	}
 
