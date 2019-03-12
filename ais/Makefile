@@ -5,45 +5,22 @@ VERSION=$(shell git rev-parse --short HEAD)
 BUILD=$(shell date +%FT%T%z)
 LDFLAGS=-ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'"
 
-REPOPATH=src/github.com/NVIDIA
-DEVPATH=src/gitlab-master.nvidia.com/aistorage/
 
+# Target for devinit
+.PHONY: devinit
 
-# Target for gitlab repository
-.PHONY: devinit devrefresh
-
-# Only for gitlab repository
-# It replaces existing github.com AIStore repository with a symlink to gitlab one
-# WARNING: it erases directory $GOPATH/src/github.com/NVIDIA, so make sure
-#    that you are done with it before executing 'make devinit'
-# Run this target once after you 'go get' AIStore for the first time
+# To help with working with a non-github remote
+# It replaces existing github.com AIStore remote with the one specified by REMOTE
 devinit:
-	@if [ -d "${GOPATH}/${REPOPATH}" ] && [ ! -L "${GOPATH}/${REPOPATH}" ]; then \
-		echo "Removing ${GOPATH}/${REPOPATH}" && \
-		rm -r "${GOPATH}/${REPOPATH}"; \
-	fi
-	@if [ -d "${GOPATH}/${REPOPATH}" ]; then \
-		echo "Deleting symbolic link" && \
-		rm "${GOPATH}/${REPOPATH}"; \
-	fi
-	@if [ ! -d "${GOPATH}/${REPOPATH}" ]; then \
-		echo "Creating symbolic link" && \
-		ln -s "${GOPATH}/${DEVPATH}" "${GOPATH}/${REPOPATH}"; \
-	fi
-
-# Only for gitlab repository
-# Use this target if $GOPATH changed and you want to recreate symlink
-#   or just to create symlink if it does not exists
-# This target is safe and does not delete any data
-devrefresh:
-	@if [ -d "${GOPATH}/${REPOPATH}" ] && [ -L "${GOPATH}/${REPOPATH}" ]; then \
-		echo "Refreshing symbolic link ${GOPATH}/${REPOPATH}" && \
-		rm -r "${GOPATH}/${REPOPATH}"; \
-	fi
-	@if [ ! -d "${GOPATH}/${REPOPATH}" ]; then \
-		echo "Creating symbolic link" && \
-		ln -s "${GOPATH}/${DEVPATH}" "${GOPATH}/${REPOPATH}"; \
-	else echo "Failed to create symlink: a regular directory exists"; \
+ifeq ($(REMOTE),)
+	$(error missing environment variable: REMOTE="http://path/to/remote")
+endif
+	@if [ -z "$$(which git)" ]; then \
+		echo "git not installed"; \
+	elif [ -z "$$(git remote -v | grep origin)" ]; then \
+		git remote add origin "${REMOTE}"; \
+	else \
+		git remote set-url origin "${REMOTE}"; \
 	fi
 
 
@@ -83,6 +60,27 @@ deploy_next_tier:
 	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
 
 
+# Target for local docker deployment
+.PHONY: deploy_docker stop_docker
+
+deploy_docker:
+	@./../deploy/dev/docker/deploy_docker.sh
+
+stop_docker:
+ifeq ($(FLAGS),)
+	$(warning missing environment variable: FLAGS="stop docker flags")
+endif
+	@./../deploy/dev/docker/stop_docker.sh $(FLAGS)
+
+
+# Target for soak test
+test-soak:
+ifeq ($(FLAGS),)
+	$(warning FLAGS="soak test flags" not passed, using defaults)
+endif
+	-@./../bench/soaktest/soaktest.sh $(FLAGS)
+
+
 # Target for tests
 .PHONY: test-envcheck test-short test-long test-run test
 
@@ -108,7 +106,7 @@ test: test-envcheck spell-check fmt-check lint-install lint test-short #main pre
 
 
 # Target for linters
-LINT_DIRS := $(shell find ../ -type d | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
+LINT_DIRS := $(shell go list -f '{{.Dir}}' ../... | grep -v -e '3rdparty' -e 'vendor')
 MISSPELL_DIRS := $(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 
 .PHONY: lint lint-install fmt-check fmt-fix spell-check spell-fix cyclo
@@ -120,7 +118,7 @@ lint-install:
 	@go get -u honnef.co/go/tools/cmd/staticcheck
 
 LINT_VET_IGNORE := -composites=false
-LINT_IGNORE := "(should have comment|comment on exported|don't use an underscore in package name|should be consistent with previous receiver name|by other packages, and that stutters;|error should be returned as the last|error should be the last type)"
+LINT_IGNORE := "(should have comment|comment on exported|don't use an underscore in package name|should be consistent with previous receiver name|by other packages, and that stutters;|error return value not checked|error should be returned as the last|error should be the last type)"
 
 lint:
 	@CHECK="lint" LINT_VET_IGNORE=$(LINT_VET_IGNORE) LINT_IGNORE=$(LINT_IGNORE) LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh
@@ -144,6 +142,7 @@ spell-fix:
 cyclo:
 	@go get github.com/fzipp/gocyclo
 	@$(GOPATH)/bin/gocyclo -over 25 $(LINT_DIRS)
+
 
 # Misc Targets
 .PHONY: numget cpuprof flamegraph code-coverage

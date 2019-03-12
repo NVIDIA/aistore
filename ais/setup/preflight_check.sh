@@ -9,7 +9,7 @@ lint)
     echo "Checking vet..." >&2
     for dir in ${LINT_DIRS}
     do
-        errs=$(go tool vet "${LINT_VET_IGNORE}" "${dir}" 2>&1 | tee -a /dev/stderr | wc -l)
+        errs=$(go vet "${LINT_VET_IGNORE}" "${dir}" 2>&1 | tee -a /dev/stderr | wc -l)
         err_count=$(($err_count + $errs))
     done
     echo "Checking staticcheck..." >&2

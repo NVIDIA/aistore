@@ -1,11 +1,11 @@
 ## Why Downloader?
-It is a well-known fact that some of the most popular AI datasets have Internet addresses.
+It is a well-known fact that some of the most popular AI datasets are available on the internet.
 
 > See, for instance, [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968) - the paper lists a good number of very large and very popular datasets.
 
 Given that fact, it is only natural to ask the follow-up question: how to work with those datasets? And what happens if the dataset in question is *larger* than a single host? Meaning, what happens if it is large enough to warrant (and require) a distributed storage system?
 
-Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluster can be quickly deployed locally to the compute clients, and the **downloader** can be then used to quickly populate a specified (distributed) AIS bucket with the objects from a given Internet location.
+Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluster can be quickly deployed locally to the compute clients, and the **downloader** can then be used to quickly populate a specified AIS bucket with the objects from a given Internet location.
 
 ## Download Request
 
@@ -17,7 +17,7 @@ AIStore supports 3 types of download requests:
 
 > - Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client).
 
-Rest of this document is structured around these 3 supported types of downloads:
+The rest of this document is structured around these 3 supported types of download request.
 
 ## Table of Contents
 - [Single-object download](#single-object-download)
@@ -29,18 +29,18 @@ Rest of this document is structured around these 3 supported types of downloads:
 
 ## Single-object download
 
-The request (described below) downloads a *single* object and is the most basic of the three.
+This request (described below) downloads a *single* object and is considered the most basic of the three.
 
 ### Request Body Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the download will be saved to |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
-**timeout** | **string** | Timeout for request to external resource | Yes
-**link** | **string** | URL of where the object will be downloaded from. |
-**objname** | **string** | Name of the object the download will be saved as. If no objname is provided, then the objname will be the last element in the URL's path. | Yes
-**headers** | **JSON object** | JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download the object from the link. | Yes
+**bucket** | **string** | Bucket where the downloaded object is saved to. |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**timeout** | **string** | Timeout for the download request | Yes
+**link** | **string** | URL of where the object is downloaded from. |
+**objname** | **string** | Name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path. | Yes
+**headers** | **JSON object** | JSON object containing HTTP headers. The headers are passed by AIS when it makes the GET request to download the object from the link. | Yes
 
 ### Sample Request
 
@@ -56,12 +56,12 @@ A *multi* object download requires either a map (denoted as **object_map** below
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the downloaded objects will be saved to. |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
-**timeout** | **string** | Timeout for request to external resource | Yes
-**headers** | **object** | JSON object where the key is a header name and the value is the corresponding header value(string). These values are used as the header values for when AIS actually makes the GET request to download the object. | Yes
-**object_map** | **JSON object** | JSON object where the key (string) is the objname the object will be saved as and value (string) is a URL pointing to some file. | Yes
-**object_list** | **JSON array** | JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path. | Yes
+**bucket** | **string** | Bucket where the downloaded objects are saved to |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**timeout** | **string** | Timeout for the download request | Yes
+**headers** | **object** | JSON object containing HTTP headers. The headers are passed by AIS when it makes the GET request to download the object from the link. | Yes
+**object_map** | **JSON object** | JSON map where the key is the resulting object name, and the value is the URL that the object is downloaded from. | Yes
+**object_list** | **JSON array** | JSON array where each item is a URL of where the object is downloaded from. The object name for each file will be the last element in the URL's path. | Yes
 
 ### Sample Request
 
@@ -91,19 +91,19 @@ To populate AIStore with objects in the range from `object200log.txt` to `object
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** | Bucket where the downloaded objects will be saved to. |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
-**timeout** | **string** | Timeout for request to external resource | Yes
-**headers** | **JSON object** | JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download each object. | Yes
-**base** | **string** | The base URL of the object that will be used to formulate the download url |
-**template** | **string** | Bash template describing names of the objects |
+**bucket** | **string** | Bucket where the downloaded objects are saved to |
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**timeout** | **string** | Timeout for the download request | Yes
+**headers** | **JSON object** | JSON object containing HTTP headers. The headers are passed by AIS when it makes the GET request to download the object from the link. | Yes
+**base** | **string** | Base URL of the object used to formulate the download URL |
+**template** | **string** | Bash template describing names of the objects in the URL |
 
 ### Sample Request
 
 | Operation | HTTP action | Example |
 |--|--|--|
 | Download a list of objects | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"bucket": "test321",  "base": "randomwebsite.com/some_dir/",  "template": "object{1..1000}log.txt"}' http://localhost:8080/v1/download/list` |
-| Download a list of objects, selecting ever tenth | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"bucket": "test321",  "base": "randomwebsite.com/",  "template": "some_dir/object{1..1000..10}log.txt"}' http://localhost:8080/v1/download/list` |
+| Download a list of objects, selecting every tenth | POST /v1/download/list | `curl -L -i -v -X POST -H 'Content-Type: application/json' -d '{"bucket": "test321",  "base": "randomwebsite.com/",  "template": "some_dir/object{1..1000..10}log.txt"}' http://localhost:8080/v1/download/list` |
 
 ## Bucket download
 
@@ -124,7 +124,7 @@ Any download request can be cancelled at any time by making a DELETE request to 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the download was supposed to be saved to |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) was used. By default, locality is determined automatically. | Yes
 **link** | **string** | URL of the object that was added to the download queue |
 **objname** | **string** | Name of the object the download was supposed to be saved as |
 
@@ -136,16 +136,16 @@ Name | Type | Description | Optional?
 
 ### Status of the download
 
-Status of any download request can be queried at any time.
+The status of any download request can be queried at any time.
 
 ### Request Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the download was supposed to be saved to |
-**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality will be determined automatically | Yes
+**bck_provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **link** | **string** | URL of the object that was added to the download queue |
-**objname** | **string** | Name of the object the download was supposed to be saved as |
+**objname** | **string** | Name of the object that the download was supposed to be saved as |
 
 ### Sample Request
 
