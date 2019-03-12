@@ -7,10 +7,11 @@
     ais_node_labels: false
     ais_proxy_filter: "ais-proxy-type=electable"
     initial_primary_proxy_label: "initial_primary_proxy=yes"    
-  tasks:
+    docker_repo_token: "" 
+ tasks:
   - name: copy the helm charts to the bastion
     synchronize:
-     src: ../helm_charts/{{ chart_name }}/charts
+     src: ../helm_charts/{{ chart_name }}/charts/
      dest: /tmp/helm_deploy
      recursive: True
   - name: copy the script to bastion
@@ -28,7 +29,7 @@
        src: image_tag.txt
        dest: /tmp/helm_deploy/image_tag.txt
        mode: 0644
-  - import_tasks: setup_node_labels.yaml
+  - import_tasks: ais_setup_node_labels.yaml
     when: ais_node_labels
   - name: run the deploy script
-    command: chdir=/tmp/helm_deploy ./deploy_helm.sh kube.conf {{ app_name }}
+    command: chdir=/tmp/helm_deploy ./deploy_helm.sh kube.conf {{ app_name }} {{ docker_repo_token }}
