@@ -1,3 +1,7 @@
+// Package recipes contains all the recipes for soak test
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package recipes
 
 import (

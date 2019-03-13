@@ -1,6 +1,10 @@
-// All tests registered here
-
+// Package recipes contains all the recipes for soak test
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package recipes
+
+// special file where all the recipes are registered
 
 import (
 	"html/template"
@@ -16,8 +20,6 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 )
-
-//Special file for registering recipes
 
 const (
 	recipeTmpl = "RecipeID\t Name\t Short\t Description\n" +

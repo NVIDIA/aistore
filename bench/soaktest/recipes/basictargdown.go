@@ -1,3 +1,7 @@
+// Package recipes contains all the recipes for soak test
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package recipes
 
 import (
@@ -28,19 +32,20 @@ func recBasicTargDown(rctx *soakprim.RecipeContext) {
 	rctx.Pre(conds)
 	rctx.Put("d1", time.Second*10, 5)
 	rctx.Get("d2", time.Second*8, true, 0, 0)
-	rctx.RemoveTarget(postConds)
+	// Target down during get, causes some errors
+	rctx.RemoveTarget(postConds, time.Second*3)
 	rctx.Post(postConds)
 
 	rctx.Pre(conds)
 	rctx.Put("d2", time.Second*10, 3)
 	rctx.Get("d1", time.Second*8, true, 0, 0)
-	rctx.RestoreTarget(postConds)
+	rctx.RestoreTarget(postConds, time.Second*3)
 	rctx.Post(postConds)
 
 	rctx.Pre(conds)
 	rctx.Get("d1", time.Second*5, true, 0, 0)
 	rctx.Destroy("d2")
-	rctx.RemoveTarget(postConds)
+	rctx.RemoveTarget(postConds, 0)
 	rctx.Post(postConds)
 
 }

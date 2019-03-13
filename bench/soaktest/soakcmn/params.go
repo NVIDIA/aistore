@@ -1,3 +1,7 @@
+// Package soakcmn provides constants and variables shared across soaktest
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package soakcmn
 
 import "time"

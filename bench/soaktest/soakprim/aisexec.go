@@ -1,3 +1,7 @@
+// Package soakprim provides the framework for running soak tests
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package soakprim
 
 import (

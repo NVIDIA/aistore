@@ -1,3 +1,7 @@
+// Package soakprim provides the framework for running soak tests
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package soakprim
 
 import (
@@ -41,6 +45,7 @@ type RecipeContext struct {
 	primitiveCount   map[string]int
 	failedPrimitives map[string]error
 	origTargets      cluster.NodeMap
+	targetMutex      *sync.Mutex
 	wg               *sync.WaitGroup
 
 	regCtx *regressionContext
@@ -104,6 +109,7 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 	//Do recipe level setup
 	rctx.primitiveCount = map[string]int{}
 	rctx.failedPrimitives = map[string]error{}
+	rctx.targetMutex = &sync.Mutex{}
 	rctx.wg = &sync.WaitGroup{}
 
 	bckNames := fetchBuckets("PreRecipe")

@@ -143,6 +143,8 @@ var (
 	getPending       int64
 	putPending       int64
 
+	flagUsage bool
+
 	ip   string
 	port string
 
@@ -151,47 +153,94 @@ var (
 	dockerPort   = envVars["PORT"]
 )
 
+func printUsage(f *flag.FlagSet) {
+	fmt.Println("Flags: ")
+	f.PrintDefaults()
+	fmt.Println()
+
+	fmt.Println("Examples: ")
+	examples := []string{
+		"  aisloader -bucket=nvais -duration 0s -totalputsize=0",
+		"\tNo PUT or GET, just clean up",
+
+		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -bckprovider=local",
+		"\tTime based local bucket PUT only. Bucket is cleaned up by default",
+
+		"  aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240",
+		"\tPut limit based cloud bucket mixed PUT(30%) and GET(70%). Bucket is cleaned up by default",
+
+		"  aisloader -bucket=nvais -cleanup=false -duration 10s -numworkers=3 -pctput=100 -bckprovider=local",
+		"  aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local",
+		"\tFirst command PUTs into local bucket with clean up disabled, leaving the bucket for the second command to test only GET performance",
+	}
+	for i := 0; i < len(examples); i++ {
+		fmt.Println(examples[i])
+	}
+	fmt.Println()
+
+	fmt.Println("Additional Commands: ")
+	fmt.Println("aisloader usage        Shows this menu")
+	fmt.Println()
+}
+
 func parseCmdLine() (params, error) {
 	var (
 		p   params
 		err error
 	)
 
+	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) //Discard flags of imported packages
+
 	// Command line options
-	flag.StringVar(&ip, "ip", "localhost", "IP address for proxy server")
-	flag.StringVar(&port, "port", "8080", "Port number for proxy server")
-	flag.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
-	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	flag.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "'local' if using local bucket, otherwise 'cloud'")
-	flag.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
-		"If duration is 0 and totalputsize is also 0, it is a no op if stopable=false.")
-	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
-	flag.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests")
-	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
-	flag.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify multiplicative suffix; 0 = no limit")
-	flag.BoolVar(&p.cleanUp, "cleanup", true, "Determines if aisloader cleans up the files it creates when run is finished, true by default.")
-	flag.BoolVar(&p.verifyHash, "verifyhash", false, "If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.")
-	flag.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify multiplicative suffix")
-	flag.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify multiplicative suffix")
-	flag.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
+	f.BoolVar(&flagUsage, "usage", false, "Show extensive help menu with examples and exit")
+	f.StringVar(&ip, "ip", "localhost", "IP address for proxy server")
+	f.StringVar(&port, "port", "8080", "Port number for proxy server")
+	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
+	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
+	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "'local' if using local bucket, otherwise 'cloud'")
+	f.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
+		"If duration is 0 and totalputsize is also 0, it is a no op.")
+	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
+	f.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests, bucket must not be empty if zero")
+	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
+	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify multiplicative suffix; 0 = no limit")
+	f.BoolVar(&p.cleanUp, "cleanup", true, "Determines if aisloader cleans up the files it creates when run is finished, true by default.")
+	f.BoolVar(&p.verifyHash, "verifyhash", false, "If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.")
+	f.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify multiplicative suffix")
+	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify multiplicative suffix")
+	f.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
-	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
-	flag.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
-	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
-	flag.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
-	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
-	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
-	flag.Int64Var(&p.seed, "seed", 0, "Seed for random source, 0=use current time")
-	flag.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
-	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
-	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify multiplicative suffix; 0 = read the entire object")
+	f.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
+	f.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
+	f.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
+	f.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
+	f.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
+	f.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
+	f.Int64Var(&p.seed, "seed", 0, "Seed for random source, 0=use current time")
+	f.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
+	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
+	f.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify multiplicative suffix; 0 = read the entire object")
 
 	//Advanced Usage
-	flag.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
-	flag.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
-	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
+	f.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
+	f.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
+	f.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
 
-	flag.Parse()
+	f.Parse(os.Args[1:])
+
+	if len(os.Args[1:]) == 0 {
+		printUsage(f)
+		os.Exit(0)
+	}
+
+	os.Args = []string{os.Args[0]}
+	flag.Parse() //Called so that imported packages don't compain
+
+	if flagUsage || f.NArg() != 0 && f.Arg(0) == "usage" {
+		printUsage(f)
+		os.Exit(0)
+	}
+
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
 	p.usingFile = p.readerType == tutils.ReaderTypeFile
 

@@ -1,3 +1,7 @@
+// Package soakprim provides the framework for running soak tests
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package soakprim
 
 import (
@@ -116,7 +120,8 @@ func (rctx *RecipeContext) Get(bucketname string, duration time.Duration, checks
 	}()
 }
 
-func (rctx *RecipeContext) GetCfg(bucketname string, duration time.Duration) {
+// GetCfg gets the config of the proxy and thus has no bucket
+func (rctx *RecipeContext) GetCfg(duration time.Duration) {
 	tag := rctx.startPrim("GetCFG")
 	params := &AISLoaderExecParams{
 		pctput:   0,
@@ -126,7 +131,7 @@ func (rctx *RecipeContext) GetCfg(bucketname string, duration time.Duration) {
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, soakcmn.OpTypeCfg, bckNamePrefix(bucketname), soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypeCfg, regBucket /** still need an existing bucket for getcfg, use regression **/, soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)
@@ -153,35 +158,49 @@ func (rctx *RecipeContext) Destroy(bucketname string) {
 	}()
 }
 
-func (rctx *RecipeContext) RemoveTarget(conds *PostConds) {
+func (rctx *RecipeContext) RemoveTarget(conds *PostConds, delay time.Duration) {
 	if conds != nil {
 		conds.NumTargets--
 	}
 
 	tag := rctx.startPrim("RemoveTarget")
-	defer rctx.finishPrim(tag)
-	smap := fetchSmap("RestoreTarget")
-	for _, v := range smap.Tmap {
-		err := tutils.UnregisterTarget(primaryURL, v.DaemonID)
-		cmn.AssertNoErr(err)
-		break
-	}
+	go func() {
+		defer rctx.finishPrim(tag)
+		time.Sleep(delay)
+		rctx.targetMutex.Lock()
+		smap := fetchSmap("RestoreTarget")
+		for _, v := range smap.Tmap {
+			err := tutils.UnregisterTarget(primaryURL, v.DaemonID)
+			rctx.targetMutex.Unlock()
+			cmn.AssertNoErr(err)
+			return
+		}
+		rctx.targetMutex.Unlock()
+		cmn.AssertNoErr(fmt.Errorf("no targets to remove"))
+	}()
 }
 
-func (rctx *RecipeContext) RestoreTarget(conds *PostConds) {
+func (rctx *RecipeContext) RestoreTarget(conds *PostConds, delay time.Duration) {
 	if conds != nil {
 		conds.NumTargets++
 	}
 
 	tag := rctx.startPrim("RestoreTarget")
-	defer rctx.finishPrim(tag)
-	smap := fetchSmap("RestoreTarget")
-	for k, v := range rctx.origTargets {
-		_, ok := smap.Tmap[k]
-		if !ok {
-			err := tutils.RegisterTarget(primaryURL, v, *smap)
-			cmn.AssertNoErr(err)
-			break
+	go func() {
+		defer rctx.finishPrim(tag)
+		time.Sleep(delay)
+		rctx.targetMutex.Lock()
+		smap := fetchSmap("RestoreTarget")
+		for k, v := range rctx.origTargets {
+			_, ok := smap.Tmap[k]
+			if !ok {
+				err := tutils.RegisterTarget(primaryURL, v, *smap)
+				rctx.targetMutex.Unlock()
+				cmn.AssertNoErr(err)
+				return
+			}
 		}
-	}
+		rctx.targetMutex.Unlock()
+		cmn.AssertNoErr(fmt.Errorf("no targets to restore"))
+	}()
 }

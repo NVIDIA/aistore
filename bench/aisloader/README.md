@@ -10,7 +10,7 @@ $ go run main.go worker.go [ARGS ...]
 
 ## Bytes Multiplicative Suffix
 
-Parameters in AISLoader that represent a number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following metric prefix symbols are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes. 
+Parameters in AISLoader that represent a number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes. 
 
 ## Using AIS Loader
 

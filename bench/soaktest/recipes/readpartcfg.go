@@ -1,3 +1,7 @@
+// Package recipes contains all the recipes for soak test
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
 package recipes
 
 import (
@@ -25,12 +29,8 @@ func recReadPartCfg(rctx *soakprim.RecipeContext) {
 	rctx.Post(nil)
 
 	rctx.Pre(conds)
-	rctx.GetCfg("b1", time.Second*10)
-	rctx.Get("b2", time.Second*10, false, 30, 100) //checksum=false because check doesn't factor in range
-	rctx.Post(nil)
-
-	rctx.Pre(conds)
+	rctx.GetCfg(time.Second * 10)
 	rctx.Get("b1", time.Second*10, false, 0, 60)
-	rctx.GetCfg("b2", time.Second*10)
+	rctx.Get("b2", time.Second*10, false, 30, 100) //checksum=false because check doesn't factor in range
 	rctx.Post(nil)
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 
 // 'soaktest' preforms a 'soak test' (see: https://www.tutorialspoint.com/software_testing_dictionary/soak_testing.htm) on AIStore.
@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -40,6 +41,9 @@ const (
 )
 
 var (
+	flagUsage bool
+	flagLs    bool
+
 	recipeListStr string
 
 	recMinFilesizeStr string
@@ -49,6 +53,14 @@ var (
 	regMaxFilesizeStr string
 )
 
+func getExecutable() string {
+	val, ok := os.LookupEnv("START_CMD")
+	if ok {
+		return val
+	}
+	return filepath.Base(os.Args[0])
+}
+
 func printUsage(f *flag.FlagSet) {
 	fmt.Println("Flags: ")
 	f.PrintDefaults()
@@ -56,18 +68,20 @@ func printUsage(f *flag.FlagSet) {
 
 	w := new(tabwriter.Writer)
 
+	executable := getExecutable()
+
 	fmt.Println("Examples: ")
-	fmt.Printf("  %v --short --rec-cycles=3 --reg-phasedisable\n\t\tRun all short recipes 3 times with no regression phases in between\n", os.Args[0])
-	fmt.Printf("  %v --rec-list=1,3 --rec-pctcap=0.1 \n\t\tRun soaktest using RecipeID 1 and 3, using 0.1%% of capacity\n", os.Args[0])
-	fmt.Printf("  %v --reg-phasedisable --rec-regdisable \n\t\tRun soaktest without regression\n", os.Args[0])
-	fmt.Printf("  %v --rec-disable --reg-phaseduration=1s \n\t\tRun only regression phases that last 1 second\n", os.Args[0])
-	fmt.Printf("  %v --rec-disable --reg-phasedisable \n\t\tRun cleanup\n", os.Args[0])
+	fmt.Printf("  %v --short --rec-cycles=3 --reg-phasedisable\n\t\tRun all short recipes 3 times with no regression phases in between\n", executable)
+	fmt.Printf("  %v --rec-list=1,3 --rec-pctcap=0.1 \n\t\tRun soaktest using RecipeID 1 and 3, using 0.1%% of capacity\n", executable)
+	fmt.Printf("  %v --reg-phasedisable --rec-regdisable \n\t\tRun soaktest without regression\n", executable)
+	fmt.Printf("  %v --rec-disable --reg-phaseduration=1s \n\t\tRun only regression phases that last 1 second\n", executable)
+	fmt.Printf("  %v --rec-disable --reg-phasedisable \n\t\tRun cleanup\n", executable)
 	fmt.Println()
 
 	fmt.Println("Additional Commands: ")
 	w.Init(os.Stdout, 0, 8, 0, '\t', 0)
-	fmt.Fprintf(w, "%v usage\tShows this menu\n", os.Args[0])
-	fmt.Fprintf(w, "%v ls\tLists all recipes with descriptions\n", os.Args[0])
+	fmt.Fprintf(w, "%v usage\tShows this menu\n", executable)
+	fmt.Fprintf(w, "%v ls\tLists all recipes with descriptions\n", executable)
 	w.Flush()
 	fmt.Println()
 }
@@ -79,6 +93,9 @@ func parseCmdLine() {
 
 	f.StringVar(&soakcmn.Params.IP, "ip", "", "IP address for proxy server")
 	f.StringVar(&soakcmn.Params.Port, "port", "", "Port number for proxy server")
+
+	f.BoolVar(&flagUsage, "usage", false, "Show extensive help menu with examples and exit")
+	f.BoolVar(&flagLs, "ls", false, "Lists all recipes with descriptions and exit")
 
 	f.BoolVar(&soakcmn.Params.Short, "short", false, "Skips the longer recipes, makes the default reg-phaseduration shorter")
 
@@ -104,6 +121,11 @@ func parseCmdLine() {
 
 	f.Parse(os.Args[1:])
 
+	if len(os.Args[1:]) == 0 {
+		fmt.Printf("No flags passed. Type '%v usage' for list of flags and examples.\n", getExecutable())
+		fmt.Println("Proceeding with default flags ...")
+	}
+
 	os.Args = []string{os.Args[0]}
 	flag.Parse() //Called so that imported packages don't compain
 
@@ -117,6 +139,15 @@ func parseCmdLine() {
 		default:
 			fmt.Printf("Invalid command %v\nType '%v usage' for help\n", f.Arg(0), flag.Arg(0))
 		}
+		os.Exit(0)
+	}
+
+	if flagUsage {
+		printUsage(f)
+		os.Exit(0)
+	}
+	if flagLs {
+		recipes.PrintRecipes()
 		os.Exit(0)
 	}
 }
