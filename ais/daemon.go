@@ -219,10 +219,8 @@ func aisinit(version, build string) {
 		ctx.rg.add(p, xproxy)
 
 		ps := &stats.Prunner{}
-		ps.Init()
+		ps.Init("aisproxy", p.si.DaemonID)
 		ctx.rg.add(ps, xproxystats)
-		_ = p.initStatsD("aisproxy")
-		ps.Core.StatsdC = &p.statsdC
 
 		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
 		ctx.rg.add(newmetasyncer(p), xmetasyncer)
@@ -232,10 +230,8 @@ func aisinit(version, build string) {
 		ctx.rg.add(t, xtarget)
 
 		ts := &stats.Trunner{T: t} // iostat below
-		ts.Init()
+		ts.Init("aistarget", t.si.DaemonID)
 		ctx.rg.add(ts, xstorstats)
-		_ = t.initStatsD("aistarget")
-		ts.Core.StatsdC = &t.statsdC
 
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 

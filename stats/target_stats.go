@@ -6,10 +6,6 @@
 package stats
 
 import (
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -26,7 +22,6 @@ import (
 //
 // NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes), "*.bps" - throughput (in byte/s)
 //
-
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount     = "get.cold.n"
@@ -70,12 +65,11 @@ type (
 		statsRunner
 		T        cluster.Target         `json:"-"`
 		Riostat  *ios.IostatRunner      `json:"-"`
-		Core     *targetCoreStats       `json:"core"`
+		Core     *CoreStats             `json:"core"`
 		Capacity map[string]*fscapacity `json:"capacity"`
 		// inner state
 		timecounts struct {
 			capLimit, capIdx int64 // update capacity: time interval counting
-			logLimit, logIdx int64 // check log size: ditto
 		}
 		lines []string
 	}
@@ -92,19 +86,9 @@ type (
 	fscapacity struct {
 		Used    uint64 `json:"used"`    // bytes
 		Avail   uint64 `json:"avail"`   // ditto
-		Usedpct int64  `json:"usedpct"` // reduntant ok
-	}
-	targetCoreStats struct {
-		ProxyCoreStats
+		Usedpct int64  `json:"usedpct"` // redundant ok
 	}
 )
-
-//
-// targetCoreStats
-//
-
-func (t *targetCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(t.Tracker) }
-func (t *targetCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &t.Tracker) }
 
 //
 // Trunner
@@ -113,9 +97,10 @@ func (t *targetCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmars
 func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                        { return r.runcommon(r) }
 
-func (r *Trunner) Init() {
-	r.Core = &targetCoreStats{}
+func (r *Trunner) Init(daemonStr, daemonID string) {
+	r.Core = &CoreStats{}
 	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
+	r.Core.initStatsD(daemonStr, daemonID)
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
@@ -123,8 +108,7 @@ func (r *Trunner) Init() {
 	config := cmn.GCO.Get()
 	r.Core.statsTime = config.Periodic.StatsTime
 	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
-	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
-
+	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 }
@@ -133,7 +117,6 @@ func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
 	r.Core.statsTime = newConf.Periodic.StatsTime
 	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
-	r.timecounts.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(newConf.Periodic.StatsTime))
 }
 
 func (r *Trunner) GetWhatStats() ([]byte, error) {
@@ -186,77 +169,7 @@ func (r *Trunner) housekeep(runlru bool) {
 		go r.T.Prefetch()
 	}
 
-	// keep total log size below the configured max
-	r.timecounts.logIdx++
-	if r.timecounts.logIdx >= r.timecounts.logLimit {
-		go r.removeLogs(config)
-		r.timecounts.logIdx = 0
-	}
-}
-
-// TODO: move to common_stats and reuse for proxy
-func (r *Trunner) removeLogs(config *cmn.Config) {
-	var maxtotal = int64(config.Log.MaxTotal)
-	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
-	if err != nil {
-		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
-		_ = cmn.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
-		return
-	}
-	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
-	for _, logtype := range logtypes {
-		var (
-			tot   = int64(0)
-			infos = make([]os.FileInfo, 0, len(logfinfos))
-		)
-		for _, logfi := range logfinfos {
-			if logfi.IsDir() {
-				continue
-			}
-			if !strings.Contains(logfi.Name(), ".log.") {
-				continue
-			}
-			if strings.Contains(logfi.Name(), logtype) {
-				tot += logfi.Size()
-				infos = append(infos, logfi)
-			}
-		}
-		if tot > maxtotal {
-			r.removeOlderLogs(tot, maxtotal, config.Log.Dir, logtype, infos)
-		}
-	}
-}
-
-func (r *Trunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
-	l := len(filteredInfos)
-	if l <= 1 {
-		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)
-		return
-	}
-	fiLess := func(i, j int) bool {
-		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
-	}
-	if glog.V(3) {
-		glog.Infof("GC logs: started")
-	}
-	sort.Slice(filteredInfos, fiLess)
-	filteredInfos = filteredInfos[:l-1] // except the last = current
-	for _, logfi := range filteredInfos {
-		logfqn := filepath.Join(logdir, logfi.Name())
-		if err := os.Remove(logfqn); err == nil {
-			tot -= logfi.Size()
-			glog.Infof("GC logs: removed %s", logfqn)
-			if tot < maxtotal {
-				break
-			}
-		} else {
-			glog.Errorf("GC logs: failed to remove %s", logfqn)
-		}
-	}
-	if glog.V(3) {
-		glog.Infof("GC logs: done")
-	}
+	r.statsRunner.housekeep(runlru)
 }
 
 func (r *Trunner) UpdateCapacityOOS() (runlru bool) {
@@ -316,11 +229,11 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 	v, ok := s.Tracker[name]
 	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
 
-	// most target stats can be handled by ProxyCoreStats.doAdd
+	// most target stats can be handled by CoreStats.doAdd
 	// stats that track data IO are unique to target and are handled here
 	// .size stats, as of 2.x and beyond, is one of them
 	if !strings.HasSuffix(name, ".size") {
-		s.ProxyCoreStats.doAdd(name, val)
+		s.doAdd(name, val)
 		return
 	}
 
@@ -332,7 +245,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		metricType = statsd.PersistentCounter
 	}
 
-	s.StatsdC.Send(nroot,
+	s.statsdC.Send(nroot,
 		metric{Type: metricType, Name: "bytes", Value: val},
 		metric{Type: metricType, Name: "count", Value: 1},
 	)

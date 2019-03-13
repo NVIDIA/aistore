@@ -6,7 +6,12 @@
 package stats
 
 import (
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +36,7 @@ const (
 	KindSpecial    = "special"
 )
 
-// Stats common to ProxyCoreStats and targetCoreStats
+// CoreStats stats
 const (
 	// KindCounter
 	GetCount         = "get.n"
@@ -75,6 +80,11 @@ type (
 		Name string
 		Val  int64
 	}
+	CoreStats struct {
+		Tracker   statsTracker
+		statsdC   *statsd.Client
+		statsTime time.Duration
+	}
 )
 
 //
@@ -90,7 +100,7 @@ type (
 		housekeep(bool)
 		doAdd(nv NamedVal64)
 	}
-	// implements Tracker, inherited by Prunner ans Trunner
+	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
 		cmn.Named
 		stopCh    chan struct{}
@@ -98,6 +108,8 @@ type (
 		starttime time.Time
 		ticker    *time.Ticker
 		ctracker  copyTracker // to avoid making it at runtime
+		logLimit  int64       // check log size
+		logIdx    int64       // time interval counting
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -121,6 +133,114 @@ type (
 // globals
 //
 var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+
+//
+// CoreStats
+//
+func (s *CoreStats) init(size int) {
+	s.Tracker = make(statsTracker, size)
+	s.Tracker.registerCommonStats()
+}
+
+func (s *CoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
+func (s *CoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
+
+//
+// NOTE naming convention: ".n" for the count and ".µs" for microseconds
+//
+func (s *CoreStats) doAdd(name string, val int64) {
+	v, ok := s.Tracker[name]
+	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
+	if v.kind == KindLatency {
+		if strings.HasSuffix(name, ".µs") {
+			nroot := strings.TrimSuffix(name, ".µs")
+			s.statsdC.Send(nroot, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		}
+		v.Lock()
+		v.numSamples++
+		val = int64(time.Duration(val) / time.Microsecond)
+		v.cumulative += val
+		v.Value += val
+		v.Unlock()
+	} else if v.kind == KindThroughput {
+		v.Lock()
+		v.cumulative += val
+		v.Value += val
+		v.Unlock()
+	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
+		nroot := strings.TrimSuffix(name, ".n")
+		s.statsdC.Send(nroot, metric{statsd.Counter, "count", val})
+		v.Lock()
+		v.Value += val
+		v.Unlock()
+	}
+}
+
+func (s *CoreStats) copyZeroReset(ctracker copyTracker) {
+	for name, v := range s.Tracker {
+		if v.kind == KindLatency {
+			v.Lock()
+			if v.numSamples > 0 {
+				ctracker[name] = &copyValue{Value: v.Value / v.numSamples} // note: int divide
+			}
+			v.Value = 0
+			v.numSamples = 0
+			v.Unlock()
+		} else if v.kind == KindThroughput {
+			cmn.AssertMsg(s.statsTime.Seconds() > 0, "CoreStats: statsTime not set")
+			v.Lock()
+			throughput := v.Value / int64(s.statsTime.Seconds()) // note: int divide
+			ctracker[name] = &copyValue{Value: throughput}
+			v.Value = 0
+			v.Unlock()
+			if strings.HasSuffix(name, ".bps") {
+				nroot := strings.TrimSuffix(name, ".bps")
+				s.statsdC.Send(nroot,
+					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
+				)
+			}
+		} else if v.kind == KindCounter {
+			v.RLock()
+			if v.Value != 0 {
+				ctracker[name] = &copyValue{Value: v.Value}
+			}
+			v.RUnlock()
+		} else {
+			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+		}
+	}
+}
+
+func (s *CoreStats) copyCumulative(ctracker copyTracker) {
+	// serves to satisfy REST API what=stats query
+
+	for name, v := range s.Tracker {
+		v.RLock()
+		if v.kind == KindLatency || v.kind == KindThroughput {
+			ctracker[name] = &copyValue{Value: v.cumulative}
+		} else if v.kind == KindCounter {
+			if v.Value != 0 {
+				ctracker[name] = &copyValue{Value: v.Value}
+			}
+		} else {
+			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+		}
+		v.RUnlock()
+	}
+}
+
+//
+// StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
+//
+func (s *CoreStats) initStatsD(daemonStr, daemonID string) (err error) {
+	suffix := strings.Replace(daemonID, ":", "_", -1)
+	statsD, err := statsd.New("localhost", 8125, daemonStr+"."+suffix)
+	s.statsdC = &statsD
+	if err != nil {
+		glog.Infof("Failed to connect to StatsD daemon: %v", err)
+	}
+	return
+}
 
 //
 // statsValue
@@ -215,6 +335,7 @@ func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
 		r.ticker.Stop()
 		r.ticker = time.NewTicker(newConf.Periodic.StatsTime)
+		r.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(newConf.Periodic.StatsTime))
 	}
 }
 
@@ -226,11 +347,82 @@ func (r *statsRunner) Stop(err error) {
 
 // statslogger interface impl
 func (r *statsRunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
-func (r *statsRunner) housekeep(bool)                    {}
 func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv
+	}
+}
+func (r *statsRunner) housekeep(bool) {
+	// keep total log size below the configured max
+	r.logIdx++
+	if r.logIdx >= r.logLimit {
+		go r.removeLogs(cmn.GCO.Get())
+		r.logIdx = 0
+	}
+}
+
+func (r *statsRunner) removeLogs(config *cmn.Config) {
+	var maxtotal = int64(config.Log.MaxTotal)
+	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
+	if err != nil {
+		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
+		_ = cmn.CreateDir(config.Log.Dir) // FIXME: (local non-containerized + kill/restart under test)
+		return
+	}
+	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+	for _, logtype := range logtypes {
+		var (
+			tot   = int64(0)
+			infos = make([]os.FileInfo, 0, len(logfinfos))
+		)
+		for _, logfi := range logfinfos {
+			if logfi.IsDir() {
+				continue
+			}
+			if !strings.Contains(logfi.Name(), ".log.") {
+				continue
+			}
+			if strings.Contains(logfi.Name(), logtype) {
+				tot += logfi.Size()
+				infos = append(infos, logfi)
+			}
+		}
+		if tot > maxtotal {
+			r.removeOlderLogs(tot, maxtotal, config.Log.Dir, logtype, infos)
+		}
+	}
+}
+
+func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []os.FileInfo) {
+	l := len(filteredInfos)
+	if l <= 1 {
+		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)
+		return
+	}
+	fiLess := func(i, j int) bool {
+		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: started")
+	}
+	sort.Slice(filteredInfos, fiLess)
+	filteredInfos = filteredInfos[:l-1] // except the last = current
+	for _, logfi := range filteredInfos {
+		logfqn := filepath.Join(logdir, logfi.Name())
+		if err := os.Remove(logfqn); err == nil {
+			tot -= logfi.Size()
+			glog.Infof("GC logs: removed %s", logfqn)
+			if tot < maxtotal {
+				break
+			}
+		} else {
+			glog.Errorf("GC logs: failed to remove %s", logfqn)
+		}
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: done")
 	}
 }
 

@@ -940,7 +940,5 @@ func (s *Slab2) cleanup() (freed int64) {
 func logMsg(arg interface{}) {
 	if flag.Parsed() {
 		glog.Infoln(arg)
-	} else {
-		fmt.Println(arg)
 	}
 }

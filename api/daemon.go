@@ -135,7 +135,7 @@ func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.TSysInfo, err error)
 // GetDaemonStats API
 //
 // Returns the stats of a specific target Daemon in the cluster
-func GetDaemonStats(baseParams *BaseParams) (daestats *stats.ProxyCoreStats, err error) {
+func GetDaemonStats(baseParams *BaseParams) (daestats *stats.CoreStats, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
@@ -143,18 +143,18 @@ func GetDaemonStats(baseParams *BaseParams) (daestats *stats.ProxyCoreStats, err
 
 	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
-		return &stats.ProxyCoreStats{}, err
+		return &stats.CoreStats{}, err
 	}
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return &stats.ProxyCoreStats{}, err
+		return &stats.CoreStats{}, err
 	}
 
 	err = jsoniter.Unmarshal(b, &daestats)
 	if err != nil {
-		return &stats.ProxyCoreStats{}, err
+		return &stats.CoreStats{}, err
 	}
 	return
 }

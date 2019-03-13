@@ -3560,7 +3560,7 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 		if res.err != nil {
 			continue
 		}
-		proxystats := &stats.ProxyCoreStats{} // FIXME
+		proxystats := &stats.CoreStats{}
 		err := jsoniter.Unmarshal(res.outjson, proxystats)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",

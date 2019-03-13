@@ -1139,18 +1139,6 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	return
 }
 
-//
-// StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
-//
-func (h *httprunner) initStatsD(daemonStr string) (err error) {
-	suffix := strings.Replace(h.si.DaemonID, ":", "_", -1)
-	h.statsdC, err = statsd.New("localhost", 8125, daemonStr+"."+suffix)
-	if err != nil {
-		glog.Infof("Failed to connect to StatsD daemon: %v", err)
-	}
-	return
-}
-
 func isReplicationPUT(r *http.Request) (isreplica bool, replicasrc string) {
 	replicasrc = r.Header.Get(cmn.HeaderObjReplicSrc)
 	return replicasrc != "", replicasrc

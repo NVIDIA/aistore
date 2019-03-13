@@ -6,12 +6,8 @@
 package stats
 
 import (
-	"strings"
-	"time"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -20,132 +16,34 @@ import (
 //
 
 type (
-	ProxyCoreStats struct {
-		Tracker   statsTracker
-		StatsdC   *statsd.Client `json:"-"`
-		statsTime time.Duration
-	}
 	Prunner struct {
 		statsRunner
-		Core *ProxyCoreStats `json:"core"`
+		Core *CoreStats `json:"core"`
 	}
 	ClusterStats struct {
-		Proxy  *ProxyCoreStats     `json:"proxy"`
+		Proxy  *CoreStats          `json:"proxy"`
 		Target map[string]*Trunner `json:"target"`
 	}
 	ClusterStatsRaw struct {
-		Proxy  *ProxyCoreStats                `json:"proxy"`
+		Proxy  *CoreStats                     `json:"proxy"`
 		Target map[string]jsoniter.RawMessage `json:"target"`
 	}
 )
-
-//
-// ProxyCoreStats
-// all stats that proxy currently has are common and hardcoded at startup
-//
-func (s *ProxyCoreStats) init(size int) {
-	s.Tracker = make(statsTracker, size)
-	s.Tracker.registerCommonStats()
-}
-
-func (s *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
-func (s *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
-
-//
-// NOTE naming convention: ".n" for the count and ".µs" for microseconds
-//
-func (s *ProxyCoreStats) doAdd(name string, val int64) {
-	v, ok := s.Tracker[name]
-	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
-	if v.kind == KindLatency {
-		if strings.HasSuffix(name, ".µs") {
-			nroot := strings.TrimSuffix(name, ".µs")
-			s.StatsdC.Send(nroot, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
-		}
-		v.Lock()
-		v.numSamples++
-		val = int64(time.Duration(val) / time.Microsecond)
-		v.cumulative += val
-		v.Value += val
-		v.Unlock()
-	} else if v.kind == KindThroughput {
-		v.Lock()
-		v.cumulative += val
-		v.Value += val
-		v.Unlock()
-	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
-		nroot := strings.TrimSuffix(name, ".n")
-		s.StatsdC.Send(nroot, metric{statsd.Counter, "count", val})
-		v.Lock()
-		v.Value += val
-		v.Unlock()
-	}
-}
-
-func (s *ProxyCoreStats) copyZeroReset(ctracker copyTracker) {
-	for name, v := range s.Tracker {
-		if v.kind == KindLatency {
-			v.Lock()
-			if v.numSamples > 0 {
-				ctracker[name] = &copyValue{Value: v.Value / v.numSamples} // note: int divide
-			}
-			v.Value = 0
-			v.numSamples = 0
-			v.Unlock()
-		} else if v.kind == KindThroughput {
-			v.Lock()
-			cmn.AssertMsg(s.statsTime.Seconds() > 0, "ProxyCoreStats: statsTime not set")
-			throughput := v.Value / int64(s.statsTime.Seconds()) // note: int divide
-			ctracker[name] = &copyValue{Value: throughput}
-			v.Value = 0
-			v.Unlock()
-			if strings.HasSuffix(name, ".bps") {
-				nroot := strings.TrimSuffix(name, ".bps")
-				s.StatsdC.Send(nroot,
-					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
-				)
-			}
-		} else if v.kind == KindCounter {
-			v.RLock()
-			if v.Value != 0 {
-				ctracker[name] = &copyValue{Value: v.Value}
-			}
-			v.RUnlock()
-		} else {
-			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
-		}
-	}
-}
-
-func (s *ProxyCoreStats) copyCumulative(ctracker copyTracker) {
-	// serves to satisfy REST API what=stats query
-
-	for name, v := range s.Tracker {
-		v.RLock()
-		if v.kind == KindLatency || v.kind == KindThroughput {
-			ctracker[name] = &copyValue{Value: v.cumulative}
-		} else if v.kind == KindCounter {
-			if v.Value != 0 {
-				ctracker[name] = &copyValue{Value: v.Value}
-			}
-		} else {
-			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
-		}
-		v.RUnlock()
-	}
-}
 
 //
 // Prunner
 //
 func (r *Prunner) Run() error { return r.runcommon(r) }
 
-func (r *Prunner) Init() {
-	r.Core = &ProxyCoreStats{}
+// All stats that proxy currently has are CoreStats which are registered at startup
+func (r *Prunner) Init(daemonStr, daemonID string) {
+	r.Core = &CoreStats{}
 	r.Core.init(24)
 	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime
 	r.ctracker = make(copyTracker, 24)
+	r.Core.initStatsD(daemonStr, daemonID)
 
+	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(r.Core.statsTime))
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 }
@@ -176,4 +74,8 @@ func (r *Prunner) log() (runlru bool) {
 func (r *Prunner) doAdd(nv NamedVal64) {
 	s := r.Core
 	s.doAdd(nv.Name, nv.Val)
+}
+
+func (r *Prunner) housekeep(runlru bool) {
+	r.statsRunner.housekeep(runlru)
 }
