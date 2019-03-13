@@ -161,7 +161,11 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		freeObject(reader)
 		return
 	}
-	cb := func(hdr transport.Header, reader io.ReadCloser, err error) {
+
+	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
+	// instead of callback's reader argument(memsys.Reader type) to freeObject
+	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
+	cb := func(hdr transport.Header, _ io.ReadCloser, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket, lom.Objname, daemons, err)
 		}

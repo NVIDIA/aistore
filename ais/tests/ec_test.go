@@ -70,7 +70,7 @@ func ecSliceNumInit(t *testing.T, smap cluster.Smap) error {
 		return nil
 	} else if tCnt == 5 {
 		ecSliceCnt = 1
-		ecParityCnt = 1
+		ecParityCnt = 2
 		return nil
 	}
 
