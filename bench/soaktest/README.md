@@ -37,8 +37,8 @@ SK accepts a number of command line arguments, all of which can also be passed b
  - `-rec-cycles` - Stops after running this many recipe cycles, 0=infinite.
  - `-rec-regdisable` - Disables running regression while recipe is running.
  - `-rec-pctcap` - Max Pct (0-100) of total storage capacity allocated to recipes (Default 0.9).
- - `-rec-minsize` - Min filesize in recipes (default 300MiB), supports [byte size suffix](../aisloader/README.md#byte-size-suffix).
- - `-rec-maxsize` - Max filesize in recipes (default 1GiB), supports [byte size suffix](../aisloader/README.md#byte-size-suffix).
+ - `-rec-minsize` - Min filesize in recipes (default 300MiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
+ - `-rec-maxsize` - Max filesize in recipes (default 1GiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
  - `-rec-primworkers` - Number of workers that are run by a primitive within a recipe (default 1).
 
  - `-reg-phasedisable` - Skips running regression phases, if true will just continuously run recipes.
@@ -46,8 +46,8 @@ SK accepts a number of command line arguments, all of which can also be passed b
  - `-reg-pctcap` - Max Pct (0-100) of total storage capacity allocated to regression (default 0.4).
  - `-reg-setupduration` - The maximum amount of time to spend setting up the bucket for regression (default 12s), 0=fill until `-reg-pctcap`.
  - `-reg-setupworkers` - Number of workers that is used to set up the bucket for regression (default 4).
- - `-rec-minsize` - Min filesize in regression (default 700MiB), supports [byte size suffix](../aisloader/README.md#byte-size-suffix).
- - `-rec-maxsize` - Max filesize in regression (default 2GiB), supports [byte size suffix](../aisloader/README.md#byte-size-suffix).
+ - `-rec-minsize` - Min filesize in regression (default 700MiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
+ - `-rec-maxsize` - Max filesize in regression (default 2GiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
  - `-reg-workers` - Number of workers that regression uses (default 1).
 
  - `-reportdir` - The directory to write reports to, creates and uses `/tmp/ais-soak/reports` if not specified.

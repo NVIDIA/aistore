@@ -26,17 +26,6 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
-	tr = &traceableTransport{
-		transport: transport,
-		tsBegin:   time.Now(),
-	}
-	trace = &httptrace.ClientTrace{
-		GotConn:              tr.GotConn,
-		WroteHeaders:         tr.WroteHeaders,
-		WroteRequest:         tr.WroteRequest,
-		GotFirstResponseByte: tr.GotFirstResponseByte,
-	}
-	tracedClient   = &http.Client{Transport: tr}
 	BaseHTTPClient = &http.Client{}
 	HTTPClient     = &http.Client{
 		Timeout:   600 * time.Second,
@@ -47,4 +36,30 @@ var (
 
 func init() {
 	Mem2 = memsys.Init()
+}
+
+type (
+	tracectx struct {
+		tr           *traceableTransport
+		trace        *httptrace.ClientTrace
+		tracedClient *http.Client
+	}
+)
+
+func newTraceCtx() *tracectx {
+	tctx := &tracectx{}
+
+	tctx.tr = &traceableTransport{
+		transport: transport,
+		tsBegin:   time.Now(),
+	}
+	tctx.trace = &httptrace.ClientTrace{
+		GotConn:              tctx.tr.GotConn,
+		WroteHeaders:         tctx.tr.WroteHeaders,
+		WroteRequest:         tctx.tr.WroteRequest,
+		GotFirstResponseByte: tctx.tr.GotFirstResponseByte,
+	}
+	tctx.tracedClient = &http.Client{Transport: tctx.tr}
+
+	return tctx
 }

@@ -60,6 +60,8 @@ type (
 	}
 
 	params struct {
+		seed int64 // random seed, 0=current time
+
 		putSizeUpperBound int64
 		minSize           int64
 		maxSize           int64
@@ -98,10 +100,10 @@ type (
 		usingSG    bool
 		usingFile  bool
 		getConfig  bool // true if only run get proxy config request
-		randomize  bool
 		jsonFormat bool
 
-		stopable bool // if true, will stop when `stop` is sent through stdin
+		stopable       bool // if true, will stop when `stop` is sent through stdin
+		statsdRequired bool
 
 		// bucket-related options
 		bPropsStr string
@@ -130,7 +132,7 @@ type (
 
 var (
 	runParams        params
-	rnd              = rand.New(rand.NewSource(1234))
+	rnd              *rand.Rand
 	workOrders       chan *workOrder
 	workOrderResults chan *workOrder
 	intervalStats    sts
@@ -166,25 +168,26 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
 	flag.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests")
 	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
-	flag.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify units with suffix; 0 = no limit")
-	flag.BoolVar(&p.cleanUp, "cleanup", true, "True if clean up after run")
-	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
-	flag.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify units with suffix")
-	flag.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify units with suffix")
+	flag.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify multiplicative suffix; 0 = no limit")
+	flag.BoolVar(&p.cleanUp, "cleanup", true, "Determines if aisloader cleans up the files it creates when run is finished, true by default.")
+	flag.BoolVar(&p.verifyHash, "verifyhash", false, "If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.")
+	flag.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify multiplicative suffix")
+	flag.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify multiplicative suffix")
 	flag.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
 	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
 	flag.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
+	flag.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
-	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
 	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
-	flag.BoolVar(&p.randomize, "randomize", false, "Determines if the random source should be nondeterministic")
+	flag.Int64Var(&p.seed, "seed", 0, "Seed for random source, 0=use current time")
 	flag.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
-	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify units with suffix")
-	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify units with suffix; 0 = read the entire object")
+	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
+	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify multiplicative suffix; 0 = read the entire object")
 
 	//Advanced Usage
+	flag.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
 	flag.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
 	flag.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
 
@@ -192,9 +195,10 @@ func parseCmdLine() (params, error) {
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
 	p.usingFile = p.readerType == tutils.ReaderTypeFile
 
-	if p.randomize {
-		rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+	if p.seed == 0 {
+		p.seed = time.Now().UnixNano()
 	}
+	rnd = rand.New(rand.NewSource(p.seed))
 
 	if p.putSizeUpperBoundStr != "" {
 		if p.putSizeUpperBound, err = cmn.S2B(p.putSizeUpperBoundStr); err != nil {
@@ -437,7 +441,13 @@ func main() {
 
 	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, fmt.Sprintf("aisloader.%s-%d", host, runParams.loaderID))
 	if err != nil {
-		fmt.Println("Failed to connect to statd, running without statsd")
+		fmt.Printf("%s", "Failed to connect to statsd server")
+		if runParams.statsdRequired {
+			fmt.Println("... aborting")
+			os.Exit(1)
+		} else {
+			fmt.Println("... proceeding anyway")
+		}
 	}
 	defer statsdC.Close()
 
@@ -542,6 +552,7 @@ L:
 // lonRunParams show run parameters in json format
 func logRunParams(p params, to *os.File) {
 	b, _ := json.MarshalIndent(struct {
+		Seed          int64  `json:"seed"`
 		URL           string `json:"proxy"`
 		BckProvider   string `json:"bprovider"`
 		Bucket        string `json:"bucket"`
@@ -555,6 +566,7 @@ func logRunParams(p params, to *os.File) {
 		Backing       string `json:"backed by"`
 		Cleanup       bool   `json:"cleanup"`
 	}{
+		Seed:          p.seed,
 		URL:           p.proxyURL,
 		BckProvider:   p.bckProvider,
 		Bucket:        p.bucket,
@@ -835,7 +847,7 @@ func newWorkOrder() {
 }
 
 func completeWorkOrder(wo *workOrder) {
-	delta := wo.end.Sub(wo.start)
+	delta := cmn.TimeDelta(wo.end, wo.start)
 
 	metrics := make([]statsd.Metric, 0)
 	if wo.err == nil {

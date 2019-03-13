@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 	"unicode"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -190,6 +191,13 @@ func (ss StringSet) String() string {
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, ",")
+}
+
+func TimeDelta(time1, time2 time.Time) time.Duration {
+	if time1.IsZero() || time2.IsZero() {
+		return 0
+	}
+	return time1.Sub(time2)
 }
 
 const assertMsg = "assertion failed"

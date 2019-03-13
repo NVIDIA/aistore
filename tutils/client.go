@@ -232,6 +232,8 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 		w                        = ioutil.Discard
 	)
 
+	tctx := newTraceCtx()
+
 	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
 	if length > 0 {
 		url += fmt.Sprintf("?%s=%d&%s=%d",
@@ -242,16 +244,16 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
-	resp, err := tracedClient.Do(req)
+	resp, err := tctx.tracedClient.Do(req)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
 		}
 	}()
 
-	tr.tsHTTPEnd = time.Now()
+	tctx.tr.tsHTTPEnd = time.Now()
 
 	if validate && resp != nil {
 		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
@@ -270,17 +272,17 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	}
 
 	l := HTTPLatencies{
-		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
-		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
-		TargetConn:          tr.tsTargetConn.Sub(tr.tsRedirect),
-		Target:              tr.tsHTTPEnd.Sub(tr.tsTargetConn),
-		PostHTTP:            time.Since(tr.tsHTTPEnd),
-		ProxyWroteHeader:    tr.tsProxyWroteHeaders.Sub(tr.tsProxyConn),
-		ProxyWroteRequest:   tr.tsProxyWroteRequest.Sub(tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  tr.tsProxyFirstResponse.Sub(tr.tsProxyWroteRequest),
-		TargetWroteHeader:   tr.tsTargetWroteHeaders.Sub(tr.tsTargetConn),
-		TargetWroteRequest:  tr.tsTargetWroteRequest.Sub(tr.tsTargetWroteHeaders),
-		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
+		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
+		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
+		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
+		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
+		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
+		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
+		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
+		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
+		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
 	return len, l, err
 }
@@ -309,14 +311,16 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 		req.Header.Set(cmn.HeaderObjCksumVal, hash)
 	}
 
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-	resp, err := tracedClient.Do(req)
+	tctx := newTraceCtx()
+
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
+	resp, err := tctx.tracedClient.Do(req)
 	if err != nil {
 		sleep := httpRetrySleep
 		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
-				resp, err = tracedClient.Do(req)
+				resp, err = tctx.tracedClient.Do(req)
 				sleep += sleep / 2
 			}
 		}
@@ -331,7 +335,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 			resp.Body.Close()
 		}
 	}()
-	tr.tsHTTPEnd = time.Now()
+	tctx.tr.tsHTTPEnd = time.Now()
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
@@ -342,17 +346,17 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	}
 
 	l := HTTPLatencies{
-		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
-		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
-		TargetConn:          tr.tsTargetConn.Sub(tr.tsRedirect),
-		Target:              tr.tsHTTPEnd.Sub(tr.tsTargetConn),
-		PostHTTP:            time.Since(tr.tsHTTPEnd),
-		ProxyWroteHeader:    tr.tsProxyWroteHeaders.Sub(tr.tsProxyConn),
-		ProxyWroteRequest:   tr.tsProxyWroteRequest.Sub(tr.tsProxyWroteHeaders),
-		ProxyFirstResponse:  tr.tsProxyFirstResponse.Sub(tr.tsProxyWroteRequest),
-		TargetWroteHeader:   tr.tsTargetWroteHeaders.Sub(tr.tsTargetConn),
-		TargetWroteRequest:  tr.tsTargetWroteRequest.Sub(tr.tsTargetWroteHeaders),
-		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
+		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
+		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
+		Target:              cmn.TimeDelta(tctx.tr.tsHTTPEnd, tctx.tr.tsTargetConn),
+		PostHTTP:            time.Since(tctx.tr.tsHTTPEnd),
+		ProxyWroteHeader:    cmn.TimeDelta(tctx.tr.tsProxyWroteHeaders, tctx.tr.tsProxyConn),
+		ProxyWroteRequest:   cmn.TimeDelta(tctx.tr.tsProxyWroteRequest, tctx.tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  cmn.TimeDelta(tctx.tr.tsProxyFirstResponse, tctx.tr.tsProxyWroteRequest),
+		TargetWroteHeader:   cmn.TimeDelta(tctx.tr.tsTargetWroteHeaders, tctx.tr.tsTargetConn),
+		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
+		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
 	return l, nil
 }
@@ -547,12 +551,15 @@ func ListObjectsFast(proxyURL, bucket, bckProvider, prefix string) ([]string, er
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
+
+	tctx := newTraceCtx()
+
 	url := server + cmn.URLPath(cmn.Version, cmn.Daemon)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.URL.RawQuery = GetWhatRawQuery(cmn.GetWhatConfig, "")
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
-	resp, err := tracedClient.Do(req)
+	resp, err := tctx.tracedClient.Do(req)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -562,8 +569,8 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	_, err = discardResponse(resp, err, fmt.Sprintf("Get config"))
 	emitError(resp, err, nil)
 	l := HTTPLatencies{
-		ProxyConn: tr.tsProxyConn.Sub(tr.tsBegin),
-		Proxy:     time.Since(tr.tsProxyConn),
+		ProxyConn: cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
+		Proxy:     time.Since(tctx.tr.tsProxyConn),
 	}
 	return l, err
 }
