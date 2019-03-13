@@ -64,7 +64,7 @@ deploy_next_tier:
 .PHONY: deploy_docker stop_docker
 
 deploy_docker:
-	@./../deploy/dev/docker/deploy_docker.sh
+	@cd ../deploy/dev/docker && ./deploy_docker.sh
 
 stop_docker:
 ifeq ($(FLAGS),)
