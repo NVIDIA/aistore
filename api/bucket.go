@@ -302,6 +302,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 
 		reslist.Entries = append(reslist.Entries, page.Entries...)
 		if page.PageMarker == "" {
+			msg.GetPageMarker = ""
 			break
 		}
 
