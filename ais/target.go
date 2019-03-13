@@ -3469,29 +3469,35 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 
 func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (errstr string) {
 	var (
-		newTargetID, s string
-		existentialQ   bool
+		newTargetID, s             string
+		iPresent, newTargetPresent bool
 	)
 	// proxy => target control protocol (see p.httpclupost)
-	action, id := msgInt.Action, msgInt.NewDaemonID
-	if action != "" {
-		newTargetID = id
-	}
-	if msgInt.Action != "" {
+	action, newDaemonID := msgInt.Action, msgInt.NewDaemonID
+	if action == cmn.ActRegTarget {
+		newTargetID = newDaemonID
+		s = fmt.Sprintf(", %s %s(new target ID)", msgInt.Action, newTargetID)
+	} else if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
 	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
 		tname(t.si), newsmap.version(), newsmap.CountTargets(), pname(newsmap.ProxySI), s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
-			existentialQ = true
+			iPresent = true
 			glog.Infof("%s <= self", tname(si))
+		} else if id == newTargetID {
+			newTargetPresent = true // only if not self
 		} else {
 			glog.Infof("%s", tname(si))
 		}
 	}
-	if !existentialQ {
+	if !iPresent {
 		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", tname(t.si), newsmap.pp())
+		return
+	}
+	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
+		errstr = fmt.Sprintf("Not finding %s(new target) in the new %s", newTargetID, newsmap.pp())
 		return
 	}
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {

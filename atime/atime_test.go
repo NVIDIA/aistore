@@ -37,9 +37,11 @@ func TestAtimerunnerStop(t *testing.T) {
 
 	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
+	time.Sleep(100 * time.Millisecond) // FIXME
 	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	atimer.Stop(fmt.Errorf("test"))
+	time.Sleep(100 * time.Millisecond)
 
 	waitCh := make(chan struct{})
 	go func() {
