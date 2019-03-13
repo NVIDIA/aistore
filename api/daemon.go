@@ -11,6 +11,7 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -19,10 +20,11 @@ import (
 // Given the direct public URL of the target, GetMountPaths returns its mountpaths and error, if any exists
 func GetMountpaths(baseParams *BaseParams) (*cmn.MountpathList, error) {
 	q := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
-	optParams := OptionalParams{Query: q}
+	params := OptionalParams{Query: q}
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
-	b, err := DoHTTPRequest(baseParams, path, nil, optParams)
+
+	b, err := DoHTTPRequest(baseParams, path, nil, params)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +88,9 @@ func GetDaemonConfig(baseParams *BaseParams) (config *cmn.Config, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}}
-	optParams := OptionalParams{Query: query}
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
+	params := OptionalParams{Query: query}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +114,9 @@ func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.TSysInfo, err error)
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}
-	optParams := OptionalParams{Query: query}
-	resp, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
+	params := OptionalParams{Query: query}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +128,33 @@ func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.TSysInfo, err error)
 	err = jsoniter.Unmarshal(b, &sysInfo)
 	if err != nil {
 		return nil, err
+	}
+	return
+}
+
+// GetDaemonStats API
+//
+// Returns the stats of a specific target Daemon in the cluster
+func GetDaemonStats(baseParams *BaseParams) (daestats *stats.ProxyCoreStats, err error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+	params := OptionalParams{Query: query}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
+	if err != nil {
+		return &stats.ProxyCoreStats{}, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return &stats.ProxyCoreStats{}, err
+	}
+
+	err = jsoniter.Unmarshal(b, &daestats)
+	if err != nil {
+		return &stats.ProxyCoreStats{}, err
 	}
 	return
 }

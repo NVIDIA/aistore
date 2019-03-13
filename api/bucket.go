@@ -6,7 +6,6 @@ package api
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
-	querystr := ""
 	if props.Cksum.Type == "" {
 		props.Cksum.Type = cmn.ChecksumInherit
 	}
@@ -29,12 +27,14 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 	if err != nil {
 		return err
 	}
-	baseParams.Method = http.MethodPut
+
+	optParams := OptionalParams{}
 	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
+		optParams.Query = query[0]
 	}
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
-	_, err = DoHTTPRequest(baseParams, path, b)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
@@ -47,17 +47,17 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{}, query ...url.Values) error {
 	strValue := fmt.Sprintf("%v", value)
-	querystr := ""
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Name: prop, Value: strValue})
 	if err != nil {
 		return err
 	}
-	baseParams.Method = http.MethodPut
+	optParams := OptionalParams{}
 	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
+		optParams.Query = query[0]
 	}
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
-	_, err = DoHTTPRequest(baseParams, path, b)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
@@ -65,18 +65,17 @@ func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values) error {
-	querystr := ""
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
 	if err != nil {
 		return err
 	}
-	baseParams.Method = http.MethodPut
-
+	optParams := OptionalParams{}
 	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
+		optParams.Query = query[0]
 	}
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
-	_, err = DoHTTPRequest(baseParams, path, b)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
@@ -86,28 +85,18 @@ func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
 func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cmn.BucketProps, error) {
-	var querystr = ""
+	baseParams.Method = http.MethodHead
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	optParams := OptionalParams{}
 	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
+		optParams.Query = query[0]
 	}
 
-	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr)
-
+	r, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
 	if err != nil {
 		return nil, err
 	}
-
 	defer r.Body.Close()
-
-	if r.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to read response, err: %v", err)
-		}
-		return nil, fmt.Errorf("HEAD bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
-			bucket, r.StatusCode, string(b))
-	}
 
 	cksumProps := cmn.CksumConf{
 		Type: r.Header.Get(cmn.HeaderBucketChecksumType),
@@ -182,11 +171,13 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 // bckProvider takes one of "" (empty), "cloud" or "local". If bckProvider is empty, return all bucketnames.
 // Otherwise return "cloud" or "local" buckets.
 func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
-	var bucketNames cmn.BucketNames
+	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
-		fmt.Sprintf("?%s=%s", cmn.URLParamBckProvider, bckProvider)
-	b, err := DoHTTPRequest(baseParams, path, nil)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*")
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	optParams := OptionalParams{Query: query}
+
+	b, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +189,7 @@ func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketName
 	} else {
 		return nil, fmt.Errorf("empty response instead of empty bucket list from %s", baseParams.URL)
 	}
-	return &bucketNames, nil
+	return bucketNames, nil
 }
 
 // CreateLocalBucket API
@@ -233,17 +224,17 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 //
 // EvictCloudBucket sends a HTTP request to a proxy to evict a cloud bucket with the given name
 func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values) error {
-	var querystr string
-	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
-	}
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
 	if err != nil {
 		return err
 	}
+	optParams := OptionalParams{}
+	if len(query) > 0 {
+		optParams.Query = query[0]
+	}
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
-	_, err = DoHTTPRequest(baseParams, path, b)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
@@ -266,13 +257,13 @@ func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
 func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
-	var querystr = ""
 	baseParams.Method = http.MethodPost
-	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
-	}
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket) + querystr
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
+	q := url.Values{}
+	if len(query) > 0 {
+		q = query[0]
+	}
 
 	// An optimization to read as few objects from bucket as possible.
 	// toRead is the current number of objects ListBucket must read before
@@ -295,7 +286,8 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 
 		optParams := OptionalParams{Header: http.Header{
 			"Content-Type": []string{"application/json"},
-		}}
+		},
+			Query: q}
 		respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
 		if err != nil {
 			return nil, err
@@ -332,16 +324,11 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 // Function always returns the whole list of objects without paging
 func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, query ...url.Values) (*cmn.BucketList, error) {
 	var (
-		querystr = ""
-		b        []byte
-		err      error
+		b   []byte
+		err error
 	)
 	baseParams.Method = http.MethodPost
-	if len(query) > 0 {
-		querystr = "?" + query[0].Encode()
-	}
-
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActListObjects) + querystr
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActListObjects)
 	reslist := &cmn.BucketList{}
 	if msg != nil {
 		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
@@ -349,10 +336,15 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, quer
 			return nil, err
 		}
 	}
+	q := url.Values{}
+	if len(query) > 0 {
+		q = query[0]
+	}
 
 	optParams := OptionalParams{Header: http.Header{
 		"Content-Type": []string{"application/json"},
-	}}
+	},
+		Query: q}
 	respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
 	if err != nil {
 		return nil, err

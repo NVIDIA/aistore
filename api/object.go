@@ -49,21 +49,16 @@ type PutObjectArgs struct {
 //
 // Returns the size and version of the object specified by bucket/object
 func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string) (*cmn.ObjectProps, error) {
-	bucketProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
-	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr)
+	baseParams.Method = http.MethodHead
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	params := OptionalParams{Query: query}
+
+	r, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Body.Close()
-
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response, err: %v", err)
-		}
-		return nil, fmt.Errorf("HEAD bucket/object: %s/%s failed, HTTP status: %d, HTTP response: %s",
-			bucket, object, r.StatusCode, string(b))
-	}
 
 	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderObjSize))
 	if err != nil {
@@ -80,11 +75,12 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string) (*cm
 //
 // Deletes an object specified by bucket/object
 func DeleteObject(baseParams *BaseParams, bucket, object, bckProvider string) error {
-	bucketProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
-
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + bucketProviderStr
-	_, err := DoHTTPRequest(baseParams, path, nil)
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	params := OptionalParams{Query: query}
+
+	_, err := DoHTTPRequest(baseParams, path, nil, params)
 	return err
 }
 

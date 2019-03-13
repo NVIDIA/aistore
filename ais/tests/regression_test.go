@@ -1365,29 +1365,10 @@ waitloop:
 }
 
 func getClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
-	q := tutils.GetWhatRawQuery(cmn.GetWhatStats, "")
-	url := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), q)
-	resp, err := tutils.BaseHTTPClient.Get(url)
-	if err != nil {
-		t.Fatalf("Failed to perform get, err = %v", err)
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response body, err = %v", err)
-	}
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Fatalf("HTTP error = %d, message = %v", resp.StatusCode, string(b))
-	}
-
-	err = jsoniter.Unmarshal(b, &stats)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal, err = %v", err)
-	}
-
-	return
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	clusterStats, err := api.GetClusterStats(baseParams)
+	tutils.CheckFatal(err, t)
+	return clusterStats
 }
 
 func getNamedTargetStats(trunner *stats.Trunner, name string) int64 {

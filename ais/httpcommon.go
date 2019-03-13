@@ -883,7 +883,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)
 		cmn.AssertNoErr(err)
-	case cmn.GetWhatDaemonInfo:
+	case cmn.GetWhatSnode:
 		jsbytes, err = jsoniter.Marshal(h.si)
 		cmn.AssertNoErr(err)
 	default:

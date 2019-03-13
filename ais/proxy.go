@@ -1920,7 +1920,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatDaemonInfo:
+	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
@@ -3023,7 +3023,7 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 // and is equal to nsi
 func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Snode) bool {
 	query := url.Values{}
-	query.Add(cmn.URLParamWhat, cmn.GetWhatDaemonInfo)
+	query.Add(cmn.URLParamWhat, cmn.GetWhatSnode)
 	args := callArgs{
 		si: osi,
 		req: reqArgs{

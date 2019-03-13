@@ -13,22 +13,22 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // GetClusterMap API
 //
 // GetClusterMap retrieves AIStore cluster map
-func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
-	var (
-		q    = url.Values{}
-		body []byte
-		smap cluster.Smap
-	)
-	q.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
+func GetClusterMap(baseParams *BaseParams) (smap cluster.Smap, err error) {
+	q := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}
 	query := q.Encode()
 	requestURL := fmt.Sprintf("%s?%s", baseParams.URL+cmn.URLPath(cmn.Version, cmn.Daemon), query)
 
+	// Cannot use doHTTPRequestGetResp, since it tries to read the response internally.
+	// In situations where we wait for the primary proxy to restart (TestMultiProxy/CrashAndFastRestore),
+	// `waitForPrimaryProxy` does an additional check for a connection refused error,
+	// which polls until the primary proxy is up. In the meantime, smap will be nil.
 	resp, err := baseParams.Client.Get(requestURL)
 	if err != nil {
 		return cluster.Smap{}, err
@@ -38,7 +38,7 @@ func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 		return cluster.Smap{}, fmt.Errorf("get Smap, HTTP status %d", resp.StatusCode)
 	}
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return cluster.Smap{}, err
 	}
@@ -52,26 +52,19 @@ func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 // GetClusterSysInfo API
 //
 // GetClusterSysInfo retrieves AIStore system info
-func GetClusterSysInfo(baseParams *BaseParams) (cmn.ClusterSysInfo, error) {
-	var (
-		q       = url.Values{}
-		body    []byte
-		sysinfo cmn.ClusterSysInfo
-	)
-	q.Add(cmn.URLParamWhat, cmn.GetWhatSysInfo)
-	query := q.Encode()
-	requestURL := fmt.Sprintf("%s?%s", baseParams.URL+cmn.URLPath(cmn.Version, cmn.Cluster), query)
+func GetClusterSysInfo(baseParams *BaseParams) (sysinfo cmn.ClusterSysInfo, err error) {
+	baseParams.Method = http.MethodGet
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSysInfo}}
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
+	params := OptionalParams{Query: query}
 
-	resp, err := baseParams.Client.Get(requestURL)
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
 		return cmn.ClusterSysInfo{}, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
-		return cmn.ClusterSysInfo{}, fmt.Errorf("get SysInfo, HTTP status %d", resp.StatusCode)
-	}
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return cmn.ClusterSysInfo{}, err
 	}
@@ -81,6 +74,32 @@ func GetClusterSysInfo(baseParams *BaseParams) (cmn.ClusterSysInfo, error) {
 	}
 
 	return sysinfo, nil
+}
+
+// GetClusterStats API
+//
+// GetClusterStats retrieves AIStore cluster stats (all targets and current proxy)
+func GetClusterStats(baseParams *BaseParams) (clusterStats stats.ClusterStats, err error) {
+	baseParams.Method = http.MethodGet
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
+	params := OptionalParams{Query: query}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
+	if err != nil {
+		return stats.ClusterStats{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return stats.ClusterStats{}, err
+	}
+	err = json.Unmarshal(body, &clusterStats)
+	if err != nil {
+		return stats.ClusterStats{}, fmt.Errorf("failed to unmarshal cluster stats, err: %v", err)
+	}
+	return clusterStats, nil
 }
 
 // RegisterTarget API

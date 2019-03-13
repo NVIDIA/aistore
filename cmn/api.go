@@ -220,7 +220,7 @@ const (
 	GetWhatXaction    = "xaction"
 	GetWhatSmapVote   = "smapvote"
 	GetWhatMountpaths = "mountpaths"
-	GetWhatDaemonInfo = "daemoninfo"
+	GetWhatSnode      = "snode"
 	GetWhatSysInfo    = "sysinfo"
 )
 
