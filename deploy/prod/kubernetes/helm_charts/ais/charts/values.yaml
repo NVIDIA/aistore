@@ -21,6 +21,9 @@ image:
   tag: 10
   pullPolicy: IfNotPresent
   dockerRepoToken: ""
+  initContainers:
+    repository: quay.io/nvidia/kubectl
+    tag: latest
 common_config:
   dir: /etc/ais
   cloudprovider: aws

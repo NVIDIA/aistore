@@ -1,0 +1,139 @@
+diff --git a/inventory/sample/group_vars/k8s-cluster/addons.yml b/inventory/sample/group_vars/k8s-cluster/addons.yml
+index ee6bdfc3..804af0da 100644
+--- a/inventory/sample/group_vars/k8s-cluster/addons.yml
++++ b/inventory/sample/group_vars/k8s-cluster/addons.yml
+@@ -3,7 +3,7 @@
+ dashboard_enabled: true
+ 
+ # Helm deployment
+-helm_enabled: false
++helm_enabled: true
+ 
+ # Registry deployment
+ registry_enabled: false
+@@ -12,7 +12,7 @@ registry_enabled: false
+ # registry_disk_size: "10Gi"
+ 
+ # Metrics Server deployment
+-metrics_server_enabled: false
++metrics_server_enabled: true
+ # metrics_server_kubelet_insecure_tls: true
+ # metrics_server_metric_resolution: 60s
+ # metrics_server_kubelet_preferred_address_types: "InternalIP"
+diff --git a/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml b/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
+index 03f70a4c..fbdaebc3 100644
+--- a/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
++++ b/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
+@@ -19,7 +19,7 @@ kube_users_dir: "{{ kube_config_dir }}/users"
+ kube_api_anonymous_auth: true
+ 
+ ## Change this to use another Kubernetes version, e.g. a current beta release
+-kube_version: v1.13.4
++kube_version: v1.13.3
+ 
+ # kubernetes image repo define
+ kube_image_repo: "gcr.io/google-containers"
+@@ -123,7 +123,7 @@ kube_encrypt_secret_data: false
+ 
+ # DNS configuration.
+ # Kubernetes cluster name, also will be used as DNS domain
+-cluster_name: cluster.local
++cluster_name: aiscluster.local
+ # Subdomains of DNS domain to be resolved via /etc/resolv.conf for hostnet pods
+ ndots: 2
+ # Can be dnsmasq_kubedns, kubedns, coredns, coredns_dual, manual or none
+@@ -171,9 +171,9 @@ dynamic_kubelet_configuration_dir: "{{ kubelet_config_dir | default(default_kube
+ podsecuritypolicy_enabled: false
+ 
+ # Make a copy of kubeconfig on the host that runs Ansible in {{ inventory_dir }}/artifacts
+-# kubeconfig_localhost: false
++kubeconfig_localhost: true
+ # Download kubectl onto the host that runs Ansible in {{ bin_dir }}
+-# kubectl_localhost: false
++kubectl_localhost: true
+ 
+ # dnsmasq
+ # dnsmasq_upstream_dns_servers:
+diff --git a/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml b/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
+index 6ca30a24..bef3143b 100644
+--- a/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
++++ b/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
+ngn-gia-storage-user@cpu01:~/kubespray/inventory$ git diff
+diff --git a/inventory/sample/group_vars/k8s-cluster/addons.yml b/inventory/sample/group_vars/k8s-cluster/addons.yml
+index ee6bdfc3..804af0da 100644
+--- a/inventory/sample/group_vars/k8s-cluster/addons.yml
++++ b/inventory/sample/group_vars/k8s-cluster/addons.yml
+@@ -3,7 +3,7 @@
+ dashboard_enabled: true
+ 
+ # Helm deployment
+-helm_enabled: false
++helm_enabled: true
+ 
+ # Registry deployment
+ registry_enabled: false
+@@ -12,7 +12,7 @@ registry_enabled: false
+ # registry_disk_size: "10Gi"
+ 
+ # Metrics Server deployment
+-metrics_server_enabled: false
++metrics_server_enabled: true
+ # metrics_server_kubelet_insecure_tls: true
+ # metrics_server_metric_resolution: 60s
+ # metrics_server_kubelet_preferred_address_types: "InternalIP"
+diff --git a/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml b/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
+index 03f70a4c..fbdaebc3 100644
+--- a/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
++++ b/inventory/sample/group_vars/k8s-cluster/k8s-cluster.yml
+@@ -19,7 +19,7 @@ kube_users_dir: "{{ kube_config_dir }}/users"
+ kube_api_anonymous_auth: true
+ 
+ ## Change this to use another Kubernetes version, e.g. a current beta release
+-kube_version: v1.13.4
++kube_version: v1.13.3
+ 
+ # kubernetes image repo define
+ kube_image_repo: "gcr.io/google-containers"
+@@ -123,7 +123,7 @@ kube_encrypt_secret_data: false
+ 
+ # DNS configuration.
+ # Kubernetes cluster name, also will be used as DNS domain
+-cluster_name: cluster.local
++cluster_name: aiscluster.local
+ # Subdomains of DNS domain to be resolved via /etc/resolv.conf for hostnet pods
+ ndots: 2
+ # Can be dnsmasq_kubedns, kubedns, coredns, coredns_dual, manual or none
+@@ -171,9 +171,9 @@ dynamic_kubelet_configuration_dir: "{{ kubelet_config_dir | default(default_kube
+ podsecuritypolicy_enabled: false
+ 
+ # Make a copy of kubeconfig on the host that runs Ansible in {{ inventory_dir }}/artifacts
+-# kubeconfig_localhost: false
++kubeconfig_localhost: true
+ # Download kubectl onto the host that runs Ansible in {{ bin_dir }}
+-# kubectl_localhost: false
++kubectl_localhost: true
+ 
+ # dnsmasq
+ # dnsmasq_upstream_dns_servers:
+diff --git a/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml b/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
+index 6ca30a24..bef3143b 100644
+--- a/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
++++ b/inventory/sample/group_vars/k8s-cluster/k8s-net-calico.yml
+@@ -6,7 +6,7 @@
+ #peer_with_router: false
+ 
+ # Enables Internet connectivity from containers
+-# nat_outgoing: true
++nat_outgoing: true
+ 
+ # add default ippool name
+ # calico_pool_name: "default-pool"
+@@ -20,7 +20,7 @@
+ # You can set MTU value here. If left undefined or empty, it will
+ # not be specified in calico CNI config, so Calico will use built-in
+ # defaults. The value should be a number, not a string.
+-# calico_mtu: 1500
++calico_mtu: 8980
+ 
+ # Advertise Cluster IPs
+ # calico_advertise_cluster_ips: true
