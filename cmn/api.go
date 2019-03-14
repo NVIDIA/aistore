@@ -214,15 +214,16 @@ type MountpathList struct {
 
 // URLParamWhat enum
 const (
-	GetWhatConfig     = "config"
-	GetWhatSmap       = "smap"
-	GetWhatBucketMeta = "bucketmd"
-	GetWhatStats      = "stats"
-	GetWhatXaction    = "xaction"
-	GetWhatSmapVote   = "smapvote"
-	GetWhatMountpaths = "mountpaths"
-	GetWhatSnode      = "snode"
-	GetWhatSysInfo    = "sysinfo"
+	GetWhatConfig       = "config"
+	GetWhatSmap         = "smap"
+	GetWhatBucketMeta   = "bucketmd"
+	GetWhatStats        = "stats"
+	GetWhatXaction      = "xaction"
+	GetWhatSmapVote     = "smapvote"
+	GetWhatMountpaths   = "mountpaths"
+	GetWhatSnode        = "snode"
+	GetWhatSysInfo      = "sysinfo"
+	GetWhatDaemonStatus = "status"
 )
 
 // GetMsg.GetSort enum
@@ -339,6 +340,9 @@ const (
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished-ack"
+
+	// CLI
+	Target = "target"
 
 	//====== download endpoint (l3) =======
 	DownloadSingle = "single"

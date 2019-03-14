@@ -132,29 +132,29 @@ func GetDaemonSysInfo(baseParams *BaseParams) (sysInfo *cmn.TSysInfo, err error)
 	return
 }
 
-// GetDaemonStats API
+// GetDaemonInfo API
 //
-// Returns the stats of a specific target Daemon in the cluster
-func GetDaemonStats(baseParams *BaseParams) (daestats *stats.CoreStats, err error) {
+// Returns the info of a specific Daemon in the cluster
+func GetDaemonStatus(baseParams *BaseParams) (daeInfo *stats.DaemonStatus, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
-	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatStats}}
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDaemonStatus}}
 	params := OptionalParams{Query: query}
 
 	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
-		return &stats.CoreStats{}, err
+		return &stats.DaemonStatus{}, err
 	}
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return &stats.CoreStats{}, err
+		return &stats.DaemonStatus{}, err
 	}
 
-	err = jsoniter.Unmarshal(b, &daestats)
+	err = jsoniter.Unmarshal(b, &daeInfo)
 	if err != nil {
-		return &stats.CoreStats{}, err
+		return &stats.DaemonStatus{}, err
 	}
 	return
 }

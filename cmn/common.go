@@ -182,6 +182,10 @@ func B2S(b int64, digits int) string {
 	return fmt.Sprintf("%dB", b)
 }
 
+func UnsignedB2S(b uint64, digits int) string {
+	return B2S(int64(b), digits)
+}
+
 func (ss StringSet) String() string {
 	keys := make([]string, len(ss))
 	idx := 0

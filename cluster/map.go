@@ -40,6 +40,7 @@ type NetInfo struct {
 //==================================================================
 type Snode struct {
 	DaemonID        string  `json:"daemon_id"`
+	DaemonType      string  `json:"daemon_type"`
 	PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
 	IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
 	IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
@@ -53,11 +54,11 @@ func (d *Snode) Digest() uint64 {
 	return d.idDigest
 }
 
-const snodefmt = "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
+const snodefmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
 
 func (d *Snode) String() string {
 	if glog.V(4) {
-		return fmt.Sprintf(snodefmt, d.DaemonID, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
+		return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
 	}
 	return d.DaemonID
 }
@@ -77,7 +78,7 @@ func (d *Snode) URL(network string) string {
 }
 
 func (a *Snode) Equals(b *Snode) bool {
-	return a.DaemonID == b.DaemonID &&
+	return a.DaemonID == b.DaemonID && a.DaemonType == b.DaemonType &&
 		reflect.DeepEqual(a.PublicNet, b.PublicNet) &&
 		reflect.DeepEqual(a.IntraControlNet, b.IntraControlNet) &&
 		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)

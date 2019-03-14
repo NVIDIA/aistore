@@ -376,7 +376,7 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 }
 
 // initSI initializes this cluster.Snode
-func (h *httprunner) initSI() {
+func (h *httprunner) initSI(daemonType string) {
 	var s string
 	config := cmn.GCO.Get()
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
@@ -442,7 +442,7 @@ func (h *httprunner) initSI() {
 		}
 	}
 
-	h.si = newSnode(daemonID, config.Net.HTTP.Proto, publicAddr, intraControlAddr, intraDataAddr)
+	h.si = newSnode(daemonID, config.Net.HTTP.Proto, daemonType, publicAddr, intraControlAddr, intraDataAddr)
 }
 
 func (h *httprunner) run() error {

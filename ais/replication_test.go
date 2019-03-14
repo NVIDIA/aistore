@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -59,7 +60,7 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 // newFakeTargetRunner returns a fake targetrunner initialized for replication tests
 func newFakeTargetRunner() *targetrunner {
 	t := &targetrunner{}
-	t.si = newSnode(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	t.si = newSnode(fakeDaemonID, httpProto, cmn.Target, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	return t
 }
 

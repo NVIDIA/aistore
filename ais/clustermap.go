@@ -43,8 +43,8 @@ type smapX struct {
 }
 
 // see printname() below
-func tname(si *cluster.Snode) string { return "t[" + si.String() + "]" }
-func pname(si *cluster.Snode) string { return "p[" + si.String() + "]" }
+func tname(si *cluster.Snode) string { return "t[" + si.DaemonID + "]" }
+func pname(si *cluster.Snode) string { return "p[" + si.DaemonID + "]" }
 
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
@@ -277,7 +277,7 @@ func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
 // new cluster.Snode
 //
 //=====================================================================
-func newSnode(id, proto string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
+func newSnode(id, proto, daeType string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
 	publicNet := cluster.NetInfo{
 		NodeIPAddr: publicAddr.IP.String(),
 		DaemonPort: strconv.Itoa(publicAddr.Port),
@@ -299,7 +299,7 @@ func newSnode(id, proto string, publicAddr, intraControlAddr, intraDataAddr *net
 			DirectURL:  proto + "://" + intraDataAddr.String(),
 		}
 	}
-	snode = &cluster.Snode{DaemonID: id, PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
+	snode = &cluster.Snode{DaemonID: id, DaemonType: daeType, PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
 	snode.Digest()
 	return
 }

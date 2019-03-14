@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
@@ -84,6 +85,14 @@ type (
 		Tracker   statsTracker
 		statsdC   *statsd.Client
 		statsTime time.Duration
+	}
+
+	DaemonStatus struct {
+		Snode       *cluster.Snode         `json:"snode"`
+		Stats       *CoreStats             `json:"daemon_stats"`
+		Capacity    map[string]*fscapacity `json:"capacity"`
+		SysInfo     cmn.SysInfo            `json:"sys_info"`
+		SmapVersion int64                  `json:"smap_version"`
 	}
 )
 

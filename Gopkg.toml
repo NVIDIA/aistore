@@ -21,3 +21,7 @@
 [[constraint]]
   name = "github.com/klauspost/reedsolomon"
   version = "1.8.0"
+
+[[constraint]]
+  name = "github.com/urfave/cli"
+  version = "1.20.0"

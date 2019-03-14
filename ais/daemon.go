@@ -24,8 +24,6 @@ import (
 
 // runners
 const (
-	xproxy           = "proxy"
-	xtarget          = "target"
 	xmem             = "gmem2"
 	xstreamc         = "stream-collector"
 	xsignal          = "signal"
@@ -182,7 +180,7 @@ func aisinit(version, build string) {
 		confChanged bool
 	)
 	flag.Parse()
-	cmn.AssertMsg(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	cmn.AssertMsg(clivars.role == cmn.Proxy || clivars.role == cmn.Target, "Invalid flag: role="+clivars.role)
 
 	dryRun.size, err = cmn.S2B(dryRun.sizeStr)
 	if dryRun.size < 1 || err != nil {
@@ -213,10 +211,10 @@ func aisinit(version, build string) {
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
 	}
-	if clivars.role == xproxy {
+	if clivars.role == cmn.Proxy {
 		p := &proxyrunner{}
-		p.initSI()
-		ctx.rg.add(p, xproxy)
+		p.initSI(cmn.Proxy)
+		ctx.rg.add(p, cmn.Proxy)
 
 		ps := &stats.Prunner{}
 		ps.Init("aisproxy", p.si.DaemonID)
@@ -226,8 +224,8 @@ func aisinit(version, build string) {
 		ctx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
-		t.initSI()
-		ctx.rg.add(t, xtarget)
+		t.initSI(cmn.Target)
+		ctx.rg.add(t, cmn.Target)
 
 		ts := &stats.Trunner{T: t} // iostat below
 		ts.Init("aistarget", t.si.DaemonID)
@@ -392,7 +390,7 @@ func getatimerunner() *atime.Runner {
 }
 
 func getcloudif() cloudif {
-	r := ctx.rg.runmap[xtarget]
+	r := ctx.rg.runmap[cmn.Target]
 	rr, ok := r.(*targetrunner)
 	cmn.Assert(ok)
 	return rr.cloudif

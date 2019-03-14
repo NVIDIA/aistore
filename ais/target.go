@@ -2872,18 +2872,19 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
+	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
 		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
 		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
 		jsbytes, err := rst.GetWhatStats()
 		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatXaction:
 		var (
 			jsbytes     []byte
@@ -2900,7 +2901,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			jsbytes, err = jsoniter.Marshal(kindDetails)
 			cmn.AssertNoErr(err)
 		}
-		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
 		availablePaths, disabledPaths := fs.Mountpaths.Get()
@@ -2923,7 +2924,19 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+	case cmn.GetWhatDaemonStatus:
+		tstats := getstorstatsrunner()
+		msg := &stats.DaemonStatus{
+			Snode:       t.httprunner.si,
+			SmapVersion: t.smapowner.get().Version,
+			SysInfo:     gmem2.FetchSysInfo(),
+			Stats:       tstats.Core,
+			Capacity:    tstats.Capacity,
+		}
+		jsbytes, err := jsoniter.Marshal(msg)
+		cmn.AssertNoErr(err)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}

@@ -1900,6 +1900,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
+	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
 	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
@@ -1907,11 +1908,11 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		rst := getproxystatsrunner()
 		jsbytes, err := rst.GetWhatStats()
 		cmn.AssertNoErr(err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		p.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatSysInfo:
 		jsbytes, err := jsoniter.Marshal(gmem2.FetchSysInfo())
 		cmn.AssertNoErr(err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		p.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatSmap:
 		smap := p.smapowner.get()
 		for smap == nil || !smap.isValid() {
@@ -1926,7 +1927,17 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		jsbytes, err := jsoniter.Marshal(smap)
 		cmn.AssertNoErr(err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+		p.writeJSON(w, r, jsbytes, httpdaeWhat)
+	case cmn.GetWhatDaemonStatus:
+		msg := &stats.DaemonStatus{
+			Snode:       p.httprunner.si,
+			SmapVersion: p.smapowner.get().Version,
+			SysInfo:     gmem2.FetchSysInfo(),
+			Stats:       getproxystatsrunner().Core,
+		}
+		jsbytes, err := jsoniter.Marshal(msg)
+		cmn.AssertNoErr(err)
+		p.writeJSON(w, r, jsbytes, httpdaeWhat)
 	default:
 		p.httprunner.httpdaeget(w, r)
 	}

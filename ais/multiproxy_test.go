@@ -32,7 +32,7 @@ type (
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.si = newSnode("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	config := cmn.GCO.BeginUpdate()
@@ -252,11 +252,10 @@ func TestDiscoverServers(t *testing.T) {
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			addrInfo := serverTCPAddr(ts.URL)
-			daemon := newSnode(s.id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 			if s.isProxy {
-				discoverSmap.addProxy(daemon)
+				discoverSmap.addProxy(newSnode(s.id, httpProto, cmn.Proxy, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			} else {
-				discoverSmap.addTarget(daemon)
+				discoverSmap.addTarget(newSnode(s.id, httpProto, cmn.Target, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 			}
 		}
 		primary.smapowner.put(discoverSmap)
