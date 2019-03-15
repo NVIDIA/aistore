@@ -42,10 +42,6 @@ type smapX struct {
 	cluster.Smap
 }
 
-// see printname() below
-func tname(si *cluster.Snode) string { return "t[" + si.DaemonID + "]" }
-func pname(si *cluster.Snode) string { return "p[" + si.DaemonID + "]" }
-
 func newSmap() (smap *smapX) {
 	smap = &smapX{}
 	smap.init(8, 8, 0)
@@ -68,7 +64,7 @@ func (m *smapX) isValid() bool {
 	if m.ProxySI == nil {
 		return false
 	}
-	return m.isPresent(m.ProxySI, true)
+	return m.isPresent(m.ProxySI)
 }
 
 func (m *smapX) isPrimary(self *cluster.Snode) bool {
@@ -78,8 +74,8 @@ func (m *smapX) isPrimary(self *cluster.Snode) bool {
 	return m.ProxySI.DaemonID == self.DaemonID
 }
 
-func (m *smapX) isPresent(si *cluster.Snode, isproxy bool) bool {
-	if isproxy {
+func (m *smapX) isPresent(si *cluster.Snode) bool {
+	if si.DaemonType == cmn.Proxy {
 		psi := m.GetProxy(si.DaemonID)
 		return psi != nil
 	}
@@ -89,10 +85,10 @@ func (m *smapX) isPresent(si *cluster.Snode, isproxy bool) bool {
 
 func (m *smapX) printname(id string) string {
 	if si := m.GetProxy(id); si != nil {
-		return pname(si)
+		return si.Name()
 	}
 	if si := m.GetTarget(id); si != nil {
-		return tname(si)
+		return si.Name()
 	}
 	return "???[" + id + "]"
 }

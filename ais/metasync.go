@@ -534,7 +534,7 @@ func (y *metasyncer) checkPrimary() bool {
 		return true
 	}
 	reason := "the primary"
-	if !smap.isPresent(y.p.si, true) {
+	if !smap.isPresent(y.p.si) {
 		reason = "present in the Smap"
 	}
 	lead := "?"

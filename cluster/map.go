@@ -84,6 +84,14 @@ func (a *Snode) Equals(b *Snode) bool {
 		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)
 }
 
+//see printname() in clustermap.go
+func (si *Snode) Name() string {
+	if si.DaemonType == cmn.Proxy {
+		return "p[" + si.DaemonID + "]"
+	}
+	return "t[" + si.DaemonID + "]"
+}
+
 //===============================================================
 //
 // Smap: cluster map is a versioned object

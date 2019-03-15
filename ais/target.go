@@ -177,7 +177,7 @@ func (t *targetrunner) Run() error {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", tname(t.si))
+				glog.Errorf("%s: retrying registration...", t.si.Name())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -185,8 +185,8 @@ func (t *targetrunner) Run() error {
 		break
 	}
 	if ereg != nil {
-		glog.Errorf("%s failed to register, err: %v", tname(t.si), ereg)
-		glog.Errorf("%s is terminating", tname(t.si))
+		glog.Errorf("%s failed to register, err: %v", t.si.Name(), ereg)
+		glog.Errorf("%s is terminating", t.si.Name())
 		return ereg
 	}
 
@@ -282,7 +282,7 @@ func (t *targetrunner) Run() error {
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
-	glog.Infof("%s is ready to handle requests", tname(t.si))
+	glog.Infof("%s is ready to handle requests", t.si.Name())
 	glog.Flush()
 	return nil
 }
@@ -399,16 +399,16 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
 	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, "register"); errstr != "" {
 		t.gfn.lookup = false
-		glog.Errorf("registered %s: %s", tname(t.si), errstr)
+		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
-		glog.Infof("registered %s: %s v%d", tname(t.si), bmdTermName, t.bmdowner.get().version())
+		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
 	}
 	// smap
 	if errstr := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 		t.gfn.lookup = false
-		glog.Errorf("registered %s: %s", tname(t.si), errstr)
+		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
-		glog.Infof("registered %s: Smap v%d", tname(t.si), t.smapowner.get().version())
+		glog.Infof("registered %s: Smap v%d", t.si.Name(), t.smapowner.get().version())
 	}
 	return
 }
@@ -1487,11 +1487,11 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	smap := t.smapowner.get()
 	if smap.GetProxy(from) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from p[%s]", pname(t.si), from)
+			glog.Infof("%s: health-ping from %s", t.si.Name(), from)
 		}
 		t.keepalive.heardFrom(from, false)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", tname(t.si), smap.printname(from))
+		glog.Infof("%s: health-ping from %s", t.si.Name(), smap.printname(from))
 	}
 }
 
@@ -2608,7 +2608,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	// migrate to another target
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
-			bucketFrom, objnameFrom, tname(t.si), bucketTo, objnameTo, tname(si))
+			bucketFrom, objnameFrom, t.si.Name(), bucketTo, objnameTo, si.Name())
 	}
 
 	// TODO: fill and send should be general function in `rebManager`: from, to, object
@@ -2761,7 +2761,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
-			glog.Infof("%s: %s v%d done", tname(t.si), cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", t.si.Name(), cmn.SyncSmap, newsmap.version())
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -3007,7 +3007,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if glog.V(3) {
-		glog.Infof("Registered %s(self)", tname(t.si))
+		glog.Infof("Registered %s(self)", t.si.Name())
 	}
 }
 
@@ -3241,7 +3241,7 @@ func (t *targetrunner) detectMpathChanges() {
 			newfs.Available.String(), newfs.Disabled.String(),
 		)
 
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", tname(t.si), mpathconfigfqn)
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.Name(), mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
 		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
@@ -3479,19 +3479,19 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		s = ", action " + msgInt.Action
 	}
 	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
-		tname(t.si), newsmap.version(), newsmap.CountTargets(), pname(newsmap.ProxySI), s)
+		t.si.Name(), newsmap.version(), newsmap.CountTargets(), newsmap.ProxySI.Name(), s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			iPresent = true
-			glog.Infof("%s <= self", tname(si))
+			glog.Infof("%s <= self", si.Name())
 		} else if id == newTargetID {
 			newTargetPresent = true // only if not self
 		} else {
-			glog.Infof("%s", tname(si))
+			glog.Infof("%s", si.Name())
 		}
 	}
 	if !iPresent {
-		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", tname(t.si), newsmap.pp())
+		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", t.si.Name(), newsmap.pp())
 		return
 	}
 	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
@@ -3512,7 +3512,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 	if newTargetID == "" {
 		return
 	}
-	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", tname(t.si), newTargetID)
+	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
 	go t.rebManager.runGlobalReb(newsmap, newTargetID)
 	return
 }
@@ -3572,7 +3572,7 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 			continue
 		}
 		if proxystats.Tracker[stats.Uptime].Value != 0 {
-			glog.Infof("%s startup: primary %s", tname(t.si), pname(psi))
+			glog.Infof("%s startup: primary %s", t.si.Name(), psi.Name())
 			break
 		}
 	}
@@ -3606,11 +3606,11 @@ func (t *targetrunner) disable() error {
 		return nil
 	}
 
-	glog.Infof("Disabling %s", tname(t.si))
+	glog.Infof("Disabling %s", t.si.Name())
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
 			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying unregistration...", tname(t.si))
+				glog.Errorf("%s: retrying unregistration...", t.si.Name())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -3621,13 +3621,13 @@ func (t *targetrunner) disable() error {
 	if status >= http.StatusBadRequest || eunreg != nil {
 		// do not update state on error
 		if eunreg == nil {
-			eunreg = fmt.Errorf("error unregistering %s, http status %d", tname(t.si), status)
+			eunreg = fmt.Errorf("error unregistering %s, http status %d", t.si.Name(), status)
 		}
 		return eunreg
 	}
 
 	t.regstate.disabled = true
-	glog.Infof("%s has been disabled (unregistered)", tname(t.si))
+	glog.Infof("%s has been disabled (unregistered)", t.si.Name())
 	return nil
 }
 
@@ -3645,11 +3645,11 @@ func (t *targetrunner) enable() error {
 		return nil
 	}
 
-	glog.Infof("Enabling %s", tname(t.si))
+	glog.Infof("Enabling %s", t.si.Name())
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", tname(t.si))
+				glog.Errorf("%s: retrying registration...", t.si.Name())
 				time.Sleep(time.Second)
 				continue
 			}
@@ -3660,13 +3660,13 @@ func (t *targetrunner) enable() error {
 	if status >= http.StatusBadRequest || ereg != nil {
 		// do not update state on error
 		if ereg == nil {
-			ereg = fmt.Errorf("error registering %s, http status: %d", tname(t.si), status)
+			ereg = fmt.Errorf("error registering %s, http status: %d", t.si.Name(), status)
 		}
 		return ereg
 	}
 
 	t.regstate.disabled = false
-	glog.Infof("%s has been enabled", tname(t.si))
+	glog.Infof("%s has been enabled", t.si.Name())
 	return nil
 }
 

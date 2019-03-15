@@ -161,12 +161,12 @@ func (p *proxyrunner) Run() error {
 	}
 	p.registerNetworkHandlers(networkHandlers)
 
-	glog.Infof("%s: [public net] listening on: %s", pname(p.si), p.si.PublicNet.DirectURL)
+	glog.Infof("%s: [public net] listening on: %s", p.si.Name(), p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
-		glog.Infof("%s: [intra control net] listening on: %s", pname(p.si), p.si.IntraControlNet.DirectURL)
+		glog.Infof("%s: [intra control net] listening on: %s", p.si.Name(), p.si.IntraControlNet.DirectURL)
 	}
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
-		glog.Infof("%s: [intra data net] listening on: %s", pname(p.si), p.si.IntraDataNet.DirectURL)
+		glog.Infof("%s: [intra data net] listening on: %s", p.si.Name(), p.si.IntraDataNet.DirectURL)
 	}
 	if config.Net.HTTP.RevProxy != "" {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
@@ -221,7 +221,7 @@ func (p *proxyrunner) Stop(err error) {
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
-	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Getname(), pname(p.si), isPrimary, err)
+	glog.Infof("Stopping %s (%s, primary=%t), err: %v", p.Getname(), p.si.Name(), isPrimary, err)
 	p.xactions.abortAll()
 
 	if isPrimary {
@@ -642,7 +642,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
-		if !newsmap.isPresent(p.si, true) {
+		if !newsmap.isPresent(p.si) {
 			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si, newsmap.pp())
 			glog.Errorln(s)
 		}
@@ -1182,7 +1182,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
-	glog.Infof("%s: forwarding '%s:%s' to the primary %s", pname(p.si), msg.Action, s, smap.ProxySI)
+	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si.Name(), msg.Action, s, smap.ProxySI)
 	p.rproxy.p.ServeHTTP(w, r)
 	return true
 }
@@ -1266,7 +1266,7 @@ func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket
 	for res := range results {
 		if res.err != nil {
 			s := fmt.Sprintf("Failed to remove object copies, %s, bucket %s, err: %v(%d)",
-				tname(res.si), bucket, res.err, res.status)
+				res.si.Name(), bucket, res.err, res.status)
 			if res.errstr != "" {
 				glog.Errorln(res.errstr)
 			}
@@ -1422,7 +1422,7 @@ func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *clu
 					err: err,
 				}
 			}
-			glog.Errorf("Failed to get cached objects info from %s: %v", tname(daemon), err)
+			glog.Errorf("Failed to get cached objects info from %s: %v", daemon.Name(), err)
 			return
 		}
 
@@ -1438,7 +1438,7 @@ func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *clu
 					err: err,
 				}
 			}
-			glog.Errorf("Failed to unmarshall cached objects list from %s: %v", tname(daemon), err)
+			glog.Errorf("Failed to unmarshall cached objects list from %s: %v", daemon.Name(), err)
 			return
 		}
 
@@ -1921,7 +1921,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				cmn.Assert(smap.isValid())
 				break
 			}
-			glog.Errorf("%s is starting up: cannot execute GET %s yet...", pname(p.si), cmn.GetWhatSmap)
+			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si.Name(), cmn.GetWhatSmap)
 			time.Sleep(time.Second)
 			smap = p.smapowner.get()
 		}
@@ -1963,7 +1963,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, s)
 				return
 			}
-			if !newsmap.isPresent(p.si, true) {
+			if !newsmap.isPresent(p.si) {
 				s := fmt.Sprintf("Not finding self %s in the %s", p.si, newsmap.pp())
 				p.invalmsghdlr(w, r, s)
 				return
@@ -1972,7 +1972,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, s)
 				return
 			}
-			glog.Infof("%s: %s v%d done", pname(p.si), cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", p.si.Name(), cmn.SyncSmap, newsmap.version())
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
@@ -2052,16 +2052,16 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
 // primary connect to the new primary
 func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
 	newPrimaryURL := r.URL.Query().Get(cmn.URLParamPrimaryCandidate)
-	glog.Infof("%s: force new primary %s (URL: %s)", pname(p.si), proxyID, newPrimaryURL)
+	glog.Infof("%s: force new primary %s (URL: %s)", p.si.Name(), proxyID, newPrimaryURL)
 
 	if p.si.DaemonID == proxyID {
-		glog.Warningf("%s is already the primary", pname(p.si))
+		glog.Warningf("%s is already the primary", p.si.Name())
 		return
 	}
 	smap := p.smapowner.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil && newPrimaryURL == "" {
-		s := fmt.Sprintf("%s: failed to find new primary %s in local %s", pname(p.si), proxyID, smap.pp())
+		s := fmt.Sprintf("%s: failed to find new primary %s in local %s", p.si.Name(), proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2069,7 +2069,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		newPrimaryURL = psi.IntraControlNet.DirectURL
 	}
 	if newPrimaryURL == "" {
-		s := fmt.Sprintf("%s: failed to get new primary %s direct URL", pname(p.si), proxyID)
+		s := fmt.Sprintf("%s: failed to get new primary %s direct URL", p.si.Name(), proxyID)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2079,7 +2079,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		return
 	}
 	if proxyID != newSmap.ProxySI.DaemonID {
-		s := fmt.Sprintf("%s: proxy %s is not the primary, current %s", pname(p.si), proxyID, newSmap.pp())
+		s := fmt.Sprintf("%s: proxy %s is not the primary, current %s", p.si.Name(), proxyID, newSmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2109,7 +2109,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// forceful primary change
 	if force && apitems[0] == cmn.Proxy {
 		if !p.smapowner.get().isPrimary(p.si) {
-			s := fmt.Sprintf("%s is not the primary", pname(p.si))
+			s := fmt.Sprintf("%s is not the primary", p.si.Name())
 			p.invalmsghdlr(w, r, s)
 		}
 		p.forcefulJoin(w, r, proxyID)
@@ -2168,7 +2168,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
-	if !smap.isPresent(p.si, true) {
+	if !smap.isPresent(p.si) {
 		cmn.AssertMsg(false, "This proxy '"+p.si.DaemonID+"' must always be present in the local "+smap.pp())
 	}
 	clone := smap.clone()
@@ -2190,7 +2190,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 
 	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
-		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), pname(p.si))
+		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), p.si.Name())
 		glog.Infof("Distributing %s v%d as well", bmdTermName, bucketmd.version())
 	}
 	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
@@ -2564,7 +2564,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("register %s: invalid IP address %v", tname(&nsi), nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("register %s: invalid IP address %v", (&nsi).Name(), nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2591,7 +2591,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		if register {
 			if glog.V(3) {
-				glog.Infof("register %s (num targets before %d)", tname(&nsi), smap.CountTargets())
+				glog.Infof("register %s (num targets before %d)", (&nsi).Name(), smap.CountTargets())
 			}
 			args := callArgs{
 				si: &nsi,
@@ -2604,7 +2604,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				errstr := fmt.Sprintf("Failed to register %s: %v, %s", tname(&nsi), res.err, res.errstr)
+				errstr := fmt.Sprintf("Failed to register %s: %v, %s", (&nsi).Name(), res.err, res.errstr)
 				p.invalmsghdlr(w, r, errstr, res.status)
 				return
 			}
@@ -2673,10 +2673,10 @@ func (p *proxyrunner) registerToSmap(nsi *cluster.Snode, isproxy, nonelectable b
 				clone.NonElects = make(cmn.SimpleKVs)
 			}
 			clone.NonElects[id] = ""
-			glog.Warningf("%s won't be electable", pname(nsi))
+			glog.Warningf("%s won't be electable", nsi.Name())
 		}
 		if glog.V(3) {
-			glog.Infof("joined %s (num proxies %d)", pname(nsi), clone.CountProxies())
+			glog.Infof("joined %s (num proxies %d)", nsi.Name(), clone.CountProxies())
 		}
 	} else {
 		if clone.GetTarget(id) != nil { // ditto
@@ -2684,7 +2684,7 @@ func (p *proxyrunner) registerToSmap(nsi *cluster.Snode, isproxy, nonelectable b
 		}
 		clone.addTarget(nsi)
 		if glog.V(3) {
-			glog.Infof("joined %s (num targets %d)", tname(nsi), clone.CountTargets())
+			glog.Infof("joined %s (num targets %d)", nsi.Name(), clone.CountTargets())
 		}
 	}
 	p.smapowner.put(clone)
@@ -2760,7 +2760,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delProxy(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered %s (num proxies %d)", pname(psi), clone.CountProxies())
+			glog.Infof("unregistered %s (num proxies %d)", psi.Name(), clone.CountProxies())
 		}
 	} else {
 		osi = clone.GetTarget(sid)
@@ -2772,7 +2772,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delTarget(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered %s (num targets %d)", tname(osi), clone.CountTargets())
+			glog.Infof("unregistered %s (num targets %d)", osi.Name(), clone.CountTargets())
 		}
 		args := callArgs{
 			si: osi,
@@ -2784,7 +2784,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		res := p.call(args)
 		if res.err != nil {
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", tname(osi), res.err, res.errstr)
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", osi.Name(), res.err, res.errstr)
 		}
 	}
 	if p.startedup(0) == 0 {

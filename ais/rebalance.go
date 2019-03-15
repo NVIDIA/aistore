@@ -178,7 +178,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 	// do rebalance
 	if glog.V(4) {
-		glog.Infof("%s %s => %s", lom, tname(rj.t.si), tname(si))
+		glog.Infof("%s %s => %s", lom, rj.t.si.Name(), si.Name())
 	}
 
 	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
@@ -333,10 +333,10 @@ func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config) (ok boo
 		res := reb.t.call(callArgs)
 		if res.err == nil {
 			ok = true
-			glog.Infof("%s: %s is online", tname(reb.t.si), tname(si))
+			glog.Infof("%s: %s is online", reb.t.si.Name(), si.Name())
 			break
 		}
-		s := fmt.Sprintf("retry #%d: %s is offline, err: %v", i, tname(si), res.err)
+		s := fmt.Sprintf("retry #%d: %s is offline, err: %v", i, si.Name(), res.err)
 		if res.status > 0 {
 			glog.Infof("%s, status=%d", s, res.status)
 		} else {
@@ -440,7 +440,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		ver      = smap.version()
 		config   = cmn.GCO.Get()
 	)
-	glog.Infof("%s: Smap v%d, newTargetID=%s", tname(reb.t.si), ver, newTargetID)
+	glog.Infof("%s: Smap v%d, newTargetID=%s", reb.t.si.Name(), ver, newTargetID)
 	// first, check whether all the Smap-ed targets are up and running
 	for _, si := range smap.Tmap {
 		if si.DaemonID == reb.t.si.DaemonID {
@@ -526,7 +526,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		}
 	}
 	if newTargetID == reb.t.si.DaemonID {
-		glog.Infof("rebalance %s(self)", tname(reb.t.si))
+		glog.Infof("rebalance %s(self)", reb.t.si.Name())
 		reb.pollRebalancingDone(smap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
 	xreb.EndTime(time.Now())

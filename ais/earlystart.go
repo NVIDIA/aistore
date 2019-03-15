@@ -41,7 +41,7 @@ func (p *proxyrunner) bootstrap() {
 	smap = newSmap()
 	if err := cmn.LocalLoad(filepath.Join(config.Confdir, cmn.SmapBackupFile), smap); err == nil {
 		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
-			glog.Infof("%s: fast discovery based on %s", pname(p.si), smap.pp())
+			glog.Infof("%s: fast discovery based on %s", p.si.Name(), smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 			url := cmn.URLPath(cmn.Version, cmn.Daemon)
 			res := p.broadcastTo(url, q, http.MethodGet, nil, smap, tout, cmn.NetworkIntraControl, cluster.AllNodes)
@@ -62,10 +62,10 @@ func (p *proxyrunner) bootstrap() {
 				}
 				if found == nil {
 					found = svm.Smap
-					glog.Infof("%s: found Smap v%d from %s", pname(p.si), found.version(), re.si)
+					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), re.si)
 				} else if svm.Smap.version() > found.version() {
 					found = svm.Smap
-					glog.Infof("%s: found Smap v%d from %s", pname(p.si), found.version(), re.si)
+					glog.Infof("%s: found Smap v%d from %s", p.si.Name(), found.version(), re.si)
 				}
 			}
 		}
@@ -78,18 +78,18 @@ func (p *proxyrunner) bootstrap() {
 	if found != nil {
 		if smap.version() > found.version() {
 			glog.Infof("%s: discovered Smap v%d (primary=%s): merging => local v%d (primary=%s)",
-				pname(p.si), found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
+				p.si.Name(), found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
 			found.merge(smap)
 			getSmapURL = p.resolvePrimary(smap.ProxySI, found.ProxySI, smap)
 			if getSmapURL == "" {
 				// discovered Smap is of no use - discard it
-				glog.Warningf("%s: no good primary candidate, proceeding with an empty Smap", pname(p.si))
+				glog.Warningf("%s: no good primary candidate, proceeding with an empty Smap", p.si.Name())
 				smap = newSmap()
 				getSmapURL = config.Proxy.PrimaryURL // NOTE: PublicNet, not IntraControlNet
 			}
 		} else {
 			glog.Infof("%s: discovered Smap v%d (primary=%s): overriding local v%d (primary=%s)",
-				pname(p.si), found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
+				p.si.Name(), found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
 			smap = found
 			getSmapURL = smap.ProxySI.IntraControlNet.DirectURL
 		}
@@ -98,16 +98,16 @@ func (p *proxyrunner) bootstrap() {
 		// environment is a clue, not a prescription: discovered Smap outweighs
 		if os.Getenv("AIS_PRIMARYPROXY") != "" && !guessAmPrimary {
 			glog.Warningf("%s: Smap v%d (primary=%s): disregarding the environment setting primary=%s (self)",
-				pname(p.si), smap.version(), smap.ProxySI.DaemonID, p.si.DaemonID)
+				p.si.Name(), smap.version(), smap.ProxySI.DaemonID, p.si.DaemonID)
 		}
 	} else if os.Getenv("AIS_PRIMARYPROXY") != "" { // environment rules!
 		smap.Pmap[p.si.DaemonID] = p.si
 		smap.ProxySI = p.si
 		guessAmPrimary = true
-		glog.Infof("%s: initializing empty Smap, primary=self", pname(p.si))
+		glog.Infof("%s: initializing empty Smap, primary=self", p.si.Name())
 	} else {
 		smap.Pmap[p.si.DaemonID] = p.si
-		glog.Infof("%s: initializing empty Smap, non-primary", pname(p.si))
+		glog.Infof("%s: initializing empty Smap, non-primary", p.si.Name())
 	}
 
 	// step 3: join as a non-primary, or
@@ -115,11 +115,11 @@ func (p *proxyrunner) bootstrap() {
 	if !guessAmPrimary {
 		cmn.AssertMsg(getSmapURL != p.si.PublicNet.DirectURL &&
 			getSmapURL != p.si.IntraControlNet.DirectURL, getSmapURL)
-		glog.Infof("%s: starting up as non-primary, joining => %s", pname(p.si), getSmapURL)
+		glog.Infof("%s: starting up as non-primary, joining => %s", p.si.Name(), getSmapURL)
 		p.secondaryStartup(getSmapURL)
 		return
 	}
-	glog.Infof("%s: assuming the primary role for now, starting up...", pname(p.si))
+	glog.Infof("%s: assuming the primary role for now, starting up...", p.si.Name())
 	go p.primaryStartup(smap, clivars.ntargets)
 }
 
@@ -137,7 +137,7 @@ func (p *proxyrunner) resolvePrimary(myPrimary, otherPrimary *cluster.Snode, sma
 	newSmap, errstr = p.smapFromURL(getSmapURL)
 	if errstr == "" && newSmap.ProxySI.DaemonID == otherPrimary.DaemonID {
 		smap.ProxySI = newSmap.ProxySI
-		glog.Infof("%s: change of mind #3: primary is %s (not %s)", pname(p.si), otherPrimary.DaemonID, myPrimary.DaemonID)
+		glog.Infof("%s: change of mind #3: primary is %s (not %s)", p.si.Name(), otherPrimary.DaemonID, myPrimary.DaemonID)
 		return
 	}
 	return ""
@@ -170,7 +170,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			res = p.call(args)
 			if res.err != nil {
 				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-					glog.Errorf("%s: get Smap from primary %s - retrying...", pname(p.si), getSmapURL)
+					glog.Errorf("%s: get Smap from primary %s - retrying...", p.si.Name(), getSmapURL)
 					time.Sleep(config.Timeout.CplaneOperation)
 					continue
 				}
@@ -199,8 +199,8 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
-	if !smap.isPresent(p.si, true) {
-		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", pname(p.si), smap.pp())
+	if !smap.isPresent(p.si) {
+		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", p.si.Name(), smap.pp())
 	}
 	if errstr := p.smapowner.persist(smap, true /*saveSmap*/); errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
@@ -234,7 +234,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 
 	smap := p.smapowner.get()
 	if !smap.isPrimary(p.si) {
-		glog.Infof("%s: change of mind #1: registering with %s", pname(p.si), smap.ProxySI.IntraControlNet.DirectURL)
+		glog.Infof("%s: change of mind #1: registering with %s", p.si.Name(), smap.ProxySI.IntraControlNet.DirectURL)
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
 	}
@@ -253,12 +253,12 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 
 	smap = p.smapowner.get()
 	if haveRegistratons {
-		glog.Infof("%s: merged local Smap (%d/%d)", pname(p.si), smap.CountTargets(), smap.CountProxies())
+		glog.Infof("%s: merged local Smap (%d/%d)", p.si.Name(), smap.CountTargets(), smap.CountProxies())
 		bmd := p.bmdowner.get()
 		msgInt := p.newActionMsgInternalStr(metaction1, smap, bmd)
 		p.metasyncer.sync(true, revspair{smap, msgInt}, revspair{bmd, msgInt})
 	} else {
-		glog.Infof("%s: no registrations yet", pname(p.si))
+		glog.Infof("%s: no registrations yet", p.si.Name())
 	}
 
 	// (iiii) discover cluster-wide metadata and resolve remaining conflicts, if any
@@ -266,7 +266,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	smap = p.smapowner.get()
 
 	if !smap.isPrimary(p.si) {
-		glog.Infof("%s: change of mind #2: registering with %s", pname(p.si), smap.ProxySI.IntraControlNet.DirectURL)
+		glog.Infof("%s: change of mind #2: registering with %s", p.si.Name(), smap.ProxySI.IntraControlNet.DirectURL)
 		p.secondaryStartup(smap.ProxySI.IntraControlNet.DirectURL)
 		return
 	}
@@ -277,7 +277,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	bmd := p.bmdowner.get()
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
-	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d", pname(p.si), smap.version(), smap.CountTargets())
+	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d", p.si.Name(), smap.version(), smap.CountTargets())
 	p.startedup(1) // started up as primary
 }
 
@@ -290,14 +290,14 @@ func (p *proxyrunner) startup(ntargets int) {
 		}
 		nt := smap.CountTargets()
 		if nt >= ntargets && ntargets > 0 {
-			glog.Infof("%s: reached the expected %d/%d target registrations", pname(p.si), ntargets, nt)
+			glog.Infof("%s: reached the expected %d/%d target registrations", p.si.Name(), ntargets, nt)
 			return
 		}
 		time.Sleep(time.Second)
 	}
 	nt := p.smapowner.get().CountTargets()
 	if nt > 0 {
-		glog.Warningf("%s: timed out waiting for %d/%d target registrations", pname(p.si), ntargets, nt)
+		glog.Warningf("%s: timed out waiting for %d/%d target registrations", p.si.Name(), ntargets, nt)
 	}
 }
 
@@ -317,25 +317,25 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 		p.bmdowner.Unlock()
 	}
 	if maxVerSmap == nil || maxVerSmap.version() == 0 {
-		glog.Infof("%s: Smap discovery: none discovered", pname(p.si))
+		glog.Infof("%s: Smap discovery: none discovered", p.si.Name())
 		return
 	}
 	smap := p.smapowner.get()
 	// use the discovered Smap if there were no (live) registrations during the startup()
 	if !haveRegistratons {
-		glog.Infof("%s: overriding local/merged Smap with the discovered %s", pname(p.si), maxVerSmap.pp())
+		glog.Infof("%s: overriding local/merged Smap with the discovered %s", p.si.Name(), maxVerSmap.pp())
 		p.smapowner.put(maxVerSmap)
 		return
 	}
 	// check for split-brain
 	if maxVerSmap.ProxySI != nil && maxVerSmap.ProxySI.DaemonID != p.si.DaemonID {
 		glog.Errorf("%s: split-brain (local/merged v%d, primary=%s) vs (discovered v%d, primary=%s)",
-			pname(p.si), smap.version(), smap.ProxySI.DaemonID, maxVerSmap.version(), maxVerSmap.ProxySI.DaemonID)
+			p.si.Name(), smap.version(), smap.ProxySI.DaemonID, maxVerSmap.version(), maxVerSmap.ProxySI.DaemonID)
 		glog.Flush()
 	}
 	// merge the discovered (max-version) Smap and the local/current one
 	// that was constructed from scratch via node-joins
-	glog.Infof("%s: merging discovered Smap v%d (%d, %d)", pname(p.si),
+	glog.Infof("%s: merging discovered Smap v%d (%d, %d)", p.si.Name(),
 		maxVerSmap.version(), maxVerSmap.CountTargets(), maxVerSmap.CountProxies())
 
 	p.smapowner.Lock()
@@ -347,7 +347,7 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 	}
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
-	glog.Infof("%s: merged %s", pname(p.si), clone.pp())
+	glog.Infof("%s: merged %s", p.si.Name(), clone.pp())
 }
 
 func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
@@ -399,7 +399,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 				if svm.Smap.ProxySI != nil {
 					s = " of the current one " + svm.Smap.ProxySI.DaemonID
 				}
-				glog.Warningf("%s: starting up as primary(?) during reelection%s", pname(p.si), s)
+				glog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.Name(), s)
 				maxVersionSmap, maxVerBucketMD = nil, nil // zero-out as unusable
 				keeptrying = true
 				time.Sleep(config.Timeout.CplaneOperation)
@@ -414,10 +414,10 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(false, defaultTimeout); err != nil {
 		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-			glog.Warningf("%s: retrying registration...", pname(p.si))
+			glog.Warningf("%s: retrying registration...", p.si.Name())
 			time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 			if _, err = p.register(false, defaultTimeout); err != nil {
-				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", pname(p.si), err)
+				glog.Errorf("%s: failed the 2nd attempt to register, err: %v", p.si.Name(), err)
 				return err
 			}
 		} else {

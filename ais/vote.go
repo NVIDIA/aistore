@@ -131,7 +131,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate '%s' not present in the VoteRecord %s", candidate, newsmap.pp()))
 		return
 	}
-	if !newsmap.isPresent(h.si, isproxy) {
+	if !newsmap.isPresent(h.si) {
 		h.invalmsghdlr(w, r, fmt.Sprintf("Self '%s' not present in the VoteRecord Smap %s", h.si, newsmap.pp()))
 		return
 	}
@@ -224,7 +224,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	if !newsmap.isPresent(p.si, true) {
+	if !newsmap.isPresent(p.si) {
 		s := fmt.Sprintf("Self '%s' not present in the Vote Request %s", p.si, newsmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
@@ -297,7 +297,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 	if err != nil {
 		glog.Warningf("Error when pinging primary %s: %v", primaryURL, err)
 	}
-	glog.Infof("%s: primary proxy %v is confirmed down\n", pname(p.si), primaryURL)
+	glog.Infof("%s: primary proxy %v is confirmed down\n", p.si.Name(), primaryURL)
 	glog.Infoln("Moving to election state phase 1")
 	// Begin Election State
 	elected, votingErrors := p.electAmongProxies(vr)
@@ -317,7 +317,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 		}
 	}
 
-	glog.Infof("Moving %s(self) to primary state", pname(p.si))
+	glog.Infof("Moving %s(self) to primary state", p.si.Name())
 	// Begin Primary State
 	if s := p.becomeNewPrimary(vr.Primary /* proxyidToRemove */); s != "" {
 		glog.Errorln(s)
@@ -443,7 +443,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
 	smap := p.smapowner.get()
-	glog.Infof("%s: primary %s @%v has failed\n", pname(p.si), pname(smap.ProxySI), smap.ProxySI.PublicNet.DirectURL)
+	glog.Infof("%s: primary %s @%v has failed\n", p.si.Name(), smap.ProxySI.Name(), smap.ProxySI.PublicNet.DirectURL)
 	if smap.CountProxies() <= 1 {
 		glog.Warningf("No other proxies to elect")
 		return
@@ -463,7 +463,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		}
 		if nextPrimaryProxy.DaemonID == p.si.DaemonID {
 			// If this proxy is the next primary proxy candidate, it starts the election directly.
-			glog.Infof("%s: Starting election (candidate = self)", pname(p.si))
+			glog.Infof("%s: Starting election (candidate = self)", p.si.Name())
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.DaemonID,
 				Primary:   smap.ProxySI.DaemonID,
@@ -502,7 +502,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 
 func (t *targetrunner) onPrimaryProxyFailure() {
 	smap := t.smapowner.get()
-	glog.Infof("%s: primary proxy (%s @ %v) failed\n", tname(t.si), smap.ProxySI, smap.ProxySI.PublicNet.DirectURL)
+	glog.Infof("%s: primary proxy (%s @ %v) failed\n", t.si.Name(), smap.ProxySI, smap.ProxySI.PublicNet.DirectURL)
 
 	// find out the first proxy(using HRW algorithm) that is running and
 	// can be elected as the primary one
