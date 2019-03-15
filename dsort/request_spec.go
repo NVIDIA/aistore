@@ -108,11 +108,13 @@ type RequestSpec struct {
 	OutputFormat string `json:"output_format"`
 
 	// Optional
+	OutputBucket       string        `json:"output_bucket"` // Default: same as `bucket` field
 	OutputShardSize    int64         `json:"shard_size"`
 	IgnoreMissingFiles bool          `json:"ignore_missing_files"`      // Default: false
 	Algorithm          SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
 	MaxMemUsage        string        `json:"max_mem_usage"`             // Default: "80%"
-	BckProvider        string        `json:"bck_provider"`              // Default: "local"
+	BckProvider        string        `json:"bprovider"`                 // Default: "local"
+	OutputBckProvider  string        `json:"output_bprovider"`          // Default: "local"
 	ExtractConcLimit   int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
 	CreateConcLimit    int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
 	ExtendedMetrics    bool          `json:"extended_metrics"`          // Default: false
@@ -120,6 +122,9 @@ type RequestSpec struct {
 
 type ParsedRequestSpec struct {
 	Bucket             string                `json:"bucket"`
+	OutputBucket       string                `json:"output_bucket"`
+	BckProvider        string                `json:"bprovider"`
+	OutputBckProvider  string                `json:"output_bprovider"`
 	Extension          string                `json:"extension"`
 	OutputShardSize    int64                 `json:"shard_size"`
 	InputFormat        *parsedInputTemplate  `json:"input_format"`
@@ -127,7 +132,6 @@ type ParsedRequestSpec struct {
 	IgnoreMissingFiles bool                  `json:"ignore_missing_files"`
 	Algorithm          *SortAlgorithm        `json:"algorithm"`
 	MaxMemUsage        *parsedMemUsage       `json:"max_mem_usage"`
-	BckProvider        string                `json:"bck_provider"`
 	TargetOrderSalt    []byte                `json:"target_order_salt"`
 	ExtractConcLimit   int                   `json:"extract_concurrency_limit"`
 	CreateConcLimit    int                   `json:"create_concurrency_limit"`
@@ -156,11 +160,20 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return parsedRS, errMissingBucket
 	}
 	parsedRS.Bucket = rs.Bucket
-
+	parsedRS.OutputBucket = rs.OutputBucket
+	if parsedRS.OutputBucket == "" {
+		parsedRS.OutputBucket = parsedRS.Bucket
+	}
 	parsedRS.BckProvider = rs.BckProvider
+	if parsedRS.BckProvider == "" {
+		parsedRS.BckProvider = cmn.LocalBs
+	}
+	parsedRS.OutputBckProvider = rs.OutputBckProvider
+	if parsedRS.OutputBckProvider == "" {
+		parsedRS.OutputBckProvider = cmn.LocalBs
+	}
 
 	var err error
-
 	parsedRS.InputFormat, err = parseInputFormat(rs.IntputFormat)
 	if err != nil {
 		return nil, err

@@ -25,6 +25,7 @@ import (
 type dsortFramework struct {
 	m *metadata
 
+	outputBucket string
 	inputPrefix  string
 	outputPrefix string
 
@@ -59,6 +60,7 @@ func (df *dsortFramework) init() {
 func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Bucket:           df.m.bucket,
+		OutputBucket:     df.outputBucket,
 		Extension:        df.extension,
 		IntputFormat:     df.inputTempl,
 		OutputFormat:     df.outputTempl,
@@ -130,7 +132,13 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		getOptions := api.GetObjectInput{
 			Writer: &buffer,
 		}
-		_, err := api.GetObject(baseParams, df.m.bucket, shardName, getOptions)
+
+		bucket := df.m.bucket
+		if df.outputBucket != "" {
+			bucket = df.outputBucket
+		}
+
+		_, err := api.GetObject(baseParams, bucket, shardName, getOptions)
 		if err != nil && df.extension == ".zip" && i > df.outputShardCnt/2 {
 			// We estimated too much output shards to be produced - zip compression
 			// was so good that we could fit more files inside the shard.
@@ -236,7 +244,7 @@ func dispatchDSortJob(m *metadata, i int) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, m.t)
@@ -323,7 +331,116 @@ func TestDistributedSort(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
+	rs := dsortFW.gen()
+	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+	tutils.CheckFatal(err, t)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	tutils.Logln("finished distributed sort")
+
+	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	if len(metrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
+	}
+
+	dsortFW.checkOutputShards(5)
+}
+
+func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: t.Name() + "input",
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			outputBucket:      t.Name() + "output",
+			inputTempl:        "input-{0..999}",
+			outputTempl:       "output-{00000..01000}",
+			tarballCnt:        1000,
+			fileInTarballCnt:  100,
+			fileInTarballSize: 1024,
+			extension:         ".tar",
+			maxMemUsage:       "99%",
+		}
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local output bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+
+	tutils.Logln("starting distributed sort...")
+	rs := dsortFW.gen()
+	if _, err := tutils.StartDSort(m.proxyURL, rs); err == nil {
+		t.Error("expected dSort job to fail when input bucket does not exist")
+	}
+
+	// Now destroy output bucket and create input bucket
+	tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	tutils.Logln("starting second distributed sort...")
+	if _, err := tutils.StartDSort(m.proxyURL, rs); err == nil {
+		t.Error("expected dSort job to fail when output bucket does not exist")
+	}
+}
+
+func TestDistributedSortWithOutputBucket(t *testing.T) {
+	var (
+		err error
+		m   = &metadata{
+			t:      t,
+			bucket: t.Name() + "input",
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			outputBucket:      t.Name() + "output",
+			inputTempl:        "input-{0..999}",
+			outputTempl:       "output-{00000..01000}",
+			tarballCnt:        1000,
+			fileInTarballCnt:  100,
+			fileInTarballSize: 1024,
+			extension:         ".tar",
+			maxMemUsage:       "99%",
+		}
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local buckets
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Create local output bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+
+	dsortFW.createInputShards()
+
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -441,7 +558,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -496,7 +613,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort with spilling to disk...")
+	tutils.Logln("starting distributed sort with spilling to disk...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -557,7 +674,7 @@ func TestDistributedSortZip(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort with compression (.zip)...")
+	tutils.Logln("starting distributed sort with compression (.zip)...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -612,7 +729,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort with compression (.tar.gz)...")
+	tutils.Logln("starting distributed sort with compression (.tar.gz)...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -671,7 +788,7 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -730,7 +847,7 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -789,7 +906,7 @@ func TestDistributedSortWithContentString(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -844,7 +961,7 @@ func TestDistributedSortAbort(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)
@@ -911,7 +1028,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 	for _, phase := range []string{"extraction", "sorting", "creation"} {
 		dsortFW.createInputShards()
 
-		tutils.Logf("started distributed sort (abort on: %s)...\n", phase)
+		tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
 		rs := dsortFW.gen()
 		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 		tutils.CheckFatal(err, t)
@@ -983,7 +1100,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 		m.reregistered = 0
 		dsortFW.createInputShards()
 
-		tutils.Logf("started distributed sort (abort on: %s)...\n", phase)
+		tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
 		rs := dsortFW.gen()
 		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 		tutils.CheckFatal(err, t)
@@ -1060,7 +1177,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckError(err, t)
@@ -1123,7 +1240,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 
 	dsortFW.createInputShards()
 
-	tutils.Logln("started distributed sort...")
+	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
 	tutils.CheckFatal(err, t)

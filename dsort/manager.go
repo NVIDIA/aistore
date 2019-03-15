@@ -61,6 +61,7 @@ var (
 
 type dsortContext struct {
 	smap       cluster.Sowner
+	bmdowner cluster.Bowner
 	node       *cluster.Snode
 	t          cluster.Target
 	nameLocker cluster.NameLocker
@@ -141,8 +142,9 @@ type Manager struct {
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
 
-func RegisterNode(smap cluster.Sowner, snode *cluster.Snode, t cluster.Target, nameLocker cluster.NameLocker) {
+func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, t cluster.Target, nameLocker cluster.NameLocker) {
 	ctx.smap = smap
+	ctx.bmdowner = bmdowner
 	ctx.node = snode
 	ctx.t = t
 	ctx.nameLocker = nameLocker

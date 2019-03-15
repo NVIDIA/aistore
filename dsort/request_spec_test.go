@@ -17,7 +17,6 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse minimal spec", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
-				BckProvider:     cmn.LocalBs,
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
@@ -29,7 +28,9 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.Bucket).To(Equal("test"))
+			Expect(parsed.OutputBucket).To(Equal("test"))
 			Expect(parsed.BckProvider).To(Equal(cmn.LocalBs))
+			Expect(parsed.OutputBckProvider).To(Equal(cmn.LocalBs))
 			Expect(parsed.Extension).To(Equal(extTar))
 
 			Expect(parsed.InputFormat.Type).To(Equal(templBash))
@@ -53,6 +54,28 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.MaxMemUsage.Type).To(Equal(memPercent))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80))
+		})
+
+		It("should set buckets correctly", func() {
+			rs := RequestSpec{
+				Bucket:            "test",
+				BckProvider:       cmn.CloudBs,
+				OutputBucket:      "testing",
+				OutputBckProvider: cmn.CloudBs,
+				Extension:         extTar,
+				IntputFormat:      "prefix-{0010..0111..2}-suffix",
+				OutputFormat:      "prefix-{10..111}-suffix",
+				OutputShardSize:   100000,
+				MaxMemUsage:       "80%",
+				Algorithm:         SortAlgorithm{Kind: SortKindNone},
+			}
+			parsed, err := rs.Parse()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(parsed.Bucket).To(Equal("test"))
+			Expect(parsed.OutputBucket).To(Equal("testing"))
+			Expect(parsed.BckProvider).To(Equal(cmn.CloudBs))
+			Expect(parsed.OutputBckProvider).To(Equal(cmn.CloudBs))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {

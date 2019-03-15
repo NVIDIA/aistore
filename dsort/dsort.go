@@ -325,8 +325,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		metrics        = m.Metrics.Creation
 
 		// object related variables
-		shardName = m.genShardName(s)
-		bucket    = m.rs.Bucket
+		shardName   = m.genShardName(s)
+		bucket      = m.rs.OutputBucket
+		bckProvider = m.rs.OutputBckProvider
 
 		// variables which may be not set, depending on context
 		h          hash.Hash
@@ -339,7 +340,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	lom := &cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}
-	if errStr := lom.Fill(m.rs.BckProvider, cluster.LomFstat); errStr != "" {
+	if errStr := lom.Fill(bckProvider, cluster.LomFstat); errStr != "" {
 		return errors.New(errStr)
 	}
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
@@ -422,7 +423,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		hdr := transport.Header{
 			Bucket:  bucket,
 			Objname: shardName,
-			IsLocal: m.rs.BckProvider == cmn.LocalBs,
+			IsLocal: bckProvider == cmn.LocalBs,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       stat.Size(),
 				CksumValue: cksumValue,
@@ -679,7 +680,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			// correct HRW target as opposed to constructing it on the target
 			// with optimal file content locality and then sent to the correct
 			// target.
-			si, errStr := cluster.HrwTarget(m.rs.Bucket, m.genShardName(shard), m.smap)
+			si, errStr := cluster.HrwTarget(m.rs.OutputBucket, m.genShardName(shard), m.smap)
 			if errStr != "" {
 				return errors.New(errStr)
 			}

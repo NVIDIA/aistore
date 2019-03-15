@@ -70,6 +70,20 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parsedRS.TargetOrderSalt = []byte(time.Now().Format("15:04:05.000000"))
+
+	// TODO: handle case when bucket was removed during dSort job - this should
+	// stop whole operation. Maybe some listeners as we have on smap change?
+	// This would also be helpful for Downloader (in the middle of downloading
+	// large file the bucket can be easily deleted).
+	bmd := ctx.bmdowner.Get()
+	if _, err := bmd.ValidateBucket(parsedRS.Bucket, parsedRS.BckProvider); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	} else if _, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+
 	b, err := js.Marshal(parsedRS)
 	if err != nil {
 		s := fmt.Sprintf("unable to marshal RequestSpec: %+v, err: %v", parsedRS, err)

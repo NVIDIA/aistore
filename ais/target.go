@@ -278,7 +278,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.si, t, t.rtnamemap)
+	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t, t.rtnamemap)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}

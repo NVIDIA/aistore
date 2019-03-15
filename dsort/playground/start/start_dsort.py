@@ -8,7 +8,8 @@ import openapi_client
 
 parser = argparse.ArgumentParser(description='Generate and put tarballs.')
 parser.add_argument('--ext', type=str, default='.tar', help='extension for tarballs (either `.tar`, `.tgz` or `.zip`)')
-parser.add_argument('--bucket', type=str, default='dsort-testing', help='bucket where shards will be put')
+parser.add_argument('--bucket', type=str, default='dsort-testing', help='bucket where shards are stored')
+parser.add_argument('--output-bucket', type=str, default='', help='bucket where shards will be saved')
 parser.add_argument('--url', type=str, default='http://localhost:8080', help='proxy url to which requests will be made')
 parser.add_argument('--outsize', type=int, default=1024*1024*10, help='size of output of shard')
 parser.add_argument('--akind', type=str, default='alphanumeric', help='kind of algorithm used for sorting')
@@ -34,7 +35,9 @@ algorithm = openapi_client.models.SortSpecAlgorithm(
 
 spec = openapi_client.models.SortSpec(
     bucket=args.bucket,
-    bck_provider='local',
+    output_bucket=args.obucket,
+    bprovider='local',
+    output_bprovider='local',
     extension=args.ext,
     input_format=args.input,
     output_format=args.output,

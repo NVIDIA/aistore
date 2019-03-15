@@ -55,6 +55,7 @@ all possible settings, for more advanced usage please refer to API).
 |------|---------------|-------------|
 | --ext | `.tar` | Extension for output shards (either `.tar`, `.tgz` or `.zip`) |
 | --bucket | `dsort-testing` | Bucket where shards objects are stored |
+| --obucket | | Bucket where new output shards will be saved (by default same as `bucket`) |
 | --url | `http://localhost:8080` | Proxy url to which requests will be made |
 | --input | `shard-{0..10}` | Name template for input shard |
 | --output | `new-shard-{0000..1000}` | Name template for output shard |
@@ -145,6 +146,7 @@ all possible settings, for more advanced usage please refer to API).
 |------|---------------|-------------|
 | -ext | `.tar` | Extension for output shards (either `.tar`, `.tgz` or `.zip`)|
 | -bucket | `dsort-testing` | Bucket where shards objects are stored |
+| -obucket | | Bucket where new output shards will be saved (by default same as `bucket`) |
 | -url | `http://localhost:8080` | Proxy url to which requests will be made |
 | -input | `shard-{0..9}` | Name template for input shard |
 | -output | `new-shard-{0000..1000}` | Name template for output shard |

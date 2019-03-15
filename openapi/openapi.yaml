@@ -1032,11 +1032,18 @@ components:
       properties:
         bucket:
           type: string
-          description: Name of the bucket from where data is read and written
+          description: Name of the source bucket which data is read from
           example: "dsort-bucket"
-        bck_provider:
+        output_bucket:
+          type: string
+          decription: Name of the bucket where data is written/saved. By default it is same as bucket.
+        bprovider:
           type: string
           description: Describes if the bucket is local or cloud
+          default: "local"
+        output_bprovider:
+          type: string
+          description: Describes if the output bucket is local or cloud
           default: "local"
         extension:
           type: string
