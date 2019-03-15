@@ -41,23 +41,6 @@ const ( //  h.call(timeout)
 	longTimeout    = time.Duration(0)
 )
 
-var (
-	// Translates the various query values for URLParamBckProvider for cluster use
-	bckProviderMap = map[string]string{
-		// Cloud values
-		cmn.CloudBs:        cmn.CloudBs,
-		cmn.ProviderAmazon: cmn.CloudBs,
-		cmn.ProviderGoogle: cmn.CloudBs,
-
-		// Local values
-		cmn.LocalBs:     cmn.LocalBs,
-		cmn.ProviderAIS: cmn.LocalBs,
-
-		// unset
-		"": "",
-	}
-)
-
 type (
 	metric = statsd.Metric // type alias
 
@@ -787,70 +770,12 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	return
 }
 
-func isValidCloudProvider(bckProvider, cloudProvider string) bool {
-	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
-}
-
-func (h *httprunner) validateBckName(w http.ResponseWriter, r *http.Request, bucket string) bool {
-	if strings.Contains(bucket, string(filepath.Separator)) {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		h.invalmsghdlr(w, r, s)
-		return false
-	}
-	return true
-}
-
-func (h *httprunner) validateBckProvider(bckProvider, bucket string) (isLocal bool, errstr string) {
-	bckProvider = strings.ToLower(bckProvider)
-	config := cmn.GCO.Get()
-	val, ok := bckProviderMap[bckProvider]
-	if !ok {
-		errstr = fmt.Sprintf("Invalid value %s for %s", bckProvider, cmn.URLParamBckProvider)
-		return
-	}
-
-	// Get bucket names
-	if bucket == "*" {
-		return
-	}
-
-	bckIsLocal := h.bmdowner.get().IsLocal(bucket)
-	switch val {
-	case cmn.LocalBs:
-		// Check if local bucket does exist
-		if !bckIsLocal {
-			errstr = fmt.Sprintf("Local bucket %s %s", bucket, cmn.DoesNotExist)
-			return
-		}
-		isLocal = true
-	case cmn.CloudBs:
-		// Check if user does have the associated cloud
-		if !isValidCloudProvider(bckProvider, config.CloudProvider) {
-			errstr = fmt.Sprintf("Cluster cloud provider '%s', mis-match bucket provider '%s'",
-				config.CloudProvider, bckProvider)
-			return
-		}
-		isLocal = false
-	default:
-		isLocal = bckIsLocal
-	}
-
-	return
-}
-
 func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bckIsLocal, ok bool) {
 	var (
-		errstr string
+		err error
 	)
-	if !h.validateBckName(w, r, bucket) {
-		return
-	}
-	if bckIsLocal, errstr = h.validateBckProvider(bckProvider, bucket); errstr != "" {
-		h.invalmsghdlr(w, r, errstr)
+	if bckIsLocal, err = h.bmdowner.get().ValidateBucket(bucket, bckProvider); err != nil {
+		h.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	return bckIsLocal, true

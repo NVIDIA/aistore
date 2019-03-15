@@ -422,7 +422,10 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		ct             = t.contextWithAuth(r)
 		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
 	)
-	bckIsLocal, _ := t.validateBckProvider(bckProvider, bucket)
+	bckIsLocal, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)
+	if err != nil {
+		return err
+	}
 
 	min, max, err := parseRange(rangeMsg.Range)
 	if err != nil {

@@ -496,7 +496,7 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			bckIsLocal, _ := t.validateBckProvider(fwd.bckProvider, fwd.bucket)
+			bckIsLocal, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.bckProvider)
 			if bckIsLocal {
 				glog.Errorf("prefetch: bucket %s is local, nothing to do", fwd.bucket)
 			} else {
