@@ -6,10 +6,6 @@
   branch = "master"
   name = "google.golang.org/api"
 
-[prune]
-  go-tests = true
-  unused-packages = true
-
 [[override]]
   source = "https://github.com/fsnotify/fsnotify/archive/v1.4.7.tar.gz"
   name = "gopkg.in/fsnotify.v1"

@@ -261,6 +261,14 @@
   version = "v0.8.0"
 
 [[projects]]
+  digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
+
+[[projects]]
   digest = "1:ac5cb21cbe4f095b6e5f1ae5102a85dfd598d39b5ad0d64df3d41ee046586f30"
   name = "go.opencensus.io"
   packages = [
@@ -503,6 +511,7 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
+    "github.com/urfave/cli",
     "golang.org/x/net/context",
     "golang.org/x/net/http2",
     "golang.org/x/net/http2/h2c",
