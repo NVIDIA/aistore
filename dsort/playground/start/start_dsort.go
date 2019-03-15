@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -23,6 +26,10 @@ var (
 	createConcLimit   int
 	memUsage          string
 	metricRefreshTime int
+
+	err       error
+	dsortUUID string
+	sigCh     = make(chan os.Signal, 1)
 )
 
 func init() {
@@ -39,7 +46,17 @@ func init() {
 	flag.Parse()
 }
 
+func handleKillSignal() {
+	_, ok := <-sigCh
+	if ok {
+		tutils.AbortDSort(proxyURL, dsortUUID)
+	}
+}
+
 func main() {
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	go handleKillSignal()
+
 	rs := dsort.RequestSpec{
 		Bucket:           bucket,
 		Extension:        ext,
@@ -52,7 +69,7 @@ func main() {
 		MaxMemUsage:      memUsage,
 		ExtendedMetrics:  true,
 	}
-	dsortUUID, err := tutils.StartDSort(proxyURL, rs)
+	dsortUUID, err = tutils.StartDSort(proxyURL, rs)
 	if err != nil {
 		glog.Fatal(err)
 	}
@@ -89,4 +106,5 @@ func main() {
 	}
 
 	fmt.Println("Distributed sort has finished!")
+	close(sigCh)
 }
