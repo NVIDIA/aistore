@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -106,6 +107,7 @@ import (
 const (
 	adminCancel  = "CANCEL"
 	adminStatus  = "STATUS"
+	adminList    = "LIST"
 	taskDownload = "DOWNLOAD"
 	queueChSize  = 200
 
@@ -156,8 +158,9 @@ type (
 	// for a downlad request. These objects are used by Downloader to process
 	// the request, and are then dispatched to the correct jogger to be handled.
 	request struct {
-		action      string // one of: adminCancel, adminStatus, taskDownload
-		id          string // id of the job task
+		action      string         // one of: adminCancel, adminList, adminStatus, taskDownload
+		id          string         // id of the job task
+		regex       *regexp.Regexp // regex of descriptions to return if id is empty
 		obj         cmn.DlObj
 		bucket      string
 		bckProvider string
@@ -352,6 +355,8 @@ Loop:
 				d.dispatchStatus(req)
 			case adminCancel:
 				d.dispatchCancel(req)
+			case adminList:
+				d.dispatchList(req)
 			default:
 				cmn.AssertFmt(false, req, req.action)
 			}
@@ -457,6 +462,21 @@ func (d *Downloader) Status(id string) (resp interface{}, err error, statusCode 
 	req := &request{
 		action:     adminStatus,
 		id:         id,
+		responseCh: make(chan *response, 1),
+	}
+	d.adminCh <- req
+
+	// await the response
+	r := <-req.responseCh
+	d.DecPending()
+	return r.resp, r.err, r.statusCode
+}
+
+func (d *Downloader) List(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
+	d.IncPending()
+	req := &request{
+		action:     adminList,
+		regex:      regex,
 		responseCh: make(chan *response, 1),
 	}
 	d.adminCh <- req
@@ -661,6 +681,20 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 	}
 
 	return currentTasks
+}
+
+func (d *Downloader) dispatchList(req *request) {
+	records, err := d.db.getList(req.regex)
+	if err != nil {
+		req.writeErrResp(err, http.StatusInternalServerError)
+		return
+	}
+
+	respMap := make(map[string]cmn.DlJobInfo)
+	for _, r := range records {
+		respMap[r.ID] = r.ToDlJobInfo()
+	}
+	req.writeResp(respMap)
 }
 
 //==================================== jogger =====================================

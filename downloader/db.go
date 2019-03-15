@@ -5,9 +5,11 @@
 package downloader
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -52,6 +54,36 @@ func (db *downloaderDB) getJob(id string) (body *cmn.DlBody, err error) {
 		return nil, errJobNotFound
 	}
 	return
+}
+
+func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]cmn.DlBody, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	records, err := db.driver.ReadAll(downloaderCollection)
+
+	if err != nil {
+		if !os.IsNotExist(err) {
+			glog.Error(err)
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	body := make([]cmn.DlBody, 0)
+
+	for _, r := range records {
+		var dlb cmn.DlBody
+		if err := json.Unmarshal([]byte(r), &dlb); err != nil {
+			glog.Error(err)
+			continue
+		}
+		if descRegex == nil || descRegex.MatchString(dlb.Description) {
+			body = append(body, dlb)
+		}
+	}
+
+	return body, nil
 }
 
 func (db *downloaderDB) setJob(id string, body *cmn.DlBody) error {

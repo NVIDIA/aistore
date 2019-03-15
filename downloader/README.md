@@ -27,6 +27,7 @@ The rest of this document is structured around all supported types of downloads:
 - [Cloud download](#cloud-download)
 - [Cancellation](#cancellation)
 - [Status of the download](#status-of-the-download)
+- [List of downloads](#list-of-downloads)
 
 ## Single download
 
@@ -39,6 +40,7 @@ Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded object is saved to. |
 **bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically | Yes
+**description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **link** | **string** | URL of where the object is downloaded from. |
 **objname** | **string** | Name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path. | Yes
@@ -60,6 +62,7 @@ Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
 **bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 
 ### Sample Request
@@ -93,6 +96,7 @@ Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
 **bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **base** | **string** | Base URL of the object used to formulate the download URL. |
 **template** | **string** | Bash template describing names of the objects in the URL. |
@@ -139,9 +143,9 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action  | Example |
 |--|--|--|
-| Cancel Download | DELETE v1/download | `curl -Liv -X DELETE http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
+| Cancel download | DELETE v1/download | `curl -Liv -X DELETE http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
 
-### Status of the download
+## Status of the download
 
 The status of any download request can be queried at any time.
 
@@ -155,4 +159,23 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Get Download Status | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
+| Get download status | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
+
+
+## List of downloads
+
+The list of all download requests can be queried at any time. Note that this has the same syntax as [Status of the download](#Status-of-the-download) except the `id` parameter is empty.
+
+### Request Parameters
+
+Name | Type | Description | Optional?
+------------ | ------------- | ------------- | -------------
+**regex** | **string** | Regex for the description of download requests. | Yes
+
+### Sample Requests
+
+| Operation | HTTP action | Example |
+|--|--|--|
+| Get list of all downloads | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download`|
+| Get list of downloads with description starting with a digit | GET /v1/download/ | `curl -Liv -X GET 'http://localhost:8080/v1/download?regex=^[0-9]'`|
+

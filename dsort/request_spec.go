@@ -108,6 +108,7 @@ type RequestSpec struct {
 	OutputFormat string `json:"output_format"`
 
 	// Optional
+	ProcDescription    string        `json:"description"`
 	OutputBucket       string        `json:"output_bucket"` // Default: same as `bucket` field
 	OutputShardSize    int64         `json:"shard_size"`
 	IgnoreMissingFiles bool          `json:"ignore_missing_files"`      // Default: false
@@ -122,6 +123,7 @@ type RequestSpec struct {
 
 type ParsedRequestSpec struct {
 	Bucket             string                `json:"bucket"`
+	ProcDescription    string                `json:"description"`
 	OutputBucket       string                `json:"output_bucket"`
 	BckProvider        string                `json:"bprovider"`
 	OutputBckProvider  string                `json:"output_bprovider"`
@@ -159,6 +161,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if rs.Bucket == "" {
 		return parsedRS, errMissingBucket
 	}
+	parsedRS.ProcDescription = rs.ProcDescription
 	parsedRS.Bucket = rs.Bucket
 	parsedRS.OutputBucket = rs.OutputBucket
 	if parsedRS.OutputBucket == "" {

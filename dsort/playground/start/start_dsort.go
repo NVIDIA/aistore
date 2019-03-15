@@ -19,6 +19,7 @@ var (
 	ext               string
 	bucket            string
 	outputBucket      string
+	description       string
 	proxyURL          string
 	inputTemplate     string
 	outputTemplate    string
@@ -36,6 +37,7 @@ var (
 func init() {
 	flag.StringVar(&ext, "ext", ".tar", "extension for output shards (either `.tar`, `.tgz` or `.zip`)")
 	flag.StringVar(&bucket, "bucket", "dsort-testing", "bucket where shards objects are stored")
+	flag.StringVar(&description, "description", "", "description for dsort process")
 	flag.StringVar(&outputBucket, "obucket", "", "bucket where new output shards will be saved")
 	flag.StringVar(&proxyURL, "url", "http://localhost:8080", "proxy url to which requests will be made")
 	flag.StringVar(&inputTemplate, "input", "shard-{0..9}", "name template for input shard")
@@ -60,6 +62,7 @@ func main() {
 	go handleKillSignal()
 
 	rs := dsort.RequestSpec{
+		ProcDescription:  description,
 		Bucket:           bucket,
 		OutputBucket:     outputBucket,
 		Extension:        ext,

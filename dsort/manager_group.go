@@ -5,9 +5,11 @@
 package dsort
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -26,7 +28,7 @@ var (
 
 // ManagerGroup abstracts multiple dsort managers into single struct.
 type ManagerGroup struct {
-	mtx      sync.Mutex
+	mtx      sync.Mutex // Synchronizes reading managers field and db access
 	managers map[string]*Manager
 }
 
@@ -52,6 +54,44 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	mg.managers[managerUUID] = manager
 	manager.lock()
 	return manager, nil
+}
+
+func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
+	mg.mtx.Lock()
+	defer mg.mtx.Unlock()
+
+	jobInfoMap := make(map[string]JobInfo, len(mg.managers))
+
+	for k, v := range mg.managers {
+		if descRegex == nil || descRegex.MatchString(v.Description) {
+			jobInfoMap[k] = v.Metrics.ToJobInfo()
+		}
+	}
+
+	// Always check persistent db for now
+	config := cmn.GCO.Get()
+	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
+	if err != nil {
+		glog.Error(err)
+		return jobInfoMap
+	}
+	records, err := db.ReadAll(managersCollection)
+	if err != nil {
+		glog.Error(err)
+		return jobInfoMap
+	}
+	for _, r := range records {
+		var m Manager
+		if err := json.Unmarshal([]byte(r), &m); err != nil {
+			glog.Error(err)
+			continue
+		}
+		if descRegex == nil || descRegex.MatchString(m.Description) {
+			jobInfoMap[m.ManagerUUID] = m.Metrics.ToJobInfo()
+		}
+	}
+
+	return jobInfoMap
 }
 
 // Get gets manager with given mangerUUID. When manager with given uuid does not
@@ -86,6 +126,27 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 	return manager, exists
 }
 
+// Remove the managerUUID from history. Used for reducing clutter. Fails if process hasn't been cleaned up.
+func (mg *ManagerGroup) Remove(managerUUID string) error {
+	mg.mtx.Lock()
+	defer mg.mtx.Unlock()
+
+	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived {
+		return fmt.Errorf("dsort process %s still in progress and cannot be removed", managerUUID)
+	} else if ok {
+		delete(mg.managers, managerUUID)
+	}
+
+	config := cmn.GCO.Get()
+	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+	db.Delete(managersCollection, managerUUID) // Delete only returns err when record does not exist, which should be ignored
+	return nil
+}
+
 // persist removes manager from manager group (memory) and moves all information
 // about it to persistent storage (file). This operation allows for later access
 // of old managers (including managers' metrics).
@@ -94,27 +155,22 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 // removed from memory.
 func (mg *ManagerGroup) persist(managerUUID string) {
 	mg.mtx.Lock()
+	defer mg.mtx.Unlock()
 	manager, exists := mg.managers[managerUUID]
 	if !exists {
-		mg.mtx.Unlock()
 		return
 	}
 
+	manager.Metrics.Archived = true
 	config := cmn.GCO.Get()
 	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
 	if err != nil {
 		glog.Error(err)
-		goto cleanup
+		return
 	}
 	if err = db.Write(managersCollection, managerUUID, manager); err != nil {
 		glog.Error(err)
-		goto cleanup
+		return
 	}
 	delete(mg.managers, managerUUID)
-
-cleanup:
-	// Cleanup can be done at very end. This enables to read metrics without
-	// waiting for cleanup to finish - otherwise we would block on
-	// ManagerGroup.Get.
-	mg.mtx.Unlock()
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -144,6 +145,7 @@ const (
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
 	URLParamBckProvider = "bprovider"    // "local" | "cloud"
 	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
+	URLParamRegex       = "regex"        // param for only returning dsort/downloader processes where the description contains regex
 	// internal use
 	URLParamFromID           = "fid" // source target ID
 	URLParamToID             = "tid" // destination target ID
@@ -351,6 +353,8 @@ const (
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished-ack"
+	List        = "list"   // lists running dsort processes
+	Remove      = "remove" // removes a dsort process from history
 
 	// CLI
 	Target = "target"
@@ -385,6 +389,7 @@ func (d *DlStatusResp) String() string {
 }
 
 type DlBase struct {
+	Description string `json:"description"`
 	Bucket      string `json:"bucket"`
 	BckProvider string `json:"bprovider"`
 	Timeout     string `json:"timeout"`
@@ -396,6 +401,7 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 	}
 	b.BckProvider = query.Get(URLParamBckProvider)
 	b.Timeout = query.Get("timeout")
+	b.Description = query.Get("description")
 }
 
 func (b *DlBase) AsQuery() url.Values {
@@ -449,11 +455,13 @@ func (b *DlObj) Validate() error {
 
 // Internal status/delete request body
 type DlAdminBody struct {
-	ID string `json:"id"`
+	ID    string `json:"id"`
+	Regex string `json:"regex"`
 }
 
 func (b *DlAdminBody) InitWithQuery(query url.Values) {
 	b.ID = query.Get(URLParamID)
+	b.Regex = query.Get(URLParamRegex)
 }
 
 func (b *DlAdminBody) AsQuery() url.Values {
@@ -463,8 +471,12 @@ func (b *DlAdminBody) AsQuery() url.Values {
 }
 
 func (b *DlAdminBody) Validate() error {
-	if b.ID == "" {
-		return fmt.Errorf("missing downloader job %q", URLParamID)
+	if b.ID != "" && b.Regex != "" {
+		return fmt.Errorf("regex %q defined at the same time as id %q", URLParamRegex, URLParamID)
+	} else if b.Regex != "" {
+		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -493,6 +505,18 @@ func (b *DlBody) Validate() error {
 
 func (b *DlBody) String() string {
 	return fmt.Sprintf("%s, id=%q", b.DlBase, b.ID)
+}
+
+func (b *DlBody) ToDlJobInfo() DlJobInfo {
+	return DlJobInfo{
+		Description: b.Description,
+	}
+}
+
+// Summary info of the download job
+// FIXME: add more stats
+type DlJobInfo struct {
+	Description string `json:"description"`
 }
 
 // Info about a task that is currently being downloaded by one of the joggers

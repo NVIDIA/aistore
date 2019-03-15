@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -14,6 +15,47 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
+
+const (
+	downloadDescAllPrefix = "downloader-test-integration"
+	downloadDescAllRegex  = "^" + downloadDescAllPrefix
+)
+
+var (
+	downloadDescCurPrefix = fmt.Sprintf("%s-%d-", downloadDescAllPrefix, os.Getpid())
+)
+
+func generateDownloadDesc() string {
+	return downloadDescCurPrefix + time.Now().Format(time.RFC3339Nano)
+}
+
+func clearDownloadList(t *testing.T) {
+	listDownload, err := api.DownloadGetList(tutils.DefaultBaseAPIParams(t), downloadDescAllRegex)
+	tutils.CheckFatal(err, t)
+
+	for k := range listDownload {
+		tutils.Logf("Removing: %v...\n", k)
+		err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), k)
+		tutils.CheckFatal(err, t)
+	}
+}
+
+func checkDownloadList(t *testing.T, expNumEntries ...int) {
+	defer clearDownloadList(t)
+
+	expNumEntriesVal := 1
+	if len(expNumEntries) > 0 {
+		expNumEntriesVal = expNumEntries[0]
+	}
+
+	listDownload, err := api.DownloadGetList(tutils.DefaultBaseAPIParams(t), downloadDescAllRegex)
+	tutils.CheckFatal(err, t)
+	actEntries := len(listDownload)
+
+	if expNumEntriesVal != actEntries {
+		t.Fatalf("Incorrect # of downloader entries: expected %d, actual %d", expNumEntriesVal, actEntries)
+	}
+}
 
 func waitForDownload(t *testing.T, id string) {
 	for {
@@ -42,17 +84,19 @@ func TestDownloadSingle(t *testing.T) {
 		linkSmall     = "https://github.com/NVIDIA/aistore"
 	)
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
+	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objname, link)
 	tutils.CheckError(err, t)
 
 	time.Sleep(time.Second)
 
 	// Schedule second object
-	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
+	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objnameSecond, link)
 	tutils.CheckError(err, t)
 
 	// Cancel second object
@@ -75,7 +119,7 @@ func TestDownloadSingle(t *testing.T) {
 		t.Error("expected error when cancelling for link that is not being downloaded and is not in queue")
 	}
 
-	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, linkSmall)
+	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objname, linkSmall)
 	tutils.CheckError(err, t)
 
 	waitForDownload(t, id)
@@ -85,6 +129,8 @@ func TestDownloadSingle(t *testing.T) {
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
 	}
+
+	checkDownloadList(t)
 }
 
 func TestDownloadRange(t *testing.T) {
@@ -95,17 +141,21 @@ func TestDownloadRange(t *testing.T) {
 		template = "imagenet/imagenet_train-{000000..000007}.tgz"
 	)
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), bucket, base, template)
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, base, template)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(3 * time.Second)
 
 	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
 	tutils.CheckFatal(err, t)
+
+	checkDownloadList(t, 0)
 }
 
 func TestDownloadMultiMap(t *testing.T) {
@@ -118,11 +168,13 @@ func TestDownloadMultiMap(t *testing.T) {
 		}
 	)
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, id)
@@ -132,6 +184,8 @@ func TestDownloadMultiMap(t *testing.T) {
 	if len(objs) != len(m) {
 		t.Errorf("expected objects (%s), got: %s", m, objs)
 	}
+
+	checkDownloadList(t)
 }
 
 func TestDownloadMultiList(t *testing.T) {
@@ -145,11 +199,13 @@ func TestDownloadMultiList(t *testing.T) {
 		expectedObjs = []string{"LICENSE", "README.md"}
 	)
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, l)
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, l)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, id)
@@ -159,6 +215,8 @@ func TestDownloadMultiList(t *testing.T) {
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
 	}
+
+	checkDownloadList(t)
 }
 
 func TestDownloadTimeout(t *testing.T) {
@@ -168,6 +226,8 @@ func TestDownloadTimeout(t *testing.T) {
 		objname  = "object"
 		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 	)
+
+	clearDownloadList(t)
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
@@ -180,6 +240,7 @@ func TestDownloadTimeout(t *testing.T) {
 		},
 	}
 	body.Bucket = bucket
+	body.Description = generateDownloadDesc()
 	body.Timeout = "1ms" // super small timeout to see if the request will be canceled
 
 	id, err := api.DownloadSingleWithParam(tutils.DefaultBaseAPIParams(t), body)
@@ -192,7 +253,7 @@ func TestDownloadTimeout(t *testing.T) {
 		// For now we cannot do that since we don't collect information about
 		// task being canceled.
 		// t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
-		tutils.Logf("%v", err)
+		tutils.Logf("%v\n", err)
 	}
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
@@ -200,6 +261,8 @@ func TestDownloadTimeout(t *testing.T) {
 	if len(objs) != 0 {
 		t.Errorf("expected 0 objects, got: %s", objs)
 	}
+
+	checkDownloadList(t)
 }
 
 func TestDownloadCloud(t *testing.T) {
@@ -220,6 +283,8 @@ func TestDownloadCloud(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bucket) {
 		t.Skip("test requires a cloud bucket")
 	}
+
+	clearDownloadList(t)
 
 	tutils.CleanCloudBucket(t, proxyURL, bucket, prefix)
 	defer tutils.CleanCloudBucket(t, proxyURL, bucket, prefix)
@@ -256,6 +321,7 @@ func TestDownloadCloud(t *testing.T) {
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
 	}
+	checkDownloadList(t)
 
 	// Test cancellation
 	err = api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
@@ -268,6 +334,8 @@ func TestDownloadCloud(t *testing.T) {
 
 	err = api.DownloadCancel(baseParams, id)
 	tutils.CheckFatal(err, t)
+
+	checkDownloadList(t, 0)
 }
 
 func TestDownloadStatus(t *testing.T) {
@@ -295,13 +363,14 @@ func TestDownloadStatus(t *testing.T) {
 		longFileName:  "http://releases.ubuntu.com/18.04/ubuntu-18.04.2-desktop-amd64.iso",
 	}
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, bucket)
 
-	id, err := api.DownloadMulti(params, bucket, files)
+	id, err := api.DownloadMulti(params, generateDownloadDesc(), bucket, files)
 	tutils.CheckFatal(err, t)
-	defer api.DownloadCancel(params, id)
 
 	// Wait for the short file to be downloaded
 	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestLocalBucketName, params, 2*time.Second)
@@ -322,6 +391,8 @@ func TestDownloadStatus(t *testing.T) {
 	if resp.CurrentTasks[0].Name != longFileName {
 		t.Errorf("invalid file name in status message, expected: %s, got: %s", longFileName, resp.CurrentTasks[0].Name)
 	}
+
+	checkDownloadList(t)
 }
 
 func TestDownloadStatusError(t *testing.T) {
@@ -339,13 +410,14 @@ func TestDownloadStatusError(t *testing.T) {
 		}
 	)
 
+	clearDownloadList(t)
+
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadMulti(params, bucket, files)
+	id, err := api.DownloadMulti(params, generateDownloadDesc(), bucket, files)
 	tutils.CheckFatal(err, t)
-	defer api.DownloadCancel(params, id)
 
 	// Wait to make sure both files were processed by downloader
 	time.Sleep(1 * time.Second)
@@ -370,4 +442,6 @@ func TestDownloadStatusError(t *testing.T) {
 		t.Errorf("expected objects that cause errors to be (%s, %s), but got: (%s, %s)",
 			"invalidURL", "notFoundFile", resp.Errs[0].Name, resp.Errs[1].Name)
 	}
+
+	checkDownloadList(t)
 }

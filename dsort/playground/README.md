@@ -145,6 +145,7 @@ all possible settings, for more advanced usage please refer to API).
 | Flag | Default value | Description |
 |------|---------------|-------------|
 | -ext | `.tar` | Extension for output shards (either `.tar`, `.tgz` or `.zip`)|
+| -description | | Description of the dsort process |
 | -bucket | `dsort-testing` | Bucket where shards objects are stored |
 | -obucket | | Bucket where new output shards will be saved (by default same as `bucket`) |
 | -url | `http://localhost:8080` | Proxy url to which requests will be made |

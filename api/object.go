@@ -280,7 +280,7 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 
 // Downloader API
 
-func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) (string, error) {
+func DownloadSingle(baseParams *BaseParams, description, bucket, objname, link string) (string, error) {
 	dlBody := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
 			Objname: objname,
@@ -288,6 +288,7 @@ func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) (strin
 		},
 	}
 	dlBody.Bucket = bucket
+	dlBody.Description = description
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
 
@@ -302,12 +303,13 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (s
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadRange(baseParams *BaseParams, bucket, base, template string) (string, error) {
+func DownloadRange(baseParams *BaseParams, description string, bucket, base, template string) (string, error) {
 	dlBody := cmn.DlRangeBody{
 		Base:     base,
 		Template: template,
 	}
 	dlBody.Bucket = bucket
+	dlBody.Description = description
 	return DownloadRangeWithParam(baseParams, dlBody)
 }
 
@@ -322,9 +324,10 @@ func DownloadRangeWithParam(baseParams *BaseParams, dlBody cmn.DlRangeBody) (str
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string, error) {
+func DownloadMulti(baseParams *BaseParams, description string, bucket string, m interface{}) (string, error) {
 	dlBody := cmn.DlMultiBody{}
 	dlBody.Bucket = bucket
+	dlBody.Description = description
 	query := dlBody.AsQuery()
 
 	msg, err := jsoniter.Marshal(m)
@@ -372,6 +375,29 @@ func DownloadStatus(baseParams *BaseParams, id string) (cmn.DlStatusResp, error)
 		Query: query,
 	}
 	return doDlStatusRequest(baseParams, path, optParams)
+}
+
+func DownloadGetList(baseParams *BaseParams, regex string) (map[string]cmn.DlJobInfo, error) {
+	dlBody := cmn.DlAdminBody{
+		Regex: regex,
+	}
+	query := dlBody.AsQuery()
+
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Download)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	resp, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	if err != nil {
+		return nil, err
+	}
+	var parsedResp map[string]cmn.DlJobInfo
+	err = jsoniter.Unmarshal(resp, &parsedResp)
+	if err != nil {
+		return nil, err
+	}
+	return parsedResp, nil
 }
 
 func DownloadCancel(baseParams *BaseParams, id string) error {

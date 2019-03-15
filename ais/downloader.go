@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,6 +120,24 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 
 	switch method {
 	case http.MethodGet:
+		if msg.ID == "" {
+			// If ID is empty, return the list of downloads
+			listDownloads := make(map[string]cmn.DlJobInfo)
+			for _, resp := range validResponses {
+				var parsedResp map[string]cmn.DlJobInfo
+				err := jsoniter.Unmarshal(resp.body, &parsedResp)
+				cmn.AssertNoErr(err)
+				for k, v := range parsedResp {
+					//FIXME: add aggregation when more stats added to DlJobInfo
+					listDownloads[k] = v
+				}
+			}
+
+			result, err := jsoniter.Marshal(listDownloads)
+			cmn.AssertNoErr(err)
+			return result, http.StatusOK, nil
+		}
+
 		stats := make([]cmn.DlStatusResp, len(validResponses))
 		for i, resp := range validResponses {
 			err := jsoniter.Unmarshal(resp.body, &stats[i])
@@ -192,6 +211,7 @@ func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, obje
 			dlBody.Bucket = payload.Bucket
 			dlBody.BckProvider = payload.BckProvider
 			dlBody.Timeout = payload.Timeout
+			dlBody.Description = payload.Description
 
 			bulkTargetRequest[si] = dlBody
 			b = dlBody
@@ -442,8 +462,21 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cmn.AssertNoErr(payload.Validate())
 
-		glog.V(4).Infof("Getting status of download: %s", payload)
-		response, err, statusCode = downloader.Status(payload.ID)
+		if payload.ID != "" {
+			glog.V(4).Infof("Getting status of download: %s", payload)
+			response, err, statusCode = downloader.Status(payload.ID)
+		} else {
+			var regex *regexp.Regexp
+			if payload.Regex != "" {
+				if regex, err = regexp.CompilePOSIX(payload.Regex); err != nil {
+					cmn.InvalidHandlerWithMsg(w, r, err.Error())
+					return
+				}
+			}
+			glog.V(4).Infof("Listing downloads")
+			response, err, statusCode = downloader.List(regex)
+		}
+
 	case http.MethodDelete:
 		payload := &cmn.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {

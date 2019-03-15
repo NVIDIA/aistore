@@ -132,8 +132,14 @@ type Metrics struct {
 	Extraction *LocalExtraction `json:"local_extraction,omitempty"`
 	Sorting    *MetaSorting     `json:"meta_sorting,omitempty"`
 	Creation   *ShardCreation   `json:"shard_creation,omitempty"`
+
 	// Aborted specifies if the DSort has been aborted or not.
 	Aborted bool `json:"aborted"`
+	// Archived specifies if the DSort has been archived to persistent storage
+	Archived bool `json:"archived"`
+
+	// Describes the DSort run
+	Description string `json:"description"`
 
 	// extended determines if we should calculate and send extended metrics like
 	// request/response times.
@@ -200,4 +206,62 @@ func (m *Metrics) update() {
 		m.Creation.Elapsed = time.Since(m.Creation.Start) / time.Second
 	}
 	m.unlock()
+}
+
+// JobInfo is a struct that contains stats that represent the DSort run in a list
+type JobInfo struct {
+	StartedTime time.Time `json:"started_time,omitempty"`
+	FinishTime  time.Time `json:"finish_time,omitempty"`
+
+	ExtractedDuration time.Duration `json:"started_meta_sorting,omitempty"`
+	SortingDuration   time.Duration `json:"started_shard_creation,omitempty"`
+	CreationDuration  time.Duration `json:"finished_shard_creation,omitempty"`
+
+	Aborted  bool `json:"aborted"`
+	Archived bool `json:"archived"`
+
+	Description string `json:"description"`
+}
+
+func (m *Metrics) ToJobInfo() JobInfo {
+	return JobInfo{
+		StartedTime: m.Extraction.Start,
+		FinishTime:  m.Creation.End,
+
+		ExtractedDuration: m.Extraction.Elapsed,
+		SortingDuration:   m.Sorting.Elapsed,
+		CreationDuration:  m.Creation.Elapsed,
+
+		Aborted:     m.Aborted,
+		Archived:    m.Archived,
+		Description: m.Description,
+	}
+}
+
+func (lhs *JobInfo) Aggregate(rhs JobInfo) {
+	lhs.StartedTime = startTime(lhs.StartedTime, rhs.StartedTime)
+	lhs.FinishTime = stopTime(lhs.FinishTime, rhs.FinishTime)
+
+	lhs.ExtractedDuration = cmn.MaxDuration(lhs.ExtractedDuration, rhs.ExtractedDuration)
+	lhs.SortingDuration = cmn.MaxDuration(lhs.SortingDuration, rhs.SortingDuration)
+	lhs.CreationDuration = cmn.MaxDuration(lhs.CreationDuration, rhs.CreationDuration)
+
+	lhs.Aborted = lhs.Aborted || rhs.Aborted
+	lhs.Archived = lhs.Archived && rhs.Archived
+}
+
+//startTime returns the start time of a,b. If either is zero, the other takes precedence.
+func startTime(a, b time.Time) time.Time {
+	if (a.Before(b) && !a.IsZero()) || b.IsZero() {
+		return a
+	}
+	return b
+}
+
+//stopTime returns the stop time of a,b. If either is zero it's unknown and returns 0.
+func stopTime(a, b time.Time) time.Time {
+	if (a.After(b) && !b.IsZero()) || a.IsZero() {
+		return a
+	}
+	return b
 }

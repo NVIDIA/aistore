@@ -876,6 +876,14 @@ func AbortDSort(proxyURL, managerUUID string) error {
 	return err
 }
 
+func RemoveDSort(proxyURL, managerUUID string) error {
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
+	_, err := api.DoHTTPRequest(baseParams, path, nil)
+	return err
+}
+
 func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 	for {
 		allMetrics, err := MetricsDSort(proxyURL, managerUUID)
@@ -900,6 +908,26 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func ListDSort(proxyURL, regex string) (map[string]*dsort.JobInfo, error) {
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.List)
+	query := url.Values{}
+	query.Add(cmn.URLParamRegex, regex)
+	optParams := api.OptionalParams{
+		Query: query,
+	}
+
+	body, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
+	if err != nil {
+		return nil, err
+	}
+
+	var metrics map[string]*dsort.JobInfo
+	err = jsoniter.Unmarshal(body, &metrics)
+	return metrics, err
 }
 
 func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, error) {

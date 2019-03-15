@@ -91,6 +91,7 @@ type Manager struct {
 	// Fields with json tags are the only fields which are persisted
 	// into the disk once the dSort is finished.
 	ManagerUUID string   `json:"manager_uuid"`
+	Description string   `json:"description"`
 	Metrics     *Metrics `json:"metrics"`
 
 	mu   sync.Mutex
@@ -167,6 +168,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	targetCount := m.smap.CountTargets()
 
 	m.rs = rs
+	m.Description = rs.ProcDescription
 	m.Metrics = newMetrics(rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
 

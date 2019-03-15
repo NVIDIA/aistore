@@ -2453,14 +2453,14 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 			cmn.NetworkIntraControl,
 			broadcastType,
 		)
-		resultMap := make(map[string]jsoniter.RawMessage, expectedNodes)
+		sysInfoMap := make(map[string]jsoniter.RawMessage, expectedNodes)
 		for result := range results {
 			if result.err != nil {
 				return nil, result.errstr
 			}
-			resultMap[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
+			sysInfoMap[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
 		}
-		return resultMap, ""
+		return sysInfoMap, ""
 	}
 
 	out := &cmn.ClusterSysInfoRaw{}

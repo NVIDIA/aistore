@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"math"
+	"time"
 )
 
 const MaxInt64 = int64(math.MaxInt64)
@@ -39,6 +40,24 @@ func MaxI64(a, b int64) int64 {
 	if a > b {
 		return a
 	}
+	return b
+}
+
+// MinDuration returns min value of a and b time.Duration types
+func MinDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+
+	return b
+}
+
+// MaxDuration returns min value of a and b time.Duration types
+func MaxDuration(a, b time.Duration) time.Duration {
+	if a >= b {
+		return a
+	}
+
 	return b
 }
 
