@@ -56,7 +56,7 @@ func handleKillSignal() {
 }
 
 func main() {
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go handleKillSignal()
 
 	rs := dsort.RequestSpec{

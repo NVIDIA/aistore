@@ -214,6 +214,7 @@ func TestDownloadTimeout(t *testing.T) {
 		// For now we cannot do that since we don't collect information about
 		// task being canceled.
 		// t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
+		tutils.Logf("%v", err)
 	}
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)

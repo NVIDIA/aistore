@@ -1,4 +1,4 @@
-// The commands package provides the set of CLI commands used to communicate with the AIS cluster.
+// Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -98,7 +98,7 @@ func GetQueryHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		err = templates.DisplayOutput(body, templates.SmapTmpl, c.Bool("json"))
+		return templates.DisplayOutput(body, templates.SmapTmpl, c.Bool("json"))
 	case cmn.GetWhatConfig:
 		newURL, err := daemonDirectURL(daemonID)
 		if err != nil {
@@ -109,35 +109,32 @@ func GetQueryHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		err = templates.DisplayOutput(body, templates.ConfigTmpl, c.Bool("json"))
+		return templates.DisplayOutput(body, templates.ConfigTmpl, c.Bool("json"))
 	case cmn.GetWhatStats:
 		if res, ok := proxy[daemonID]; ok {
-			err = templates.DisplayOutput(res, templates.ProxyStatsTmpl, c.Bool("json"))
+			return templates.DisplayOutput(res, templates.ProxyStatsTmpl, c.Bool("json"))
 		} else if res, ok := target[daemonID]; ok {
-			err = templates.DisplayOutput(res, templates.TargetStatsTmpl, c.Bool("json"))
+			return templates.DisplayOutput(res, templates.TargetStatsTmpl, c.Bool("json"))
 		} else if daemonID == "" {
 			body, err := api.GetClusterStats(baseParams)
 			if err != nil {
 				return err
 			}
-			err = templates.DisplayOutput(body, templates.StatsTmpl, c.Bool("json"))
-		} else {
-			return fmt.Errorf("%s is not a valid DAEMON_ID", daemonID)
+			return templates.DisplayOutput(body, templates.StatsTmpl, c.Bool("json"))
 		}
+		return fmt.Errorf("%s is not a valid DAEMON_ID", daemonID)
 	default:
-		return fmt.Errorf("Invalid resource name '%s'", req)
+		return fmt.Errorf("invalid resource name '%s'", req)
 	}
-
-	return err
 }
 
 // Bash Completion
 func DaemonList(_ *cli.Context) {
 	fillMap(ClusterURL)
-	for dae, _ := range proxy {
+	for dae := range proxy {
 		fmt.Println(dae)
 	}
-	for dae, _ := range target {
+	for dae := range target {
 		fmt.Println(dae)
 	}
 }

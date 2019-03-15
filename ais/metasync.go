@@ -199,6 +199,7 @@ func (y *metasyncer) Stop(err error) {
 // methods (notify, sync, becomeNonPrimary) consistute internal API
 //
 
+//lint:ignore U1000 unused
 func (y *metasyncer) notify(wait bool, msg *actionMsgInternal) (failedCnt int) {
 	if !y.checkPrimary() {
 		return

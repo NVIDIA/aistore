@@ -62,10 +62,10 @@ type (
 		CopyFQN         string       // local replica
 		ParsedFQN       fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		// props
-		Version  string
-		Atime    time.Time
-		Size     int64
-		Cksum    cmn.CksumProvider
+		Version string
+		Atime   time.Time
+		Size    int64
+		Cksum   cmn.CksumProvider
 		// flags
 		BckIsLocal bool // the bucket (that contains this object) is local
 		BadCksum   bool // this object has a bad checksum

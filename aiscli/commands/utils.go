@@ -1,4 +1,4 @@
-// The commands package provides the set of CLI commands used to communicate with the AIS cluster.
+// Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,7 +22,7 @@ var ClusterURL = os.Getenv("AIS_URL")
 // Checks if URL is valid by trying to get Smap
 func TestAISURL(clusterURL string) error {
 	if ClusterURL == "" {
-		return errors.New("AIS_URL variable unset.")
+		return errors.New("env variable 'AIS_URL' unset")
 	}
 	baseParams := tutils.BaseAPIParams(clusterURL)
 	_, err := api.GetClusterMap(baseParams)

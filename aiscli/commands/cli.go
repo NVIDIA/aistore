@@ -1,4 +1,4 @@
-// The commands package provides the set of CLI commands used to communicate with the AIS cluster.
+// Package commands provides the set of CLI commands used to communicate with the AIS cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */

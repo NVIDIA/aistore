@@ -61,7 +61,7 @@ var (
 
 type dsortContext struct {
 	smap       cluster.Sowner
-	bmdowner cluster.Bowner
+	bmdowner   cluster.Bowner
 	node       *cluster.Snode
 	t          cluster.Target
 	nameLocker cluster.NameLocker
