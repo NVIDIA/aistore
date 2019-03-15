@@ -23,6 +23,22 @@ spec:
         component: "{{ .Values.ne_proxy.name }}"
         release: {{ .Release.Name }}
     spec:
+      initContainers:
+        - name: populate-env
+          image: quay.io/nvidia/kubectl:latest
+          env:
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command:
+            - "/bin/bash"
+          args: [ "-c", "/bin/bash /var/ais_config/set_uuid_env.sh" ]
+          volumeMounts:
+            - name: config-mount
+              mountPath: "/var/ais_config"
+            - name: env-mount
+              mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

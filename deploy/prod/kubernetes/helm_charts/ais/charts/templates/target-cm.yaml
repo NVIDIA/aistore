@@ -5,4 +5,5 @@ metadata:
 data:
   ais.json: |-
 {{ include "target.config" .   | indent 4 }}
-
+  set_uuid_env.sh: |-
+{{ include "common.set_uuid_env" . | indent 4 }}

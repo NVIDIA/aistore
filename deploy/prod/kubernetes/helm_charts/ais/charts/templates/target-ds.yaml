@@ -19,6 +19,23 @@ spec:
         component: "{{ .Values.target.name }}"
         release: {{ .Release.Name }}
     spec:
+      initContainers:
+        - name: populate-env
+          image: quay.io/nvidia/kubectl:latest
+          env:
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command:
+            - "/bin/bash"
+          args: [ "-c", "/bin/bash /var/ais_config/set_uuid_env.sh" ]
+          volumeMounts:
+            - name: config-mount
+              mountPath: "/var/ais_config"
+            - name: env-mount
+              mountPath: "{{ .Values.target.envMountPath.podPath }}"
+
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -50,11 +67,13 @@ spec:
               value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
             - name: http
-              containerPort: {{ .Values.target.service.port }}
+              containerPort: {{ .Values.tar/get.service.port }}
               protocol: TCP
           volumeMounts:
             - name: etc-mount
               mountPath: "{{ .Values.common_config.dir }}"
+            - name: env-mount
+              mountPath: "{{ .Values.target.envMountPath.podPath }}"
             - name: config-mount
               mountPath: "/var/ais_config"
             - name: statsd-config

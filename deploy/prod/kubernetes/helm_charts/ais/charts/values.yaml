@@ -141,6 +141,9 @@ target:
   etcMountPath:
     hostPath: /etc/ais/target
     # No pod path as it should be the same as config.dir
+  envMountPath:
+    hostPath: /tmp/
+    podPath:  /var/ais_env
   mountPaths:
     #- /tmp
     - /ais/sda

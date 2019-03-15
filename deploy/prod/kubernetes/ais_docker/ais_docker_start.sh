@@ -33,6 +33,13 @@ else
     is_primary=false
 fi
 
+#an initcontainer runs to create a hash of the uuid which is to be used as the AIS_DAEMONID
+#If that file isn't found, then the default set by the daemonset is used as the AIS_DAEMONID
+if [[ -f /var/ais_env/uuid_env ]]; then
+   UUID=$(cat /var/ais_env/uuid_env)
+   export AIS_DAEMONID=$UUID
+   echo "Found UUID hash to set as DaemonID: $UUID"
+fi
 #
 # There's no assured sequencing of the relative startup of proxy & target pods
 # on a node, not to mention across multiple nodes. So target pods can start before
