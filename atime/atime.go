@@ -266,11 +266,7 @@ func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache 
 	if !ok {
 		finfo, err = os.Stat(fqn)
 		if err == nil {
-			mtime := time.Time{}
-			atime, mtime, _ = ios.GetAmTimes(finfo)
-			if mtime.After(atime) {
-				atime = mtime
-			}
+			atime = ios.GetATime(finfo)
 		}
 	}
 	if err == nil {

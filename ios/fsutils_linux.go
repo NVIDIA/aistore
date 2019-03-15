@@ -31,10 +31,9 @@ func GetFSUsedPercentage(path string) (usedPercentage int64, ok bool) {
 	return int64(usedBlocks * 100 / totalBlocks), true
 }
 
-func GetAmTimes(osfi os.FileInfo) (time.Time, time.Time, *syscall.Stat_t) {
+func GetATime(osfi os.FileInfo) time.Time {
 	stat := osfi.Sys().(*syscall.Stat_t)
 	atime := time.Unix(stat.Atim.Sec, stat.Atim.Nsec)
 	// NOTE: see https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
-	mtime := osfi.ModTime()
-	return atime, mtime, stat
+	return atime
 }
