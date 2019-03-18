@@ -341,7 +341,7 @@ const (
 	Mountpaths = "mountpaths"
 	ListAll    = "*"
 
-	// dsort
+	// dSort
 	Init        = "init"
 	Sort        = "sort"
 	Start       = "start"
@@ -354,20 +354,17 @@ const (
 	// CLI
 	Target = "target"
 
-	//====== download endpoint (l3) =======
-	DownloadSingle = "single"
-	DownloadRange  = "range"
-	DownloadMulti  = "multi"
+	// Downloader
 	DownloadBucket = "bucket"
 )
 
-type dlBase struct {
+type DlBase struct {
 	Bucket      string `json:"bucket"`
 	BckProvider string `json:"bprovider"`
 	Timeout     string `json:"timeout"`
 }
 
-func (b *dlBase) InitWithQuery(query url.Values) {
+func (b *DlBase) InitWithQuery(query url.Values) {
 	if b.Bucket == "" {
 		b.Bucket = query.Get(URLParamBucket)
 	}
@@ -375,7 +372,7 @@ func (b *dlBase) InitWithQuery(query url.Values) {
 	b.Timeout = query.Get("timeout")
 }
 
-func (b *dlBase) AsQuery() url.Values {
+func (b *DlBase) AsQuery() url.Values {
 	query := url.Values{}
 	if b.Bucket != "" {
 		query.Add(URLParamBucket, b.Bucket)
@@ -389,7 +386,7 @@ func (b *dlBase) AsQuery() url.Values {
 	return query
 }
 
-func (b *dlBase) Validate() error {
+func (b *DlBase) Validate() error {
 	if b.Bucket == "" {
 		return fmt.Errorf("missing the %q which is required", URLParamBucket)
 	}
@@ -447,13 +444,13 @@ func (b *DlAdminBody) Validate() error {
 
 // Internal download request body
 type DlBody struct {
-	dlBase
+	DlBase
 	ID   string  `json:"id"`
 	Objs []DlObj `json:"objs"`
 }
 
 func (b *DlBody) Validate() error {
-	if err := b.dlBase.Validate(); err != nil {
+	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	if b.ID == "" {
@@ -475,25 +472,25 @@ type DlStatusResp struct {
 
 // Single request
 type DlSingle struct {
-	dlBase
+	DlBase
 	DlObj
 }
 
 func (b *DlSingle) InitWithQuery(query url.Values) {
-	b.dlBase.InitWithQuery(query)
+	b.DlBase.InitWithQuery(query)
 	b.Link = query.Get(URLParamLink)
 	b.Objname = query.Get(URLParamObjName)
 }
 
 func (b *DlSingle) AsQuery() url.Values {
-	query := b.dlBase.AsQuery()
+	query := b.DlBase.AsQuery()
 	query.Add(URLParamLink, b.Link)
 	query.Add(URLParamObjName, b.Objname)
 	return query
 }
 
 func (b *DlSingle) Validate() error {
-	if err := b.dlBase.Validate(); err != nil {
+	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	if err := b.DlObj.Validate(); err != nil {
@@ -502,32 +499,38 @@ func (b *DlSingle) Validate() error {
 	return nil
 }
 
+func (b *DlSingle) ExtractPayload() (SimpleKVs, error) {
+	objects := make(SimpleKVs, 1)
+	objects[b.Objname] = b.Link
+	return objects, nil
+}
+
 func (b *DlSingle) String() (str string) {
 	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
 }
 
 // Range request
 type DlRangeBody struct {
-	dlBase
+	DlBase
 	Base     string `json:"base"`
 	Template string `json:"template"`
 }
 
 func (b *DlRangeBody) InitWithQuery(query url.Values) {
-	b.dlBase.InitWithQuery(query)
+	b.DlBase.InitWithQuery(query)
 	b.Base = query.Get(URLParamBase)
 	b.Template = query.Get(URLParamTemplate)
 }
 
 func (b *DlRangeBody) AsQuery() url.Values {
-	query := b.dlBase.AsQuery()
+	query := b.DlBase.AsQuery()
 	query.Add(URLParamBase, b.Base)
 	query.Add(URLParamTemplate, b.Template)
 	return query
 }
 
 func (b *DlRangeBody) Validate() error {
-	if err := b.dlBase.Validate(); err != nil {
+	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	if b.Base == "" {
@@ -542,24 +545,71 @@ func (b *DlRangeBody) Validate() error {
 	return nil
 }
 
+func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
+	prefix, suffix, start, end, step, digitCount, err := ParseBashTemplate(b.Template)
+	if err != nil {
+		return nil, err
+	}
+
+	objects := make(SimpleKVs, (end-start+1)/step)
+	for i := start; i <= end; i += step {
+		objname := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
+		objects[objname] = b.Base + objname
+	}
+	return objects, nil
+}
+
 func (b *DlRangeBody) String() (str string) {
 	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
 }
 
 // Multi request
 type DlMultiBody struct {
-	dlBase
+	DlBase
 }
 
 func (b *DlMultiBody) InitWithQuery(query url.Values) {
-	b.dlBase.InitWithQuery(query)
+	b.DlBase.InitWithQuery(query)
 }
 
 func (b *DlMultiBody) Validate() error {
-	if err := b.dlBase.Validate(); err != nil {
+	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, error) {
+	objects := make(SimpleKVs, 10)
+	switch ty := objectsPayload.(type) {
+	case map[string]interface{}:
+		for key, val := range ty {
+			switch v := val.(type) {
+			case string:
+				objects[key] = v
+			default:
+				return nil, fmt.Errorf("values in map should be strings, found: %T", v)
+			}
+		}
+	case []interface{}:
+		// process list of links
+		for _, val := range ty {
+			switch link := val.(type) {
+			case string:
+				objName := path.Base(link)
+				if objName == "." || objName == "/" {
+					// should we continue and let the use worry about this after?
+					return nil, fmt.Errorf("can not extract a valid `object name` from the provided download link: %q", link)
+				}
+				objects[objName] = link
+			default:
+				return nil, fmt.Errorf("values in array should be strings, found: %T", link)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("JSON body should be map (string -> string) or array of strings, found: %T", ty)
+	}
+	return objects, nil
 }
 
 func (b *DlMultiBody) String() (str string) {
@@ -568,26 +618,26 @@ func (b *DlMultiBody) String() (str string) {
 
 // Bucket request
 type DlBucketBody struct {
-	dlBase
+	DlBase
 	Prefix string `json:"prefix"`
 	Suffix string `json:"suffix"`
 }
 
 func (b *DlBucketBody) InitWithQuery(query url.Values) {
-	b.dlBase.InitWithQuery(query)
+	b.DlBase.InitWithQuery(query)
 	b.Prefix = query.Get(URLParamPrefix)
 	b.Suffix = query.Get(URLParamSuffix)
 }
 
 func (b *DlBucketBody) Validate() error {
-	if err := b.dlBase.Validate(); err != nil {
+	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (b *DlBucketBody) AsQuery() url.Values {
-	query := b.dlBase.AsQuery()
+	query := b.DlBase.AsQuery()
 	query.Add(URLParamPrefix, b.Prefix)
 	query.Add(URLParamSuffix, b.Suffix)
 	return query

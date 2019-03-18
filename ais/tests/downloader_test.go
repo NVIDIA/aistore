@@ -33,10 +33,6 @@ func waitForDownload(t *testing.T, id string) {
 }
 
 func TestDownloadSingle(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestLocalBucketName
@@ -53,7 +49,7 @@ func TestDownloadSingle(t *testing.T) {
 	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objname, link)
 	tutils.CheckError(err, t)
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second)
 
 	// Schedule second object
 	idSecond, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), bucket, objnameSecond, link)
@@ -96,10 +92,6 @@ func TestDownloadSingle(t *testing.T) {
 }
 
 func TestDownloadRange(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
@@ -121,10 +113,6 @@ func TestDownloadRange(t *testing.T) {
 }
 
 func TestDownloadMultiMap(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
@@ -151,10 +139,6 @@ func TestDownloadMultiMap(t *testing.T) {
 }
 
 func TestDownloadMultiList(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
@@ -182,10 +166,6 @@ func TestDownloadMultiList(t *testing.T) {
 }
 
 func TestDownloadTimeout(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
@@ -230,10 +210,6 @@ func TestDownloadTimeout(t *testing.T) {
 // for the download.
 func TestDownloadBucket(t *testing.T) {
 	t.Skip("Not yet fully implemented")
-
-	if testing.Short() {
-		t.Skip(skipping)
-	}
 
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)

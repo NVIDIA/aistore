@@ -47,7 +47,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action  | Example  | Notes |
 |--|--|--|--|
-| Single Object Download | POST /v1/download/single | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"bucket": "ubuntu", "objname": "ubuntu.iso", "headers":  {  "Authorization": "Bearer AbCdEf123456" }, "link": "http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso"}' http://localhost:8080/v1/download/single`| Header authorization is not required to make this download request. It is just provided as an example. |
+| Single Object Download | POST /v1/download | `curl -Liv -X POST 'http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso'`| Header authorization is not required to make this download request. It is just provided as an example. |
 
 ## Multi download
 
@@ -66,8 +66,8 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Multi Download Using Object Map | POST /v1/download/multi | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"t10k-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1-ubyte.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download/multi?bucket=yann-lecun` |
-| Multi Download Using Object List |  POST /v1/download/multi  | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download/multi?bucket=yann-lecun` |
+| Multi Download Using Object Map | POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"t10k-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1-ubyte.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download?bucket=yann-lecun` |
+| Multi Download Using Object List |  POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download?bucket=yann-lecun` |
 
 ## Range download
 
@@ -101,8 +101,8 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a list of objects | POST /v1/download/range | `curl -Livg -X POST 'http://localhost:8080/v1/download/range?bucket=test321&base=randomwebsite.com/some_dir/&template=object{200..300}log.txt'` |
-| Download a list of objects, selecting every tenth | POST /v1/download/range | `curl -Livg -X POST 'http://localhost:8080/v1/download/range?bucket=test321&base=randomwebsite.com/some_dir/&template=object{1..1000..10}log.txt'` |
+| Download a (range) list of objects | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&base=randomwebsite.com/some_dir/&template=object{200..300}log.txt'` |
+| Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&base=randomwebsite.com/some_dir/&template=object{1..1000..10}log.txt'` |
 
 **Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.
 

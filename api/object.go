@@ -296,7 +296,7 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingle) (strin
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadSingle)
+	path := cmn.URLPath(cmn.Version, cmn.Download)
 	optParams := OptionalParams{
 		Query: query,
 	}
@@ -313,7 +313,7 @@ func DownloadRange(baseParams *BaseParams, bucket, base, template string) (strin
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadRange)
+	path := cmn.URLPath(cmn.Version, cmn.Download)
 	optParams := OptionalParams{
 		Query: query,
 	}
@@ -332,7 +332,7 @@ func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string
 	}
 
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadMulti)
+	path := cmn.URLPath(cmn.Version, cmn.Download)
 	optParams := OptionalParams{
 		Query: query,
 	}

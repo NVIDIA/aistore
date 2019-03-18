@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -143,7 +142,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 
 // objects is a map of objnames (keys) where the corresponding
 // value is the link that the download will be saved as.
-func (p *proxyrunner) bulkDownloadProcessor(id, bucket, bckProvider, timeout string, objects cmn.SimpleKVs) error {
+func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, objects cmn.SimpleKVs) error {
 	var (
 		smap  = p.smapowner.get()
 		wg    = &sync.WaitGroup{}
@@ -155,7 +154,7 @@ func (p *proxyrunner) bulkDownloadProcessor(id, bucket, bckProvider, timeout str
 		// Make sure that objName does not contain "?query=smth" suffix
 		objName = normalizeObjName(objName)
 
-		si, errstr := hrwTarget(bucket, objName, smap)
+		si, errstr := hrwTarget(payload.Bucket, objName, smap)
 		if errstr != "" {
 			return fmt.Errorf(errstr)
 		}
@@ -170,9 +169,9 @@ func (p *proxyrunner) bulkDownloadProcessor(id, bucket, bckProvider, timeout str
 			dlBody := &cmn.DlBody{
 				ID: id,
 			}
-			dlBody.Bucket = bucket
-			dlBody.BckProvider = bckProvider
-			dlBody.Timeout = timeout
+			dlBody.Bucket = payload.Bucket
+			dlBody.BckProvider = payload.BckProvider
+			dlBody.Timeout = payload.Timeout
 
 			bulkTargetRequest[si] = dlBody
 			b = dlBody
@@ -247,7 +246,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 
 // POST /v1/download
 func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Download)
+	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Download)
 	if err != nil {
 		return
 	}
@@ -260,152 +259,66 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(apitems) >= 1 {
+		// TODO: consolidate bucket API path as well
 		switch apitems[0] {
-		case cmn.DownloadSingle:
-			p.singleDownloadHandler(w, r, id)
-			return
-		case cmn.DownloadRange:
-			p.rangeDownloadHandler(w, r, id)
-			return
-		case cmn.DownloadMulti:
-			p.multiDownloadHandler(w, r, id)
-			return
 		case cmn.DownloadBucket:
 			p.bucketDownloadHandler(w, r, id)
 			return
 		}
+
+		p.invalmsghdlr(w, r, fmt.Sprintf("%q is not a valid download request path", apitems))
+		return
 	}
-	p.invalmsghdlr(w, r, fmt.Sprintf("%q is not a valid download request path", apitems))
+
+	p.objectDownloadHandler(w, r, id)
 }
 
-// POST /v1/download/single?bucket=...&link=...&objname=...
-func (p *proxyrunner) singleDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
+// POST /v1/download?bucket=...&link=...&objname=...&template=...
+func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
 	var (
-		payload = &cmn.DlSingle{}
 		// link -> objname
-		objects = make(cmn.SimpleKVs)
-	)
+		objects cmn.SimpleKVs
 
-	payload.InitWithQuery(r.URL.Query())
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	glog.V(4).Infof("singleDownloadHandler payload %v", payload)
-
-	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
-		return
-	}
-
-	objects[payload.Objname] = payload.Link
-	if err := p.bulkDownloadProcessor(id, payload.Bucket, payload.BckProvider, payload.Timeout, objects); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	w.Write([]byte(id))
-}
-
-// POST /v1/download/range?bucket=...&base=...&template=...
-func (p *proxyrunner) rangeDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
-	var (
-		payload = &cmn.DlRangeBody{}
-		// link -> objname
-		objects = make(cmn.SimpleKVs)
-	)
-
-	payload.InitWithQuery(r.URL.Query())
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
-		return
-	}
-
-	glog.V(4).Infof("rangeDownloadHandler payload: %s", payload)
-
-	prefix, suffix, start, end, step, digitCount, err := cmn.ParseBashTemplate(payload.Template)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	for i := start; i <= end; i += step {
-		objname := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
-		objects[objname] = payload.Base + objname
-	}
-
-	if err := p.bulkDownloadProcessor(id, payload.Bucket, payload.BckProvider, payload.Timeout, objects); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	w.Write([]byte(id))
-}
-
-// POST /v1/download/multi?bucket=...&timeout=...
-func (p *proxyrunner) multiDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
-	var (
-		payload = &cmn.DlMultiBody{}
-		objects = make(cmn.SimpleKVs)
-
+		payload        = &cmn.DlBase{}
+		singlePayload  = &cmn.DlSingle{}
+		rangePayload   = &cmn.DlRangeBody{}
+		multiPayload   = &cmn.DlMultiBody{}
 		objectsPayload interface{}
 	)
 
-	if err := cmn.ReadJSON(w, r, &objectsPayload); err != nil {
-		return
-	}
-
 	payload.InitWithQuery(r.URL.Query())
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	glog.V(4).Infof("multiDownloadHandler payload: %s", payload)
-
 	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
 
-	switch ty := objectsPayload.(type) {
-	case map[string]interface{}:
-		for key, val := range ty {
-			switch v := val.(type) {
-			case string:
-				objects[key] = v
-			default:
-				p.invalmsghdlr(w, r, fmt.Sprintf("values in map should be strings, found: %T", v))
-				return
-			}
+	singlePayload.InitWithQuery(r.URL.Query())
+	rangePayload.InitWithQuery(r.URL.Query())
+	multiPayload.InitWithQuery(r.URL.Query())
+
+	if err := singlePayload.Validate(); err == nil {
+		if objects, err = singlePayload.ExtractPayload(); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
-	case []interface{}:
-		// process list of links
-		for _, val := range ty {
-			switch link := val.(type) {
-			case string:
-				objName := path.Base(link)
-				if objName == "." || objName == "/" {
-					// should we continue and let the use worry about this after?
-					p.invalmsghdlr(w, r, fmt.Sprintf("can not extract a valid `object name` from the provided download link: %q.", link))
-					return
-				}
-				objects[objName] = link
-			default:
-				p.invalmsghdlr(w, r, fmt.Sprintf("values in array should be strings, found: %T", link))
-				return
-			}
+	} else if err := rangePayload.Validate(); err == nil {
+		if objects, err = rangePayload.ExtractPayload(); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
-	default:
-		p.invalmsghdlr(w, r, fmt.Sprintf("JSON body should be map (string -> string) or array of strings, found: %T", ty))
+	} else if err := multiPayload.Validate(); err == nil {
+		if err := cmn.ReadJSON(w, r, &objectsPayload); err != nil {
+			return
+		}
+		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	} else {
+		p.invalmsghdlr(w, r, "invalid query keys or query values")
 		return
 	}
 
-	// process the downloads
-	if err := p.bulkDownloadProcessor(id, payload.Bucket, payload.BckProvider, payload.Timeout, objects); err != nil {
+	if err := p.bulkDownloadProcessor(id, payload, objects); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
