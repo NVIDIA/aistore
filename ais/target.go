@@ -576,17 +576,22 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
-	if _, ok := t.validateBucket(w, r, bucket, ""); !ok {
+	bucket := apiItems[0]
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+
+	normalizedBckProvider, err := cluster.TranslateBckProvider(bckProvider)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	// all cloud bucket names
-	if bucket == "*" {
-		t.getbucketnames(w, r)
+
+	// list bucket names
+	if bucket == cmn.ListAll {
+		t.getbucketnames(w, r, normalizedBckProvider)
 		return
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
@@ -2004,17 +2009,18 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	return bucketList, nil
 }
 
-func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
-	bucketmd := t.bmdowner.get()
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
+	var (
+		bmd         = t.bmdowner.get()
+		bucketNames = &cmn.BucketNames{
+			Local: make([]string, 0, len(bmd.LBmap)),
+			Cloud: make([]string, 0, 64),
+		}
+	)
 
-	bucketnames := &cmn.BucketNames{
-		Local: make([]string, 0, len(bucketmd.LBmap)),
-		Cloud: make([]string, 0, 64),
-	}
 	if bckProvider != cmn.CloudBs {
-		for bucket := range bucketmd.LBmap {
-			bucketnames.Local = append(bucketnames.Local, bucket)
+		for bucket := range bmd.LBmap {
+			bucketNames.Local = append(bucketNames.Local, bucket)
 		}
 	}
 
@@ -2023,9 +2029,9 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	bucketnames.Cloud = buckets
+	bucketNames.Cloud = buckets
 
-	jsbytes, err := jsoniter.Marshal(bucketnames)
+	jsbytes, err := jsoniter.Marshal(bucketNames)
 	cmn.AssertNoErr(err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }

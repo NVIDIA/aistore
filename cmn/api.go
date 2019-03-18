@@ -339,6 +339,7 @@ const (
 	Voteres    = "result"
 	VoteInit   = "init"
 	Mountpaths = "mountpaths"
+	ListAll    = "*"
 
 	// dsort
 	Init        = "init"

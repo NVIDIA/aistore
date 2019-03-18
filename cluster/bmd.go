@@ -6,14 +6,10 @@ package cluster
 
 import (
 	"fmt"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-)
-
-const (
-	maxBucketNameLen = 200
 )
 
 var (
@@ -67,36 +63,19 @@ func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
 }
 
 func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err error) {
-	if bucket == "*" { // Get bucket names
-		return false, nil
-	}
-	if bucket == "" {
-		err = fmt.Errorf("invalid bucket name %q - bucket name is empty", bucket)
+	if !validateBucketName(bucket) {
+		err = fmt.Errorf("invalid bucket names - it must contain only lowercase letters, numbers, dashes (-), underscores (_), and dots (.)")
 		return
 	}
-	if strings.Contains(bucket, string(filepath.Separator)) {
-		err = fmt.Errorf("invalid bucket name %q - contains '/'", bucket)
-		return
-	}
-	if strings.Contains(bucket, " ") {
-		err = fmt.Errorf("invalid bucket name %q - contains space", bucket)
-		return
-	}
-	if len(bucket) > maxBucketNameLen {
-		err = fmt.Errorf("invalid bucket name %q - length exceeds %d", bucket, maxBucketNameLen)
-		return
-	}
-
-	bckProvider = strings.ToLower(bckProvider)
 	config := cmn.GCO.Get()
-	val, ok := bckProviderMap[bckProvider]
-	if !ok {
-		err = fmt.Errorf("invalid value %q for %q", bckProvider, cmn.URLParamBckProvider)
-		return
+
+	normalizedBckProvider, err := TranslateBckProvider(bckProvider)
+	if err != nil {
+		return false, err
 	}
 
 	bckIsLocal := m.IsLocal(bucket)
-	switch val {
+	switch normalizedBckProvider {
 	case cmn.LocalBs:
 		// Check if local bucket does exist
 		if !bckIsLocal {
@@ -116,6 +95,33 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 	return
 }
 
+func TranslateBckProvider(bckProvider string) (string, error) {
+	bckProvider = strings.ToLower(bckProvider)
+	val, ok := bckProviderMap[bckProvider]
+	if !ok {
+		return "", fmt.Errorf("invalid value %q for %q", bckProvider, cmn.URLParamBckProvider)
+	}
+	return val, nil
+}
+
 func isValidCloudProvider(bckProvider, cloudProvider string) bool {
 	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
+}
+
+func validateBucketName(bucket string) bool {
+	if bucket == "" {
+		return false
+	}
+	reg, err := regexp.Compile(`^[\.a-zA-Z0-9_-]*$`)
+	cmn.AssertNoErr(err)
+	if !reg.MatchString(bucket) {
+		return false
+	}
+	// Reject bucket name containing only dots
+	for _, c := range bucket {
+		if c != '.' {
+			return true
+		}
+	}
+	return false
 }

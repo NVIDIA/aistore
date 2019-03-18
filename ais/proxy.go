@@ -296,19 +296,22 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
+
+	normalizedBckProvider, err := cluster.TranslateBckProvider(bckProvider)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	// all bucket names
-	if bucket == "*" {
-		p.getbucketnames(w, r, bucket, bckProvider)
+	// list bucket names
+	if bucket == cmn.ListAll {
+		p.getbucketnames(w, r, bucket, normalizedBckProvider)
 		return
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
@@ -1280,11 +1283,11 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	bucketmd := p.bmdowner.get()
 	bckProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
 	if bckProvider == cmn.LocalBs {
-		bucketnames := &cmn.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
+		bucketNames := &cmn.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
 		for bucket := range bucketmd.LBmap {
-			bucketnames.Local = append(bucketnames.Local, bucket)
+			bucketNames.Local = append(bucketNames.Local, bucket)
 		}
-		jsbytes, err := jsoniter.Marshal(bucketnames)
+		jsbytes, err := jsoniter.Marshal(bucketNames)
 		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, "getbucketnames"+bckProviderStr)
 		return
@@ -1295,13 +1298,13 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	for _, si = range smap.Tmap {
 		break
 	}
-	bucketspec += bckProviderStr
 	args := callArgs{
 		si: si,
 		req: reqArgs{
 			method: r.Method,
 			header: r.Header,
-			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucketspec),
+			path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
+			query:  r.URL.Query(),
 		},
 		timeout: defaultTimeout,
 	}

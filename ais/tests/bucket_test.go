@@ -259,3 +259,22 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 }
+
+func TestBucketInvalidName(t *testing.T) {
+	var (
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	invalidNames := []string{
+		cmn.ListAll, ".", "", " ", "bucket and name",
+		"bucket/name",
+	}
+
+	for _, name := range invalidNames {
+		if err := api.CreateLocalBucket(baseParams, name); err == nil {
+			tutils.DestroyLocalBucket(t, proxyURL, name)
+			t.Errorf("accepted bucket with name %s", name)
+		}
+	}
+}

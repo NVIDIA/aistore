@@ -173,7 +173,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
 	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*")
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll)
 	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
 	optParams := OptionalParams{Query: query}
 
