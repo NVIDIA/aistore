@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -159,8 +160,9 @@ func TestDownloadMultiList(t *testing.T) {
 		bucket   = TestLocalBucketName
 		l        = []string{
 			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE",
+			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
 		}
+		expectedObjs = []string{"LICENSE", "README.md"}
 	)
 
 	// Create local bucket
@@ -174,8 +176,8 @@ func TestDownloadMultiList(t *testing.T) {
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
-	if len(objs) != len(l) {
-		t.Errorf("expected objects (%s), got: %s", l, objs)
+	if !reflect.DeepEqual(objs, expectedObjs) {
+		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
 	}
 }
 

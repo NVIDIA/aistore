@@ -26,6 +26,16 @@ type dlResponse struct {
 	err        error
 }
 
+// Removes everything that goes after '?', eg. "?query=key..." so it will not
+// be part of final object name.
+func normalizeObjName(objName string) string {
+	idx := strings.IndexByte(objName, '?')
+	if idx < 0 {
+		return objName
+	}
+	return objName[:idx]
+}
+
 ///////////
 // PROXY //
 ///////////
@@ -141,14 +151,17 @@ func (p *proxyrunner) bulkDownloadProcessor(id, bucket, bckProvider, timeout str
 	)
 
 	bulkTargetRequest := make(map[*cluster.Snode]*cmn.DlBody, smap.CountTargets())
-	for objname, link := range objects {
-		si, errstr := hrwTarget(bucket, objname, smap)
+	for objName, link := range objects {
+		// Make sure that objName does not contain "?query=smth" suffix
+		objName = normalizeObjName(objName)
+
+		si, errstr := hrwTarget(bucket, objName, smap)
 		if errstr != "" {
 			return fmt.Errorf(errstr)
 		}
 
 		dlObj := cmn.DlObj{
-			Objname: objname,
+			Objname: objName,
 			Link:    link,
 		}
 
