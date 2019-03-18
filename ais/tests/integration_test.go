@@ -1209,7 +1209,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}
 
 	const (
-		newMountpath = "/tmp/ais"
+		newMountpath = "/tmp/ais/mountpath"
 	)
 
 	var (
@@ -1229,6 +1229,8 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	err := cmn.CreateDir(newMountpath)
+	tutils.CheckFatal(err, t)
 
 	defer func() {
 		if !tutils.DockerRunning() {
@@ -1242,7 +1244,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Add new mountpath to target
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-	err := api.AddMountpath(baseParams, newMountpath)
+	err = api.AddMountpath(baseParams, newMountpath)
 	tutils.CheckFatal(err, t)
 
 	waitForRebalanceToComplete(t, m.proxyURL)
