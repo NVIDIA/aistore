@@ -412,6 +412,52 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	return slices, idToNode, nil
 }
 
+func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, idToNode map[int]string, toDisk bool, id int, sliceSize int64) error {
+	if toDisk {
+		prefix := fmt.Sprintf("ec-rebuild-%d", id)
+		fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
+		file, err := cmn.CreateFile(fqn)
+		if err != nil {
+			return err
+		}
+		writers[id] = file
+		restored[id] = &slice{workFQN: fqn, n: sliceSize}
+	} else {
+		sgl := mem2.NewSGL(sliceSize)
+		restored[id] = &slice{obj: sgl, n: sliceSize}
+		writers[id] = sgl
+	}
+
+	// id from slices object differs from id of idToNode object
+	delete(idToNode, id+1)
+
+	return nil
+}
+
+func checkSliceChecksum(reader io.Reader, recvCksm cmn.CksumProvider, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64) {
+	defer wg.Done()
+
+	if kind, _ := recvCksm.Get(); kind == cmn.ChecksumNone {
+		glog.Errorf("Checksum of a slice is of type %s", cmn.ChecksumNone)
+		return
+	}
+
+	buf, slab := mem2.AllocFromSlab2(cmn.MaxI64(sliceSize, 256*cmn.KiB))
+	actualCksm, errstr := cmn.ComputeXXHash(reader, buf)
+	slab.Free(buf)
+
+	if errstr != "" {
+		glog.Errorf("Couldn't compute hash of a slice: %s", errstr)
+		errCh <- i
+		return
+	}
+
+	if !cmn.EqCksum(cmn.NewCksum(cmn.ChecksumXXHash, actualCksm), recvCksm) {
+		glog.Errorf("Checksum of slice does not match. Got: %s, expected: %s", recvCksm.String(), cmn.NewCksum(cmn.ChecksumXXHash, actualCksm).String())
+		errCh <- i
+	}
+}
+
 // reconstruct the main object from slices, save it locally
 // * req - original request
 // * meta - rebuild metadata
@@ -426,6 +472,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	readers := make([]io.Reader, sliceCnt)
 	writers := make([]io.Writer, sliceCnt)
 	restored := make([]*slice, sliceCnt)
+
+	cksmWg := &sync.WaitGroup{}
+	cksmErrCh := make(chan int, sliceCnt)
 
 	// allocate memory for reconstructed(missing) slices - EC requirement,
 	// and open existing slices for reading
@@ -444,26 +493,17 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			}
 		}
 		if sl == nil || sl.writer == nil {
-			if toDisk {
-				prefix := fmt.Sprintf("ec-rebuild-%d", i)
-				fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
-				file, err := cmn.CreateFile(fqn)
-				if err != nil {
-					break
-				}
-				writers[i] = file
-				restored[i] = &slice{workFQN: fqn, n: sliceSize}
-			} else {
-				sgl := mem2.NewSGL(cmn.KiB * 512)
-				restored[i] = &slice{obj: sgl, n: sliceSize}
-				writers[i] = sgl
+			if err = noSliceWriter(req, writers, restored, idToNode, toDisk, i, sliceSize); err != nil {
+				break
 			}
-			delete(idToNode, i+1)
 		} else {
+			var cksmReader io.Reader
 			if sgl, ok := sl.writer.(*memsys.SGL); ok {
 				readers[i] = memsys.NewReader(sgl)
+				cksmReader = memsys.NewReader(sgl)
 			} else if sl.workFQN != "" {
 				readers[i], err = cmn.NewFileHandle(sl.workFQN)
+				cksmReader, _ = cmn.NewFileHandle(sl.workFQN)
 				if err != nil {
 					break
 				}
@@ -471,6 +511,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 				err = fmt.Errorf("unsupported slice source: %T", sl.writer)
 				break
 			}
+
+			cksmWg.Add(1)
+			go checkSliceChecksum(cksmReader, sl.cksum, cksmWg, cksmErrCh, i, sliceSize)
 		}
 	}
 
@@ -486,6 +529,20 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	if err != nil {
 		return restored, err
 	}
+
+	// Wait for checksum checks to complete
+	cksmWg.Wait()
+	close(cksmErrCh)
+
+	for i := range cksmErrCh {
+		// slice's checksum did not match, however we might be able to restore object anyway
+		glog.Warningf("Slice checksum mismatch for %s", req.LOM.Objname)
+		if err := noSliceWriter(req, writers, restored, idToNode, toDisk, i, sliceSize); err != nil {
+			return restored, err
+		}
+		readers[i] = nil
+	}
+
 	if err = stream.Reconstruct(readers, writers); err != nil {
 		return restored, err
 	}
@@ -835,13 +892,13 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		}
 
 		metas[node.DaemonID] = &md
-		cnt := chk[md.Checksum]
+		cnt := chk[md.ObjChecksum]
 		cnt++
-		chk[md.Checksum] = cnt
+		chk[md.ObjChecksum] = cnt
 
 		if cnt > chkMax {
 			chkMax = cnt
-			chkVal = md.Checksum
+			chkVal = md.ObjChecksum
 		}
 	}
 
@@ -853,11 +910,11 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	// cleanup: delete all metadatas that have "obsolete" information
 	nodes = make(map[string]*Metadata)
 	for k, v := range metas {
-		if v.Checksum == chkVal {
+		if v.ObjChecksum == chkVal {
 			meta = v
 			nodes[k] = v
 		} else {
-			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s", k, v.SliceID, chkVal, v.Checksum)
+			glog.Warningf("Hashes of target %s[slice id %d] mismatch: %s == %s", k, v.SliceID, chkVal, v.ObjChecksum)
 		}
 	}
 

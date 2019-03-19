@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"encoding/hex"
+	"fmt"
 	"hash"
 )
 
@@ -56,5 +57,9 @@ func EqCksum(a, b CksumProvider) bool {
 
 func (v Cksumvalxxhash) Get() (string, string) { return v.kind, v.val }
 func (v Cksumvalmd5) Get() (string, string)    { return v.kind, v.val }
-func (v Cksumvalxxhash) String() string        { return "(" + v.kind + ", " + v.val[:8] + "...)" }
-func (v Cksumvalmd5) String() string           { return "(" + v.kind + ", " + v.val[:8] + "...)" }
+func (v Cksumvalxxhash) String() string {
+	return fmt.Sprintf("(%s,%s...)", v.kind, v.val[:Min(8, len(v.val))])
+}
+func (v Cksumvalmd5) String() string {
+	return fmt.Sprintf("(%s,%s...)", v.kind, v.val[:Min(8, len(v.val))])
+}

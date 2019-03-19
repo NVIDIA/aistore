@@ -6,9 +6,10 @@
 package ios
 
 import (
-	"fmt"
 	"os"
 	"testing"
+
+	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -91,7 +92,7 @@ func TestSearchValidMountPath(t *testing.T) {
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
-	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
+	tassert.Error(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -99,7 +100,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
-	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
+	tassert.Error(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -107,7 +108,7 @@ func TestSearchWithNoMountPath(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
-	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
+	tassert.Error(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -120,15 +121,15 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	oldMPs := setAvailableMountPaths("/tmp", "/tmp/x")
 
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
-	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
+	tassert.Error(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/xabc")
 	longestPrefix := mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
+	tassert.Error(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/x/abc")
 	longestPrefix = mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
+	tassert.Error(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -142,14 +143,14 @@ func TestSimilarCases(t *testing.T) {
 
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp/abc")
 	longestPrefix := mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
+	tassert.Error(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/abc/")
 	longestPrefix = mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
+	tassert.Error(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/abx")
-	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "/abx")
+	tassert.Error(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "/abx")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -159,15 +160,15 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp")
 	longestPrefix := mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
+	tassert.Error(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/")
 	longestPrefix = mpathInfo.Path
-	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
+	tassert.Error(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
 	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/abx")
 	longestPrefix = mpathInfo.Path
-	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
+	tassert.Error(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
 }
 
@@ -193,12 +194,6 @@ func setAvailableMountPaths(paths ...string) []string {
 	}
 
 	return oldPaths
-}
-
-func testAssert(t *testing.T, condition bool, msg string, args ...interface{}) {
-	if !condition {
-		t.Errorf(fmt.Sprintf(msg, args...))
-	}
 }
 
 func createDirs(dirs ...string) error {

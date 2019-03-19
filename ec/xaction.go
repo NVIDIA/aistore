@@ -215,7 +215,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			glog.Errorf("No writer for %s", uname)
 			return
 		}
-		if err := r.writerReceive(writer, iReq.Exists, object); err != nil && err != ErrorNotFound {
+		if err := r.writerReceive(writer, iReq.Exists, hdr.ObjAttrs, object); err != nil && err != ErrorNotFound {
 			glog.Errorf("Failed to receive data for %s: %v", iReq.Sender, err)
 		}
 
@@ -235,12 +235,15 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 		if ok {
 			writer.lom.Version = hdr.ObjAttrs.Version
 			writer.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
+
 			if hdr.ObjAttrs.CksumType != "" {
 				writer.lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 			}
-			if err := r.writerReceive(writer, iReq.Exists, object); err != nil {
+
+			if err := r.writerReceive(writer, iReq.Exists, hdr.ObjAttrs, object); err != nil {
 				glog.Errorf("Failed to read replica: %v", err)
 			}
+
 			return
 		}
 
@@ -295,6 +298,8 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			}
 			lom.Version = hdr.ObjAttrs.Version
 			lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
+
+			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if hdr.ObjAttrs.CksumType != "" {
 				lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 			}
@@ -626,9 +631,11 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 		Version: lom.Version,
 		Atime:   lom.Atime.UnixNano(),
 	}
+
 	if lom.Cksum != nil {
 		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
 	}
+
 	rHdr := transport.Header{
 		Bucket:   bucket,
 		Objname:  objname,
@@ -656,7 +663,7 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func (r *XactEC) writerReceive(writer *slice, exists bool, reader io.Reader) (err error) {
+func (r *XactEC) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
 	buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 
 	if !exists {
@@ -672,6 +679,9 @@ func (r *XactEC) writerReceive(writer *slice, exists bool, reader io.Reader) (er
 	if file, ok := writer.writer.(*os.File); ok {
 		file.Close()
 	}
+
+	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
+
 	writer.wg.Done()
 	slab.Free(buf)
 	return err

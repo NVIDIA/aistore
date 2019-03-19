@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/OneOfOne/xxhash"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -115,11 +117,11 @@ func (c *putJogger) encode(req *Request) error {
 	ecConf := req.LOM.BckProps.EC
 	_, cksumValue := req.LOM.Cksum.Get()
 	meta := &Metadata{
-		Size:     req.LOM.Size,
-		Data:     ecConf.DataSlices,
-		Parity:   ecConf.ParitySlices,
-		IsCopy:   req.IsCopy,
-		Checksum: cksumValue,
+		Size:        req.LOM.Size,
+		Data:        ecConf.DataSlices,
+		Parity:      ecConf.ParitySlices,
+		IsCopy:      req.IsCopy,
+		ObjChecksum: cksumValue,
 	}
 
 	// calculate the number of targets required to encode the object
@@ -239,6 +241,23 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	return err
 }
 
+// Fills slices with calculated checksums, reports errors to errCh
+func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan error, cksmReaders []io.Reader, sliceSize int64) {
+	defer wg.Done()
+	buf, slab := mem2.AllocFromSlab2(cmn.MaxI64(256*cmn.KiB, sliceSize))
+	defer slab.Free(buf)
+	for i, reader := range cksmReaders {
+		cksm, errstr := cmn.ComputeXXHash(reader, buf)
+
+		if errstr != "" {
+			errCh <- fmt.Errorf("failure computing checksum of a slice: %s", errstr)
+			return
+		}
+
+		slices[i].cksum = cmn.NewCksum(cmn.ChecksumXXHash, cksm)
+	}
+}
+
 // generateSlicesToMemory gets FQN to the original file and encodes it into EC slices
 // * fqn - the path to original object
 // * dataSlices - the number of data slices
@@ -274,19 +293,37 @@ func generateSlicesToMemory(fqn string, dataSlices, paritySlices int) (cmn.ReadO
 		padSize -= int64(byteCnt)
 	}
 
-	// readers are slices of original object(no memory allocated),
-	// writers are slices created by EC encoding process(memory is allocated)
+	// readers are slices of original object(no memory allocated)
 	readers := make([]io.Reader, dataSlices)
+	cksmReaders := make([]io.Reader, dataSlices)
+
+	// writers are slices created by EC encoding process(memory is allocated)
+	// hashes are writers, which calculate hash when their're written to
+	// sliceWriters combine writers and hashes to calculate slices and hashes at the same time
 	writers := make([]io.Writer, paritySlices)
+	hashes := make([]*xxhash.XXHash64, paritySlices)
+	sliceWriters := make([]io.Writer, paritySlices)
+
 	for i := 0; i < dataSlices; i++ {
 		reader := memsys.NewSliceReader(sgl, int64(i)*sliceSize, sliceSize)
 		slices[i] = &slice{reader: reader}
 		readers[i] = reader
+		cksmReaders[i] = memsys.NewSliceReader(sgl, int64(i)*sliceSize, sliceSize)
 	}
+
+	// We have established readers of data slices, we can already start calculating hashes for them
+	// during calculating parity slices and their hashes
+	wgCksmReaders := &sync.WaitGroup{}
+	wgCksmReaders.Add(1)
+	errCksmCh := make(chan error, 1)
+	go calculateDataSlicesHashes(slices, wgCksmReaders, errCksmCh, cksmReaders, sliceSize)
+
 	for i := 0; i < paritySlices; i++ {
 		writer := mem2.NewSGL(initSize)
 		slices[i+dataSlices] = &slice{obj: writer}
 		writers[i] = writer
+		hashes[i] = xxhash.New64()
+		sliceWriters[i] = io.MultiWriter(writers[i], hashes[i])
 	}
 
 	stream, err := reedsolomon.NewStreamC(dataSlices, paritySlices, true, true)
@@ -294,7 +331,19 @@ func generateSlicesToMemory(fqn string, dataSlices, paritySlices int) (cmn.ReadO
 		return sgl, slices, err
 	}
 
-	err = stream.Encode(readers, writers)
+	// Calculate slices and it's hashes
+	if err := stream.Encode(readers, sliceWriters); err != nil {
+		return sgl, slices, err
+	}
+
+	for i, h := range hashes {
+		slices[i+dataSlices].cksum = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(h))
+	}
+
+	wgCksmReaders.Wait()
+	close(errCksmCh)
+	err = <-errCksmCh
+
 	return sgl, slices, err
 }
 
@@ -326,28 +375,47 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 	sliceSize := SliceSize(fileSize, dataSlices)
 	padSize := sliceSize*int64(dataSlices) - fileSize
 
-	// readers are slices of original object(no memory allocated),
-	// writers are slices created by EC encoding process
+	// readers are slices of original object(no memory allocated)
 	readers := make([]io.Reader, dataSlices)
+	cksmReaders := make([]io.Reader, dataSlices)
+
+	// writers are slices created by EC encoding process(memory is allocated)
+	// hashes are writers, which calculate hash when their're written to
+	// sliceWriters combine writers and hashes to calculate slices and hashes at the same time
 	writers := make([]io.Writer, paritySlices)
+	hashes := make([]*xxhash.XXHash64, paritySlices)
+	sliceWriters := make([]io.Writer, paritySlices)
+
 	sizeLeft := fileSize
 	for i := 0; i < dataSlices; i++ {
 		var (
-			reader cmn.ReadOpenCloser
-			err    error
+			reader     cmn.ReadOpenCloser
+			cksmReader cmn.ReadOpenCloser
+			err        error
 		)
 		if sizeLeft < sliceSize {
 			reader, err = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sizeLeft, padSize)
+			cksmReader, _ = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sizeLeft, padSize)
 		} else {
 			reader, err = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sliceSize, 0)
+			cksmReader, _ = cmn.NewFileSectionHandle(fh, int64(i)*sliceSize, sliceSize, 0)
 		}
 		if err != nil {
 			return fh, slices, err
 		}
 		slices[i] = &slice{obj: fh, reader: reader}
 		readers[i] = reader
+		cksmReaders[i] = cksmReader
 		sizeLeft -= sliceSize
 	}
+
+	// We have established readers of data slices, we can already start calculating hashes for them
+	// during calculating parity slices and their hashes
+	wgCksmReaders := &sync.WaitGroup{}
+	wgCksmReaders.Add(1)
+	errChCksm := make(chan error, 1)
+	go calculateDataSlicesHashes(slices, wgCksmReaders, errChCksm, cksmReaders, sliceSize)
+
 	for i := 0; i < paritySlices; i++ {
 		workFQN := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
 		writer, err := cmn.CreateFile(workFQN)
@@ -356,6 +424,8 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 		}
 		slices[i+dataSlices] = &slice{writer: writer, workFQN: workFQN}
 		writers[i] = writer
+		hashes[i] = xxhash.New64()
+		sliceWriters[i] = io.MultiWriter(writers[i], hashes[i])
 	}
 
 	stream, err := reedsolomon.NewStreamC(dataSlices, paritySlices, true, true)
@@ -363,7 +433,19 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 		return fh, slices, err
 	}
 
-	err = stream.Encode(readers, writers)
+	// Calculate slices and it's hashes
+	if err := stream.Encode(readers, sliceWriters); err != nil {
+		return fh, slices, err
+	}
+
+	for i, h := range hashes {
+		slices[i+dataSlices].cksum = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(h))
+	}
+
+	wgCksmReaders.Wait()
+	close(errChCksm)
+	err = <-errChCksm
+
 	for _, wr := range writers {
 		// writer can be only *os.File within this function
 		f, ok := wr.(*os.File)
@@ -400,6 +482,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	} else {
 		objReader, slices, err = generateSlicesToMemory(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
 	}
+
 	if err != nil {
 		freeObject(objReader)
 		c.freeSGL(slices)
@@ -460,6 +543,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		mcopy := *meta
 		mcopy.SliceID = i + 1
+
 		src := &dataSource{
 			reader:   reader,
 			size:     sliceSize,
@@ -467,7 +551,12 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			metadata: &mcopy,
 			isSlice:  true,
 		}
-		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, req.LOM, src, nil)
+
+		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
+		lom := *req.LOM
+		lom.Cksum = slices[i].cksum
+
+		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, &lom, src, nil)
 		if err != nil {
 			ch <- err
 			return
