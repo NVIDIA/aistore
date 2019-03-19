@@ -20,7 +20,16 @@ func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
 	if runParams.usingSG {
 		sgl = tutils.Mem2.NewSGL(wo.size)
-		defer sgl.Free()
+		defer func() {
+			// FIXME: due to critical bug (https://github.com/golang/go/issues/30597)
+			// we need to postpone `sgl.Free` to a little bit later time, otherwise
+			// we will experience 'read after free'. Sleep time is number taken
+			// from thin air - increase if panics are still happening.
+			go func() {
+				time.Sleep(5 * time.Second)
+				sgl.Free()
+			}()
+		}()
 	}
 
 	r, err := tutils.NewReader(tutils.ParamReader{
