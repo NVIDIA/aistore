@@ -176,7 +176,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		for i := 0; i < numberOfFiles; i++ {
 			files[i] = path.Join(prefix, <-fileNameCh)
 		}
-		err := tutils.DeleteList(proxyURL, bucketName, cmn.CloudBs, files, true, 0)
+		err := api.DeleteList(tutils.BaseAPIParams(proxyURL), bucketName, cmn.CloudBs, files, true, 0)
 		if err != nil {
 			t.Error("Unable to delete files during cleanup from cloud bucket.")
 		}
@@ -841,6 +841,7 @@ func TestPrefetchList(t *testing.T) {
 		toprefetch    = make(chan string, numfiles)
 		netprefetches = int64(0)
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams    = tutils.BaseAPIParams(proxyURL)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -868,11 +869,11 @@ func TestPrefetchList(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err := tutils.EvictList(proxyURL, clibucket, cmn.CloudBs, files, true, 0)
+	err := api.EvictList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = tutils.PrefetchList(proxyURL, clibucket, cmn.CloudBs, files, true, 0)
+	err = api.PrefetchList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -931,7 +932,7 @@ func TestDeleteList(t *testing.T) {
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the objects
-	err = tutils.DeleteList(proxyURL, clibucket, "", files, true, 0)
+	err = api.DeleteList(tutils.BaseAPIParams(proxyURL), clibucket, "", files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -955,6 +956,7 @@ func TestPrefetchRange(t *testing.T) {
 		rmin, rmax     int64
 		re             *regexp.Regexp
 		proxyURL       = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams     = tutils.BaseAPIParams(proxyURL)
 		prefetchPrefix = "regressionList/obj"
 		prefetchRegex  = "\\d*"
 	)
@@ -1010,11 +1012,11 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err = tutils.EvictRange(proxyURL, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = api.EvictRange(baseParams, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = tutils.PrefetchRange(proxyURL, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = api.PrefetchRange(baseParams, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1067,7 +1069,7 @@ func TestDeleteRange(t *testing.T) {
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the small range of objects
-	err = tutils.DeleteRange(proxyURL, clibucket, "", prefix, regex, smallrange, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), clibucket, "", prefix, regex, smallrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1094,7 +1096,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 4. Delete the big range of objects
-	err = tutils.DeleteRange(proxyURL, clibucket, "", prefix, regex, bigrange, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), clibucket, "", prefix, regex, bigrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1167,7 +1169,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partial_rnge)
-	err = tutils.DeleteRange(proxyURL, TestLocalBucketName, cmn.LocalBs, prefix, regex, partial_rnge, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, partial_rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1197,7 +1199,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = tutils.DeleteRange(proxyURL, TestLocalBucketName, cmn.LocalBs, prefix, regex, rnge, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}

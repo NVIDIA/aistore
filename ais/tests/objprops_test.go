@@ -127,7 +127,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, bckProvider string, objMap map[s
 		}
 	}
 
-	err := tutils.EvictList(proxyURL, bucket, bckProvider, toEvictList, true, 0)
+	err := api.EvictList(tutils.BaseAPIParams(proxyURL), bucket, bckProvider, toEvictList, true, 0)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()

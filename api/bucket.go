@@ -5,10 +5,12 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -220,6 +222,60 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
+// DeleteList API
+//
+// DeleteList sends a HTTP request to remove a list of objects from a bucket
+func DeleteList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
+}
+
+// DeleteRange API
+//
+// DeleteRange sends a HTTP request to remove a range of objects from a bucket
+func DeleteRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
+}
+
+// PrefetchList API
+//
+// PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
+func PrefetchList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+}
+
+// PrefetchRange API
+//
+// PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
+func PrefetchRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+}
+
+// EvictList API
+//
+// EvictList sends a HTTP request to evict a list of objects from a cloud bucket
+func EvictList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+}
+
+// EvictRange API
+//
+// EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
+func EvictRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+}
+
 // EvictCloudBucket API
 //
 // EvictCloudBucket sends a HTTP request to a proxy to evict a cloud bucket with the given name
@@ -369,5 +425,25 @@ func EraseCopies(baseParams *BaseParams, bucket string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}
+
+// Handles the List/Range operations (delete, prefetch)
+func doListRangeRequest(baseParams *BaseParams, bucket, bckProvider, action, method string, listrangemsg interface{}) error {
+	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
+	b, err := json.Marshal(actionMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
+	}
+	baseParams.Method = method
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	optParams := OptionalParams{
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		Query: query,
+	}
+	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }

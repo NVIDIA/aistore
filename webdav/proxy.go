@@ -145,5 +145,5 @@ func (p *proxyServer) listObjectsNames(bucket, bckProvider, prefix string) ([]st
 
 // deleteObjects deletes all objects in the list of names from a bucket
 func (p *proxyServer) deleteObjects(bucket, bckProvider string, names []string) error {
-	return tutils.DeleteList(p.url, bucket, bckProvider, names, true /* wait */, 0 /* deadline*/)
+	return api.DeleteList(tutils.BaseAPIParams(p.url), bucket, bckProvider, names, true /* wait */, 0 /* deadline*/)
 }

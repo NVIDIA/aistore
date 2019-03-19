@@ -274,7 +274,7 @@ func Test_putdeleteRange(t *testing.T) {
 		msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
-		err := tutils.DeleteRange(proxyURL, clibucket, "", test.prefix, test.regexStr, test.rangeStr, true, 0)
+		err := api.DeleteRange(baseParams, clibucket, "", test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -465,7 +465,7 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	var (
 		bucketName = clibucket
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
-		baseParams = tutils.DefaultBaseAPIParams(t)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		fileName1  = "mytestobj1.txt"
 		fileName2  = "mytestobj2.txt"
 		queryLocal = url.Values{}
@@ -516,22 +516,22 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 	// Prefetch, evict without bprovider=cloud
 	tutils.Logf("Validating responses for empty bprovider for cloud bucket operations ...\n")
-	err = tutils.PrefetchList(proxyURL, clibucket, "", files, true, 0)
+	err = api.PrefetchList(baseParams, clibucket, "", files, true, 0)
 	if err == nil {
 		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
-	err = tutils.PrefetchRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
+	err = api.PrefetchRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
 		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
-	err = tutils.EvictList(proxyURL, bucketName, "", files, true, 0)
+	err = api.EvictList(baseParams, bucketName, "", files, true, 0)
 	if err == nil {
 		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
 
-	err = tutils.EvictRange(proxyURL, clibucket, "", "", "", prefetchRange, true, 0)
+	err = api.EvictRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
 		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
 	}
@@ -561,18 +561,18 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Prefetch/Evict should work
-	err = tutils.PrefetchList(proxyURL, clibucket, cmn.CloudBs, files, true, 0)
+	err = api.PrefetchList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
 	tutils.CheckFatal(err, t)
-	err = tutils.EvictList(proxyURL, bucketName, cmn.CloudBs, files, true, 0)
+	err = api.EvictList(baseParams, bucketName, cmn.CloudBs, files, true, 0)
 	tutils.CheckFatal(err, t)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	tutils.DeleteList(proxyURL, bucketName, cmn.CloudBs, files, true, 0)
+	api.DeleteList(baseParams, bucketName, cmn.CloudBs, files, true, 0)
 
 	// Deleting from local bucket
 	tutils.Logf("Deleting %s and %s from local bucket ...\n", fileName1, fileName2)
-	tutils.DeleteList(proxyURL, bucketName, cmn.LocalBs, files, true, 0)
+	api.DeleteList(baseParams, bucketName, cmn.LocalBs, files, true, 0)
 
 	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
@@ -1832,7 +1832,7 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 }
 
 func evictobjects(t *testing.T, proxyURL, bckProvider string, fileslist []string) {
-	err := tutils.EvictList(proxyURL, clibucket, bckProvider, fileslist, true, 0)
+	err := api.EvictList(tutils.BaseAPIParams(proxyURL), clibucket, bckProvider, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}

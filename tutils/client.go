@@ -374,68 +374,6 @@ func Del(proxyURL, bucket, object, bckProvider string, wg *sync.WaitGroup, errCh
 	return err
 }
 
-func doListRangeCall(proxyURL, bucket, bckProvider, action, method string, listrangemsg interface{}) error {
-	var (
-		b     []byte
-		err   error
-		query = url.Values{}
-	)
-	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
-	b, err = json.Marshal(actionMsg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
-	}
-
-	query.Add(cmn.URLParamBckProvider, bckProvider)
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = method
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	optParams := api.OptionalParams{
-		Header: http.Header{
-			"Content-Type": []string{"application/json"},
-		},
-		Query: query,
-	}
-	_, err = api.DoHTTPRequest(baseParams, path, b, optParams)
-	return err
-}
-
-func PrefetchList(proxyURL, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
-}
-
-func PrefetchRange(proxyURL, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
-}
-
-func DeleteList(proxyURL, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
-}
-
-func DeleteRange(proxyURL, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
-}
-
-func EvictList(proxyURL, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
-}
-
-func EvictRange(proxyURL, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
-}
-
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckCached + "=true"
 	r, err := HTTPClient.Head(url)
