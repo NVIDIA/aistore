@@ -59,6 +59,54 @@ func main() {
 			Action:  commands.ListAIS,
 			Flags:   []cli.Flag{commands.VerboseFlag},
 		},
+
+		// Downloader
+		{
+			Name:  "download",
+			Usage: "allows downloading objects from external source",
+			Flags: []cli.Flag{
+				commands.BucketFlag,
+				commands.BckProviderFlag,
+				commands.TimeoutFlag,
+			},
+			Subcommands: []cli.Command{
+				{
+					Name:  commands.DownloadSingle,
+					Usage: "downloads single object into provided bucket",
+					Flags: []cli.Flag{
+						commands.LinkFlag,
+						commands.ObjNameFlag,
+					},
+					Action: commands.DownloadHandler,
+				},
+				{
+					Name:  commands.DownloadRange,
+					Usage: "downloads range of objects specified in template parameter",
+					Flags: []cli.Flag{
+						commands.BaseFlag,
+						commands.TemplateFlag,
+					},
+					Action: commands.DownloadHandler,
+				},
+				{
+					Name:  commands.DownloadStatus,
+					Usage: "fetches status of download job with given id",
+					Flags: []cli.Flag{
+						commands.IDFlag,
+						commands.ProgressBarFlag,
+					},
+					Action: commands.DownloadAdminHandler,
+				},
+				{
+					Name:  commands.DownloadCancel,
+					Usage: "cancels download job with given id",
+					Flags: []cli.Flag{
+						commands.IDFlag,
+					},
+					Action: commands.DownloadAdminHandler,
+				},
+			},
+		},
 	}
 
 	sort.Sort(cli.CommandsByName(aisCLI.Commands))

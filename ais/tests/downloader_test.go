@@ -177,7 +177,7 @@ func TestDownloadTimeout(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	body := cmn.DlSingle{
+	body := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
 			Objname: objname,
 			Link:    link,

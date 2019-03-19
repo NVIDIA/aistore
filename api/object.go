@@ -282,7 +282,7 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 // Downloader API
 
 func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) (string, error) {
-	dlBody := cmn.DlSingle{
+	dlBody := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
 			Objname: objname,
 			Link:    link,
@@ -292,7 +292,7 @@ func DownloadSingle(baseParams *BaseParams, bucket, objname, link string) (strin
 	return DownloadSingleWithParam(baseParams, dlBody)
 }
 
-func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingle) (string, error) {
+func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
@@ -310,6 +310,10 @@ func DownloadRange(baseParams *BaseParams, bucket, base, template string) (strin
 		Template: template,
 	}
 	dlBody.Bucket = bucket
+	return DownloadRangeWithParam(baseParams, dlBody)
+}
+
+func DownloadRangeWithParam(baseParams *BaseParams, dlBody cmn.DlRangeBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost

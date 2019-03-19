@@ -5,6 +5,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -471,25 +472,25 @@ type DlStatusResp struct {
 }
 
 // Single request
-type DlSingle struct {
+type DlSingleBody struct {
 	DlBase
 	DlObj
 }
 
-func (b *DlSingle) InitWithQuery(query url.Values) {
+func (b *DlSingleBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
 	b.Link = query.Get(URLParamLink)
 	b.Objname = query.Get(URLParamObjName)
 }
 
-func (b *DlSingle) AsQuery() url.Values {
+func (b *DlSingleBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
 	query.Add(URLParamLink, b.Link)
 	query.Add(URLParamObjName, b.Objname)
 	return query
 }
 
-func (b *DlSingle) Validate() error {
+func (b *DlSingleBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
@@ -499,13 +500,13 @@ func (b *DlSingle) Validate() error {
 	return nil
 }
 
-func (b *DlSingle) ExtractPayload() (SimpleKVs, error) {
+func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
 	objects := make(SimpleKVs, 1)
 	objects[b.Objname] = b.Link
 	return objects, nil
 }
 
-func (b *DlSingle) String() (str string) {
+func (b *DlSingleBody) String() (str string) {
 	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
 }
 
@@ -572,7 +573,11 @@ func (b *DlMultiBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
 }
 
-func (b *DlMultiBody) Validate() error {
+func (b *DlMultiBody) Validate(body []byte) error {
+	if len(body) <= 0 {
+		return errors.New("body should not be empty")
+	}
+
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}

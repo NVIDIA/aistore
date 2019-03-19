@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -280,20 +281,30 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 		objects cmn.SimpleKVs
 
 		payload        = &cmn.DlBase{}
-		singlePayload  = &cmn.DlSingle{}
+		singlePayload  = &cmn.DlSingleBody{}
 		rangePayload   = &cmn.DlRangeBody{}
 		multiPayload   = &cmn.DlMultiBody{}
 		objectsPayload interface{}
 	)
 
 	payload.InitWithQuery(r.URL.Query())
-	if _, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+	if bckIsLocal, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+		return
+	} else if !bckIsLocal {
+		// TODO: we should enable this
+		p.invalmsghdlr(w, r, "downloading objects to cloud bucket is not supported")
 		return
 	}
 
 	singlePayload.InitWithQuery(r.URL.Query())
 	rangePayload.InitWithQuery(r.URL.Query())
 	multiPayload.InitWithQuery(r.URL.Query())
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
 	if err := singlePayload.Validate(); err == nil {
 		if objects, err = singlePayload.ExtractPayload(); err != nil {
@@ -305,10 +316,12 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-	} else if err := multiPayload.Validate(); err == nil {
-		if err := cmn.ReadJSON(w, r, &objectsPayload); err != nil {
+	} else if err := multiPayload.Validate(b); err == nil {
+		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+
 		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
