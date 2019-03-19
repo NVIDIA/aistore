@@ -398,12 +398,12 @@ func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, bckIsLocal 
 	xs.Unlock()
 }
 
-// PutCopies and EraseCopies as those are currently the only bucket-specific xaction we may have
+// PutCopies, EraseCopies and EC as those are currently the only bucket-specific xaction we may have
 func (xs *xactions) abortBucketSpecific(bucket string) {
 	xs.Lock()
 	defer xs.Unlock()
 	var (
-		bucketSpecific = []string{cmn.ActPutCopies, cmn.ActEraseCopies}
+		bucketSpecific = []string{cmn.ActPutCopies, cmn.ActEraseCopies, cmn.ActEC}
 		wg             = &sync.WaitGroup{}
 	)
 	for _, act := range bucketSpecific {
@@ -424,8 +424,8 @@ func (xs *xactions) abortBucketSpecific(bucket string) {
 			}
 			glog.Errorf("%s: timed-out waiting for termination", xx)
 		}(k, wg)
-		wg.Wait()
 	}
+	wg.Wait()
 }
 
 func (xs *xactions) renewDownloader(t *targetrunner) (xdl *downloader.Downloader, err error) {
