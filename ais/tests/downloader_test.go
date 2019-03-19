@@ -6,7 +6,6 @@ package ais_test
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +18,7 @@ func waitForDownload(t *testing.T, id string) {
 	for {
 		all := true
 		if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
-			if !strings.Contains(string(resp), "pct: 100") {
+			if resp.Finished != resp.Total {
 				all = false
 			}
 		}
@@ -61,10 +60,6 @@ func TestDownloadSingle(t *testing.T) {
 
 	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id)
 	tutils.CheckError(err, t)
-	if len(resp) < 10 {
-		t.Errorf("expected longer response, got: %s", string(resp))
-	}
-	tutils.Logln(string(resp))
 
 	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
 	tutils.CheckError(err, t)
@@ -72,7 +67,7 @@ func TestDownloadSingle(t *testing.T) {
 	time.Sleep(time.Second)
 
 	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
-		t.Errorf("expected error when getting status for link that is not being downloaded: %s", string(resp))
+		t.Errorf("expected error when getting status for link that is not being downloaded: %v", resp)
 	}
 
 	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id); err == nil {
@@ -229,4 +224,46 @@ func TestDownloadBucket(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// FIXME: How to wait?
+}
+
+func TestDownloadStatus(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		m        = map[string]string{
+			"short": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+			"long":  "http://releases.ubuntu.com/18.04/ubuntu-18.04.2-desktop-amd64.iso",
+		}
+	)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, m)
+	tutils.CheckFatal(err, t)
+	defer api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+
+	// Wait for the short download to complete
+	time.Sleep(2 * time.Second)
+
+	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id)
+	tutils.CheckFatal(err, t)
+
+	if resp.Total != len(m) {
+		t.Errorf("expected %d objects, got %d", len(m), resp.Total)
+	}
+	if resp.Finished != 1 {
+		t.Errorf("expected the short file to be downloaded")
+	}
+	if len(resp.CurrentTasks) != 1 {
+		t.Fatal("did not expect the long file to be already downloaded")
+	}
+	if resp.CurrentTasks[0].Name != "long" {
+		t.Errorf("invalid file name in status message, expected: %s, got: %s", "long", resp.CurrentTasks[0].Name)
+	}
 }

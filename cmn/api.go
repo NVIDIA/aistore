@@ -359,6 +359,18 @@ const (
 	DownloadBucket = "bucket"
 )
 
+// Download POST result returned to the user
+type DlPostResp struct {
+	ID string `json:"id"`
+}
+
+type DlStatusResp struct {
+	Finished     int          `json:"finished"`
+	Total        int          `json:"total"`
+	Percentage   float64      `json:"percentage,omitempty"`
+	CurrentTasks []TaskDlInfo `json:"current_tasks"`
+}
+
 type DlBase struct {
 	Bucket      string `json:"bucket"`
 	BckProvider string `json:"bprovider"`
@@ -465,10 +477,11 @@ func (b *DlBody) Validate() error {
 	return nil
 }
 
-// Internal status response body
-type DlStatusResp struct {
-	Finished int `json:"finished"`
-	Total    int `json:"total"`
+// Info about a task that is currently being downloaded by one of the joggers
+type TaskDlInfo struct {
+	Name       string `json:"name"`
+	Downloaded int64  `json:"downloaded"`
+	Total      int64  `json:"total,omitempty"` // TODO: Implement setting this field
 }
 
 // Single request

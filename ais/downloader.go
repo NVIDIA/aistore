@@ -71,7 +71,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, si *cluster.Snode, ms
 	}
 }
 
-func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBody) (string, error) {
+func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBody) ([]byte, int, error) {
 	var (
 		smap        = p.smapowner.get()
 		wg          = &sync.WaitGroup{}
@@ -97,14 +97,14 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 	}
 
 	notFoundCnt := 0
-	errors := make([]dlResponse, 0, 10) // errors other than than 404 (not found)
+	errs := make([]dlResponse, 0, 10) // errors other than than 404 (not found)
 	validResponses := responses[:0]
 	for _, resp := range responses {
 		if resp.statusCode >= http.StatusBadRequest {
 			if resp.statusCode == http.StatusNotFound {
 				notFoundCnt++
 			} else {
-				errors = append(errors, resp)
+				errs = append(errs, resp)
 			}
 		} else {
 			validResponses = append(validResponses, resp)
@@ -112,9 +112,9 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 	}
 
 	if notFoundCnt == len(responses) { // all responded with 404
-		return "", responses[0].err
-	} else if len(errors) > 0 {
-		return "", errors[0].err
+		return nil, http.StatusNotFound, responses[0].err
+	} else if len(errs) > 0 {
+		return nil, errs[0].statusCode, errs[0].err
 	}
 
 	switch method {
@@ -126,18 +126,33 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 		}
 
 		finished, total := 0, 0
+		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		for _, stat := range stats {
 			finished += stat.Finished
 			total += stat.Total
+			currTasks = append(currTasks, stat.CurrentTasks...)
+		}
+		pct := float64(finished) / float64(total) * 100
+
+		resp := cmn.DlStatusResp{
+			Finished:     finished,
+			Total:        total,
+			Percentage:   pct,
+			CurrentTasks: currTasks,
 		}
 
-		pct := float64(finished) / float64(total) * 100
-		return fmt.Sprintf("Status: [finished: %d, total: %d, pct: %.3f%%]", finished, total, pct), nil
+		respJSON, err := jsoniter.Marshal(resp)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		return respJSON, http.StatusOK, nil
 	case http.MethodDelete:
-		return string(responses[0].body), nil
+		response := responses[0]
+		return response.body, response.statusCode, response.err
 	default:
 		cmn.AssertMsg(false, method)
-		return "", nil
+		return nil, http.StatusInternalServerError, nil
 	}
 }
 
@@ -236,13 +251,16 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	}
 
 	glog.V(4).Infof("httpDownloadAdmin payload %v", payload)
-	resp, err := p.broadcastDownloadRequest(r.Method, payload)
+	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, payload)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		p.invalmsghdlr(w, r, err.Error(), statusCode)
 		return
 	}
 
-	w.Write([]byte(resp))
+	_, err = w.Write(resp)
+	if err != nil {
+		glog.Errorf("Failed to write to http response: %v.", err)
+	}
 }
 
 // POST /v1/download
@@ -336,7 +354,7 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Write([]byte(id))
+	p.respondWithID(w, r, id)
 }
 
 // POST /v1/download/bucket/name?provider=...&prefix=...&suffix=...
@@ -406,7 +424,27 @@ func (p *proxyrunner) bucketDownloadHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Write([]byte(id))
+	p.respondWithID(w, r, id)
+}
+
+// Helper methods
+
+func (p *proxyrunner) respondWithID(w http.ResponseWriter, r *http.Request, id string) {
+	resp := cmn.DlPostResp{
+		ID: id,
+	}
+
+	b, err := jsoniter.Marshal(resp)
+	if err != nil {
+		p.invalmsghdlr(w, r, "error marshalling response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(b)
+	if err != nil {
+		glog.Errorf("Failed to write to http response: %v.", err)
+	}
 }
 
 ////////////
@@ -473,6 +511,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	if response != nil {
 		b, err := jsoniter.Marshal(response)
 		cmn.AssertNoErr(err)
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			glog.Errorf("Failed to write to http response: %s.", err.Error())
+		}
 	}
 }

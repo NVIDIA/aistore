@@ -618,8 +618,6 @@ func (d *Downloader) dispatchStatus(req *request) {
 		}
 		_, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
 		cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
-
-		// TODO: calculating progress should take into account progress of currently downloaded task
 	}
 
 	if len(errs) > 0 {
@@ -628,10 +626,34 @@ func (d *Downloader) dispatchStatus(req *request) {
 		return
 	}
 
+	currentTasks := d.activeTasks(req.id)
+
 	req.writeResp(cmn.DlStatusResp{
-		Finished: finished,
-		Total:    total,
+		Finished:     finished,
+		Total:        total,
+		CurrentTasks: currentTasks,
 	})
+}
+
+func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
+	currentTasks := make([]cmn.TaskDlInfo, 0, len(d.joggers))
+
+	for _, j := range d.joggers {
+		j.Lock()
+
+		task := j.task
+		if task != nil && task.id == reqID {
+			info := cmn.TaskDlInfo{
+				Name:       task.obj.Objname,
+				Downloaded: atomic.LoadInt64(&task.currentSize),
+			}
+			currentTasks = append(currentTasks, info)
+		}
+
+		j.Unlock()
+	}
+
+	return currentTasks
 }
 
 //==================================== jogger =====================================

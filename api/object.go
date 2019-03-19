@@ -300,8 +300,7 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (s
 	optParams := OptionalParams{
 		Query: query,
 	}
-	id, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return string(id), err
+	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
 func DownloadRange(baseParams *BaseParams, bucket, base, template string) (string, error) {
@@ -321,8 +320,7 @@ func DownloadRangeWithParam(baseParams *BaseParams, dlBody cmn.DlRangeBody) (str
 	optParams := OptionalParams{
 		Query: query,
 	}
-	id, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return string(id), err
+	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
 func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string, error) {
@@ -340,8 +338,7 @@ func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string
 	optParams := OptionalParams{
 		Query: query,
 	}
-	id, err := DoHTTPRequest(baseParams, path, msg, optParams)
-	return string(id), err
+	return doDlDownloadRequest(baseParams, path, msg, optParams)
 }
 
 func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error {
@@ -360,7 +357,7 @@ func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error
 	return err
 }
 
-func DownloadStatus(baseParams *BaseParams, id string) (resp []byte, err error) {
+func DownloadStatus(baseParams *BaseParams, id string) (cmn.DlStatusResp, error) {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}
@@ -371,8 +368,7 @@ func DownloadStatus(baseParams *BaseParams, id string) (resp []byte, err error) 
 	optParams := OptionalParams{
 		Query: query,
 	}
-	resp, err = DoHTTPRequest(baseParams, path, nil, optParams)
-	return resp, err
+	return doDlStatusRequest(baseParams, path, optParams)
 }
 
 func DownloadCancel(baseParams *BaseParams, id string) error {
@@ -388,4 +384,29 @@ func DownloadCancel(baseParams *BaseParams, id string) error {
 	}
 	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
+}
+
+func doDlDownloadRequest(baseParams *BaseParams, path string, msg []byte, optParams OptionalParams) (string, error) {
+	respBytes, err := DoHTTPRequest(baseParams, path, msg, optParams)
+	if err != nil {
+		return "", err
+	}
+
+	var resp cmn.DlPostResp
+	err = jsoniter.Unmarshal(respBytes, &resp)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.ID, nil
+}
+
+func doDlStatusRequest(baseParams *BaseParams, path string, optParams OptionalParams) (resp cmn.DlStatusResp, err error) {
+	respBytes, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	if err != nil {
+		return resp, err
+	}
+
+	err = jsoniter.Unmarshal(respBytes, &resp)
+	return resp, err
 }

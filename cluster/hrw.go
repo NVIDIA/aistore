@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"path"
 	"sort"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,9 +19,8 @@ const MLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
-// FIXME: use path.Join
 func Uname(bucket, objname string) string {
-	return bucket + "/" + objname
+	return path.Join(bucket, objname)
 }
 
 func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
