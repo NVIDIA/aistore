@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -201,29 +202,72 @@ func TestDownloadTimeout(t *testing.T) {
 	}
 }
 
-// NOTE: For now this test is disabled since we don't have a clear way to wait
-// for the download.
-func TestDownloadBucket(t *testing.T) {
-	t.Skip("Not yet fully implemented")
+func TestDownloadCloud(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
 
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = "lpr-vision"
-		prefix   = "imagenet/imagenet_train-"
-		suffix   = ".tgz"
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		bucket     = clibucket
+
+		fileCnt = 5
+		prefix  = "imagenet/imagenet_train-"
+		suffix  = ".tgz"
 	)
 
 	if !isCloudBucket(t, proxyURL, bucket) {
-		t.Skip("test requires a Cloud bucket")
+		t.Skip("test requires a cloud bucket")
 	}
 
-	_, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	tutils.CleanCloudBucket(t, proxyURL, bucket, prefix)
+	defer tutils.CleanCloudBucket(t, proxyURL, bucket, prefix)
+
+	expectedObjs := make([]string, 0, fileCnt)
+	for i := 0; i < fileCnt; i++ {
+		reader, err := tutils.NewRandReader(cmn.MiB, false /* withHash */)
+		tutils.CheckFatal(err, t)
+
+		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
+		err = api.PutObject(api.PutObjectArgs{
+			BaseParams:     baseParams,
+			Bucket:         bucket,
+			BucketProvider: cmn.CloudBs,
+			Object:         objName,
+			Reader:         reader,
+		})
+		tutils.CheckFatal(err, t)
+
+		expectedObjs = append(expectedObjs, objName)
+	}
+
+	// Test download
+	err := api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
 	tutils.CheckFatal(err, t)
 
-	err = api.DownloadBucket(tutils.DefaultBaseAPIParams(t), bucket, prefix, suffix)
+	id, err := api.DownloadCloud(baseParams, bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
-	// FIXME: How to wait?
+	waitForDownload(t, id)
+
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	tutils.CheckFatal(err, t)
+	if !reflect.DeepEqual(objs, expectedObjs) {
+		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
+	}
+
+	// Test cancellation
+	err = api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
+	tutils.CheckFatal(err, t)
+
+	id, err = api.DownloadCloud(baseParams, bucket, prefix, suffix)
+	tutils.CheckFatal(err, t)
+
+	time.Sleep(200 * time.Millisecond)
+
+	err = api.DownloadCancel(baseParams, id)
+	tutils.CheckFatal(err, t)
 }
 
 // This test can be flaky. It requires at least 2 targets or at least 2 mountpaths if there is only 1 target

@@ -340,20 +340,24 @@ func DownloadMulti(baseParams *BaseParams, bucket string, m interface{}) (string
 	return doDlDownloadRequest(baseParams, path, msg, optParams)
 }
 
-func DownloadBucket(baseParams *BaseParams, bucket, prefix, suffix string) error {
-	dlBody := cmn.DlBucketBody{
+func DownloadCloud(baseParams *BaseParams, bucket, prefix, suffix string) (string, error) {
+	dlBody := cmn.DlCloudBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
+	dlBody.Bucket = bucket
+	return DownloadCloudWithParam(baseParams, dlBody)
+}
+
+func DownloadCloudWithParam(baseParams *BaseParams, dlBody cmn.DlCloudBody) (string, error) {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadBucket, bucket)
+	path := cmn.URLPath(cmn.Version, cmn.Download)
 	optParams := OptionalParams{
 		Query: query,
 	}
-	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
+	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
 func DownloadStatus(baseParams *BaseParams, id string) (cmn.DlStatusResp, error) {

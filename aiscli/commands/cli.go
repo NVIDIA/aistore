@@ -28,6 +28,8 @@ var (
 	LinkFlag        = cli.StringFlag{Name: cmn.URLParamLink, Usage: "URL of where the object is downloaded from, eg. 'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz'", Value: ""}
 	BaseFlag        = cli.StringFlag{Name: cmn.URLParamBase, Usage: "base URL of the object used to formulate the download URL, eg. 'http://yann.lecun.com/exdb/mnist'", Value: ""}
 	TemplateFlag    = cli.StringFlag{Name: cmn.URLParamTemplate, Usage: "bash template describing names of the objects in the URL, eg: 'object{200..300}log.txt'", Value: ""}
+	DlPrefixFlag    = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix of the object name, eg. 'imagenet/imagenet-'"}
+	DlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
 	IDFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
 	ProgressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 

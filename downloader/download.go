@@ -172,9 +172,8 @@ type (
 		parent *Downloader
 		*request
 
-		headers     map[string]string // the headers that are forwarded to the get request to download the object.
-		currentSize int64             // the current size of the file (updated as the download progresses)
-		finishedCh  chan error        // when a jogger finishes downloading a dlTask
+		currentSize int64      // the current size of the file (updated as the download progresses)
+		finishedCh  chan error // when a jogger finishes downloading a dlTask
 
 		downloadCtx context.Context    // context with cancel function
 		cancelFunc  context.CancelFunc // used to cancel the download after the request commences
@@ -212,7 +211,7 @@ type (
 //==================================== Requests ===========================================
 
 func (req *request) String() (str string) {
-	str += fmt.Sprintf("id: %q, objname: %q, link: %q, ", req.id, req.obj.Objname, req.obj.Link)
+	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.Objname, req.obj.Link, req.obj.FromCloud)
 	if req.bucket != "" {
 		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.bckProvider)
 	}
@@ -221,7 +220,7 @@ func (req *request) String() (str string) {
 }
 
 func (req *request) uid() string {
-	return fmt.Sprintf("%s|%s|%s", req.obj.Link, req.bucket, req.obj.Objname)
+	return fmt.Sprintf("%s|%s|%s|%v", req.obj.Link, req.bucket, req.obj.Objname, req.obj.FromCloud)
 }
 
 func (req *request) write(resp interface{}, err error, statusCode int) {
@@ -732,6 +731,11 @@ func (j *jogger) stop() {
 }
 
 func (t *task) download() {
+	var (
+		statusMsg string
+		err       error
+	)
+
 	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}
 	if errstr := lom.Fill(t.bckProvider, cluster.LomFstat); errstr != "" {
 		t.abort(internalErrorMessage(), errors.New(errstr))
@@ -741,35 +745,46 @@ func (t *task) download() {
 		t.abort(internalErrorMessage(), errors.New("object with the same bucket and objname already exists"))
 		return
 	}
+
+	if glog.V(4) {
+		glog.Infof("Starting download for %v", t)
+	}
+
+	started := time.Now()
+	if !t.obj.FromCloud {
+		statusMsg, err = t.downloadLocal(lom)
+	} else {
+		statusMsg, err = t.downloadCloud(lom)
+	}
+
+	if err != nil {
+		t.abort(statusMsg, err)
+		return
+	}
+
+	t.parent.stats.AddMany(
+		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize},
+		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(started))},
+	)
+	t.finishedCh <- nil
+}
+
+func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 	postFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
 
 	// create request
 	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)
 	if err != nil {
-		t.abort(internalErrorMessage(), err)
-		return
-	}
-
-	// add headers
-	if len(t.headers) > 0 {
-		for k, v := range t.headers {
-			httpReq.Header.Set(k, v)
-		}
+		return "", err
 	}
 
 	requestWithContext := httpReq.WithContext(t.downloadCtx)
-	if glog.V(4) {
-		glog.Infof("Starting download for %v", t)
-	}
-	started := time.Now()
 	response, err := httpClient.Do(requestWithContext)
 	if err != nil {
-		t.abort(httpClientErrorMessage(err.(*url.Error)), err) // error returned by httpClient.Do() is a *url.Error
-		return
+		return httpClientErrorMessage(err.(*url.Error)), err // error returned by httpClient.Do() is a *url.Error
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		t.abort(httpRequestErrorMessage(t.obj.Link, response), fmt.Errorf("status code: %d", response.StatusCode))
-		return
+		return httpRequestErrorMessage(t.obj.Link, response), fmt.Errorf("status code: %d", response.StatusCode)
 	}
 
 	// Create a custom reader to monitor progress every time we read from response body stream
@@ -781,15 +796,16 @@ func (t *task) download() {
 	}
 
 	if err := t.parent.t.Receive(postFQN, progressReader, lom); err != nil {
-		t.abort(internalErrorMessage(), err)
-		return
+		return internalErrorMessage(), err
 	}
+	return "", nil
+}
 
-	t.parent.stats.AddMany(
-		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize},
-		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(started))},
-	)
-	t.finishedCh <- nil
+func (t *task) downloadCloud(lom *cluster.LOM) (string, error) {
+	if errstr, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); errstr != "" {
+		return internalErrorMessage(), errors.New(errstr)
+	}
+	return "", nil
 }
 
 func (t *task) cancel() {

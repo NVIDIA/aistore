@@ -14,7 +14,7 @@ AIStore supports 4 types of download requests:
 * *Single* - download a single object
 * *Multi* - download multiple objects provided by JSON map (string -> string) or list of strings
 * *Range* - download multiple objects based on a given naming pattern
-* *Bucket* - given object name, optional prefix and optional suffix, download matching objects from the specified cloud bucket
+* *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
 > - Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client).
 
@@ -24,7 +24,7 @@ The rest of this document is structured around all supported types of downloads:
 - [Single (object) download](#single-download)
 - [Multi (object) download](#multi-download)
 - [Range (object) download](#list-download)
-- [(cloud) Bucket download](#bucket-download)
+- [Cloud download](#cloud-download)
 - [Cancellation](#cancellation)
 - [Status of the download](#status-of-the-download)
 
@@ -91,7 +91,7 @@ To populate AIStore with objects in the range from `object200log.txt` to `object
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
-**bucket** | **string** |  Bucket where the downloaded objects are saved to. |
+**bucket** | **string** | Bucket where the downloaded objects are saved to. |
 **bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **base** | **string** | Base URL of the object used to formulate the download URL. |
@@ -106,14 +106,15 @@ Name | Type | Description | Optional?
 
 **Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.
 
-## Bucket download
+## Cloud download
 
-A *bucket* download prefetches multiple objects which are contained in given cloud bucket.
+A *cloud* download prefetches multiple objects which are contained in given cloud bucket.
 
 ### Request Query Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
+**bucket** | **string** | Cloud bucket from which the data will be prefetched |
 **timeout** | **string** | Timeout for request to external resource | Yes
 **prefix** | **string** | Prefix of the object name | Yes
 **suffix** | **string** | Suffix of the object name | Yes
@@ -122,7 +123,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a list of objects from cloud bucket | POST /v1/download/bucket | `curl -L -X POST 'http://localhost:8080/v1/download/bucket/lpr-vision?prefix=imagenet/imagenet_train-&suffix=.tgz'`|
+| Download a list of objects from cloud bucket | POST /v1/download/bucket | `curl -L -X POST 'http://localhost:8080/v1/download?bucket=lpr-vision&prefix=imagenet/imagenet_train-&suffix=.tgz'`|
 
 ## Cancellation
 

@@ -161,7 +161,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 
 // objects is a map of objnames (keys) where the corresponding
 // value is the link that the download will be saved as.
-func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, objects cmn.SimpleKVs) error {
+func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) error {
 	var (
 		smap  = p.smapowner.get()
 		wg    = &sync.WaitGroup{}
@@ -179,8 +179,9 @@ func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, obje
 		}
 
 		dlObj := cmn.DlObj{
-			Objname: objName,
-			Link:    link,
+			Objname:   objName,
+			Link:      link,
+			FromCloud: cloud,
 		}
 
 		b, ok := bulkTargetRequest[si]
@@ -268,8 +269,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 
 // POST /v1/download
 func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Download)
-	if err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Download); err != nil {
 		return
 	}
 
@@ -277,18 +277,6 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		glog.Error(err)
 		p.invalmsghdlr(w, r, "failed to generate id for the request", http.StatusInternalServerError)
-		return
-	}
-
-	if len(apitems) >= 1 {
-		// TODO: consolidate bucket API path as well
-		switch apitems[0] {
-		case cmn.DownloadBucket:
-			p.bucketDownloadHandler(w, r, id)
-			return
-		}
-
-		p.invalmsghdlr(w, r, fmt.Sprintf("%q is not a valid download request path", apitems))
 		return
 	}
 
@@ -300,26 +288,27 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 	var (
 		// link -> objname
 		objects cmn.SimpleKVs
+		query   = r.URL.Query()
 
 		payload        = &cmn.DlBase{}
 		singlePayload  = &cmn.DlSingleBody{}
 		rangePayload   = &cmn.DlRangeBody{}
 		multiPayload   = &cmn.DlMultiBody{}
+		cloudPayload   = &cmn.DlCloudBody{}
 		objectsPayload interface{}
+
+		bckIsLocal, fromCloud, ok bool
 	)
 
-	payload.InitWithQuery(r.URL.Query())
-	if bckIsLocal, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
-		return
-	} else if !bckIsLocal {
-		// TODO: we should enable this
-		p.invalmsghdlr(w, r, "downloading objects to cloud bucket is not supported")
+	payload.InitWithQuery(query)
+	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
 
-	singlePayload.InitWithQuery(r.URL.Query())
-	rangePayload.InitWithQuery(r.URL.Query())
-	multiPayload.InitWithQuery(r.URL.Query())
+	singlePayload.InitWithQuery(query)
+	rangePayload.InitWithQuery(query)
+	multiPayload.InitWithQuery(query)
+	cloudPayload.InitWithQuery(query)
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -347,82 +336,45 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
+		msg := cmn.GetMsg{
+			GetPrefix:     cloudPayload.Prefix,
+			GetPageMarker: "",
+			GetFast:       true,
+		}
+
+		bckEntries := make([]*cmn.BucketEntry, 0, 1024)
+		for {
+			curBckEntries, err := p.listBucket(r, payload.Bucket, payload.BckProvider, msg)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+
+			// filter only with matching suffix
+			for _, entry := range curBckEntries.Entries {
+				if strings.HasSuffix(entry.Name, cloudPayload.Suffix) {
+					bckEntries = append(bckEntries, entry)
+				}
+			}
+
+			msg.GetPageMarker = curBckEntries.PageMarker
+			if msg.GetPageMarker == "" {
+				break
+			}
+		}
+
+		objects = make(cmn.SimpleKVs, 10)
+		for _, entry := range bckEntries {
+			objects[entry.Name] = ""
+		}
+		fromCloud = true
 	} else {
 		p.invalmsghdlr(w, r, "invalid query keys or query values")
 		return
 	}
 
-	if err := p.bulkDownloadProcessor(id, payload, objects); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	p.respondWithID(w, r, id)
-}
-
-// POST /v1/download/bucket/name?provider=...&prefix=...&suffix=...
-func (p *proxyrunner) bucketDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
-	var (
-		payload = &cmn.DlBucketBody{}
-		query   = r.URL.Query()
-	)
-
-	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Download, cmn.DownloadBucket)
-	if err != nil {
-		return
-	}
-
-	payload.Bucket = apiItems[0]
-	payload.InitWithQuery(query)
-	if err := payload.Validate(); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if bckIsLocal, ok := p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
-		return
-	} else if bckIsLocal {
-		p.invalmsghdlr(w, r, "/download/bucket requires cloud bucket")
-		return
-	}
-
-	msg := cmn.GetMsg{
-		GetPrefix:     payload.Prefix,
-		GetPageMarker: "",
-		GetFast:       true,
-	}
-
-	bckEntries := make([]*cmn.BucketEntry, 0, 1024)
-	for {
-		curBckEntries, err := p.listBucket(r, payload.Bucket, payload.BckProvider, msg)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		// filter only with matching suffix
-		for _, entry := range curBckEntries.Entries {
-			if strings.HasSuffix(entry.Name, payload.Suffix) {
-				bckEntries = append(bckEntries, entry)
-			}
-		}
-
-		msg.GetPageMarker = curBckEntries.PageMarker
-		if msg.GetPageMarker == "" {
-			break
-		}
-	}
-
-	objects := make([]string, len(bckEntries))
-	for idx, entry := range bckEntries {
-		objects[idx] = entry.Name
-	}
-	actionMsg := &cmn.ActionMsg{
-		Action: cmn.ActPrefetch,
-		Name:   "download/bucket",
-		Value:  map[string]interface{}{"objnames": objects},
-	}
-	if err := p.listRange(http.MethodPost, payload.Bucket, actionMsg, nil); err != nil {
+	if err := p.bulkDownloadProcessor(id, payload, objects, fromCloud); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

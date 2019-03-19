@@ -626,7 +626,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		started    time.Time
 		config     = cmn.GCO.Get()
 		versioncfg = &config.Ver
-		ct         = t.contextWithAuth(r)
+		ct         = t.contextWithAuth(r.Header)
 		query      = r.URL.Query()
 	)
 	//
@@ -734,7 +734,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// 3. coldget
 	if coldGet && !dryRun.disk && !dryRun.network {
 		t.rtnamemap.Unlock(lom.Uname, false)
-		if errstr, errcode := t.getCold(ct, lom, false); errstr != "" {
+		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
@@ -1147,7 +1147,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	err = t.objDelete(t.contextWithAuth(r), lom, evict)
+	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
 		s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
 		t.invalmsghdlr(w, r, s)
@@ -1284,7 +1284,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !bckIsLocal {
-		bucketProps, errstr, errCode = getcloudif().headbucket(t.contextWithAuth(r), bucket)
+		bucketProps, errstr, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errCode)
 			return
@@ -1387,7 +1387,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size, 1), lom.Version)
 		}
 	} else {
-		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r), bucket, objname)
+		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -1747,7 +1747,7 @@ func (t *targetrunner) getFromTier(lom *cluster.LOM) (ok bool) {
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
+func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
 	var (
 		versioncfg      = &lom.Config.Ver
 		errv            string
@@ -2025,7 +2025,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 		}
 	}
 
-	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
+	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r.Header))
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -2098,7 +2098,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
 	} else {
 		tag = "cloud"
-		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r), bucket, &msg)
+		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
 	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -2313,8 +2313,9 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // In both case a new checksum is saved to xattrs
 func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error, errcode int) {
 	var (
-		cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
-		cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
+		header     = r.Header
+		cksumType  = header.Get(cmn.HeaderObjCksumType)
+		cksumValue = header.Get(cmn.HeaderObjCksumVal)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 
@@ -2325,7 +2326,7 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 		bucket:       bucket,
 		r:            r.Body,
 		cksumToCheck: cksum,
-		ctx:          t.contextWithAuth(r),
+		ctx:          t.contextWithAuth(header),
 		bckProvider:  bckProvider,
 	}
 	if err := roi.init(); err != nil {
@@ -3283,13 +3284,9 @@ func (t *targetrunner) fshc(err error, filepath string) {
 
 // Decrypts token and retreives userID from request header
 // Returns empty userID in case of token is invalid
-func (t *targetrunner) userFromRequest(r *http.Request) (*authRec, error) {
-	if r == nil {
-		return nil, nil
-	}
-
+func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
 	token := ""
-	tokenParts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	tokenParts := strings.SplitN(header.Get("Authorization"), " ", 2)
 	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
 		token = tokenParts[1]
 	}
@@ -3311,7 +3308,7 @@ func (t *targetrunner) userFromRequest(r *http.Request) (*authRec, error) {
 // (at this moment userID is enough) from HTTP request header: looks for
 // 'Authorization' header and decrypts it.
 // Extracted user information is put to context that is passed to all consumers
-func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
+func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	ct := context.Background()
 	config := cmn.GCO.Get()
 
@@ -3319,7 +3316,7 @@ func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 		return ct
 	}
 
-	user, err := t.userFromRequest(r)
+	user, err := t.userFromRequest(header)
 	if err != nil {
 		glog.Errorf("Failed to extract token: %v", err)
 		return ct

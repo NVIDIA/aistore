@@ -181,7 +181,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 	if !coldGet {
 		return
 	}
-	if errstr, _ = t.getCold(ct, lom, true); errstr != "" {
+	if errstr, _ = t.GetCold(ct, lom, true); errstr != "" {
 		if errstr != "skip" {
 			glog.Errorln(errstr)
 		}
@@ -406,7 +406,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 
 		// Asynchronously perform function
 		go func() {
-			err := f(t.contextWithAuth(r), objs, bucket, bckProvider, listMsg.Deadline, done)
+			err := f(t.contextWithAuth(r.Header), objs, bucket, bckProvider, listMsg.Deadline, done)
 			if err != nil {
 				glog.Errorf("Error performing list function: %v", err)
 				t.statsif.Add(stats.ErrListCount, 1)
@@ -430,7 +430,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		err            error
 		bucket         = apitems[0]
 		prefix         = rangeMsg.Prefix
-		ct             = t.contextWithAuth(r)
+		ct             = t.contextWithAuth(r.Header)
 		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
 	)
 	bckIsLocal, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)

@@ -17,6 +17,7 @@ import (
 const (
 	DownloadSingle = "single"
 	DownloadRange  = "range"
+	DownloadCloud  = "cloud"
 	DownloadStatus = "status"
 	DownloadCancel = "cancel"
 )
@@ -68,6 +69,18 @@ func DownloadHandler(c *cli.Context) error {
 		}
 
 		id, err = api.DownloadRangeWithParam(baseParams, payload)
+		if err != nil {
+			return err
+		}
+	case DownloadCloud:
+		prefix := parseFlag(c, DlPrefixFlag.Name)
+		suffix := parseFlag(c, DlSuffixFlag.Name)
+		payload := cmn.DlCloudBody{
+			DlBase: basePayload,
+			Prefix: prefix,
+			Suffix: suffix,
+		}
+		id, err = api.DownloadCloudWithParam(baseParams, payload)
 		if err != nil {
 			return err
 		}

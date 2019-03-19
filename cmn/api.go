@@ -354,9 +354,6 @@ const (
 
 	// CLI
 	Target = "target"
-
-	// Downloader
-	DownloadBucket = "bucket"
 )
 
 // Download POST result returned to the user
@@ -428,8 +425,9 @@ func (b *DlBase) Validate() error {
 }
 
 type DlObj struct {
-	Link    string `json:"link"`
-	Objname string `json:"objname"`
+	Objname   string `json:"objname"`
+	Link      string `json:"link"`
+	FromCloud bool   `json:"from_cloud"`
 }
 
 func (b *DlObj) Validate() error {
@@ -440,7 +438,7 @@ func (b *DlObj) Validate() error {
 		}
 		b.Objname = objName
 	}
-	if b.Link == "" {
+	if b.Link == "" && !b.FromCloud {
 		return fmt.Errorf("missing the %q from the request body", URLParamLink)
 	}
 	if b.Objname == "" {
@@ -491,6 +489,10 @@ func (b *DlBody) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (b *DlBody) String() string {
+	return fmt.Sprintf("%s, id=%q", b.DlBase, b.ID)
 }
 
 // Info about a task that is currently being downloaded by one of the joggers
@@ -655,27 +657,30 @@ func (b *DlMultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bucket)
 }
 
-// Bucket request
-type DlBucketBody struct {
+// Cloud request
+type DlCloudBody struct {
 	DlBase
 	Prefix string `json:"prefix"`
 	Suffix string `json:"suffix"`
 }
 
-func (b *DlBucketBody) InitWithQuery(query url.Values) {
+func (b *DlCloudBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
 	b.Prefix = query.Get(URLParamPrefix)
 	b.Suffix = query.Get(URLParamSuffix)
 }
 
-func (b *DlBucketBody) Validate() error {
+func (b *DlCloudBody) Validate(bckIsLocal bool) error {
+	if bckIsLocal {
+		return errors.New("bucket download requires cloud bucket")
+	}
 	if err := b.DlBase.Validate(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (b *DlBucketBody) AsQuery() url.Values {
+func (b *DlCloudBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
 	query.Add(URLParamPrefix, b.Prefix)
 	query.Add(URLParamSuffix, b.Suffix)

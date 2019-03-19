@@ -560,6 +560,14 @@ func DestroyLocalBucket(t *testing.T, proxyURL, bucket string) {
 	}
 }
 
+func CleanCloudBucket(t *testing.T, proxyURL, bucket, prefix string) {
+	toDelete, err := ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	CheckFatal(err, t)
+	baseParams := BaseAPIParams(proxyURL)
+	err = api.DeleteList(baseParams, bucket, cmn.CloudBs, toDelete, true, 0)
+	CheckFatal(err, t)
+}
+
 func GetWhatRawQuery(getWhat string, getProps string) string {
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, getWhat)

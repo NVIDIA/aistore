@@ -87,6 +87,15 @@ func main() {
 					Action: commands.DownloadHandler,
 				},
 				{
+					Name:  commands.DownloadCloud,
+					Usage: "downloads objects from cloud bucket matching provided prefix and suffix",
+					Flags: []cli.Flag{
+						commands.DlPrefixFlag,
+						commands.DlSuffixFlag,
+					},
+					Action: commands.DownloadHandler,
+				},
+				{
 					Name:  commands.DownloadStatus,
 					Usage: "fetches status of download job with given id",
 					Flags: []cli.Flag{

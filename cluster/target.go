@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"context"
 	"io"
 
 	"github.com/NVIDIA/aistore/atime"
@@ -23,6 +24,7 @@ type Target interface {
 	FSHC(err error, path string)
 	GetAtimeRunner() *atime.Runner
 	GetMem2() *memsys.Mem2
+	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	Receive(workFQN string, reader io.ReadCloser, lom *LOM) error
 	GetFSPRG() fs.PathRunGroup
 }

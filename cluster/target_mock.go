@@ -5,7 +5,9 @@
 package cluster
 
 import (
+	"context"
 	"io"
+	"net/http"
 
 	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/fs"
@@ -29,14 +31,19 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	}
 }
 
-func (t *TargetMock) OOS(oos ...bool) bool                                         { return false }
-func (t *TargetMock) IsRebalancing() bool                                          { return false }
-func (t *TargetMock) RunLRU()                                                      {}
-func (t *TargetMock) PrefetchQueueLen() int                                        { return 0 }
-func (t *TargetMock) Prefetch()                                                    {}
-func (t *TargetMock) GetBowner() Bowner                                            { return t.BO }
-func (t *TargetMock) FSHC(err error, path string)                                  {}
-func (t *TargetMock) GetAtimeRunner() *atime.Runner                                { return t.Atime }
-func (t *TargetMock) GetMem2() *memsys.Mem2                                        { return memsys.Init() }
-func (t *TargetMock) Receive(workFQN string, reader io.ReadCloser, lom *LOM) error { return nil }
-func (t *TargetMock) GetFSPRG() fs.PathRunGroup                                    { return nil }
+func (t *TargetMock) OOS(oos ...bool) bool          { return false }
+func (t *TargetMock) IsRebalancing() bool           { return false }
+func (t *TargetMock) RunLRU()                       {}
+func (t *TargetMock) PrefetchQueueLen() int         { return 0 }
+func (t *TargetMock) Prefetch()                     {}
+func (t *TargetMock) GetBowner() Bowner             { return t.BO }
+func (t *TargetMock) FSHC(err error, path string)   {}
+func (t *TargetMock) GetAtimeRunner() *atime.Runner { return t.Atime }
+func (t *TargetMock) GetMem2() *memsys.Mem2         { return memsys.Init() }
+func (t *TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int) {
+	return "", http.StatusOK
+}
+func (t *TargetMock) Receive(workFQN string, reader io.ReadCloser, lom *LOM) error {
+	return nil
+}
+func (t *TargetMock) GetFSPRG() fs.PathRunGroup { return nil }

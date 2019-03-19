@@ -339,15 +339,15 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var (
 		cksum        cmn.CksumProvider
 		cksumToCheck cmn.CksumProvider
 	)
 
-	sess := createSession(ct)
+	sess := createSession(ctx)
 	svc := s3.New(sess)
-	obj, err := svc.GetObject(&s3.GetObjectInput{
+	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
 	})

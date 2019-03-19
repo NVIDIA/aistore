@@ -150,34 +150,33 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 //   connection to the cloud, GCP context, project_id, error_string
 // project_id is used only by getbucketnames function
 
-func createClient(ct context.Context) (*storage.Client, context.Context, string, string) {
-	gctx := context.Background()
-	userID := getStringFromContext(ct, ctxUserID)
-	userCreds := userCredsFromContext(ct)
-	credsDir := getStringFromContext(ct, ctxCredsDir)
+func createClient(ctx context.Context) (*storage.Client, context.Context, string, string) {
+	userID := getStringFromContext(ctx, ctxUserID)
+	userCreds := userCredsFromContext(ctx)
+	credsDir := getStringFromContext(ctx, ctxCredsDir)
 	if userID == "" || userCreds == nil || credsDir == "" {
-		return defaultClient(gctx)
+		return defaultClient(ctx)
 	}
 
 	creds, err := extractGCPCreds(userCreds)
 	if err != nil || creds == nil {
 		glog.Errorf("Failed to retrieve %s credentials %s: %v", cmn.ProviderGoogle, userID, err)
-		return defaultClient(gctx)
+		return defaultClient(ctx)
 	}
 
 	filePath, err := saveCredentialsToFile(credsDir, userID, creds.creds)
 	if err != nil {
 		glog.Errorf("Failed to save credentials: %v", err)
-		return defaultClient(gctx)
+		return defaultClient(ctx)
 	}
 
-	client, err := storage.NewClient(gctx, option.WithCredentialsFile(filePath))
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(filePath))
 	if err != nil {
 		glog.Errorf("Failed to create storage client for %s: %v", userID, err)
-		return defaultClient(gctx)
+		return defaultClient(ctx)
 	}
 
-	return client, gctx, creds.projectID, ""
+	return client, ctx, creds.projectID, ""
 }
 
 //==================
