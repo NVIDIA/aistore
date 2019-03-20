@@ -365,10 +365,11 @@ type DlPostResp struct {
 }
 
 type DlStatusResp struct {
-	Finished     int          `json:"finished"`
-	Total        int          `json:"total"`
-	Percentage   float64      `json:"percentage,omitempty"`
-	CurrentTasks []TaskDlInfo `json:"current_tasks"`
+	Finished     int           `json:"finished"`
+	Total        int           `json:"total"`
+	Percentage   float64       `json:"percentage"`
+	CurrentTasks []TaskDlInfo  `json:"current_tasks,omitempty"`
+	Errs         []TaskErrInfo `json:"download_errors,omitempty"`
 }
 
 func (d *DlStatusResp) String() string {
@@ -497,6 +498,11 @@ type TaskDlInfo struct {
 	Name       string `json:"name"`
 	Downloaded int64  `json:"downloaded"`
 	Total      int64  `json:"total,omitempty"` // TODO: Implement setting this field
+}
+
+type TaskErrInfo struct {
+	Name string `json:"name"`
+	Err  string `json:"error"`
 }
 
 // Single request
@@ -695,7 +701,6 @@ const (
 // its type, checksum, and LRU. These characteristics determine its behaviour
 // in response to operations on the bucket itself or the objects inside the bucket.
 type BucketProps struct {
-
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
 	// If a bucket is local, CloudProvider must be "ais".
 	// Otherwise, it must be "aws" or "gcp".

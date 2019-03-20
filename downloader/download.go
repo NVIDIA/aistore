@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -628,10 +629,17 @@ func (d *Downloader) dispatchStatus(req *request) {
 
 	currentTasks := d.activeTasks(req.id)
 
+	dlErrors, err := d.db.getErrors(req.id)
+	if err != nil {
+		req.writeErrResp(err, http.StatusInternalServerError)
+		return
+	}
+
 	req.writeResp(cmn.DlStatusResp{
 		Finished:     finished,
 		Total:        total,
 		CurrentTasks: currentTasks,
+		Errs:         dlErrors,
 	})
 }
 
@@ -694,9 +702,8 @@ Loop:
 		go t.download()
 
 		// await abort or completion
-		if err := <-t.waitForFinish(); err != nil {
-			glog.Errorf("error occurred when downloading %s: %v", t, err)
-		}
+		<-t.waitForFinish()
+
 		j.Lock()
 		j.task = nil
 		j.Unlock()
@@ -717,7 +724,7 @@ func (j *jogger) stop() {
 	j.Lock()
 	j.stopAgent = true
 	if j.task != nil {
-		j.task.abort(errors.New("stopped jogger"))
+		j.task.abort(internalErrorMessage(), errors.New("stopped jogger"))
 	}
 	j.Unlock()
 
@@ -727,11 +734,11 @@ func (j *jogger) stop() {
 func (t *task) download() {
 	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}
 	if errstr := lom.Fill(t.bckProvider, cluster.LomFstat); errstr != "" {
-		t.abort(errors.New(errstr))
+		t.abort(internalErrorMessage(), errors.New(errstr))
 		return
 	}
 	if lom.Exists() {
-		t.abort(errors.New("object with the same bucket and objname already exists"))
+		t.abort(internalErrorMessage(), errors.New("object with the same bucket and objname already exists"))
 		return
 	}
 	postFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
@@ -739,7 +746,7 @@ func (t *task) download() {
 	// create request
 	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)
 	if err != nil {
-		t.abort(err)
+		t.abort(internalErrorMessage(), err)
 		return
 	}
 
@@ -757,11 +764,11 @@ func (t *task) download() {
 	started := time.Now()
 	response, err := httpClient.Do(requestWithContext)
 	if err != nil {
-		t.abort(err)
+		t.abort(httpClientErrorMessage(err.(*url.Error)), err) // error returned by httpClient.Do() is a *url.Error
 		return
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		t.abort(fmt.Errorf("status code: %d", response.StatusCode))
+		t.abort(httpRequestErrorMessage(t.obj.Link, response), fmt.Errorf("status code: %d", response.StatusCode))
 		return
 	}
 
@@ -774,7 +781,7 @@ func (t *task) download() {
 	}
 
 	if err := t.parent.t.Receive(postFQN, progressReader, lom); err != nil {
-		t.abort(err)
+		t.abort(internalErrorMessage(), err)
 		return
 	}
 
@@ -792,8 +799,14 @@ func (t *task) cancel() {
 // TODO: this should also inform somehow downloader status about being aborted/canceled
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
-func (t *task) abort(err error) {
+func (t *task) abort(statusMsg string, err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
+
+	dbErr := t.parent.db.addError(t.id, t.obj.Objname, statusMsg)
+	cmn.AssertNoErr(dbErr)
+
+	glog.Errorf("error occurred when downloading %s: %v", t, err)
+
 	t.finishedCh <- err
 }
 
@@ -803,6 +816,18 @@ func (t *task) waitForFinish() <-chan error {
 
 func (t *task) String() string {
 	return t.request.String()
+}
+
+func internalErrorMessage() string {
+	return "Internal server error."
+}
+
+func httpClientErrorMessage(err *url.Error) string {
+	return fmt.Sprintf("Error performing request to object's location (%s): %v.", err.URL, err.Err)
+}
+
+func httpRequestErrorMessage(url string, resp *http.Response) string {
+	return fmt.Sprintf("Error downloading file from object's location (%s). Server returned status: %s.", url, resp.Status)
 }
 
 func newQueue() *queue {

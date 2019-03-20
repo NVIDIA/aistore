@@ -18,6 +18,7 @@ import (
 const (
 	persistDownloaderJobsPath = "downloader_jobs.db" // base name to persist downloader jobs' file
 	downloaderCollection      = "jobs"
+	downloaderErrors          = "errors"
 )
 
 var (
@@ -74,6 +75,38 @@ func (db *downloaderDB) delJob(id string) error {
 			return err
 		}
 		return errJobNotFound
+	}
+	return nil
+}
+
+func (db *downloaderDB) getErrors(id string) (errors []cmn.TaskErrInfo, err error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if err := db.driver.Read(downloaderErrors, id, &errors); err != nil {
+		if !os.IsNotExist(err) {
+			glog.Error(err)
+			return nil, err
+		}
+		// If there was nothing in DB, return empty list
+		return []cmn.TaskErrInfo{}, nil
+	}
+	return
+}
+
+func (db *downloaderDB) addError(id, objname string, errMsg string) error {
+	errMsgs, err := db.getErrors(id)
+	if err != nil {
+		return err
+	}
+	errMsgs = append(errMsgs, cmn.TaskErrInfo{Name: objname, Err: errMsg})
+
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if err := db.driver.Write(downloaderErrors, id, errMsgs); err != nil {
+		glog.Error(err)
+		return err
 	}
 	return nil
 }

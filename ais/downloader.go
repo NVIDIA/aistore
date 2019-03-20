@@ -127,10 +127,12 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 
 		finished, total := 0, 0
 		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
+		downloadErrs := make([]cmn.TaskErrInfo, 0)
 		for _, stat := range stats {
 			finished += stat.Finished
 			total += stat.Total
 			currTasks = append(currTasks, stat.CurrentTasks...)
+			downloadErrs = append(downloadErrs, stat.Errs...)
 		}
 		pct := float64(finished) / float64(total) * 100
 
@@ -139,6 +141,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 			Total:        total,
 			Percentage:   pct,
 			CurrentTasks: currTasks,
+			Errs:         downloadErrs,
 		}
 
 		respJSON, err := jsoniter.Marshal(resp)
