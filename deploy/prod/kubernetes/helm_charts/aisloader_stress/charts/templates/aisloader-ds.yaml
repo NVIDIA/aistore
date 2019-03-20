@@ -35,15 +35,11 @@ spec:
                   fieldPath: status.hostIP 
             - name: STATSDCONF
               value: "/var/statsd_config/statsd.json"
-            - name: COLLECTDCONF
-              value: "/var/collectd_config/collectd.json"
             - name: RUNSCRIPTSOURCE
               value: "/var/aisloader_script/config.sh"
           volumeMounts:
             - name: statsd-config
               mountPath: "/var/statsd_config"
-            - name: collectd-config
-              mountPath: "/var/collectd_config"
             - name: aisloader-script
               mountPath: "/var/aisloader_script"
           resources:
@@ -53,9 +49,6 @@ spec:
         - name: statsd-config
           configMap:
             name: {{ template "chart.name" . }}-statsd
-        - name: collectd-config
-          configMap:
-            name: {{ template "chart.name" . }}-collectd
         - name: aisloader-script
           configMap:
             name: {{ template "chart.name" . }}-startscript

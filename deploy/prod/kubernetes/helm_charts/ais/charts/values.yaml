@@ -16,6 +16,7 @@
 #   - secure, /tmp/ is an uncontrolled channel into the container
 #
 
+# XXX TODO we need docker repo tokens for other registries such as separate for ais and kubectl images
 image:
   repository: quay.io/nvidia/ais_k8s
   tag: stable
@@ -173,8 +174,17 @@ resources: {}
   #  cpu: 100m
   #  memory: 128Mi
 
-
-tolerations: []
+#
+# Storage nodes can/should be tainted to keep non-AIS loads off, so we must
+# tolerate those taints. The same tolerations are added to graphite and grafana
+# subcharts (because their PV will often be satisfied from a storage node, and
+# we don't want them running on any GPU nodes).
+#
+tolerations:
+- key: "dedicated"
+  operator: "Equal"
+  value: "ais"
+  effect: "PreferNoSchedule"
 
 # Make sure the DFC target only deploy to the node that are marked with a label that signify a hi-perf
 # storage
@@ -190,13 +200,16 @@ affinity: {}
 #            - d1.8xlarge
 
 #
-# If you have an existing graphite installation then set the following
+# If you have an existing graphite installation then set the builtin_monitoring
 # tag to false and supply the host (or IP) and port for graphite in
 # map external_monitoring.
 #
+# If builtin_monitoring is true and you don't want this chart to install
+# Prometheus then set the prometheus tag to false.
+#
 tags:
   builtin_monitoring: true
-
+  prometheus: true
 
 #
 # Alternatively, leave the builtin-monitoring tag true (the default) and
@@ -226,6 +239,11 @@ graphite:
       capacity: "250Gi"
       path: ""
       node: ""
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "ais"
+    effect: "PreferNoSchedule"
 
 #
 # Key paths here that match those of https://github.com/helm/charts/tree/master/stable/grafana
@@ -249,10 +267,59 @@ grafana:
     dashboards:
       enabled: false
       label: ais_grafana_dashboard
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "ais"
+    effect: "PreferNoSchedule"
+
+#
+# Key paths here that match those of https://github.com/helm/charts/tree/master/stable/prometheus
+# will over-ride default values in the grafana dependency. Local additions are all within the ais map.
+#
+# XXX TODO enable persistence
+#
+prometheus:
+  alertmanager:
+    persistentVolume:
+      enabled: false
+    tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "ais"
+      effect: "PreferNoSchedule"
+  server:
+    persistentVolume:
+      enabled: false
+    tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "ais"
+      effect: "PreferNoSchedule"
+  kubeStateMetrics:
+    tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "ais"
+      effect: "PreferNoSchedule"
+  nodeExporter:
+    tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "ais"
+      effect: "PreferNoSchedule"
+  pushgateway:
+    tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "ais"
+      effect: "PreferNoSchedule"
 
 
 #
-# Used only if builtin_monitoring is over-ridden to false
+# Used only if builtin_monitoring is over-ridden to false. No Grafana or Prometheus here - we
+# just arrange to send AIS stats to Graphite, and the external provider is responsible for
+# node metrics, visualization etc.
 #
 external_monitoring:
   graphite_host: somehost

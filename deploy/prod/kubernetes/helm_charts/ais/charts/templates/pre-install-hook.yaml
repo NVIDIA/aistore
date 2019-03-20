@@ -1,3 +1,17 @@
+#
+# Pre-install hook for Helm, to cleanup smap.json from any past ais release.
+#
+# We start a DaemonSet with affinity to match any one of our label selectors
+# for proxy, non-electable proxy & target nodes. Since Helm regards a hook of
+# resource kind DaemonSet as non-blocking (it is considered ready as soon as
+# it is loaded) we follow up with an additional pre-install hook that blocks
+# for a bit to allow this one to run to completion.
+#
+# When the command exits, k8s will relaunch the container (this being a DaemonSet)
+# and there's nothing we seem to be able to do about that. But Helm is satisfied
+# once all pods have completed one scheduling trip, and then proceeds to delete
+# the resource.
+#
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -24,12 +38,10 @@ spec:
         component: "pre-install-hook"
         release: {{ .Release.Name }}
     spec:
-      #restartPolicy: Never
       containers:
       - name: pre-install-job
         image: "alpine:3.3"
         command: ["/bin/sh"]
-        #Currently cleaning up only the smap.json on a re-deploy. TODO: Update if any other files need to be cleaned up as well
         args: ["-c","rm -f /etc/ais/proxy/smap.json /etc/ais/target/smap.json"]
         volumeMounts:
            - name: etc-mount
@@ -46,14 +58,8 @@ spec:
               - key: {{ .Values.proxy.nodeSelector.key }}
                 operator: In
                 values:
-                 - {{ .Values.proxy.nodeSelector.value | quote }}
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: {{ .Values.ne_proxy.nodeSelector.key }}
-                operator: In
-                values:
+                  - {{ .Values.proxy.nodeSelector.value | quote }}
                   - {{ .Values.ne_proxy.nodeSelector.value | quote }}
-            nodeSelectorTerms:
             - matchExpressions:
               - key: {{ .Values.target.nodeSelector.key }}
                 operator: In

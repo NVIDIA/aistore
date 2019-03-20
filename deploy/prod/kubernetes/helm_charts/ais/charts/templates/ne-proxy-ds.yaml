@@ -55,12 +55,14 @@ spec:
               value : "/var/ais_config/ais.json"
             - name: STATSDCONF
               value: "/var/statsd_config/statsd.json"
-            - name: COLLECTDCONF
-              value: "/var/collectd_config/collectd.json"
             - name : ROLE
               value : "proxy"
             - name : TARGETS
               value : "1"
+            - name: AIS_HOSTIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             - name: PRIMARY_PROXY_SERVICE_HOSTNAME
               value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
@@ -76,20 +78,20 @@ spec:
               mountPath: "{{ .Values.common_config.dir }}"
             - name: statsd-config
               mountPath: "/var/statsd_config"
-            - name: collectd-config
-              mountPath: "/var/collectd_config"
           livenessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.ne_proxy.service.port }}
             initialDelaySeconds: 60
-            periodSeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.ne_proxy.service.port }}
-            initialDelaySeconds: 20
-            periodSeconds: 15
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       serviceAccount: {{ template "ais.name" . }}-sa
@@ -108,9 +110,6 @@ spec:
         - name: statsd-config
           configMap:
             name: {{ template "ais.name" . }}-statsd
-        - name: collectd-config
-          configMap:
-            name: {{ template "ais.name" . }}-collectd
     {{- with .Values.affinity }}
       affinity:
 {{ toYaml . | indent 8 }}

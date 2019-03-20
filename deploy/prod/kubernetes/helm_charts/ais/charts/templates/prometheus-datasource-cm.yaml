@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ais-grafana-graphite-datasource
+  name: ais-grafana-prometheus-datasource
   labels:
      ais_grafana_datasource: "anyvalue"
 data:
-  graphite-datasource.yaml: |-
+  prometheus-datasource.yaml: |-
     #
     # Based on https://github.com/helm/charts/tree/master/stable/grafana
     #
@@ -16,14 +16,14 @@ data:
     # config file version
     apiVersion: 1
     deleteDatasources:
-      - name: AIS Graphite
+      - name: Prometheus
         orgId: 1
     datasources:
-    - name: AIS Graphite
-      type: graphite
+    - name: Prometheus
+      type: prometheus
       access: proxy
       orgId: 1
-      url: http://{{ if .Values.tags.builtin_monitoring }}{{ .Release.Name }}-graphite{{ else }}{{ .Values.external_monitoring.graphite_host }}{{ end }}:{{ if .Values.tags.builtin_monitoring }}8080{{ else }}{{ .Values.external_monitoring.graphite_port }}{{ end }}
+      url: http://{{ .Release.Name }}-prometheus-server:80
       # password:
       # user:
       # database:
@@ -31,7 +31,7 @@ data:
       # basicAuthUser:
       # basicAuthPassword:
       # withCredentials:
-      isDefault: true
+      isDefault: false
       version: 1
       # <bool> allow users to edit datasources from the UI.
       editable: false

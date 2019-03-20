@@ -32,8 +32,8 @@ function update_blk_sd_value {
     echo
 }
 
-update_blk_sd_value queue/scheduler "{{ blkdevtune.scheduler }}"
-update_blk_sd_value queue/nr_requests {{ blkdevtune.nr_requests }}
-update_blk_sd_value queue/read_ahead {{ blkdevtune.read_ahead }}
+{% for item in blkdevtune.iteritems() %}
+update_blk_sd_value "{{ item[0] }}" "{{ item[1] }}"
+{% endfor %}
 
 exit 0

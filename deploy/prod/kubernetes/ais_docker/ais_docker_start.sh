@@ -2,10 +2,14 @@
 
 cp -fv $CONFFILE /etc/ais || exit 1 
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
-cp -fv $COLLECTDCONF /etc/collectd/collectd.conf || exit 1
 
-service collectd start
 node /opt/statsd/stats.js /opt/statsd/statsd.conf &
+
+#
+# Somewhere to dump anything of interest that will be picked up but the
+# gather_log.sh script.
+#
+mkdir /var/log/aismisc
 
 #
 # If this pod is part of the proxy daemonset then the initContainer in that
@@ -32,13 +36,26 @@ else
     is_primary=false
 fi
 
-#an initcontainer runs to create a hash of the uuid which is to be used as the AIS_DAEMONID
-#If that file isn't found, then the default set by the daemonset is used as the AIS_DAEMONID
+#
+# An initcontainer runs to create a hash of the system uuid. If such a hash was found, we
+# use it as the base of the AIS_DAEMONID
+#
+# If no uuid was found, we'll fallback to AIS_HOSTIP - the node IP provided in the pod
+# environment.
+#
+# In both cases, we prefix the daemon id with the first letter of the ROLE - targets
+# and proxies can run on the same node, so this disambiguates their daemon ids. This
+# would fail if electable and non-electable proxies run on the same node - we could
+# pass more detail on the role type in the environment if required.
+#
 if [[ -f /var/ais_env/uuid_env ]]; then
    UUID=$(cat /var/ais_env/uuid_env)
-   export AIS_DAEMONID=$UUID
-   echo "Found UUID hash to set as DaemonID: $UUID"
+   export AIS_DAEMONID="${ROLE::1}$UUID"
+else
+   export AIS_DAEMONID="${ROLE::1}$AIS_HOSTIP"
 fi
+echo "Our ais daemon id will be $AIS_DAEMONID"
+
 #
 # There's no assured sequencing of the relative startup of proxy & target pods
 # on a node, not to mention across multiple nodes. So target pods can start before
@@ -69,9 +86,18 @@ fi
 ping_result="failure"
 total_wait=0
 if [[  -f /etc/ais/smap.json ]]; then
+    #
+    # On helm install, a pre-install hook cleans up /etc/ais/smap.json (which is only ever
+    # created on proxy nodes). Thus an existing smap.json *should* imply this is a pod restart
+    # in a past helm release. This is not ironclad - for example if we label a new node
+    # some time after initial helm install and the node previously ran a proxy then the
+    # old smap may still be present.
+    #
     # A contactable/resolvable initial primary is expressly not a requirement after initial deployment!
-    echo "Cached smap.json present - assuming not initial AIS cluster deployment"
-elif ! $is_primary; then
+    #
+    echo "Past smap.json exists - assuming not initial AIS cluster deployment"
+elif [[ "$ROLE" == "target" || $is_primary == "false" ]]; then
+        echo "No past smap.json and this pod is a target or non-primary proxy - waiting for primary to be pingable"
         # k8s liveness will likely fail and restart us before the 120s period is over, anyway
         while [[ $total_wait -lt 120 ]]; do
             # Single success will end, otherwise wait at most 10s
@@ -89,6 +115,8 @@ elif ! $is_primary; then
                 sleep 5                     # code 2 means resolve failure, treat any others the same
                 total_wait=$((total_wait + 5))
             fi
+
+            echo "Ping total wait time so far: $total_wait"
         done
 
         echo "Ping $ping_result; waited a total of around $total_wait seconds"

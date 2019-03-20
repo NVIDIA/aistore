@@ -69,6 +69,11 @@ nvidia_docker_key: 'https://nvidia.github.io/nvidia-docker/gpgkey'
 libnvidia_container_key: 'https://nvidia.github.io/libnvidia-container/gpgkey'
 
 #
+# NVIDIA device plugin daemonset location
+#
+nvidia_device_plugin_url: 'https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.11/nvidia-device-plugin.yml'
+
+#
 # Caution is required  when blasting out host/dev combos for mkfs via ansible!
 # The playbooks are intended to mkfs at initial cluster establishment, and also
 # when new nodes are added (or disks replaced, or extra disks made available).
@@ -110,6 +115,11 @@ ais_host_mtu:
     mtu: 9000
 
 #
+# Taint applied to cpu/storage nodes. Must be tolerated by pods in the ais chart.
+#
+cpu_node_taint: 'dedicated=ais:PreferNoSchedule'
+
+#
 # Lines to add to /etc/security/limits.conf (or /etc/security/limits.d/)
 #
 ais_pam_limits:
@@ -132,9 +142,11 @@ ais_cpufreq_governor: performance
 # See e.g. https://www.beegfs.io/wiki/StorageServerTuning
 #
 blkdevtune:
-  scheduler: deadline
-  nr_requests: 4096
-  read_ahead: 4096
+  queue/scheduler: deadline
+  queue/nr_requests: 4096
+  queue/read_ahead_kb: 4096
+  queue/rq_affinity: 2
+  queue/max_sectors_kb: 8192
 
 #
 # Items to add/tweak in /etc/sysctl.conf. The 'default' is just for reference/comparison,
@@ -152,22 +164,22 @@ ais_host_sysctl:
     value: 268435456
     default: 212992
     state: present
-    comment: Max receive socket buffer size for all protocols. AIS uses TCP, so net.ipv4.tcp_rmem over-rides there. Tweak to allow apps using SO_RCVBUF wide range. Will not apply to AIS.
+    comment: Max receive socket buffer size for all protocols. AIS uses TCP, so net.ipv4.tcp_rmem over-rides there. Tweak to allow apps using SO_RCVBUF wide range. Will not apply to AIS, but does apply to the UDP buffers used by statsd.
   - name: net.core.wmem_max
     value: 268435456
     default: 212992
     state: present
-    comment: Max send socket buffer size for all protocols. TCP over-rides, as above. Tweak to allow apps using SO_SNDBUF wide range. Will not apply to AIS.
+    comment: Max send socket buffer size for all protocols. TCP over-rides, as above. Tweak to allow apps using SO_SNDBUF wide range. Will not apply to AIS, but does apply to the UDP buffers used by statsd.
   - name: net.core.rmem_default
     value: 25165824
     default: 212992
     state: present
-    comment: Default  receive socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS.
+    comment: Default  receive socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS, but does apply to the UDP buffers used by statsd.
   - name: net.core.wmem_default
     value: 25165824
     default: 212992
     state: present
-    comment: Default send socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS.
+    comment: Default send socket buffer size for all protocol. TCP over-rides etc as above. Does not apply to AIS, but does apply to the UDP buffers used by statsd.
   - name: net.core.optmem_max
     value: 25165824
     default: 20480
@@ -228,3 +240,13 @@ ais_host_sysctl:
     state: present
     default: 1
     comment: Per Mellanox tuning guide
+  - name: vm.vfs_cache_pressure
+    value: 50
+    state: present
+    default: 100
+    comment: Values lower than 100 are suitable for fileservers in which we want to keep directory and inode objects in memory.
+  - name: vm.swappiness
+    value: 10
+    state: present
+    default: 60
+    comment: Lowering this makes the kernel less inclined to push pages to swap unless we are close to using all memory.

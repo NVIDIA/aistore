@@ -1,0 +1,30 @@
+#
+# Now add device plugin
+# kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.11/nvidia-device-plugin.yml
+#
+# It's a daemonset, so don't repeat command on all nodes!
+#
+# https://github.com/NVIDIA/k8s-device-plugin#preparing-your-gpu-nodes
+#
+# The following uses local_action to run kubectl on the local system (the one running Ansible).
+# Obviously this assumes that the local system is set up to run kubectl.
+#
+
+#
+# This role should not repeat for every host in the play
+#
+runonce: True
+
+- name: Check whether nvidia-device-plugin DaemonSet is installed
+  local_action:
+    module: command
+    _raw_params: kubectl get ds nvidia-device-plugin-daemonset --namespace=kube-system
+  ignore_errors: True
+  register: ds
+  changed_when: ds.rc != 0
+
+- name: Install nvidia-device-plugin DaemonSet if necessary
+  local_action:
+    module: command
+    _raw_params: kubectl create -f {{ nvidia_device_plugin_url }}
+  when: ds.rc != 0

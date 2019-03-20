@@ -8,10 +8,17 @@ function whinge {
 [[ -n "$STATSDCONF" ]] || whinge "STATSDCONF not set"
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || whinge "failed to copy $STATSDCONF"
 
-[[ -n "$COLLECTDCONF" ]] || whinge "COLLECTDCONF not set"
-cp -fv $COLLECTDCONF /etc/collectd/collectd.conf || whinge "failed to copy $COLLECTDCONF"
+#
+# Somewhere to dump anything of interest that will be picked up but the
+# gather_log.sh script.
+#
+mkdir /var/log/aismisc
 
-service collectd start
+#
+# Results directory - gather_logs.sh will collect this.
+#
+mkdir /var/log/aisloader
+
 node /opt/statsd/stats.js /opt/statsd/statsd.conf &
 sleep 2 # token effort to allow statsd to set up shop before aisloader tries to connect
 
@@ -26,9 +33,7 @@ PATH=/go/bin:$PATH
 # Send output to stdout so we can see it with kubectl logs, and
 # duplicate to a file in /tmp.
 #
-# XXX TODO work out a means of preserving this output automatically
-#
-run_aisloader "$MY_NODE" 2>&1 | tee /tmp/aisloader.out
+run_aisloader "$MY_NODE" 2>&1 | tee /var/log/aisloader/aisloader.out
 
 #
 # If we simply exit we'll get restarted (as part of a daemonset). So hang around and

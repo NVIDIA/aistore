@@ -60,6 +60,7 @@
     owner: root
     group: root
     mode: 0755
+  register: configscript
 
 - name: Create aishostconfig systemctl unit
   copy:
@@ -74,7 +75,7 @@
     daemon-reload: yes
     enabled: yes
     state: restarted
-  when: configservice.changed
+  when: configservice.changed or configscript.changed
 
 
 

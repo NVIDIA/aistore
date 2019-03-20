@@ -51,15 +51,12 @@ spec:
               value : "/var/ais_config/ais.json"
             - name: STATSDCONF
               value: "/var/statsd_config/statsd.json"
-            - name: COLLECTDCONF
-              value: "/var/collectd_config/collectd.json"
             - name : ROLE
               value : "target"
             # dummy value for target
             - name : TARGETS
               value : "1"
-            # Passing in the hostIP daemon ID, so that the ais target will have the same set of hash
-            - name: AIS_DAEMONID
+            - name: AIS_HOSTIP
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
@@ -67,7 +64,7 @@ spec:
               value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
             - name: http
-              containerPort: {{ .Values.tar/get.service.port }}
+              containerPort: {{ .Values.target.service.port }}
               protocol: TCP
           volumeMounts:
             - name: etc-mount
@@ -78,8 +75,6 @@ spec:
               mountPath: "/var/ais_config"
             - name: statsd-config
               mountPath: "/var/statsd_config"
-            - name: collectd-config
-              mountPath: "/var/collectd_config"
             {{ range .Values.target.mountPaths }}
             - name: fspath{{ . | replace "/" "-" }}
               mountPath: "{{ . }}"
@@ -89,13 +84,15 @@ spec:
               path: /v1/health
               port: {{ .Values.target.service.port }}
             initialDelaySeconds: 60
-            periodSeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /v1/health
               port: {{ .Values.target.service.port }}
-            initialDelaySeconds: 20
-            periodSeconds: 15
+            initialDelaySeconds: 10
+            periodSeconds: 10 
+            failureThreshold: 3
           resources:
 {{ toYaml .Values.resources | indent 12 }}
       serviceAccount: {{ template "ais.name" . }}-sa
@@ -105,15 +102,15 @@ spec:
         - name: config-mount
           configMap:
             name:  {{ template "ais.name" . }}-target
+        - name: env-mount
+          hostPath:
+            path: {{ .Values.target.envMountPath.hostPath }}
         - name: etc-mount
           hostPath:
             path: {{ .Values.target.etcMountPath.hostPath }}
         - name: statsd-config
           configMap:
             name: {{ template "ais.name" . }}-statsd
-        - name: collectd-config
-          configMap:
-            name: {{ template "ais.name" . }}-collectd
         {{ range .Values.target.mountPaths }}
         - name: fspath{{ . | replace "/" "-" }}
           hostPath:

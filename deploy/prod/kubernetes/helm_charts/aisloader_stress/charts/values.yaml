@@ -6,7 +6,10 @@ image:
   pullPolicy: IfNotPresent
   pullSecret: requireoverride
 
-# the release name for AIS, ie the name used in 'helm install --name=foo .'' for the AIS install
+#
+# The release name for AIS, ie the name used in 'helm install --name=foo .'' for the AIS install.
+# This is used in finding the proxy clusterIP, and for the graphite host.
+#
 ais_release: "stress"
 
 #
@@ -25,9 +28,10 @@ aisloaderArg:
     specific: []
   duration:
     default: "30m"
-    specific:
-      - node: "cpu01"
-        value: "29m"
+    # Example of how to specify per-host values
+    # specific:
+    #  - node: "cpu01"
+    #    value: "29m"
   pctput:
     default: "0"
     specific: []
@@ -47,24 +51,17 @@ aisloaderArg:
     default: "8080"
     specific: []
   minsize:
-    default: 8192
+    default: "8M"
     specific: []
   maxsize:
-    default: 8192 
+    default: "8M" 
+    specific: []
+  seed:
+    # can be 'fromhostip' or 'random'
+    default: "fromhostip"
     specific: []
 
 resources: {}
-
-#
-# Quick hack to use the Graphite instance created during AIS install. Requires cmd over-ride of graphite_host
-# if the helm install used anything other than --name ais
-#
-tags:
-  builtin_monitoring: false
-
-external_monitoring:
-  graphite_host: ais-graphite
-  graphite_port: 2003
 
 nodeSelector:
   aisloader: "yes"

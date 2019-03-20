@@ -50,7 +50,7 @@
 # XXX TODO This will fail if docker is not yet installed, or is installed but not the correct version.
 # Since we're using kubespray to install Docker we have a problem: we would like to run these host
 # config plays *before* building the k8s cluster, but Docker won't be present until we run kubespray.
-# Various way of solving that - current choice is to stick head in sand and require this to be run 
+# Various ways of solving that - current choice is to stick head in sand and require this to be run 
 # on GPU nodes after kubespray, and require docker be up-to-date (be careful to keep versions in sync
 # across CPU and GPU nodes).
 #
@@ -59,7 +59,7 @@
 # to see available versions) we'll avoid selecting the latest nvidia packages (which want Docker 18.09)
 # and instead use those listed as depending on Docker 18.06.2.
 #
-# We must install both packages in a single apt instance.
+# We must install both packages in a single apt invocation.
 #
 - name: Install nvidia-docker and nvidia-container-runtime
   apt:
@@ -86,15 +86,3 @@
     name: docker
     state: restarted
   when: defruntime.changed
-
-  #
-  # Now add device plugin
-  # kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v1.11/nvidia-device-plugin.yml
-  #
-  # It's a daemonset, so don't repeat command on all nodes!
-  #
-  # https://github.com/NVIDIA/k8s-device-plugin#preparing-your-gpu-nodes
-  #
-  # That daemonset has tolerations, one for nvidia.com/gpu (exists) that we should taint
-  # nodes with to avoid it running on cpu nodes (I think; it just goes into a crash loop)
-  #

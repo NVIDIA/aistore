@@ -8,7 +8,8 @@ These playbooks are intended both for standalone use and for supporting automati
 
 1. Playbook `ais_host_config_common.yml` - run *before* a set of hosts is added to a cluster with kubespray; this play installs assorted debug-related packages, but it does not install Docker or similar.
 2. Kubespray is run, to form initial cluster or to extend it with additional hosts; amongst many other things this will install Docker.
-3. Playbook `ais_gpuhost_config.yml` - run *after* kubespray for the host(s); this playbook will install CUDA drivers, `nvidia-docker2`, `nvidia-container-runtime` and the nvidia device plugin. It requires that Docker already be installed - hence why this playbook is run after kubespray.
+3. Playbook `ais_node_taints.yml` - run *after* `kubespray` to apply taints to nodes
+4. Playbook `ais_gpuhost_config.yml` - run *after* `kubespray` for the host(s); this playbook will install CUDA drivers, `nvidia-docker2`, `nvidia-container-runtime` and the nvidia device plugin.
 
 ### Playbooks Supporting AIS Installation
 

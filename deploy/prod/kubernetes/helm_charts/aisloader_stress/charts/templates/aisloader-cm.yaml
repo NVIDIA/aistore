@@ -34,6 +34,7 @@ data:
     declare -A port=( [_default]="{{ .Values.aisloaderArg.port.default }}" )
     declare -A minsize=( [_default]="{{ .Values.aisloaderArg.minsize.default }}" )
     declare -A maxsize=( [_default]="{{ .Values.aisloaderArg.maxsize.default }}" )
+    declare -A seed=( [_default]="{{ .Values.aisloaderArg.seed.default }}" )
 
     # Node-specific values for bucket, if any
     {{ range .Values.aisloaderArg.bucket.specific }}
@@ -86,6 +87,11 @@ data:
     maxsize[{{ .node }}]={{ .value | quote }}
     {{ end }}
 
+    # Node-specific values for seed, if any
+    {{ range .Values.aisloaderArg.seed.specific }}
+    seed[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
     #
     # Called from the container start script, with aisloader in PATH.
     # The stdout of aisloader can be seen in kubectl logs.
@@ -97,10 +103,20 @@ data:
       mybkt=${bktpat/%%s/$n}
 
       #
-      # Use a consistent seed per node
-      # XXX Could pass a seed via the values.yaml as for all others?
+      # Interpret seed value
       #
-      SEED=${MY_HOSTIP#[0-9]*\.[0-9]*\.[0-9]*\.}
+      case "${seed[$n]:-${seed['_default']}}" in
+        fromhostip)
+          SEED=${MY_HOSTIP#[0-9]*\.[0-9]*\.[0-9]*\.}
+          ;;
+        random)
+          RANDOM=$(dd if=/dev/random bs=1 count=2 2>/dev/null | od -t u2 | head -1 | awk '{print $2}')
+          SEED=$RANDOM
+          ;;
+        *)
+          SEED=$RANDOM
+          ;;
+      esac
   
       aisloader \
         -bucket=$mybkt \

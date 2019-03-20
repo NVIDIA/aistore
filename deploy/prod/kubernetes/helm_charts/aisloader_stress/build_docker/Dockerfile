@@ -11,7 +11,7 @@ FROM ubuntu:bionic
 ARG start_script
 RUN mkdir -p /usr/local/bin
 
-RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs collectd collectd-utils git iputils-ping netcat golang-go
+RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs git iputils-ping netcat golang-go
 RUN pip install awscli
 RUN cd /opt && git clone git://github.com/etsy/statsd.git
 

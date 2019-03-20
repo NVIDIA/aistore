@@ -979,9 +979,9 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	if rangeLen == 0 {
 		reader = file
 		// No need to allocate buffer for whole object (it might be very large).
-		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size, cmn.MiB))
+		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size, 8*cmn.MiB))
 	} else {
-		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(rangeLen, cmn.MiB))
+		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(rangeLen, 8*cmn.MiB))
 		if cksumRange {
 			var cksum string
 			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)

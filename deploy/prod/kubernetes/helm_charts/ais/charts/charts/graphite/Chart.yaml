@@ -1,0 +1,17 @@
+apiVersion: v1
+appVersion: 1.1.5-4
+description: Graphite metrics server
+home: https://graphiteapp.org/
+icon: https://graphiteapp.org/img/graphite-logo_color.png
+keywords:
+- metrics
+maintainers:
+- email: fabian.schlegel@kiwigrid.com
+  name: fabian-schlegel
+- email: andre.bauer@kiwigrid.com
+  name: monotek
+name: graphite
+sources:
+- https://github.com/graphite-project
+- https://github.com/graphite-project/docker-graphite-statsd
+version: 0.3.4
