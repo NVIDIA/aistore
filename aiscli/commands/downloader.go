@@ -97,7 +97,7 @@ func DownloadAdminHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(resp))
+		fmt.Println(resp.String())
 	case DownloadCancel:
 		if err := api.DownloadCancel(baseParams, id); err != nil {
 			return err

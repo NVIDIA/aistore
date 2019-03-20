@@ -371,6 +371,21 @@ type DlStatusResp struct {
 	CurrentTasks []TaskDlInfo `json:"current_tasks"`
 }
 
+func (d *DlStatusResp) String() string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)\n", d.Finished, d.Total, d.Percentage))
+
+	if len(d.CurrentTasks) != 0 {
+		sb.WriteString("Progress of files that are currently being downloaded:\n")
+		for _, task := range d.CurrentTasks {
+			sb.WriteString(fmt.Sprintf("\t%s: %s\n", task.Name, B2S(task.Downloaded, 2))) // TODO: print total too
+		}
+	}
+
+	return sb.String()
+}
+
 type DlBase struct {
 	Bucket      string `json:"bucket"`
 	BckProvider string `json:"bprovider"`
@@ -519,7 +534,7 @@ func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
 	return objects, nil
 }
 
-func (b *DlSingleBody) String() (str string) {
+func (b *DlSingleBody) String() string {
 	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
 }
 
@@ -573,7 +588,7 @@ func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
 	return objects, nil
 }
 
-func (b *DlRangeBody) String() (str string) {
+func (b *DlRangeBody) String() string {
 	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
 }
 
@@ -630,7 +645,7 @@ func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, err
 	return objects, nil
 }
 
-func (b *DlMultiBody) String() (str string) {
+func (b *DlMultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bucket)
 }
 
