@@ -1,4 +1,5 @@
 ## Why Downloader?
+
 It is a well-known fact that some of the most popular AI datasets are available on the Internet.
 
 > See, for instance, [Revisiting Unreasonable Effectiveness of Data in Deep Learning Era](https://arxiv.org/abs/1707.02968) - the paper lists a good number of very large and very popular datasets.
@@ -9,27 +10,27 @@ Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluste
 
 ## Download Request
 
-AIStore supports 4 types of download requests:
+AIS's *Downloader* supports 4 types of download requests:
 
 * *Single* - download a single object
 * *Multi* - download multiple objects provided by JSON map (string -> string) or list of strings
 * *Range* - download multiple objects based on a given naming pattern
 * *Cloud* - given optional prefix and optional suffix, download matching objects from the specified cloud bucket
 
-> - Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client).
+> Prior to downloading, make sure that AIS (destination) bucket already exists. See [AIS API](/docs/http_api.md) for details on how to create, destroy, and list storage buckets. For Python-based clients, a better starting point could be [here](/README.md#python-client). Error is returned when provied bucket does not exist.
 
 The rest of this document is structured around all supported types of downloads:
 
 ## Table of Contents
 - [Single (object) download](#single-download)
 - [Multi (object) download](#multi-download)
-- [Range (object) download](#list-download)
+- [Range (object) download](#range-download)
 - [Cloud download](#cloud-download)
 - [Cancellation](#cancellation)
-- [Status of the download](#status-of-the-download)
+- [Status (of the download)](#status)
 - [List of downloads](#list-of-downloads)
 
-## Single download
+## Single Download
 
 The request (described below) downloads a *single* object and is considered the most basic.
 This request returns *id* on successful request which can then be used to check the status or cancel the download job.
@@ -47,13 +48,16 @@ Name | Type | Description | Optional?
 
 ### Sample Request
 
-| Operation | HTTP action  | Example  | Notes |
-|--|--|--|--|
-| Single Object Download | POST /v1/download | `curl -Liv -X POST 'http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso'`| Header authorization is not required to make this download request. It is just provided as an example. |
+| Operation | HTTP action | Example |
+|--|--|--|
+| Single object download | POST /v1/download | `curl -Liv -X POST 'http://localhost:8080/v1/download?bucket=ubuntu&objname=ubuntu.iso&link=http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso'` |
 
-## Multi download
+## Multi Download
 
-A *multi* object download requires either a map or a list (**object_list**) in JSON body.
+A *multi* object download requires either a map or a list in JSON body:
+* **Map** - in map, each entry should contain `custom_object_name` (key) -> `external_link` (value). This format allows to name objects to not depend on automatic naming as it is done in *list* format.
+* **List** - in list, each entry should contain `external_link` to resource. Objects names are created from the base of the link (query parameters are stripped).
+
 This request returns *id* on successful request which can then be used to check the status or cancel the download job.
 
 ### Request Query Parameters
@@ -69,10 +73,10 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Multi Download Using Object Map | POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"t10k-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1-ubyte.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images-idx3-ubyte.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download?bucket=yann-lecun` |
-| Multi Download Using Object List |  POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download?bucket=yann-lecun` |
+| Multi download using object map | POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '{"train-labels.gz": "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "t10k-labels-idx1.gz": "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "train-images.gz": "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"}' http://localhost:8080/v1/download?bucket=yann-lecun` |
+| Multi download using object list |  POST /v1/download | `curl -Liv -X POST -H 'Content-Type: application/json' -d '["http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"]' http://localhost:8080/v1/download?bucket=yann-lecun` |
 
-## Range download
+## Range Download
 
 A *range* download retrieves (in one shot) multiple objects while expecting (and relying upon) a certain naming convention which happens to be often used.
 This request returns *id* on successful request which can then be used to check the status or cancel the download job.
@@ -112,7 +116,7 @@ Name | Type | Description | Optional?
 
 ## Cloud download
 
-A *cloud* download prefetches multiple objects which are contained in given cloud bucket.
+A *cloud* download prefetches multiple objects which names match provided prefix and suffix and are contained in given cloud bucket.
 
 ### Request Query Parameters
 
@@ -120,18 +124,18 @@ Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Cloud bucket from which the data will be prefetched |
 **timeout** | **string** | Timeout for request to external resource | Yes
-**prefix** | **string** | Prefix of the object name | Yes
-**suffix** | **string** | Suffix of the object name | Yes
+**prefix** | **string** | Prefix of the objects names | Yes
+**suffix** | **string** | Suffix of the objects names | Yes
 
 ### Sample Request
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a list of objects from cloud bucket | POST /v1/download/bucket | `curl -L -X POST 'http://localhost:8080/v1/download?bucket=lpr-vision&prefix=imagenet/imagenet_train-&suffix=.tgz'`|
+| Download a list of objects from cloud bucket | POST /v1/download | `curl -L -X POST 'http://localhost:8080/v1/download?bucket=lpr-vision&prefix=imagenet/imagenet_train-&suffix=.tgz'`|
 
 ## Cancellation
 
-Any download request can be cancelled at any time by making a DELETE request to the **downloader**.
+Any download request can be canceled at any time by making a `DELETE` request with provided `id` (which is returned upon job creation).
 
 ### Request Query Parameters
 
@@ -141,15 +145,15 @@ Name | Type | Description | Optional?
 
 ### Sample Request
 
-| Operation | HTTP action  | Example |
+| Operation | HTTP action | Example |
 |--|--|--|
-| Cancel download | DELETE v1/download | `curl -Liv -X DELETE http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
+| Cancel download | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
 
-## Status of the download
+## Status
 
-The status of any download request can be queried at any time.
+The status of any download request can be queried at any time using `GET` request with provided `id` (which is returned upon job creation).
 
-### Request Parameters
+### Request Query Parameters
 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
@@ -159,12 +163,12 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Get download status | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612`|
+| Get download status | GET /v1/download | `curl -Liv -X GET 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
 
 
 ## List of downloads
 
-The list of all download requests can be queried at any time. Note that this has the same syntax as [Status of the download](#Status-of-the-download) except the `id` parameter is empty.
+The list of all download requests can be queried at any time. Note that this has the same syntax as [Status](#status) except the `id` parameter is empty.
 
 ### Request Parameters
 
