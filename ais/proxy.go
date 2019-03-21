@@ -2553,11 +2553,11 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 // register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		nsi                   cluster.Snode
-		msg                   *cmn.ActionMsg
-		s                     string
-		keepalive, register   bool
-		isProxy, nonElectable bool
+		nsi                 cluster.Snode
+		msg                 *cmn.ActionMsg
+		s                   string
+		keepalive, register bool
+		nonElectable        bool
 	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
@@ -2566,10 +2566,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &nsi) != nil {
 		return
 	}
+	if err := nsi.Validate(); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	isProxy := nsi.DaemonType == cmn.Proxy
 	if len(apitems) > 0 {
 		keepalive = apitems[0] == cmn.Keepalive
 		register = apitems[0] == cmn.Register // user via REST API
-		isProxy = apitems[0] == cmn.Proxy
 		if isProxy {
 			if len(apitems) > 1 {
 				keepalive = apitems[1] == cmn.Keepalive
@@ -2580,7 +2584,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s = fmt.Sprintf("register %s (isProxy=%t, keepalive=%t)", &nsi, isProxy, keepalive)
+	s = fmt.Sprintf("register %s (keepalive=%t)", &nsi, keepalive)
 	msg = &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -2602,7 +2606,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	smap := p.smapowner.get()
 	if isProxy {
 		osi := smap.GetProxy(nsi.DaemonID)
-		if !p.addOrUpdateNode(&nsi, osi, keepalive, "proxy") {
+		if !p.addOrUpdateNode(&nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
@@ -2612,7 +2616,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		// FIXME: If not keepalive then update smap anyway - either: new target,
 		// updated target or target has powercycled. Except 'updated target' case,
 		// rebalance needs to be triggered and updating smap is the easiest way.
-		if keepalive && !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
+		if keepalive && !p.addOrUpdateNode(&nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
@@ -2638,7 +2642,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if p.startedup(0) == 0 {
-		p.registerToSmap(&nsi, isProxy, nonElectable)
+		clone := p.smapowner.get().clone()
+		clone.putNode(&nsi, nonElectable)
+		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		return
 	}
@@ -2652,30 +2658,38 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update and distribute Smap
-	go func(nsi *cluster.Snode, isProxy, nonElectable bool) {
-
-		// TODO: trigger GFN if need be
-		// failCnt := p.metasyncer.notify(true, &actionMsgInternal{ActionMsg: cmn.ActionMsg{Action: "metasync-start-gfn"}})
-		// ...
-
+	go func(nsi *cluster.Snode) {
 		p.smapowner.Lock()
 
-		p.registerToSmap(nsi, isProxy, nonElectable)
-		smap := p.smapowner.get()
+		clone := p.smapowner.get().clone()
+		clone.putNode(nsi, nonElectable)
 
-		if errstr := p.smapowner.persist(smap, true); errstr != "" {
+		// Notify proxies and targets about new node. Targets probably need
+		// to set up GFN.
+		notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
+		notifyPairs := revspair{clone, notifyMsgInt}
+		failCnt := p.metasyncer.notify(true, notifyPairs)
+		if failCnt > 1 {
+			p.smapowner.Unlock()
+			glog.Errorf("FATAL: cannot join %s - unable to reach %d nodes", nsi, failCnt)
+			return
+		} else if failCnt > 0 {
+			glog.Warning("unable to reach 1 node")
+		}
+
+		p.smapowner.put(clone)
+		if errstr := p.smapowner.persist(clone, true); errstr != "" {
 			glog.Errorln(errstr)
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
 		// storage targets make use of msgInt.NewDaemonID,
 		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
-		msgInt := p.newActionMsgInternal(msg, smap, nil)
+		msgInt := p.newActionMsgInternal(msg, clone, nil)
 		msgInt.NewDaemonID = nsi.DaemonID
-		msgInt.SmapVersion = smap.Version
 
 		// metasync
-		pairs := []revspair{revspair{smap, msgInt}}
+		pairs := []revspair{{clone, msgInt}}
 		if !isProxy {
 			bmd := p.bmdowner.get()
 			pairs = append(pairs, revspair{bmd, msgInt})
@@ -2684,43 +2698,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			pairs = append(pairs, revspair{tokens, msgInt})
 		}
 		p.metasyncer.sync(false, pairs...)
-	}(&nsi, isProxy, nonElectable)
+	}(&nsi)
 }
 
-func (p *proxyrunner) registerToSmap(nsi *cluster.Snode, isproxy, nonelectable bool) {
-	clone := p.smapowner.get().clone()
-	id := nsi.DaemonID
-	if isproxy {
-		if clone.GetProxy(id) != nil { // update if need be - see addOrUpdateNode()
-			clone.delProxy(id)
-		}
-		clone.addProxy(nsi)
-		if nonelectable {
-			if clone.NonElects == nil {
-				clone.NonElects = make(cmn.SimpleKVs)
-			}
-			clone.NonElects[id] = ""
-			glog.Warningf("%s won't be electable", nsi.Name())
-		}
-		if glog.V(3) {
-			glog.Infof("joined %s (num proxies %d)", nsi.Name(), clone.CountProxies())
-		}
-	} else {
-		if clone.GetTarget(id) != nil { // ditto
-			clone.delTarget(id)
-		}
-		clone.addTarget(nsi)
-		if glog.V(3) {
-			glog.Infof("joined %s (num targets %d)", nsi.Name(), clone.CountTargets())
-		}
-	}
-	p.smapowner.put(clone)
-}
-
-func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool, kind string) bool {
+func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool) bool {
 	if keepalive {
 		if osi == nil {
-			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi)
+			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", nsi.DaemonType, nsi)
 			return true
 		}
 
@@ -2729,7 +2713,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 				glog.Errorf("%s tried to register/keepalive with a duplicate ID %s", nsi.PublicNet.DirectURL, nsi)
 				return false
 			}
-			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi)
+			glog.Warningf("register/keepalive %s %s: info changed - renewing", nsi.DaemonType, nsi)
 			return true
 		}
 
@@ -2741,10 +2725,10 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 			return true
 		}
 		if osi.Equals(nsi) {
-			glog.Infof("register %s %s: already done", kind, nsi)
+			glog.Infof("register %s: already done", nsi)
 			return false
 		}
-		glog.Warningf("register %s %s: renewing the registration %+v => %+v", kind, nsi, osi, nsi)
+		glog.Warningf("register %s: renewing the registration %+v => %+v", nsi, osi, nsi)
 	}
 	return true
 }

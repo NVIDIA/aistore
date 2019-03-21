@@ -51,9 +51,7 @@ func newSmap() (smap *smapX) {
 func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(cluster.NodeMap, tsize)
 	m.Pmap = make(cluster.NodeMap, psize)
-	if elsize > 0 {
-		m.NonElects = make(cmn.SimpleKVs, elsize)
-	}
+	m.NonElects = make(cmn.SimpleKVs, elsize)
 }
 
 func (m *smapX) tag() string                    { return smaptag }
@@ -132,7 +130,34 @@ func (m *smapX) delProxy(pid string) {
 		cmn.AssertMsg(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
 	}
 	delete(m.Pmap, pid)
+	delete(m.NonElects, pid)
 	m.Version++
+}
+
+func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
+	id := nsi.DaemonID
+	if nsi.DaemonType == cmn.Proxy {
+		if m.GetProxy(id) != nil {
+			m.delProxy(id)
+		}
+		m.addProxy(nsi)
+		if nonElectable {
+			m.NonElects[id] = ""
+			glog.Warningf("%s won't be electable", nsi.Name())
+		}
+		if glog.V(3) {
+			glog.Infof("joined %s (num proxies %d)", nsi.Name(), m.CountProxies())
+		}
+	} else {
+		cmn.Assert(nsi.DaemonType == cmn.Target)
+		if m.GetTarget(id) != nil { // ditto
+			m.delTarget(id)
+		}
+		m.addTarget(nsi)
+		if glog.V(3) {
+			glog.Infof("joined %s (num targets %d)", nsi.Name(), m.CountTargets())
+		}
+	}
 }
 
 func (m *smapX) clone() *smapX {

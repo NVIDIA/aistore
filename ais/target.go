@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/atime"
@@ -131,10 +132,17 @@ type (
 		started time.Time // started time of receiving - used to calculate the recv duration
 		lom     *cluster.LOM
 	}
-	// the state that may influence GET logic for the first (getFromNeighAfterJoin) seconds after joining
-	getFromNeighbors struct {
-		stopts time.Time // (reg-time + const) when we stop trying to GET from neighbors
-		lookup bool
+
+	// The state that may influence GET logic when mountpath is added/enabled
+	localGFN struct {
+		lookup int32 // atomic bool
+	}
+
+	// The state that may influence GET logic when new target joins cluster
+	globalGFN struct {
+		lookup       int32          // atomic bool
+		stopDeadline int64          // (reg-time + const) when we stop trying to GET from neighbors
+		smap         unsafe.Pointer // new smap which will be soon live
 	}
 
 	targetrunner struct {
@@ -151,10 +159,54 @@ type (
 		xcopy          *mirror.XactCopy
 		ecmanager      *ecManager
 		rebManager     *rebManager
-		gfn            getFromNeighbors
-		regstate       regstate // the state of being registered with the primary (can be en/disabled via API)
+		gfn            struct {
+			local  localGFN
+			global globalGFN
+		}
+		regstate regstate // the state of being registered with the primary (can be en/disabled via API)
 	}
 )
+
+func (gfn *localGFN) active() bool {
+	return atomic.LoadInt32(&gfn.lookup) > 0
+}
+
+func (gfn *localGFN) activate() {
+	atomic.StoreInt32(&gfn.lookup, 1)
+	glog.Infof("global GFN has been activated")
+}
+
+func (gfn *localGFN) deactivate() {
+	atomic.StoreInt32(&gfn.lookup, 0)
+	glog.Infof("local GFN has been deactivated")
+}
+
+func (gfn *globalGFN) active() (bool, *smapX) {
+	if atomic.LoadInt32(&gfn.lookup) == 0 {
+		return false, nil
+	}
+
+	// Deadline exceeded - probably primary proxy notified about new smap
+	// but did not update it due to some failures.
+	if time.Now().UnixNano() > atomic.LoadInt64(&gfn.stopDeadline) {
+		gfn.deactivate()
+		return false, nil
+	}
+
+	return true, (*smapX)(atomic.LoadPointer(&gfn.smap))
+}
+
+func (gfn *globalGFN) activate(smap *smapX) {
+	atomic.StorePointer(&gfn.smap, unsafe.Pointer(smap))
+	atomic.StoreInt64(&gfn.stopDeadline, time.Now().UnixNano()+getFromNeighAfterJoin.Nanoseconds())
+	atomic.StoreInt32(&gfn.lookup, 1)
+	glog.Infof("global GFN has been activated")
+}
+
+func (gfn *globalGFN) deactivate() {
+	atomic.StoreInt32(&gfn.lookup, 0)
+	glog.Infof("global GFN has been deactivated")
+}
 
 //
 // target runner
@@ -398,19 +450,18 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	// we need to have the current cluster-wide metadata and the temporary gfn state:
 	err = jsoniter.Unmarshal(res.outjson, &meta)
 	cmn.AssertNoErr(err)
-	t.gfn.lookup = true
-	t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
+
+	t.gfn.global.activate(meta.Smap)
+
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
 	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, bucketMDRegister); errstr != "" {
-		t.gfn.lookup = false
 		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
 		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
 	}
 	// smap
 	if errstr := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-		t.gfn.lookup = false
 		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
 		glog.Infof("registered %s: Smap v%d", t.si.Name(), t.smapowner.get().version())
@@ -762,9 +813,10 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.localRebStatus()
-	if aborted || running {
+	gfnActive := t.gfn.local.active()
+	if aborted || running || gfnActive {
 		// FIXME: move this part to lom
-		oldFQN, oldSize := t.getFromOtherLocalFS(lom)
+		oldFQN, oldSize := getFromOtherLocalFS(lom)
 		if oldFQN != "" {
 			lom.FQN = oldFQN
 			lom.Size = oldSize
@@ -775,22 +827,20 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 			return
 		}
 	}
+
 	// check cluster-wide ("ask neighbors")
 	aborted, running = t.xactions.globalRebStatus()
-	if t.gfn.lookup {
-		if aborted || running {
-			t.gfn.lookup = false
-		} else if started.After(t.gfn.stopts) {
-			t.gfn.lookup = false
+	gfnActive, smap := t.gfn.global.active()
+	if aborted || running || gfnActive {
+		if !gfnActive {
+			smap = t.smapowner.get()
 		}
-	}
-	if aborted || running || t.gfn.lookup {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("neighbor lookup: aborted=%t, running=%t, lookup=%t", aborted, running, t.gfn.lookup)
+			glog.Infof("neighbor lookup: aborted=%t, running=%t, lookup=%t", aborted, running, gfnActive)
 		}
 		// retry in case the object is being moved right now
 		for retry := 0; retry < getFromNeighRetries; retry++ {
-			props, err := t.getFromNeighbor(r, lom)
+			props, err := t.getFromNeighbor(r, lom, smap)
 			if err != nil {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("Unsuccessful GFN: %v.", err)
@@ -804,7 +854,9 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 			}
 			return
 		}
-	} else if t.getFromTier(lom) {
+	}
+
+	if t.getFromTier(lom) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("restored from tier: %s (%s)", lom, cmn.B2S(lom.Size, 1))
 		}
@@ -1460,7 +1512,6 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
-
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -1483,12 +1534,20 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 
 // POST /v1/metasync
 func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var msgInt actionMsgInternal
-	if err := cmn.ReadJSON(w, r, &msgInt); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
+	var payload = make(cmn.SimpleKVs)
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		return
 	}
-	glog.Infof("metasync NIY: %+v", msgInt) // TODO
+
+	newSmap, msgInt, errstr := t.extractSmap(payload)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newSmap != nil && msgInt.Action == cmn.ActStartGFN {
+		t.gfn.global.activate(newSmap)
+	}
 }
 
 // GET /v1/health
@@ -1666,8 +1725,8 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, ve
 	return
 }
 
-func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remoteLOM *cluster.LOM, err error) {
-	neighsi := t.lookupRemotely(lom)
+func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *smapX) (remoteLOM *cluster.LOM, err error) {
+	neighsi := t.lookupRemotely(lom, smap)
 	if neighsi == nil {
 		err = fmt.Errorf("failed cluster-wide lookup %s", lom)
 		return
@@ -1875,13 +1934,13 @@ ret:
 	return
 }
 
-func (t *targetrunner) lookupRemotely(lom *cluster.LOM) *cluster.Snode {
+func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	res := t.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
 		nil, // query
 		http.MethodHead,
 		nil,
-		t.smapowner.get(),
+		smap,
 		lom.Config.Timeout.MaxKeepalive,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
@@ -3000,9 +3059,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			// a) target joining existing cluster and b) cluster starting to rebalance itself
 			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 			// To handle incoming GETs within this window (which would typically take a few seconds or less)
-			// we need to have the current cluster-wide metadata and the temporary gfn state:
-			t.gfn.lookup = true
-			t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
+			t.gfn.global.activate(t.smapowner.get())
 
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
@@ -3384,14 +3441,17 @@ func (t *targetrunner) stopXactions(xacts []string) {
 }
 
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	t.gfn.local.activate()
 	enabled, exists := t.fsprg.enableMountpath(mountpath)
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
+		t.gfn.local.deactivate()
 		return
 	}
 
 	if !enabled && !exists {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
+		t.gfn.local.deactivate()
 		return
 	}
 	t.stopXactions(mountpathXactions)
@@ -3413,9 +3473,11 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	t.gfn.local.activate()
 	err := t.fsprg.addMountpath(mountpath)
 	if err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
+		t.gfn.local.deactivate()
 		return
 	}
 	t.stopXactions(mountpathXactions)
@@ -3700,7 +3762,7 @@ func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists b
 	return t.fsprg.disableMountpath(mountpath)
 }
 
-func (t *targetrunner) getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
+func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
 		filePath := mpathInfo.MakePathBucketObject(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)

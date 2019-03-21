@@ -101,7 +101,6 @@ type (
 	revsReq struct {
 		pairs     []revspair
 		wg        *sync.WaitGroup
-		msgInt    *actionMsgInternal
 		failedCnt *int32 // TODO: add cluster.NodeMap to identify the failed ones
 		reqType   int    // enum: revsReqSync, etc.
 	}
@@ -125,7 +124,7 @@ type metasyncer struct {
 //
 // inner helpers
 //
-func (req revsReq) isNil() bool { return len(req.pairs) == 0 && req.msgInt == nil }
+func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 
 //
 // c-tor, register, and runner
@@ -162,7 +161,7 @@ func (y *metasyncer) Run() error {
 				y.timerStopped = true
 				break
 			}
-			cnt := y.doSync(revsReq.pairs, revsReq.msgInt, revsReq.reqType)
+			cnt := y.doSync(revsReq.pairs, revsReq.reqType)
 			if revsReq.wg != nil {
 				if revsReq.failedCnt != nil {
 					atomic.StoreInt32(revsReq.failedCnt, int32(cnt))
@@ -199,14 +198,13 @@ func (y *metasyncer) Stop(err error) {
 // methods (notify, sync, becomeNonPrimary) consistute internal API
 //
 
-//nolint:unused
-func (y *metasyncer) notify(wait bool, msg *actionMsgInternal) (failedCnt int) {
+func (y *metasyncer) notify(wait bool, pair revspair) (failedCnt int) {
 	if !y.checkPrimary() {
 		return
 	}
 	var (
 		failedCnt32 int32
-		revsReq     = revsReq{msgInt: msg}
+		revsReq     = revsReq{pairs: []revspair{pair}}
 	)
 	if wait {
 		revsReq.wg = &sync.WaitGroup{}
@@ -252,18 +250,18 @@ func (y *metasyncer) becomeNonPrimary() {
 //
 
 // main method; see top of the file; returns number of "sync" failures
-func (y *metasyncer) doSync(pairs []revspair, msgInt *actionMsgInternal, revsReqType int) (cnt int) {
+func (y *metasyncer) doSync(pairs []revspair, revsReqType int) (cnt int) {
 	var (
 		jsbytes, jsmsg []byte
 		err            error
 		refused        cluster.NodeMap
 		pairsToSend    []revspair
 		newTargetID    string
+		method         string
 		//
 		payload = make(cmn.SimpleKVs)
 		smap    = y.p.smapowner.get()
 		config  = cmn.GCO.Get()
-		method  = http.MethodPut
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -278,13 +276,15 @@ func (y *metasyncer) doSync(pairs []revspair, msgInt *actionMsgInternal, revsReq
 			}
 		}
 	}
+
 	if revsReqType == revsReqNotify {
-		cmn.Assert(len(pairs) == 0)
 		method = http.MethodPost
-		jsbytes, err = jsoniter.Marshal(msgInt)
-		goto bcast
+	} else if revsReqType == revsReqSync {
+		method = http.MethodPut
+	} else {
+		cmn.AssertMsg(false, fmt.Sprintf("unknown request type: %d", revsReqType))
 	}
-	cmn.Assert(msgInt == nil && revsReqType == revsReqSync)
+
 	pairsToSend = pairs[:0] // share original slice
 outer:
 	for _, pair := range pairs {
@@ -295,7 +295,7 @@ outer:
 		// vs current Smap
 		if tag == smaptag {
 			v := smap.version()
-			if revs.version() > v {
+			if revsReqType == revsReqSync && revs.version() > v {
 				cmn.AssertMsg(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
 			} else if revs.version() < v {
 				glog.Warningf("Warning: %s: using newer Smap v%d to broadcast", s, v)
@@ -340,10 +340,9 @@ outer:
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
 	jsbytes, err = jsoniter.Marshal(payload)
+	cmn.AssertNoErr(err)
 
 	// step 3: b-cast
-bcast:
-	cmn.AssertNoErr(err)
 	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
 	res := y.p.broadcastTo(
 		urlPath,
@@ -359,7 +358,7 @@ bcast:
 	// step 4: count failures and fill-in refused
 	for r := range res {
 		if r.err == nil {
-			if len(pairsToSend) > 0 {
+			if revsReqType == revsReqSync {
 				y.syncDone(r.si.DaemonID, pairsToSend)
 			}
 			continue
@@ -386,6 +385,7 @@ bcast:
 			y.becomeNonPrimary()
 			return
 		}
+
 		y.handleRefused(method, urlPath, jsbytes, refused, pairsToSend, config, smap)
 	}
 	// step 6: housekeep and return new pending

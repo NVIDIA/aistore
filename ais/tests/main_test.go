@@ -275,12 +275,14 @@ func Test_putdeleteRange(t *testing.T) {
 		err := api.DeleteRange(baseParams, clibucket, "", test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
 			t.Error(err)
+			continue
 		}
 
 		totalFiles -= test.delta
 		bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
+			continue
 		}
 		if len(bktlst.Entries) != totalFiles {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), totalFiles)

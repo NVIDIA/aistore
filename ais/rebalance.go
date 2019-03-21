@@ -474,7 +474,11 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		return
 	}
 
-	// establish connections with nodes, as they are not created on change of smap
+	// Rebalance has started so we can disable custom GFN lookup - GFN will still
+	// happen but because of running rebalance.
+	reb.t.gfn.global.deactivate()
+
+	// Establish connections with nodes, as they are not created on change of smap
 	reb.streams.Resync()
 
 	pmarker := persistentMarker(globalRebType)
@@ -560,6 +564,11 @@ func (reb *rebManager) runLocalReb() {
 		pmarker   = persistentMarker(localRebType)
 		file, err = cmn.CreateFile(pmarker)
 	)
+
+	// Rebalance has started so we can disable custom GFN lookup - GFN will still
+	// happen but because of running rebalance.
+	reb.t.gfn.local.deactivate()
+
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""

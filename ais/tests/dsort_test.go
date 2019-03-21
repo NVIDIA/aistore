@@ -1209,7 +1209,6 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	for idx, phase := range []string{"extraction", "sorting", "creation"} {
-		m.reregistered = 0
 		dsortFW.createInputShards()
 
 		tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)

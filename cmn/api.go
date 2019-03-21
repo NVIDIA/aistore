@@ -72,6 +72,7 @@ const (
 	ActPutCopies    = "putcopies"
 	ActMakeNCopies  = "makencopies"
 	ActEC           = "ec" // erasure (en)code objects
+	ActStartGFN     = "metasync-start-gfn"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

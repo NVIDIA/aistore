@@ -47,11 +47,8 @@ type metadata struct {
 	num                 int
 	numGetsEachFile     int
 	fileSize            uint64
-	numGetErrsBefore    uint64
-	numGetErrsAfter     uint64
-	maxErrPct           int
+	numGetErrs          uint64
 	getsCompleted       uint64
-	reregistered        uint64
 	proxyURL            string
 }
 
@@ -154,6 +151,7 @@ func (m *metadata) gets() {
 	} else {
 		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
 	}
+	baseParams := tutils.DefaultBaseAPIParams(m.t)
 	for i := 0; i < m.num*m.numGetsEachFile; i++ {
 		go func() {
 			<-m.semaphore
@@ -166,14 +164,9 @@ func (m *metadata) gets() {
 				repFile.repetitions--
 				m.repFilenameCh <- repFile
 			}
-			_, err := api.GetObject(tutils.DefaultBaseAPIParams(m.t), m.bucket, path.Join(SmokeStr, repFile.filename))
+			_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
 			if err != nil {
-				r := atomic.LoadUint64(&(m.reregistered))
-				if r == 1 {
-					atomic.AddUint64(&(m.numGetErrsAfter), 1)
-				} else {
-					atomic.AddUint64(&(m.numGetErrsBefore), 1)
-				}
+				atomic.AddUint64(&(m.numGetErrs), 1)
 			}
 			g := atomic.AddUint64(&(m.getsCompleted), 1)
 			if g%5000 == 0 {
@@ -190,14 +183,9 @@ func (m *metadata) gets() {
 	}
 }
 
-// see above - the T1/2/3 timeline and details
-func (m *metadata) resultsBeforeAfter() {
-	tutils.Logf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
-		m.numGetErrsBefore, m.numGetErrsAfter)
-	pctBefore := int(m.numGetErrsBefore) * 100 / (m.num * m.numGetsEachFile)
-	pctAfter := int(m.numGetErrsAfter) * 100 / (m.num * m.numGetsEachFile)
-	if pctBefore > m.maxErrPct || pctAfter > m.maxErrPct {
-		m.t.Fatalf("Error rates before %d%% or after %d%% T3 exceed the max %d%%\n", pctBefore, pctAfter, m.maxErrPct)
+func (m *metadata) ensureNoErrors() {
+	if m.numGetErrs > 0 {
+		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs)
 	}
 }
 
@@ -232,10 +220,6 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 			tutils.CheckFatal(err, m.t)
 			// T3
 			if reflect.DeepEqual(proxyLBNames.Local, targetLBNames.Local) {
-				s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
-				if !s {
-					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
-				}
 				tutils.Logf("T3: re-registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
 				return
 			}
@@ -309,15 +293,8 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}()
 
 	m.wg.Wait()
-	// ===================================================================
-	// the timeline (denoted as well in the reregisterTarget() function) looks as follows:
-	// 	- T1: client executes ReRegister
-	// 	- T2: the cluster map gets updated
-	// 	- T3: re-registered target gets the updated local bucket map
-	// all the while GETs are running, and the "before" and "after" counters are almost
-	// exactly "separated" by the time T3 ("almost" because of the Sleep in doGetsInParallel())
-	// ===================================================================
-	m.resultsBeforeAfter()
+
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -402,7 +379,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.gets()
 
 	m.wg.Wait()
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -422,7 +399,6 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 			num:             20000,
 			numGetsEachFile: 5,
 			fileSize:        cmn.KiB * 2,
-			maxErrPct:       1,
 		}
 		targetURL  string
 		targetPort string
@@ -460,13 +436,15 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Step 4
 	m.wg.Add(m.num*m.numGetsEachFile + 1)
 	go func() {
+		time.Sleep(4 * time.Second)
 		restore(tcmd, targs, false, "target")
 		m.wg.Done()
 	}()
+
 	m.gets()
 
 	m.wg.Wait()
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -648,7 +626,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.gets()
 	m.wg.Wait()
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -812,7 +790,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 			len(mpList.Available), len(mpListAfter.Available))
 	}
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -882,7 +860,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 			len(mpList.Available), len(mpListAfter.Available))
 	}
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 }
 
 func TestGetDuringRebalance(t *testing.T) {
@@ -945,7 +923,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	mdAfterRebalance.gets()
 	mdAfterRebalance.wg.Wait()
 
-	mdAfterRebalance.resultsBeforeAfter()
+	mdAfterRebalance.ensureNoErrors()
 	md.assertClusterState()
 }
 
@@ -1072,7 +1050,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 
 	// Destroy renamed local bucket
 	tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
@@ -1198,7 +1176,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 }
 
 func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
@@ -1269,7 +1247,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		tutils.CheckFatal(err, t)
 	}
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 }
 
 func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
@@ -1356,7 +1334,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 	}
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 }
 
 func TestDisableAndEnableMountpath(t *testing.T) {
@@ -1432,7 +1410,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 }
 
 func TestForwardCP(t *testing.T) {
@@ -1474,9 +1452,7 @@ func TestForwardCP(t *testing.T) {
 	}()
 
 	m.wg.Wait()
-	if m.numGetErrsBefore+m.numGetErrsAfter > 0 {
-		t.Fatalf("Unexpected: GET errors before %d and after %d", m.numGetErrsBefore, m.numGetErrsAfter)
-	}
+	m.ensureNoErrors()
 
 	// Step 5. destroy local bucket via original primary which is not primary at this point
 	tutils.DestroyLocalBucket(t, origURL, m.bucket)
@@ -1633,7 +1609,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.gets()
 	m.wg.Wait()
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }
 
@@ -1689,6 +1665,6 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.gets()
 	m.wg.Wait()
 
-	m.resultsBeforeAfter()
+	m.ensureNoErrors()
 	m.assertClusterState()
 }

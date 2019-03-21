@@ -85,11 +85,18 @@ func (a *Snode) Equals(b *Snode) bool {
 }
 
 //see printname() in clustermap.go
-func (si *Snode) Name() string {
-	if si.DaemonType == cmn.Proxy {
-		return "p[" + si.DaemonID + "]"
+func (d *Snode) Name() string {
+	if d.DaemonType == cmn.Proxy {
+		return "p[" + d.DaemonID + "]"
 	}
-	return "t[" + si.DaemonID + "]"
+	return "t[" + d.DaemonID + "]"
+}
+
+func (d *Snode) Validate() error {
+	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
+		return fmt.Errorf("daemon_type is invalid: %q, expected one of [%s, %s]", d.DaemonType, cmn.Proxy, cmn.Target)
+	}
+	return nil
 }
 
 //===============================================================

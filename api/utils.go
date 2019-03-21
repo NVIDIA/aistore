@@ -11,7 +11,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -64,6 +66,17 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 	}
 
 	resp, err := baseParams.Client.Do(req)
+	if err != nil {
+		sleep := httpRetrySleep
+		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
+			for i := 0; i < httpMaxRetries && err != nil; i++ {
+				time.Sleep(sleep)
+				resp, err = baseParams.Client.Do(req)
+				sleep += sleep / 2
+			}
+		}
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s, err: %v", baseParams.Method, err)
 	}
