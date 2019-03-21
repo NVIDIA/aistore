@@ -270,37 +270,44 @@ func TestDownloadCloud(t *testing.T) {
 	tutils.CheckFatal(err, t)
 }
 
-// This test can be flaky. It requires at least 2 targets or at least 2 mountpaths if there is only 1 target
 func TestDownloadStatus(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
 
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
-		files    = map[string]string{
-			"shortFile": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-			"longFile":  "http://releases.ubuntu.com/18.04/ubuntu-18.04.2-desktop-amd64.iso",
-		}
+		bucket        = TestLocalBucketName
+		params        = tutils.DefaultBaseAPIParams(t)
+		shortFileName = "shortFile"
+		m             = metadata{t: t}
 	)
 
-	// Test requires both files to start downloading simultaneously, so it requires AT LEAST 2 mpaths (maybe more,
-	// if a hash collision happens.
-	validateTotalNumberOfMpaths(t, 2)
+	m.saveClusterState()
+	if m.originalTargetCount < 2 {
+		t.Errorf("At least 2 targets are required.")
+		return
+	}
+
+	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestLocalBucketName, &m.smap)
+
+	files := map[string]string{
+		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+		longFileName:  "http://releases.ubuntu.com/18.04/ubuntu-18.04.2-desktop-amd64.iso",
+	}
 
 	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, bucket)
 
-	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), bucket, files)
+	id, err := api.DownloadMulti(params, bucket, files)
 	tutils.CheckFatal(err, t)
-	defer api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	defer api.DownloadCancel(params, id)
 
-	// Wait for the short download to complete
-	time.Sleep(2 * time.Second)
+	// Wait for the short file to be downloaded
+	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestLocalBucketName, params, 2*time.Second)
+	tutils.CheckFatal(err, t)
 
-	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id)
+	resp, err := api.DownloadStatus(params, id)
 	tutils.CheckFatal(err, t)
 
 	if resp.Total != 2 {
@@ -312,53 +319,48 @@ func TestDownloadStatus(t *testing.T) {
 	if len(resp.CurrentTasks) != 1 {
 		t.Fatal("did not expect the long file to be already downloaded")
 	}
-	if resp.CurrentTasks[0].Name != "longFile" {
-		t.Errorf("invalid file name in status message, expected: %s, got: %s", "longFile", resp.CurrentTasks[0].Name)
+	if resp.CurrentTasks[0].Name != longFileName {
+		t.Errorf("invalid file name in status message, expected: %s, got: %s", longFileName, resp.CurrentTasks[0].Name)
 	}
 }
 
-// This test can be flaky. It requires at least 2 targets or at least 2 mountpaths if there is only 1 target
 func TestDownloadStatusError(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
 
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		params   = tutils.DefaultBaseAPIParams(t)
 		files    = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
 			"notFoundFile": "http://releases.ubuntu.com/18.04/amd65.iso",
 		}
-		apiParams = tutils.DefaultBaseAPIParams(t)
 	)
-
-	// Test requires both files to start downloading simultaneously, so it requires AT LEAST 2 mpaths (maybe more,
-	// if a hash collision happens.
-	validateTotalNumberOfMpaths(t, 2)
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadMulti(apiParams, bucket, files)
+	id, err := api.DownloadMulti(params, bucket, files)
 	tutils.CheckFatal(err, t)
-	defer api.DownloadCancel(apiParams, id)
+	defer api.DownloadCancel(params, id)
 
-	// Wait for the short download to complete
-	time.Sleep(2 * time.Second)
+	// Wait to make sure both files were processed by downloader
+	time.Sleep(1 * time.Second)
 
-	resp, err := api.DownloadStatus(apiParams, id)
+	resp, err := api.DownloadStatus(params, id)
 	tutils.CheckFatal(err, t)
 
-	if resp.Total != 2 {
-		t.Errorf("expected %d objects, got %d", 2, resp.Total)
+	if resp.Total != len(files) {
+		t.Errorf("expected %d objects, got %d", len(files), resp.Total)
 	}
 	if resp.Finished != 0 {
 		t.Errorf("expected 0 files to be finished")
 	}
-	if len(resp.Errs) != 2 {
-		t.Fatalf("expected 2 downloading errors, but got: %d", len(resp.Errs))
+	if len(resp.Errs) != len(files) {
+		t.Fatalf("expected 2 downloading errors, but got: %d errors: %v", len(resp.Errs), resp.Errs)
 	}
 
 	invalidAddressCausedError := resp.Errs[0].Name == "invalidURL" || resp.Errs[1].Name == "invalidURL"
@@ -367,27 +369,5 @@ func TestDownloadStatusError(t *testing.T) {
 	if !(invalidAddressCausedError && notFoundFileCausedError) {
 		t.Errorf("expected objects that cause errors to be (%s, %s), but got: (%s, %s)",
 			"invalidURL", "notFoundFile", resp.Errs[0].Name, resp.Errs[1].Name)
-	}
-}
-
-func validateTotalNumberOfMpaths(t *testing.T, minCount int) {
-	m := metadata{t: t}
-	m.saveClusterState()
-
-	if m.originalTargetCount >= minCount {
-		return
-	}
-
-	var targetURL string
-	for _, target := range m.smap.Tmap {
-		targetURL = target.PublicNet.DirectURL
-	}
-
-	baseParams := tutils.BaseAPIParams(targetURL)
-	mpList, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
-
-	if len(mpList.Available) < minCount {
-		t.Fatalf("Must have at least %d mountpaths", minCount)
 	}
 }

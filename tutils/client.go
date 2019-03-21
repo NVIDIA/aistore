@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -720,6 +722,29 @@ func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string
 		})
 	}
 	return
+}
+
+func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, timeout time.Duration) error {
+	maxTime := time.Now().Add(timeout)
+
+	for {
+		if time.Now().After(maxTime) {
+			return errors.Errorf("timed out when downloading %s/%s", bucket, objName)
+		}
+
+		reslist, err := api.ListBucket(params, bucket, &cmn.GetMsg{GetFast: true}, 0)
+		if err != nil {
+			return err
+		}
+
+		for _, obj := range reslist.Entries {
+			if obj.Name == objName {
+				return nil
+			}
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {

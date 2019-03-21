@@ -10,7 +10,10 @@ import (
 	"math/rand"
 	"os"
 	"runtime/debug"
+	"strconv"
 	"testing"
+
+	"github.com/NVIDIA/aistore/cluster"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
@@ -72,6 +75,20 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 		remain--
 	}
 	return string(b)
+}
+
+// Generates an object name that hashes to a different target than `baseName`
+func GenerateNotConflictingObjectName(baseName, newNamePrefix, bucketName string, smap *cluster.Smap) string {
+	newName := newNamePrefix
+
+	baseNameHrw, _ := cluster.HrwTarget(bucketName, baseName, smap)
+	newNameHrw, _ := cluster.HrwTarget(bucketName, newName, smap)
+
+	for i := 0; baseNameHrw == newNameHrw; i++ {
+		newName = newNamePrefix + strconv.Itoa(i)
+		newNameHrw, _ = cluster.HrwTarget(bucketName, newName, smap)
+	}
+	return newName
 }
 
 // copyRandWithHash reads data from random source and writes it to a writer while
