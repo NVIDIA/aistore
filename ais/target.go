@@ -42,6 +42,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/karrick/godirwalk"
 )
 
 const (
@@ -1894,6 +1895,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.GetMsg) (outbyt
 	return
 }
 
+// TODO: add support paging for fast object listing
 func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*cmn.BucketList, error) {
 	type mresp struct {
 		infos      *allfinfos
@@ -1927,7 +1929,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 			// msg.GetProps is skipped: only object name and size returned.
 			// All other msg props do not work except msg.GetPrefix
 			// Always returns all objects
-			if err := filepath.Walk(dir, r.infos.listwalkfFast); err != nil {
+			err := godirwalk.Walk(dir, &godirwalk.Options{
+				Callback: r.infos.listwalkfFast,
+				Unsorted: false,
+			})
+			if err != nil {
 				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 				r.failedPath = dir
 				r.err = err
@@ -2092,7 +2098,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return // ======================================>
 	}
 	// cloud bucket
-	msg.GetFast = false // quick mode does not make sense for Cloud buckets
+	msg.GetFast = false // fast mode does not make sense for Cloud buckets
 	if useCache {
 		tag = "cloud cached"
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
@@ -2230,18 +2236,11 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 }
 
 // fast alternative of generic listwalk: do not fetch any object information
-// besides one that passed by filepath.Walk. Always returns all objects - no
-// paging required. But the result may have 'ghost' or misplaced objects.
+// Always returns all objects - no paging required. But the result may have
+// 'ghost' or duplicated  objects.
 // The only supported GetMsg feature is 'GetPrefix' - it does not slow down.
-func (ci *allfinfos) listwalkfFast(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
-			return err
-		}
-		return nil
-	}
-	if osfi.IsDir() {
+func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
+	if de.IsDir() {
 		return ci.processDir(fqn)
 	}
 
@@ -2249,14 +2248,10 @@ func (ci *allfinfos) listwalkfFast(fqn string, osfi os.FileInfo, err error) erro
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
 	}
-	if ci.marker != "" && relname <= ci.marker {
-		return nil
-	}
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
 		Name:   relname,
 		Status: cmn.ObjStatusOK,
-		Size:   osfi.Size(),
 	}
 	ci.files = append(ci.files, fileInfo)
 	return nil

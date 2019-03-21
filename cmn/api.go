@@ -177,16 +177,17 @@ const (
 	URLParamTimeout  = "timeout"
 )
 
-// TODO: sort and some props are TBD
 // GetMsg represents properties and options for requests which fetch entities
+// Note: if GetFast is `true` then paging is disabled - all items are returned
+//       in one response. The result list is unsorted and contains only object
+//       names: even field `Status` is filled with zero value
 type GetMsg struct {
-	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
+	GetPageMarker string `json:"pagemarker"`  // marker - the last object in previous page
 	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
-	GetFast       bool   `json:"fast"`        // return only names and sizes of all objects
+	GetFast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
 }
 
 // ListRangeMsgBase contains fields common to Range and List operations
@@ -236,12 +237,6 @@ const (
 	GetWhatSnode        = "snode"
 	GetWhatSysInfo      = "sysinfo"
 	GetWhatDaemonStatus = "status"
-)
-
-// GetMsg.GetSort enum
-const (
-	GetSortAsc = "ascending"
-	GetSortDes = "descending"
 )
 
 // GetMsg.GetTimeFormat enum

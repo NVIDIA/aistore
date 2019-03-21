@@ -849,13 +849,14 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 
 	b, err := jsoniter.Marshal(bckList)
 	cmn.AssertNoErr(err)
+	pageMarker := bckList.PageMarker
+	bckList.Entries = nil
+	bckList = nil
 
 	if p.writeJSON(w, r, b, "listbucket") {
-		pageMarker := bckList.PageMarker
-
 		delta := time.Since(started)
 		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			lat := int64(delta / time.Microsecond)
 			if pageMarker != "" {
 				glog.Infof("LIST: %s, page %s, %d µs", bucket, pageMarker, lat)
@@ -1557,20 +1558,24 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+	bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
 	for r := range targetResults {
 		if r.err != nil {
 			err = r.err
 			return
 		}
-
 		if r.resp.outjson == nil || len(r.resp.outjson) == 0 {
 			continue
 		}
 
-		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+		// a small performance boost: preallocate memory either for the page
+		// or for the size of allocated for previous target. When object are
+		// evenly distributed the latter can help to avoid reallocations
+		bucketList.Entries = make([]*cmn.BucketEntry, 0, cmn.Max(pageSize, len(bucketList.Entries)))
 		if err = jsoniter.Unmarshal(r.resp.outjson, &bucketList); err != nil {
 			return
 		}
+		r.resp.outjson = nil
 
 		if len(bucketList.Entries) == 0 {
 			continue
@@ -1578,36 +1583,27 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 
 		allEntries.Entries = append(allEntries.Entries, bucketList.Entries...)
 	}
+	bucketList.Entries = nil
+	bucketList = nil
 
-	// return the list always sorted in alphabetical order
-	// prioritize items with Status=OK
-	entryLess := func(i, j int) bool {
-		if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
-			return allEntries.Entries[i].Status < allEntries.Entries[j].Status
-		}
-		return allEntries.Entries[i].Name < allEntries.Entries[j].Name
-	}
-	sort.Slice(allEntries.Entries, entryLess)
-
-	if msg.GetFast {
-		j := 0
-		// keep all objects in the list but squeeze the same names into one
-		for i := 1; i < len(allEntries.Entries); i++ {
+	// For regular object list request:
+	//   - return the list always sorted in alphabetical order
+	//   - prioritize items with Status=OK
+	// For fast listing:
+	//   - return the entire list unsorted(sorting may take upto 10-15
+	//     second for big data sets - millions of objects - eventually it may
+	//     result in timeout between target and waiting for response proxy)
+	//   - the only valid value for every object in resulting list is `Name`,
+	//     all other fields(including `Status`) have zero value
+	if !msg.GetFast {
+		entryLess := func(i, j int) bool {
 			if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
-				continue
+				return allEntries.Entries[i].Status < allEntries.Entries[j].Status
 			}
-			j++
-			if j != i {
-				allEntries.Entries[j] = allEntries.Entries[i]
-			}
+			return allEntries.Entries[i].Name < allEntries.Entries[j].Name
 		}
-		if j < len(allEntries.Entries)-1 {
-			for i := j; i < len(allEntries.Entries); i++ {
-				allEntries.Entries[i] = nil
-			}
-			allEntries.Entries = allEntries.Entries[:j]
-		}
-	} else {
+		sort.Slice(allEntries.Entries, entryLess)
+
 		// shrink the result to `pageSize` entries. If the page is full than
 		// mark the result incomplete by setting PageMarker
 		if len(allEntries.Entries) >= pageSize {

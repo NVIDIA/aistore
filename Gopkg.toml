@@ -29,3 +29,7 @@
 [[constraint]]
   name = "github.com/vbauerster/mpb"
   version = "3.4.0"
+
+[[constraint]]
+  name = "github.com/karrick/godirwalk"
+  version = "1.8.0"

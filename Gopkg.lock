@@ -172,6 +172,14 @@
   version = "v1.1.5"
 
 [[projects]]
+  digest = "1:38d2e838817528fd7d1ccdf7fa6700ee0f1727b3c484d13cab54bfbdaab12b0e"
+  name = "github.com/karrick/godirwalk"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6d1c7760ec857d2984abe0a23fa263877f50d3f0"
+  version = "v1.8.0"
+
+[[projects]]
   digest = "1:2d643962fac133904694fffa959bc3c5dcfdcee38c6f5ffdd99a3c93eb9c835c"
   name = "github.com/klauspost/cpuid"
   packages = ["."]
@@ -543,6 +551,7 @@
     "github.com/dgrijalva/jwt-go",
     "github.com/google/uuid",
     "github.com/json-iterator/go",
+    "github.com/karrick/godirwalk",
     "github.com/klauspost/reedsolomon",
     "github.com/nanobox-io/golang-scribble",
     "github.com/onsi/ginkgo",

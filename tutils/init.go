@@ -59,7 +59,10 @@ func newTraceCtx() *tracectx {
 		WroteRequest:         tctx.tr.WroteRequest,
 		GotFirstResponseByte: tctx.tr.GotFirstResponseByte,
 	}
-	tctx.tracedClient = &http.Client{Transport: tctx.tr}
+	tctx.tracedClient = &http.Client{
+		Transport: tctx.tr,
+		Timeout:   600 * time.Second,
+	}
 
 	return tctx
 }

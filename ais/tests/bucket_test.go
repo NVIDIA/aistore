@@ -5,7 +5,10 @@
 package ais_test
 
 import (
+	"fmt"
 	"math/rand"
+	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -152,6 +155,94 @@ func TestListObjects(t *testing.T) {
 		if len(bckObjs) != totalObjects {
 			t.Errorf("actual objects %d, expected: %d", len(bckObjs), totalObjects)
 		}
+	}
+}
+
+// Tests URL to quickly get all objects in a bucket
+func TestListObjectFast(t *testing.T) {
+	const (
+		bucket       = "quick-list-bucket"
+		numObjs      = 1234 // greater than default PageSize=1000
+		objSize      = 1024
+		commonPrefix = "quick"
+	)
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	sgl := tutils.Mem2.NewSGL(objSize)
+	defer sgl.Free()
+
+	tutils.Logf("Creating %d objects in %s bucket\n", numObjs, bucket)
+	errCh := make(chan error, numObjs)
+	objsPutCh := make(chan string, numObjs)
+	objList := make([]string, 0, numObjs)
+	for i := 0; i < numObjs; i++ {
+		fname := fmt.Sprintf("q-%04d", i)
+		objList = append(objList, fname)
+	}
+	tutils.PutObjsFromList(proxyURL, bucket, DeleteDir, readerType, commonPrefix, objSize, objList, errCh, objsPutCh, sgl)
+	selectErr(errCh, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
+	close(objsPutCh)
+
+	tutils.Logln("Reading objects...")
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	reslist, err := api.ListBucketFast(baseParams, bucket, nil)
+	if err != nil {
+		t.Fatalf("List bucket %s failed, err = %v", bucket, err)
+	}
+	tutils.Logf("Object count: %d\n", len(reslist.Entries))
+	if len(reslist.Entries) != numObjs {
+		t.Fatalf("Expected %d objects, received %d objects",
+			numObjs, len(reslist.Entries))
+	}
+
+	// check that all props are zeros, except name
+	// check if all names are different
+	var empty cmn.BucketEntry
+	unique_names := make(map[string]bool, len(reslist.Entries))
+	for _, e := range reslist.Entries {
+		if e.Name == "" {
+			t.Errorf("Invalid size or name: %#v", *e)
+			continue
+		}
+		if strings.Contains(e.Name, "q-") {
+			unique_names[e.Name] = true
+		}
+		if e.Ctime != empty.Ctime ||
+			e.Checksum != empty.Checksum ||
+			e.Size != empty.Size ||
+			e.Type != empty.Type ||
+			e.Bucket != empty.Bucket ||
+			e.Atime != empty.Atime ||
+			e.Version != empty.Version ||
+			e.TargetURL != empty.TargetURL ||
+			e.Status != empty.Status ||
+			e.Copies != empty.Copies ||
+			e.IsCached != empty.IsCached {
+			t.Errorf("Some fields do not have default values: %#v", *e)
+		}
+	}
+	if len(reslist.Entries) != len(unique_names) {
+		t.Fatalf("Expected %d unique objects, found only %d unique objects",
+			len(reslist.Entries), len(unique_names))
+	}
+
+	query := make(url.Values)
+	prefix := commonPrefix + "/q-009"
+	query.Set(cmn.URLParamPrefix, prefix)
+	reslist, err = api.ListBucketFast(baseParams, bucket, nil, query)
+	if err != nil {
+		t.Fatalf("List bucket %s with prefix %s failed, err = %v",
+			bucket, prefix, err)
+	}
+	tutils.Logf("Object count (with prefix %s): %d\n", prefix, len(reslist.Entries))
+	// Get should return only objects from q-0090 through q-0099
+	if len(reslist.Entries) != 10 {
+		t.Fatalf("Expected %d objects with prefix %s, received %d objects",
+			numObjs, prefix, len(reslist.Entries))
 	}
 }
 
