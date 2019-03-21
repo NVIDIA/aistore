@@ -242,4 +242,9 @@ if [[ $AUTHENABLED = "true" ]]; then
 	{ set +x; } 2>/dev/null
 fi
 sleep 0.1
+
+# Install the aiscli and enable autocompletion
+go install $DIR/../../aiscli
+source $DIR/../../aiscli/aiscli_autocomplete
+
 echo done

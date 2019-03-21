@@ -7,30 +7,49 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/tutils"
 )
 
-// The URL that points to the AIS cluster
-var ClusterURL = os.Getenv("AIS_URL")
+var (
+	ClusterURL = os.Getenv("AIS_URL") // The URL that points to the AIS cluster
+	transport  = &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 60 * time.Second,
+		}).DialContext,
+	}
+	HTTPClient = &http.Client{
+		Timeout:   300 * time.Second,
+		Transport: transport,
+	}
+)
 
 // Checks if URL is valid by trying to get Smap
 func TestAISURL(clusterURL string) error {
 	if ClusterURL == "" {
 		return errors.New("env variable 'AIS_URL' unset")
 	}
-	baseParams := tutils.BaseAPIParams(clusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	_, err := api.GetClusterMap(baseParams)
 	return err
 }
 
+func cliAPIParams(proxyURL string) *api.BaseParams {
+	return &api.BaseParams{
+		Client: HTTPClient,
+		URL:    proxyURL,
+	}
+}
+
 func retrieveStatus(url string, errCh chan error, dataCh chan *stats.DaemonStatus) {
-	baseParams := tutils.BaseAPIParams(url)
+	baseParams := cliAPIParams(url)
 	obj, err := api.GetDaemonStatus(baseParams)
 	if err != nil {
 		errCh <- err
@@ -42,7 +61,7 @@ func retrieveStatus(url string, errCh chan error, dataCh chan *stats.DaemonStatu
 // Populates the proxy and target maps
 func fillMap(url string) error {
 	var (
-		baseParams = tutils.BaseAPIParams(url)
+		baseParams = cliAPIParams(url)
 		wg         = &sync.WaitGroup{}
 	)
 	smap, err := api.GetClusterMap(baseParams)

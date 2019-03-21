@@ -229,10 +229,21 @@ func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, er
 }
 
 func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, errstr string) {
+	var (
+		deadline time.Duration
+		err      error
+	)
 	const s = "Error parsing BaseMsg:"
 	pbm = &cmn.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
-		deadline, err := time.ParseDuration(v.(string))
+		// When unmarshalling map[string]interface{},
+		// Go will convert int to float64 (https://play.golang.org/p/kHroZ1rHVQ)
+		if f, ok := v.(float64); ok {
+			deadline = time.Duration(int64(f))
+		} else {
+			deadline, err = time.ParseDuration(v.(string))
+		}
+
 		if err != nil {
 			return pbm, fmt.Sprintf("%s (Deadline: %v, %T, %v)", s, v, v, err)
 		}

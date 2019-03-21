@@ -143,7 +143,8 @@ AIStore provides an extensive list of RESTful operations to retrieve cluster cur
 |--- | --- | ---|
 | Get cluster map | GET /v1/daemon | `curl -X GET http://G/v1/daemon?what=smap` |
 | Get proxy/target configuration| GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=config` |
-| Get proxy/target info | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=daemoninfo` |
+| Get proxy/target snode | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=snode` |
+| Get proxy/target status | GET /v1/daemon | `curl -X GET http://G-or-T/v1/daemon?what=status` |
 | Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=stats` |
 | Get target statistics | GET /v1/daemon | `curl -X GET http://T/v1/daemon?what=stats` |
 | Get process info for all nodes in cluster (proxy) | GET /v1/cluster | `curl -X GET http://G/v1/cluster?what=sysinfo` |

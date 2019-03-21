@@ -19,7 +19,6 @@ func main() {
 		fmt.Printf("Could not connect to AIS cluster: %v\n", err)
 		os.Exit(1)
 	}
-
 	aisCLI := commands.New()
 
 	aisCLI.Commands = []cli.Command{
@@ -59,7 +58,6 @@ func main() {
 			Action:  commands.ListAIS,
 			Flags:   []cli.Flag{commands.VerboseFlag},
 		},
-
 		// Downloader
 		{
 			Name:  "download",
@@ -104,6 +102,42 @@ func main() {
 						commands.IDFlag,
 					},
 					Action: commands.DownloadAdminHandler,
+				},
+			},
+		},
+		// Object Commands
+		{
+			Name:  "object",
+			Usage: "commands that interact with objects",
+			Flags: []cli.Flag{commands.BckProviderFlag},
+			Subcommands: []cli.Command{
+				{
+					Name:      commands.ObjGet,
+					Usage:     "gets the object from the specified bucket",
+					UsageText: fmt.Sprintf(commands.ObjectGetPutUsage, commands.ObjGet),
+					Flags:     commands.ObjectFlag[commands.ObjGet],
+					Action:    commands.ObjectHandler,
+				},
+				{
+					Name:      commands.ObjPut,
+					Usage:     "puts the object to the specified bucket",
+					UsageText: fmt.Sprintf(commands.ObjectGetPutUsage, commands.ObjPut),
+					Flags:     commands.ObjectFlag[commands.ObjPut],
+					Action:    commands.ObjectHandler,
+				},
+				{
+					Name:      commands.ObjDel,
+					Usage:     "deletes the object from the specified bucket",
+					UsageText: fmt.Sprintf(commands.ObjectDelUsage, commands.ObjDel),
+					Flags:     commands.ObjectFlag[commands.ObjDel],
+					Action:    commands.DeleteObject,
+				},
+				{
+					Name:      commands.ObjRename,
+					Usage:     "renames a local object",
+					UsageText: fmt.Sprintf(commands.ObjectRenameUsage, commands.ObjRename),
+					Flags:     commands.ObjectFlag[commands.ObjRename],
+					Action:    commands.ObjectHandler,
 				},
 			},
 		},

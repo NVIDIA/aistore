@@ -1,4 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
+// This specific file handles the CLI commands that interact with the cluster
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -11,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/tutils"
 	"github.com/urfave/cli"
 )
 
@@ -83,7 +83,7 @@ func GetQueryHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	baseParams := tutils.BaseAPIParams(ClusterURL)
+	baseParams := cliAPIParams(ClusterURL)
 	daemonID := c.Args().First()
 	req := c.Command.Name
 	switch req {
@@ -124,17 +124,6 @@ func GetQueryHandler(c *cli.Context) error {
 		}
 		return fmt.Errorf("%s is not a valid DAEMON_ID", daemonID)
 	default:
-		return fmt.Errorf("invalid resource name '%s'", req)
-	}
-}
-
-// Bash Completion
-func DaemonList(_ *cli.Context) {
-	fillMap(ClusterURL)
-	for dae := range proxy {
-		fmt.Println(dae)
-	}
-	for dae := range target {
-		fmt.Println(dae)
+		return fmt.Errorf("invalid command name '%s'", req)
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/tutils"
 	"github.com/urfave/cli"
 )
 
@@ -24,7 +23,7 @@ const (
 
 func DownloadHandler(c *cli.Context) error {
 	var (
-		baseParams = tutils.BaseAPIParams(ClusterURL)
+		baseParams = cliAPIParams(ClusterURL)
 		bucket     = parseFlag(c, BucketFlag.Name)
 		timeout    = parseFlag(c, TimeoutFlag.Name)
 
@@ -81,7 +80,7 @@ func DownloadHandler(c *cli.Context) error {
 
 func DownloadAdminHandler(c *cli.Context) error {
 	var (
-		baseParams = tutils.BaseAPIParams(ClusterURL)
+		baseParams = cliAPIParams(ClusterURL)
 		id         = parseFlag(c, IDFlag.Name)
 	)
 

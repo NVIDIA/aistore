@@ -145,9 +145,8 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 // is allocated when reading from the response body to compute the object checksum.
 //
 // Returns InvalidCksumError when the expected and actual checksum values are different.
-func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (int64, error) {
+func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		n         int64
 		cksumVal  string
 		w         = ioutil.Discard
 		q         url.Values
