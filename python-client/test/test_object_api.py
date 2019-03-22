@@ -129,7 +129,7 @@ class TestObjectApi(unittest.TestCase):
         object_name, _ = self.__put_random_object()
         log.info("GET object [%s/%s]", self.BUCKET_NAME, object_name)
         input_params = self.models.InputParameters(self.models.Actions.EVICTOBJECTS)
-        log.info("Evict object [%s/%s] InputParamaters [%s]",
+        log.info("Evict object [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)

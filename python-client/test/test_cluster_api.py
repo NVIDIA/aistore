@@ -66,7 +66,7 @@ class TestClusterApi(unittest.TestCase):
         """
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "enable_read_range", "true")
+            "cksum.enable_read_range", "true")
         self.cluster.perform_operation(input_params)
         target_ids = self.daemon.get(self.models.GetWhat.SMAP)["tmap"].keys()
         target_ports = [target_id.split(":")[1] for target_id in target_ids]
@@ -83,7 +83,7 @@ class TestClusterApi(unittest.TestCase):
         self.cluster.api_client.configuration.host = old_host
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
-            "enable_read_range", "false")
+            "cksum.enable_read_range", "false")
         self.cluster.perform_operation(input_params)
 
     @unittest.skip("Running this test will cause the cluster to shutdown.")

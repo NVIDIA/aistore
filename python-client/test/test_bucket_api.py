@@ -185,16 +185,16 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(self.models.Actions.EVICTOBJECTS)
-        log.info("Evict object list [%s/%s] InputParamaters [%s]",
+        log.info("Evict object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
         input_params.action = self.models.Actions.PREFETCH
         input_params.value = self.models.ListParameters(
             wait=True, objnames=[object_name])
-        log.info("Prefetch object list [%s/%s] InputParamaters [%s]",
+        log.info("Prefetch object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
-        self.bucket.perform_operation(self.BUCKET_NAME, input_params)
+        self.bucket.perform_operation(self.BUCKET_NAME, input_params, bprovider="cloud")
         log.info("Get object [%s/%s] from cache",
                  self.BUCKET_NAME, object_name)
         self.object.get_properties(
@@ -210,17 +210,17 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(self.models.Actions.EVICTOBJECTS)
-        log.info("Evict object list [%s/%s] InputParamaters [%s]",
+        log.info("Evict object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
         input_params.action = self.models.Actions.PREFETCH
         input_params.value = self.models.RangeParameters(wait=True,
                              prefix="", regex="", range="")
-        log.info("Prefetch object range [%s/%s] InputParamaters [%s]",
+        log.info("Prefetch object range [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
-        self.bucket.perform_operation(self.BUCKET_NAME, input_params)
-        log.info("Prefetch object list [%s/%s] InputParamaters [%s]",
+        self.bucket.perform_operation(self.BUCKET_NAME, input_params, bprovider="cloud")
+        log.info("Prefetch object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.get_properties(
             self.BUCKET_NAME, object_name, check_cached=True)
@@ -234,9 +234,9 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.DELETE, self.models.ListParameters(
+            self.models.Actions.DELETE, None, self.models.ListParameters(
             wait=True, objnames=[object_name]))
-        log.info("Delete object list [%s/%s] InputParamaters [%s]",
+        log.info("Delete object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
@@ -252,9 +252,9 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.DELETE, self.models.RangeParameters(
+            self.models.Actions.DELETE, None, self.models.RangeParameters(
                 wait=True, prefix="", regex="", range=""))
-        log.info("Delete object range [%s/%s] InputParamaters [%s]",
+        log.info("Delete object range [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
@@ -270,9 +270,9 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.EVICTOBJECTS, self.models.ListParameters(
+            self.models.Actions.EVICTOBJECTS, None, self.models.ListParameters(
             wait=True, objnames=[object_name]))
-        log.info("Evict object list [%s/%s] InputParamaters [%s]",
+        log.info("Evict object list [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
@@ -289,9 +289,9 @@ class TestBucketApi(unittest.TestCase):
         """
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
-            self.models.Actions.EVICTOBJECTS, self.models.RangeParameters(
+            self.models.Actions.EVICTOBJECTS, None, self.models.RangeParameters(
                 wait=True, prefix="", regex="", range=""))
-        log.info("Evict object range [%s/%s] InputParamaters [%s]",
+        log.info("Evict object range [%s/%s] InputParameters [%s]",
                  self.BUCKET_NAME, object_name, input_params)
         self.object.delete(
             self.BUCKET_NAME, object_name, input_parameters=input_params)
@@ -309,16 +309,16 @@ class TestBucketApi(unittest.TestCase):
         object_name, _ = self.__put_random_object()
         input_params = self.models.InputParameters(
             self.models.Actions.EVICTCB)
-        log.info("Evict bucket [%s] InputParamaters [%s]",
+        log.info("Evict bucket [%s] InputParameters [%s]",
                  self.BUCKET_NAME, input_params)
-        self.bucket.delete(self.BUCKET_NAME, input_parameters=input_params)
+        self.bucket.delete(self.BUCKET_NAME, input_parameters=input_params, bprovider="cloud")
         self.__execute_operation_on_unavailable_object(
             self.object.get_properties, self.BUCKET_NAME, object_name,
             check_cached=True)
 
     def __check_if_local_bucket_exists(self, bucket_name):
         log.info("LIST BUCKET local names [%s]", bucket_name)
-        bucket_names = self.bucket.list_names(loc=True)
+        bucket_names = self.bucket.list_names(bprovider="local")
         self.assertTrue(len(bucket_names.cloud) == 0,
                         "Cloud buckets returned when requesting for only "
                         "local buckets")

@@ -160,6 +160,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: bprovider
+          in: query
+          description: bucket locality
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -275,11 +280,11 @@ paths:
       tags:
         - Bucket
       parameters:
-        - name: loc
+        - name: bprovider
           in: query
           description: Get only local bucket names
           schema:
-            type: boolean
+            type: string
       responses:
         '200':
           description: Cloud and local bucket names
@@ -309,6 +314,11 @@ paths:
         - name: cloud_provider
           in: query
           description: Bucket's cloud provider
+          schema:
+            type: string
+        - name: bprovider
+          in: query
+          description: Bucket's locality
           schema:
             type: string
         - name: next_tier_url
@@ -353,6 +363,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: bprovider
+          in: query
+          description: Bucket's locality
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -382,6 +397,11 @@ paths:
           in: path
           description: Bucket name
           required: true
+          schema:
+            type: string
+        - name: bprovider
+          in: query
+          description: Bucket's locality
           schema:
             type: string
       requestBody:
@@ -1036,7 +1056,7 @@ components:
           example: "dsort-bucket"
         output_bucket:
           type: string
-          decription: Name of the bucket where data is written/saved. By default it is same as bucket.
+          description: Name of the bucket where data is written/saved. By default it is same as bucket.
         bprovider:
           type: string
           description: Describes if the bucket is local or cloud
@@ -1378,7 +1398,8 @@ components:
         - stats
         - xaction
         - mountpaths
-        - daemoninfo
+        - snode
+        - status
         - sysinfo
         - bucketmd
     GetProps:

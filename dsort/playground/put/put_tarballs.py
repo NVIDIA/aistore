@@ -24,7 +24,7 @@ bucket_api = openapi_client.api.bucket_api.BucketApi(api_client)
 object_api = openapi_client.api.object_api.ObjectApi(api_client)
 
 # Create local bucket
-bucket_names = bucket_api.list_names(loc=True)
+bucket_names = bucket_api.list_names(bprovider="local")
 if args.bucket in bucket_names.local and args.cleanup:
     input_params = openapi_client.models.InputParameters(openapi_client.models.Actions.DESTROYLB)
     bucket_api.delete(args.bucket, input_params)
