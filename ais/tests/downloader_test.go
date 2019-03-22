@@ -33,9 +33,19 @@ func clearDownloadList(t *testing.T) {
 	listDownload, err := api.DownloadGetList(tutils.DefaultBaseAPIParams(t), downloadDescAllRegex)
 	tutils.CheckFatal(err, t)
 
+	for k, v := range listDownload {
+		if v.NumPending > 0 {
+			tutils.Logf("Cancelling: %v...\n", k)
+			err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), k)
+			tutils.CheckFatal(err, t)
+		}
+	}
+
+	time.Sleep(time.Millisecond * 300)
+
 	for k := range listDownload {
 		tutils.Logf("Removing: %v...\n", k)
-		err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), k)
+		err := api.DownloadRemove(tutils.DefaultBaseAPIParams(t), k)
 		tutils.CheckFatal(err, t)
 	}
 }
@@ -114,12 +124,22 @@ func TestDownloadSingle(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
-		t.Errorf("expected error when getting status for link that is not being downloaded: %v", resp)
+	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err != nil {
+		t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
+	} else if !resp.Cancelled {
+		t.Errorf("canceled link not marked: %v", resp)
 	}
 
-	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id); err == nil {
-		t.Error("expected error when cancelling for link that is not being downloaded and is not in queue")
+	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id); err != nil {
+		t.Errorf("got error when cancelling second time: %v", err)
+	}
+
+	if err = api.DownloadRemove(tutils.DefaultBaseAPIParams(t), id); err != nil {
+		t.Errorf("got error when removing task: %v", err)
+	}
+
+	if err = api.DownloadRemove(tutils.DefaultBaseAPIParams(t), id); err == nil {
+		t.Errorf("expected error when removing non-existent task")
 	}
 
 	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objname, linkSmall)
@@ -133,7 +153,7 @@ func TestDownloadSingle(t *testing.T) {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
 	}
 
-	checkDownloadList(t)
+	checkDownloadList(t, 2)
 }
 
 func TestDownloadRange(t *testing.T) {
@@ -161,7 +181,7 @@ func TestDownloadRange(t *testing.T) {
 	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
 	tutils.CheckFatal(err, t)
 
-	checkDownloadList(t, 0)
+	checkDownloadList(t)
 }
 
 func TestDownloadMultiMap(t *testing.T) {
@@ -317,7 +337,7 @@ func TestDownloadCloud(t *testing.T) {
 	err := api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
 	tutils.CheckFatal(err, t)
 
-	id, err := api.DownloadCloud(baseParams, bucket, prefix, suffix)
+	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, id)
@@ -327,13 +347,12 @@ func TestDownloadCloud(t *testing.T) {
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
 	}
-	checkDownloadList(t)
 
 	// Test cancellation
 	err = api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
 	tutils.CheckFatal(err, t)
 
-	id, err = api.DownloadCloud(baseParams, bucket, prefix, suffix)
+	id, err = api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(200 * time.Millisecond)
@@ -341,7 +360,13 @@ func TestDownloadCloud(t *testing.T) {
 	err = api.DownloadCancel(baseParams, id)
 	tutils.CheckFatal(err, t)
 
-	checkDownloadList(t, 0)
+	resp, err := api.DownloadStatus(baseParams, id)
+	tutils.CheckFatal(err, t)
+	if !resp.Cancelled {
+		t.Errorf("cancelled cloud download %v not marked", id)
+	}
+
+	checkDownloadList(t, 2)
 }
 
 func TestDownloadStatus(t *testing.T) {

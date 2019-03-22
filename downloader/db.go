@@ -5,12 +5,13 @@
 package downloader
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
+
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,6 +22,7 @@ const (
 	persistDownloaderJobsPath = "downloader_jobs.db" // base name to persist downloader jobs' file
 	downloaderCollection      = "jobs"
 	downloaderErrors          = "errors"
+	downloaderTasks           = "tasks"
 )
 
 var (
@@ -74,7 +76,7 @@ func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]cmn.DlBody, error) 
 
 	for _, r := range records {
 		var dlb cmn.DlBody
-		if err := json.Unmarshal([]byte(r), &dlb); err != nil {
+		if err := jsoniter.UnmarshalFromString(r, &dlb); err != nil {
 			glog.Error(err)
 			continue
 		}
@@ -94,6 +96,31 @@ func (db *downloaderDB) setJob(id string, body *cmn.DlBody) error {
 		glog.Error(err)
 		return err
 	}
+	return nil
+}
+
+func (db *downloaderDB) setCancelled(id string) error {
+	var body cmn.DlBody
+
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if err := db.driver.Read(downloaderCollection, id, &body); err != nil {
+		if !os.IsNotExist(err) {
+			glog.Error(err)
+			return err
+		}
+		return errJobNotFound
+	}
+	if body.Cancelled {
+		return nil
+	}
+	body.Cancelled = true
+	if err := db.driver.Write(downloaderCollection, id, body); err != nil {
+		glog.Error(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -141,4 +168,37 @@ func (db *downloaderDB) addError(id, objname string, errMsg string) error {
 		return err
 	}
 	return nil
+}
+
+func (db *downloaderDB) persistTask(id string, task cmn.TaskDlInfo) error {
+	persistedTasks, err := db.getTasks(id)
+	if err != nil {
+		return err
+	}
+	persistedTasks = append(persistedTasks, task)
+
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if err := db.driver.Write(downloaderTasks, id, persistedTasks); err != nil {
+		glog.Error(err)
+		return err
+	}
+
+	return nil
+}
+
+func (db *downloaderDB) getTasks(id string) (tasks []cmn.TaskDlInfo, err error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	if err := db.driver.Read(downloaderTasks, id, &tasks); err != nil {
+		if !os.IsNotExist(err) {
+			glog.Error(err)
+			return nil, err
+		}
+		// If there was nothing in DB, return empty list
+		return []cmn.TaskDlInfo{}, nil
+	}
+	return
 }

@@ -41,7 +41,7 @@ func normalizeObjName(objName string) string {
 // PROXY //
 ///////////
 
-func (p *proxyrunner) targetDownloadRequest(method string, si *cluster.Snode, msg interface{}) dlResponse {
+func (p *proxyrunner) targetDownloadRequest(method string, path string, si *cluster.Snode, msg interface{}) dlResponse {
 	query := url.Values{}
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
 	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(time.Now().UnixNano()), 10))
@@ -58,7 +58,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, si *cluster.Snode, ms
 		si: si,
 		req: reqArgs{
 			method: method,
-			path:   cmn.URLPath(cmn.Version, cmn.Download),
+			path:   cmn.URLPath(cmn.Version, cmn.Download, path),
 			query:  query,
 			body:   body,
 		},
@@ -72,7 +72,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, si *cluster.Snode, ms
 	}
 }
 
-func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBody) ([]byte, int, error) {
+func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
 	var (
 		smap        = p.smapowner.get()
 		wg          = &sync.WaitGroup{}
@@ -83,7 +83,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 	for _, si := range smap.Tmap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			responsesCh <- p.targetDownloadRequest(method, si, msg)
+			responsesCh <- p.targetDownloadRequest(method, path, si, msg)
 			wg.Done()
 		}(si)
 	}
@@ -128,7 +128,9 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 				err := jsoniter.Unmarshal(resp.body, &parsedResp)
 				cmn.AssertNoErr(err)
 				for k, v := range parsedResp {
-					//FIXME: add aggregation when more stats added to DlJobInfo
+					if oldMetric, ok := listDownloads[k]; ok {
+						v.Aggregate(oldMetric)
+					}
 					listDownloads[k] = v
 				}
 			}
@@ -144,23 +146,31 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, msg *cmn.DlAdminBo
 			cmn.AssertNoErr(err)
 		}
 
-		finished, total := 0, 0
+		finished, total, numPending := 0, 0, 0
+		cancelled := false
 		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
+		finishedTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		downloadErrs := make([]cmn.TaskErrInfo, 0)
 		for _, stat := range stats {
 			finished += stat.Finished
 			total += stat.Total
+			numPending += stat.NumPending
+			cancelled = cancelled || stat.Cancelled
 			currTasks = append(currTasks, stat.CurrentTasks...)
+			finishedTasks = append(finishedTasks, stat.FinishedTasks...)
 			downloadErrs = append(downloadErrs, stat.Errs...)
 		}
 		pct := float64(finished) / float64(total) * 100
 
 		resp := cmn.DlStatusResp{
-			Finished:     finished,
-			Total:        total,
-			Percentage:   pct,
-			CurrentTasks: currTasks,
-			Errs:         downloadErrs,
+			Finished:      finished,
+			Total:         total,
+			Percentage:    pct,
+			CurrentTasks:  currTasks,
+			FinishedTasks: finishedTasks,
+			Cancelled:     cancelled,
+			NumPending:    numPending,
+			Errs:          downloadErrs,
 		}
 
 		respJSON, err := jsoniter.Marshal(resp)
@@ -226,7 +236,7 @@ func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, obje
 	for si, dlBody := range bulkTargetRequest {
 		wg.Add(1)
 		go func(si *cluster.Snode, dlBody *cmn.DlBody) {
-			if resp := p.targetDownloadRequest(http.MethodPost, si, dlBody); resp.err != nil {
+			if resp := p.targetDownloadRequest(http.MethodPost, "", si, dlBody); resp.err != nil {
 				errCh <- resp.err
 			}
 			wg.Done()
@@ -271,13 +281,43 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 	)
 
 	payload.InitWithQuery(r.URL.Query())
-	if err := payload.Validate(); err != nil {
+	if err := payload.Validate(r.Method == http.MethodDelete); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
+	path := ""
+	if r.Method == http.MethodDelete {
+		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
+		if err != nil {
+			cmn.InvalidHandlerWithMsg(w, r, err.Error())
+			return
+		}
+		if len(items) == 1 && items[0] == cmn.Cancel {
+			path = cmn.Cancel
+		} else if len(items) == 0 { // remove from list
+			resp, statusCode, err := p.broadcastDownloadRequest(http.MethodGet, "", payload)
+			// err 404 if not exists on any target
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error(), statusCode)
+				return
+			}
+
+			// Check for not running
+			var parsedResp cmn.DlStatusResp
+			err = jsoniter.Unmarshal(resp, &parsedResp)
+			cmn.AssertNoErr(err)
+			if parsedResp.NumPending > 0 {
+				p.invalmsghdlr(w, r, fmt.Sprintf("download job with id %s still running", payload.ID))
+				return
+			}
+		} else {
+			cmn.InvalidHandler(w, r)
+		}
+	}
+
 	glog.V(4).Infof("httpDownloadAdmin payload %v", payload)
-	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, payload)
+	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
 		return
@@ -437,7 +477,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		response   interface{}
-		err        error
+		respErr    error
 		statusCode int
 	)
 
@@ -456,17 +496,17 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.AssertNoErr(payload.Validate())
 
 		glog.V(4).Infof("Downloading: %s", payload)
-		response, err, statusCode = downloader.Download(payload)
+		response, respErr, statusCode = downloader.Download(payload)
 	case http.MethodGet:
 		payload := &cmn.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		cmn.AssertNoErr(payload.Validate())
+		cmn.AssertNoErr(payload.Validate(false /*requireID*/))
 
 		if payload.ID != "" {
 			glog.V(4).Infof("Getting status of download: %s", payload)
-			response, err, statusCode = downloader.Status(payload.ID)
+			response, respErr, statusCode = downloader.Status(payload.ID)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -476,25 +516,35 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			glog.V(4).Infof("Listing downloads")
-			response, err, statusCode = downloader.List(regex)
+			response, respErr, statusCode = downloader.List(regex)
 		}
 
 	case http.MethodDelete:
 		payload := &cmn.DlAdminBody{}
-		if err := cmn.ReadJSON(w, r, payload); err != nil {
+		if err = cmn.ReadJSON(w, r, payload); err != nil {
 			return
 		}
-		cmn.AssertNoErr(payload.Validate())
+		cmn.AssertNoErr(payload.Validate(true))
 
-		glog.V(4).Infof("Cancelling download: %s", payload)
-		response, err, statusCode = downloader.Cancel(payload.ID)
+		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
+		cmn.AssertNoErr(err)
+		if len(items) == 1 && items[0] == cmn.Cancel {
+			glog.V(4).Infof("Cancelling download: %s", payload)
+			response, respErr, statusCode = downloader.Cancel(payload.ID)
+		} else if len(items) == 0 {
+			glog.V(4).Infof("Removing download: %s", payload)
+			response, respErr, statusCode = downloader.Remove(payload.ID)
+		} else {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("downloader: invalid handler for delete request: %s", r.URL.Path))
+			return
+		}
 	default:
 		cmn.AssertMsg(false, r.Method)
 		return
 	}
 
 	if statusCode >= http.StatusBadRequest {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), statusCode)
+		cmn.InvalidHandlerWithMsg(w, r, respErr.Error(), statusCode)
 		return
 	}
 

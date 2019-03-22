@@ -106,6 +106,7 @@ import (
 // ================================ Summary ====================================
 
 const (
+	adminRemove  = "REMOVE"
 	adminCancel  = "CANCEL"
 	adminStatus  = "STATUS"
 	adminList    = "LIST"
@@ -176,8 +177,11 @@ type (
 		parent *Downloader
 		*request
 
-		totalSize   int64      // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
+		started time.Time
+		ended   time.Time
+
 		currentSize int64      // the current size of the file (updated as the download progresses)
+		totalSize   int64      // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
 		finishedCh  chan error // when a jogger finishes downloading a dlTask
 
 		downloadCtx context.Context    // context with cancel function
@@ -357,6 +361,8 @@ Loop:
 				d.dispatchStatus(req)
 			case adminCancel:
 				d.dispatchCancel(req)
+			case adminRemove:
+				d.dispatchRemove(req)
 			case adminList:
 				d.dispatchList(req)
 			default:
@@ -459,6 +465,21 @@ func (d *Downloader) Cancel(id string) (resp interface{}, err error, statusCode 
 	return r.resp, r.err, r.statusCode
 }
 
+func (d *Downloader) Remove(id string) (resp interface{}, err error, statusCode int) {
+	d.IncPending()
+	req := &request{
+		action:     adminRemove,
+		id:         id,
+		responseCh: make(chan *response, 1),
+	}
+	d.adminCh <- req
+
+	// await the response
+	r := <-req.responseCh
+	d.DecPending()
+	return r.resp, r.err, r.statusCode
+}
+
 func (d *Downloader) Status(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
@@ -538,14 +559,36 @@ finalize:
 	}
 }
 
-func (d *Downloader) dispatchCancel(req *request) {
+func (d *Downloader) checkJob(req *request) (*cmn.DlBody, error) {
 	body, err := d.db.getJob(req.id)
 	if err != nil {
 		if err == errJobNotFound {
 			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)
-			return
+			return nil, err
 		}
 		req.writeErrResp(err, http.StatusInternalServerError)
+		return nil, err
+	}
+	return body, nil
+}
+
+func (d *Downloader) dispatchRemove(req *request) {
+	body, err := d.checkJob(req)
+	if err != nil {
+		return
+	}
+
+	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
+	cmn.Assert(d.getNumPending(body) == 0)
+
+	err = d.db.delJob(req.id)
+	cmn.AssertNoErr(err) // everything should be okay since getReqFromDB
+	req.writeResp(nil)
+}
+
+func (d *Downloader) dispatchCancel(req *request) {
+	body, err := d.checkJob(req)
+	if err != nil {
 		return
 	}
 
@@ -591,20 +634,14 @@ func (d *Downloader) dispatchCancel(req *request) {
 		return
 	}
 
-	err = d.db.delJob(req.id)
+	err = d.db.setCancelled(req.id)
 	cmn.AssertNoErr(err) // everything should be okay since getReqFromDB
 	req.writeResp(nil)
 }
 
 func (d *Downloader) dispatchStatus(req *request) {
-	body, err := d.db.getJob(req.id)
+	body, err := d.checkJob(req)
 	if err != nil {
-		if err == errJobNotFound {
-			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)
-			return
-		}
-
-		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
 
@@ -649,6 +686,13 @@ func (d *Downloader) dispatchStatus(req *request) {
 	}
 
 	currentTasks := d.activeTasks(req.id)
+	finishedTasks, err := d.db.getTasks(req.id)
+	if err != nil {
+		req.writeErrResp(err, http.StatusInternalServerError)
+		return
+	}
+
+	numPending := d.getNumPending(body)
 
 	dlErrors, err := d.db.getErrors(req.id)
 	if err != nil {
@@ -658,10 +702,14 @@ func (d *Downloader) dispatchStatus(req *request) {
 	sort.Sort(cmn.TaskErrByName(dlErrors))
 
 	req.writeResp(cmn.DlStatusResp{
-		Finished:     finished,
-		Total:        total,
-		CurrentTasks: currentTasks,
-		Errs:         dlErrors,
+		Finished:      finished,
+		Total:         total,
+		CurrentTasks:  currentTasks,
+		FinishedTasks: finishedTasks,
+		Errs:          dlErrors,
+
+		NumPending: numPending,
+		Cancelled:  body.Cancelled,
 	})
 }
 
@@ -677,6 +725,11 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 				Name:       task.obj.Objname,
 				Downloaded: atomic.LoadInt64(&task.currentSize),
 				Total:      task.totalSize,
+
+				StartTime: task.started,
+				EndTime:   task.ended,
+
+				Running: true,
 			}
 			currentTasks = append(currentTasks, info)
 		}
@@ -688,6 +741,27 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 	return currentTasks
 }
 
+// gets the number of pending files of reqId
+func (d *Downloader) getNumPending(body *cmn.DlBody) int {
+	numPending := 0
+
+	for _, j := range d.joggers {
+		for _, obj := range body.Objs {
+			req := request{
+				id:          body.ID,
+				obj:         obj,
+				bucket:      body.Bucket,
+				bckProvider: body.BckProvider,
+			}
+			if j.q.exists(&req) {
+				numPending++
+			}
+		}
+	}
+
+	return numPending
+}
+
 func (d *Downloader) dispatchList(req *request) {
 	records, err := d.db.getList(req.regex)
 	if err != nil {
@@ -697,7 +771,10 @@ func (d *Downloader) dispatchList(req *request) {
 
 	respMap := make(map[string]cmn.DlJobInfo)
 	for _, r := range records {
-		respMap[r.ID] = r.ToDlJobInfo()
+		respMap[r.ID] = cmn.DlJobInfo{
+			Description: r.Description,
+			NumPending:  d.getNumPending(&r),
+		}
 	}
 	req.writeResp(respMap)
 }
@@ -743,6 +820,7 @@ Loop:
 		<-t.waitForFinish()
 
 		j.Lock()
+		j.task.persist()
 		j.task = nil
 		j.Unlock()
 		if exists := j.q.delete(t.request); exists {
@@ -789,12 +867,13 @@ func (t *task) download() {
 		glog.Infof("Starting download for %v", t)
 	}
 
-	started := time.Now()
+	t.started = time.Now()
 	if !t.obj.FromCloud {
 		statusMsg, err = t.downloadLocal(lom)
 	} else {
 		statusMsg, err = t.downloadCloud(lom)
 	}
+	t.ended = time.Now()
 
 	if err != nil {
 		t.abort(statusMsg, err)
@@ -803,7 +882,7 @@ func (t *task) download() {
 
 	t.parent.stats.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize},
-		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(started))},
+		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(t.started))},
 	)
 	t.finishedCh <- nil
 }
@@ -872,6 +951,19 @@ func (t *task) abort(statusMsg string, err error) {
 	glog.Errorf("error occurred when downloading %s: %v", t, err)
 
 	t.finishedCh <- err
+}
+
+func (t *task) persist() {
+	t.parent.db.persistTask(t.id, cmn.TaskDlInfo{
+		Name:       t.obj.Objname,
+		Downloaded: t.currentSize,
+		Total:      t.totalSize,
+
+		StartTime: t.started,
+		EndTime:   t.ended,
+
+		Running: false,
+	})
 }
 
 func (t *task) waitForFinish() <-chan error {
@@ -952,6 +1044,13 @@ func (q *queue) get() (foundTask *task) {
 	foundTask.downloadCtx = ctx
 	foundTask.cancelFunc = cancel
 	return
+}
+
+func (q *queue) exists(req *request) bool {
+	q.RLock()
+	_, exists := q.m[req.uid()]
+	q.RUnlock()
+	return exists
 }
 
 func (q *queue) delete(req *request) bool {

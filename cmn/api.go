@@ -167,14 +167,15 @@ const (
 	URLParamTotalUncompressedSize = "tunc"
 
 	// downloader
-	URLParamBase     = "base"
-	URLParamBucket   = "bucket"
-	URLParamID       = "id"
-	URLParamLink     = "link"
-	URLParamObjName  = "objname"
-	URLParamSuffix   = "suffix"
-	URLParamTemplate = "template"
-	URLParamTimeout  = "timeout"
+	URLParamBase        = "base"
+	URLParamBucket      = "bucket"
+	URLParamID          = "id"
+	URLParamLink        = "link"
+	URLParamObjName     = "objname"
+	URLParamSuffix      = "suffix"
+	URLParamTemplate    = "template"
+	URLParamTimeout     = "timeout"
+	URLParamDescription = "description"
 )
 
 // SelectMsg represents properties and options for requests which fetch entities
@@ -351,6 +352,9 @@ const (
 	List        = "list"   // lists running dsort processes
 	Remove      = "remove" // removes a dsort process from history
 
+	// downloader
+	Cancel = "cancel"
+
 	// CLI
 	Target = "target"
 )
@@ -361,11 +365,16 @@ type DlPostResp struct {
 }
 
 type DlStatusResp struct {
-	Finished     int           `json:"finished"`
-	Total        int           `json:"total"`
-	Percentage   float64       `json:"percentage"`
-	CurrentTasks []TaskDlInfo  `json:"current_tasks,omitempty"`
-	Errs         []TaskErrInfo `json:"download_errors,omitempty"`
+	Finished   int     `json:"finished"`
+	Total      int     `json:"total"`
+	Percentage float64 `json:"percentage"`
+
+	Cancelled  bool `json:"cancelled"`
+	NumPending int  `json:"num_pending"`
+
+	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
+	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
+	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 }
 
 func (d *DlStatusResp) String() string {
@@ -384,6 +393,17 @@ func (d *DlStatusResp) String() string {
 	return sb.String()
 }
 
+// Summary info of the download job
+// FIXME: add more stats
+type DlJobInfo struct {
+	Description string `json:"description"`
+	NumPending  int    `json:"num_pending"`
+}
+
+func (lhs *DlJobInfo) Aggregate(rhs DlJobInfo) {
+	lhs.NumPending += rhs.NumPending
+}
+
 type DlBase struct {
 	Description string `json:"description"`
 	Bucket      string `json:"bucket"`
@@ -396,8 +416,8 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 		b.Bucket = query.Get(URLParamBucket)
 	}
 	b.BckProvider = query.Get(URLParamBckProvider)
-	b.Timeout = query.Get("timeout")
-	b.Description = query.Get("description")
+	b.Timeout = query.Get(URLParamTimeout)
+	b.Description = query.Get(URLParamDescription)
 }
 
 func (b *DlBase) AsQuery() url.Values {
@@ -408,8 +428,11 @@ func (b *DlBase) AsQuery() url.Values {
 	if b.BckProvider != "" {
 		query.Add(URLParamBckProvider, b.BckProvider)
 	}
-	if b.Bucket != "" {
+	if b.Timeout != "" {
 		query.Add(URLParamTimeout, b.Timeout)
+	}
+	if b.Description != "" {
+		query.Add(URLParamDescription, b.Description)
 	}
 	return query
 }
@@ -462,17 +485,24 @@ func (b *DlAdminBody) InitWithQuery(query url.Values) {
 
 func (b *DlAdminBody) AsQuery() url.Values {
 	query := url.Values{}
-	query.Add(URLParamID, b.ID)
+	if b.ID != "" {
+		query.Add(URLParamID, b.ID)
+	}
+	if b.Regex != "" {
+		query.Add(URLParamRegex, b.Regex)
+	}
 	return query
 }
 
-func (b *DlAdminBody) Validate() error {
+func (b *DlAdminBody) Validate(requireID bool) error {
 	if b.ID != "" && b.Regex != "" {
 		return fmt.Errorf("regex %q defined at the same time as id %q", URLParamRegex, URLParamID)
 	} else if b.Regex != "" {
 		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
 			return err
 		}
+	} else if b.ID == "" && requireID {
+		return fmt.Errorf("ID not specified")
 	}
 	return nil
 }
@@ -482,6 +512,8 @@ type DlBody struct {
 	DlBase
 	ID   string  `json:"id"`
 	Objs []DlObj `json:"objs"`
+
+	Cancelled bool `json:"cancelled"`
 }
 
 func (b *DlBody) Validate() error {
@@ -490,6 +522,10 @@ func (b *DlBody) Validate() error {
 	}
 	if b.ID == "" {
 		return fmt.Errorf("missing %q, something went wrong", URLParamID)
+	}
+	if b.Cancelled {
+		// used to store cancel status in db, should be unset
+		return fmt.Errorf("invalid flag 'cancelled'")
 	}
 	for _, obj := range b.Objs {
 		if err := obj.Validate(); err != nil {
@@ -503,29 +539,22 @@ func (b *DlBody) String() string {
 	return fmt.Sprintf("%s, id=%q", b.DlBase, b.ID)
 }
 
-func (b *DlBody) ToDlJobInfo() DlJobInfo {
-	return DlJobInfo{
-		Description: b.Description,
-	}
-}
-
-// Summary info of the download job
-// FIXME: add more stats
-type DlJobInfo struct {
-	Description string `json:"description"`
-}
-
 type TaskInfoByName []TaskDlInfo
 
 func (t TaskInfoByName) Len() int           { return len(t) }
 func (t TaskInfoByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t TaskInfoByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
 
-// Info about a task that is currently being downloaded by one of the joggers
+// Info about a task that is currently or has been downloaded by one of the joggers
 type TaskDlInfo struct {
 	Name       string `json:"name"`
 	Downloaded int64  `json:"downloaded"`
 	Total      int64  `json:"total,omitempty"`
+
+	StartTime time.Time `json:"start_time,omitempty"`
+	EndTime   time.Time `json:"end_time,omitempty"`
+
+	Running bool `json:"running"`
 }
 
 type TaskErrByName []TaskErrInfo

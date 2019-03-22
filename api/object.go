@@ -343,12 +343,13 @@ func DownloadMulti(baseParams *BaseParams, description string, bucket string, m 
 	return doDlDownloadRequest(baseParams, path, msg, optParams)
 }
 
-func DownloadCloud(baseParams *BaseParams, bucket, prefix, suffix string) (string, error) {
+func DownloadCloud(baseParams *BaseParams, description string, bucket, prefix, suffix string) (string, error) {
 	dlBody := cmn.DlCloudBody{
 		Prefix: prefix,
 		Suffix: suffix,
 	}
 	dlBody.Bucket = bucket
+	dlBody.Description = description
 	return DownloadCloudWithParam(baseParams, dlBody)
 }
 
@@ -401,6 +402,21 @@ func DownloadGetList(baseParams *BaseParams, regex string) (map[string]cmn.DlJob
 }
 
 func DownloadCancel(baseParams *BaseParams, id string) error {
+	dlBody := cmn.DlAdminBody{
+		ID: id,
+	}
+	query := dlBody.AsQuery()
+
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.Cancel)
+	optParams := OptionalParams{
+		Query: query,
+	}
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	return err
+}
+
+func DownloadRemove(baseParams *BaseParams, id string) error {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}

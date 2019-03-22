@@ -29,6 +29,7 @@ The rest of this document is structured around all supported types of downloads:
 - [Cancellation](#cancellation)
 - [Status (of the download)](#status)
 - [List of downloads](#list-of-downloads)
+- [Remove from list](#remove-from-list)
 
 ## Single Download
 
@@ -137,7 +138,7 @@ Name | Type | Description | Optional?
 
 ## Cancellation
 
-Any download request can be canceled at any time by making a `DELETE` request with provided `id` (which is returned upon job creation).
+Any download request can be canceled at any time by making a `DELETE` request to `/v1/download/cancel` with provided `id` (which is returned upon job creation).
 
 ### Request Query Parameters
 
@@ -149,7 +150,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Cancel download | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
+| Cancel download | DELETE /v1/download/cancel | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/cancel?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
 
 ## Status
 
@@ -168,7 +169,7 @@ Name | Type | Description | Optional?
 | Get download status | GET /v1/download | `curl -Liv -X GET 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
 
 
-## List of downloads
+## List of Downloads
 
 The list of all download requests can be queried at any time. Note that this has the same syntax as [Status](#status) except the `id` parameter is empty.
 
@@ -185,3 +186,18 @@ Name | Type | Description | Optional?
 | Get list of all downloads | GET /v1/download/ | `curl -Liv -X GET http://localhost:8080/v1/download`|
 | Get list of downloads with description starting with a digit | GET /v1/download/ | `curl -Liv -X GET 'http://localhost:8080/v1/download?regex=^[0-9]'`|
 
+## Remove from List
+
+Any cancelled or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request with provided `id` (which is returned upon job creation).
+
+### Request Query Parameters
+
+Name | Type | Description | Optional?
+------------ | ------------- | ------------- | -------------
+**id** | **string** | Unique identifier of download job returned upon job creation. |
+
+### Sample Request
+
+| Operation | HTTP action | Example |
+|--|--|--|
+| Remove from list | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
