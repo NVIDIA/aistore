@@ -26,6 +26,14 @@
   version = "v1.2.2"
 
 [[projects]]
+  digest = "1:e626376fab8608a972d47e91b3c1bbbddaecaf1d42b82be6dcc52d10a7557893"
+  name = "github.com/VividCortex/ewma"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "b24eb346a94c3ba12c1da1e564dbac1b498a77ce"
+  version = "v1.1.1"
+
+[[projects]]
   digest = "1:5274200aa10410132e8e6c814fdf5050f3000fb5dcc0b25cbd0658a4cfeabb9f"
   name = "github.com/aws/aws-sdk-go"
   packages = [
@@ -180,6 +188,14 @@
   version = "v1.8.0"
 
 [[projects]]
+  digest = "1:e150b5fafbd7607e2d638e4e5cf43aa4100124e5593385147b0a74e2733d8b0d"
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c2a7a6ca930a4cd0bc33a3f298eb71960732a3a7"
+  version = "v0.0.7"
+
+[[projects]]
   digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
   name = "github.com/modern-go/concurrent"
   packages = ["."]
@@ -269,6 +285,19 @@
   version = "v1.20.0"
 
 [[projects]]
+  digest = "1:b98980042819240ff47f380378e881dfc04cdf36c373c12dce3397fdfb71d5cb"
+  name = "github.com/vbauerster/mpb"
+  packages = [
+    ".",
+    "cwriter",
+    "decor",
+    "internal",
+  ]
+  pruneopts = "UT"
+  revision = "b1fa246876b8398a7e3aad2000ef5c0b1a0b58fe"
+  version = "v3.4.0"
+
+[[projects]]
   digest = "1:ac5cb21cbe4f095b6e5f1ae5102a85dfd598d39b5ad0d64df3d41ee046586f30"
   name = "go.opencensus.io"
   packages = [
@@ -289,6 +318,14 @@
   pruneopts = "UT"
   revision = "79993219becaa7e29e3b60cb67f5b8e82dee11d6"
   version = "v0.17.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:058e9504b9a79bfe86092974d05bb3298d2aa0c312d266d43148de289a5065d9"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  pruneopts = "UT"
+  revision = "b7391e95e576cacdcdd422573063bc057239113d"
 
 [[projects]]
   branch = "master"
@@ -512,6 +549,7 @@
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
     "github.com/urfave/cli",
+    "github.com/vbauerster/mpb",
     "golang.org/x/net/context",
     "golang.org/x/net/http2",
     "golang.org/x/net/http2/h2c",

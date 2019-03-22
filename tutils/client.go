@@ -25,8 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -729,7 +727,7 @@ func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, 
 
 	for {
 		if time.Now().After(maxTime) {
-			return errors.Errorf("timed out when downloading %s/%s", bucket, objName)
+			return fmt.Errorf("timed out when downloading %s/%s", bucket, objName)
 		}
 
 		reslist, err := api.ListBucket(params, bucket, &cmn.GetMsg{GetFast: true}, 0)

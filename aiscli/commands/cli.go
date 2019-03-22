@@ -34,6 +34,7 @@ var (
 	dlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
 	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar"}
 
 	// Object
 	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object", Value: ""}

@@ -376,9 +376,10 @@ type DlStatusResp struct {
 func (d *DlStatusResp) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)\n", d.Finished, d.Total, d.Percentage))
+	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)", d.Finished, d.Total, d.Percentage))
 
 	if len(d.CurrentTasks) != 0 {
+		sb.WriteString("\n")
 		sb.WriteString("Progress of files that are currently being downloaded:\n")
 		for _, task := range d.CurrentTasks {
 			sb.WriteString(fmt.Sprintf("\t%s: %s\n", task.Name, B2S(task.Downloaded, 2))) // TODO: print total too
@@ -519,12 +520,24 @@ type DlJobInfo struct {
 	Description string `json:"description"`
 }
 
+type TaskInfoByName []TaskDlInfo
+
+func (t TaskInfoByName) Len() int           { return len(t) }
+func (t TaskInfoByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t TaskInfoByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
+
 // Info about a task that is currently being downloaded by one of the joggers
 type TaskDlInfo struct {
 	Name       string `json:"name"`
 	Downloaded int64  `json:"downloaded"`
-	Total      int64  `json:"total,omitempty"` // TODO: Implement setting this field
+	Total      int64  `json:"total,omitempty"`
 }
+
+type TaskErrByName []TaskErrInfo
+
+func (t TaskErrByName) Len() int           { return len(t) }
+func (t TaskErrByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t TaskErrByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
 
 type TaskErrInfo struct {
 	Name string `json:"name"`

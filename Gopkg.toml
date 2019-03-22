@@ -1,3 +1,7 @@
+[prune]
+  go-tests = true
+  unused-packages = true
+
 [[constraint]]
   name = "github.com/dgrijalva/jwt-go"
   version = "3.2.0"
@@ -21,3 +25,7 @@
 [[constraint]]
   name = "github.com/urfave/cli"
   version = "1.20.0"
+
+[[constraint]]
+  name = "github.com/vbauerster/mpb"
+  version = "3.4.0"

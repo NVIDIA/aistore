@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -175,6 +176,7 @@ type (
 		parent *Downloader
 		*request
 
+		totalSize   int64      // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
 		currentSize int64      // the current size of the file (updated as the download progresses)
 		finishedCh  chan error // when a jogger finishes downloading a dlTask
 
@@ -653,6 +655,7 @@ func (d *Downloader) dispatchStatus(req *request) {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
 	}
+	sort.Sort(cmn.TaskErrByName(dlErrors))
 
 	req.writeResp(cmn.DlStatusResp{
 		Finished:     finished,
@@ -673,6 +676,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 			info := cmn.TaskDlInfo{
 				Name:       task.obj.Objname,
 				Downloaded: atomic.LoadInt64(&task.currentSize),
+				Total:      task.totalSize,
 			}
 			currentTasks = append(currentTasks, info)
 		}
@@ -680,6 +684,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 		j.Unlock()
 	}
 
+	sort.Sort(cmn.TaskInfoByName(currentTasks))
 	return currentTasks
 }
 
@@ -829,10 +834,19 @@ func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 		},
 	}
 
+	t.setTotalSize(response)
+
 	if err := t.parent.t.Receive(postFQN, progressReader, lom); err != nil {
 		return internalErrorMessage(), err
 	}
 	return "", nil
+}
+
+func (t *task) setTotalSize(resp *http.Response) {
+	totalSize := resp.ContentLength
+	if totalSize > 0 {
+		t.totalSize = totalSize
+	}
 }
 
 func (t *task) downloadCloud(lom *cluster.LOM) (string, error) {
