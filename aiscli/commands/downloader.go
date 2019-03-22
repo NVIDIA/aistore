@@ -22,16 +22,65 @@ const (
 	DownloadCancel = "cancel"
 )
 
+var (
+	BaseDownloadFlags = []cli.Flag{
+		bucketFlag,
+		bckProviderFlag,
+		timeoutFlag,
+	}
+
+	DownloadFlags = map[string][]cli.Flag{
+		DownloadSingle: append(
+			[]cli.Flag{
+				objNameFlag,
+				linkFlag,
+			},
+			BaseDownloadFlags...,
+		),
+		DownloadRange: append(
+			[]cli.Flag{
+				baseFlag,
+				templateFlag,
+			},
+			BaseDownloadFlags...,
+		),
+		DownloadCloud: append(
+			[]cli.Flag{
+				dlPrefixFlag,
+				dlSuffixFlag,
+			},
+			BaseDownloadFlags...,
+		),
+		DownloadStatus: []cli.Flag{
+			idFlag,
+			progressBarFlag,
+		},
+		DownloadCancel: []cli.Flag{
+			idFlag,
+		},
+	}
+
+	DownloadSingleUsage = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", DownloadSingle)
+	DownloadRangeUsage  = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --base <value> --template <value>", DownloadRange)
+	DownloadCloudUsage  = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", DownloadCloud)
+	DownloadStatusUsage = fmt.Sprintf("aiscli download %s --id <value> [STATUS FLAGS...]", DownloadStatus)
+	DownloadCancelUsage = fmt.Sprintf("aiscli download %s --id <value>", DownloadCancel)
+)
+
 func DownloadHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		bucket     = parseFlag(c, BucketFlag.Name)
-		timeout    = parseFlag(c, TimeoutFlag.Name)
+		bucket     = parseFlag(c, bucketFlag.Name)
+		timeout    = parseFlag(c, timeoutFlag.Name)
 
 		id string
 	)
 
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, BckProviderFlag.Name))
+	if err := checkFlags(c, bucketFlag.Name); err != nil {
+		return err
+	}
+
+	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -45,8 +94,12 @@ func DownloadHandler(c *cli.Context) error {
 	commandName := c.Command.Name
 	switch commandName {
 	case DownloadSingle:
-		objName := parseFlag(c, ObjNameFlag.Name)
-		link := parseFlag(c, LinkFlag.Name)
+		if err := checkFlags(c, objNameFlag.Name, linkFlag.Name); err != nil {
+			return err
+		}
+
+		objName := parseFlag(c, objNameFlag.Name)
+		link := parseFlag(c, linkFlag.Name)
 		payload := cmn.DlSingleBody{
 			DlBase: basePayload,
 			DlObj: cmn.DlObj{
@@ -60,8 +113,12 @@ func DownloadHandler(c *cli.Context) error {
 			return err
 		}
 	case DownloadRange:
-		base := parseFlag(c, BaseFlag.Name)
-		template := parseFlag(c, TemplateFlag.Name)
+		if err := checkFlags(c, baseFlag.Name, templateFlag.Name); err != nil {
+			return err
+		}
+
+		base := parseFlag(c, baseFlag.Name)
+		template := parseFlag(c, templateFlag.Name)
 		payload := cmn.DlRangeBody{
 			DlBase:   basePayload,
 			Base:     base,
@@ -73,8 +130,8 @@ func DownloadHandler(c *cli.Context) error {
 			return err
 		}
 	case DownloadCloud:
-		prefix := parseFlag(c, DlPrefixFlag.Name)
-		suffix := parseFlag(c, DlSuffixFlag.Name)
+		prefix := parseFlag(c, dlPrefixFlag.Name)
+		suffix := parseFlag(c, dlSuffixFlag.Name)
 		payload := cmn.DlCloudBody{
 			DlBase: basePayload,
 			Prefix: prefix,
@@ -94,8 +151,12 @@ func DownloadHandler(c *cli.Context) error {
 func DownloadAdminHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		id         = parseFlag(c, IDFlag.Name)
+		id         = parseFlag(c, idFlag.Name)
 	)
+
+	if err := checkFlags(c, idFlag.Name, linkFlag.Name); err != nil {
+		return err
+	}
 
 	commandName := c.Command.Name
 	switch commandName {

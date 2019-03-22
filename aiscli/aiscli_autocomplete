@@ -1,6 +1,8 @@
 # Modified bash autocomplete script from github.com/urfave/cli
 #!/bin/bash
 
+PROG=aiscli
+
 _cli_bash_autocomplete() {
     local cur opts
     COMPREPLY=()
@@ -10,4 +12,12 @@ _cli_bash_autocomplete() {
     return 0
 }
 
-complete -F _cli_bash_autocomplete aiscli
+_cli_zsh_autocomplete() {
+  local -a opts
+  opts=("${(@f)$(_CLI_ZSH_AUTOCOMPLETE_HACK=1 ${words[@]:0:#words[@]-1} --generate-bash-completion)}")
+  _describe 'values' opts
+  return
+}
+
+complete -F _cli_bash_autocomplete $PROG 1>/dev/null 2>&1
+compdef _cli_zsh_autocomplete $PROG 1>/dev/null 2>&1

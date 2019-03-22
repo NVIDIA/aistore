@@ -5,6 +5,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -16,34 +18,47 @@ type AIScli struct {
 var (
 	JSONFlag     = cli.BoolFlag{Name: "json,j", Usage: "json output"}
 	VerboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
-	ChecksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
-	WaitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
+	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
+	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
-	BucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are saved to, eg. 'imagenet'", Value: ""}
-	BckProviderFlag = cli.StringFlag{Name: cmn.URLParamBckProvider, Usage: "determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically", Value: ""}
+	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are saved to, eg. 'imagenet'", Value: ""}
+	bckProviderFlag = cli.StringFlag{Name: cmn.URLParamBckProvider, Usage: "determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically", Value: ""}
 
 	// Downloader
-	TimeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'", Value: ""}
-	ObjNameFlag     = cli.StringFlag{Name: cmn.URLParamObjName, Usage: "name of the object the download is saved as, eg. 'train-images-mnist.tgz'", Value: ""}
-	LinkFlag        = cli.StringFlag{Name: cmn.URLParamLink, Usage: "URL of where the object is downloaded from, eg. 'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz'", Value: ""}
-	BaseFlag        = cli.StringFlag{Name: cmn.URLParamBase, Usage: "base URL of the object used to formulate the download URL, eg. 'http://yann.lecun.com/exdb/mnist'", Value: ""}
-	TemplateFlag    = cli.StringFlag{Name: cmn.URLParamTemplate, Usage: "bash template describing names of the objects in the URL, eg: 'object{200..300}log.txt'", Value: ""}
-	DlPrefixFlag    = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix of the object name, eg. 'imagenet/imagenet-'"}
-	DlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
-	IDFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
-	ProgressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'", Value: ""}
+	objNameFlag     = cli.StringFlag{Name: cmn.URLParamObjName, Usage: "name of the object the download is saved as, eg. 'train-images-mnist.tgz'", Value: ""}
+	linkFlag        = cli.StringFlag{Name: cmn.URLParamLink, Usage: "URL of where the object is downloaded from, eg. 'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz'", Value: ""}
+	baseFlag        = cli.StringFlag{Name: cmn.URLParamBase, Usage: "base URL of the object used to formulate the download URL, eg. 'http://yann.lecun.com/exdb/mnist'", Value: ""}
+	templateFlag    = cli.StringFlag{Name: cmn.URLParamTemplate, Usage: "bash template describing names of the objects in the URL, eg: 'object{200..300}log.txt'", Value: ""}
+	dlPrefixFlag    = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix of the object name, eg. 'imagenet/imagenet-'"}
+	dlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
+	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
+	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 
 	// Object
-	KeyFlag      = cli.StringFlag{Name: "key", Usage: "name of object", Value: ""}
-	OldKeyFlag   = cli.StringFlag{Name: "oldkey", Usage: "old name of object", Value: ""}
-	OffsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset", Value: ""}
-	LengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length", Value: ""}
-	PrefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for object matching"}
-	RegexFlag    = cli.StringFlag{Name: "regex", Usage: "regex pattern for object matching", Value: "\\d+1\\d"}
-	ListFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'", Value: ""}
-	RangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>", Value: ""}
-	DeadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
+	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object", Value: ""}
+	oldKeyFlag   = cli.StringFlag{Name: "oldkey", Usage: "old name of object", Value: ""}
+	offsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset", Value: ""}
+	lengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length", Value: ""}
+	prefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for object matching"}
+	regexFlag    = cli.StringFlag{Name: "regex", Usage: "regex pattern for object matching", Value: "\\d+1\\d"}
+	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'", Value: ""}
+	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>", Value: ""}
+	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
 )
+
+func flagIsSet(c *cli.Context, flag string) bool {
+	return c.GlobalIsSet(flag) || c.IsSet(flag)
+}
+
+func checkFlags(c *cli.Context, flags ...string) error {
+	for _, f := range flags {
+		if !flagIsSet(c, f) {
+			return fmt.Errorf("%q is not set", f)
+		}
+	}
+	return nil
+}
 
 // Returns the value of flag (either parent or local scope)
 func parseFlag(c *cli.Context, flag string) string {
