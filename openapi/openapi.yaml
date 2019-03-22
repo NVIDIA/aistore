@@ -695,7 +695,7 @@ paths:
             text/plain:
               schema:
                 type: string
-  /sort/start:
+  /sort:
     post:
       summary: Starts distributed sort operation on cluster
       operationId: startSort
@@ -722,15 +722,14 @@ paths:
               schema:
                 type: string
                 format: uuid
-  /sort/metrics/{sort-uuid}:
     get:
       summary: Get metrics of given sort operation
       operationId: getSortMetrics
       tags:
         - Sort
       parameters:
-        - name: sort-uuid
-          in: path
+        - name: id
+          in: query
           description: Sort uuid which is returned when starting dsort
           required: true
           schema:
@@ -749,15 +748,15 @@ paths:
             text/plain:
               schema:
                 type: string
-  /sort/abort/{sort-uuid}:
+  /sort/abort:
     delete:
       summary: Abort distributed sort operation
       operationId: abortSort
       tags:
         - Sort
       parameters:
-        - name: sort-uuid
-          in: path
+        - name: id
+          in: query
           description: Sort uuid which is returned when starting dsort
           required: true
           schema:

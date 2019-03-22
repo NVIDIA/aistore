@@ -859,7 +859,7 @@ func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
 
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start)
+	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	body, err := api.DoHTTPRequest(baseParams, path, msg)
 	if err != nil {
 		return "", err
@@ -871,16 +871,20 @@ func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
 func AbortDSort(proxyURL, managerUUID string) error {
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-	_, err := api.DoHTTPRequest(baseParams, path, nil)
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort)
+	query := url.Values{cmn.URLParamID: []string{managerUUID}}
+	optParams := api.OptionalParams{Query: query}
+	_, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 
 func RemoveDSort(proxyURL, managerUUID string) error {
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Remove, managerUUID)
-	_, err := api.DoHTTPRequest(baseParams, path, nil)
+	path := cmn.URLPath(cmn.Version, cmn.Sort)
+	query := url.Values{cmn.URLParamID: []string{managerUUID}}
+	optParams := api.OptionalParams{Query: query}
+	_, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 
@@ -913,7 +917,7 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 func ListDSort(proxyURL, regex string) (map[string]*dsort.JobInfo, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.List)
+	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	query := url.Values{}
 	query.Add(cmn.URLParamRegex, regex)
 	optParams := api.OptionalParams{
@@ -933,8 +937,10 @@ func ListDSort(proxyURL, regex string) (map[string]*dsort.JobInfo, error) {
 func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
-	body, err := api.DoHTTPRequest(baseParams, path, nil)
+	path := cmn.URLPath(cmn.Version, cmn.Sort)
+	query := url.Values{cmn.URLParamID: []string{managerUUID}}
+	optParams := api.OptionalParams{Query: query}
+	body, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
 	if err != nil {
 		return nil, err
 	}

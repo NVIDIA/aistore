@@ -39,28 +39,30 @@ type response struct {
 
 // [METHOD] /v1/sort/...
 func ProxySortHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort)
+	apiItems, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort)
 	if err != nil {
 		return
 	}
 
-	switch apiItems[0] {
-	case cmn.Start:
+	switch r.Method {
+	case http.MethodPost:
 		proxyStartSortHandler(w, r)
-	case cmn.List:
-		proxyListSortHandler(w, r)
-	case cmn.Metrics:
-		proxyMetricsSortHandler(w, r)
-	case cmn.Abort:
-		proxyAbortSortHandler(w, r)
-	case cmn.Remove:
-		proxyRemoveSortHandler(w, r)
+	case http.MethodGet:
+		proxyGetHandler(w, r)
+	case http.MethodDelete:
+		if len(apiItems) == 1 && apiItems[0] == cmn.Abort {
+			proxyAbortSortHandler(w, r)
+		} else if len(apiItems) == 0 {
+			proxyRemoveSortHandler(w, r)
+		} else {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
+		}
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid request %s", apiItems[0]))
 	}
 }
 
-// POST /v1/sort/start
+// POST /v1/sort
 func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
@@ -148,12 +150,25 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(managerUUID))
 }
 
-// GET /v1/sort/list
-func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
+// GET /v1/sort
+func proxyGetHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
 
+	query := r.URL.Query()
+	managerUUID := query.Get(cmn.URLParamID)
+
+	if managerUUID == "" {
+		proxyListSortHandler(w, r)
+		return
+	}
+
+	proxyMetricsSortHandler(w, r)
+}
+
+// GET /v1/sort?regex=...
+func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	//validate regex
 	regexStr := r.URL.Query().Get(cmn.URLParamRegex)
 	if _, err := regexp.CompilePOSIX(regexStr); err != nil {
@@ -195,20 +210,12 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		// double header write.
 		return
 	}
-
 }
 
-// GET /v1/sort/metrics
+// GET /v1/sort?id=...
 func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
-	if !checkHTTPMethod(w, r, http.MethodGet) {
-		return
-	}
-
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Metrics)
-	if err != nil {
-		return
-	}
-	managerUUID := apiItems[0]
+	query := r.URL.Query()
+	managerUUID := query.Get(cmn.URLParamID)
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
 	targets := ctx.smap.Get().Tmap
 	responses := broadcast(http.MethodGet, path, nil, nil, targets)
@@ -244,27 +251,29 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Abort)
+	_, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort, cmn.Abort)
 	if err != nil {
 		return
 	}
 
-	managerUUID := apiItems[0]
+	query := r.URL.Query()
+	managerUUID := query.Get(cmn.URLParamID)
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
 	broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap)
 }
 
-// DELETE /v1/sort/remove
+// DELETE /v1/sort
 func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Remove)
+	_, err := checkRESTItems(w, r, 0, cmn.Version, cmn.Sort)
 	if err != nil {
 		return
 	}
 
-	managerUUID := apiItems[0]
+	query := r.URL.Query()
+	managerUUID := query.Get(cmn.URLParamID)
 	targets := ctx.smap.Get().Tmap
 
 	// First, broadcast to see if process is cleaned up first
