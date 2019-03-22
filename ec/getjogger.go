@@ -613,6 +613,25 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	return restored, nil
 }
 
+// *slices - slices to search through
+// *start - id which search should start from
+// Returns:
+// slice or nil if not found
+// first index after found slice
+func getNextNonEmptySlice(slices []*slice, start int) (*slice, int) {
+	i := cmn.Max(0, start)
+
+	for i < len(slices) && slices[i] == nil {
+		i++
+	}
+
+	if i == len(slices) {
+		return nil, i
+	}
+
+	return slices[i], i + 1
+}
+
 // upload missing slices to targets that do not have any slice at the moment
 // of reconstruction:
 // * req - original request
@@ -651,23 +670,23 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	// Do not wait until the data transfer is completed
 	idx := 0
 	for _, tgt := range emptyNodes {
-		for idx < len(slices) && slices[idx] == nil {
-			idx++
-		}
+		// get next non-empty slice
+		sl, nextIdx := getNextNonEmptySlice(slices, idx)
+
 		if glog.V(4) {
 			glog.Infof("For %s found %s/%s slice %d (%d)",
 				tgt, req.LOM.Bucket, req.LOM.Objname, idx, len(slices))
 		}
 
-		if idx >= len(slices) {
-			// unlikely but we need to free allocated memory for rest of slices
-			glog.Errorf("Numbers of restored slices and empty targets mismatch")
-			slices[idx].free()
-			continue
+		if sl == nil {
+			// The number of empty nodes is larger than non-empty slices
+			// There's nothing to be done for next nodes, safe to break a loop
+			glog.Errorf("Numbers of restored slices is smaller than numer of empty targets")
+			break
 		}
 
 		// every slice's SGL must be freed on transfer completion
-		cb := func(daemonID string, s *slice, id int) transport.SendCallback {
+		cb := func(daemonID string, s *slice) transport.SendCallback {
 			return func(hdr transport.Header, reader io.ReadCloser, err error) {
 				if err != nil {
 					glog.Errorf("Failed to send %s/%s to %v: %v", req.LOM.Bucket, req.LOM.Objname, daemonID, err)
@@ -676,25 +695,25 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 					s.free()
 				}
 			}
-		}(tgt, slices[idx], idx+1)
+		}(tgt, sl)
 
 		// clone the object's metadata and set the correct SliceID before sending
 		sliceMeta := *meta
 		sliceMeta.SliceID = idx + 1
 		var reader cmn.ReadOpenCloser
-		if slices[idx].workFQN != "" {
-			reader, _ = cmn.NewFileHandle(slices[idx].workFQN)
+		if sl.workFQN != "" {
+			reader, _ = cmn.NewFileHandle(sl.workFQN)
 		} else {
-			if s, ok := slices[idx].obj.(*memsys.SGL); ok {
+			if s, ok := sl.obj.(*memsys.SGL); ok {
 				reader = memsys.NewReader(s)
 			} else {
-				glog.Errorf("Invalid reader type of %s: %T", req.LOM.Objname, slices[idx].obj)
+				glog.Errorf("Invalid reader type of %s: %T", req.LOM.Objname, sl.obj)
 				continue
 			}
 		}
 		dataSrc := &dataSource{
 			reader:   reader,
-			size:     slices[idx].n,
+			size:     sl.n,
 			metadata: &sliceMeta,
 			isSlice:  true,
 		}
@@ -705,6 +724,18 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		if err := c.parent.writeRemote([]string{tgt}, req.LOM, dataSrc, cb); err != nil {
 			glog.Errorf("Failed to send slice %d of %s/%s to %s", idx+1, req.LOM.Bucket, req.LOM.Objname, tgt)
 		}
+
+		idx = nextIdx
+	}
+
+	sl, idx := getNextNonEmptySlice(slices, idx)
+	if sl != nil {
+		glog.Errorf("Number of restored slices is greater than number of empty targets")
+	}
+	for sl != nil {
+		// Free allocated memory of additional slices
+		sl.free()
+		sl, idx = getNextNonEmptySlice(slices, idx)
 	}
 
 	return nil
