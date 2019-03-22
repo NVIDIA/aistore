@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/lru"
@@ -352,7 +353,8 @@ func (t *targetrunner) setupRebalanceManager() error {
 	}
 
 	t.rebManager = &rebManager{
-		t: t,
+		t:           t,
+		objectsSent: filter.NewDefaultFilter(),
 	}
 
 	if _, err := transport.Register(network, "rebalance", t.rebManager.recvRebalanceObj); err != nil {
@@ -840,15 +842,16 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lom *cluster.LOM, started time.Time,
 	rangeOff, rangeLen int64, coldGet bool) {
 	var (
-		file        *os.File
-		sgl         *memsys.SGL
-		slab        *memsys.Slab2
-		buf         []byte
-		rangeReader io.ReadSeeker
-		reader      io.Reader
-		written     int64
-		err         error
-		errstr      string
+		file            *os.File
+		sgl             *memsys.SGL
+		slab            *memsys.Slab2
+		buf             []byte
+		rangeReader     io.ReadSeeker
+		reader          io.Reader
+		written         int64
+		err             error
+		errstr          string
+		isGFNRequest, _ = parsebool(r.URL.Query().Get(cmn.URLParamIsGFNRequest))
 	)
 	defer func() {
 		// rahfcacher.got()
@@ -957,9 +960,17 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}
 
 	// GFN: atime must be already set by the getFromNeighbor
-	if !coldGet && r.URL.Query().Get(cmn.URLParamIsGFNRequest) != "true" {
+	if !coldGet && !isGFNRequest {
 		lom.UpdateAtime(started, false /* migrated */)
 	}
+
+	// Update objects which were sent during GFN. Thanks to this we will not
+	// have to resend them in global rebalance. In case of race between rebalance
+	// and GFN, the former wins and it will result in double send.
+	if isGFNRequest {
+		t.rebManager.objectsSent.Insert([]byte(lom.Uname()))
+	}
+
 	if glog.FastV(4, glog.SmoduleAIS) {
 		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
 		if coldGet {

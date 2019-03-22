@@ -96,6 +96,14 @@
   version = "v3.2.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:055e0539db2ff375e356db6961eae161858fc360bfa20c4f82ada1e271756176"
+  name = "github.com/dgryski/go-metro"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "280f6062b5bc97ee9b9afe7f2ccb361e59845baa"
+
+[[projects]]
   digest = "1:15e27372d379b45b18ac917b9dafc45c45485239490ece18cca97a12f9591146"
   name = "github.com/go-ini/ini"
   packages = ["."]
@@ -275,6 +283,14 @@
   pruneopts = "UT"
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:fd539c4cfa0f70d9e1ec1973a71ee35b4f95b0ad653da8850155293c4edbcf9e"
+  name = "github.com/seiflotfy/cuckoofilter"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "764cb5258d9bcd276f2f809e74cfa206d8e8e054"
 
 [[projects]]
   digest = "1:c08f5d8cc28ed4dccb098121d5f1f19f708bf04e3bbd4b772ce6461de6ef1ca2"
@@ -556,6 +572,7 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
+    "github.com/seiflotfy/cuckoofilter",
     "github.com/teris-io/shortid",
     "github.com/urfave/cli",
     "github.com/vbauerster/mpb",

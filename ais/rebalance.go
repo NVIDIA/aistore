@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -38,7 +39,7 @@ const NeighborRebalanceStartDelay = 10 * time.Second
 
 type (
 	rebJoggerBase struct {
-		t            *targetrunner
+		m            *rebManager
 		xreb         *xactRebBase
 		mpath        string
 		wg           *sync.WaitGroup
@@ -58,8 +59,9 @@ type (
 	}
 
 	rebManager struct {
-		t       *targetrunner
-		streams *transport.StreamBundle
+		t           *targetrunner
+		streams     *transport.StreamBundle
+		objectsSent *filter.Filter
 	}
 )
 
@@ -129,7 +131,7 @@ func (rj *globalRebJogger) jog() {
 
 func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadCloser, err error) {
 	uname := cluster.Uname(hdr.Bucket, hdr.Objname)
-	rj.t.rtnamemap.Unlock(uname, false)
+	rj.m.t.rtnamemap.Unlock(uname, false)
 
 	if err != nil {
 		glog.Errorf("failed to send obj rebalance: %s/%s, err: %v", hdr.Bucket, hdr.Objname, err)
@@ -160,7 +162,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if fi.Mode().IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rj.t, FQN: fqn}
+	lom := &cluster.LOM{T: rj.m.t, FQN: fqn}
 	if errstr := lom.Fill("", 0); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
@@ -173,12 +175,23 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if errstr != "" {
 		return errors.New(errstr)
 	}
-	if si.DaemonID == rj.t.si.DaemonID {
+	if si.DaemonID == rj.m.t.si.DaemonID {
 		return nil
 	}
+
+	// Skip objects which were already sent via GFN. Since we use probabilistic
+	// filters it may happen than even though we sent given object through GFN
+	// the filter will answer 'false' in `Lookup` - but this is something that
+	// we need to accept.
+	uname := lom.Uname()
+	if rj.m.objectsSent.Lookup([]byte(uname)) {
+		rj.m.objectsSent.Delete([]byte(uname)) // it will not be used anymore
+		return nil
+	}
+
 	// do rebalance
 	if glog.V(4) {
-		glog.Infof("%s %s => %s", lom, rj.t.si.Name(), si.Name())
+		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
 	}
 
 	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
@@ -189,11 +202,11 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 
 	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
-	rj.t.rtnamemap.Lock(lom.Uname(), false)
+	rj.m.t.rtnamemap.Lock(uname, false)
 
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		glog.Errorf("failed to open file: %s, err: %v", lom.FQN, err)
-		rj.t.rtnamemap.Unlock(lom.Uname(), false)
+		rj.m.t.rtnamemap.Unlock(uname, false)
 		return err
 	}
 
@@ -202,7 +215,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
 		IsLocal: lom.BckIsLocal,
-		Opaque:  []byte(rj.t.si.DaemonID),
+		Opaque:  []byte(si.DaemonID),
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       fi.Size(),
 			Atime:      lom.Atime().UnixNano(),
@@ -213,9 +226,9 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 
 	rj.wg.Add(1) // NOTE: Done happens in case of SendV error or in rebalanceObjCallback.
-	if err := rj.t.rebManager.streams.SendV(hdr, file, rj.rebalanceObjCallback, si); err != nil {
+	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.rebalanceObjCallback, si); err != nil {
 		glog.Errorf("failed to rebalance: %s, err: %v", lom.FQN, err)
-		rj.t.rtnamemap.Unlock(lom.Uname(), false)
+		rj.m.t.rtnamemap.Unlock(uname, false)
 		rj.wg.Done()
 		return err
 	}
@@ -257,7 +270,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rj.t, FQN: fqn}
+	lom := &cluster.LOM{T: rj.m.t, FQN: fqn}
 	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %v - skipping...", lom, err)
@@ -279,7 +292,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rj.xreb.Abort()
-		rj.t.fshc(err, lom.HrwFQN)
+		rj.m.t.fshc(err, lom.HrwFQN)
 		return nil
 	}
 
@@ -292,17 +305,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 
-	rj.t.rtnamemap.Lock(lom.Uname(), false)
+	rj.m.t.rtnamemap.Lock(lom.Uname(), false)
 	if err := lom.CopyObject(lom.HrwFQN, rj.buf); err != nil {
-		rj.t.rtnamemap.Unlock(lom.Uname(), false)
+		rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
 		if !os.IsNotExist(err) {
 			rj.xreb.Abort()
-			rj.t.fshc(err, lom.HrwFQN)
+			rj.m.t.fshc(err, lom.HrwFQN)
 			return err
 		}
 		return nil
 	}
-	rj.t.rtnamemap.Unlock(lom.Uname(), false)
+	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
 	rj.objectsMoved++
 	rj.bytesMoved += fileInfo.Size()
 	return nil
@@ -499,6 +512,8 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	// Establish connections with nodes, as they are not created on change of smap
 	reb.streams.Resync()
 
+	reb.objectsSent.Reset() // start with empty filters
+
 	pmarker := persistentMarker(globalRebType)
 
 	file, err := cmn.CreateFile(pmarker)
@@ -516,13 +531,13 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	// TODO: currently supporting a single content-type: Object
 	for _, mpathInfo := range availablePaths {
 		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{t: reb.t, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap}
+		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap}
 		wg.Add(1)
 		joggers = append(joggers, rc)
 		go rc.jog()
 
 		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{t: reb.t, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap}
+		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap}
 		wg.Add(1)
 		joggers = append(joggers, rl)
 		go rl.jog()
@@ -600,13 +615,13 @@ func (reb *rebManager) runLocalReb() {
 	// TODO: currently supporting a single content-type: Object
 	for _, mpathInfo := range availablePaths {
 		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{t: reb.t, mpath: mpathC, xreb: xreb, wg: wg}, slab: slab}
+		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, slab: slab}
 		wg.Add(1)
 		joggers = append(joggers, jogger)
 		go jogger.jog()
 
 		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		jogger = &localRebJogger{rebJoggerBase: rebJoggerBase{t: reb.t, mpath: mpathL, xreb: xreb, wg: wg}, slab: slab}
+		jogger = &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, slab: slab}
 		wg.Add(1)
 		joggers = append(joggers, jogger)
 		go jogger.jog()
