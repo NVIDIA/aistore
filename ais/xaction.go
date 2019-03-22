@@ -400,8 +400,6 @@ func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, bckIsLocal 
 
 // PutCopies, EraseCopies and EC as those are currently the only bucket-specific xaction we may have
 func (xs *xactions) abortBucketSpecific(bucket string) {
-	xs.Lock()
-	defer xs.Unlock()
 	var (
 		bucketSpecific = []string{cmn.ActPutCopies, cmn.ActEraseCopies, cmn.ActEC}
 		wg             = &sync.WaitGroup{}
@@ -411,7 +409,9 @@ func (xs *xactions) abortBucketSpecific(bucket string) {
 		wg.Add(1)
 		go func(kind string, wg *sync.WaitGroup) {
 			defer wg.Done()
+			xs.Lock()
 			xx := xs.findU(kind)
+			xs.Unlock()
 			if xx == nil {
 				return
 			}
