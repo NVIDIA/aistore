@@ -67,8 +67,8 @@ type (
 		lid      string        // log prefix
 		workCh   chan obj      // aka SQ: next object to stream
 		cmplCh   chan cmpl     // aka SCQ; note that SQ and SCQ together form a FIFO
-		lastCh   chan struct{} // end of stream
-		stopCh   chan struct{} // stop/abort stream
+		lastCh   cmn.StopCh    // end of stream
+		stopCh   cmn.StopCh    // stop/abort stream
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
@@ -161,7 +161,7 @@ type (
 		streams map[string]*Stream
 		heap    []*Stream
 		ticker  *time.Ticker
-		stopCh  chan struct{}
+		stopCh  cmn.StopCh
 		ctrlCh  chan ctrl
 	}
 	ctrl struct { // add/del channel to/from collector
@@ -196,7 +196,7 @@ func Init() *StreamCollector {
 
 	// real stream collector
 	gc = &collector{
-		stopCh:  make(chan struct{}, 1),
+		stopCh:  cmn.NewStopCh(),
 		ctrlCh:  make(chan ctrl, 16),
 		streams: make(map[string]*Stream, 16),
 		heap:    make([]*Stream, 0, 16), // min-heap sorted by stream.time.ticks
@@ -237,18 +237,22 @@ func (gc *collector) run() (err error) {
 				heap.Remove(gc, s.time.index)
 				close(s.workCh) // delayed close
 			}
-		case <-gc.stopCh:
+		case <-gc.stopCh.Listen():
 			for _, s := range gc.streams {
-				s.stopCh <- struct{}{}
+				s.Stop()
 			}
 			gc.streams = nil
 			return
 		}
 	}
 }
+
 func (gc *collector) stop(err error) {
-	gc.stopCh <- struct{}{}
-	close(gc.stopCh)
+	gc.stopCh.Close()
+}
+
+func (gc *collector) remove(s *Stream) {
+	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
 }
 
 // as min-heap
@@ -361,8 +365,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.workCh = make(chan obj, burst)  // Send Qeueue or SQ
 	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue or SCQ
 
-	s.lastCh = make(chan struct{}, 1)
-	s.stopCh = make(chan struct{}, 1)
+	s.lastCh = cmn.NewStopCh()
+	s.stopCh = cmn.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
 	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
 	atomic.StoreInt64(&s.sessST, inactive)    // NOTE: initiate HTTP session upon arrival of the first object
@@ -446,12 +450,19 @@ func (s *Stream) Fin() (err error) {
 	s.wg.Wait() // normal (graceful, synchronous) termination
 	return
 }
-
-func (s *Stream) Stop()               { s.stopCh <- struct{}{} }
+func (s *Stream) Stop() {
+	s.stopCh.Close()
+}
 func (s *Stream) URL() string         { return s.toURL }
 func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
 func (s *Stream) Terminated() bool    { return atomic.LoadInt64(&s.term.barr) != 0 }
+func (s *Stream) terminate() {
+	gc.remove(s)
+	s.Stop()
+	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
+	close(s.cmplCh)
+}
 
 func (s *Stream) TermInfo() (string, error) {
 	if s.Terminated() && *s.term.reason == "" {
@@ -501,10 +512,8 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 			break
 		}
 	}
-	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
-	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
-	close(s.cmplCh)
-	close(s.stopCh)
+
+	s.terminate()
 	s.wg.Done()
 
 	// handle termination that is caused by anything other than Fin()
@@ -573,13 +582,13 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 			glog.Infof("%s: %v", s, ctx.Err())
 			*s.term.reason = reasonCanceled
 			return
-		case <-s.lastCh:
+		case <-s.lastCh.Listen():
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: end-of-stream", s)
 			}
 			*s.term.reason = endOfStream
 			return
-		case <-s.stopCh:
+		case <-s.stopCh.Listen():
 			glog.Infof("%s: stopped", s)
 			*s.term.reason = reasonStopped
 			return
@@ -653,10 +662,9 @@ repeat:
 		l := s.insHeader(s.sendoff.obj.hdr)
 		s.header = s.maxheader[:l]
 		return s.sendHdr(b)
-	case <-s.stopCh:
+	case <-s.stopCh.Listen():
 		num := atomic.LoadInt64(&s.stats.Num)
 		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
-		s.stopCh <- struct{}{}
 		err = io.EOF
 		return
 	}
@@ -688,8 +696,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 				glog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
-			s.lastCh <- struct{}{}
-			close(s.lastCh)
+			s.lastCh.Close()
 		}
 	} else if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: split header: copied %d < %d hlen", s, s.sendoff.off, len(s.header))

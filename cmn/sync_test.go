@@ -19,6 +19,14 @@ func TestTimeoutGroupSmoke(t *testing.T) {
 	}
 }
 
+func TestTimeoutGroupWait(t *testing.T) {
+	wg := cmn.NewTimeoutGroup()
+	wg.Add(2)
+	wg.Done()
+	wg.Done()
+	wg.Wait()
+}
+
 func TestTimeoutGroupGoroutines(t *testing.T) {
 	wg := cmn.NewTimeoutGroup()
 

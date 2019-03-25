@@ -864,7 +864,13 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			// aborted or for some reason is not responding. Thus we need to do
 			// some precaution and wait for the content only for limited time or
 			// until we receive abort signal.
+			var pulled bool
 			timed, stopped := writer.wg.WaitTimeoutWithStop(m.callTimeout, m.listenAborted())
+			if timed || stopped {
+				// In case of time out or abort we need to pull the writer to
+				// avoid concurrent Close and Write on `writer.w`.
+				pulled = m.pullStreamWriter(pathToContents) != nil
+			}
 
 			if m.Metrics.extended {
 				metrics.Lock()
@@ -872,11 +878,27 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				metrics.Unlock()
 			}
 
-			if stopped {
-				return 0, fmt.Errorf("wait for remote content was aborted")
-			} else if timed {
-				return 0, fmt.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
+			// If we timed out or were stopped but we didn't manage to pull the
+			// writer then this means that someone else did it and we barely
+			// missed. In this case we should wait for the job to be finished -
+			// in case of being stopped we should receive error anyway.
+			if !pulled {
+				if timed || stopped {
+					writer.wg.Wait()
+				}
+			} else {
+				// We managed to pull the writer, we can safely return error.
+				var err error
+				if stopped {
+					err = fmt.Errorf("wait for remote content was aborted")
+				} else if timed {
+					err = fmt.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
+				} else {
+					cmn.AssertMsg(false, "pulled but not stopped or timed?!")
+				}
+				return 0, err
 			}
+
 			return writer.n, writer.err
 		}
 

@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -27,6 +28,12 @@ type (
 		postedFin int32 // determines if we have already posted fin signal
 		fin       chan struct{}
 	}
+
+	// StopCh is specialized channel for stopping things.
+	StopCh struct {
+		once sync.Once
+		ch   chan struct{}
+	}
 )
 
 func NewTimeoutGroup() *TimeoutGroup {
@@ -40,7 +47,14 @@ func (tg *TimeoutGroup) Add(delta int) {
 	atomic.AddInt32(&tg.jobsLeft, int32(delta))
 }
 
-// WaitTimeout waits until jobs is finished or times out.
+// Wait waits until jobs are finished.
+//
+// NOTE: Wait can be only invoked after all Adds!
+func (tg *TimeoutGroup) Wait() {
+	tg.WaitTimeoutWithStop(24*time.Hour, nil)
+}
+
+// WaitTimeout waits until jobs are finished or timed out.
 // In case of timeout it returns true.
 //
 // NOTE: WaitTimeout can be only invoked after all Adds!
@@ -49,7 +63,7 @@ func (tg *TimeoutGroup) WaitTimeout(timeout time.Duration) bool {
 	return timed
 }
 
-// WaitTimeoutWithStop waits until jobs is finished, times out, or receives
+// WaitTimeoutWithStop waits until jobs are finished, timed out, or received
 // signal on stop channel. When channel is nil it is equivalent to WaitTimeout.
 //
 // NOTE: WaitTimeoutWithStop can be only invoked after all Adds!
@@ -76,4 +90,20 @@ func (tg *TimeoutGroup) Done() {
 	} else if left < 0 {
 		AssertMsg(false, fmt.Sprintf("jobs left is below zero: %d", left))
 	}
+}
+
+func NewStopCh() StopCh {
+	return StopCh{
+		ch: make(chan struct{}, 1),
+	}
+}
+
+func (sc *StopCh) Listen() <-chan struct{} {
+	return sc.ch
+}
+
+func (sc *StopCh) Close() {
+	sc.once.Do(func() {
+		close(sc.ch)
+	})
 }

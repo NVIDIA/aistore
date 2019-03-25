@@ -702,7 +702,7 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			responses[idx] = response{
 				si:         node,
 				err:        err,
-				statusCode: resp.StatusCode,
+				statusCode: http.StatusInternalServerError,
 			}
 			return
 		}

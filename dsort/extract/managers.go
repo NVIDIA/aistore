@@ -7,6 +7,7 @@ package extract
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,6 +104,14 @@ func (rm *RecordManager) ExtractRecord(fqn, name string, r cmn.ReadSizer, metada
 func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, buf []byte) (size int64, err error) {
 	ext := filepath.Ext(name)
 	recordPath, fullPath := rm.paths(fqn, name, ext)
+
+	// If the content already exists we should skip it.
+	_, existsMemory := rm.contents.Load(fullPath)
+	_, existsDisk := rm.extractionPaths.Load(fullPath)
+	if existsMemory || existsDisk {
+		copyMetadataAndData(ioutil.Discard, r, metadata, buf)
+		return
+	}
 
 	r, ske := rm.keyExtractor.PrepareExtractor(name, r, ext)
 	if toDisk {

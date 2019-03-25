@@ -77,7 +77,9 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
 	}
 	records, err := db.ReadAll(managersCollection)
 	if err != nil {
-		glog.Error(err)
+		if !os.IsNotExist(err) {
+			glog.Error(err)
+		}
 		return jobInfoMap
 	}
 	for _, r := range records {
