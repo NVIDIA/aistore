@@ -21,25 +21,31 @@ import (
 )
 
 const (
-	ObjGet    = "get"
-	ObjPut    = "put"
-	ObjDel    = "delete"
-	ObjRename = "rename"
+	ObjGet = "get"
+	ObjPut = "put"
 )
 
 var (
-	BaseObjectFlags = []cli.Flag{bucketFlag, keyFlag, bckProviderFlag}
+	BaseObjectFlags = []cli.Flag{
+		bucketFlag,
+		keyFlag,
+		bckProviderFlag,
+	}
 
 	ObjectFlags = map[string][]cli.Flag{
+		ObjPut: append(
+			[]cli.Flag{bodyFlag},
+			BaseObjectFlags...),
 		ObjGet: append(
 			[]cli.Flag{
+				outFileFlag,
 				offsetFlag,
 				lengthFlag,
 				checksumFlag,
+				propsFlag,
 			},
-			BaseObjectFlags...,
-		),
-		ObjDel: append(
+			BaseObjectFlags...),
+		CommandDel: append(
 			[]cli.Flag{
 				listFlag,
 				rangeFlag,
@@ -48,21 +54,19 @@ var (
 				waitFlag,
 				deadlineFlag,
 			},
-			BaseObjectFlags...,
-		),
-		ObjPut: BaseObjectFlags,
-		ObjRename: append(
-			[]cli.Flag{
-				oldKeyFlag,
-			},
-			BaseObjectFlags...,
-		),
+			BaseObjectFlags...),
+		CommandRename: []cli.Flag{
+			bucketFlag,
+			newKeyFlag,
+			keyFlag,
+		},
 	}
-	objectGetPutUsage = "aiscli object [FLAGS...] %s [OPTIONAL FLAGS...] --bucket <value> --key <value>"
-	ObjectGetUsage    = fmt.Sprintf(objectGetPutUsage, ObjGet)
-	ObjectPutUsage    = fmt.Sprintf(objectGetPutUsage, ObjPut)
-	ObjectDelUsage    = fmt.Sprintf("aiscli object [FLAGS...] %s --bucket <value> [DELETE FLAGS]", ObjDel)
-	ObjectRenameUsage = fmt.Sprintf("aiscli object %s --bucket <value> --oldkey <value> --key <value>", ObjRename)
+
+	ObjectDelGetText  = "aiscli object %s --bucket <value> --key <value>"
+	ObjectGetUsage    = fmt.Sprintf(ObjectDelGetText, ObjGet)
+	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, CommandDel)
+	ObjectPutUsage    = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --body <value>", ObjPut)
+	ObjectRenameUsage = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --newkey <value> ", CommandRename)
 )
 
 func ObjectHandler(c *cli.Context) error {
@@ -71,15 +75,12 @@ func ObjectHandler(c *cli.Context) error {
 		bucket     string
 	)
 
-	if c.NumFlags() < 2 {
-		return errors.New(c.Command.UsageText)
-	}
 	if err := checkFlags(c, bucketFlag.Name, keyFlag.Name); err != nil {
 		return err
 	}
 
-	obj := c.String(keyFlag.Name)
-	bucket = c.String(bucketFlag.Name)
+	obj := parseFlag(c, keyFlag.Name)
+	bucket = parseFlag(c, bucketFlag.Name)
 	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
@@ -91,13 +92,34 @@ func ObjectHandler(c *cli.Context) error {
 		var objLen int64
 		query := url.Values{}
 		query.Add(cmn.URLParamBckProvider, bckProvider)
-		query.Add(cmn.URLParamOffset, c.String(offsetFlag.Name))
-		query.Add(cmn.URLParamLength, c.String(lengthFlag.Name))
+		query.Add(cmn.URLParamOffset, parseFlag(c, offsetFlag.Name))
+		query.Add(cmn.URLParamLength, parseFlag(c, lengthFlag.Name))
 		objArgs := api.GetObjectInput{Writer: os.Stdout, Query: query}
+
+		// Output to user location
+		if flagIsSet(c, outFileFlag.Name) {
+			outFile := parseFlag(c, outFileFlag.Name)
+			f, err := os.Create(outFile)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			objArgs = api.GetObjectInput{Writer: f, Query: query}
+		}
 
 		// XOR
 		if flagIsSet(c, lengthFlag.Name) != flagIsSet(c, offsetFlag.Name) {
 			return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+		}
+
+		// Object Props
+		if c.Bool(propsFlag.Name) {
+			objProps, err := api.HeadObject(baseParams, bucket, bckProvider, obj)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s has size %s (%d B) and version '%s'\n", obj, cmn.B2S(int64(objProps.Size), 2), objProps.Size, objProps.Version)
+			return nil
 		}
 
 		// Checksum validation
@@ -111,12 +133,16 @@ func ObjectHandler(c *cli.Context) error {
 		}
 
 		if flagIsSet(c, lengthFlag.Name) {
-			fmt.Printf("\nRead %d byte(s)\n", objLen)
+			fmt.Printf("\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
 			return nil
 		}
-		fmt.Printf("%s has size %d\n", obj, objLen)
+		fmt.Printf("%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
 	case ObjPut:
-		path, err := filepath.Abs(obj)
+		if err := checkFlags(c, bodyFlag.Name); err != nil {
+			return err
+		}
+		source := parseFlag(c, bodyFlag.Name)
+		path, err := filepath.Abs(source)
 		if err != nil {
 			return err
 		}
@@ -124,22 +150,23 @@ func ObjectHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
 		putArgs := api.PutObjectArgs{baseParams, bucket, bckProvider, obj, "", reader}
 		err = api.PutObject(putArgs)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("%s put into %s bucket\n", obj, bucket)
-	case ObjRename:
-		if c.NumFlags() < 3 {
-			return errors.New(c.Command.UsageText)
+	case CommandRename:
+		if err := checkFlags(c, newKeyFlag.Name, bucketFlag.Name, keyFlag.Name); err != nil {
+			return err
 		}
-		oldName := c.String(oldKeyFlag.Name)
-		err := api.RenameObject(baseParams, bucket, oldName, obj)
+		newName := parseFlag(c, newKeyFlag.Name)
+		err := api.RenameObject(baseParams, bucket, obj, newName)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s renamed to %s\n", oldName, obj)
+		fmt.Printf("%s renamed to %s\n", obj, newName)
 	default:
 		return fmt.Errorf("invalid command name '%s'", commandName)
 	}
@@ -157,12 +184,12 @@ func DeleteObject(c *cli.Context) error {
 		return err
 	}
 
-	bucket = c.String(bucketFlag.Name)
+	bucket = parseFlag(c, bucketFlag.Name)
 	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}
-	deadline, err := time.ParseDuration(c.String(deadlineFlag.Name))
+	deadline, err := time.ParseDuration(parseFlag(c, deadlineFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -173,7 +200,7 @@ func DeleteObject(c *cli.Context) error {
 
 	// Normal usage
 	if flagIsSet(c, keyFlag.Name) {
-		obj := c.String(keyFlag.Name)
+		obj := parseFlag(c, keyFlag.Name)
 		if err := api.DeleteObject(baseParams, bucket, obj, bckProvider); err != nil {
 			return err
 		}
@@ -183,7 +210,7 @@ func DeleteObject(c *cli.Context) error {
 
 	// List Delete
 	if flagIsSet(c, listFlag.Name) {
-		fileList := makeList(c.String(listFlag.Name))
+		fileList := makeList(parseFlag(c, listFlag.Name))
 		if err := api.DeleteList(baseParams, bucket, bckProvider, fileList, wait, deadline); err != nil {
 			return err
 		}
@@ -193,9 +220,9 @@ func DeleteObject(c *cli.Context) error {
 
 	// Range Delete
 	if flagIsSet(c, rangeFlag.Name) {
-		prefix := c.String(prefixFlag.Name)
-		regex := c.String(regexFlag.Name)
-		rangeStr := c.String(rangeFlag.Name)
+		prefix := parseFlag(c, prefixFlag.Name)
+		regex := parseFlag(c, regexFlag.Name)
+		rangeStr := parseFlag(c, rangeFlag.Name)
 		if err := api.DeleteRange(baseParams, bucket, bckProvider, prefix, regex, rangeStr, wait, deadline); err != nil {
 			return err
 		}

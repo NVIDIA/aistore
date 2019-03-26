@@ -331,6 +331,8 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 	if awsIsVersionSet(headOutput.VersionId) {
 		objmeta[cmn.HeaderObjVersion] = *headOutput.VersionId
 	}
+	size := strconv.FormatInt(*headOutput.ContentLength, 10)
+	objmeta[cmn.HeaderObjSize] = size
 	return
 }
 

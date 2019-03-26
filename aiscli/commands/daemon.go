@@ -18,6 +18,14 @@ import (
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
+
+	DaemonFlags = map[string][]cli.Flag{
+		cmn.GetWhatSmap:         []cli.Flag{jsonFlag},
+		cmn.GetWhatDaemonStatus: []cli.Flag{jsonFlag},
+		cmn.GetWhatConfig:       []cli.Flag{jsonFlag},
+		cmn.GetWhatStats:        []cli.Flag{jsonFlag},
+		CommandList:             []cli.Flag{verboseFlag},
+	}
 )
 
 // Display smap individual daemon
@@ -65,8 +73,7 @@ func DaemonStatus(c *cli.Context) error {
 	} else if daemonID == cmn.Target {
 		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, c.Bool("json"))
 	} else if daemonID == "" {
-		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, c.Bool("json"))
-		if err != nil {
+		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, c.Bool("json")); err != nil {
 			return err
 		}
 		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, c.Bool("json"))
@@ -79,8 +86,7 @@ func DaemonStatus(c *cli.Context) error {
 
 // Querying information
 func GetQueryHandler(c *cli.Context) error {
-	err := fillMap(ClusterURL)
-	if err != nil {
+	if err := fillMap(ClusterURL); err != nil {
 		return err
 	}
 	baseParams := cliAPIParams(ClusterURL)

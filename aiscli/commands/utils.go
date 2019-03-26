@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -134,4 +135,19 @@ func daemonDirectURL(daemonID string) (string, error) {
 		return res.Snode.URL(cmn.NetworkPublic), nil
 	}
 	return "", fmt.Errorf("%s is not a valid daemon ID", daemonID)
+}
+
+func regexFilter(regex string, strList []string) (retList []string) {
+	if regex == "" {
+		return strList
+	}
+
+	retList = strList[:0]
+	r, _ := regexp.Compile(regex)
+	for _, item := range strList {
+		if r.MatchString(item) {
+			retList = append(retList, item)
+		}
+	}
+	return retList
 }

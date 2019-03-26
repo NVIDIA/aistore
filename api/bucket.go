@@ -222,6 +222,20 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
+// RenameLocalBucket API
+//
+// RenameLocalBucket changes the name of a bucket from oldName to newBucketName
+func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}
+
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
@@ -294,20 +308,6 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 	return err
 }
 
-// RenameLocalBucket API
-//
-// RenameLocalBucket changes the name of a bucket from oldName to newBucketName
-func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
-	if err != nil {
-		return err
-	}
-	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
-	_, err = DoHTTPRequest(baseParams, path, b)
-	return err
-}
-
 // ListBucket API
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
@@ -375,7 +375,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 	return reslist, nil
 }
 
-// ListBuckeFast returns list of objects in a bucket.
+// ListBucketFast returns list of objects in a bucket.
 // Build an object list with minimal set of properties: name and size.
 // All GetMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
