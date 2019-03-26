@@ -26,7 +26,7 @@ import (
 
 // a mountpath getJogger: processes GET requests to one mountpath
 type getJogger struct {
-	parent *XactEC
+	parent *XactGet
 	mpath  string // mountpath that the jogger manages
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
@@ -176,6 +176,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		reader:   srcReader,
 		size:     lom.Size,
 		metadata: metadata,
+		reqType:  ReqPut,
 	}
 	if err := c.parent.writeRemote(daemons, lom, src, cb); err != nil {
 		glog.Errorf("Failed to copy replica %s/%s to %v: %v", lom.Bucket, lom.Objname, daemons, err)
@@ -192,7 +193,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
-		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).marshal()
+		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).Marshal()
 		if err != nil {
 			glog.Errorf("Failed to marshal %v", err)
 			continue
@@ -268,7 +269,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
-		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).marshal()
+		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).Marshal()
 		if err != nil {
 			glog.Errorf("Failed to marshal %v", err)
 			continue
@@ -386,7 +387,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 
 	iReq := c.parent.newIntraReq(reqGet, meta)
 	iReq.IsSlice = true
-	request, err := iReq.marshal()
+	request, err := iReq.Marshal()
 	if err != nil {
 		freeSlices(slices)
 		return nil, nil, err
@@ -716,6 +717,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 			size:     sl.n,
 			metadata: &sliceMeta,
 			isSlice:  true,
+			reqType:  ReqPut,
 		}
 
 		if glog.V(4) {
@@ -840,7 +842,7 @@ func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
 // always use SGL. No `toDisk` check required
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
 	metaWG := cmn.NewTimeoutGroup()
-	request, _ := c.parent.newIntraReq(reqMeta, nil).marshal()
+	request, _ := c.parent.newIntraReq(ReqMeta, nil).Marshal()
 	hdr := transport.Header{
 		Bucket:  req.LOM.Bucket,
 		Objname: req.LOM.Objname,

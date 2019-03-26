@@ -134,7 +134,9 @@ type intraReqType = int
 const (
 	// a target sends a replica or slice to store on another target
 	// the destionation does not have to respond
-	reqPut intraReqType = iota
+	ReqPut intraReqType = iota
+	// response for requested slice/replica by another target
+	RespPut
 	// a target requests a slice or replica from another target
 	// if the destination has the object/slice it sends it back, otherwise
 	//    it sets Exists=false in response header
@@ -145,7 +147,7 @@ const (
 	// a target requests a metadata of an object
 	// if the destination has the object/slice it sends it back, otherwise
 	//    it sets Exists=false in response header
-	reqMeta
+	ReqMeta
 )
 
 type (
@@ -179,7 +181,7 @@ type (
 type (
 	// An EC request sent via transport using Opaque field of transport.Header
 	// between targets inside a cluster
-	intraReq struct {
+	IntraReq struct {
 		// request type
 		Act intraReqType `json:"act"`
 		// Sender's daemonID, used by the destination to send the response
@@ -219,6 +221,7 @@ type (
 		obj      *slice             // internal info about SGL slice
 		metadata *Metadata          // object's metadata
 		isSlice  bool               // is it slice or replica
+		reqType  intraReqType       // request's type, slice/meta request/response
 	}
 )
 
@@ -246,11 +249,11 @@ func (s *slice) release() {
 	}
 }
 
-func (r *intraReq) marshal() ([]byte, error) {
+func (r *IntraReq) Marshal() ([]byte, error) {
 	return jsoniter.Marshal(r)
 }
 
-func (r *intraReq) unmarshal(b []byte) error {
+func (r *IntraReq) Unmarshal(b []byte) error {
 	return jsoniter.Unmarshal(b, r)
 }
 

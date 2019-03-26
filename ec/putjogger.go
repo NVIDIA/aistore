@@ -26,7 +26,7 @@ import (
 
 // a mountpath putJogger: processes PUT/DEL requests to one mountpath
 type putJogger struct {
-	parent *XactEC
+	parent *XactPut
 	slab   *memsys.Slab2
 	buffer []byte
 	mpath  string
@@ -184,7 +184,7 @@ func (c *putJogger) cleanup(req *Request) error {
 		glog.Errorf("Error removing metafile %q", fqnMeta)
 	}
 
-	request, err := c.parent.newIntraReq(reqDel, nil).marshal()
+	request, err := c.parent.newIntraReq(reqDel, nil).Marshal()
 	if err != nil {
 		return err
 	}
@@ -235,6 +235,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 		reader:   fh,
 		size:     req.LOM.Size,
 		metadata: metadata,
+		reqType:  ReqPut,
 	}
 	err = c.parent.writeRemote(nodes, req.LOM, src, cb)
 
@@ -550,6 +551,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			obj:      data,
 			metadata: &mcopy,
 			isSlice:  true,
+			reqType:  ReqPut,
 		}
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target

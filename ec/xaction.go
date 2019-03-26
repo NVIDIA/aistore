@@ -1,25 +1,17 @@
-// Package ec provides erasure coding (EC) based data protection for AIStore.
-/*
-* Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- */
 package ec
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -30,13 +22,24 @@ const (
 )
 
 type (
-	// Erasure coding runner: accepts requests and dispatches them to
-	// a correct mountpath runner. Runner uses dedicated to EC memory manager
-	// inherited by dependent mountpath runners
-	XactEC struct {
+	xactECBase struct {
 		cmn.XactDemandBase
 		cmn.Named
-		t          cluster.Target
+		t cluster.Target
+
+		bmd     cluster.Bowner // bucket manager
+		smap    cluster.Sowner // cluster map
+		si      *cluster.Snode // target daemonInfo
+		stats   stats          // EC statistics
+		bckName string         // which bucket xact belongs to
+
+		dOwner *dataOwner // data slice manager
+
+		reqBundle  *transport.StreamBundle // a stream bundle to send lightweight requests
+		respBundle *transport.StreamBundle // a stream bungle to transfer data between targets
+	}
+
+	xactReqBase struct {
 		mpathReqCh chan mpathReq // notify about mountpath changes
 		ecCh       chan *Request // to request object encoding
 
@@ -44,23 +47,7 @@ type (
 
 		rejectReq int32 // marker if EC requests should be rejected
 
-		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
-		getJoggers map[string]*getJogger // mountpath joggers for GET
-		bmd        cluster.Bowner        // bucket manager
-		smap       cluster.Sowner        // cluster map
-		si         *cluster.Snode        // target daemonInfo
-		stats      stats                 // EC statistics
-		bckName    string                // which bucket xact belongs to
-
-		dOwner *dataOwner // data slice manager
-
-		reqBundle  *transport.StreamBundle // a stream bundle to send lightweight requests
-		respBundle *transport.StreamBundle // a stream bungle to transfer data between targets
 	}
-)
-
-type (
-	bgProcess = func(req *Request, toDisk bool, buffer []byte, cb func(error))
 
 	mpathReq struct {
 		action string
@@ -74,282 +61,137 @@ type (
 	}
 )
 
-//
-// XactEC
-//
+const (
+	XactGetType = "xactecget"
+	XactPutType = "xactecput"
+	XactResType = "xactecreq"
+)
 
-func NewXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
-	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactEC {
-	availablePaths, disabledPaths := fs.Mountpaths.Get()
-	totalPaths := len(availablePaths) + len(disabledPaths)
-	runner := &XactEC{
-		t:          t,
+func newXactReqECBase() xactReqBase {
+	return xactReqBase{
 		mpathReqCh: make(chan mpathReq, 1),
-		getJoggers: make(map[string]*getJogger, totalPaths),
-		putJoggers: make(map[string]*putJogger, totalPaths),
 		ecCh:       make(chan *Request, requestBufSizeGlobal),
 		controlCh:  make(chan RequestsControlMsg, 8),
-		bmd:        bmd,
-		smap:       smap,
-		si:         si,
-		stats:      stats{bckName: bucket},
-		bckName:    bucket,
+	}
+}
+
+func newXactECBase(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) xactECBase {
+	return xactECBase{
+		t: t,
+
+		bmd:     bmd,
+		smap:    smap,
+		si:      si,
+		stats:   stats{bckName: bucket},
+		bckName: bucket,
 
 		dOwner: &dataOwner{
 			mtx:    sync.Mutex{},
 			slices: make(map[string]*slice, 10),
 		},
-	}
 
-	runner.reqBundle = reqBundle
-	runner.respBundle = respBundle
-
-	// create all runners but do not start them until Run is called
-	for mpath := range availablePaths {
-		getJog := runner.newGetJogger(mpath)
-		runner.getJoggers[mpath] = getJog
-		putJog := runner.newPutJogger(mpath)
-		runner.putJoggers[mpath] = putJog
-	}
-	for mpath := range disabledPaths {
-		getJog := runner.newGetJogger(mpath)
-		runner.getJoggers[mpath] = getJog
-		putJog := runner.newPutJogger(mpath)
-		runner.putJoggers[mpath] = putJog
-	}
-
-	return runner
-}
-
-func (r *XactEC) DispatchReq(w http.ResponseWriter, hdr transport.Header, object io.Reader) {
-	iReq := intraReq{}
-	if err := iReq.unmarshal(hdr.Opaque); err != nil {
-		glog.Errorf("Failed to unmarshal request: %v", err)
-		return
-	}
-
-	bckIsLocal := r.bmd.Get().IsLocal(hdr.Bucket)
-	daemonID := iReq.Sender
-	// command requests should not have a body, but if it has,
-	// the body must be drained to avoid errors
-	if hdr.ObjAttrs.Size != 0 {
-		if _, err := ioutil.ReadAll(object); err != nil {
-			glog.Errorf("Failed to read request body: %v", err)
-			return
-		}
-	}
-
-	switch iReq.Act {
-	case reqDel:
-		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(hdr.Bucket, hdr.Objname, bckIsLocal); err != nil {
-			glog.Errorf("Failed to delete %s/%s: %v", hdr.Bucket, hdr.Objname, err)
-		}
-	case reqGet:
-		// slice or replica request: send the object's data to the caller
-		var fqn, errstr string
-		if iReq.IsSlice {
-			if glog.V(4) {
-				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, hdr.Objname)
-			}
-			fqn, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, bckIsLocal)
-		} else {
-			if glog.V(4) {
-				glog.Infof("Received request for replica %s", hdr.Objname)
-			}
-			fqn, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, bckIsLocal)
-		}
-		if errstr != "" {
-			glog.Errorf(errstr)
-			return
-		}
-
-		if err := r.dataResponse(reqPut, fqn, hdr.Bucket, hdr.Objname, daemonID); err != nil {
-			glog.Errorf("Failed to send back [GET req] %q: %v", fqn, err)
-		}
-	case reqMeta:
-		// metadata request: send the metadata to the caller
-		fqn, errstr := cluster.FQN(MetaType, hdr.Bucket, hdr.Objname, bckIsLocal)
-		if errstr != "" {
-			glog.Errorf(errstr)
-			return
-		}
-		if err := r.dataResponse(iReq.Act, fqn, hdr.Bucket, hdr.Objname, daemonID); err != nil {
-			glog.Errorf("Failed to send back [META req] %q: %v", fqn, err)
-		}
-	default:
-		// invalid request detected
-		glog.Errorf("Invalid request: %s", string(hdr.Opaque))
+		reqBundle:  reqBundle,
+		respBundle: respBundle,
 	}
 }
 
-func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, object io.Reader) {
-	var err error
-	iReq := intraReq{}
-	if err = iReq.unmarshal(hdr.Opaque); err != nil {
-		glog.Errorf("Failed to read request: %v", err)
-		return
+// ClearRequests disables receiving new EC requests, they will be terminated with error
+// Then it starts draining a channel from pending EC requests
+// It does not enable receiving new EC requests, it has to be done explicitly, when EC is enabled again
+func (r *xactReqBase) ClearRequests() {
+	msg := RequestsControlMsg{
+		Action: ActClearRequests,
 	}
 
-	uname := unique(iReq.Sender, hdr.Bucket, hdr.Objname)
-	if err != nil {
-		r.dOwner.mtx.Lock()
-		writer, ok := r.dOwner.slices[uname]
-		r.dOwner.mtx.Unlock()
-		if ok {
-			r.unregWriter(uname)
-			writer.wg.Done()
-		}
-		glog.Errorf("Response failed: %v", err)
-		return
+	r.controlCh <- msg
+}
+
+func (r *xactReqBase) EnableRequests() {
+	msg := RequestsControlMsg{
+		Action: ActEnableRequests,
 	}
 
-	switch iReq.Act {
-	// a remote target sent object's metadata. A slice should be waiting
-	// for the information and be registered with `regWriter` beforehand
-	case reqMeta:
-		r.dOwner.mtx.Lock()
-		writer, ok := r.dOwner.slices[uname]
-		r.dOwner.mtx.Unlock()
-		if !ok {
-			glog.Errorf("No writer for %s", uname)
-			return
+	r.controlCh <- msg
+}
+
+func (r *xactReqBase) setEcRequestsDisabled() {
+	atomic.CompareAndSwapInt32(&r.rejectReq, 0, 1)
+}
+
+func (r *xactReqBase) setEcRequestsEnabled() {
+	atomic.CompareAndSwapInt32(&r.rejectReq, 1, 0)
+}
+
+func (r *xactReqBase) ecRequestsEnabled() bool {
+	return atomic.LoadInt32(&r.rejectReq) == 0
+}
+
+// Create a request header: initializes the `Sender` field with local target's
+// daemon ID, and sets `Exists:true` that means "local object exists".
+// Later `Exists` can be changed to `false` if local file is unreadable or does
+// not exist
+func (r *xactECBase) newIntraReq(act intraReqType, meta *Metadata) *IntraReq {
+	return &IntraReq{
+		Act:    act,
+		Sender: r.si.DaemonID,
+		Meta:   meta,
+		Exists: true,
+	}
+}
+
+// Sends the replica/meta/slice data: either to copy replicas/slices after
+// encoding or to send requested "object" to a client. In the latter case
+// if the local object does not exist, it sends an empty body and sets
+// exists=false in response header
+func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id string) error {
+	var (
+		reader cmn.ReadOpenCloser
+		sz     int64
+	)
+	ireq := r.newIntraReq(act, nil)
+	fh, err := cmn.NewFileHandle(fqn)
+	lom := &cluster.LOM{FQN: fqn, T: r.t}
+	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
+		// an error is OK. Log it and try to go on with what has been read
+		glog.Warningf("Failed to read file stats: %s", errstr)
+	}
+
+	if err == nil && lom.Size != 0 {
+		sz = lom.Size
+		reader = fh
+	} else {
+		ireq.Exists = false
+	}
+	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
+	objAttrs := transport.ObjectAttrs{
+		Size:    sz,
+		Version: lom.Version,
+		Atime:   lom.Atime.UnixNano(),
+	}
+
+	if lom.Cksum != nil {
+		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
+	}
+
+	rHdr := transport.Header{
+		Bucket:   bucket,
+		Objname:  objname,
+		ObjAttrs: objAttrs,
+	}
+	if rHdr.Opaque, err = ireq.Marshal(); err != nil {
+		if fh != nil {
+			fh.Close()
 		}
-		if err := r.writerReceive(writer, iReq.Exists, hdr.ObjAttrs, object); err != nil && err != ErrorNotFound {
-			glog.Errorf("Failed to receive data for %s: %v", iReq.Sender, err)
-		}
+		return err
+	}
 
-		// object or slice received
-	case reqPut:
-		if glog.V(4) {
-			glog.Infof("Response from %s, %s", iReq.Sender, uname)
-		}
-		r.dOwner.mtx.Lock()
-		writer, ok := r.dOwner.slices[uname]
-		r.dOwner.mtx.Unlock()
-		// Case #1: it is response to slice/replica request by an object
-		// restoration process. In this case there should exists
-		// a slice waiting for the data to come(registered with `regWriter`.
-		// Read the data into the slice writer and notify the slice when
-		// the transfer is completed
-		if ok {
-			writer.lom.Version = hdr.ObjAttrs.Version
-			writer.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
-
-			if hdr.ObjAttrs.CksumType != "" {
-				writer.lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-			}
-
-			if err := r.writerReceive(writer, iReq.Exists, hdr.ObjAttrs, object); err != nil {
-				glog.Errorf("Failed to read replica: %v", err)
-			}
-
-			return
-		}
-
-		// Case #2: a remote target sent a replica/slice while it was
-		// encoding or restoring an object. In this case it just saves
-		// the sent replica or slice to a local file along with its metadata
-		// look for metadata in request
-
-		// First check if the request is valid: it must contain metadata
-		meta := iReq.Meta
-		if meta == nil {
-			glog.Errorf("No metadata in request for %s/%s: %s", hdr.Bucket, hdr.Objname, string(hdr.Opaque))
-			return
-		}
-
-		bckIsLocal := r.bmd.Get().IsLocal(hdr.Bucket)
-		var (
-			objFQN, errstr string
-			err            error
-		)
-		if iReq.IsSlice {
-			if glog.V(4) {
-				glog.Infof("Got slice response from %s (#%d of %s/%s)",
-					iReq.Sender, iReq.Meta.SliceID, hdr.Bucket, hdr.Objname)
-			}
-			objFQN, errstr = cluster.FQN(SliceType, hdr.Bucket, hdr.Objname, bckIsLocal)
-			if errstr != "" {
-				glog.Error(errstr)
-				return
-			}
-		} else {
-			if glog.V(4) {
-				glog.Infof("Got replica response from %s (%s/%s)",
-					iReq.Sender, hdr.Bucket, hdr.Objname)
-			}
-			objFQN, errstr = cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, bckIsLocal)
-			if errstr != "" {
-				glog.Error(errstr)
-				return
-			}
-		}
-		// save slice/object
-		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-		buf, slab := mem2.AllocFromSlab2(cmn.MiB)
-		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
-		if err == nil {
-			lom := &cluster.LOM{FQN: objFQN, T: r.t}
-			if errstr := lom.Fill("", 0); errstr != "" {
-				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, errstr)
-				slab.Free(buf)
-				return
-			}
-			lom.Version = hdr.ObjAttrs.Version
-			lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
-
-			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
-			if hdr.ObjAttrs.CksumType != "" {
-				lom.Cksum = cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-			}
-
-			if errstr := lom.Persist(false); errstr != "" {
-				err = errors.New(errstr)
-			}
-		}
+	cb := func(hdr transport.Header, c io.ReadCloser, err error) {
 		if err != nil {
-			glog.Errorf("Failed to save %s/%s data to %q: %v",
-				hdr.Bucket, hdr.Objname, objFQN, err)
-			slab.Free(buf)
-			return
+			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)
 		}
-
-		// save its metadata
-		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-		metaBuf, err := meta.marshal()
-		if err == nil {
-			err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf)
-		}
-		slab.Free(buf)
-		if err != nil {
-			glog.Errorf("Failed to save metadata to %q: %v", metaFQN, err)
-		}
-	default:
-		// should be unreachable
-		glog.Errorf("Invalid request: %s", hdr.Opaque)
 	}
-}
-
-func (r *XactEC) newGetJogger(mpath string) *getJogger {
-	return &getJogger{
-		parent: r,
-		mpath:  mpath,
-		workCh: make(chan *Request, requestBufSizeFS),
-		stopCh: make(chan struct{}, 1),
-		jobs:   make(map[uint64]bgProcess, 4),
-		sema:   make(chan struct{}, maxBgJobsPerJogger),
-		diskCh: make(chan struct{}, 1),
-	}
-}
-
-func (r *XactEC) newPutJogger(mpath string) *putJogger {
-	return &putJogger{
-		parent: r,
-		mpath:  mpath,
-		workCh: make(chan *Request, requestBufSizeFS),
-		stopCh: make(chan struct{}, 1),
-	}
+	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
 }
 
 // Send a data or request to one or few targets by their DaemonIDs. Most of the time
@@ -363,7 +205,7 @@ func (r *XactEC) newPutJogger(mpath string) *putJogger {
 //		- true - send lightweight request to all targets (usually reader is nil
 //			in this case)
 //	    - false - send a slice/replica/metadata to targets
-func (r *XactEC) sendByDaemonID(daemonIDs []string, hdr transport.Header,
+func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 	reader cmn.ReadOpenCloser, cb transport.SendCallback, isRequest bool) error {
 	nodes := make([]*cluster.Snode, 0, len(daemonIDs))
 	smap := r.smap.Get()
@@ -398,7 +240,7 @@ func (r *XactEC) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 //		name, it puts the data to its writer and notifies when download is done
 // * request - request to send
 // * writer - an opened writer that will receive the replica/slice/meta
-func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
+func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
 	hdr := transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
@@ -437,6 +279,32 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 	return nil
 }
 
+// Registers a new slice that will wait for the data to come from
+// a remote target
+func (r *xactECBase) regWriter(uname string, writer *slice) bool {
+	r.dOwner.mtx.Lock()
+	_, ok := r.dOwner.slices[uname]
+	if ok {
+		glog.Errorf("Writer for %s is already registered", uname)
+	} else {
+		r.dOwner.slices[uname] = writer
+	}
+	r.dOwner.mtx.Unlock()
+
+	return !ok
+}
+
+// Unregisters a slice that has been waiting for the data to come from
+// a remote target
+func (r *xactECBase) unregWriter(uname string) (writer *slice, ok bool) {
+	r.dOwner.mtx.Lock()
+	wr, ok := r.dOwner.slices[uname]
+	delete(r.dOwner.slices, uname)
+	r.dOwner.mtx.Unlock()
+
+	return wr, ok
+}
+
 // Used to copy replicas/slices after the object is encoded after PUT/restored
 // after GET, or to respond to meta/slice/replica request.
 // * daemonIDs - receivers of the data
@@ -454,11 +322,11 @@ func (r *XactEC) readRemote(lom *cluster.LOM, daemonID, uname string, request []
 //      The counter is used for sending slices of one big SGL to a few nodes. In
 //		this case every slice must be sent to only one target, and transport bundle
 //		cannot help to track automatically when SGL should be freed.
-func (r *XactEC) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.SendCallback) error {
-	req := r.newIntraReq(reqPut, src.metadata)
+func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.SendCallback) error {
+	req := r.newIntraReq(src.reqType, src.metadata)
 	req.IsSlice = src.isSlice
 
-	putData, err := req.marshal()
+	putData, err := req.Marshal()
 	if err != nil {
 		return err
 	}
@@ -490,172 +358,6 @@ func (r *XactEC) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSour
 	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)
 }
 
-func (r *XactEC) Run() (err error) {
-	glog.Infof("Starting %s", r.Getname())
-
-	for _, jog := range r.getJoggers {
-		go jog.run()
-	}
-	for _, jog := range r.putJoggers {
-		go jog.run()
-	}
-	conf := cmn.GCO.Get()
-	tck := time.NewTicker(conf.Periodic.StatsTime)
-	lastAction := time.Now()
-	idleTimeout := conf.Timeout.SendFile * 3
-
-	// as of now all requests are equal. Some may get throttling later
-	for {
-		select {
-		case <-tck.C:
-			if s := fmt.Sprintf("%v", r.Stats()); s != "" {
-				glog.Info(s)
-			}
-		case req := <-r.ecCh:
-			lastAction = time.Now()
-			switch req.Action {
-			case ActSplit:
-				r.stats.updateEncode(req.LOM.Size)
-			case ActDelete:
-				r.stats.updateDelete()
-			case ActRestore:
-				r.stats.updateDecode()
-			}
-			r.dispatchRequest(req)
-		case mpathRequest := <-r.mpathReqCh:
-			switch mpathRequest.action {
-			case cmn.ActMountpathAdd:
-				r.addMpath(mpathRequest.mpath)
-			case cmn.ActMountpathRemove:
-				r.removeMpath(mpathRequest.mpath)
-			}
-		case <-r.ChanCheckTimeout():
-			idleEnds := lastAction.Add(idleTimeout)
-			if idleEnds.Before(time.Now()) && r.Timeout() {
-				if glog.V(4) {
-					glog.Infof("Idle time is over: %v. Last action at: %v",
-						time.Now(), lastAction)
-				}
-				// it's ok not to notify ecmanager, he'll just have stoped xact in a map
-				r.stop()
-
-				return nil
-			}
-		case msg := <-r.controlCh:
-
-			if msg.Action == ActEnableRequests {
-				r.setEcRequestsEnabled()
-				break
-			}
-			cmn.Assert(msg.Action == ActClearRequests)
-
-			r.setEcRequestsDisabled()
-
-			// drain pending bucket's EC requests, return them with an error
-			// note: loop can't be replaced with channel range, as the channel is never closed
-			for {
-				select {
-				case req := <-r.ecCh:
-					r.abortECRequestWhenDisabled(req)
-				default:
-					r.stop()
-					return nil
-				}
-			}
-		case <-r.ChanAbort():
-			r.stop()
-			return fmt.Errorf("%s aborted, exiting", r)
-		}
-	}
-}
-
-func (r *XactEC) abortECRequestWhenDisabled(req *Request) {
-	if req.ErrCh != nil {
-		req.ErrCh <- fmt.Errorf("EC disabled, can't procced with the request on bucket %s", r.bckName)
-		close(req.ErrCh)
-	}
-}
-
-// Utility function to cleanup both object/slice and its meta on the local node
-// Used when processing object deletion request
-func (r *XactEC) removeObjAndMeta(bucket, objname string, bckIsLocal bool) error {
-	if glog.V(4) {
-		glog.Infof("Delete request for %s/%s", bucket, objname)
-	}
-
-	// to be consistent with PUT, object's files are deleted in a reversed
-	// order: first Metafile is removed, then Replica/Slice
-	// Why: the main object is gone already, so we do not want any target
-	// responds that it has the object because it has metafile. We delete
-	// metafile that makes remained slices/replicas outdated and can be cleaned
-	// up later by LRU or other runner
-	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, errstr := cluster.FQN(tp, bucket, objname, bckIsLocal)
-		if errstr != "" {
-			return errors.New(errstr)
-		}
-		if err := os.RemoveAll(fqnMeta); err != nil {
-			return fmt.Errorf("error removing %s %q: %v", tp, fqnMeta, err)
-		}
-	}
-
-	return nil
-}
-
-// Sends the replica/meta/slice data: either to copy replicas/slices after
-// encoding or to send requested "object" to a client. In the latter case
-// if the local object does not exist, it sends an empty body and sets
-// exists=false in response header
-func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string) error {
-	var (
-		reader cmn.ReadOpenCloser
-		sz     int64
-	)
-	ireq := r.newIntraReq(act, nil)
-	fh, err := cmn.NewFileHandle(fqn)
-	lom := &cluster.LOM{FQN: fqn, T: r.t}
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
-		// an error is OK. Log it and try to go on with what has been read
-		glog.Warningf("Failed to read file stats: %s", errstr)
-	}
-
-	if err == nil && lom.Size != 0 {
-		sz = lom.Size
-		reader = fh
-	} else {
-		ireq.Exists = false
-	}
-	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
-	objAttrs := transport.ObjectAttrs{
-		Size:    sz,
-		Version: lom.Version,
-		Atime:   lom.Atime.UnixNano(),
-	}
-
-	if lom.Cksum != nil {
-		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
-	}
-
-	rHdr := transport.Header{
-		Bucket:   bucket,
-		Objname:  objname,
-		ObjAttrs: objAttrs,
-	}
-	if rHdr.Opaque, err = ireq.marshal(); err != nil {
-		if fh != nil {
-			fh.Close()
-		}
-		return err
-	}
-
-	cb := func(hdr transport.Header, c io.ReadCloser, err error) {
-		if err != nil {
-			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)
-		}
-	}
-	return r.sendByDaemonID([]string{id}, rHdr, reader, cb, false)
-}
-
 // save data from a target response to SGL. When exists is false it
 // just drains the response body and returns - because it does not contain
 // any data. On completion the function must call writer.wg.Done to notify
@@ -663,7 +365,7 @@ func (r *XactEC) dataResponse(act intraReqType, fqn, bucket, objname, id string)
 // * writer - where to save the slice/meta/replica data
 // * exists - if the remote target had the requested object
 // * reader - response body
-func (r *XactEC) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
+func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
 	buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 
 	if !exists {
@@ -687,205 +389,52 @@ func (r *XactEC) writerReceive(writer *slice, exists bool, objAttrs transport.Ob
 	return err
 }
 
-func (r *XactEC) Stop(error) { r.Abort() }
-
-func (r *XactEC) stop() {
-	if r.Finished() {
-		glog.Warningf("%s - not running, nothing to do", r)
-		return
-	}
-
-	r.XactDemandBase.Stop()
-	for _, jog := range r.getJoggers {
-		jog.stop()
-	}
-	for _, jog := range r.putJoggers {
-		jog.stop()
-	}
-
-	// Don't close bundles, they are shared between bucket's EC actions
-
-	r.EndTime(time.Now())
-}
-
-// Encode schedules FQN for erasure coding process
-func (r *XactEC) Encode(req *Request) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
-	if glog.V(4) {
-		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s", r.bckName, len(r.ecCh), req.LOM.Uname)
-	}
-
-	r.dispatchEncodingRequest(req)
-}
-
-// Decode schedules an object to be restored from existing slices.
-// A caller should wait for the main object restoration is completed. When
-// ecrunner finishes main object restoration process it puts into request.ErrCh
-// channel the error or nil. The caller may read the object after receiving
-// a nil value from channel but ecrunner keeps working - it reuploads all missing
-// slices or copies
-func (r *XactEC) Decode(req *Request) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
-
-	r.dispatchEncodingRequest(req)
-}
-
-// Cleanup deletes all object slices or copies after the main object is removed
-func (r *XactEC) Cleanup(req *Request) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
-
-	r.dispatchEncodingRequest(req)
-}
-
-// ClearRequests disables receiving new EC requests, they will be terminated with error
-// Then it starts draining a channel from pending EC requests
-// It does not enable receiving new EC requests, it has to be done explicitly, when EC is enabled again
-func (r *XactEC) ClearRequests() {
-	msg := RequestsControlMsg{
-		Action: ActClearRequests,
-	}
-
-	r.controlCh <- msg
-}
-
-func (r *XactEC) EnableRequests() {
-	msg := RequestsControlMsg{
-		Action: ActEnableRequests,
-	}
-
-	r.controlCh <- msg
-}
-
-func (r *XactEC) dispatchEncodingRequest(req *Request) {
-	if !r.ecRequestsEnabled() {
-		r.abortECRequestWhenDisabled(req)
-		return
-	}
-
-	r.ecCh <- req
-}
-
-func (r *XactEC) setEcRequestsDisabled() {
-	atomic.CompareAndSwapInt32(&r.rejectReq, 0, 1)
-}
-
-func (r *XactEC) setEcRequestsEnabled() {
-	atomic.CompareAndSwapInt32(&r.rejectReq, 1, 0)
-}
-
-func (r *XactEC) ecRequestsEnabled() bool {
-	return atomic.LoadInt32(&r.rejectReq) == 0
-}
-
-func (r *XactEC) dispatchRequest(req *Request) {
-	if !r.ecRequestsEnabled() {
-		if req.ErrCh != nil {
-			req.ErrCh <- fmt.Errorf("EC on bucket %s is being disabled, no EC requests accepted", r.bckName)
-			close(req.ErrCh)
-		}
-		return
-	}
-
-	r.IncPending()
-	switch req.Action {
-	case ActRestore:
-		jogger, ok := r.getJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-		r.stats.updateQueue(len(jogger.workCh))
-		jogger.workCh <- req
-	default:
-		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
-		if glog.V(4) {
-			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname)
-		}
-		r.stats.updateQueue(len(jogger.workCh))
-		jogger.workCh <- req
-	}
-}
-
-func (r *XactEC) Stats() *ECStats {
+func (r *xactECBase) Stats() *ECStats {
 	return r.stats.stats()
-}
-
-// Create a request header: initializes the `Sender` field with local target's
-// daemon ID, and sets `Exists:true` that means "local object exists".
-// Later `Exists` can be changed to `false` if local file is unreadable or does
-// not exist
-func (r *XactEC) newIntraReq(act intraReqType, meta *Metadata) *intraReq {
-	return &intraReq{
-		Act:    act,
-		Sender: r.si.DaemonID,
-		Meta:   meta,
-		Exists: true,
-	}
-}
-
-// Registers a new slice that will wait for the data to come from
-// a remote target
-func (r *XactEC) regWriter(uname string, writer *slice) bool {
-	r.dOwner.mtx.Lock()
-	_, ok := r.dOwner.slices[uname]
-	if ok {
-		glog.Errorf("Writer for %s is already registered", uname)
-	} else {
-		r.dOwner.slices[uname] = writer
-	}
-	r.dOwner.mtx.Unlock()
-
-	return !ok
-}
-
-// Unregisters a slice that has been waiting for the data to come from
-// a remote target
-func (r *XactEC) unregWriter(uname string) (writer *slice, ok bool) {
-	r.dOwner.mtx.Lock()
-	wr, ok := r.dOwner.slices[uname]
-	delete(r.dOwner.slices, uname)
-	r.dOwner.mtx.Unlock()
-
-	return wr, ok
 }
 
 //
 // fsprunner methods
 //
-func (r *XactEC) ReqAddMountpath(mpath string) {
+func (r *xactReqBase) ReqAddMountpath(mpath string) {
 	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathAdd, mpath: mpath}
 }
 
-func (r *XactEC) ReqRemoveMountpath(mpath string) {
+func (r *xactReqBase) ReqRemoveMountpath(mpath string) {
 	r.mpathReqCh <- mpathReq{action: cmn.ActMountpathRemove, mpath: mpath}
 }
 
-func (r *XactEC) ReqEnableMountpath(mpath string)  { /* do nothing */ }
-func (r *XactEC) ReqDisableMountpath(mpath string) { /* do nothing */ }
+func (r *xactECBase) ReqEnableMountpath(mpath string)  { /* do nothing */ }
+func (r *xactECBase) ReqDisableMountpath(mpath string) { /* do nothing */ }
 
-func (r *XactEC) addMpath(mpath string) {
-	jogger, ok := r.getJoggers[mpath]
-	if ok && jogger != nil {
-		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
-		return
+type (
+	Xacts struct {
+		get *XactGet
+		put *XactPut
+		req *XactRespond
 	}
-	getJog := r.newGetJogger(mpath)
-	r.getJoggers[mpath] = getJog
-	go getJog.run()
-	putJog := r.newPutJogger(mpath)
-	r.putJoggers[mpath] = putJog
-	go putJog.run()
+)
+
+func (xacts *Xacts) Get() *XactGet {
+	return xacts.get
 }
 
-func (r *XactEC) removeMpath(mpath string) {
-	getJog, ok := r.getJoggers[mpath]
-	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
-	getJog.stop()
-	delete(r.getJoggers, mpath)
+func (xacts *Xacts) Put() *XactPut {
+	return xacts.put
+}
 
-	putJog, ok := r.putJoggers[mpath]
-	cmn.AssertMsg(ok, "Mountpath unregister handler for EC called with invalid mountpath")
-	putJog.stop()
-	delete(r.putJoggers, mpath)
+func (xacts *Xacts) Req() *XactRespond {
+	return xacts.req
+}
+
+func (xacts *Xacts) SetGet(xact *XactGet) {
+	xacts.get = xact
+}
+
+func (xacts *Xacts) SetPut(xact *XactPut) {
+	xacts.put = xact
+}
+
+func (xacts *Xacts) SetReq(xact *XactRespond) {
+	xacts.req = xact
 }

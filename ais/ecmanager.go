@@ -10,6 +10,7 @@ package ais
 import (
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"sync"
 
@@ -25,11 +26,11 @@ type ecManager struct {
 	sync.RWMutex
 	bndlOnce   sync.Once
 	t          *targetrunner
-	xacts      map[string]*ec.XactEC // bckName -> xact map, only local buckets allowed, no naming collisions
-	bowner     *bmdowner             // bucket manager
-	bckMD      *bucketMD             // bucket metadata, used to get EC enabled/disabled information
-	netReq     string                // network used to send object request
-	netResp    string                // network used to send/receive slices
+	xacts      map[string]*ec.Xacts // bckName -> xact map, only local buckets allowed, no naming collisions
+	bowner     *bmdowner            // bucket manager
+	bckMD      *bucketMD            // bucket metadata, used to get EC enabled/disabled information
+	netReq     string               // network used to send object request
+	netResp    string               // network used to send/receive slices
 	reqBundle  *transport.StreamBundle
 	respBundle *transport.StreamBundle
 }
@@ -51,8 +52,8 @@ func newECM(t *targetrunner) *ecManager {
 		netResp: netResp,
 		t:       t,
 		bowner:  t.bmdowner,
+		xacts:   make(map[string]*ec.Xacts),
 		bckMD:   t.bmdowner.get(),
-		xacts:   make(map[string]*ec.XactEC),
 	}
 
 	for _, bck := range ECM.bckMD.LBmap {
@@ -104,32 +105,63 @@ func (mgr *ecManager) initECBundles() {
 	mgr.respBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, respSbArgs)
 }
 
-func (mgr *ecManager) newXact(bucket string) *ec.XactEC {
-	return ec.NewXact(mgr.t, mgr.t.bmdowner,
+func (mgr *ecManager) newGetXact(bucket string) *ec.XactGet {
+	return ec.NewGetXact(mgr.t, mgr.t.bmdowner,
 		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) getBckXact(bckName string) *ec.XactEC {
-	mgr.RLock()
-	defer mgr.RUnlock()
-
-	return mgr.xacts[bckName]
+func (mgr *ecManager) newPutXact(bucket string) *ec.XactPut {
+	return ec.NewPutXact(mgr.t, mgr.t.bmdowner,
+		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) setBckXact(bckName string, xact *ec.XactEC) {
-	mgr.Lock()
-	mgr.xacts[bckName] = xact
-	mgr.Unlock()
+func (mgr *ecManager) newReqXact(bucket string) *ec.XactRespond {
+	return ec.NewRespondXact(mgr.t, mgr.t.bmdowner,
+		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) restoreBckXact(bckName string) *ec.XactEC {
-	xact := mgr.getBckXact(bckName)
+func (mgr *ecManager) restoreBckGetXact(bckName string) *ec.XactGet {
+	xact := mgr.getBckXacts(bckName).Get()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewEC(bckName)
-		mgr.setBckXact(bckName, xact)
+		xact = mgr.t.xactions.renewGetEC(bckName)
+		mgr.getBckXacts(bckName).SetGet(xact)
 	}
 
 	return xact
+}
+
+func (mgr *ecManager) restoreBckPutXact(bckName string) *ec.XactPut {
+	xact := mgr.getBckXacts(bckName).Put()
+	if xact == nil || xact.Finished() {
+		xact = mgr.t.xactions.renewPutEC(bckName)
+		mgr.getBckXacts(bckName).SetPut(xact)
+	}
+
+	return xact
+}
+
+func (mgr *ecManager) restoreBckReqXact(bckName string) *ec.XactRespond {
+	xact := mgr.getBckXacts(bckName).Req()
+	if xact == nil || xact.Finished() {
+		xact = mgr.t.xactions.renewRespondEC(bckName)
+		mgr.getBckXacts(bckName).SetReq(xact)
+	}
+
+	return xact
+}
+
+func (mgr *ecManager) getBckXacts(bckName string) *ec.Xacts {
+	mgr.RLock()
+	defer mgr.RUnlock()
+
+	xacts, ok := mgr.xacts[bckName]
+
+	if !ok {
+		xacts = &ec.Xacts{}
+		mgr.xacts[bckName] = xacts
+	}
+
+	return xacts
 }
 
 // A function to process command requests from other targets
@@ -145,7 +177,22 @@ func (mgr *ecManager) makeRecvRequest() transport.Receive {
 			return
 		}
 
-		mgr.restoreBckXact(hdr.Bucket).DispatchReq(w, hdr, object)
+		iReq := ec.IntraReq{}
+		if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+			glog.Errorf("Failed to unmarshal request: %v", err)
+			return
+		}
+
+		// command requests should not have a body, but if it has,
+		// the body must be drained to avoid errors
+		if hdr.ObjAttrs.Size != 0 {
+			if _, err := ioutil.ReadAll(object); err != nil {
+				glog.Errorf("Failed to read request body: %v", err)
+				return
+			}
+		}
+
+		mgr.restoreBckReqXact(hdr.Bucket).DispatchReq(iReq, hdr.Bucket, hdr.Objname)
 	}
 }
 
@@ -162,7 +209,20 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 			return
 		}
 
-		mgr.restoreBckXact(hdr.Bucket).DispatchResp(w, hdr, object)
+		iReq := ec.IntraReq{}
+		if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+			glog.Errorf("Failed to unmarshal request: %v", err)
+			return
+		}
+
+		switch iReq.Act {
+		case ec.ReqPut:
+			mgr.restoreBckReqXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
+		case ec.ReqMeta, ec.RespPut:
+			mgr.restoreBckGetXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
+		default:
+			glog.Errorf("Unknown EC response action %d", iReq.Act)
+		}
 	}
 }
 
@@ -191,7 +251,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		return errors.New(errstr)
 	}
 
-	mgr.restoreBckXact(lom.Bucket).Encode(req)
+	mgr.restoreBckPutXact(lom.Bucket).Encode(req)
 
 	return nil
 }
@@ -207,7 +267,7 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 		LOM:    lom,
 	}
 
-	mgr.restoreBckXact(lom.Bucket).Cleanup(req)
+	mgr.restoreBckPutXact(lom.Bucket).Cleanup(req)
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
@@ -222,7 +282,7 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		ErrCh:  make(chan error), // unbuffered
 	}
 
-	mgr.restoreBckXact(lom.Bucket).Decode(req)
+	mgr.restoreBckGetXact(lom.Bucket).Decode(req)
 
 	// wait for EC completes restoring the object
 	return <-req.ErrCh
@@ -230,14 +290,16 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 
 // disableBck starts to reject new EC requests, rejects pending ones
 func (mgr *ecManager) disableBck(bckName string) {
-	mgr.restoreBckXact(bckName).ClearRequests()
+	mgr.restoreBckGetXact(bckName).ClearRequests()
+	mgr.restoreBckPutXact(bckName).ClearRequests()
 }
 
 // enableBck aborts xact disable and starts to accept new EC requests
 // enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
 func (mgr *ecManager) enableBck(bckName string) {
-	mgr.restoreBckXact(bckName).EnableRequests()
+	mgr.restoreBckGetXact(bckName).EnableRequests()
+	mgr.restoreBckPutXact(bckName).EnableRequests()
 }
 
 func (mgr *ecManager) BucketsMDChanged() {

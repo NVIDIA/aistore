@@ -469,12 +469,12 @@ func (xs *xactions) abortAll() (sleep bool) {
 	return
 }
 
-func (xs *xactions) renewEC(bucket string) *ec.XactEC {
-	kind := path.Join(cmn.ActEC, bucket)
+func (xs *xactions) renewGetEC(bucket string) *ec.XactGet {
+	kind := path.Join(cmn.ActEC, bucket, ec.XactGetType)
 	xs.Lock()
 	xx := xs.findU(kind)
 	if xx != nil {
-		xec := xx.(*ec.XactEC)
+		xec := xx.(*ec.XactGet)
 		xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 		glog.Infof("%s already running, nothing to do", xec)
 		xs.Unlock()
@@ -482,7 +482,48 @@ func (xs *xactions) renewEC(bucket string) *ec.XactEC {
 	}
 
 	id := xs.uniqueid()
-	xec := ECM.newXact(bucket)
+	xec := ECM.newGetXact(bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, bucket)
+	go xec.Run()
+	xs.add(xec)
+	xs.Unlock()
+	return xec
+}
+
+func (xs *xactions) renewPutEC(bucket string) *ec.XactPut {
+	kind := path.Join(cmn.ActEC, bucket, ec.XactPutType)
+	xs.Lock()
+	xx := xs.findU(kind)
+	if xx != nil {
+		xec := xx.(*ec.XactPut)
+		xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		glog.Infof("%s already running, nothing to do", xec)
+		xs.Unlock()
+		return xec
+	}
+
+	id := xs.uniqueid()
+	xec := ECM.newPutXact(bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, bucket)
+	go xec.Run()
+	xs.add(xec)
+	xs.Unlock()
+	return xec
+}
+func (xs *xactions) renewRespondEC(bucket string) *ec.XactRespond {
+	kind := path.Join(cmn.ActEC, bucket, ec.XactResType)
+	xs.Lock()
+	xx := xs.findU(kind)
+	if xx != nil {
+		xec := xx.(*ec.XactRespond)
+		xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		glog.Infof("%s already running, nothing to do", xec)
+		xs.Unlock()
+		return xec
+	}
+
+	id := xs.uniqueid()
+	xec := ECM.newReqXact(bucket)
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, bucket)
 	go xec.Run()
 	xs.add(xec)
