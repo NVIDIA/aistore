@@ -5,10 +5,14 @@
 package soakprim
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
+	"github.com/NVIDIA/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/tutils"
 
@@ -17,33 +21,38 @@ import (
 )
 
 const (
-	regBucket = "soaktest-reg-0"
+	regBucketPrefix = "soaktest-reg"
 )
 
 type regressionContext struct {
-	bckName string
 	wg      *sync.WaitGroup
 	stopCh  chan struct{}
+	bckName string
 }
 
 //regression runs a constant get request throughout the testing
 
-func init() {
-	if exists, _ := tutils.DoesLocalBucketExist(primaryURL, regBucket); exists {
-		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), regBucket)
-	}
-	api.CreateLocalBucket(tutils.BaseAPIParams(primaryURL), regBucket)
-}
-
 func cleanupRegression() {
-	if exists, _ := tutils.DoesLocalBucketExist(primaryURL, regBucket); exists {
-		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), regBucket)
+	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
+	cmn.AssertNoErr(err)
+
+	for _, name := range names.Local {
+		if strings.HasPrefix(name, regBucketPrefix) {
+			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), name)
+		}
 	}
 }
 
 func setupRegression() *regressionContext {
+	cleanupRegression() //clean up previous regressions first
+
+	regctx := &regressionContext{}
+
+	regctx.bckName = fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid())
+
 	report.Writef(report.ConsoleLevel, "Setting up regression (maximum %v)...\n", regCapacity)
 
+	aisStopCh := make(chan *stats.PrimitiveStat, 1)
 	params := &AISLoaderExecParams{
 		pctput:       100,
 		totalputsize: regCapacity,
@@ -51,23 +60,17 @@ func setupRegression() *regressionContext {
 		minsize:      soakcmn.Params.RegMinFilesize,
 		maxsize:      soakcmn.Params.RegMaxFilesize,
 	}
-	aisStopCh := make(chan *stats.PrimitiveStat, 1)
-	AISExec(aisStopCh, soakcmn.OpTypePut, regBucket, soakcmn.Params.RegSetupWorkers, params)
+	AISExec(aisStopCh, soakcmn.OpTypePut, regctx.bckName, soakcmn.Params.RegSetupWorkers, params)
 	setupStat := <-aisStopCh
 	close(aisStopCh)
 
 	report.Writef(report.ConsoleLevel, "Done setting up regression (actual size %v) ...\n", setupStat.TotalSize)
 
-	regctx := &regressionContext{}
-	regctx.bckName = regBucket //all regression tests share a bucket for now
-
 	return regctx
 }
 
 // worker function for regression. Must call in go func
-func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
-	wg.Add(1)
-
+func regressionWorker(tag string, bucket string, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
 	aisLoaderExecParams := &AISLoaderExecParams{
 		pctput:     0,
 		stopable:   true,
@@ -85,7 +88,7 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 
 	go func() {
 		defer aisExecWg.Done()
-		AISExec(aisExecResultCh, soakcmn.OpTypeGet, regBucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
+		AISExec(aisExecResultCh, soakcmn.OpTypeGet, bucket, soakcmn.Params.RegWorkers, aisLoaderExecParams)
 	}()
 
 	<-stopCh
@@ -94,6 +97,7 @@ func regressionWorker(stopCh chan struct{}, wg *sync.WaitGroup, recordRegression
 	aisExecWg.Wait()
 
 	stat := <-aisExecResultCh
+	stat.ID = tag
 	recordRegression(stat)
 
 	wg.Done()
@@ -113,7 +117,11 @@ func (rctx *RecipeContext) StartRegression() {
 	if rctx.repCtx == nil {
 		rctx.repCtx = report.NewReportContext()
 	}
-	go regressionWorker(regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
+	for i := 0; i < soakcmn.Params.RegInstances; i++ {
+		tag := fmt.Sprintf("regression %d", i+1)
+		regCtx.wg.Add(1)
+		go regressionWorker(tag, rctx.regCtx.bckName, regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
+	}
 }
 
 func (rctx *RecipeContext) FinishRegression() {
@@ -127,7 +135,7 @@ func (rctx *RecipeContext) FinishRegression() {
 	updateSysInfo()
 
 	if regCtx.wg != nil {
-		regCtx.stopCh <- struct{}{}
+		close(regCtx.stopCh)
 		regCtx.wg.Wait()
 	}
 }

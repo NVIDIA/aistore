@@ -20,7 +20,7 @@ These are the terms used in describing the design of recipes:
 - Recipe Cycle: SK runs recipes by constantly running a random permutation of all available recipes. The run of a particular permutation is considered a Recipe Cycle. 
 - Primitive: A function call within a recipe that communicates with the AIS cluster. Examples: `GET(...)`, `PUT(...)`, `DELETE(...)` etc. Some of these are measured to track performance. The file that defines all primitives can be found [here](soakprim/primitives.go).
 - Phase: A set of primitives surrounded by a call to `Pre(...)` at the start and ending with `Post(...)` is considered a phase within a recipe. Phases are run sequentially, while the primitives within a phase are run asynchronously. The call to `Pre(...)` ensures that the recipe meets all the prerequisites before proceeding with the phase, while the call to `Post(..)` checks if the phase was successful and saves summary information about the phase to the report.
-- Regression: a continuous workload that is intended to detect performance regression during the soak test. At the time of this writing, only 100% GET is supported (for regression). Regression can either run alongside another recipe, or run by itself (called a regression phase). SK alternates between running a recipe and running regression phase. 
+- Regression: A continuous workload that continuously GETs from a bucket. Designed to simulate a neural network using training data hosted by AIS. Regression can either run alongside another recipe, or run by itself (called a regression phase). SK alternates between running a recipe and running regression phase. Multiple instances of this can be run in parallel and will point to the same bucket.
 
 ## Usage
 
@@ -46,8 +46,9 @@ SK accepts a number of command line arguments, all of which can also be passed b
  - `-reg-pctcap` - Max Pct (0-100) of total storage capacity allocated to regression (default 0.4).
  - `-reg-setupduration` - The maximum amount of time to spend setting up the bucket for regression (default 12s), 0=fill until `-reg-pctcap`.
  - `-reg-setupworkers` - Number of workers that is used to set up the bucket for regression (default 4).
- - `-rec-minsize` - Min filesize in regression (default 700MiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
- - `-rec-maxsize` - Max filesize in regression (default 2GiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
+ - `-reg-minsize` - Min filesize in regression (default 700MiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
+ - `-reg-maxsize` - Max filesize in regression (default 2GiB), can specify with [multiplicative suffix](../aisloader/README.md#bytes-multiplicative-suffix).
+ - `-reg-instances` - Number of regression instances (default 1).
  - `-reg-workers` - Number of workers that regression uses (default 1).
 
  - `-reportdir` - The directory to write reports to, creates and uses `/tmp/ais-soak/reports` if not specified.
@@ -55,6 +56,23 @@ SK accepts a number of command line arguments, all of which can also be passed b
 SK supports additional commands:
  - `./soaktest.sh ls` displays a list of all recipes with descriptions.
  - `./soaktest.sh usage` displays an extended help menu with examples.
+
+ ## Usage Examples
+ 
+ - `./soaktest.sh`
+    - Run soaktest with all default parameters
+ - `./soaktest.sh --short`
+    - Run short soaktest with all default parameters
+ - `./soaktest.sh --short --rec-cycles=1 --reg-phasedisable --rec-regdisable`
+    - Run all short recipes and then exit with no regression
+ - `./soaktest.sh --rec-disable --reg-phaseduration=1s`
+    - Run regression phases in intervals of one second
+ - `./soaktest.sh --ip=my-k8-cluster --port=8081`
+    - Run soaktest with default parameters on the proxy at http://my-k8-cluster:8081
+ - `./soaktest.sh --rec-list=1,3 --rec-pctcap=0.2 --reg-pctcap=0.1`
+    - Run soaktest using RecipeID 1 and 3, allocating 0.2% of capacity to recipes, and 0.1% to regression 
+ - `./soaktest.sh --rec-disable --reg-phasedisable`
+    - Don't run anything and just cleanup
 
  ## Output
 

@@ -131,7 +131,7 @@ func (rctx *RecipeContext) GetCfg(duration time.Duration) {
 	go func() {
 		ch := make(chan *stats.PrimitiveStat, 1)
 		defer rctx.finishPrim(tag)
-		AISExec(ch, soakcmn.OpTypeCfg, regBucket /** still need an existing bucket for getcfg, use regression **/, soakcmn.Params.RecPrimWorkers, params)
+		AISExec(ch, soakcmn.OpTypeCfg, "" /** bucket not required for getcfg **/, soakcmn.Params.RecPrimWorkers, params)
 		stat := <-ch
 		stat.ID = tag.String()
 		rctx.repCtx.PutPrimitiveStats(stat)

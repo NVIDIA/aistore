@@ -407,7 +407,7 @@ func main() {
 		}
 	}
 
-	if runParams.bckProvider == cmn.LocalBs {
+	if runParams.bckProvider == cmn.LocalBs && !runParams.getConfig {
 		exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
 		if err != nil {
 			fmt.Println("Failed to get local bucket lists", runParams.bucket, "err = ", err)

@@ -36,4 +36,5 @@ type SoakParams struct {
 	RegMinFilesize   int64         //minimum size of file used in regression
 	RegMaxFilesize   int64         //maximum size of file used in regression
 	RegWorkers       int           //number of workers to run for regression
+	RegInstances     int           //number of instances of regression
 }

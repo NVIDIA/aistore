@@ -115,6 +115,7 @@ func parseCmdLine() {
 	f.IntVar(&soakcmn.Params.RegSetupWorkers, "reg-setupworkers", 4, "Number of workers that is used to set up the bucket for regression")
 	f.StringVar(&regMinFilesizeStr, "reg-minsize", "", fmt.Sprintf("Min filesize in regression (default %s), can specify units with suffix", cmn.B2S(regMinFilesizeDefault, 2)))
 	f.StringVar(&regMaxFilesizeStr, "reg-maxsize", "", fmt.Sprintf("Max filesize in regression (default %s), can specify units with suffix", cmn.B2S(regMaxFilesizeDefault, 2)))
+	f.IntVar(&soakcmn.Params.RegInstances, "reg-instances", 1, "Number of instances of regression per bucket")
 	f.IntVar(&soakcmn.Params.RegWorkers, "reg-workers", 1, "Number of workers that regression uses")
 
 	f.StringVar(&soakcmn.Params.ReportDir, "reportdir", "", fmt.Sprintf("Folder to place report, places in '%s' if empty", report.DefaultDir))
