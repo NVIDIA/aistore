@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,8 +22,8 @@ type (
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactDemandBase
 		// runtime
-		workCh  chan *cluster.LOM
-		copiers map[string]*copier
+		workCh   chan *cluster.LOM
+		mpathers map[string]mpather
 		// init
 		Mirror                 cmn.MirrorConf
 		Slab                   *memsys.Slab2
@@ -57,14 +56,14 @@ func (r *XactCopy) InitAndRun() error {
 		return err
 	}
 	r.workCh = make(chan *cluster.LOM, r.Mirror.Burst)
-	r.copiers = make(map[string]*copier, l)
+	r.mpathers = make(map[string]mpather, l)
 	r.wg = &sync.WaitGroup{}
 	r.wg.Add(1)
 	go r.Run()
 	for _, mpathInfo := range availablePaths {
 		copier := &copier{parent: r, mpathInfo: mpathInfo}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal)
-		r.copiers[mpathLC] = copier
+		r.mpathers[mpathLC] = copier
 		r.wg.Add(1)
 		go copier.jog()
 	}
@@ -78,14 +77,15 @@ func (r *XactCopy) Run() error {
 	for {
 		select {
 		case lom := <-r.workCh:
-			// load balance
-			if copier := r.loadBalance(lom); copier != nil {
-				if glog.V(4) {
-					glog.Infof("%s=>%s", lom.ParsedFQN.MpathInfo, copier.mpathInfo)
-				}
-				copier.workCh <- lom
+			if errstr := lom.Fill("", cluster.LomCopy); errstr != "" {
+				glog.Errorln(errstr)
+				break
+			}
+			cmn.Assert(r.BckIsLocal == lom.BckIsLocal)
+			if mpather := findLeastUtilized(lom, r.mpathers); mpather != nil {
+				mpather.post(lom)
 			} else {
-				glog.Errorf("%s: failed to load balance (drop type 1)", lom)
+				glog.Errorf("%s: cannot find dst mountpath", lom)
 			}
 		case <-r.ChanCheckTimeout():
 			if r.Timeout() {
@@ -113,7 +113,7 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	if r.Mirror.OptimizePUT {
 		if pending > 1 && pending >= max {
 			r.dropped++
-			if (r.dropped % logNumDropped) == 0 {
+			if (r.dropped % logNumProcessed) == 0 {
 				glog.Errorf("%s: pending=%d, total=%d, dropped=%d", r, pending, r.total, r.dropped)
 			}
 			return
@@ -156,28 +156,14 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 // serve GETs are even less available for other extended actions than otherwise, etc.
 // =================== load balancing and self-throttling ========================
 
-func (r *XactCopy) loadBalance(lom *cluster.LOM) (copier *copier) {
-	var util = cmn.PairF32{101, 101}
-	for _, j := range r.copiers {
-		if j.mpathInfo.Path == lom.ParsedFQN.MpathInfo.Path {
-			continue
-		}
-		if _, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil); curr.Max < util.Max {
-			copier = j
-			util = curr
-		}
-	}
-	return
-}
-
 func (r *XactCopy) stop() {
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
 	}
 	r.XactDemandBase.Stop()
-	for _, copier := range r.copiers {
-		copier.stop()
+	for _, mpather := range r.mpathers {
+		mpather.stop()
 	}
 	r.EndTime(time.Now())
 	for lom := range r.workCh {
@@ -187,8 +173,12 @@ func (r *XactCopy) stop() {
 }
 
 //
-// mpath copier
+// copier - as mpather
 //
+
+func (j *copier) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
+func (j *copier) post(lom *cluster.LOM)            { j.workCh <- lom }
+
 func (j *copier) stop() {
 	for lom := range j.workCh {
 		glog.Infof("Stopping, not copying %s", lom)
@@ -198,6 +188,9 @@ func (j *copier) stop() {
 	close(j.stopCh)
 }
 
+//
+// copier - main
+//
 func (j *copier) jog() {
 	glog.Infof("copier[%s] started", j.mpathInfo)
 	j.parent.wg.Done()
@@ -208,7 +201,7 @@ loop:
 	for {
 		select {
 		case lom := <-j.workCh:
-			j.mirror(lom)
+			j.addCopy(lom)
 			j.parent.DecPending() // to support action renewal on-demand
 		case <-j.stopCh:
 			break loop
@@ -217,38 +210,18 @@ loop:
 	j.parent.Slab.Free(j.buf)
 }
 
-func (j *copier) mirror(lom *cluster.LOM) {
-	// copy
+func (j *copier) addCopy(lom *cluster.LOM) {
 	j.parent.Namelocker.Lock(lom.Uname, false)
 	defer j.parent.Namelocker.Unlock(lom.Uname, false)
 
-	lom.ParsedFQN.MpathInfo = j.mpathInfo
-	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
-	if err := lom.CopyObject(workFQN, j.buf); err != nil {
-		return
-	}
-	cpyFQN := fs.CSM.FQN(j.mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
-	if glog.V(4) {
-		glog.Infof("Copied %s => workfile %s, cpyFQN %s", lom, workFQN, cpyFQN)
-	}
-	if err := cmn.MvFile(workFQN, cpyFQN); err != nil {
+	if err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)
-		goto fail
-	}
-	if errstr := lom.SetXcopy(cpyFQN); errstr != "" {
-		glog.Errorln(errstr)
 	} else {
 		if glog.V(4) {
 			glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
 		}
-		if v := atomic.AddInt64(&j.parent.copied, 1); (v % logNumCopied) == 0 {
+		if v := atomic.AddInt64(&j.parent.copied, 1); (v % logNumProcessed) == 0 {
 			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)
 		}
-	}
-	return
-fail:
-	if errRemove := os.Remove(workFQN); errRemove != nil {
-		glog.Errorf("Failed to remove %s, err: %v", workFQN, errRemove)
-		j.parent.T.FSHC(errRemove, workFQN)
 	}
 }

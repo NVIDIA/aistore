@@ -414,11 +414,11 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 	return reslist, nil
 }
 
-// EraseCopies API
+// MakeNCopies API
 //
-// EraseCopies starts an extended action (xaction) to reduce redundancy of a given bucket to 1 (single copy)
-func EraseCopies(baseParams *BaseParams, bucket string) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEraseCopies})
+// MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
+func MakeNCopies(baseParams *BaseParams, bucket string, copies int) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
 	if err != nil {
 		return err
 	}

@@ -349,7 +349,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bckProvider string, msgInt actionMsgInternal) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bckProvider string, msgInt *actionMsgInternal) error {
 	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")

@@ -895,7 +895,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
 	}
-	fqn := lom.ChooseMirror()
+	fqn := lom.LoadBalanceGET()
 	file, err = os.Open(fqn)
 	if err != nil {
 		if os.IsPermission(err) {
@@ -1088,7 +1088,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		fs.Mountpaths.EvictCloudBucket(bucket)
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, apitems, bckProvider, msgInt)
+			err := t.listRangeOperation(r, apitems, bckProvider, &msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
 			} else {
@@ -1187,7 +1187,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
 		// validation done in proxy.go
-		if err := t.listRangeOperation(r, apitems, bckProvider, msgInt); err != nil {
+		if err := t.listRangeOperation(r, apitems, bckProvider, &msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
@@ -1233,11 +1233,18 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActRechecksum:
 		// re-checksum the bucket and return
 		t.runRechecksumBucket(bucket)
-	case cmn.ActEraseCopies:
+	case cmn.ActMakeNCopies:
+		copies, err := t.parseValidateNCopies(msgInt.Value)
+		if err == nil {
+			err = mirror.ValidateNCopies(copies)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 		t.xactions.abortPutCopies(bucket)
-		bucketmd := t.bmdowner.get()
-		bckIsLocal := bucketmd.IsLocal(bucket)
-		t.xactions.renewEraseCopies(bucket, t, bckIsLocal)
+		bckIsLocal := t.bmdowner.get().IsLocal(bucket)
+		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsLocal)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
 	}
@@ -1702,7 +1709,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		return
 	}
 
-	remoteLOM = lom.Copy(cluster.LOMCopyProps{Cksum: cksum, Version: version, Atime: atime})
+	remoteLOM = lom.CloneAndSet(cluster.LOMCopyProps{Cksum: cksum, Version: version, Atime: atime})
 
 	roi := &recvObjInfo{
 		t:        t,
@@ -2059,7 +2066,8 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, bckIsLocal bool, actionMsg *actionMsgInternal) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string,
+	bckIsLocal bool, actionMsg *actionMsgInternal) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -2210,6 +2218,9 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	if ci.needVersion {
 		lomAction |= cluster.LomVersion
 	}
+	if ci.needCopies {
+		lomAction |= cluster.LomCopy
+	}
 	if lomAction != 0 {
 		lom.Fill("", lomAction)
 	}
@@ -2226,8 +2237,8 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	if ci.needVersion {
 		fileInfo.Version = lom.Version
 	}
-	if ci.needCopies && lom.HasCopy() {
-		fileInfo.Copies = 2 // 2-way, or not replicated
+	if ci.needCopies {
+		fileInfo.Copies = int16(lom.NumCopies())
 	}
 	fileInfo.Size = osfi.Size()
 	ci.files = append(ci.files, fileInfo)
@@ -2365,11 +2376,10 @@ func (roi *recvObjInfo) init() error {
 		return errors.New(errstr)
 	}
 	roi.workFQN = roi.lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
-	// All objects which are migrated should contain checksum.
+	// migrated/replicated objects must be accompanied by their checksums
 	if roi.migrated {
 		cmn.Assert(roi.cksumToCheck != nil)
 	}
-
 	return nil
 }
 
@@ -2391,14 +2401,12 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	if err = roi.writeToFile(); err != nil {
 		return err, http.StatusInternalServerError
 	}
-
 	if !dryRun.disk && !dryRun.network {
 		// commit
 		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
 	}
-
 	delta := time.Since(roi.started)
 	roi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -2456,11 +2464,9 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 			return
 		}
 	}
-	if roi.lom.HasCopy() {
-		if errstr = roi.lom.DelCopy(); errstr != "" {
-			roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
-			return
-		}
+	if errstr = roi.lom.DelAllCopies(); errstr != "" {
+		roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+		return
 	}
 	if err := cmn.MvFile(roi.workFQN, roi.lom.FQN); err != nil {
 		roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
@@ -2478,11 +2484,13 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 	if !lom.MirrorConf.Enabled || dryRun.disk {
 		return
 	}
-
-	if fs.Mountpaths.NumAvail() <= 1 { // FIXME: cache when filling-in the lom
+	if nmp := fs.Mountpaths.NumAvail(); nmp < int(lom.MirrorConf.Copies) {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)",
+				nmp, lom.Bucket, lom.MirrorConf.Copies)
+		}
 		return
 	}
-
 	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.BckIsLocal != lom.BckIsLocal {
 		t.xcopy = t.xactions.renewPutCopies(lom, t)
 	}
@@ -2526,10 +2534,8 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		t.statsif.Add(stats.DeleteCount, 1)
 	}
 	if delFromAIS {
-		if lom.HasCopy() {
-			if errstr := lom.DelCopy(); errstr != "" {
-				return errors.New(errstr)
-			}
+		if errstr := lom.DelAllCopies(); errstr != "" {
+			return errors.New(errstr)
 		}
 		if err := os.Remove(lom.FQN); err != nil {
 			return err
@@ -2792,7 +2798,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			ok    bool
 		)
 		if value, ok = msg.Value.(string); !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse cmn.ActionMsg value: Not a string"))
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse action '%s' value: (%v, %T) not a string",
+				cmn.ActSetConfig, msg.Value, msg.Value))
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
@@ -3379,7 +3386,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
 		return
 	}
-	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
+	t.stopXactions(mountpathXactions)
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3394,7 +3401,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		return
 	}
 
-	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
+	t.stopXactions(mountpathXactions)
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3403,7 +3410,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
 		return
 	}
-	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
+	t.stopXactions(mountpathXactions)
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3413,7 +3420,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
+	t.stopXactions(mountpathXactions)
 }
 
 // FIXME: use the message
@@ -3441,8 +3448,8 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	for bucket := range bucketmd.LBmap {
 		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
-			// TODO: separate API to stop ActPut and ActErase xactions and/or disable mirroring
-			// (needed in part for cloud buckets)
+			// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
+			//       disable mirroring (needed in part for cloud buckets)
 			t.xactions.abortBucketSpecific(bucket)
 		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
@@ -3684,7 +3691,7 @@ func (t *targetrunner) enable() error {
 func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
+	t.stopXactions(mountpathXactions)
 	return t.fsprg.disableMountpath(mountpath)
 }
 

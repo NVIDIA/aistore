@@ -23,6 +23,14 @@ import (
 	"github.com/NVIDIA/aistore/mirror"
 )
 
+// FIXME
+// NOTE: extended actions that must be stopped when a bucket gets destroyed or mountpath disabled/enabled
+// FIXME
+var (
+	perBucketXactions = []string{cmn.ActPutCopies, cmn.ActMakeNCopies, cmn.ActEC}
+	mountpathXactions = []string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActMakeNCopies, cmn.ActEC, cmn.ActLocalReb}
+)
+
 type (
 	xactions struct {
 		sync.Mutex
@@ -158,7 +166,7 @@ func (xs *xactions) renewGlobalReb(smapVersion int64, runnerCnt int) *xactRebBas
 	if xx != nil {
 		xGlobalReb := xx.(*xactGlobalReb)
 		if xGlobalReb.smapVersion > smapVersion {
-			glog.Errorf("(reb: %s) %d version is greater than smapVersion %d", xGlobalReb, xGlobalReb.smapVersion, smapVersion)
+			glog.Errorf("(reb: %s) Smap v%d is greater than v%d", xGlobalReb, xGlobalReb.smapVersion, smapVersion)
 			xs.Unlock()
 			return nil
 		}
@@ -334,11 +342,11 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 		xs.Unlock()
 		return
 	}
-	kinderase := path.Join(cmn.ActEraseCopies, lom.Bucket)
-	xx = xs.findU(kinderase)
+	kindmnc := path.Join(cmn.ActMakeNCopies, lom.Bucket)
+	xx = xs.findU(kindmnc)
 	if xx != nil {
-		xerase := xx.(*mirror.XactErase)
-		if !xerase.Finished() {
+		xmnc := xx.(*mirror.XactBckMakeNCopies)
+		if !xmnc.Finished() {
 			glog.Errorf("cannot start '%s' xaction when %s is running", cmn.ActPutCopies, xx)
 			xs.Unlock()
 			return nil
@@ -376,35 +384,35 @@ func (xs *xactions) abortPutCopies(bucket string) {
 	xs.Unlock()
 }
 
-func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, bckIsLocal bool) {
-	kinderase := path.Join(cmn.ActEraseCopies, bucket)
+func (xs *xactions) renewBckMakeNCopies(bucket string, t *targetrunner, copies int, bckIsLocal bool) {
+	kindmnc := path.Join(cmn.ActMakeNCopies, bucket)
 	xs.Lock()
-	xx := xs.findU(kinderase)
+	xx := xs.findU(kindmnc)
 	if xx != nil && !xx.Finished() {
 		glog.Infof("nothing to do: %s", xx)
 		xs.Unlock()
 		return
 	}
 	id := xs.uniqueid()
-	base := cmn.NewXactBase(id, kinderase, bucket)
-	xerase := &mirror.XactErase{
+	base := cmn.NewXactBase(id, kindmnc, bucket)
+	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
+	xmnc := &mirror.XactBckMakeNCopies{
 		XactBase:   *base,
 		T:          t,
 		Namelocker: t.rtnamemap,
+		Slab:       slab,
+		Copies:     copies,
 		BckIsLocal: bckIsLocal,
 	}
-	xs.add(xerase)
-	go xerase.Run()
+	xs.add(xmnc)
+
+	go xmnc.Run()
 	xs.Unlock()
 }
 
-// PutCopies, EraseCopies and EC as those are currently the only bucket-specific xaction we may have
 func (xs *xactions) abortBucketSpecific(bucket string) {
-	var (
-		bucketSpecific = []string{cmn.ActPutCopies, cmn.ActEraseCopies, cmn.ActEC}
-		wg             = &sync.WaitGroup{}
-	)
-	for _, act := range bucketSpecific {
+	wg := &sync.WaitGroup{}
+	for _, act := range perBucketXactions {
 		k := path.Join(act, bucket)
 		wg.Add(1)
 		go func(kind string, wg *sync.WaitGroup) {

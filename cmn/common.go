@@ -87,7 +87,6 @@ type (
 		FSCapacity uint64  `json:"fs_capacity"`
 		PctFSUsed  float64 `json:"pct_fs_used"`
 	}
-
 	TSysInfo struct {
 		SysInfo
 		FSInfo

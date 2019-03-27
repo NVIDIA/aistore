@@ -383,7 +383,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 
 				Expect(lom.Fill("", cluster.LomCopy)).To(BeEmpty())
-				Expect(lom.CopyFQN).To(BeEquivalentTo(copyFQN))
+				Expect(lom.CopyFQN[0]).To(BeEquivalentTo(copyFQN))
 			})
 		})
 	})
@@ -444,7 +444,7 @@ var _ = Describe("LOM", func() {
 				xattr, _ = fs.GetXattr(localFQN, cmn.XattrCopies)
 				Expect(string(xattr)).To(BeEquivalentTo(copyFQN))
 
-				Expect(lom.CopyFQN).To(BeEquivalentTo(copyFQN))
+				Expect(lom.CopyFQN[0]).To(BeEquivalentTo(copyFQN))
 
 				// Check msic copy data
 				lomCopy := &cluster.LOM{T: tMock, FQN: copyFQN}
@@ -452,18 +452,18 @@ var _ = Describe("LOM", func() {
 
 				Expect(lomCopy.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
 				Expect(lom.IsCopy()).To(BeFalse())
-				Expect(lom.HasCopy()).To(BeTrue())
+				Expect(lom.HasCopies()).To(BeTrue())
 				Expect(lomCopy.IsCopy()).To(BeTrue())
-				Expect(lomCopy.HasCopy()).To(BeFalse())
+				Expect(lomCopy.HasCopies()).To(BeFalse())
 
 			})
 		})
 
-		Describe("DelCopy", func() {
-			It("Should be able to delete the copy", func() {
+		Describe("DelAllCopies", func() {
+			It("Should be able to delete all copies", func() {
 				lom := prepareLomWithCopy(true)
 
-				Expect(lom.DelCopy()).To(BeEmpty())
+				Expect(lom.DelAllCopies()).To(BeEmpty())
 				_, err := os.Stat(copyFQN)
 				Expect(os.IsNotExist(err)).To(BeTrue())
 			})
@@ -485,7 +485,7 @@ var _ = Describe("LOM", func() {
 			lomEmpty := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomEmpty.Fill("", 0)).To(BeEmpty())
 
-			copiedLOM := lomEmpty.Copy(cluster.LOMCopyProps{})
+			copiedLOM := lomEmpty.CloneAndSet(cluster.LOMCopyProps{})
 			Expect(copiedLOM).To(Equal(lomEmpty))
 		})
 
@@ -502,7 +502,7 @@ var _ = Describe("LOM", func() {
 
 			cksum := cmn.NewCksum(cmn.ChecksumXXHash, "something")
 			version := "102"
-			copiedLOM := lomEmpty.Copy(cluster.LOMCopyProps{
+			copiedLOM := lomEmpty.CloneAndSet(cluster.LOMCopyProps{
 				FQN:     desiredCloudFQN,
 				Cksum:   cksum,
 				Version: version,

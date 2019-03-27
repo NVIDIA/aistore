@@ -101,7 +101,7 @@ test-short)
   ;;
 test-long)
   echo "Running long tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 1h ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
@@ -112,7 +112,7 @@ test-long)
   ;;
 test-run)
   echo "Running test with regex..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 1h  -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 2h  -run="${RE}" ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2

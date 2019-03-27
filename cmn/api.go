@@ -70,7 +70,7 @@ const (
 	ActRevokeToken  = "revoketoken"
 	ActElection     = "election"
 	ActPutCopies    = "putcopies"
-	ActEraseCopies  = "erasecopies"
+	ActMakeNCopies  = "makencopies"
 	ActEC           = "ec" // erasure (en)code objects
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
@@ -291,7 +291,7 @@ type BucketEntry struct {
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc
-	Copies    int64  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
+	Copies    int16  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
 	IsCached  bool   `json:"iscached,omitempty"`  // if the file is cached on one of targets
 }
 

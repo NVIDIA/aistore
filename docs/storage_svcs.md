@@ -1,15 +1,22 @@
 ## Table of Contents
 - [Storage Services](#storage-services)
-    - [Checksumming](#checksumming)
-    - [LRU](#lru)
-    - [Erasure coding](#erasure-coding)
-    - [Local mirroring and load balancing](#local-mirroring-and-load-balancing)
+   - [Notation](#notation)
+- [Checksumming](#checksumming)
+- [LRU](#lru)
+- [Erasure coding](#erasure-coding)
+- [Local n-way mirror](#local-n-way-mirror)
+   - [Read load balancing](#read-load-balancing)
+   - [More examples](#more-examples)
 
 ## Storage Services
 
 By default, buckets inherit [global configuration](/ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
-### Checksumming
+### Notation
+
+In this document, `G` - denotes a (hostname:port) pair of any gateway in the AIS cluster.
+
+## Checksumming
 
 Checksumming on bucket level is configured by setting bucket properties:
 
@@ -25,10 +32,10 @@ Value for the `type` field (see above) *must* be provided *every* time the bucke
 
 Example of setting bucket properties:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum": {"type": "xxhash", "validate_cold_get": true, "validate_warm_get": false, "enable_read_range": false}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
-### LRU
+## LRU
 
 Overriding the global configuration can be achieved by specifying the fields of the `LRU` instance of the `lruconfig` struct that encompasses all LRU configuration fields.
 
@@ -40,22 +47,23 @@ Overriding the global configuration can be achieved by specifying the fields of 
 * `lru.enabled`: bool that determines whether LRU is run or not; only runs when true
 
 **NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified is defaulted to the data type's zero value.
+
 Example of setting bucket properties:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum":{"type":"none","validate_cold_get":true,"validate_warm_get":true,"enable_read_range":true},"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
-#### LRU for local buckets
+### LRU for local buckets
 
 LRU eviction, as of version 2.0, is by default only enabled for cloud buckets. To enable for local buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in local buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
 
-### Erasure coding
+## Erasure coding
 
-AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-mirroring-and-load-balancing), replication (for *small* objects), and erasure coding.
+AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-n-way-mirror), replication (for *small* objects), and erasure coding.
 
 Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
 
@@ -76,40 +84,64 @@ Notes:
 
 Example of setting bucket properties:
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
 To change ony one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the sinlge set property API. Example of disabling EC:
+
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
-#### Limitations
+### Limitations
 
 In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
 
 Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
 
-### Local mirroring and load balancing
+## Local n-way mirror
+Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.
 
-Unlike erasure coding (above) that takes special care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored on a local filesystems that are different from those that store the original. In other words, a mirrored bucket will survive a loss of any (one) local drive.
+In other words, AIS n-way mirroring is intended to withstand loss of disks, not storage nodes (aka AIS targets).
 
->> The last statement is especially true when local filesystems are non-redundant. As a side, note that AIS storage targets can be deployed to utilize Linux LVMs that (themselves) provide a variety of RAID/mirror schemas.
+> For the latter, please consider using #erasure-coding and/or any of the alternative backup/restore mechanisms.
 
-Further, as of v2.0 the capability entails:
+The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-* at PUT time: asynchronously generate local replicas while trying to minimize the interference with user workloads
-* at GET time: given 2 (two) choices, select the least loaded drive or drives that store the requested object
+> Unlike [erasure conding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
-Finally, all accumulated redundant content can be (asynchronously) destroyed at any time via specific [extended action](/docs/xaction.md) called [erasecopies](/cmn/api.go). And as always, the same can be achieved via the following `curl`:
+> As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
+
+The following example configures buckets a, b, and c to store n = 1, 2, and 3 object replicas, respectively:
 
 ```shell
-$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"erasecopies"}' http://localhost:8080/v1/buckets/abc
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":1}' 'http://G/v1/buckets/a'
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/b'
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
 ```
 
-To change ony one mirroring property without touching other bucket properties, use the sinlge set property API. Example of disabling mirroring:
+The operations (above) are in fact [extended actions](xaction.md) that run asynchronously. You can monitor completion of those operations via generic [xaction API](xaction.md).
+
+Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
+
+Note again that number of local replicas is defined on a per-bucket basis.
+
+### Read load balancing
+With respect to n-way mirrors, the usual pros-and-cons consideration boils down to (the amount of) utilized space, on the other hand, versus data protection and load balancing, on the other.
+
+Since object replicas are end-to-end protected by [checksums](#checksumming) all of them and any one in particular can be used interchangeably to satisfy a GET request thus providing for multiple possible choices of local filesystems and, ultimately, local drives. Given n > 1, AIS will utilize the least loaded drive(s).
+
+### More examples
+The following sequence creates a bucket named `abc`, PUTs an object into it and then converts it into a 3-way mirror:
+
 ```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "mirror.enabled", "value": false}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'
+$ curl -L -X PUT 'http://G/v1/objects/abc/obj1' -T /tmp/obj1
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/abc'
 ```
 
->> The `curl` example above uses gateway's URL `localhost:8080` and bucket named `abc` as an example...
+The next command will redefine the `abc` bucket created in the previous example as a 2-way mirroru - all objects that were previously stored in three replicas will now have only two (replicas):
+
+```shell
+$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/abc'
+```

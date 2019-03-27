@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -36,6 +37,8 @@ const (
 	LomCopy
 )
 
+const copyNameSepa = "\"\""
+
 type (
 	LOMCopyProps struct {
 		FQN            string
@@ -59,7 +62,7 @@ type (
 		Bucket, Objname string
 		Uname           string
 		HrwFQN          string       // misplaced?
-		CopyFQN         string       // local replica
+		CopyFQN         []string     // local replica
 		ParsedFQN       fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		// props
 		Version string
@@ -91,75 +94,96 @@ func (lom *LOM) RestoredReceived(props *LOM) {
 func (lom *LOM) SetExists(exists bool) { lom.exists = exists }
 func (lom *LOM) Exists() bool          { return lom.exists }
 func (lom *LOM) LRUEnabled() bool      { return lom.BckProps.LRU.Enabled }
-func (lom *LOM) Misplaced() bool       { return lom.HrwFQN != lom.FQN && !lom.IsCopy() }         // misplaced (subj to rebalancing)
-func (lom *LOM) IsCopy() bool          { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a mirrored copy of an object
-func (lom *LOM) HasCopy() bool         { return lom.CopyFQN != "" && lom.FQN == lom.HrwFQN }     // has one mirrored copy
-
+func (lom *LOM) Misplaced() bool       { return lom.HrwFQN != lom.FQN && !lom.IsCopy() }                // misplaced (subj to rebalancing)
+func (lom *LOM) IsCopy() bool          { return len(lom.CopyFQN) == 1 && lom.CopyFQN[0] == lom.HrwFQN } // is a local copy of an object
+func (lom *LOM) HasCopies() bool       { return !lom.IsCopy() && lom.NumCopies() > 1 }
+func (lom *LOM) NumCopies() int        { return len(lom.CopyFQN) + 1 }
 func (lom *LOM) GenFQN(ty, prefix string) string {
 	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
 }
 
 func (lom *LOM) Atimestr(format ...string) string {
 	f := time.RFC822
-
 	if len(format) > 0 {
 		f = format[0]
 	}
-
 	return lom.Atime.Format(f)
 }
 
-func (lom *LOM) Copy(props LOMCopyProps) *LOM {
-	dstLOM := &LOM{}
-	*dstLOM = *lom
-
-	if dstLOM.Cksum != nil && props.Cksum == nil {
-		_ = dstLOM.checksum(0) // already copied; ignoring "get" errors at this point
-	} else if props.Cksum != nil {
-		dstLOM.Cksum = props.Cksum
-	}
-	if props.Version != "" {
-		dstLOM.Version = props.Version
-	}
-
-	if props.FQN != "" {
-		dstLOM.Bucket = ""
-		dstLOM.Objname = ""
-		dstLOM.FQN = props.FQN
-		dstLOM.init(props.BucketProvider)
-	}
-	dstLOM.Atime = props.Atime
-
-	return dstLOM
-}
-
 //
-// local replica management
+// local copy management
 //
 func (lom *LOM) SetXcopy(cpyfqn string) (errstr string) { // cross-ref
-	if errstr = fs.SetXattr(lom.FQN, cmn.XattrCopies, []byte(cpyfqn)); errstr == "" {
+	var copies string
+	if len(lom.CopyFQN) == 0 {
+		lom.CopyFQN = []string{cpyfqn}
+		copies = cpyfqn
+	} else {
+		lom.CopyFQN = append(lom.CopyFQN, cpyfqn)
+		copies = strings.Join(lom.CopyFQN, copyNameSepa)
+	}
+	if errstr = fs.SetXattr(lom.FQN, cmn.XattrCopies, []byte(copies)); errstr == "" {
 		if errstr = fs.SetXattr(cpyfqn, cmn.XattrCopies, []byte(lom.FQN)); errstr == "" {
-			lom.CopyFQN = cpyfqn
-			return
+			return // ok
 		}
 	}
+	// on error
 	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 		lom.T.FSHC(err, lom.FQN)
 	}
 	return
 }
 
-func (lom *LOM) DelCopy() (errstr string) {
-	if err := os.Remove(lom.CopyFQN); err != nil && !os.IsNotExist(err) {
+func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
+	cmn.Assert(!lom.IsCopy())
+	var (
+		cpyidx = -1
+		l      = len(lom.CopyFQN)
+	)
+	for i := 0; i < l; i++ {
+		if lom.CopyFQN[i] == cpyfqn {
+			cpyidx = i
+			break
+		}
+	}
+	if cpyidx < 0 {
+		return fmt.Sprintf("lom %s(%d): copy %s %s", lom, l, cpyfqn, cmn.DoesNotExist)
+	}
+	if l == 1 {
+		return lom.DelAllCopies()
+	}
+	if cpyidx < l-1 {
+		copy(lom.CopyFQN[cpyidx:], lom.CopyFQN[cpyidx+1:])
+	}
+	lom.CopyFQN = lom.CopyFQN[:l-1]
+	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 		lom.T.FSHC(err, lom.FQN)
 		return err.Error()
 	}
+	copies := strings.Join(lom.CopyFQN, copyNameSepa)
+	errstr = fs.SetXattr(lom.FQN, cmn.XattrCopies, []byte(copies))
+	return
+}
+
+func (lom *LOM) DelAllCopies() (errstr string) {
+	cmn.Assert(!lom.IsCopy())
+	if !lom.HasCopies() {
+		return
+	}
+	for _, cpyfqn := range lom.CopyFQN {
+		if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
+			lom.T.FSHC(err, lom.FQN)
+			return err.Error()
+		}
+	}
+	lom.CopyFQN = []string{}
 	errstr = fs.DelXattr(lom.FQN, cmn.XattrCopies)
 	return
 }
 
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
-	dstLOM := lom.Copy(LOMCopyProps{FQN: dstFQN})
+	cmn.Assert(!lom.IsCopy())
+	dstLOM := lom.CloneAndSet(LOMCopyProps{FQN: dstFQN})
 	if err = cmn.CopyFile(lom.FQN, dstLOM.FQN, buf); err != nil {
 		return
 	}
@@ -167,6 +191,25 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
 		err = errors.New(errstr)
 	}
 	return
+}
+
+func (lom *LOM) CloneAndSet(props LOMCopyProps) *LOM {
+	dstLOM := &LOM{}
+	*dstLOM = *lom
+	if props.Cksum != nil {
+		dstLOM.Cksum = props.Cksum
+	}
+	if props.Version != "" {
+		dstLOM.Version = props.Version
+	}
+	if props.FQN != "" {
+		dstLOM.Bucket, dstLOM.Objname, dstLOM.FQN = "", "", props.FQN
+		dstLOM.init(props.BucketProvider)
+	}
+	if !props.Atime.IsZero() {
+		dstLOM.Atime = props.Atime
+	}
+	return dstLOM
 }
 
 // format
@@ -196,8 +239,8 @@ func (lom *LOM) String() string {
 		if lom.IsCopy() {
 			a += "(is-copy)"
 		}
-		if lom.HasCopy() {
-			a += "(has-copy)"
+		if lom.HasCopies() {
+			a += "(has-copies)"
 		}
 		if lom.BadCksum {
 			a += "(bad-checksum)"
@@ -272,11 +315,13 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		}
 	}
 	if action&LomCopy != 0 {
-		var copyfqn []byte
-		if copyfqn, errstr = fs.GetXattr(lom.FQN, cmn.XattrCopies); errstr != "" {
+		var cpyfqn []byte
+		if cpyfqn, errstr = fs.GetXattr(lom.FQN, cmn.XattrCopies); errstr != "" {
 			return
 		}
-		lom.CopyFQN = string(copyfqn)
+		if len(cpyfqn) > 0 && !lom.IsCopy() {
+			lom.CopyFQN = strings.Split(string(cpyfqn), copyNameSepa)
+		}
 	}
 	return
 }
@@ -343,24 +388,32 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 	return
 }
 
-// best effort load balancing (GET)
-func (lom *LOM) ChooseMirror() (fqn string) {
+// best-effort GET load balancing (see also `mirror` for loadBalancePUT)
+func (lom *LOM) LoadBalanceGET() (fqn string) {
 	fqn = lom.FQN
-	if lom.CopyFQN == "" {
+	if len(lom.CopyFQN) == 0 {
 		return
 	}
-	parsedCpyFQN, err := fs.Mountpaths.FQN2Info(lom.CopyFQN)
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	_, currMain := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-	_, currRepl := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-	if currRepl.Max < currMain.Max-float32(lom.MirrorConf.UtilThresh) && currRepl.Min <= currMain.Min {
-		fqn = lom.CopyFQN
-		if glog.V(4) {
-			glog.Infof("GET %s from a mirror %s", lom, parsedCpyFQN.MpathInfo)
+	var mp *fs.MountpathInfo
+	_, u := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
+	umin := u
+	for _, cpyfqn := range lom.CopyFQN {
+		parsedCpyFQN, err := fs.Mountpaths.FQN2Info(cpyfqn)
+		if err != nil {
+			glog.Errorln(err)
+			return
 		}
+		_, uc := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
+		if uc.Max < u.Max-float32(lom.MirrorConf.UtilThresh) && uc.Min <= u.Min {
+			if uc.Max < umin.Max && uc.Min <= umin.Min {
+				fqn = cpyfqn
+				umin = uc
+				mp = parsedCpyFQN.MpathInfo
+			}
+		}
+	}
+	if mp != nil && bool(glog.V(4)) {
+		glog.Infof("GET %s from a mirror %s", lom, mp)
 	}
 	return
 }
