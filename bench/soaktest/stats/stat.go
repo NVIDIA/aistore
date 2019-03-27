@@ -6,6 +6,7 @@ package stats
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,8 +17,10 @@ const (
 )
 
 type Stat interface {
-	writeHeadings(*os.File)
-	writeStat(*os.File)
+	getHeadingsText() map[string]string
+	getHeadingsOrder() []string
+
+	getContents() map[string]interface{}
 }
 
 type StatWriter struct {
@@ -25,14 +28,58 @@ type StatWriter struct {
 	file *os.File
 }
 
+func getMilliseconds(d time.Duration) float64 {
+	return float64(d.Nanoseconds()) / float64(1e6)
+}
+
+func (w *StatWriter) writeHeadings(st Stat) {
+	headingsText := st.getHeadingsText()
+	headingsOrder := st.getHeadingsOrder()
+
+	cmn.Assert(len(headingsText) == len(headingsOrder))
+
+	csvHeadings := make([]string, len(headingsOrder))
+	for idx, x := range headingsOrder {
+		var ok bool
+		csvHeadings[idx], ok = headingsText[x]
+		cmn.Assert(ok)
+	}
+
+	w.file.WriteString(strings.Join(csvHeadings, ","))
+	w.file.WriteString("\n")
+}
+
+func ignoreItem(item interface{}) bool {
+	return item == nil || item == 0 || item == float64(0) || item == int64(0) || item == "" || item == false
+}
+
+func (w *StatWriter) writeContents(st Stat) {
+	headingsOrder := st.getHeadingsOrder()
+	contents := st.getContents()
+
+	csvData := make([]string, len(headingsOrder))
+	for idx, x := range headingsOrder {
+		if item, ok := contents[x]; ok && !ignoreItem(item) {
+			var err error
+			csvData[idx], err = cmn.ConvertToString(item)
+			cmn.AssertNoErr(err)
+		}
+	}
+
+	w.file.WriteString(strings.Join(csvData, ","))
+	w.file.WriteString("\n")
+}
+
 func (w *StatWriter) WriteStat(st Stat) {
 	if w.file == nil {
 		file, err := cmn.CreateFile(w.Path)
 		cmn.AssertNoErr(err)
 		w.file = file
-		st.writeHeadings(w.file)
+
+		w.writeHeadings(st)
 	}
-	st.writeStat(w.file)
+
+	w.writeContents(st)
 }
 
 func (w *StatWriter) Flush() {

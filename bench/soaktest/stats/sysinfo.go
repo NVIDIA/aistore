@@ -5,9 +5,6 @@
 package stats
 
 import (
-	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -40,50 +37,48 @@ func ParseClusterSysInfo(csi *cmn.ClusterSysInfo, timestamp time.Time) []*SysInf
 	return result
 }
 
-func (sis SysInfoStat) writeHeadings(f *os.File) {
-	f.WriteString(
-		strings.Join(
-			[]string{
-				"Timestamp",
-				"DaemonID",
-				"Role",
-				"Memory Used",
-				"Memory Available",
-				"% Memory Used",
-				"% CPU Used",
-				"Capacity Used (B)",
-				"Total Capacity (B)",
-				"% Capacity Used",
-			},
-			","))
+func (sis SysInfoStat) getHeadingsText() map[string]string {
+	return map[string]string{
+		"timestamp": "Timestamp",
+		"daemonID":  "DaemonID",
+		"role":      "Role",
 
-	f.WriteString("\n")
+		"memUsed":    "Memory Used (B)",
+		"memAvail":   "Memory Available (B)",
+		"pctMemUsed": "% Memory Used",
+		"pctCpuUsed": "% CPU Used",
+
+		"capUsed":    "Capacity Used (B)",
+		"capAvail":   "Total Capacity (B)",
+		"pctCapUsed": "% Capacity Used",
+	}
 }
 
-func (sis SysInfoStat) writeStat(f *os.File) {
-	var safeFSUsed, safeFSCapacity, safePctFSUsed string
+func (sis SysInfoStat) getHeadingsOrder() []string {
+	return []string{
+		"timestamp", "daemonID", "role",
+		"memUsed", "memAvail", "pctMemUsed", "pctCpuUsed",
+		"capUsed", "capAvail", "pctCapUsed",
+	}
+}
 
-	if sis.FSCapacity > 0 {
-		safeFSUsed = fmt.Sprintf("%d", (sis.FSUsed))
-		safeFSCapacity = fmt.Sprintf("%d", (sis.FSCapacity))
-		safePctFSUsed = fmt.Sprintf("%f", (sis.PctFSUsed))
+func (sis SysInfoStat) getContents() map[string]interface{} {
+	contents := map[string]interface{}{
+		"timestamp": sis.Timestamp.Format(csvTimeFormat),
+		"daemonID":  sis.DaemonID,
+		"role":      sis.Type,
+
+		"memUsed":    sis.MemUsed,
+		"memAvail":   sis.MemAvail,
+		"pctMemUsed": sis.PctMemUsed,
+		"pctCpuUsed": sis.PctCPUUsed,
 	}
 
-	f.WriteString(
-		strings.Join(
-			[]string{
-				sis.Timestamp.Format(csvTimeFormat),
-				sis.DaemonID,
-				sis.Type,
-				fmt.Sprintf("%d", (sis.MemUsed)),
-				fmt.Sprintf("%d", (sis.MemAvail)),
-				fmt.Sprintf("%f", sis.PctMemUsed),
-				fmt.Sprintf("%f", sis.PctCPUUsed),
-				safeFSUsed,
-				safeFSCapacity,
-				safePctFSUsed,
-			},
-			","))
+	if sis.FSCapacity > 0 {
+		contents["capUsed"] = sis.FSUsed
+		contents["capAvail"] = sis.FSCapacity
+		contents["pctCapUsed"] = sis.PctFSUsed
+	}
 
-	f.WriteString("\n")
+	return contents
 }

@@ -164,7 +164,7 @@ func GetDaemonStatus(baseParams *BaseParams) (daeInfo *stats.DaemonStatus, err e
 // Given a key and a value for a specific configuration parameter
 // this operation sets the configuration accordingly for a specific daemon
 func SetDaemonConfig(baseParams *BaseParams, key string, value interface{}) error {
-	valstr, err := convertToString(value)
+	valstr, err := cmn.ConvertToString(value)
 	if err != nil {
 		return err
 	}

@@ -5,11 +5,9 @@
 package stats
 
 import (
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 //This is intended to summarize primitives within a recipe
@@ -22,9 +20,10 @@ type RecipeStats struct {
 	EndTime    time.Time `json:"end_time"`
 
 	latencyTotal time.Duration
+	minLatency   time.Duration
+	maxLatency   time.Duration
 	requestCount int64
 	totalSize    int64 // bytes
-	duration     time.Duration
 	errorsCount  int64
 
 	numFatal int
@@ -36,73 +35,74 @@ func (rs *RecipeStats) Add(p *PrimitiveStat) {
 		return
 	}
 	rs.latencyTotal += time.Duration(int64(p.RequestCount) * int64(p.Latency))
+	if p.LatencyMin > 0 && (p.LatencyMin < rs.minLatency || rs.minLatency == 0) {
+		rs.minLatency = p.LatencyMin
+	}
+	rs.maxLatency = cmn.MaxDuration(rs.maxLatency, p.LatencyMax)
+
 	rs.requestCount += p.RequestCount
 	rs.totalSize += p.TotalSize
 	rs.errorsCount += p.ErrorsCount
-
-	rs.duration += p.Duration
 }
 
 func (rs *RecipeStats) HasData() bool {
 	return rs.requestCount > 0
 }
 
-func (rs RecipeStats) writeHeadings(f *os.File) {
-	f.WriteString(
-		strings.Join(
-			[]string{
-				"Begin Time",
-				"End Time",
-				"Recipe Name",
-				"Recipe Num",
-				"OpType",
+func (rs RecipeStats) getHeadingsText() map[string]string {
+	return map[string]string{
+		"beginTime": "Begin Time",
+		"endTime":   "End Time",
+		"recName":   "Recipe Name",
+		"recNum":    "Recipe Num",
+		"opType":    "Operation Type",
 
-				"Avg Latency (s)",
-				"Throughput (byte/s)",
+		"minLatency": "Min Latency (ms)",
+		"avgLatency": "Avg Latency (ms)",
+		"maxLatency": "Max Latency (ms)",
+		"throughput": "Throughput (B/s)",
 
-				"Num Errors",
-				"Num Fatal",
-			},
-			","))
-
-	f.WriteString("\n")
+		"totSize":    "Total Size (B)",
+		"reqCount":   "Request Count",
+		"errCount":   "Error Count",
+		"fatalCount": "Fatal Count",
+	}
 }
 
-func (rs RecipeStats) writeStat(f *os.File) {
-
-	safeLatency := ""
-	if rs.requestCount > 0 {
-		safeLatency = fmt.Sprintf("%f", rs.latencyTotal.Seconds()/float64(rs.requestCount))
+func (rs RecipeStats) getHeadingsOrder() []string {
+	return []string{
+		"beginTime", "endTime", "recName", "recNum", "opType",
+		"minLatency", "avgLatency", "maxLatency", "throughput",
+		"totSize", "reqCount", "errCount", "fatalCount",
 	}
-	safeThroughput := ""
-	if rs.duration.Seconds() > 0 {
-		safeThroughput = fmt.Sprintf("%f", float64(rs.totalSize)/rs.duration.Seconds())
+}
+
+func (rs RecipeStats) getContents() map[string]interface{} {
+	var safeLatency float64
+	if rs.requestCount > 0 && rs.latencyTotal > 0 {
+		safeLatency = getMilliseconds(rs.latencyTotal) / float64(rs.requestCount)
 	}
-	safeErrorCount := ""
-	if rs.errorsCount > 0 {
-		safeErrorCount = fmt.Sprintf("%d", rs.errorsCount)
-	}
-	safeNumFatal := ""
-	if rs.numFatal > 0 {
-		safeErrorCount = strconv.Itoa(rs.numFatal)
+	var safeThroughput float64
+	duration := rs.EndTime.Sub(rs.BeginTime)
+	if duration > 0 {
+		safeThroughput = float64(rs.totalSize) / duration.Seconds()
 	}
 
-	f.WriteString(
-		strings.Join(
-			[]string{
-				rs.BeginTime.Format(csvTimeFormat),
-				rs.EndTime.Format(csvTimeFormat),
-				rs.RecipeName,
-				strconv.Itoa(rs.RecipeNum),
-				rs.OpType,
+	return map[string]interface{}{
+		"beginTime": rs.BeginTime.Format(csvTimeFormat),
+		"endTime":   rs.EndTime.Format(csvTimeFormat),
+		"recName":   rs.RecipeName,
+		"recNum":    rs.RecipeNum,
+		"opType":    rs.OpType,
 
-				safeLatency,
-				safeThroughput,
+		"minLatency": getMilliseconds(rs.minLatency),
+		"avgLatency": safeLatency,
+		"maxLatency": getMilliseconds(rs.maxLatency),
+		"throughput": safeThroughput,
 
-				safeErrorCount,
-				safeNumFatal,
-			},
-			","))
-
-	f.WriteString("\n")
+		"totSize":    rs.totalSize,
+		"reqCount":   rs.requestCount,
+		"errCount":   rs.errorsCount,
+		"fatalCount": rs.numFatal,
+	}
 }

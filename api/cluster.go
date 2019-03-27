@@ -142,7 +142,7 @@ func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
 // this operation sets the cluster-wide configuration accordingly.
 // Setting cluster-wide configuration requires sending the request to a proxy
 func SetClusterConfig(baseParams *BaseParams, key string, value interface{}) error {
-	valstr, err := convertToString(value)
+	valstr, err := cmn.ConvertToString(value)
 	if err != nil {
 		return err
 	}

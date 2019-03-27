@@ -5,10 +5,6 @@
 package stats
 
 import (
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -35,80 +31,66 @@ type AISLoaderStat struct {
 	Duration     time.Duration `json:"duration"`
 }
 
-func (ps *PrimitiveStat) writeHeadings(f *os.File) {
-	f.WriteString(
-		strings.Join(
-			[]string{
-				"Timestamp",
-				"Recipe Name",
-				"Recipe Num",
-				"Primitive ID",
-				"Get/Put",
-				"Avg Latency (s)",
-				"Throughput (byte/s)",
-				"Error Count",
-				"Fatal",
-			},
-			","))
+func (rs PrimitiveStat) getHeadingsText() map[string]string {
+	return map[string]string{
+		"startTime": "Start Time",
+		"endTime":   "End Time",
+		"recName":   "Recipe Name",
+		"recNum":    "Recipe Num",
+		"primID":    "Primitive ID",
 
-	f.WriteString("\n")
+		"opType": "Operation Type",
+
+		"minLatency": "Min Latency (ms)",
+		"avgLatency": "Avg Latency (ms)",
+		"maxLatency": "Max Latency (ms)",
+		"throughput": "Throughput (B/s)",
+
+		"totSize":  "Total Size (B)",
+		"reqCount": "Request Count",
+		"errCount": "Error Count",
+		"fatal":    "Fatal",
+	}
 }
 
-func (ps *PrimitiveStat) writeStat(f *os.File) {
+func (rs PrimitiveStat) getHeadingsOrder() []string {
+	return []string{
+		"startTime", "endTime", "recName", "recNum", "primID",
+		"opType",
+		"minLatency", "avgLatency", "maxLatency", "throughput",
+		"totSize", "reqCount", "errCount", "fatal",
+	}
+}
+
+func (ps PrimitiveStat) getContents() map[string]interface{} {
 	if ps.Fatal {
-		f.WriteString(
-			strings.Join(
-				[]string{
-					ps.StartTime.Format(csvTimeFormat),
-					ps.RecipeName,
-					strconv.Itoa(ps.RecipeNum),
-					ps.ID,
-					"",
-					"",
-					"",
-					"",
-					"TRUE",
-				},
-				","))
-		f.WriteString("\n")
-		return
+		return map[string]interface{}{
+			"startTime": ps.StartTime.Format(csvTimeFormat),
+			"recName":   ps.RecipeName,
+			"recNum":    ps.RecipeNum,
+			"primID":    ps.ID,
+
+			"fatal": true,
+		}
 	}
 
-	safeRecipeNum := ""
-	if ps.RecipeNum > 0 {
-		safeRecipeNum = strconv.Itoa(ps.RecipeNum)
+	return map[string]interface{}{
+		"startTime": ps.StartTime.Format(csvTimeFormat),
+		"endTime":   ps.StartTime.Add(ps.Duration).Format(csvTimeFormat),
+		"recName":   ps.RecipeName,
+		"recNum":    ps.RecipeNum,
+		"primID":    ps.ID,
+
+		"opType": ps.OpType,
+
+		"minLatency": getMilliseconds(ps.LatencyMin),
+		"avgLatency": getMilliseconds(ps.Latency),
+		"maxLatency": getMilliseconds(ps.LatencyMax),
+		"throughput": ps.Throughput,
+
+		"totSize":  ps.TotalSize,
+		"reqCount": ps.RequestCount,
+		"errCount": ps.ErrorsCount,
+		"fatal":    false,
 	}
-
-	safeLatency := ""
-	if ps.RequestCount > 0 {
-		safeLatency = fmt.Sprintf("%f", ps.Latency.Seconds())
-	}
-	safeThroughput := ""
-	if ps.Throughput > 0 {
-		safeThroughput = fmt.Sprintf("%d", ps.Throughput)
-	}
-	safeErrorCount := ""
-	if ps.ErrorsCount > 0 {
-		safeErrorCount = fmt.Sprintf("%d", ps.ErrorsCount)
-	}
-
-	f.WriteString(
-		strings.Join(
-			[]string{
-				ps.StartTime.Format(csvTimeFormat),
-				ps.RecipeName,
-				safeRecipeNum,
-				ps.ID,
-
-				ps.OpType,
-				safeLatency,
-				safeThroughput,
-
-				safeErrorCount,
-
-				"FALSE",
-			},
-			","))
-
-	f.WriteString("\n")
 }

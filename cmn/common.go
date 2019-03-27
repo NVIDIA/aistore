@@ -219,6 +219,25 @@ func TimeDelta(time1, time2 time.Time) time.Duration {
 	return time1.Sub(time2)
 }
 
+func ConvertToString(value interface{}) (valstr string, err error) {
+	if v, ok := value.(string); ok {
+		valstr = v
+	} else if v, ok := value.(bool); ok {
+		valstr = strconv.FormatBool(v)
+	} else if v, ok := value.(int); ok {
+		valstr = strconv.Itoa(v)
+	} else if v, ok := value.(int64); ok {
+		valstr = strconv.FormatInt(v, 10)
+	} else if v, ok := value.(uint64); ok {
+		valstr = strconv.FormatUint(v, 10)
+	} else if v, ok := value.(float64); ok {
+		valstr = strconv.FormatFloat(v, 'f', -1, 64)
+	} else {
+		err = fmt.Errorf("failed to assert type on param: %v (type %T)", value, value)
+	}
+	return
+}
+
 const assertMsg = "assertion failed"
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below
