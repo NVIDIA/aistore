@@ -13,10 +13,10 @@ lint)
         err_count=$(($err_count + $errs))
     done
     echo "Checking staticcheck..." >&2
-    errs=$(${GOPATH}/bin/gometalinter --exclude="${LINT_IGNORE}" --disable-all --enable=staticcheck --linter="staticcheck:staticcheck -tags hrw {path}:PATH:LINE:COL:MESSAGE" ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
+    errs=$(${GOPATH}/bin/gometalinter --deadline 5m --exclude="${LINT_IGNORE}" --disable-all --enable=staticcheck --linter="staticcheck:staticcheck -tags hrw {path}:PATH:LINE:COL:MESSAGE" ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
     err_count=$(($err_count + $errs))
     echo "Checking others..." >&2
-    errs=$(${GOPATH}/bin/gometalinter --exclude="${LINT_IGNORE}" --disable-all --enable=golint --enable=errcheck ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
+    errs=$(${GOPATH}/bin/gometalinter --deadline 5m --exclude="${LINT_IGNORE}" --disable-all --enable=golint --enable=errcheck ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
     err_count=$(($err_count + $errs))
     if [ "${err_count}" != "0" ]; then
         echo "found ${err_count} lint errors, please fix or add exception" >&2
