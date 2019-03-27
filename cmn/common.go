@@ -726,10 +726,10 @@ func FormatTime(t time.Time, format string) string {
 	}
 }
 
-func ParseTime(timeStr string) (t time.Time, errstr string) {
+func ParseTime(timeStr string) (t time.Time, err error) {
 	timeInt, err := strconv.ParseInt(timeStr, 10, 64)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to parse atime string: %s to int, err: %v", timeStr, err)
+		err = fmt.Errorf("failed to parse atime string: %s to int, err: %v", timeStr, err)
 		return
 	}
 	t = time.Unix(0, timeInt)

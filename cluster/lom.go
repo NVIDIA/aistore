@@ -265,7 +265,8 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		}
 		cprovider := lom.Config.CloudProvider
 		if !lom.BckIsLocal && (cprovider == "" || cprovider == cmn.ProviderAIS) {
-			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s)", lom, cprovider)
+			// TODO: Differentiate between no cloud provider and nonexistent bucket
+			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s) or nonexistent bucket", lom, cprovider)
 			return
 		}
 		lom.CksumConf = &lom.BckProps.Cksum

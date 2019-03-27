@@ -790,8 +790,11 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		}
 		// retry in case the object is being moved right now
 		for retry := 0; retry < getFromNeighRetries; retry++ {
-			props, errs := t.getFromNeighbor(r, lom)
-			if errs != "" {
+			props, err := t.getFromNeighbor(r, lom)
+			if err != nil {
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("Unsuccessful GFN: %v.", err)
+				}
 				time.Sleep(getFromNeighSleep)
 				continue
 			}
@@ -1663,10 +1666,10 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, ve
 	return
 }
 
-func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remoteLOM *cluster.LOM, errstr string) {
+func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remoteLOM *cluster.LOM, err error) {
 	neighsi := t.lookupRemotely(lom)
 	if neighsi == nil {
-		errstr = fmt.Sprintf("Failed cluster-wide lookup %s", lom)
+		err = fmt.Errorf("failed cluster-wide lookup %s", lom)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1685,7 +1688,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 	//
 	newr, err := http.NewRequest(http.MethodGet, geturl, nil)
 	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
+		err = fmt.Errorf("unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
 		return
 	}
 	newr.URL.Query().Add(cmn.URLParamIsGFNRequest, "true") // This is a GFN request
@@ -1697,7 +1700,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 
 	response, err := t.httpclientLongTimeout.Do(newrequest)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to GET redirect URL %q, err: %v", geturl, err)
+		err = fmt.Errorf("failed to GET redirect URL %q, err: %v", geturl, err)
 		return
 	}
 	var (
@@ -1710,8 +1713,8 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 	)
 
 	// The string in the header is an int represented as a string, NOT a formatted date string.
-	atime, errstr := cmn.ParseTime(atimeStr)
-	if errstr != "" {
+	atime, err := cmn.ParseTime(atimeStr)
+	if err != nil {
 		return
 	}
 
@@ -1725,16 +1728,15 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (remot
 		lom:      remoteLOM,
 	}
 
-	if err = roi.writeToFile(); err != nil { // FIXME: transfer atime as well
-		errstr = err.Error()
+	if err = roi.writeToFile(); err != nil {
 		return
 	}
 	// commit
 	if err = cmn.MvFile(workFQN, remoteLOM.FQN); err != nil {
-		errstr = err.Error()
 		return
 	}
-	if errstr = remoteLOM.Persist(false); errstr != "" {
+	if errstr := remoteLOM.Persist(false); errstr != "" {
+		err = errors.New(errstr)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -2450,7 +2452,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 	if !roi.lom.BckIsLocal && !roi.migrated {
 		file, err := os.Open(roi.workFQN)
 		if err != nil {
-			errstr = fmt.Sprintf("Failed to open %s err: %v", roi.workFQN, err)
+			errstr = fmt.Sprintf("failed to open %s err: %v", roi.workFQN, err)
 			return
 		}
 
@@ -2480,7 +2482,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		return
 	}
 	if errstr = roi.lom.Persist(roi.migrated); errstr != "" {
-		glog.Errorf("Failed to persist %s: %s", roi.lom, errstr)
+		glog.Errorf("failed to persist %s: %s", roi.lom, errstr)
 	}
 	roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
 	return

@@ -653,8 +653,9 @@ func (d *Downloader) dispatchStatus(req *request) {
 		lom := &cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname}
 		errstr := lom.Fill(body.BckProvider, cluster.LomFstat)
 		if errstr != "" {
+			// TODO: if lom.Fill returned error because the bucket does not exist anymore this should not cause InternalServerError
 			errs = append(errs, response{
-				err:        err,
+				err:        errors.New(errstr),
 				statusCode: http.StatusInternalServerError,
 			})
 			continue
