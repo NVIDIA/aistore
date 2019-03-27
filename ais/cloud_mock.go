@@ -26,7 +26,7 @@ var (
 
 func newEmptyCloud() *emptyCloud { return &emptyCloud{} }
 
-func (m *emptyCloud) listbucket(ctx context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (m *emptyCloud) listbucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int) {
 	return []byte{}, fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
 }
 func (m *emptyCloud) headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int) {

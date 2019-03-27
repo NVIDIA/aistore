@@ -177,17 +177,17 @@ const (
 	URLParamTimeout  = "timeout"
 )
 
-// GetMsg represents properties and options for requests which fetch entities
-// Note: if GetFast is `true` then paging is disabled - all items are returned
+// SelectMsg represents properties and options for requests which fetch entities
+// Note: if Fast is `true` then paging is disabled - all items are returned
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
-type GetMsg struct {
-	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
-	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
-	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	GetPageMarker string `json:"pagemarker"`  // marker - the last object in previous page
-	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
-	GetFast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
+type SelectMsg struct {
+	Props      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
+	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
+	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+	PageMarker string `json:"pagemarker"`  // marker - the last object in previous page
+	PageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
+	Fast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
 }
 
 // ListRangeMsgBase contains fields common to Range and List operations
@@ -239,7 +239,7 @@ const (
 	GetWhatDaemonStatus = "status"
 )
 
-// GetMsg.GetTimeFormat enum
+// SelectMsg.TimeFormat enum
 const (
 	RFC822     = time.RFC822
 	Stamp      = time.Stamp      // e.g. "Jan _2 15:04:05"
@@ -251,7 +251,7 @@ const (
 	RFC3339    = time.RFC3339
 )
 
-// GetMsg.GetProps enum
+// SelectMsg.Props enum
 const (
 	GetPropsChecksum = "checksum"
 	GetPropsSize     = "size"
@@ -279,14 +279,14 @@ const (
 //===================
 
 // BucketEntry corresponds to a single entry in the BucketList and
-// contains file and directory metadata as per the GetMsg
+// contains file and directory metadata as per the SelectMsg
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
 	Size      int64  `json:"size,omitempty"`      // size in bytes
-	Ctime     string `json:"ctime,omitempty"`     // formatted as per GetMsg.GetTimeFormat
+	Ctime     string `json:"ctime,omitempty"`     // formatted as per SelectMsg.TimeFormat
 	Checksum  string `json:"checksum,omitempty"`  // checksum
 	Type      string `json:"type,omitempty"`      // "file" OR "directory"
-	Atime     string `json:"atime,omitempty"`     // formatted as per GetMsg.GetTimeFormat
+	Atime     string `json:"atime,omitempty"`     // formatted as per SelectMsg.TimeFormat
 	Bucket    string `json:"bucket,omitempty"`    // parent bucket name
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry

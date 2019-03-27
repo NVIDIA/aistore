@@ -136,7 +136,7 @@ func ListBucket(c *cli.Context) error {
 	query.Add(cmn.URLParamBckProvider, parseFlag(c, bckProviderFlag.Name))
 	query.Add(cmn.URLParamPrefix, prefix)
 
-	msg := &cmn.GetMsg{GetPageSize: pagesize, GetProps: props}
+	msg := &cmn.SelectMsg{PageSize: pagesize, Props: props}
 	objList, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
 		return err

@@ -440,7 +440,7 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, bckProvider, prefix string, objectCountLimit int) ([]string, error) {
-	msg := &cmn.GetMsg{GetPrefix: prefix}
+	msg := &cmn.SelectMsg{Prefix: prefix}
 	baseParams := BaseAPIParams(proxyURL)
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)
@@ -730,7 +730,7 @@ func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, 
 			return fmt.Errorf("timed out when downloading %s/%s", bucket, objName)
 		}
 
-		reslist, err := api.ListBucket(params, bucket, &cmn.GetMsg{GetFast: true}, 0)
+		reslist, err := api.ListBucket(params, bucket, &cmn.SelectMsg{Fast: true}, 0)
 		if err != nil {
 			return err
 		}

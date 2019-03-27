@@ -42,7 +42,7 @@ type filesWithDeadline struct {
 
 type listf func(ct context.Context, objects []string, bucket, bckProvider string, deadline time.Duration, done chan struct{}) error
 
-func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.GetMsg) (bucketList *cmn.BucketList, err error) {
+func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error) {
 	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
 	if errstr != "" {
 		return nil, fmt.Errorf("error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
@@ -431,7 +431,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		bucket         = apitems[0]
 		prefix         = rangeMsg.Prefix
 		ct             = t.contextWithAuth(r.Header)
-		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
+		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 	bckIsLocal, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)
 	if err != nil {
@@ -490,7 +490,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		}
 
 		// Update PageMarker for the next request
-		msg.GetPageMarker = bucketListPage.PageMarker
+		msg.PageMarker = bucketListPage.PageMarker
 	}
 	return nil
 }

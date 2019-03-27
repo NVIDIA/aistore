@@ -184,7 +184,7 @@ func createClient(ctx context.Context) (*storage.Client, context.Context, string
 // bucket operations
 //
 //==================
-func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -195,17 +195,17 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 	var query *storage.Query
 	var pageToken string
 
-	if msg.GetPrefix != "" {
-		query = &storage.Query{Prefix: msg.GetPrefix}
+	if msg.Prefix != "" {
+		query = &storage.Query{Prefix: msg.Prefix}
 	}
-	if msg.GetPageMarker != "" {
-		pageToken = msg.GetPageMarker
+	if msg.PageMarker != "" {
+		pageToken = msg.PageMarker
 	}
 
 	it := gcpclient.Bucket(bucket).Objects(gctx, query)
 	pageSize := gcpPageSize
-	if msg.GetPageSize != 0 {
-		pageSize = msg.GetPageSize
+	if msg.PageSize != 0 {
+		pageSize = msg.PageSize
 	}
 	pager := iterator.NewPager(it, pageSize, pageToken)
 	objs := make([]*storage.ObjectAttrs, 0)
@@ -220,26 +220,26 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name
-		if strings.Contains(msg.GetProps, cmn.GetPropsSize) {
+		if strings.Contains(msg.Props, cmn.GetPropsSize) {
 			entry.Size = attrs.Size
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsBucket) {
+		if strings.Contains(msg.Props, cmn.GetPropsBucket) {
 			entry.Bucket = attrs.Bucket
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsCtime) {
+		if strings.Contains(msg.Props, cmn.GetPropsCtime) {
 			t := attrs.Created
 			if !attrs.Updated.IsZero() {
 				t = attrs.Updated
 			}
-			entry.Ctime = cmn.FormatTime(t, msg.GetTimeFormat)
+			entry.Ctime = cmn.FormatTime(t, msg.TimeFormat)
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsChecksum) {
+		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
 			entry.Checksum = hex.EncodeToString(attrs.MD5)
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsVersion) {
+		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
 			entry.Version = fmt.Sprintf("%d", attrs.Generation)
 		}
-		// TODO: other cmn.GetMsg props TBD
+		// TODO: other cmn.SelectMsg props TBD
 
 		reslist.Entries = append(reslist.Entries, entry)
 	}

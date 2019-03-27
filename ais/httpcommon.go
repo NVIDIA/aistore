@@ -112,7 +112,7 @@ type (
 const initialBucketListSize = 128
 
 type cloudif interface {
-	listbucket(ctx context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int)
+	listbucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int)
 	headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//

@@ -169,7 +169,7 @@ for {
         break
     }
     // If not, update PageMarker to the next page returned from the request.
-    msg.GetPageMarker = pagelist.PageMarker
+    msg.PageMarker = pagelist.PageMarker
 }
 ```
 

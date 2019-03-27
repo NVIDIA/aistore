@@ -27,7 +27,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	return
 }
 
-func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *cmn.GetMsg,
+func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *cmn.SelectMsg,
 	versionEnabled bool, bckIsLocal bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
@@ -108,7 +108,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL, bucket, bckProvider string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL, bucket, bckProvider string, objMap map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -179,7 +179,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, bckProvider string, objMap map[s
 	}
 }
 
-func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *cmn.SelectMsg, versionEnabled bool) {
 	tutils.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bucket, objs)
 	tutils.Logf("Checking objects properties after refetching...\n")
@@ -218,7 +218,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.GetMsg, versionEnabled bool, bckIsLocal bool) {
+func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
 	smap := getClusterMap(t, proxyURL)
@@ -347,9 +347,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	}
 
 	// Read object versions
-	msg := &cmn.GetMsg{
-		GetPrefix: versionDir,
-		GetProps:  cmn.GetPropsVersion + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus,
+	msg := &cmn.SelectMsg{
+		Prefix: versionDir,
+		Props:  cmn.GetPropsVersion + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus,
 	}
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {

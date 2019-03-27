@@ -64,7 +64,7 @@ type (
 		prefix       string
 		marker       string
 		markerDir    string
-		msg          *cmn.GetMsg
+		msg          *cmn.SelectMsg
 		lastFilePath string
 		bucket       string
 		fileCount    int
@@ -1882,7 +1882,7 @@ func (t *targetrunner) lookupRemotely(lom *cluster.LOM) *cluster.Snode {
 }
 
 // should not be called for local buckets
-func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.GetMsg) (outbytes []byte, errstr string, errcode int) {
+func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg) (outbytes []byte, errstr string, errcode int) {
 	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
 		return nil, err.Error(), 0
@@ -1896,7 +1896,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.GetMsg) (outbyt
 }
 
 // TODO: add support paging for fast object listing
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*cmn.BucketList, error) {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg) (*cmn.BucketList, error) {
 	type mresp struct {
 		infos      *allfinfos
 		failedPath string
@@ -1910,7 +1910,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
 		r := &mresp{t.newFileWalk(bucket, msg), "", nil}
-		if msg.GetFast {
+		if msg.Fast {
 			// for "quick" request return all objects in one response
 			r.infos.limit = 1<<63 - 1
 		}
@@ -1924,10 +1924,10 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 			return
 		}
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
-		if msg.GetFast {
+		if msg.Fast {
 			// Special path for "quick" response: no object properties check,
-			// msg.GetProps is skipped: only object name and size returned.
-			// All other msg props do not work except msg.GetPrefix
+			// msg.Props is skipped: only object name and size returned.
+			// All other msg props do not work except msg.Prefix
 			// Always returns all objects
 			err := godirwalk.Walk(dir, &godirwalk.Options{
 				Callback: r.infos.listwalkfFast,
@@ -2007,7 +2007,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 		PageMarker: marker,
 	}
 
-	if strings.Contains(msg.GetProps, cmn.GetTargetURL) {
+	if strings.Contains(msg.Props, cmn.GetTargetURL) {
 		for _, e := range bucketList.Entries {
 			e.TargetURL = t.si.PublicNet.DirectURL
 		}
@@ -2043,7 +2043,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.GetMsg) (errstr string, ok bool) {
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.SelectMsg) (errstr string, ok bool) {
 	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
 		errstr = fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
@@ -2083,10 +2083,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
-	var msg cmn.GetMsg
+	var msg cmn.SelectMsg
 	err = jsoniter.Unmarshal(getMsgJSON, &msg)
 	if err != nil {
-		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a cmn.GetMsg: %v", actionMsg.Value)
+		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -2098,7 +2098,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return // ======================================>
 	}
 	// cloud bucket
-	msg.GetFast = false // fast mode does not make sense for Cloud buckets
+	msg.Fast = false // fast mode does not make sense for Cloud buckets
 	if useCache {
 		tag = "cloud cached"
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
@@ -2114,11 +2114,11 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	return
 }
 
-func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
+func (t *targetrunner) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 	// Marker is always a file name, so we need to strip filename from path
 	markerDir := ""
-	if msg.GetPageMarker != "" {
-		markerDir = filepath.Dir(msg.GetPageMarker)
+	if msg.PageMarker != "" {
+		markerDir = filepath.Dir(msg.PageMarker)
 	}
 
 	// A small optimization: set boolean variables need* to avoid
@@ -2126,8 +2126,8 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
 	ci := &allfinfos{
 		t:            t, // targetrunner
 		files:        make([]*cmn.BucketEntry, 0, cmn.DefaultPageSize),
-		prefix:       msg.GetPrefix,
-		marker:       msg.GetPageMarker,
+		prefix:       msg.Prefix,
+		marker:       msg.PageMarker,
 		markerDir:    markerDir,
 		msg:          msg,
 		lastFilePath: "",
@@ -2135,17 +2135,17 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
 		fileCount:    0,
 		rootLength:   0,
 		limit:        cmn.DefaultPageSize, // maximum number files to return
-		needAtime:    strings.Contains(msg.GetProps, cmn.GetPropsAtime),
-		needCtime:    strings.Contains(msg.GetProps, cmn.GetPropsCtime),
-		needChkSum:   strings.Contains(msg.GetProps, cmn.GetPropsChecksum),
-		needVersion:  strings.Contains(msg.GetProps, cmn.GetPropsVersion),
-		needStatus:   strings.Contains(msg.GetProps, cmn.GetPropsStatus),
-		needCopies:   strings.Contains(msg.GetProps, cmn.GetPropsCopies),
+		needAtime:    strings.Contains(msg.Props, cmn.GetPropsAtime),
+		needCtime:    strings.Contains(msg.Props, cmn.GetPropsCtime),
+		needChkSum:   strings.Contains(msg.Props, cmn.GetPropsChecksum),
+		needVersion:  strings.Contains(msg.Props, cmn.GetPropsVersion),
+		needStatus:   strings.Contains(msg.Props, cmn.GetPropsStatus),
+		needCopies:   strings.Contains(msg.Props, cmn.GetPropsCopies),
 		atimeRespCh:  make(chan *atime.Response, 1),
 	}
 
-	if msg.GetPageSize != 0 {
-		ci.limit = msg.GetPageSize
+	if msg.PageSize != 0 {
+		ci.limit = msg.PageSize
 	}
 
 	return ci
@@ -2214,10 +2214,10 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 		lom.Fill("", lomAction)
 	}
 	if ci.needAtime {
-		fileInfo.Atime = cmn.FormatTime(lom.Atime, ci.msg.GetTimeFormat)
+		fileInfo.Atime = cmn.FormatTime(lom.Atime, ci.msg.TimeFormat)
 	}
 	if ci.needCtime {
-		fileInfo.Ctime = cmn.FormatTime(osfi.ModTime(), ci.msg.GetTimeFormat)
+		fileInfo.Ctime = cmn.FormatTime(osfi.ModTime(), ci.msg.TimeFormat)
 	}
 	if ci.needChkSum && lom.Cksum != nil {
 		_, storedCksum := lom.Cksum.Get()
@@ -2238,7 +2238,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 // fast alternative of generic listwalk: do not fetch any object information
 // Always returns all objects - no paging required. But the result may have
 // 'ghost' or duplicated  objects.
-// The only supported GetMsg feature is 'GetPrefix' - it does not slow down.
+// The only supported SelectMsg feature is 'Prefix' - it does not slow down.
 func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
 	if de.IsDir() {
 		return ci.processDir(fqn)

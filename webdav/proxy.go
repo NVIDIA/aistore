@@ -123,9 +123,9 @@ func (p *proxyServer) deleteObject(bucket, bckProvider, prefix string) error {
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
 func (p *proxyServer) listObjectsDetails(bucket, bckProvider, prefix string, limit int) ([]*cmn.BucketEntry, error) {
-	msg := &cmn.GetMsg{
-		GetPrefix: prefix,
-		GetProps:  "size, ctime",
+	msg := &cmn.SelectMsg{
+		Prefix: prefix,
+		Props:  "size, ctime",
 	}
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)

@@ -385,7 +385,7 @@ func assertBucketSize(t *testing.T, baseParams *api.BaseParams, bckName string, 
 }
 
 func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bckName, msg, 0)
 	tutils.CheckFatal(err, t)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1030,7 +1030,7 @@ func TestECStress(t *testing.T) {
 
 	doECPutsAndCheck(t, TestLocalBucketName, seed, baseParams, concurr, objCount)
 
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1081,14 +1081,14 @@ func TestECStressManyBuckets(t *testing.T) {
 	}()
 	wg.Wait()
 
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bck1Name, msg, 0)
 	tutils.CheckFatal(err, t)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
 	tassert.Fatal(t, len(reslist.Entries) == objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1Name, len(reslist.Entries), objCount)
 
-	msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err = api.ListBucket(baseParams, bck2Name, msg, 0)
 	tutils.CheckFatal(err, t)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1207,7 +1207,7 @@ func TestECExtraStress(t *testing.T) {
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)
 
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	reslist.Entries = filterObjListOK(reslist.Entries)
@@ -1355,7 +1355,7 @@ func TestECXattrs(t *testing.T) {
 		}
 	}
 
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -1516,7 +1516,7 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	// 4. Check that ListBucket returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	if err != nil {
 		t.Error(err)
@@ -1653,7 +1653,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	// 4. Check that ListBucket returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status,version"}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 

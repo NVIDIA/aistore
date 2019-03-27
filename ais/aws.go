@@ -163,7 +163,7 @@ func awsIsVersionSet(version *string) bool {
 // bucket operations
 //
 //==================
-func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -171,19 +171,19 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 	svc := s3.New(sess)
 
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
-	if msg.GetPrefix != "" {
-		params.Prefix = aws.String(msg.GetPrefix)
+	if msg.Prefix != "" {
+		params.Prefix = aws.String(msg.Prefix)
 	}
-	if msg.GetPageMarker != "" {
-		params.Marker = aws.String(msg.GetPageMarker)
+	if msg.PageMarker != "" {
+		params.Marker = aws.String(msg.PageMarker)
 	}
-	if msg.GetPageSize != 0 {
-		if msg.GetPageSize > awsMaxPageSize {
+	if msg.PageSize != 0 {
+		if msg.PageSize > awsMaxPageSize {
 			glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
-				awsMaxPageSize, msg.GetPageSize, awsMaxPageSize)
-			msg.GetPageSize = awsMaxPageSize
+				awsMaxPageSize, msg.PageSize, awsMaxPageSize)
+			msg.PageSize = awsMaxPageSize
 		}
-		params.MaxKeys = aws.Int64(int64(msg.GetPageSize))
+		params.MaxKeys = aws.Int64(int64(msg.PageSize))
 	}
 
 	resp, err := svc.ListObjects(params)
@@ -194,12 +194,12 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 	}
 
 	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
-	if msg.GetPrefix != "" {
-		verParams.Prefix = aws.String(msg.GetPrefix)
+	if msg.Prefix != "" {
+		verParams.Prefix = aws.String(msg.Prefix)
 	}
 
 	var versions map[string]*string
-	if strings.Contains(msg.GetProps, cmn.GetPropsVersion) {
+	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
 		verResp, err := svc.ListObjectVersions(verParams)
 		if err != nil {
 			errstr = err.Error()
@@ -215,28 +215,28 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.G
 		}
 	}
 
-	// var msg cmn.GetMsg
+	// var msg cmn.SelectMsg
 	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
 		entry.Name = *(key.Key)
-		if strings.Contains(msg.GetProps, cmn.GetPropsSize) {
+		if strings.Contains(msg.Props, cmn.GetPropsSize) {
 			entry.Size = *(key.Size)
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsCtime) {
+		if strings.Contains(msg.Props, cmn.GetPropsCtime) {
 			t := *(key.LastModified)
-			entry.Ctime = cmn.FormatTime(t, msg.GetTimeFormat)
+			entry.Ctime = cmn.FormatTime(t, msg.TimeFormat)
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsChecksum) {
+		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
 			omd5, _ := strconv.Unquote(*key.ETag)
 			entry.Checksum = omd5
 		}
-		if strings.Contains(msg.GetProps, cmn.GetPropsVersion) {
+		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
 			if val, ok := versions[*(key.Key)]; ok && awsIsVersionSet(val) {
 				entry.Version = *val
 			}
 		}
-		// TODO: other cmn.GetMsg props TBD
+		// TODO: other cmn.SelectMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	if glog.V(4) {

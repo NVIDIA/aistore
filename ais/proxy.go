@@ -817,7 +817,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request,
 	bucket, bckProvider string, actionMsg cmn.ActionMsg, started time.Time, fastListing bool) {
 	var (
-		msg     = cmn.GetMsg{}
+		msg     = cmn.SelectMsg{}
 		bckList *cmn.BucketList
 		query   = r.URL.Query()
 	)
@@ -835,11 +835,11 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 
 	// override fastListing if it set
 	if fastListing {
-		msg.GetFast = fastListing
+		msg.Fast = fastListing
 	}
 	// override prefix if it is set in URL query values
 	if prefix := query.Get(cmn.URLParamPrefix); prefix != "" {
-		msg.GetPrefix = prefix
+		msg.Prefix = prefix
 	}
 
 	if bckList, err = p.listBucket(r, bucket, bckProvider, msg); err != nil {
@@ -1338,7 +1338,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider string, dinfo *cluster.Snode,
-	getMsg *cmn.GetMsg, cached bool) (*bucketResp, error) {
+	getMsg *cmn.SelectMsg, cached bool) (*bucketResp, error) {
 	bmd := p.bmdowner.get()
 	actionMsgBytes, err := jsoniter.Marshal(p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: getMsg}, nil, bmd))
 	if err != nil {
@@ -1414,10 +1414,10 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh
 
 // Request list of all cached files from a target.
 // The target returns its list in batches `pageSize` length
-func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *cluster.Snode, dataCh chan *localFilePage, origmsg *cmn.GetMsg) {
-	var msg cmn.GetMsg
+func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *cluster.Snode, dataCh chan *localFilePage, origmsg *cmn.SelectMsg) {
+	var msg cmn.SelectMsg
 	cmn.CopyStruct(&msg, origmsg)
-	msg.GetPageSize = internalPageSize
+	msg.PageSize = internalPageSize
 	for {
 		resp, err := p.targetListBucket(nil, bucket, bckProvider, daemon, &msg, true /* cachedObjects */)
 		if err != nil {
@@ -1447,7 +1447,7 @@ func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *clu
 			return
 		}
 
-		msg.GetPageMarker = entries.PageMarker
+		msg.PageMarker = entries.PageMarker
 		if dataCh != nil {
 			dataCh <- &localFilePage{
 				err:     nil,
@@ -1467,7 +1467,7 @@ func (p *proxyrunner) generateCachedList(bucket, bckProvider string, daemon *clu
 
 // Get list of cached files from all targets and update the list
 // of files from cloud with local metadata (iscached, atime etc)
-func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList *cmn.BucketList, msg cmn.GetMsg) (err error) {
+func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList *cmn.BucketList, msg cmn.SelectMsg) (err error) {
 	bucketMap := make(map[string]*cmn.BucketEntry, initialBucketListSize)
 	for _, entry := range fileList.Entries {
 		bucketMap[entry.Name] = entry
@@ -1485,7 +1485,7 @@ func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList
 
 	// since cached file page marker is not compatible with any cloud
 	// marker, it should be empty for the first call
-	msg.GetPageMarker = ""
+	msg.PageMarker = ""
 
 	wg := &sync.WaitGroup{}
 	for _, daemon := range smap.Tmap {
@@ -1520,7 +1520,7 @@ func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.GetMsg) (allEntries *cmn.BucketList, err error) {
+func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
 	type targetReply struct {
 		resp *bucketResp
 		err  error
@@ -1529,12 +1529,12 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 		cachedObjs = false
 	)
 	pageSize := cmn.DefaultPageSize
-	if msg.GetPageSize != 0 {
-		pageSize = msg.GetPageSize
+	if msg.PageSize != 0 {
+		pageSize = msg.PageSize
 	}
 
 	if pageSize > maxPageSize {
-		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, maxPageSize)
+		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.PageSize, bucket, maxPageSize)
 	}
 
 	smap := p.smapowner.get()
@@ -1595,7 +1595,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 	//     result in timeout between target and waiting for response proxy)
 	//   - the only valid value for every object in resulting list is `Name`,
 	//     all other fields(including `Status`) have zero value
-	if !msg.GetFast {
+	if !msg.Fast {
 		entryLess := func(i, j int) bool {
 			if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
 				return allEntries.Entries[i].Status < allEntries.Entries[j].Status
@@ -1619,14 +1619,14 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 	return allEntries, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider string, msg cmn.GetMsg) (allentries *cmn.BucketList, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (allentries *cmn.BucketList, err error) {
 	const (
 		cachedObjects = false
 	)
 	var resp *bucketResp
 	allentries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
-	if msg.GetPageSize > maxPageSize {
-		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, maxPageSize)
+	if msg.PageSize > maxPageSize {
+		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bucket, maxPageSize)
 	}
 
 	// first, get the cloud object list from a random target
@@ -1648,7 +1648,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider
 	if len(allentries.Entries) == 0 {
 		return
 	}
-	if strings.Contains(msg.GetProps, cmn.GetTargetURL) {
+	if strings.Contains(msg.Props, cmn.GetTargetURL) {
 		smap := p.smapowner.get()
 		for _, e := range allentries.Entries {
 			si, errStr := hrwTarget(bucket, e.Name, smap)
@@ -1659,10 +1659,10 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider
 			e.TargetURL = si.PublicNet.DirectURL
 		}
 	}
-	if strings.Contains(msg.GetProps, cmn.GetPropsAtime) ||
-		strings.Contains(msg.GetProps, cmn.GetPropsStatus) ||
-		strings.Contains(msg.GetProps, cmn.GetPropsCopies) ||
-		strings.Contains(msg.GetProps, cmn.GetPropsIsCached) {
+	if strings.Contains(msg.Props, cmn.GetPropsAtime) ||
+		strings.Contains(msg.Props, cmn.GetPropsStatus) ||
+		strings.Contains(msg.Props, cmn.GetPropsCopies) ||
+		strings.Contains(msg.Props, cmn.GetPropsIsCached) {
 		// Now add local properties to the cloud objects
 		// The call replaces allentries.Entries with new values
 		err = p.collectCachedFileList(bucket, bckProvider, allentries, msg)
@@ -1678,7 +1678,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.GetMsg) (bckList *cmn.BucketList, err error) {
+func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (bckList *cmn.BucketList, err error) {
 	if bckProvider == cmn.CloudBs || !p.bmdowner.get().IsLocal(bucket) {
 		bckList, err = p.getCloudBucketObjects(r, bucket, bckProvider, msg)
 	} else {
@@ -1720,7 +1720,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
-	//       original JSON payload (GetMsg - see pkg/api/constant.go)
+	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
@@ -2392,7 +2392,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	results, ok := p.invokeHTTPGetMsgOnTargets(w, r)
+	results, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
 	if !ok {
 		return false
 	}
@@ -2413,7 +2413,7 @@ func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Reques
 	return p.writeJSON(w, r, jsbytes, "getXaction")
 }
 
-func (p *proxyrunner) invokeHTTPGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
+func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	smapX := p.smapowner.get()
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
@@ -2485,10 +2485,10 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 // FIXME: read-lock
 func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
-	targetStats, ok := p.invokeHTTPGetMsgOnTargets(w, r)
+	targetStats, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
-			"Unable to invoke cmn.GetMsg on targets. Query: [%s]",
+			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]",
 			r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
@@ -2506,10 +2506,10 @@ func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.R
 }
 
 func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
-	targetMountpaths, ok := p.invokeHTTPGetMsgOnTargets(w, r)
+	targetMountpaths, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
-			"Unable to invoke cmn.GetMsg on targets. Query: [%s]", r.URL.RawQuery)
+			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]", r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
 		return false

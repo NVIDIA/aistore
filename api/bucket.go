@@ -312,7 +312,7 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numObjects int, query ...url.Values) (*cmn.BucketList, error) {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
@@ -329,9 +329,9 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 	toRead := numObjects
 	for {
 		if toRead != 0 {
-			if (msg.GetPageSize == 0 && toRead < cmn.DefaultPageSize) ||
-				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
-				msg.GetPageSize = toRead
+			if (msg.PageSize == 0 && toRead < cmn.DefaultPageSize) ||
+				(msg.PageSize != 0 && msg.PageSize > toRead) {
+				msg.PageSize = toRead
 			}
 		}
 
@@ -358,7 +358,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 
 		reslist.Entries = append(reslist.Entries, page.Entries...)
 		if page.PageMarker == "" {
-			msg.GetPageMarker = ""
+			msg.PageMarker = ""
 			break
 		}
 
@@ -369,7 +369,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 			toRead -= len(page.Entries)
 		}
 
-		msg.GetPageMarker = page.PageMarker
+		msg.PageMarker = page.PageMarker
 	}
 
 	return reslist, nil
@@ -377,9 +377,9 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 
 // ListBucketFast returns list of objects in a bucket.
 // Build an object list with minimal set of properties: name and size.
-// All GetMsg fields except prefix do not work and are skipped.
+// All SelectMsg fields except prefix do not work and are skipped.
 // Function always returns the whole list of objects without paging
-func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, query ...url.Values) (*cmn.BucketList, error) {
+func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
 	var (
 		b   []byte
 		err error

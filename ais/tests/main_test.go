@@ -154,7 +154,7 @@ func Test_matchdelete(t *testing.T) {
 	}
 
 	// list the bucket
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	reslist, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	if err != nil {
@@ -271,7 +271,7 @@ func Test_putdeleteRange(t *testing.T) {
 	totalFiles := numfiles
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
-		msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
+		msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
 		err := api.DeleteRange(baseParams, clibucket, "", test.prefix, test.regexStr, test.rangeStr, true, 0)
@@ -292,7 +292,7 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	tutils.Logf("Cleaning up remained objects...\n")
-	msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
+	msg := &cmn.SelectMsg{Prefix: commonPrefix + "/"}
 	bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
@@ -382,14 +382,14 @@ func Test_putdelete(t *testing.T) {
 	selectErr(errCh, "delete", t, false)
 }
 
-func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, objLimit int) (*cmn.BucketList, error) {
+func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket string, objLimit int) (*cmn.BucketList, error) {
 	var (
 		copy    bool
 		file    *os.File
 		err     error
 		reslist *cmn.BucketList
 	)
-	tutils.Logf("LIST %s [prefix %s]\n", bucket, msg.GetPrefix)
+	tutils.Logf("LIST %s [prefix %s]\n", bucket, msg.Prefix)
 	fname := filepath.Join(LocalDestDir, bucket)
 	if copy {
 		// Write list to a local filename = bucket
@@ -430,7 +430,7 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, 
 			break
 		}
 
-		msg.GetPageMarker = reslist.PageMarker
+		msg.PageMarker = reslist.PageMarker
 		tutils.Logf("PageMarker for the next page: %s\n", reslist.PageMarker)
 	}
 	tutils.Logf("-----------------\nTotal objects listed: %v\n", totalObjs)
@@ -606,7 +606,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		dataCloud    = []byte("I'm from the cloud!")
 		globalProps  cmn.BucketProps
 		globalConfig = getDaemonConfig(t, proxyURL)
-		msg          = &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: "size,status"}
+		msg          = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 		found        = false
 	)
 
@@ -1079,7 +1079,7 @@ func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync
 }
 
 func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
-	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize)}
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
 		return 0
@@ -1110,7 +1110,7 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 	return num
 }
 
-func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.GetMsg, limit int) *cmn.BucketList {
+func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.SelectMsg, limit int) *cmn.BucketList {
 	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	reslist, err := api.ListBucket(baseParams, bucket, msg, limit)

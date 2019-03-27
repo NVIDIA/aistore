@@ -97,7 +97,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	close(filenameCh)
 	close(errCh)
 
-	msg := &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
+	msg := &cmn.SelectMsg{PageSize: int(pagesize), Props: cmn.GetTargetURL}
 	bl, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
@@ -125,7 +125,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
-	msg.GetProps = ""
+	msg.Props = ""
 	bl, err = api.ListBucket(tutils.DefaultBaseAPIParams(t), bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
@@ -182,7 +182,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		}
 	}()
 
-	listBucketMsg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
+	listBucketMsg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize), Props: cmn.GetTargetURL}
 	bucketList, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -213,7 +213,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
-	listBucketMsg.GetProps = ""
+	listBucketMsg.Props = ""
 	bucketList, err = api.ListBucket(tutils.DefaultBaseAPIParams(t), bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -341,7 +341,7 @@ func TestListObjectsPrefix(t *testing.T) {
 	tutils.Logf("Create a list of %d objects\n", numFiles)
 	if isCloudBucket(t, proxyURL, bucket) {
 		tutils.Logf("Cleaning up the cloud bucket %s\n", bucket)
-		msg := &cmn.GetMsg{GetPageSize: 1000, GetPrefix: prefix}
+		msg := &cmn.SelectMsg{PageSize: 1000, Prefix: prefix}
 		reslist, err := listObjects(t, proxyURL, msg, bucket, 0)
 		tutils.CheckFatal(err, t)
 		for _, entry := range reslist.Entries {
@@ -414,7 +414,7 @@ func TestListObjectsPrefix(t *testing.T) {
 
 	for idx, test := range tests {
 		tutils.Logf("%d. %s\n    Prefix: [%s], Expected objects: %d\n", idx+1, test.title, test.prefix, test.expected)
-		msg := &cmn.GetMsg{GetPageSize: test.pageSize, GetPrefix: test.prefix}
+		msg := &cmn.SelectMsg{PageSize: test.pageSize, Prefix: test.prefix}
 		reslist, err := listObjects(t, proxyURL, msg, bucket, test.limit)
 		if err != nil {
 			t.Error(err)
@@ -938,7 +938,7 @@ func TestDeleteList(t *testing.T) {
 	}
 
 	// 3. Check to see that all the files have been deleted
-	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
 	bktlst, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
@@ -991,7 +991,7 @@ func TestPrefetchRange(t *testing.T) {
 	if re, err = regexp.Compile(prefetchRegex); err != nil {
 		t.Errorf("Error compiling regex: %v", err)
 	}
-	msg := &cmn.GetMsg{GetPrefix: prefetchPrefix, GetPageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: prefetchPrefix, PageSize: int(pagesize)}
 	objsToFilter := testListBucket(t, proxyURL, clibucket, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
@@ -1075,7 +1075,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 3. Check to see that the correct files have been deleted
-	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
 	bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
@@ -1176,7 +1176,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
-	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
 	bktlst, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != expectedRemaining {
@@ -1205,7 +1205,7 @@ func TestStressDeleteRange(t *testing.T) {
 	}
 
 	// 5. Check to see that all files have been deleted
-	msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg = &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
 	bktlst, err = api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {

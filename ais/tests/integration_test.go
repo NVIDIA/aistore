@@ -110,7 +110,7 @@ func (m *metadata) checkObjectDistribution(t *testing.T) {
 	)
 	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
+	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
 	tutils.CheckFatal(err, t)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL] += 1
@@ -1521,7 +1521,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	// Get atime in a format that includes nanoseconds to properly check if it was updated in atime cache (if it wasn't,
 	// then the returned atime would be different from the original one, but the difference could be very small).
-	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, GetTimeFormat: time.StampNano}
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
@@ -1547,7 +1547,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
-	msg = &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, GetTimeFormat: time.StampNano}
+	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -1660,7 +1660,7 @@ func testLocalMirror(t *testing.T, erase bool) {
 	}
 
 	// List Bucket - primarily for the copies
-	msg := &cmn.GetMsg{GetProps: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
 	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 

@@ -357,10 +357,10 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
-		msg := cmn.GetMsg{
-			GetPrefix:     cloudPayload.Prefix,
-			GetPageMarker: "",
-			GetFast:       true,
+		msg := cmn.SelectMsg{
+			Prefix:     cloudPayload.Prefix,
+			PageMarker: "",
+			Fast:       true,
 		}
 
 		bckEntries := make([]*cmn.BucketEntry, 0, 1024)
@@ -378,8 +378,8 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 				}
 			}
 
-			msg.GetPageMarker = curBckEntries.PageMarker
-			if msg.GetPageMarker == "" {
+			msg.PageMarker = curBckEntries.PageMarker
+			if msg.PageMarker == "" {
 				break
 			}
 		}
