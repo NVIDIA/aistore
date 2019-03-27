@@ -114,16 +114,11 @@ MISSPELL_DIRS := $(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor
 .PHONY: lint lint-install fmt-check fmt-fix spell-check spell-fix cyclo
 
 lint-install:
-	@go get -u github.com/alecthomas/gometalinter
-	@go get -u golang.org/x/lint/golint
-	@go get -u github.com/kisielk/errcheck
-	@go get -u honnef.co/go/tools/cmd/staticcheck
-
-LINT_VET_IGNORE := -composites=false
-LINT_IGNORE := "(should have comment|comment on exported|don't use an underscore in package name|should be consistent with previous receiver name|by other packages, and that stutters;|error return value not checked|error should be returned as the last|error should be the last type)"
+# golangci installs the linters it supports
+	@go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 lint:
-	@CHECK="lint" LINT_VET_IGNORE=$(LINT_VET_IGNORE) LINT_IGNORE=$(LINT_IGNORE) LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh
+	@CHECK="lint" LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh
 
 fmt-check:
 	@go get -u golang.org/x/tools/cmd/goimports

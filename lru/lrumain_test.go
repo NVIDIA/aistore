@@ -92,9 +92,6 @@ func newTargetLRUMock() *cluster.TargetMock {
 
 func newInitLRU(t *cluster.TargetMock) *InitLRU {
 	xlru := &xactMock{}
-	if xlru == nil {
-		return nil
-	}
 	return &InitLRU{
 		Xlru:                xlru,
 		Namelocker:          &nameLockerMock{},

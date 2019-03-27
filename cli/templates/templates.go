@@ -206,7 +206,7 @@ const (
 )
 
 var (
-	// Matches BucketEntry field
+	// ObjectPropsMap matches BucketEntry field
 	ObjectPropsMap = map[string]string{
 		"name":      "{{$obj.Name}}\t",
 		"size":      "{{$obj.Size}}\t",

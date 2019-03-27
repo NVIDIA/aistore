@@ -293,7 +293,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			if expected != received {
 				t.Errorf("Expected object data: %s, received object data: %s", expected, received)
 			}
-			nextTierMockForLocalBucketReached += 1
+			nextTierMockForLocalBucketReached++
 		} else {
 			http.Error(w, "bad request to nextTierMockForLocal", http.StatusBadRequest)
 		}
@@ -307,7 +307,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			if expected != received {
 				t.Errorf("Expected object data: %s, received object data: %s", expected, received)
 			}
-			nextTierMockForCloudBucketReached += 1
+			nextTierMockForCloudBucketReached++
 		} else {
 			http.Error(w, "bad request to nextTierMockForCloud", http.StatusBadRequest)
 		}

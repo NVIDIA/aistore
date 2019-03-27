@@ -395,7 +395,7 @@ func Test_OnSendCallback(t *testing.T) {
 	var (
 		totalSend int64
 		mu        sync.Mutex
-		posted    []*randReader = make([]*randReader, 10000) // 10K objects
+		posted    = make([]*randReader, 10000) // 10K objects
 	)
 	for idx := 0; idx < len(posted); idx++ {
 		hdr, rr := makeRandReader()

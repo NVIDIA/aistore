@@ -36,15 +36,15 @@ func BenchmarkHRW(b *testing.B) {
 			fileName := randFileName(randGen, nameLen)
 			for _, hashFunc := range hashFuncs {
 				b.Run(fmt.Sprintf("%s/%d/%d", hashFunc.name, numNodes, nameLen), func(b *testing.B) {
-					var nodeId int
+					var nodeID int
 					for n := 0; n < b.N; n++ {
 						// Record the result to prevent the compiler
 						// eliminating the function call.
-						nodeId = hashFunc.hashF(fileName, nodes)
+						nodeID = hashFunc.hashF(fileName, nodes)
 					}
 					// Store the result to a package level variable so the
 					// compiler cannot eliminate the Benchmark itself.
-					resultInt = nodeId
+					resultInt = nodeID
 				})
 			}
 		}

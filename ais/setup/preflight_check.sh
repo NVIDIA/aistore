@@ -5,24 +5,8 @@
 case $CHECK in
 lint)
     echo "Running lint check..." >&2
-    err_count=0
-    echo "Checking vet..." >&2
-    for dir in ${LINT_DIRS}
-    do
-        errs=$(go vet "${LINT_VET_IGNORE}" "${dir}" 2>&1 | tee -a /dev/stderr | wc -l)
-        err_count=$(($err_count + $errs))
-    done
-    echo "Checking staticcheck..." >&2
-    errs=$(${GOPATH}/bin/gometalinter --deadline 5m --exclude="${LINT_IGNORE}" --disable-all --enable=staticcheck --linter="staticcheck:staticcheck -tags hrw {path}:PATH:LINE:COL:MESSAGE" ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
-    err_count=$(($err_count + $errs))
-    echo "Checking others..." >&2
-    errs=$(${GOPATH}/bin/gometalinter --deadline 5m --exclude="${LINT_IGNORE}" --disable-all --enable=golint --enable=errcheck ${LINT_DIRS} 2>&1 | tee -a /dev/stderr | wc -l )
-    err_count=$(($err_count + $errs))
-    if [ "${err_count}" != "0" ]; then
-        echo "found ${err_count} lint errors, please fix or add exception" >&2
-        exit 1
-    fi
-    exit 0
+    ${GOPATH}/bin/golangci-lint run ${LINT_DIRS} 2>&1
+    exit $?
   ;;
 fmt)
     err_count=0

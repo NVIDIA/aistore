@@ -1126,7 +1126,7 @@ func TestStressDeleteRange(t *testing.T) {
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		regex        = "\\d*"
 		tenth        = numFiles / 10
-		partial_rnge = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
+		partialRange = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		rnge         = fmt.Sprintf("0:%d", numFiles)
 		readersList  [numReaders]tutils.Reader
 		baseParams   = tutils.DefaultBaseAPIParams(t)
@@ -1168,8 +1168,8 @@ func TestStressDeleteRange(t *testing.T) {
 	selectErr(errCh, "put", t, true)
 
 	// 2. Delete a range of objects
-	tutils.Logf("Deleting objects in range: %s\n", partial_rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, partial_rnge, true, 0)
+	tutils.Logf("Deleting objects in range: %s\n", partialRange)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, partialRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1374,11 +1374,11 @@ func getClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
 }
 
 func getNamedTargetStats(trunner *stats.Trunner, name string) int64 {
-	if v, ok := trunner.Core.Tracker[name]; !ok {
+	v, ok := trunner.Core.Tracker[name]
+	if !ok {
 		return 0
-	} else {
-		return v.Value
 	}
+	return v.Value
 }
 
 func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {

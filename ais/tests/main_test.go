@@ -120,9 +120,7 @@ func Test_download(t *testing.T) {
 	if sumtotfiles != num {
 		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", num, sumtotfiles)
 		t.Error(s)
-		if errCh != nil {
-			errCh <- errors.New(s)
-		}
+		errCh <- errors.New(s)
 	}
 	select {
 	case <-errCh:
@@ -139,10 +137,10 @@ func Test_matchdelete(t *testing.T) {
 	}
 
 	// Declare one channel per worker to pass the keyname
-	keyname_chans := make([]chan string, numworkers)
+	keynameChans := make([]chan string, numworkers)
 	for i := 0; i < numworkers; i++ {
 		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		keyname_chans[i] = make(chan string, 100)
+		keynameChans[i] = make(chan string, 100)
 	}
 	// Start the worker pools
 	errCh := make(chan error, 100)
@@ -150,7 +148,7 @@ func Test_matchdelete(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keyname_chans[i], t, wg, errCh, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
 	}
 
 	// list the bucket
@@ -174,14 +172,14 @@ func Test_matchdelete(t *testing.T) {
 		if !re.MatchString(name) {
 			continue
 		}
-		keyname_chans[num%numworkers] <- name
+		keynameChans[num%numworkers] <- name
 		if num++; num >= numfiles {
 			break
 		}
 	}
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
-		close(keyname_chans[i])
+		close(keynameChans[i])
 	}
 	wg.Wait()
 	select {

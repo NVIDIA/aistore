@@ -65,8 +65,8 @@ const (
 	NotSupported = "not supported yet"
 	NoMountpaths = "no mountpaths"
 
-	GCS_URL     = "http://storage.googleapis.com" // nolint: golint
-	GCS_URL_ALT = "http://www.googleapis.com"     // nolint: golint
+	GcsURL    = "http://storage.googleapis.com"
+	GcsURLAlt = "http://www.googleapis.com"
 )
 
 type (

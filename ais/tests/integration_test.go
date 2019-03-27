@@ -111,7 +111,7 @@ func (m *metadata) checkObjectDistribution(t *testing.T) {
 	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
 	tutils.CheckFatal(err, t)
 	for _, obj := range bucketList.Entries {
-		targetObjectCount[obj.TargetURL] += 1
+		targetObjectCount[obj.TargetURL]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
 		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",

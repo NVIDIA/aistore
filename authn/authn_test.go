@@ -332,7 +332,7 @@ func TestToken(t *testing.T) {
 	info, err = mgr.userByToken(token)
 	if info != nil || err == nil {
 		t.Errorf("Token %s expected to be expired[%x]: %v", token, info, err)
-	} else if err != nil && !strings.Contains(err.Error(), "expire") {
+	} else if !strings.Contains(err.Error(), "expire") {
 		t.Errorf("Invalid error(must be 'token expired'): %v", err)
 	}
 

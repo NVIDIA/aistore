@@ -36,7 +36,7 @@ const (
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
-	//lint:ignore U1000 unused
+	//nolint:unused
 	xreplication = "replication" // TODO: fix replication
 )
 
@@ -367,7 +367,7 @@ func gettargetkeepalive() *targetKeepaliveRunner {
 }
 
 // TODO: fix replication
-//lint:ignore U1000 unused
+//nolint:unused
 func getreplicationrunner() *replicationRunner {
 	r := ctx.rg.runmap[xreplication]
 	rr, ok := r.(*replicationRunner)

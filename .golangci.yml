@@ -1,0 +1,72 @@
+linters:
+  enable-all: false
+  disable-all: true
+  enable:
+    - golint
+    - govet
+    - staticcheck
+    - errcheck
+    - gosimple
+    - unused
+    - varcheck
+    - ineffassign
+    - deadcode
+    - typecheck
+    # not using structcheck since it doesn't handle embedded structs
+
+linters-settings:
+  govet:
+    check-shadowing: false
+  golint:
+    min-confidence: 0.8
+  errcheck:
+    check-blank: false
+    check-type-assertions: false
+
+issues:
+  # use default exclude rules 
+  exclude-use-default: true
+
+  # additional exclude rules
+  exclude-rules:
+    - linters:
+        - golint
+      text: "error should be the last type when returning multiple items" # ignores 'return body, err, errCode'
+
+    - linters:
+        - errcheck
+      text: "Error return value of" # ignores 'error return value of ... is unchecked'
+
+    - linters:
+        - golint
+      text: "should be consistent with previous receiver name"
+    
+    - linters:
+        - golint
+      text: "and that stutters; consider calling this"
+
+    - linters:
+        - golint
+      text: "don't use an underscore in package name"
+
+    - linters:
+        - govet
+      text: "composite literal uses unkeyed fields" # FIXME: disable this check using govet settings instead when supported
+
+  # Set to 0 to disable limit
+  max-same-issues: 0
+  max-per-linter: 0
+
+run:
+  tests: true # enable linting test files
+
+  build-tags:
+    - hrw # build hrw so that staticcheck doesn't complain about unused export functions
+
+  skip-dirs:
+    - vendor
+    - 3rdparty
+    - openapi
+
+  concurrency: 4
+  deadline: 5m

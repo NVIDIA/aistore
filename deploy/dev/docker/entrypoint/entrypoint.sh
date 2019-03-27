@@ -21,7 +21,7 @@ else
     BUILD=`date +%FT%T%z`
     go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
 
-    AIS_DAEMONID=`echo ${HOSTNAME}` ${GOBIN}/ais \
+    AIS_DAEMONID=`echo ${HOSTNAME}` ${GOBIN}/aisnode \
         -config=${CONFFILE} \
         -role=${ROLE} \
         -ntargets=${TARGET_CNT} \

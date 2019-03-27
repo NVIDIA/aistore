@@ -261,7 +261,7 @@ func (m *Metadata) marshal() ([]byte, error) {
 	return jsoniter.Marshal(m)
 }
 
-//lint:ignore U1000 unused
+//nolint:unused
 func (m *Metadata) unmarshal(b []byte) error {
 	return jsoniter.Unmarshal(b, m)
 }

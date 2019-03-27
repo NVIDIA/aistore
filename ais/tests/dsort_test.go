@@ -160,7 +160,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	tutils.Logln("checking if files are sorted...")
 
 	lastName := ""
-	var lastValue interface{} = nil
+	var lastValue interface{}
 
 	gzipped := false
 	if df.extension != ".tar" {

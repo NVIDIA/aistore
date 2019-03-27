@@ -325,10 +325,6 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	bucket := clibucket
-	if isCloudBucket(t, proxyURL, bucket) {
-		bucket = TestLocalBucketName
-	}
 
 	smap := getClusterMap(t, proxyURL)
 	mpList := make(map[string]string, 10)

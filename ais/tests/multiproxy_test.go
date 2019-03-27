@@ -557,7 +557,7 @@ func concurrentPutGetDel(t *testing.T) {
 	// And the second goroutine fails with error "object does not exist"
 	cid := int64(0)
 	for _, v := range smap.Pmap {
-		cid += 1
+		cid++
 		wg.Add(1)
 		go func(url string, cid int64) {
 			defer wg.Done()
@@ -989,7 +989,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		tutils.Logf("Waiting for the cluster %s [Smap version > %d]\n", reason, origVersion)
 	}
 
-	var loopCnt int = 0
+	var loopCnt int
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for {
 		smap, err := api.GetClusterMap(baseParams)

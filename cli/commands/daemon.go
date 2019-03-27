@@ -27,7 +27,7 @@ var (
 		commandList:             []cli.Flag{verboseFlag},
 	}
 
-	// AIS API Query Commands
+	// DaemonCmds tracks available AIS API Query Commands
 	DaemonCmds = []cli.Command{
 		{
 			Name:         cmn.GetWhatSmap,

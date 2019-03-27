@@ -204,14 +204,14 @@ func TestListObjectFast(t *testing.T) {
 	// check that all props are zeros, except name
 	// check if all names are different
 	var empty cmn.BucketEntry
-	unique_names := make(map[string]bool, len(reslist.Entries))
+	uniqueNames := make(map[string]bool, len(reslist.Entries))
 	for _, e := range reslist.Entries {
 		if e.Name == "" {
 			t.Errorf("Invalid size or name: %#v", *e)
 			continue
 		}
 		if strings.Contains(e.Name, "q-") {
-			unique_names[e.Name] = true
+			uniqueNames[e.Name] = true
 		}
 		if e.Ctime != empty.Ctime ||
 			e.Checksum != empty.Checksum ||
@@ -227,9 +227,9 @@ func TestListObjectFast(t *testing.T) {
 			t.Errorf("Some fields do not have default values: %#v", *e)
 		}
 	}
-	if len(reslist.Entries) != len(unique_names) {
+	if len(reslist.Entries) != len(uniqueNames) {
 		t.Fatalf("Expected %d unique objects, found only %d unique objects",
-			len(reslist.Entries), len(unique_names))
+			len(reslist.Entries), len(uniqueNames))
 	}
 
 	query := make(url.Values)

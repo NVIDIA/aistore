@@ -145,7 +145,7 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		return err
 	}
 	obj := parseFlag(c, keyFlag.Name)
-	objLen := int64(0)
+	var objLen int64
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)
 	query.Add(cmn.URLParamOffset, parseFlag(c, offsetFlag.Name))

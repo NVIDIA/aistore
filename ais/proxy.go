@@ -1760,7 +1760,7 @@ func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, a
 		return
 	}
 
-	if p.listRange(method, bucket, actionMsg, query); err != nil {
+	if err := p.listRange(method, bucket, actionMsg, query); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -2338,13 +2338,13 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 	// Make it work as a transparent proxy if we are not able to cache the requested object.
 	// Caching is available only for GET HTTP requests to GCS either via
 	// http://www.googleapi.com/storage or http://storage.googleapis.com
-	if r.Method != http.MethodGet || (baseURL != cmn.GCS_URL && baseURL != cmn.GCS_URL_ALT) {
+	if r.Method != http.MethodGet || (baseURL != cmn.GcsURL && baseURL != cmn.GcsURLAlt) {
 		p.rproxy.cloud.ServeHTTP(w, r)
 		return
 	}
 
 	s := cmn.RESTItems(r.URL.Path)
-	if baseURL == cmn.GCS_URL_ALT {
+	if baseURL == cmn.GcsURLAlt {
 		// remove redundant items from URL path to make it AIS-compatible
 		// original looks like:
 		//    http://www.googleapis.com/storage/v1/b/<bucket>/o/<object>

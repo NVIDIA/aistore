@@ -60,20 +60,7 @@ func NewGetXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
 }
 
 func (r *XactGet) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	var err error
-
 	uname := unique(iReq.Sender, bucket, objName)
-	if err != nil {
-		r.dOwner.mtx.Lock()
-		writer, ok := r.dOwner.slices[uname]
-		r.dOwner.mtx.Unlock()
-		if ok {
-			r.unregWriter(uname)
-			writer.wg.Done()
-		}
-		glog.Errorf("Response failed: %v", err)
-		return
-	}
 
 	switch iReq.Act {
 	// a remote target sent/responded object's metadata. A slice should be waiting
