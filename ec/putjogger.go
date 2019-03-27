@@ -26,10 +26,10 @@ import (
 
 // a mountpath putJogger: processes PUT/DEL requests to one mountpath
 type putJogger struct {
-	parent    *XactEC
-	slab      *memsys.Slab2
-	buffer    []byte
-	mpathInfo *fs.MountpathInfo // a bucket's mountpath that the jogger manages
+	parent *XactEC
+	slab   *memsys.Slab2
+	buffer []byte
+	mpath  string
 
 	workCh chan *Request // channel to request TOP priority operation (restore)
 	stopCh chan struct{} // jogger management channel: to stop it
@@ -38,7 +38,7 @@ type putJogger struct {
 }
 
 func (c *putJogger) run() {
-	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpathInfo, c.parent.bckName)
+	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
 	c.buffer, c.slab = mem2.AllocFromSlab2(cmn.MiB)
 
 	for {
@@ -52,7 +52,6 @@ func (c *putJogger) run() {
 			req.tm = time.Now()
 			c.ec(req)
 			c.parent.DecPending()
-			c.throttle()
 		case <-c.stopCh:
 			c.slab.Free(c.buffer)
 			c.buffer = nil
@@ -63,31 +62,9 @@ func (c *putJogger) run() {
 }
 
 func (c *putJogger) stop() {
-	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpathInfo, c.parent.bckName)
+	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
 	c.stopCh <- struct{}{}
 	close(c.stopCh)
-}
-
-// Throttle only EC put requests when CPU or memory usage is high
-// Stop throttling when many requests are pending
-func (c *putJogger) throttle() {
-	if pending := len(c.workCh); pending >= putPendingECReqsHW {
-		if pending%10 == 0 {
-			glog.Warningf("High number of pending EC put requests: %v", pending)
-		}
-		return
-	}
-
-	cpuInfo := mem2.FetchSysInfo()
-	_, diskInfo := c.mpathInfo.GetIOstats(fs.StatDiskUtil)
-
-	if cpuInfo.PctCPUUsed >= putThrottleCPUHW || diskInfo.Max >= putThrottleDiskHW {
-		glog.Warningf("Throttling EC put, HW exceeded. CPU: %.2f(%.2f), disk: %.2f(%.2f)", cpuInfo.PctCPUUsed, putThrottleCPUHW, diskInfo.Max, putThrottleDiskHW)
-		time.Sleep(cmn.ThrottleSleepAvg)
-	} else if cpuInfo.PctCPUUsed >= putThrottleCPULW || diskInfo.Max >= putThrottleDiskLW {
-		glog.Infof("Throttling EC put, LW exceeded. CPU: %.2f(%.2f), disk: %.2f(%.2f)", cpuInfo.PctCPUUsed, putThrottleCPUHW, diskInfo.Max, putThrottleDiskLW)
-		time.Sleep(cmn.ThrottleSleepLow)
-	}
 }
 
 // starts EC process

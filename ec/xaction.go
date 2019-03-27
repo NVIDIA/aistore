@@ -105,16 +105,16 @@ func NewXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
 	runner.respBundle = respBundle
 
 	// create all runners but do not start them until Run is called
-	for mpath, mpathInfo := range availablePaths {
+	for mpath := range availablePaths {
 		getJog := runner.newGetJogger(mpath)
 		runner.getJoggers[mpath] = getJog
-		putJog := runner.newPutJogger(mpathInfo)
+		putJog := runner.newPutJogger(mpath)
 		runner.putJoggers[mpath] = putJog
 	}
-	for mpath, mpathInfo := range disabledPaths {
+	for mpath := range disabledPaths {
 		getJog := runner.newGetJogger(mpath)
 		runner.getJoggers[mpath] = getJog
-		putJog := runner.newPutJogger(mpathInfo)
+		putJog := runner.newPutJogger(mpath)
 		runner.putJoggers[mpath] = putJog
 	}
 
@@ -343,12 +343,12 @@ func (r *XactEC) newGetJogger(mpath string) *getJogger {
 	}
 }
 
-func (r *XactEC) newPutJogger(mpathInfo *fs.MountpathInfo) *putJogger {
+func (r *XactEC) newPutJogger(mpath string) *putJogger {
 	return &putJogger{
-		parent:    r,
-		mpathInfo: mpathInfo,
-		workCh:    make(chan *Request, requestBufSizeFS),
-		stopCh:    make(chan struct{}, 1),
+		parent: r,
+		mpath:  mpath,
+		workCh: make(chan *Request, requestBufSizeFS),
+		stopCh: make(chan struct{}, 1),
 	}
 }
 
@@ -873,8 +873,7 @@ func (r *XactEC) addMpath(mpath string) {
 	getJog := r.newGetJogger(mpath)
 	r.getJoggers[mpath] = getJog
 	go getJog.run()
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpath)
-	putJog := r.newPutJogger(mpathInfo)
+	putJog := r.newPutJogger(mpath)
 	r.putJoggers[mpath] = putJog
 	go putJog.run()
 }

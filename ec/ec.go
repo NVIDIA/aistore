@@ -125,12 +125,6 @@ const (
 	// EC switches to disk from SGL when memory pressure is high and the amount of
 	// memory required to encode an object exceeds the limit
 	objSizeHighMem = 50 * cmn.MiB
-
-	putThrottleCPULW   = 70.0
-	putThrottleCPUHW   = 90.0
-	putThrottleDiskLW  = 50.0
-	putThrottleDiskHW  = 80.0
-	putPendingECReqsHW = requestBufSizeFS * 4 / 5
 )
 
 // type of EC request between targets. If the destination has to respond it
