@@ -372,6 +372,63 @@ func (s *sts) aggregate(other sts) {
 	s.getConfig.Aggregate(other.getConfig)
 }
 
+func setupBucket(runParams *params) error {
+	if runParams.bckProvider != cmn.LocalBs || runParams.getConfig {
+		return nil
+	}
+	exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
+	if err != nil {
+		return fmt.Errorf("failed to get local bucket lists to check for %s, err = %v", runParams.bucket, err)
+	}
+
+	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
+	if !exists {
+		err := api.CreateLocalBucket(baseParams, runParams.bucket)
+		if err != nil {
+			return fmt.Errorf("failed to create local bucket %s, err = %s", runParams.bucket, err)
+		}
+	}
+
+	if runParams.bPropsStr == "" {
+		return nil
+	}
+	// update bucket props if bPropsStr is set
+	oldProps, err := api.HeadBucket(baseParams, runParams.bucket)
+	if err != nil {
+		return fmt.Errorf("failed to read bucket %s properties: %v", runParams.bucket, err)
+	}
+	change := false
+	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
+		if !runParams.bProps.EC.Enabled {
+			oldProps.EC.Enabled = false
+		} else {
+			oldProps.EC = cmn.ECConf{
+				Enabled:      true,
+				ObjSizeLimit: runParams.bProps.EC.ObjSizeLimit,
+				DataSlices:   runParams.bProps.EC.DataSlices,
+				ParitySlices: runParams.bProps.EC.ParitySlices,
+			}
+		}
+		change = true
+	}
+	if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
+		if runParams.bProps.Mirror.Enabled {
+			oldProps.Mirror.Enabled = runParams.bProps.Mirror.Enabled
+			oldProps.Mirror.Copies = runParams.bProps.Mirror.Copies
+			oldProps.Mirror.UtilThresh = runParams.bProps.Mirror.UtilThresh
+		} else {
+			oldProps.Mirror.Enabled = false
+		}
+		change = true
+	}
+	if change {
+		if err = api.SetBucketProps(baseParams, runParams.bucket, *oldProps); err != nil {
+			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bucket, err)
+		}
+	}
+	return nil
+}
+
 func main() {
 	var (
 		wg  sync.WaitGroup
@@ -407,57 +464,9 @@ func main() {
 		}
 	}
 
-	if runParams.bckProvider == cmn.LocalBs && !runParams.getConfig {
-		exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
-		if err != nil {
-			fmt.Println("Failed to get local bucket lists", runParams.bucket, "err = ", err)
-			return
-		}
-
-		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-		if !exists {
-			err := api.CreateLocalBucket(baseParams, runParams.bucket)
-			if err != nil {
-				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
-				return
-			}
-		}
-
-		oldProps, err := api.HeadBucket(baseParams, runParams.bucket)
-		if err != nil {
-			fmt.Printf("Failed to read bucket %s properties: %v\n", runParams.bucket, err)
-			return
-		}
-		change := false
-		if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
-			if !runParams.bProps.EC.Enabled {
-				oldProps.EC.Enabled = false
-			} else {
-				oldProps.EC = cmn.ECConf{
-					Enabled:      true,
-					ObjSizeLimit: runParams.bProps.EC.ObjSizeLimit,
-					DataSlices:   runParams.bProps.EC.DataSlices,
-					ParitySlices: runParams.bProps.EC.ParitySlices,
-				}
-			}
-			change = true
-		}
-		if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
-			if runParams.bProps.Mirror.Enabled {
-				oldProps.Mirror.Enabled = runParams.bProps.Mirror.Enabled
-				oldProps.Mirror.Copies = runParams.bProps.Mirror.Copies
-				oldProps.Mirror.UtilThresh = runParams.bProps.Mirror.UtilThresh
-			} else {
-				oldProps.Mirror.Enabled = false
-			}
-			change = true
-		}
-		if change {
-			if err = api.SetBucketProps(baseParams, runParams.bucket, *oldProps); err != nil {
-				fmt.Printf("Failed to enable EC for the bucket %s properties: %v\n", runParams.bucket, err)
-				return
-			}
-		}
+	if err := setupBucket(&runParams); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 
 	if !runParams.getConfig {
