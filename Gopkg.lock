@@ -119,14 +119,6 @@
   version = "v1.2.0"
 
 [[projects]]
-  digest = "1:3a26588bc48b96825977c1b3df964f8fd842cd6860cc26370588d3563433cf11"
-  name = "github.com/google/uuid"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "d460ce9f8df2e77fb1ba55ca87fafed96c607494"
-  version = "v1.0.0"
-
-[[projects]]
   digest = "1:e145e9710a10bc114a6d3e2738aadf8de146adaa031854ffdf7bbfe15da85e63"
   name = "github.com/googleapis/gax-go"
   packages = ["."]
@@ -283,6 +275,14 @@
   pruneopts = "UT"
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
+
+[[projects]]
+  digest = "1:c08f5d8cc28ed4dccb098121d5f1f19f708bf04e3bbd4b772ce6461de6ef1ca2"
+  name = "github.com/teris-io/shortid"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6c56cef5189ca1b3d5ef01dc07f4d611dfc0bb33"
+  version = "v1.0"
 
 [[projects]]
   digest = "1:b24d38b282bacf9791408a080f606370efa3d364e4b5fd9ba0f7b87786d3b679"
@@ -549,7 +549,6 @@
     "github.com/aws/aws-sdk-go/service/s3/s3manager",
     "github.com/cloudfoundry/gosigar",
     "github.com/dgrijalva/jwt-go",
-    "github.com/google/uuid",
     "github.com/json-iterator/go",
     "github.com/karrick/godirwalk",
     "github.com/klauspost/reedsolomon",
@@ -557,8 +556,10 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
+    "github.com/teris-io/shortid",
     "github.com/urfave/cli",
     "github.com/vbauerster/mpb",
+    "github.com/vbauerster/mpb/decor",
     "golang.org/x/net/context",
     "golang.org/x/net/http2",
     "golang.org/x/net/http2/h2c",

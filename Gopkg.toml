@@ -15,10 +15,6 @@
   name = "gopkg.in/fsnotify.v1"
 
 [[constraint]]
-  name = "github.com/google/uuid"
-  version = "1.0.0"
-
-[[constraint]]
   name = "github.com/klauspost/reedsolomon"
   version = "1.8.0"
 
@@ -33,3 +29,7 @@
 [[constraint]]
   name = "github.com/karrick/godirwalk"
   version = "1.8.0"
+
+[[constraint]]
+  name = "github.com/teris-io/shortid"
+  version = "1.0.0"

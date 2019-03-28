@@ -150,7 +150,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Cancel download | DELETE /v1/download/cancel | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/cancel?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
+| Cancel download | DELETE /v1/download/cancel | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/cancel?id=5JjIuGemR'`|
 
 ## Status
 
@@ -166,7 +166,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Get download status | GET /v1/download | `curl -Liv -X GET 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
+| Get download status | GET /v1/download | `curl -Liv -X GET 'http://localhost:8080/v1/download?id=5JjIuGemR'`|
 
 
 ## List of Downloads
@@ -200,4 +200,4 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Remove from list | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=76794751-b81f-4ec6-839d-a512a7ce5612'`|
+| Remove from list | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=5JjIuGemR'`|

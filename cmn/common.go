@@ -24,8 +24,8 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
-	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/teris-io/shortid"
 )
 
 const (
@@ -35,6 +35,10 @@ const (
 	TiB = 1024 * GiB
 
 	DefaultBufSize = 32 * KiB
+
+	// Constant seeds for UUID generator
+	uuidWorker = 1
+	uuidSeed   = 17
 )
 
 var toBiBytes = map[string]int64{
@@ -101,6 +105,13 @@ type (
 	}
 )
 
+func init() {
+	sid := shortid.MustNew(uuidWorker /* worker */, shortid.DEFAULT_ABC, uuidSeed /* seed */)
+	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
+	// should fork it and change it to the newer date?
+	shortid.SetDefault(sid)
+}
+
 func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {
 	kvs := make(SimpleKVs, len(entries))
 	for _, entry := range entries {
@@ -151,8 +162,7 @@ func (fpair PairF32) String() string {
 //
 
 func GenUUID() (string, error) {
-	generatedUUID, err := uuid.NewRandom()
-	return generatedUUID.String(), err
+	return shortid.Generate()
 }
 
 func S2B(s string) (int64, error) {
