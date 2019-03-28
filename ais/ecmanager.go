@@ -23,9 +23,11 @@ import (
 
 type ecManager struct {
 	sync.RWMutex
+	bndlOnce   sync.Once
 	t          *targetrunner
 	xacts      map[string]*ec.XactEC // bckName -> xact map, only local buckets allowed, no naming collisions
-	bowner     cluster.Bowner        // bucket manager
+	bowner     *bmdowner             // bucket manager
+	bckMD      *bucketMD             // bucket metadata, used to get EC enabled/disabled information
 	netReq     string                // network used to send object request
 	netResp    string                // network used to send/receive slices
 	reqBundle  *transport.StreamBundle
@@ -49,10 +51,16 @@ func newECM(t *targetrunner) *ecManager {
 		netResp: netResp,
 		t:       t,
 		bowner:  t.bmdowner,
+		bckMD:   t.bmdowner.get(),
 		xacts:   make(map[string]*ec.XactEC),
 	}
 
-	ECM.initECBundles()
+	for _, bck := range ECM.bckMD.LBmap {
+		if bck.EC.Enabled {
+			ECM.bndlOnce.Do(ECM.initECBundles)
+			break
+		}
+	}
 
 	var err error
 	if _, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.makeRecvRequest()); err != nil {
@@ -220,14 +228,43 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 	return <-req.ErrCh
 }
 
-// DisableEC starts to reject new EC requests, rejects pending ones
-func (mgr *ecManager) DisableEC(bckName string) {
+// disableBck starts to reject new EC requests, rejects pending ones
+func (mgr *ecManager) disableBck(bckName string) {
 	mgr.restoreBckXact(bckName).ClearRequests()
 }
 
-// EnableEC aborts xact disable and starts to accept new EC requests
-// EnableEC uses the same channel as DisableEC, so order of executing them is the same as
+// enableBck aborts xact disable and starts to accept new EC requests
+// enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
-func (mgr *ecManager) EnableEC(bckName string) {
+func (mgr *ecManager) enableBck(bckName string) {
 	mgr.restoreBckXact(bckName).EnableRequests()
+}
+
+func (mgr *ecManager) BucketsMDChanged() {
+	newBckMD := mgr.bowner.get()
+	oldBckMD := mgr.bckMD
+	if newBckMD.Version <= mgr.bckMD.Version {
+		return
+	}
+
+	mgr.bckMD = newBckMD
+
+	if newBckMD.ecUsed() && !oldBckMD.ecUsed() {
+		// init EC streams if there were not initialized on the start
+		// no need to close them when last EC bucket is disabled
+		// as they close itself on idle
+		mgr.bndlOnce.Do(mgr.initECBundles)
+	}
+
+	for bckName, newBck := range newBckMD.LBmap {
+		// Disable EC for buckets that existed and have changed EC.Enabled to false
+		// Enable EC for buckets that existed and have change EC.Enabled to true
+		if oldBck, existed := oldBckMD.LBmap[bckName]; existed {
+			if !oldBck.EC.Enabled && newBck.EC.Enabled {
+				mgr.enableBck(bckName)
+			} else if oldBck.EC.Enabled && !newBck.EC.Enabled {
+				mgr.disableBck(bckName)
+			}
+		}
+	}
 }

@@ -93,6 +93,16 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 	mm[b] = p
 }
 
+func (m *bucketMD) ecUsed() bool {
+	for _, bck := range m.LBmap {
+		if bck.EC.Enabled {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ecEnabled returns whether or not erasure coding is enabled
 // for the bucket. Returns false if bucket not found
 //lint:ignore U1000 unused

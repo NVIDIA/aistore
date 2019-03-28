@@ -3463,21 +3463,13 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 
 	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
-	for bckName, newBck := range newbucketmd.LBmap {
+	for bckName := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bckName]; !ok {
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
-
-		// Disable EC for buckets that existed and have changed EC.Enabled to false
-		// Enable EC for buckets that existed and have change EC.Enabled to true
-		if oldBck, existed := bucketmd.LBmap[bckName]; existed {
-			if !oldBck.EC.Enabled && newBck.EC.Enabled {
-				t.ecmanager.EnableEC(bckName)
-			} else if oldBck.EC.Enabled && !newBck.EC.Enabled {
-				t.ecmanager.DisableEC(bckName)
-			}
-		}
 	}
+
+	t.ecmanager.BucketsMDChanged()
 
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*create*/, bucketsToCreate...)
 
