@@ -189,8 +189,10 @@ func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, obje
 
 	bulkTargetRequest := make(map[*cluster.Snode]*cmn.DlBody, smap.CountTargets())
 	for objName, link := range objects {
-		// Make sure that objName does not contain "?query=smth" suffix
+		// Make sure that objName doesn't contain "?query=smth" suffix.
 		objName = normalizeObjName(objName)
+		// Make sure that link contains protocol (absence of protocol can result in errors).
+		link = cmn.PrependProtocol(link)
 
 		si, errstr := hrwTarget(payload.Bucket, objName, smap)
 		if errstr != "" {

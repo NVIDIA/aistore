@@ -80,8 +80,11 @@ func TestDownloadSingle(t *testing.T) {
 		bucket        = TestLocalBucketName
 		objname       = "object"
 		objnameSecond = "object-second"
-		link          = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
-		linkSmall     = "https://github.com/NVIDIA/aistore"
+
+		// links below don't contain protocols to test that no error occurs
+		// in case they are missing.
+		link      = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+		linkSmall = "github.com/NVIDIA/aistore"
 	)
 
 	clearDownloadList(t)
@@ -137,7 +140,10 @@ func TestDownloadRange(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
-		base     = "https://storage.googleapis.com/lpr-vision/"
+
+		// base does not have following slash to test that it is prepended and
+		// it is concatenated with template properly.
+		base     = "storage.googleapis.com/lpr-vision"
 		template = "imagenet/imagenet_train-{000000..000007}.tgz"
 	)
 

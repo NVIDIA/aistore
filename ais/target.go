@@ -530,6 +530,7 @@ func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluste
 		r:       reader,
 		workFQN: workFQN,
 		lom:     lom,
+		ctx:     context.Background(),
 	}
 	err, _ := roi.recv()
 	return err

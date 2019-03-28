@@ -26,6 +26,19 @@ func URLPath(segments ...string) string {
 	return path.Join("/", path.Join(segments...))
 }
 
+// PrependProtocol prepends protocol in URL in case it is missing.
+// By default it adds `http://` as prefix to the URL.
+func PrependProtocol(url string, protocol ...string) string {
+	if url == "" || strings.Contains(url, "://") {
+		return url
+	}
+	proto := httpProto
+	if len(protocol) == 1 {
+		proto = protocol[0]
+	}
+	return proto + "://" + url
+}
+
 // RESTItems splits whole path into the items.
 func RESTItems(unescapedPath string) []string {
 	escaped := html.EscapeString(unescapedPath)
