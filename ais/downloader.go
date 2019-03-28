@@ -29,12 +29,17 @@ type dlResponse struct {
 
 // Removes everything that goes after '?', eg. "?query=key..." so it will not
 // be part of final object name.
-func normalizeObjName(objName string) string {
-	idx := strings.IndexByte(objName, '?')
-	if idx < 0 {
-		return objName
+func normalizeObjName(objName string) (string, error) {
+	u, err := url.Parse(objName)
+	if err != nil {
+		return "", nil
 	}
-	return objName[:idx]
+
+	if u.Path == "" {
+		return objName, nil
+	}
+
+	return url.PathUnescape(u.Path)
 }
 
 ///////////
@@ -200,7 +205,10 @@ func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, obje
 	bulkTargetRequest := make(map[*cluster.Snode]*cmn.DlBody, smap.CountTargets())
 	for objName, link := range objects {
 		// Make sure that objName doesn't contain "?query=smth" suffix.
-		objName = normalizeObjName(objName)
+		objName, err := normalizeObjName(objName)
+		if err != nil {
+			return err
+		}
 		// Make sure that link contains protocol (absence of protocol can result in errors).
 		link = cmn.PrependProtocol(link)
 
