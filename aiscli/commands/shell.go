@@ -21,3 +21,10 @@ func DaemonList(_ *cli.Context) {
 		fmt.Println(dae)
 	}
 }
+
+// Returns flags for command
+func FlagList(c *cli.Context) {
+	for _, flag := range c.Command.Flags {
+		fmt.Printf("--%s\n", cleanFlag(flag.GetName()))
+	}
+}

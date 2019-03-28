@@ -16,13 +16,13 @@ type AIScli struct {
 }
 
 const (
-	CommandList   = "list"
-	CommandDel    = "delete"
-	CommandRename = "rename"
+	CommandList     = "list"
+	CommandRename   = "rename"
+	CommandSetProps = "setprops"
 )
 
 var (
-	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json output"}
+	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
 	propsFlag    = cli.BoolFlag{Name: "props", Usage: "properties of resource (object, bucket)"}
@@ -68,11 +68,14 @@ var (
 )
 
 func flagIsSet(c *cli.Context, flag string) bool {
+	// If the flag name has multiple values, take first one
+	flag = cleanFlag(flag)
 	return c.GlobalIsSet(flag) || c.IsSet(flag)
 }
 
 // Returns the value of flag (either parent or local scope)
 func parseFlag(c *cli.Context, flag string) string {
+	flag = cleanFlag(flag)
 	if c.GlobalIsSet(flag) {
 		return c.GlobalString(flag)
 	}

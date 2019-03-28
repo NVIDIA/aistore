@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,4 +151,18 @@ func regexFilter(regex string, strList []string) (retList []string) {
 		}
 	}
 	return retList
+}
+
+// If the flag has multiple values (separated by comma), take the first one
+func cleanFlag(flag string) string {
+	return strings.Split(flag, ",")[0]
+}
+
+// Users can pass in a comma separated list
+func makeList(list, delimiter string) []string {
+	cleanList := strings.Split(list, delimiter)
+	for ii, val := range cleanList {
+		cleanList[ii] = strings.TrimSpace(val)
+	}
+	return cleanList
 }

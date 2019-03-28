@@ -1,8 +1,6 @@
 # AISCLI
 > Under development
 
-AISCLI is a command-line interface that allows users to interact with the AIS cluster. It currently supports `list`, `smap`, `config`, `stats` and `status` commands.
-
 ## How To Use
 1. To get started using the AISCLI tool, run `go install`. 
 
@@ -154,9 +152,9 @@ Creates a local bucket.
 
 #### delete 
 
-`aiscli bucket delete --bucket <value>`
+`aiscli bucket destroy --bucket <value>`
 
-Deletes a local bucket.
+Destroys a local bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -191,17 +189,34 @@ Returns the names of the buckets
 
 `aiscli bucket list --bucket <value>`
 
-Lists all the objects in the bucket
+Lists all the objects along with some of the objects' properties. For the full list of properties, see [here](../docs/bucket.md#list-bucket).
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--bucket` | string | name of the bucket | `""` |
 | `--bprovider` | [Provider](#enums) | locality of bucket | `""` |
-| `--props` | string | comma separated list of properties to return with object names | `size,version` |
+| `--props` | string | comma separated list of properties to return with object names | `name,size,version` |
 | `--regex` | string | pattern for object matching | `""` |
 | `--prefix` | string | prefix for object matching | `""` |
 | `--pagesize` | string | maximum number of object names returned in response | `1000` (cloud), `65536` (local) |
 | `--limit` | string | limit of object count | `0` (unlimited) |
+
+
+#### setprops
+
+`aiscli bucket setprops --bucket <value> [list of key=value]`
+
+Sets bucket properties. For the available options, see [bucket-properties](../docs/bucket.md#properties-and-options).
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | name of the bucket | `""` |
+| `--bprovider` | [Provider](#enums) | locality of bucket | `""` |
+| `--json` | bool | use json as input | `false` |
+
+Example: `aiscli bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror.copies=2'`
+
+JSON equivalent example: `aiscli bucket setprops --bucket mybucket --json '{"mirror" : {"enabled": true, "copies" : 2}}'`
 
 
 ### Enums

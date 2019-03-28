@@ -6,11 +6,14 @@
 package commands
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strconv"
 
+	"github.com/NVIDIA/aistore/aiscli/templates"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,8 +21,9 @@ import (
 )
 
 const (
-	BucketCreate = "create"
-	BucketNames  = "names"
+	BucketCreate  = "create"
+	BucketDestroy = "destroy"
+	BucketNames   = "names"
 )
 
 var (
@@ -29,9 +33,9 @@ var (
 	}
 
 	BucketFlags = map[string][]cli.Flag{
-		BucketCreate: []cli.Flag{bucketFlag},
-		BucketNames:  []cli.Flag{regexFlag, bckProviderFlag},
-		CommandDel:   []cli.Flag{bucketFlag},
+		BucketCreate:  []cli.Flag{bucketFlag},
+		BucketNames:   []cli.Flag{regexFlag, bckProviderFlag},
+		BucketDestroy: []cli.Flag{bucketFlag},
 		CommandRename: append(
 			[]cli.Flag{
 				newBucketFlag,
@@ -46,14 +50,18 @@ var (
 				objLimitFlag,
 			},
 			BaseBucketFlags...),
+		CommandSetProps: append(
+			[]cli.Flag{jsonFlag},
+			BaseBucketFlags...),
 	}
 
 	BucketCreateDelList = "aiscli bucket %s --bucket <value>"
 	BucketCreateText    = fmt.Sprintf(BucketCreateDelList, BucketCreate)
-	BucketDelText       = fmt.Sprintf(BucketCreateDelList, CommandDel)
+	BucketDelText       = fmt.Sprintf(BucketCreateDelList, BucketDestroy)
 	BucketListText      = fmt.Sprintf(BucketCreateDelList, CommandList)
-	BucketRenameText    = fmt.Sprintf("aiscli bucket %s --bucket <value> --newbucket <value>", CommandRename)
 	BucketNamesText     = fmt.Sprintf("aiscli bucket %s", BucketNames)
+	BucketRenameText    = fmt.Sprintf("aiscli bucket %s --bucket <value> --newbucket <value>", CommandRename)
+	BucketPropsText     = fmt.Sprintf("aiscli bucket %s --bucket <value> key=value ...", CommandSetProps)
 )
 
 func BucketHandler(c *cli.Context) (err error) {
@@ -72,7 +80,7 @@ func BucketHandler(c *cli.Context) (err error) {
 		}
 
 		fmt.Printf("%s bucket created\n", bucket)
-	case CommandDel:
+	case BucketDestroy:
 		if err = checkFlags(c, bucketFlag.Name); err != nil {
 			return err
 		}
@@ -141,12 +149,57 @@ func ListBucket(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	err = printObjectProps(objList.Entries, r, props)
+	return err
+}
 
-	for _, obj := range objList.Entries {
-		if r.MatchString(obj.Name) {
-			fmt.Printf("%+v\n", *obj)
-		}
+func SetBucketProps(c *cli.Context) error {
+	if err := checkFlags(c, bucketFlag.Name); err != nil {
+		return err
 	}
+
+	if c.NArg() < 1 {
+		return errors.New("expected at least one argument")
+	}
+
+	baseParams := cliAPIParams(ClusterURL)
+	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	if err != nil {
+		return err
+	}
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	bckName := parseFlag(c, bucketFlag.Name)
+
+	if err := bucketExists(baseParams, bckName, bckProvider); err != nil {
+		return err
+	}
+
+	// For setting bucket props (multiple)
+	if flagIsSet(c, jsonFlag.Name) {
+		props := cmn.BucketProps{}
+		inputProps := []byte(c.Args().First())
+		if err := json.Unmarshal(inputProps, &props); err != nil {
+			return err
+		}
+		if err = api.SetBucketProps(baseParams, bckName, props, query); err != nil {
+			return err
+		}
+
+		fmt.Printf("Bucket props set for %s bucket\n", bckName)
+		return nil
+	}
+
+	// For setting bucket prop (single)
+	keyVals := c.Args()
+	for _, ele := range keyVals {
+		pairs := makeList(ele, "=")
+		if err = api.SetBucketProp(baseParams, bckName, pairs[0], pairs[1], query); err != nil {
+			return err
+		}
+		fmt.Printf("%s set to %v\n", pairs[0], pairs[1])
+	}
+
+	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bckName)
 	return nil
 }
 
@@ -168,4 +221,32 @@ func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string) {
 	for _, bucket := range cloudBuckets {
 		fmt.Println(bucket)
 	}
+}
+
+func printObjectProps(entries []*cmn.BucketEntry, r *regexp.Regexp, props string) error {
+	propsList := makeList(props, ",")
+	bodyStr := "{{$obj := . }}"
+	for _, field := range propsList {
+		if _, ok := templates.ObjectPropsMap[field]; !ok {
+			return fmt.Errorf("'%s' is not a valid property", field)
+		}
+		bodyStr += templates.ObjectPropsMap[field]
+	}
+	bodyStr += "\n"
+
+	templates.DisplayOutput(propsList, templates.ObjectPropsHeader)
+	for _, obj := range entries {
+		if r.MatchString(obj.Name) {
+			templates.DisplayOutput(obj, bodyStr)
+		}
+	}
+	return nil
+}
+
+func bucketExists(baseParams *api.BaseParams, bckName, bckProvider string) error {
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {
+		return fmt.Errorf("%s bucket does not exist", bckName)
+	}
+	return nil
 }

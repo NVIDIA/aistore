@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -23,6 +22,7 @@ import (
 const (
 	ObjGet = "get"
 	ObjPut = "put"
+	ObjDel = "delete"
 )
 
 var (
@@ -45,7 +45,7 @@ var (
 				propsFlag,
 			},
 			BaseObjectFlags...),
-		CommandDel: append(
+		ObjDel: append(
 			[]cli.Flag{
 				listFlag,
 				rangeFlag,
@@ -64,7 +64,7 @@ var (
 
 	ObjectDelGetText  = "aiscli object %s --bucket <value> --key <value>"
 	ObjectGetUsage    = fmt.Sprintf(ObjectDelGetText, ObjGet)
-	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, CommandDel)
+	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, ObjDel)
 	ObjectPutUsage    = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --body <value>", ObjPut)
 	ObjectRenameUsage = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --newkey <value> ", CommandRename)
 )
@@ -210,7 +210,7 @@ func DeleteObject(c *cli.Context) error {
 
 	// List Delete
 	if flagIsSet(c, listFlag.Name) {
-		fileList := makeList(parseFlag(c, listFlag.Name))
+		fileList := makeList(parseFlag(c, listFlag.Name), ",")
 		if err := api.DeleteList(baseParams, bucket, bckProvider, fileList, wait, deadline); err != nil {
 			return err
 		}
@@ -232,9 +232,4 @@ func DeleteObject(c *cli.Context) error {
 	}
 
 	return errors.New(c.Command.UsageText)
-}
-
-// Users can pass in a comma separated list
-func makeList(list string) []string {
-	return strings.Split(list, ",")
 }

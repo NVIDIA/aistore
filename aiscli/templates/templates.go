@@ -199,9 +199,31 @@ const (
 		ProxyConfTmpl + LRUConfTmpl + XactionConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
+
+	ObjectPropsHeader = "\n{{range $, $props := .}}" +
+		"{{if (or (eq $props `ctime`) (eq $props `atime`) (eq $props `targeturl`))}}{{$props}}\t \t \t" +
+		"{{else}}{{$props}}\t" +
+		"{{end}}" +
+		"{{end}}\n"
 )
 
 var (
+	// Matches BucketEntry field
+	ObjectPropsMap = map[string]string{
+		"name":      "{{$obj.Name}}\t",
+		"size":      "{{$obj.Size}}\t",
+		"ctime":     "{{$obj.Ctime}}\t",
+		"checksum":  "{{$obj.Checksum}}\t",
+		"type":      "{{$obj.Type}}\t",
+		"atime":     "{{$obj.Atime}}\t",
+		"bucket":    "{{$obj.Bucket}}\t",
+		"version":   "{{$obj.Version}}\t",
+		"targetURL": "{{$obj.TargetURL}}\t",
+		"status":    "{{$obj.Status}}\t",
+		"copies":    "{{$obj.Copies}}\t",
+		"iscached":  "{{$obj.IsCached}}\t",
+	}
+
 	funcMap = template.FuncMap{
 		"ExtractStat":         ExtractStat,
 		"FormatBytesSigned":   cmn.B2S,
