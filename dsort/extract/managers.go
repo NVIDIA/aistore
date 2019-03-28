@@ -106,10 +106,16 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 	recordPath, fullPath := rm.paths(fqn, name, ext)
 
 	// If the content already exists we should skip it.
-	_, existsMemory := rm.contents.Load(fullPath)
-	_, existsDisk := rm.extractionPaths.Load(fullPath)
-	if existsMemory || existsDisk {
+	if rm.Records.Exists(recordPath, ext) {
+		// TODO: depending on settings we should decide if duplicates should be
+		// silently skipped, produce warning or result in abort.
+		rm.Records.DeleteDup(recordPath, ext)
 		copyMetadataAndData(ioutil.Discard, r, metadata, buf)
+
+		// NOTE: there is no need to remove anything from `rm.extractionPaths`
+		// or `rm.contents` since it will be removed anyway in cleanup.
+		// Assumption is that there will be not much duplicates and we can live
+		// with a little bit more files/memory.
 		return
 	}
 

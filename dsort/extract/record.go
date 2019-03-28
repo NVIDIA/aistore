@@ -44,10 +44,11 @@ type (
 
 	// Records abstract array of records. It safe to be used concurrently.
 	Records struct {
-		mu               sync.Mutex
+		mu               sync.RWMutex
 		arr              []*Record
 		m                map[string]*Record
-		totalObjectCount int // total number of objects in all recrods
+		dups             map[string]struct{} // contains duplicate object names, if any
+		totalObjectCount int                 // total number of objects in all records (dups are removed so not counted)
 	}
 )
 
@@ -60,6 +61,27 @@ func (r *Record) mergeObjects(other *Record) {
 		r.Key = other.Key
 	}
 	r.Objects = append(r.Objects, other.Objects...)
+}
+
+func (r *Record) find(ext string) int {
+	for idx, obj := range r.Objects {
+		if obj.Extension == ext {
+			return idx
+		}
+	}
+	return -1
+}
+
+func (r *Record) exists(ext string) bool {
+	return r.find(ext) >= 0
+}
+
+func (r *Record) delete(ext string) {
+	foundIdx := r.find(ext)
+	if foundIdx >= 0 {
+		// NOTE: We are required to preserve the order.
+		r.Objects = append(r.Objects[:foundIdx], r.Objects[foundIdx+1:]...)
+	}
 }
 
 // FullContentPath makes path to particular object.
@@ -83,8 +105,9 @@ func makeFullContentPath(contentPath, extension string) string {
 // the actual Record's
 func NewRecords(n int) *Records {
 	return &Records{
-		arr: make([]*Record, 0, n),
-		m:   make(map[string]*Record, n),
+		arr:  make([]*Record, 0, n),
+		m:    make(map[string]*Record, n),
+		dups: make(map[string]struct{}, 10),
 	}
 }
 
@@ -92,6 +115,7 @@ func (r *Records) Drain() {
 	r.mu.Lock()
 	r.arr = nil
 	r.m = nil
+	r.dups = nil
 	r.mu.Unlock()
 }
 
@@ -111,6 +135,29 @@ func (r *Records) Insert(records ...*Record) {
 		r.totalObjectCount += len(record.Objects)
 	}
 	r.mu.Unlock()
+}
+
+func (r *Records) DeleteDup(contentPath, ext string) {
+	r.mu.Lock()
+	cmn.Assert(r.Exists(contentPath, ext))
+	if record, ok := r.m[contentPath]; ok {
+		record.delete(ext)
+	}
+	r.dups[contentPath+ext] = struct{}{}
+	r.totalObjectCount--
+	r.mu.Unlock()
+}
+
+func (r *Records) Exists(contentPath, ext string) (exists bool) {
+	r.mu.RLock()
+	if record, ok := r.m[contentPath]; ok {
+		exists = record.exists(ext)
+		if !exists {
+			_, exists = r.dups[contentPath+ext]
+		}
+	}
+	r.mu.RUnlock()
+	return
 }
 
 func (r *Records) merge(records *Records) {
