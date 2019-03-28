@@ -396,12 +396,33 @@ func (d *DlStatusResp) String() string {
 // Summary info of the download job
 // FIXME: add more stats
 type DlJobInfo struct {
+	ID          string `json:"id"`
 	Description string `json:"description"`
 	NumPending  int    `json:"num_pending"`
 }
 
-func (lhs *DlJobInfo) Aggregate(rhs DlJobInfo) {
-	lhs.NumPending += rhs.NumPending
+func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
+	j.NumPending += rhs.NumPending
+}
+
+func (j *DlJobInfo) String() string {
+	var sb strings.Builder
+
+	sb.WriteString(j.ID)
+
+	if j.Description != "" {
+		sb.WriteString(fmt.Sprintf(" (%s)", j.Description))
+	}
+
+	sb.WriteString(": ")
+
+	if j.NumPending == 0 {
+		sb.WriteString("finished")
+	} else {
+		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.NumPending))
+	}
+
+	return sb.String()
 }
 
 type DlBase struct {

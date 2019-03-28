@@ -32,12 +32,13 @@ var (
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are saved to, eg. 'imagenet'"}
 	bckProviderFlag = cli.StringFlag{Name: cmn.URLParamBckProvider,
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
-	regexFlag = cli.StringFlag{Name: "regex", Usage: "regex pattern for matching"}
+	regexFlag = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
 
 	// Downloader
-	timeoutFlag = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
-	objNameFlag = cli.StringFlag{Name: cmn.URLParamObjName, Usage: "name of the object the download is saved as, eg. 'train-images-mnist.tgz'"}
-	linkFlag    = cli.StringFlag{Name: cmn.URLParamLink,
+	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
+	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription, Usage: "description of the job - can be useful when listing all downloads"}
+	objNameFlag     = cli.StringFlag{Name: cmn.URLParamObjName, Usage: "name of the object the download is saved as, eg. 'train-images-mnist.tgz'"}
+	linkFlag        = cli.StringFlag{Name: cmn.URLParamLink,
 		Usage: "URL of where the object is downloaded from, eg. 'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz'"}
 	baseFlag = cli.StringFlag{Name: cmn.URLParamBase,
 		Usage: "base URL of the object used to formulate the download URL, eg. 'http://yann.lecun.com/exdb/mnist'"}
@@ -47,7 +48,7 @@ var (
 	dlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
 	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar"}
+	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
 
 	// Object
 	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object"}

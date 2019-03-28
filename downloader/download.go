@@ -772,6 +772,7 @@ func (d *Downloader) dispatchList(req *request) {
 	respMap := make(map[string]cmn.DlJobInfo)
 	for _, r := range records {
 		respMap[r.ID] = cmn.DlJobInfo{
+			ID:          r.ID,
 			Description: r.Description,
 			NumPending:  d.getNumPending(&r),
 		}

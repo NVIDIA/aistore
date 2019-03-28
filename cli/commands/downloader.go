@@ -25,6 +25,7 @@ const (
 	DownloadCloud  = "cloud"
 	DownloadStatus = "status"
 	DownloadCancel = "cancel"
+	DownloadList   = "ls"
 
 	progressBarRefreshRateUnit    = time.Millisecond
 	progressBarRefreshRateDefault = 1000
@@ -39,6 +40,7 @@ var (
 		bucketFlag,
 		bckProviderFlag,
 		timeoutFlag,
+		descriptionFlag,
 	}
 
 	DownloadFlags = map[string][]cli.Flag{
@@ -63,13 +65,16 @@ var (
 			},
 			BaseDownloadFlags...,
 		),
-		DownloadStatus: []cli.Flag{
+		DownloadStatus: {
 			idFlag,
 			progressBarFlag,
 			refreshRateFlag,
 		},
-		DownloadCancel: []cli.Flag{
+		DownloadCancel: {
 			idFlag,
+		},
+		DownloadList: {
+			regexFlag,
 		},
 	}
 
@@ -78,13 +83,15 @@ var (
 	DownloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, DownloadCloud)
 	DownloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, DownloadStatus)
 	DownloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, DownloadCancel)
+	DownloadListUsage   = fmt.Sprintf("%s download %s --id <value> --regex <value>", cliName, DownloadList)
 )
 
 func DownloadHandler(c *cli.Context) error {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		bucket     = parseFlag(c, bucketFlag.Name)
-		timeout    = parseFlag(c, timeoutFlag.Name)
+		baseParams  = cliAPIParams(ClusterURL)
+		bucket      = parseFlag(c, bucketFlag.Name)
+		description = parseFlag(c, descriptionFlag.Name)
+		timeout     = parseFlag(c, timeoutFlag.Name)
 
 		id string
 	)
@@ -102,6 +109,7 @@ func DownloadHandler(c *cli.Context) error {
 		Bucket:      bucket,
 		BckProvider: bckProvider,
 		Timeout:     timeout,
+		Description: description,
 	}
 
 	commandName := c.Command.Name
@@ -165,15 +173,16 @@ func DownloadAdminHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
 		id         = parseFlag(c, idFlag.Name)
+		regex      = parseFlag(c, regexFlag.Name)
 	)
-
-	if err := checkFlags(c, idFlag.Name); err != nil {
-		return err
-	}
 
 	commandName := c.Command.Name
 	switch commandName {
 	case DownloadStatus:
+		if err := checkFlags(c, idFlag.Name); err != nil {
+			return err
+		}
+
 		showProgressBar := c.Bool(progressBarFlag.Name)
 
 		if showProgressBar {
@@ -192,10 +201,22 @@ func DownloadAdminHandler(c *cli.Context) error {
 			fmt.Println(resp.String())
 		}
 	case DownloadCancel:
+		if err := checkFlags(c, idFlag.Name); err != nil {
+			return err
+		}
+
 		if err := api.DownloadCancel(baseParams, id); err != nil {
 			return err
 		}
 		fmt.Printf("download canceled: %s\n", id)
+	case DownloadList:
+		list, err := api.DownloadGetList(baseParams, regex)
+		if err != nil {
+			return err
+		}
+		for _, j := range list {
+			fmt.Printf("%s\n", j.String())
+		}
 	default:
 		return fmt.Errorf("invalid command name '%s'", commandName)
 	}

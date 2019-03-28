@@ -104,6 +104,14 @@ func main() {
 					Action:       commands.DownloadAdminHandler,
 					BashComplete: commands.FlagList,
 				},
+				{
+					Name:         commands.DownloadList,
+					Usage:        "lists all download jobs which match provided regex",
+					UsageText:    commands.DownloadListUsage,
+					Flags:        commands.DownloadFlags[commands.DownloadList],
+					Action:       commands.DownloadAdminHandler,
+					BashComplete: commands.FlagList,
+				},
 			},
 		},
 		// Object Commands

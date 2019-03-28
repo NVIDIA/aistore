@@ -219,6 +219,100 @@ Example: `aiscli bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror
 JSON equivalent example: `aiscli bucket setprops --bucket mybucket --json '{"mirror" : {"enabled": true, "copies" : 2}}'`
 
 
+### Downloader
+
+[AIS Downloader](../downloader/README.md) supports following types of download requests:
+
+**single** - download a single object
+
+**range** - download multiple objects based on a given naming pattern
+
+**status** - display status of a given download job
+
+**cancel** - cancel given download job
+
+**ls** - list current download jobs and their states
+
+
+
+
+#### single
+
+`aiscli download single --bucket <value> --link <value> --objname <value>`
+
+Downloads a single object from `link` location and saves it as `objname` in provided `bucket`.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | bucket where the downloaded object is saved to | `""` |
+| `--description` | string | description for the download request| `""` |
+| `--link` | string | URL of where the object is downloaded from. | `""` |
+| `--objname` | string | name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path | `""` |
+
+Examples:
+* `aiscli download single --bucket local-lpr --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"`
+* `aiscli download single --bucket local-lpr --description "imagenet" --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
+
+#### range
+
+`aiscli download range --bucket <value> --base <value> --template <value>`
+
+Downloads a list of objects depending on provided `template` from `base` and saves it to the provided `bucket`.
+`base` and objects from `template` are concatenated with `/` so eg. for `base=https://storage.googleapis.com/lpr-vision` and `template=imagenet/imagenet_train-{000000..000140}.tgz` the resulting URL will be: `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz`, `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz`, ...
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | bucket where the downloaded object is saved to | `""` |
+| `--description` | string | description for the download request| `""` |
+| `--base` | string | base URL where the objects are located | `""` |
+| `--template` | string | bash template describing names of the objects in the URL | `""` |
+
+Examples:
+* `aiscli download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000000..000140}.tgz"` will download all objects in the range from `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz` to `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000140.tgz`.
+* `aiscli download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000022..000140..2}.tgz"` same as above while skipping every other object in the specified range
+#### status
+
+`aiscli download status --id <value>`
+
+Retrieves status of the download with provided `id` which is returned upon creation of every download job.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--id` | string | unique identifier of download job returned upon job creation | `""` |
+| `--progress` | bool | if set, displays a progres bar that ilustrates the progress of the download | `false` |
+| `--refresh` | int | refreshing rate of the progress bar (in miliseconds), works only if `--progress` flag is set | `1000` |
+
+Examples:
+* `aiscli download status --id "5JjIuGemR"` returns the condensed status of the download
+* `aiscli download status --id "5JjIuGemR" --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
+
+#### cancel
+
+`aiscli download cancel --id <value>`
+
+Cancels download job given its id.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--id` | string | unique identifier of download job returned upon job creation | `""` |
+
+Examples:
+* `aiscli download cancel --id "5JjIuGemR"` cancels the download job
+
+#### ls
+
+`aiscli download ls --regex <value>`
+
+Lists downloads which descriptions match given `regex`.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--regex` | string | regex for the description of download requests | `""` |
+
+Examples:
+* `aiscli download ls` lists all downloads
+* `aiscli download ls --regex "^downloads-(.*)"` lists all downloads which description starts with `downloads-` prefix
+
 ### Enums
 
 | Enum | Values | Description |
