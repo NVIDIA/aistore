@@ -16,6 +16,7 @@ type AIScli struct {
 }
 
 const (
+	cliName         = "aiscli"
 	CommandList     = "list"
 	CommandRename   = "rename"
 	CommandSetProps = "setprops"
@@ -98,7 +99,7 @@ func New() AIScli {
 }
 
 func (aisCLI AIScli) Init() {
-	aisCLI.Name = "aiscli"
+	aisCLI.Name = cliName
 	aisCLI.Usage = "CLI tool for AIS"
 	aisCLI.Version = "0.1"
 	aisCLI.EnableBashCompletion = true

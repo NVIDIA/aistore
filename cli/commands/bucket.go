@@ -13,8 +13,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/aiscli/templates"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -55,13 +55,13 @@ var (
 			BaseBucketFlags...),
 	}
 
-	BucketCreateDelList = "aiscli bucket %s --bucket <value>"
-	BucketCreateText    = fmt.Sprintf(BucketCreateDelList, BucketCreate)
-	BucketDelText       = fmt.Sprintf(BucketCreateDelList, BucketDestroy)
-	BucketListText      = fmt.Sprintf(BucketCreateDelList, CommandList)
-	BucketNamesText     = fmt.Sprintf("aiscli bucket %s", BucketNames)
-	BucketRenameText    = fmt.Sprintf("aiscli bucket %s --bucket <value> --newbucket <value>", CommandRename)
-	BucketPropsText     = fmt.Sprintf("aiscli bucket %s --bucket <value> key=value ...", CommandSetProps)
+	BucketCreateDelList = "%s bucket %s --bucket <value>"
+	BucketCreateText    = fmt.Sprintf(BucketCreateDelList, cliName, BucketCreate)
+	BucketDelText       = fmt.Sprintf(BucketCreateDelList, cliName, BucketDestroy)
+	BucketListText      = fmt.Sprintf(BucketCreateDelList, cliName, CommandList)
+	BucketNamesText     = fmt.Sprintf("%s bucket %s", cliName, BucketNames)
+	BucketRenameText    = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, CommandRename)
+	BucketPropsText     = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, CommandSetProps)
 )
 
 func BucketHandler(c *cli.Context) (err error) {

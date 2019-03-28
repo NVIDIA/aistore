@@ -62,11 +62,11 @@ var (
 		},
 	}
 
-	ObjectDelGetText  = "aiscli object %s --bucket <value> --key <value>"
-	ObjectGetUsage    = fmt.Sprintf(ObjectDelGetText, ObjGet)
-	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, ObjDel)
-	ObjectPutUsage    = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --body <value>", ObjPut)
-	ObjectRenameUsage = fmt.Sprintf("aiscli object %s --bucket <value> --key <value> --newkey <value> ", CommandRename)
+	ObjectDelGetText  = "%s object %s --bucket <value> --key <value>"
+	ObjectGetUsage    = fmt.Sprintf(ObjectDelGetText, cliName, ObjGet)
+	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, cliName, ObjDel)
+	ObjectPutUsage    = fmt.Sprintf("%s object %s --bucket <value> --key <value> --body <value>", cliName, ObjPut)
+	ObjectRenameUsage = fmt.Sprintf("%s object %s --bucket <value> --key <value> --newkey <value> ", cliName, CommandRename)
 )
 
 func ObjectHandler(c *cli.Context) error {

@@ -244,7 +244,7 @@ fi
 sleep 0.1
 
 # Install the aiscli and enable autocompletion
-go install $DIR/../../aiscli
-source $DIR/../../aiscli/aiscli_autocomplete
+go install $DIR/../../cli
+source $DIR/../../cli/aiscli_autocomplete
 
 echo done

@@ -9,7 +9,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/NVIDIA/aistore/aiscli/commands"
+	"github.com/NVIDIA/aistore/cli/commands"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )

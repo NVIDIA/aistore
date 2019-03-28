@@ -8,8 +8,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/aiscli/templates"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"

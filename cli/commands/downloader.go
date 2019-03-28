@@ -73,11 +73,11 @@ var (
 		},
 	}
 
-	DownloadSingleUsage = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", DownloadSingle)
-	DownloadRangeUsage  = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --base <value> --template <value>", DownloadRange)
-	DownloadCloudUsage  = fmt.Sprintf("aiscli download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", DownloadCloud)
-	DownloadStatusUsage = fmt.Sprintf("aiscli download %s --id <value> [STATUS FLAGS...]", DownloadStatus)
-	DownloadCancelUsage = fmt.Sprintf("aiscli download %s --id <value>", DownloadCancel)
+	DownloadSingleUsage = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", cliName, DownloadSingle)
+	DownloadRangeUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --base <value> --template <value>", cliName, DownloadRange)
+	DownloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, DownloadCloud)
+	DownloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, DownloadStatus)
+	DownloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, DownloadCancel)
 )
 
 func DownloadHandler(c *cli.Context) error {
