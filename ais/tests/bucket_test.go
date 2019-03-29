@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -368,4 +370,247 @@ func TestBucketInvalidName(t *testing.T) {
 			t.Errorf("accepted bucket with name %s", name)
 		}
 	}
+}
+
+//===============================================================
+//
+// n-way mirror
+//
+//===============================================================
+func TestLocalMirror(t *testing.T) {
+	total, copies2, copies3 := testLocalMirror(t, 0, 0)
+	if copies2 != total || copies3 != 0 {
+		t.Fatalf("Expecting %d objects all to have 2 replicas, got copies2=%d, copies3=%d",
+			total, copies2, copies3)
+	}
+}
+func TestLocalMirror2_1(t *testing.T) {
+	total, copies2, copies3 := testLocalMirror(t, 1, 0)
+	if copies2 != 0 || copies3 != 0 {
+		t.Fatalf("Expecting %d objects to have 1 replica, got %d", total, copies2)
+	}
+}
+
+// NOTE: targets must have at least 3 mountpaths for this test to PASS
+func TestLocalMirror2_1_3(t *testing.T) {
+	total, copies2, copies3 := testLocalMirror(t, 1, 3)
+	if copies3 != total || copies2 != 0 {
+		t.Fatalf("Expecting %d objects to have 3 replicas, got %d", total, copies3)
+	}
+}
+
+func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		m = metadata{
+			t:               t,
+			num:             10000,
+			numGetsEachFile: 5,
+		}
+	)
+
+	m.saveClusterState()
+
+	{
+		targets := extractTargetNodes(m.smap)
+		baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
+		mpList, err := api.GetMountpaths(baseParams)
+		tutils.CheckFatal(err, t)
+
+		l := len(mpList.Available)
+		max := cmn.Max(cmn.Max(2, num1), num2)
+		if l < max {
+			t.Skipf("test %q requires at least %d mountpaths (target %s has %d)", t.Name(), max, targets[0], l)
+		}
+	}
+
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	{
+		var (
+			bucketProps = defaultBucketProps()
+			config      *cmn.Config
+			err         error
+		)
+		baseParams := tutils.DefaultBaseAPIParams(t)
+		config, err = api.GetDaemonConfig(baseParams)
+		tutils.CheckFatal(err, t)
+
+		// copy default config and change one field
+		bucketProps.Mirror = config.Mirror
+		bucketProps.Mirror.Enabled = true
+		err = api.SetBucketProps(baseParams, m.bucket, bucketProps)
+		tutils.CheckFatal(err, t)
+
+		p, err := api.HeadBucket(baseParams, m.bucket)
+		tutils.CheckFatal(err, t)
+		if p.Mirror.Copies != 2 {
+			t.Fatalf("%d copies != 2", p.Mirror.Copies)
+		}
+	}
+
+	m.puts()
+	m.wg.Add(m.num * m.numGetsEachFile)
+	m.gets()
+
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	if num1 != 0 {
+		makeNCopies(t, num1, m.bucket, baseParams)
+	}
+	if num2 != 0 {
+		makeNCopies(t, num2, m.bucket, baseParams)
+	}
+
+	// List Bucket - primarily for the copies
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	tutils.CheckFatal(err, t)
+
+	m.wg.Wait()
+
+	for _, entry := range objectList.Entries {
+		if entry.Atime == "" {
+			t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
+		}
+		total++
+		if entry.Copies == 2 {
+			copies2++
+		} else if entry.Copies == 3 {
+			copies3++
+		}
+	}
+	tutils.Logf("objects (total, 2-copies, 3-copies) = (%d, %d, %d)\n", total, copies2, copies3)
+	if total != m.num {
+		t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
+	}
+	return
+}
+
+func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseParams) {
+	tutils.Logf("Set copies = %d\n", ncopies)
+	if err := api.MakeNCopies(baseParams, bucket, ncopies); err != nil {
+		t.Fatalf("Failed to start copies=%d xaction, err: %v", ncopies, err)
+	}
+	timedout := 60 // seconds
+	ok := false
+	for i := 0; i < timedout+1; i++ {
+		var allDetails = make(map[string][]stats.XactionDetails) // TODO: missing API
+		time.Sleep(time.Second)
+
+		responseBytes, err := tutils.GetXactionResponse(baseParams.URL, cmn.ActMakeNCopies)
+		tutils.CheckFatal(err, t)
+		err = json.Unmarshal(responseBytes, &allDetails)
+		tutils.CheckFatal(err, t)
+		ok = true
+		for tid := range allDetails {
+			detail := allDetails[tid][0] // TODO
+			if detail.Status == cmn.XactionStatusInProgress {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			break
+		}
+	}
+	if !ok {
+		t.Fatalf("timed-out waiting for %s to finish", cmn.ActMakeNCopies)
+	}
+}
+
+func TestCloudMirror(t *testing.T) {
+	var (
+		num = 64
+	)
+	baseParams := tutils.DefaultBaseAPIParams(t)
+	if !isCloudBucket(t, baseParams.URL, clibucket) {
+		t.Skipf("%s requires a cloud bucket", t.Name())
+	}
+
+	// evict
+	query := make(url.Values)
+	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	err := api.EvictCloudBucket(baseParams, clibucket, query)
+	tutils.CheckFatal(err, t)
+
+	// enable mirror
+	err = api.SetBucketProp(baseParams, clibucket, cmn.HeaderBucketMirrorEnabled, true)
+	tutils.CheckFatal(err, t)
+	defer api.SetBucketProp(baseParams, clibucket, cmn.HeaderBucketMirrorEnabled, false)
+
+	// list
+	msg := &cmn.SelectMsg{}
+	objectList, err := api.ListBucket(baseParams, clibucket, msg, 0)
+	tutils.CheckFatal(err, t)
+
+	l := len(objectList.Entries)
+	if l < num {
+		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s", t.Name(), clibucket)
+	}
+
+	// cold GET - causes local mirroring
+	tutils.Logf("cold GET %d object into a 2-way mirror...\n", num)
+	j := int(time.Now().UnixNano() % int64(l))
+	for i := 0; i < num; i++ {
+		e := objectList.Entries[(j+i)%l]
+		_, err := api.GetObject(baseParams, clibucket, e.Name)
+		tutils.CheckFatal(err, t)
+	}
+
+	time.Sleep(time.Second * 10) // FIXME: better handle on when copying is done
+
+	msg = &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime}
+	query = make(url.Values)
+	query.Set(cmn.URLParamCached, "true")
+	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
+	tutils.CheckFatal(err, t)
+
+	total, copies2, copies3, cached := countObjects(objectList)
+	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
+	if copies2 < num {
+		t.Fatalf("listbucket: expecting %d 2-copies, got %d", num, copies2)
+	}
+
+	smap := getClusterMap(t, baseParams.URL)
+	{
+		targets := extractTargetNodes(smap)
+		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
+		mpList, err := api.GetMountpaths(baseTgtParams)
+		tutils.CheckFatal(err, t)
+
+		numps := len(mpList.Available)
+		if numps < 3 {
+			t.Skipf("test %q requires at least 3 mountpaths (target %s has %d)", t.Name(), targets[0], numps)
+		}
+	}
+
+	makeNCopies(t, 3, clibucket, baseParams)
+	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
+	tutils.CheckFatal(err, t)
+
+	total, copies2, copies3, cached = countObjects(objectList)
+	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
+	if copies3 < num {
+		t.Fatalf("listbucket: expecting %d 3-copies, got %d", num, copies3)
+	}
+}
+
+func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached int) {
+	for _, entry := range objectList.Entries {
+		total++
+		if entry.Copies == 2 {
+			copies2++
+		} else if entry.Copies == 3 {
+			copies3++
+		}
+		if entry.IsCached {
+			cached++
+		}
+	}
+	return
 }

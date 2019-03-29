@@ -292,7 +292,8 @@ func EvictRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng 
 
 // EvictCloudBucket API
 //
-// EvictCloudBucket sends a HTTP request to a proxy to evict a cloud bucket with the given name
+// EvictCloudBucket sends a HTTP request to a proxy to evict an entire cloud bucket from the AIStore
+// - the operation results in eliminating all traces of the specified cloud bucket in the AIStore
 func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvictCB})
 	if err != nil {

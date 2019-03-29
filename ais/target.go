@@ -659,7 +659,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lom.MirrorConf.Enabled {
-		if errstr = lom.Fill(bckProvider, cluster.LomCopy); errstr != "" {
+		if errstr = lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
 		}
@@ -740,6 +740,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
+		t.localMirror(lom)
 	}
 
 	// 4. finally
@@ -896,7 +897,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
 	}
-	fqn := lom.LoadBalanceGET()
+	fqn := lom.LoadBalanceGET() // coldGet => len(CopyFQN) == 0
 	file, err = os.Open(fqn)
 	if err != nil {
 		if os.IsPermission(err) {
@@ -2507,7 +2508,7 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 		}
 	}
 	if err != nil {
-		glog.Errorf("Unexpected: %v", err)
+		glog.Errorf("%s: unexpected failure to post for copying, err: %v", lom, err)
 	}
 }
 

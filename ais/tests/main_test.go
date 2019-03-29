@@ -1302,7 +1302,8 @@ func Test_evictCloudBucket(t *testing.T) {
 		t.Fatalf("Test property not changed")
 	}
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
-	api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
+	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
+	tutils.CheckFatal(err, t)
 
 	for _, fname := range fileslist {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {

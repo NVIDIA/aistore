@@ -182,7 +182,9 @@ func (lom *LOM) DelAllCopies() (errstr string) {
 }
 
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
-	cmn.Assert(!lom.IsCopy())
+	if lom.IsCopy() {
+		return fmt.Errorf("%s is a copy", lom)
+	}
 	dstLOM := lom.CloneAndSet(LOMCopyProps{FQN: dstFQN})
 	if err = cmn.CopyFile(lom.FQN, dstLOM.FQN, buf); err != nil {
 		return

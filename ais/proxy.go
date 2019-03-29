@@ -503,7 +503,6 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msgInt := p.newActionMsgInternal(&msg, nil, clone)
 		p.metasyncer.sync(true, revspair{clone, msgInt})
 	case cmn.ActEvictCB:
-		// Check that users didn't specify bprovider=cloud
 		if bckProvider == "" {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
 				cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.CloudBs))
@@ -512,15 +511,14 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
 			return
 		}
-
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
 		bucketmd := p.bmdowner.get()
-		// check for and delete cloud metadata
-		p.bmdowner.Lock()
-		clone := bucketmd.clone()
-		if clone.del(bucket, false) {
+		if bucketmd.isPresent(bucket, bckIsLocal) {
+			p.bmdowner.Lock()
+			clone := bucketmd.clone()
+			clone.del(bucket, false)
 			if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
 				p.bmdowner.Unlock()
 				p.invalmsghdlr(w, r, errstr)
@@ -528,15 +526,17 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 			p.bmdowner.put(clone)
 			p.bmdowner.Unlock()
+			bucketmd = clone
 
 			msgInt := p.newActionMsgInternal(&msg, nil, clone)
-			p.metasyncer.sync(false, revspair{clone, msgInt})
+			p.metasyncer.sync(true, revspair{clone, msgInt})
 		} else {
-			// metadata doesn't exists or got deleted
-			p.bmdowner.Unlock()
+			if glog.V(3) {
+				glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bucket, cmn.DoesNotExist)
+			}
 		}
 
-		msgInt := p.newActionMsgInternal(&msg, nil, clone)
+		msgInt := p.newActionMsgInternal(&msg, nil, bucketmd)
 		jsonbytes, err := jsoniter.Marshal(msgInt)
 		cmn.AssertNoErr(err)
 
@@ -552,14 +552,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			cmn.NetworkIntraControl,
 			cluster.Targets,
 		)
-
 		for result := range results {
 			if result.err != nil {
-				p.invalmsghdlr(
-					w,
-					r,
-					fmt.Sprintf("%s failed, err: %s", msg.Action, result.errstr),
-				)
+				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, result.errstr))
 				return
 			}
 		}
@@ -1425,6 +1420,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh
 				// the object cannot be marked as cached.
 				// Such objects will retrieve data from Cloud on GET request
 				entry.IsCached = newEntry.Status == cmn.ObjStatusOK
+				entry.Copies = newEntry.Copies
 			}
 		}
 	}

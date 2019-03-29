@@ -4,7 +4,7 @@
 - [Checksumming](#checksumming)
 - [LRU](#lru)
 - [Erasure coding](#erasure-coding)
-- [Local n-way mirror](#local-n-way-mirror)
+- [N-way mirror](#n-way-mirror)
    - [Read load balancing](#read-load-balancing)
    - [More examples](#more-examples)
 
@@ -63,7 +63,7 @@ LRU eviction, as of version 2.0, is by default only enabled for cloud buckets. T
 
 ## Erasure coding
 
-AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-n-way-mirror), replication (for *small* objects), and erasure coding.
+AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [n-way mirroring](#n-way-mirror), replication (for *small* objects), and erasure coding.
 
 Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
 
@@ -99,8 +99,8 @@ In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded
 
 Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
 
-## Local n-way mirror
-Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.
+## N-way mirror
+Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed (local or Cloud) bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.
 
 In other words, AIS n-way mirroring is intended to withstand loss of disks, not storage nodes (aka AIS targets).
 
@@ -120,7 +120,7 @@ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies"
 curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
 ```
 
-The operations (above) are in fact [extended actions](xaction.md) that run asynchronously. You can monitor completion of those operations via generic [xaction API](xaction.md).
+The operations (above) are in fact [extended actions](xaction.md) that run asynchronously. Both Cloud and local buckets are supported. You can monitor completion of those operations via generic [xaction API](xaction.md).
 
 Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
 

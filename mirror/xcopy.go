@@ -63,7 +63,7 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 	if numjs, err = r.init(); err != nil {
 		return err
 	}
-	glog.Infoln(r.String())
+	glog.Infoln(r.String(), "copies=", r.Copies)
 	// control loop
 	for {
 		select {
@@ -157,7 +157,7 @@ func (j *jogger) jog() {
 		if strings.Contains(s, "xaction") {
 			glog.Infof("%s: stopping traversal: %s", dir, s)
 		} else {
-			glog.Errorf("%s: failed to traverse, err: %v", dir, err)
+			glog.Errorln(err)
 		}
 	}
 	j.parent.doneCh <- struct{}{}
@@ -228,7 +228,7 @@ func (j *jogger) delCopies(lom *cluster.LOM) (err error) {
 }
 
 func (j *jogger) addCopies(lom *cluster.LOM) (err error) {
-	for i := 2; i <= j.parent.Copies; i++ {
+	for i := lom.NumCopies() + 1; i <= j.parent.Copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.mpathers); mpather != nil {
 			if err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
@@ -238,8 +238,7 @@ func (j *jogger) addCopies(lom *cluster.LOM) (err error) {
 				glog.Infof("%s: %s=>%s", lom, lom.ParsedFQN.MpathInfo, mpather.mountpathInfo())
 			}
 		} else {
-			err = fmt.Errorf("%s: cannot find dst mountpath", lom)
-			glog.Errorln(err)
+			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return
 		}
 	}
