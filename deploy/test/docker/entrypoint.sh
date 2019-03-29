@@ -23,7 +23,7 @@ pushd $AIS > /dev/null
 
 # try to build and deploy
 pushd $AIS/ais > /dev/null
-go build -tags="aws" setup/ais.go && go build -tags="gcp" setup/ais.go && go build -tags="" setup/ais.go && rm -rf ais
+go build -tags="aws" setup/aisnode.go && go build -tags="gcp" setup/ais.go && go build -tags="" setup/aisnode.go && rm -rf ais
 echo -e "4\n4\n3\n${CLD_PROVIDER}" > deploy.tmp && make deploy < deploy.tmp && sleep 5
 popd > /dev/null
 

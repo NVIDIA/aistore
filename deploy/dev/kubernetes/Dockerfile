@@ -68,7 +68,7 @@ ENV BUILD `date +%FT%T%z`
 RUN cd $GOPATH/src/github.com/NVIDIA && git clone https://github.com/NVIDIA/aistore.git && cd $WORKDIR
 
 RUN echo "\
-cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go  \n \
+cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/aisnode.go  \n \
 cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh

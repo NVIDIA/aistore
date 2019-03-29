@@ -79,7 +79,7 @@ if [ "$(echo $KUBERNETES_SERVICE_HOST)" != "" ]; then
       exit 1
   fi
 fi
-if [ "$(ps aux | grep -v -e 'grep' | grep bin/ais)" != "" ]; then
+if [ "$(ps aux | grep -v -e 'grep' | grep bin/aisnode)" != "" ]; then
     echo "AIStore running locally..." >&2
     exit 0 
 fi

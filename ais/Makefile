@@ -28,16 +28,16 @@ endif
 .PHONY: build
 
 build:
-	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/ais.go
+	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/aisnode.go
 
 
 # Target for cleaning deployment
 .PHONY: kill rmcache clean
 
 kill:
-	@pkill -SIGINT ais 2>/dev/null; sleep 1; true
+	@pkill -SIGINT aisnode 2>/dev/null; sleep 1; true
 	@pkill authn 2>/dev/null; sleep 1; true
-	@pkill -SIGKILL ais 2>/dev/null; true
+	@pkill -SIGKILL aisnode 2>/dev/null; true
 
 # delete only caches, not logs
 rmcache:
@@ -46,8 +46,8 @@ rmcache:
 clean:
 	rm -rf ~/.ais*
 	rm -rf /tmp/ais
-	rm -f $(GOPATH)/bin/ais
-	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/ais.a
+	rm -f $(GOPATH)/bin/aisnode
+	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
 
 
 # Target for local deployment

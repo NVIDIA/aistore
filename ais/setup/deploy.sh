@@ -181,8 +181,8 @@ BUILD=`date +%FT%T%z`
 
 if [ "$ENABLE_CODE_COVERAGE" == "" ]
 then
-	EXE=$GOPATH/bin/ais
-	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
+	EXE=$GOPATH/bin/aisnode
+	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
 else
 	echo "Note: code test-coverage enabled!"
 	EXE=$GOPATH/bin/ais_coverage.test

@@ -109,14 +109,14 @@ ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -ntargets=$TARGETS -
 
 while :
 do
-    if [[ -e /usr/local/bin/ais ]]; then
+    if [[ -e /usr/local/bin/aisnode ]]; then
         # the production Dockerfile places ais here
-        /usr/local/bin/ais $ARGS
-    elif [[ -e /go/bin/ais ]]; then
+        /usr/local/bin/aisnode $ARGS
+    elif [[ -e /go/bin/aisnode ]]; then
         # debug/source image with a built binary, use that
-        /go/bin/ais $ARGS
+        /go/bin/aisnode $ARGS
     elif [[ -d /go/src/github.com/NVIDIA/aistore/ais ]]; then
-        (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/ais.go $ARGS)
+        (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
     else
         echo "Cannot find an ais binary or source tree"
     fi

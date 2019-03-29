@@ -6,8 +6,8 @@
 # cd $GOPATH
 # docker build -f blah/blah/Dockerfile_debug ...
 #
-# The entry point CMD expects that at $GOPATH/bin/ais is the ais binary, or if that
-# is absent that is should go run setup/ais.go
+# The entry point CMD expects that at $GOPATH/bin/aisnode is the ais binary, or if that
+# is absent that is should go run setup/aisnode.go
 #
 
 FROM ubuntu:bionic

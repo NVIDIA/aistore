@@ -25,9 +25,9 @@ before_script:
 build:
   stage: build
   script:
-    - go build -tags="aws" setup/ais.go
-    - go build -tags="gcp" setup/ais.go
-    - go build -tags="" setup/ais.go
+    - go build -tags="aws" setup/aisnode.go
+    - go build -tags="gcp" setup/aisnode.go
+    - go build -tags="" setup/aisnode.go
 
 lint:
   stage: build

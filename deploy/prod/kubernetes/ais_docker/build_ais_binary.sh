@@ -81,7 +81,7 @@ echo "Cloud provider set to: ${CLDPROVIDER}"
       -tags="${CLDPROVIDER}" \
       -ldflags "$LDEXTRAFLAGS -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" \
       ${GCFLAGS:+"$GCFLAGS"} \
-      setup/ais.go
+      setup/aisnode.go
 )
 
 if [[ $? -ne 0 ]]; then

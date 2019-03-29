@@ -44,5 +44,5 @@ AIS proxy and AIS target (executables) both support the following command-line a
 > Use `--help` for the most recently updated set of command-line options, for instance:
 
 ```shell
-# $GOPATH/bin/ais --help
+# $GOPATH/bin/aisnode --help
 ```
