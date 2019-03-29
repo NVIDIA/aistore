@@ -248,48 +248,46 @@ Reset bucket properties to cluster default.
 
 [AIS Downloader](../downloader/README.md) supports following types of download requests:
 
-* **single** - download a single object
-* **range** - download multiple objects based on a given naming pattern
+* **download** - download the object(s) from external source
 * **status** - display status of a given download job
 * **cancel** - cancel given download job
 * **rm** - remove finished download job from the list
 * **ls** - list current download jobs and their states
 
 
-#### single
+#### download
 
-`ais download single --bucket <value> --link <value> --objname <value>`
+`ais download <source> <dest>`
 
-Downloads a single object from `link` location and saves it as `objname` in provided `bucket`.
+Downloads the object(s) from `source` location and saves it as specified in `dest` location.
+`source` location can be link to single or range download:
+* `gs://lpr-vision/imagenet/imagenet_train-000000.tgz`
+* `gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz`
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--bucket` | string | bucket where the downloaded object is saved to | `""` |
-| `--description` | string | description for the download request| `""` |
-| `--link` | string | URL of where the object is downloaded from. | `""` |
-| `--objname` | string | name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path | `""` |
+Currently, the schemas supported for `source` location are:
+* `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`
+* `s3://` - refers to Amazon Web Services S3 storage, eg. `s3://bucket/sub_folder/object_name.tar`
+* `http://` or `https://` - refers to external link somewhere on the web, eg. `http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`
 
-Examples:
-* `ais download single --bucket local-lpr --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"`
-* `ais download single --bucket local-lpr --description "imagenet" --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
-
-#### range
-
-`ais download range --bucket <value> --base <value> --template <value>`
-
-Downloads a list of objects depending on provided `template` from `base` and saves it to the provided `bucket`.
-`base` and objects from `template` are concatenated with `/` so eg. for `base=https://storage.googleapis.com/lpr-vision` and `template=imagenet/imagenet_train-{000000..000140}.tgz` the resulting URL will be: `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz`, `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz`, ...
+As for `dest` location, the only supported schema is `ais://` and the link should be constructed as follows: `ais://bucket/sub_folder/object_name.tar`, where:
+* `ais://` - schema, specifying that the destination is AIS cluster
+* `bucket` - bucket name where the object(s) will be stored
+* `sub_folder/object_name.tar` - in case of downloading a single file, this will be the name of the object saved in AIS cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | bucket where the downloaded object is saved to | `""` |
-| `--description` | string | description for the download request| `""` |
-| `--base` | string | base URL where the objects are located | `""` |
-| `--template` | string | bash template describing names of the objects in the URL | `""` |
+| `--description, -desc` | string | description for the download request | `""` |
+| `--timeout` | string | timeout for request to external resource | `""` |
 
 Examples:
-* `ais download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000000..000140}.tgz"` will download all objects in the range from `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz` to `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000140.tgz`.
-* `ais download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000022..000140..2}.tgz"` same as above while skipping every other object in the specified range
+* `ais download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso` downloads object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP location and saves it in `ubuntu` bucket, named as `ubuntu-18.04.1.iso`.  
+The same result can be obtained with  `ais download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/` - note the lack of object name in the destination.
+* `ais download gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads object `imagenet/imagenet_train-000000.tgz` from Google Cloud Storage from bucket `lpr-vision` and saves it in `local-lpr` bucket, named as `imagenet_train-000000.tgz`
+* `ais download --description "imagenet" gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
+* `ais download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr` will download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and save them in `local-lpr` bucket
+* `ais download --desc "subset-imagenet" "gs://lpr-vision/imagenet/imagenet_train-{000022..000140..2}.tgz" ais://local-lpr` same as above while skipping every other object in the specified range
+
+
 #### status
 
 `ais download status --id <value>`
@@ -299,8 +297,8 @@ Retrieves status of the download with provided `id` which is returned upon creat
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--id` | string | unique identifier of download job returned upon job creation | `""` |
-| `--progress` | bool | if set, displays a progres bar that ilustrates the progress of the download | `false` |
-| `--refresh` | int | refreshing rate of the progress bar (in miliseconds), works only if `--progress` flag is set | `1000` |
+| `--progress` | bool | if set, displays a progress bar that illustrates the progress of the download | `false` |
+| `--refresh` | int | refreshing rate of the progress bar (in milliseconds), works only if `--progress` flag is set | `1000` |
 
 Examples:
 * `ais download status --id "5JjIuGemR"` returns the condensed status of the download

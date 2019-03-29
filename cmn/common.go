@@ -620,8 +620,8 @@ func Ratio(high, low, curr int64) float32 {
 //
 
 var (
-	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix`")
-	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix`")
+	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
+	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix'")
 
 	ErrStartAfterEnd   = errors.New("'start' cannot be greater than 'end'")
 	ErrNegativeStart   = errors.New("'start' is negative")

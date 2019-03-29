@@ -20,9 +20,6 @@ import (
 )
 
 const (
-	downloadSingle = "single"
-	downloadRange  = "range"
-	downloadCloud  = "cloud"
 	downloadStatus = "status"
 	downloadCancel = "cancel"
 	downloadRemove = "rm"
@@ -38,34 +35,12 @@ const (
 
 var (
 	baseDownloadFlags = []cli.Flag{
-		bucketFlag,
 		bckProviderFlag,
 		timeoutFlag,
 		descriptionFlag,
 	}
 
 	downloadFlags = map[string][]cli.Flag{
-		downloadSingle: append(
-			[]cli.Flag{
-				objNameFlag,
-				linkFlag,
-			},
-			baseDownloadFlags...,
-		),
-		downloadRange: append(
-			[]cli.Flag{
-				baseFlag,
-				templateFlag,
-			},
-			baseDownloadFlags...,
-		),
-		downloadCloud: append(
-			[]cli.Flag{
-				dlPrefixFlag,
-				dlSuffixFlag,
-			},
-			baseDownloadFlags...,
-		),
 		downloadStatus: {
 			idFlag,
 			progressBarFlag,
@@ -83,9 +58,7 @@ var (
 		},
 	}
 
-	downloadSingleUsage = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", cliName, downloadSingle)
-	downloadRangeUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --base <value> --template <value>", cliName, downloadRange)
-	downloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, downloadCloud)
+	downloadUsage       = fmt.Sprintf("%s download <source> <dest>", cliName)
 	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
 	downloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadCancel)
 	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
@@ -93,37 +66,16 @@ var (
 
 	DownloaderCmds = []cli.Command{
 		{
-			Name:  "download",
-			Usage: "allows downloading objects from external source",
-			Flags: baseDownloadFlags,
+			Name:         "download",
+			Usage:        "download objects from external source",
+			Flags:        baseDownloadFlags,
+			Action:       downloadHandler,
+			UsageText:    downloadUsage,
+			BashComplete: flagList,
 			Subcommands: []cli.Command{
 				{
-					Name:         downloadSingle,
-					Usage:        "downloads single object into provided bucket",
-					UsageText:    downloadSingleUsage,
-					Flags:        downloadFlags[downloadSingle],
-					Action:       downloadHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         downloadRange,
-					Usage:        "downloads range of objects specified in template parameter",
-					UsageText:    downloadRangeUsage,
-					Flags:        downloadFlags[downloadRange],
-					Action:       downloadHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         downloadCloud,
-					Usage:        "downloads objects from cloud bucket matching provided prefix and suffix",
-					UsageText:    downloadCloudUsage,
-					Flags:        downloadFlags[downloadCloud],
-					Action:       downloadHandler,
-					BashComplete: flagList,
-				},
-				{
 					Name:         downloadStatus,
-					Usage:        "fetches status of download job with given id",
+					Usage:        "fetch status of download job with given id",
 					UsageText:    downloadStatusUsage,
 					Flags:        downloadFlags[downloadStatus],
 					Action:       downloadAdminHandler,
@@ -131,7 +83,7 @@ var (
 				},
 				{
 					Name:         downloadCancel,
-					Usage:        "cancels download job with given id",
+					Usage:        "cancel download job with given id",
 					UsageText:    downloadCancelUsage,
 					Flags:        downloadFlags[downloadCancel],
 					Action:       downloadAdminHandler,
@@ -139,7 +91,7 @@ var (
 				},
 				{
 					Name:         downloadRemove,
-					Usage:        "removes download job with given id from the list",
+					Usage:        "remove download job with given id from the list",
 					UsageText:    downloadRemoveUsage,
 					Flags:        downloadFlags[downloadRemove],
 					Action:       downloadAdminHandler,
@@ -147,7 +99,7 @@ var (
 				},
 				{
 					Name:         downloadList,
-					Usage:        "lists all download jobs which match provided regex",
+					Usage:        "list all download jobs which match provided regex",
 					UsageText:    downloadListUsage,
 					Flags:        downloadFlags[downloadList],
 					Action:       downloadAdminHandler,
@@ -161,16 +113,11 @@ var (
 func downloadHandler(c *cli.Context) error {
 	var (
 		baseParams  = cliAPIParams(ClusterURL)
-		bucket      = parseFlag(c, bucketFlag.Name)
 		description = parseFlag(c, descriptionFlag.Name)
 		timeout     = parseFlag(c, timeoutFlag.Name)
 
 		id string
 	)
-
-	if err := checkFlags(c, bucketFlag.Name); err != nil {
-		return err
-	}
 
 	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
@@ -178,21 +125,37 @@ func downloadHandler(c *cli.Context) error {
 	}
 
 	basePayload := cmn.DlBase{
-		Bucket:      bucket,
 		BckProvider: bckProvider,
 		Timeout:     timeout,
 		Description: description,
 	}
 
-	commandName := c.Command.Name
-	switch commandName {
-	case downloadSingle:
-		if err := checkFlags(c, objNameFlag.Name, linkFlag.Name); err != nil {
+	if c.NArg() != 2 {
+		return fmt.Errorf("expected two arguments: source and destination, got %d", c.NArg())
+	}
+	source, dest := c.Args().Get(0), c.Args().Get(1)
+	link, err := parseSource(source)
+	if err != nil {
+		return err
+	}
+	bucket, objName, err := parseDest(dest)
+	if err != nil {
+		return err
+	}
+	basePayload.Bucket = bucket
+
+	if strings.Contains(source, "{") && strings.Contains(source, "}") {
+		// Range
+		payload := cmn.DlRangeBody{
+			DlBase:   basePayload,
+			Template: link,
+		}
+		id, err = api.DownloadRangeWithParam(baseParams, payload)
+		if err != nil {
 			return err
 		}
-
-		objName := parseFlag(c, objNameFlag.Name)
-		link := parseFlag(c, linkFlag.Name)
+	} else {
+		// Single
 		payload := cmn.DlSingleBody{
 			DlBase: basePayload,
 			DlObj: cmn.DlObj{
@@ -200,42 +163,10 @@ func downloadHandler(c *cli.Context) error {
 				Objname: objName,
 			},
 		}
-
 		id, err = api.DownloadSingleWithParam(baseParams, payload)
 		if err != nil {
 			return err
 		}
-	case downloadRange:
-		if err := checkFlags(c, baseFlag.Name, templateFlag.Name); err != nil {
-			return err
-		}
-
-		base := parseFlag(c, baseFlag.Name)
-		template := parseFlag(c, templateFlag.Name)
-		payload := cmn.DlRangeBody{
-			DlBase:   basePayload,
-			Base:     base,
-			Template: template,
-		}
-
-		id, err = api.DownloadRangeWithParam(baseParams, payload)
-		if err != nil {
-			return err
-		}
-	case downloadCloud:
-		prefix := parseFlag(c, dlPrefixFlag.Name)
-		suffix := parseFlag(c, dlSuffixFlag.Name)
-		payload := cmn.DlCloudBody{
-			DlBase: basePayload,
-			Prefix: prefix,
-			Suffix: suffix,
-		}
-		id, err = api.DownloadCloudWithParam(baseParams, payload)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("invalid command name '%s'", commandName)
 	}
 	fmt.Println(id)
 	return nil

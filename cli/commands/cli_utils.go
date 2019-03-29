@@ -39,16 +39,7 @@ var (
 
 	// Downloader
 	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
-	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription, Usage: "description of the job - can be useful when listing all downloads"}
-	objNameFlag     = cli.StringFlag{Name: cmn.URLParamObjName, Usage: "name of the object the download is saved as, eg. 'train-images-mnist.tgz'"}
-	linkFlag        = cli.StringFlag{Name: cmn.URLParamLink,
-		Usage: "URL of where the object is downloaded from, eg. 'http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz'"}
-	baseFlag = cli.StringFlag{Name: cmn.URLParamBase,
-		Usage: "base URL of the object used to formulate the download URL, eg. 'http://yann.lecun.com/exdb/mnist'"}
-	templateFlag = cli.StringFlag{Name: cmn.URLParamTemplate,
-		Usage: "bash template describing names of the objects in the URL, eg: 'object{200..300}log.txt'"}
-	dlPrefixFlag    = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix of the object name, eg. 'imagenet/imagenet-'"}
-	dlSuffixFlag    = cli.StringFlag{Name: cmn.URLParamSuffix, Usage: "suffix of the object name, eg. '.tgz'"}
+	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
 	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}

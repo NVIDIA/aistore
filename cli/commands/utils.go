@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -18,6 +20,16 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
+)
+
+const (
+	defaultScheme = "https"
+	gsScheme      = "gs"
+	s3Scheme      = "s3"
+	aisScheme     = "ais"
+
+	gsHost = "storage.googleapis.com"
+	s3Host = "s3.amazonaws.com"
 )
 
 var (
@@ -178,4 +190,78 @@ func makeKVS(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
 		nvs[pairs[0]] = pairs[1]
 	}
 	return
+}
+
+func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+
+	scheme = u.Scheme
+	bucket = u.Host
+	objName = u.Path
+	return
+}
+
+// Replace protocol (gs://, s3://) with proper google cloud / s3 URL
+func parseSource(rawURL string) (link string, err error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return
+	}
+
+	scheme := u.Scheme
+	host := u.Host
+	fullPath := u.Path
+
+	// if rawURL is using gs or s3 scheme ({gs/s3}://<bucket>/...) then <bucket> is considered a host by `url.Parse`
+	switch u.Scheme {
+	case gsScheme:
+		scheme = "https"
+		host = gsHost
+		fullPath = path.Join(u.Host, fullPath)
+	case s3Scheme:
+		scheme = "http"
+		host = s3Host
+		fullPath = path.Join(u.Host, fullPath)
+	case "":
+		scheme = defaultScheme
+	case "https", "http":
+		break
+	case aisScheme:
+		err = fmt.Errorf("%q scheme cannot be used as source", aisScheme)
+		return
+	default:
+		err = fmt.Errorf("invalid scheme: %s", scheme)
+		return
+	}
+
+	normalizedURL := url.URL{
+		Scheme:   scheme,
+		User:     u.User,
+		Host:     host,
+		Path:     fullPath,
+		RawQuery: u.RawQuery,
+		Fragment: u.Fragment,
+	}
+
+	return url.QueryUnescape(normalizedURL.String())
+}
+
+func parseDest(rawURL string) (bucket, objName string, err error) {
+	destScheme, destBucket, destObjName, err := parseURI(rawURL)
+	if err != nil {
+		return
+	}
+	if destScheme != aisScheme {
+		err = fmt.Errorf("destination should be %q scheme, eg. %s://bucket/objname", aisScheme, aisScheme)
+		return
+	}
+	if destBucket == "" {
+		err = fmt.Errorf("destination bucket cannot be empty")
+		return
+	}
+	destObjName = strings.Trim(destObjName, "/")
+	return destBucket, destObjName, nil
 }

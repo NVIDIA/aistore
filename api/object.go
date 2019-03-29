@@ -303,9 +303,8 @@ func DownloadSingleWithParam(baseParams *BaseParams, dlBody cmn.DlSingleBody) (s
 	return doDlDownloadRequest(baseParams, path, nil, optParams)
 }
 
-func DownloadRange(baseParams *BaseParams, description string, bucket, base, template string) (string, error) {
+func DownloadRange(baseParams *BaseParams, description string, bucket, template string) (string, error) {
 	dlBody := cmn.DlRangeBody{
-		Base:     base,
 		Template: template,
 	}
 	dlBody.Bucket = bucket

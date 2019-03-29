@@ -110,12 +110,10 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Download a (range) list of objects | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&base=randomwebsite.com/some_dir&template=object{200..300}log.txt'` |
-| Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&base=randomwebsite.com/some_dir&template=object{1..1000..10}log.txt'` |
+| Download a (range) list of objects | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
+| Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{1..1000..10}log.txt'` |
 
 **Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.
-
-**Note:** `base` and `template` are concatenated with `/`, eg. `base=randomwebsite.com/some_dir` and `template=object{200..300}log.txt'` will result in URLs: `http://randomwebsite.com/some_dir/object200log.txt`, `http://randomwebsite.com/some_dir/object201log.txt`, ...
 
 ## Cloud download
 

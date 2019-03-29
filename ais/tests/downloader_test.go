@@ -168,10 +168,7 @@ func TestDownloadRange(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		bucket   = TestLocalBucketName
 
-		// base does not have following slash to test that it is prepended and
-		// it is concatenated with template properly.
-		base     = "storage.googleapis.com/lpr-vision"
-		template = "imagenet/imagenet_train-{000000..000007}.tgz"
+		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000007}.tgz"
 	)
 
 	clearDownloadList(t)
@@ -180,7 +177,7 @@ func TestDownloadRange(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, base, template)
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
 	tutils.CheckFatal(err, t)
 
 	time.Sleep(3 * time.Second)
@@ -574,10 +571,8 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bucket = TestLocalBucketName
-
-		base     = "storage.googleapis.com/lpr-vision"
-		template = "cifar{10..100..90}_test.tgz"
+		bucket   = TestLocalBucketName
+		template = "storage.googleapis.com/lpr-vision/cifar{10..100..90}_test.tgz"
 
 		expectedObjects = []string{"cifar10_test.tgz", "cifar100_test.tgz"}
 	)
@@ -590,7 +585,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, base, template)
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
 	tutils.CheckFatal(err, t)
 
 	waitForDownload(t, id, time.Minute)

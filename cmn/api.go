@@ -169,7 +169,6 @@ const (
 	URLParamTotalUncompressedSize = "tunc"
 
 	// downloader
-	URLParamBase        = "base"
 	URLParamBucket      = "bucket"
 	URLParamID          = "id"
 	URLParamLink        = "link"
@@ -650,19 +649,16 @@ func (b *DlSingleBody) String() string {
 // Range request
 type DlRangeBody struct {
 	DlBase
-	Base     string `json:"base"`
 	Template string `json:"template"`
 }
 
 func (b *DlRangeBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
-	b.Base = query.Get(URLParamBase)
 	b.Template = query.Get(URLParamTemplate)
 }
 
 func (b *DlRangeBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
-	query.Add(URLParamBase, b.Base)
 	query.Add(URLParamTemplate, b.Template)
 	return query
 }
@@ -670,12 +666,6 @@ func (b *DlRangeBody) AsQuery() url.Values {
 func (b *DlRangeBody) Validate() error {
 	if err := b.DlBase.Validate(); err != nil {
 		return err
-	}
-	if b.Base == "" {
-		return fmt.Errorf("no %q for range found, %q is required", URLParamBase, URLParamBase)
-	}
-	if !strings.HasSuffix(b.Base, "/") {
-		b.Base += "/"
 	}
 	if b.Template == "" {
 		return fmt.Errorf("no %q for range found, %q is required", URLParamTemplate, URLParamTemplate)
@@ -691,18 +681,19 @@ func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
 
 	objects := make(SimpleKVs, (end-start+1)/step)
 	for i := start; i <= end; i += step {
-		objname := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
-		objects[objname] = b.Base + objname
+		link := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
+		objName := path.Base(link)
+		objects[objName] = link
 	}
 	return objects, nil
 }
 
 func (b *DlRangeBody) Describe() string {
-	return fmt.Sprintf("%s%s -> %s", b.Base, b.Template, b.Bucket)
+	return fmt.Sprintf("%s -> %s", b.Template, b.Bucket)
 }
 
 func (b *DlRangeBody) String() string {
-	return fmt.Sprintf("bucket: %q, base: %q, template: %q", b.Bucket, b.Base, b.Template)
+	return fmt.Sprintf("bucket: %q, template: %q", b.Bucket, b.Template)
 }
 
 // Multi request
