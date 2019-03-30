@@ -220,19 +220,12 @@ func TimeDelta(time1, time2 time.Time) time.Duration {
 }
 
 func ConvertToString(value interface{}) (valstr string, err error) {
-	if v, ok := value.(string); ok {
+	switch v := value.(type) {
+	case string:
 		valstr = v
-	} else if v, ok := value.(bool); ok {
-		valstr = strconv.FormatBool(v)
-	} else if v, ok := value.(int); ok {
-		valstr = strconv.Itoa(v)
-	} else if v, ok := value.(int64); ok {
-		valstr = strconv.FormatInt(v, 10)
-	} else if v, ok := value.(uint64); ok {
-		valstr = strconv.FormatUint(v, 10)
-	} else if v, ok := value.(float64); ok {
-		valstr = strconv.FormatFloat(v, 'f', -1, 64)
-	} else {
+	case bool, int, int32, int64, uint32, uint64, float32, float64:
+		valstr = fmt.Sprintf("%v", v)
+	default:
 		err = fmt.Errorf("failed to assert type on param: %v (type %T)", value, value)
 	}
 	return
