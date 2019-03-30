@@ -21,27 +21,28 @@ import (
 )
 
 const (
-	BucketCreate  = "create"
-	BucketDestroy = "destroy"
-	BucketNames   = "names"
+	bucketCreate   = "create"
+	bucketDestroy  = "destroy"
+	bucketNames    = "names"
+	bucketSetProps = "setprops"
 )
 
 var (
-	BaseBucketFlags = []cli.Flag{
+	baseBucketFlags = []cli.Flag{
 		bucketFlag,
 		bckProviderFlag,
 	}
 
-	BucketFlags = map[string][]cli.Flag{
-		BucketCreate:  []cli.Flag{bucketFlag},
-		BucketNames:   []cli.Flag{regexFlag, bckProviderFlag},
-		BucketDestroy: []cli.Flag{bucketFlag},
-		CommandRename: append(
+	bucketFlags = map[string][]cli.Flag{
+		bucketCreate:  []cli.Flag{bucketFlag},
+		bucketNames:   []cli.Flag{regexFlag, bckProviderFlag},
+		bucketDestroy: []cli.Flag{bucketFlag},
+		commandRename: append(
 			[]cli.Flag{
 				newBucketFlag,
 			},
-			BaseBucketFlags...),
-		CommandList: append(
+			baseBucketFlags...),
+		commandList: append(
 			[]cli.Flag{
 				regexFlag,
 				prefixFlag,
@@ -49,79 +50,154 @@ var (
 				objPropsFlag,
 				objLimitFlag,
 			},
-			BaseBucketFlags...),
-		CommandSetProps: append(
+			baseBucketFlags...),
+		bucketSetProps: append(
 			[]cli.Flag{jsonFlag},
-			BaseBucketFlags...),
+			baseBucketFlags...),
 	}
 
-	BucketCreateDelList = "%s bucket %s --bucket <value>"
-	BucketCreateText    = fmt.Sprintf(BucketCreateDelList, cliName, BucketCreate)
-	BucketDelText       = fmt.Sprintf(BucketCreateDelList, cliName, BucketDestroy)
-	BucketListText      = fmt.Sprintf(BucketCreateDelList, cliName, CommandList)
-	BucketNamesText     = fmt.Sprintf("%s bucket %s", cliName, BucketNames)
-	BucketRenameText    = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, CommandRename)
-	BucketPropsText     = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, CommandSetProps)
+	bucketCreateDelList = "%s bucket %s --bucket <value>"
+	bucketCreateText    = fmt.Sprintf(bucketCreateDelList, cliName, bucketCreate)
+	bucketDelText       = fmt.Sprintf(bucketCreateDelList, cliName, bucketDestroy)
+	bucketListText      = fmt.Sprintf(bucketCreateDelList, cliName, commandList)
+	bucketNamesText     = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
+	bucketRenameText    = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, commandRename)
+	bucketPropsText     = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
+
+	BucketCmds = []cli.Command{
+		{
+			Name:  cmn.URLParamBucket,
+			Usage: "commands that interact with objects",
+			Flags: baseBucketFlags,
+			Subcommands: []cli.Command{
+				{
+					Name:         bucketCreate,
+					Usage:        "creates the local bucket",
+					UsageText:    bucketCreateText,
+					Flags:        bucketFlags[bucketCreate],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         bucketDestroy,
+					Usage:        "destroys the local bucket",
+					UsageText:    bucketDelText,
+					Flags:        bucketFlags[bucketDestroy],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         commandRename,
+					Usage:        "renames the local bucket",
+					UsageText:    bucketRenameText,
+					Flags:        bucketFlags[commandRename],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         bucketNames,
+					Usage:        "returns all bucket names",
+					UsageText:    bucketNamesText,
+					Flags:        bucketFlags[bucketNames],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         commandList,
+					Usage:        "returns all objects from bucket",
+					UsageText:    bucketListText,
+					Flags:        bucketFlags[commandList],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         bucketSetProps,
+					Usage:        "sets bucket properties",
+					UsageText:    bucketPropsText,
+					Flags:        bucketFlags[bucketSetProps],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
+			},
+		},
+	}
 )
 
-func BucketHandler(c *cli.Context) (err error) {
+func bucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
-
 	command := c.Command.Name
+	if err = checkFlags(c, bucketFlag.Name); err != nil && command != bucketNames {
+		return err
+	}
+
+	bucket := parseFlag(c, bucketFlag.Name)
+
 	switch command {
-	case BucketCreate:
-		if err = checkFlags(c, bucketFlag.Name); err != nil {
-			return err
-		}
-
-		bucket := parseFlag(c, bucketFlag.Name)
-		if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
-			return err
-		}
-
-		fmt.Printf("%s bucket created\n", bucket)
-	case BucketDestroy:
-		if err = checkFlags(c, bucketFlag.Name); err != nil {
-			return err
-		}
-
-		bucket := parseFlag(c, bucketFlag.Name)
-		if err = api.DestroyLocalBucket(baseParams, bucket); err != nil {
-			return err
-		}
-		fmt.Printf("%s bucket deleted\n", bucket)
-	case CommandRename:
-		if err = checkFlags(c, bucketFlag.Name, newBucketFlag.Name); err != nil {
-			return err
-		}
-
-		bucket := parseFlag(c, bucketFlag.Name)
-		newBucket := parseFlag(c, newBucketFlag.Name)
-		if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
-			return err
-		}
-		fmt.Printf("%s bucket renamed to %s\n", bucket, newBucket)
-	case BucketNames:
-		bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
-		if err != nil {
-			return err
-		}
-		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
-		if err != nil {
-			return err
-		}
-		printBucketNames(bucketNames, parseFlag(c, regexFlag.Name), bckProvider)
+	case bucketCreate:
+		err = createBucket(c, baseParams, bucket)
+	case bucketDestroy:
+		err = destroyBucket(c, baseParams, bucket)
+	case commandRename:
+		err = renameBucket(c, baseParams, bucket)
+	case bucketNames:
+		err = listBucketNames(c, baseParams)
+	case commandList:
+		err = listBucketObj(c, baseParams, bucket)
+	case bucketSetProps:
+		err = setBucketProps(c, baseParams, bucket)
 	default:
-		return fmt.Errorf("invalid command name '%s'", command)
+		return fmt.Errorf(invalidCmdMsg, command)
 	}
 	return err
 }
 
-func ListBucket(c *cli.Context) error {
-	baseParams := cliAPIParams(ClusterURL)
-	if err := checkFlags(c, bucketFlag.Name); err != nil {
+// Creates new local bucket
+func createBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
 		return err
 	}
+	fmt.Printf("%s bucket created\n", bucket)
+	return
+}
+
+// Destroy local bucket
+func destroyBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	if err = api.DestroyLocalBucket(baseParams, bucket); err != nil {
+		return err
+	}
+	fmt.Printf("%s bucket destroyed\n", bucket)
+	return
+}
+
+// Rename local bucket
+func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	if err = checkFlags(c, newBucketFlag.Name); err != nil {
+		return err
+	}
+	newBucket := parseFlag(c, newBucketFlag.Name)
+	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
+		return err
+	}
+	fmt.Printf("%s bucket renamed to %s\n", bucket, newBucket)
+	return
+}
+
+// Lists bucket names
+func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	if err != nil {
+		return err
+	}
+	bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
+	if err != nil {
+		return err
+	}
+	printBucketNames(bucketNames, parseFlag(c, regexFlag.Name), bckProvider)
+	return
+}
+
+// Lists objects in bucket
+func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	regex := parseFlag(c, regexFlag.Name)
 	r, err := regexp.Compile(regex)
 	if err != nil {
@@ -129,8 +205,7 @@ func ListBucket(c *cli.Context) error {
 	}
 
 	prefix := parseFlag(c, prefixFlag.Name)
-	bucket := parseFlag(c, bucketFlag.Name)
-	props := parseFlag(c, objPropsFlag.Name)
+	props := "name," + parseFlag(c, objPropsFlag.Name)
 	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag.Name))
 	if err != nil {
 		return err
@@ -149,20 +224,16 @@ func ListBucket(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = printObjectProps(objList.Entries, r, props)
-	return err
+	return printObjectProps(objList.Entries, r, props)
+
 }
 
-func SetBucketProps(c *cli.Context) error {
-	if err := checkFlags(c, bucketFlag.Name); err != nil {
-		return err
-	}
-
+// Sets bucket properties
+func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	if c.NArg() < 1 {
 		return errors.New("expected at least one argument")
 	}
 
-	baseParams := cliAPIParams(ClusterURL)
 	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
@@ -224,23 +295,25 @@ func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string) {
 }
 
 func printObjectProps(entries []*cmn.BucketEntry, r *regexp.Regexp, props string) error {
+	filteredEntries := []cmn.BucketEntry{}
 	propsList := makeList(props, ",")
-	bodyStr := "{{$obj := . }}"
+	headStr := ""
+	bodyStr := "{{range $obj := .}}"
 	for _, field := range propsList {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
 			return fmt.Errorf("'%s' is not a valid property", field)
 		}
+		headStr += field + "\t"
 		bodyStr += templates.ObjectPropsMap[field]
 	}
-	bodyStr += "\n"
-
-	templates.DisplayOutput(propsList, templates.ObjectPropsHeader)
+	headStr += "\n"
+	bodyStr += "\n{{end}}\n"
 	for _, obj := range entries {
 		if r.MatchString(obj.Name) {
-			templates.DisplayOutput(obj, bodyStr)
+			filteredEntries = append(filteredEntries, *obj)
 		}
 	}
-	return nil
+	return templates.DisplayOutput(filteredEntries, headStr+bodyStr)
 }
 
 func bucketExists(baseParams *api.BaseParams, bckName, bckProvider string) error {

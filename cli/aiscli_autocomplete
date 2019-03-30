@@ -1,7 +1,7 @@
 # Modified bash autocomplete script from github.com/urfave/cli
 #!/bin/bash
 
-PROG=aiscli
+PROG=ais
 
 _cli_bash_autocomplete() {
     local cur opts

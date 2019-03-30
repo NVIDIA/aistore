@@ -30,7 +30,6 @@ endif
 build:
 	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/aisnode.go
 
-
 # Target for cleaning deployment
 .PHONY: kill rmcache clean
 
@@ -47,6 +46,7 @@ clean:
 	rm -rf ~/.ais*
 	rm -rf /tmp/ais
 	rm -f $(GOPATH)/bin/aisnode
+	rm -f $(GOPATH)/bin/ais
 	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
 
 
@@ -55,9 +55,11 @@ clean:
 
 deploy:
 	@./setup/deploy.sh
+	@cd ../cli && go build -o ${GOPATH}/bin/ais
 
 deploy_next_tier:
 	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
+	@cd ../cli && go build -o ${GOPATH}/bin/ais
 
 
 # Target for local docker deployment

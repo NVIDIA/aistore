@@ -11,18 +11,21 @@ import (
 	"github.com/urfave/cli"
 )
 
-type AIScli struct {
+type AISCLI struct {
 	*cli.App
 }
 
 const (
-	cliName         = "aiscli"
-	CommandList     = "list"
-	CommandRename   = "rename"
-	CommandSetProps = "setprops"
+	cliName       = "ais"
+	commandList   = "list"
+	commandRename = "rename"
+
+	invalidCmdMsg    = "invalid command name '%s'"
+	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
 )
 
 var (
+	// Common Flags
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
@@ -69,6 +72,23 @@ var (
 	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
 )
 
+func New() AISCLI {
+	aisCLI := AISCLI{cli.NewApp()}
+	aisCLI.Init()
+	return aisCLI
+}
+
+func (aisCLI AISCLI) Init() {
+	aisCLI.Name = cliName
+	aisCLI.Usage = "CLI tool for AIS"
+	aisCLI.Version = "0.1"
+	aisCLI.EnableBashCompletion = true
+	cli.VersionFlag = cli.BoolFlag{
+		Name:  "version, V",
+		Usage: "print only the version",
+	}
+}
+
 func flagIsSet(c *cli.Context, flag string) bool {
 	// If the flag name has multiple values, take first one
 	flag = cleanFlag(flag)
@@ -87,25 +107,8 @@ func parseFlag(c *cli.Context, flag string) string {
 func checkFlags(c *cli.Context, flag ...string) error {
 	for _, f := range flag {
 		if !flagIsSet(c, f) {
-			return fmt.Errorf("%q is not set", f)
+			return fmt.Errorf("%q flag is not set", f)
 		}
 	}
 	return nil
-}
-
-func New() AIScli {
-	aisCLI := AIScli{cli.NewApp()}
-	aisCLI.Init()
-	return aisCLI
-}
-
-func (aisCLI AIScli) Init() {
-	aisCLI.Name = cliName
-	aisCLI.Usage = "CLI tool for AIS"
-	aisCLI.Version = "0.1"
-	aisCLI.EnableBashCompletion = true
-	cli.VersionFlag = cli.BoolFlag{
-		Name:  "version, V",
-		Usage: "print only the version",
-	}
 }

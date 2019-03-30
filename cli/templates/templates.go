@@ -199,12 +199,6 @@ const (
 		ProxyConfTmpl + LRUConfTmpl + XactionConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
-
-	ObjectPropsHeader = "\n{{range $, $props := .}}" +
-		"{{if (or (eq $props `ctime`) (eq $props `atime`) (eq $props `targeturl`))}}{{$props}}\t \t \t" +
-		"{{else}}{{$props}}\t" +
-		"{{end}}" +
-		"{{end}}\n"
 )
 
 var (
@@ -270,7 +264,7 @@ func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool
 	if err != nil {
 		return err
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 0, '\t', 0)
+	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, '\t', 0)
 	if err := tmpl.Execute(w, object); err != nil {
 		return err
 	}

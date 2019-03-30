@@ -135,7 +135,7 @@ func daemonDirectURL(daemonID string) (string, error) {
 	if res, ok := target[daemonID]; ok {
 		return res.Snode.URL(cmn.NetworkPublic), nil
 	}
-	return "", fmt.Errorf("%s is not a valid daemon ID", daemonID)
+	return "", fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
 func regexFilter(regex string, strList []string) (retList []string) {

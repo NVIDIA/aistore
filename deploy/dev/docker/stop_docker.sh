@@ -147,3 +147,6 @@ echo "Removing volumes folders..."
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
     rm -rf /tmp/ais/${i}
 done
+
+# Remove CLI
+rm -f ${GOPATH}/bin/ais

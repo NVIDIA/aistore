@@ -12,7 +12,7 @@ import (
 )
 
 // Bash Completion
-func DaemonList(_ *cli.Context) {
+func daemonList(_ *cli.Context) {
 	fillMap(ClusterURL)
 	for dae := range proxy {
 		fmt.Println(dae)
@@ -23,7 +23,7 @@ func DaemonList(_ *cli.Context) {
 }
 
 // Returns flags for command
-func FlagList(c *cli.Context) {
+func flagList(c *cli.Context) {
 	for _, flag := range c.Command.Flags {
 		fmt.Printf("--%s\n", cleanFlag(flag.GetName()))
 	}

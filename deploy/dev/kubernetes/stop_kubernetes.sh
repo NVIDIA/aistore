@@ -9,3 +9,5 @@ if kubectl get statefulset | grep aisproxy > /dev/null 2>&1; then
 fi
 kubectl delete -f aisprimaryproxy_deployment.yml
 
+# Remove CLI
+rm -f ${GOPATH}/bin/ais

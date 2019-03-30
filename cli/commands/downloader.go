@@ -20,12 +20,12 @@ import (
 )
 
 const (
-	DownloadSingle = "single"
-	DownloadRange  = "range"
-	DownloadCloud  = "cloud"
-	DownloadStatus = "status"
-	DownloadCancel = "cancel"
-	DownloadList   = "ls"
+	downloadSingle = "single"
+	downloadRange  = "range"
+	downloadCloud  = "cloud"
+	downloadStatus = "status"
+	downloadCancel = "cancel"
+	downloadList   = "ls"
 
 	progressBarRefreshRateUnit    = time.Millisecond
 	progressBarRefreshRateDefault = 1000
@@ -36,57 +36,115 @@ const (
 )
 
 var (
-	BaseDownloadFlags = []cli.Flag{
+	baseDownloadFlags = []cli.Flag{
 		bucketFlag,
 		bckProviderFlag,
 		timeoutFlag,
 		descriptionFlag,
 	}
 
-	DownloadFlags = map[string][]cli.Flag{
-		DownloadSingle: append(
+	downloadFlags = map[string][]cli.Flag{
+		downloadSingle: append(
 			[]cli.Flag{
 				objNameFlag,
 				linkFlag,
 			},
-			BaseDownloadFlags...,
+			baseDownloadFlags...,
 		),
-		DownloadRange: append(
+		downloadRange: append(
 			[]cli.Flag{
 				baseFlag,
 				templateFlag,
 			},
-			BaseDownloadFlags...,
+			baseDownloadFlags...,
 		),
-		DownloadCloud: append(
+		downloadCloud: append(
 			[]cli.Flag{
 				dlPrefixFlag,
 				dlSuffixFlag,
 			},
-			BaseDownloadFlags...,
+			baseDownloadFlags...,
 		),
-		DownloadStatus: {
+		downloadStatus: []cli.Flag{
 			idFlag,
 			progressBarFlag,
 			refreshRateFlag,
 		},
-		DownloadCancel: {
+		downloadCancel: []cli.Flag{
 			idFlag,
 		},
-		DownloadList: {
+		downloadList: {
 			regexFlag,
 		},
 	}
 
-	DownloadSingleUsage = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", cliName, DownloadSingle)
-	DownloadRangeUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --base <value> --template <value>", cliName, DownloadRange)
-	DownloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, DownloadCloud)
-	DownloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, DownloadStatus)
-	DownloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, DownloadCancel)
-	DownloadListUsage   = fmt.Sprintf("%s download %s --id <value> --regex <value>", cliName, DownloadList)
+	downloadSingleUsage = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --objname <value> --link <value>", cliName, downloadSingle)
+	downloadRangeUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --base <value> --template <value>", cliName, downloadRange)
+	downloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, downloadCloud)
+	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
+	downloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadCancel)
+	downloadListUsage   = fmt.Sprintf("%s download %s --id <value> --regex <value>", cliName, downloadList)
+
+	DownloaderCmds = []cli.Command{
+		{
+			Name:  "download",
+			Usage: "allows downloading objects from external source",
+			Flags: baseDownloadFlags,
+			Subcommands: []cli.Command{
+				{
+					Name:         downloadSingle,
+					Usage:        "downloads single object into provided bucket",
+					UsageText:    downloadSingleUsage,
+					Flags:        downloadFlags[downloadSingle],
+					Action:       downloadHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadRange,
+					Usage:        "downloads range of objects specified in template parameter",
+					UsageText:    downloadRangeUsage,
+					Flags:        downloadFlags[downloadRange],
+					Action:       downloadHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadCloud,
+					Usage:        "downloads objects from cloud bucket matching provided prefix and suffix",
+					UsageText:    downloadCloudUsage,
+					Flags:        downloadFlags[downloadCloud],
+					Action:       downloadHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadStatus,
+					Usage:        "fetches status of download job with given id",
+					UsageText:    downloadStatusUsage,
+					Flags:        downloadFlags[downloadStatus],
+					Action:       downloadAdminHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadCancel,
+					Usage:        "cancels download job with given id",
+					UsageText:    downloadCancelUsage,
+					Flags:        downloadFlags[downloadCancel],
+					Action:       downloadAdminHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadList,
+					Usage:        "lists all download jobs which match provided regex",
+					UsageText:    downloadListUsage,
+					Flags:        downloadFlags[downloadList],
+					Action:       downloadAdminHandler,
+					BashComplete: flagList,
+				},
+			},
+		},
+	}
 )
 
-func DownloadHandler(c *cli.Context) error {
+func downloadHandler(c *cli.Context) error {
 	var (
 		baseParams  = cliAPIParams(ClusterURL)
 		bucket      = parseFlag(c, bucketFlag.Name)
@@ -114,7 +172,7 @@ func DownloadHandler(c *cli.Context) error {
 
 	commandName := c.Command.Name
 	switch commandName {
-	case DownloadSingle:
+	case downloadSingle:
 		if err := checkFlags(c, objNameFlag.Name, linkFlag.Name); err != nil {
 			return err
 		}
@@ -133,7 +191,7 @@ func DownloadHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-	case DownloadRange:
+	case downloadRange:
 		if err := checkFlags(c, baseFlag.Name, templateFlag.Name); err != nil {
 			return err
 		}
@@ -150,7 +208,7 @@ func DownloadHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-	case DownloadCloud:
+	case downloadCloud:
 		prefix := parseFlag(c, dlPrefixFlag.Name)
 		suffix := parseFlag(c, dlSuffixFlag.Name)
 		payload := cmn.DlCloudBody{
@@ -169,7 +227,7 @@ func DownloadHandler(c *cli.Context) error {
 	return nil
 }
 
-func DownloadAdminHandler(c *cli.Context) error {
+func downloadAdminHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
 		id         = parseFlag(c, idFlag.Name)
@@ -178,7 +236,7 @@ func DownloadAdminHandler(c *cli.Context) error {
 
 	commandName := c.Command.Name
 	switch commandName {
-	case DownloadStatus:
+	case downloadStatus:
 		if err := checkFlags(c, idFlag.Name); err != nil {
 			return err
 		}
@@ -200,7 +258,7 @@ func DownloadAdminHandler(c *cli.Context) error {
 
 			fmt.Println(resp.String())
 		}
-	case DownloadCancel:
+	case downloadCancel:
 		if err := checkFlags(c, idFlag.Name); err != nil {
 			return err
 		}
@@ -209,7 +267,7 @@ func DownloadAdminHandler(c *cli.Context) error {
 			return err
 		}
 		fmt.Printf("download canceled: %s\n", id)
-	case DownloadList:
+	case downloadList:
 		list, err := api.DownloadGetList(baseParams, regex)
 		if err != nil {
 			return err

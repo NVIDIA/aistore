@@ -19,27 +19,154 @@ var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
 
-	DaemonFlags = map[string][]cli.Flag{
+	daemonFlags = map[string][]cli.Flag{
 		cmn.GetWhatSmap:         []cli.Flag{jsonFlag},
 		cmn.GetWhatDaemonStatus: []cli.Flag{jsonFlag},
 		cmn.GetWhatConfig:       []cli.Flag{jsonFlag},
 		cmn.GetWhatStats:        []cli.Flag{jsonFlag},
-		CommandList:             []cli.Flag{verboseFlag},
+		commandList:             []cli.Flag{verboseFlag},
+	}
+
+	// AIS API Query Commands
+	DaemonCmds = []cli.Command{
+		{
+			Name:         cmn.GetWhatSmap,
+			Usage:        "returns cluster map (Smap)",
+			Action:       queryHandler,
+			Flags:        daemonFlags[cmn.GetWhatSmap],
+			BashComplete: daemonList,
+		},
+		{
+			Name:         cmn.GetWhatDaemonStatus,
+			Usage:        "returns status of AIS Daemon",
+			Action:       queryHandler,
+			Flags:        daemonFlags[cmn.GetWhatDaemonStatus],
+			BashComplete: daemonList,
+		},
+		{
+			Name:         cmn.GetWhatConfig,
+			Usage:        "returns config of AIS daemon",
+			Action:       queryHandler,
+			Flags:        daemonFlags[cmn.GetWhatConfig],
+			BashComplete: daemonList,
+		},
+		{
+			Name:         cmn.GetWhatStats,
+			Usage:        "returns stats of AIS daemon",
+			Action:       queryHandler,
+			Flags:        daemonFlags[cmn.GetWhatStats],
+			BashComplete: daemonList,
+		},
+		{
+			Name:    commandList,
+			Aliases: []string{"ls"},
+			Usage:   "returns list of AIS Daemons",
+			Action:  queryHandler,
+			Flags:   daemonFlags[commandList],
+		},
 	}
 )
 
-// Display smap individual daemon
-func ListAIS(c *cli.Context) error {
-	err := fillMap(ClusterURL)
+// Querying information
+func queryHandler(c *cli.Context) (err error) {
+	if err = fillMap(ClusterURL); err != nil {
+		return err
+	}
+	baseParams := cliAPIParams(ClusterURL)
+	daemonID := c.Args().First()
+	req := c.Command.Name
+
+	switch req {
+	case cmn.GetWhatSmap:
+		err = daemonSmap(c, baseParams, daemonID)
+	case cmn.GetWhatConfig:
+		err = daemonConfig(c, baseParams, daemonID)
+	case cmn.GetWhatStats:
+		err = daemonStats(c, baseParams, daemonID)
+	case cmn.GetWhatDaemonStatus:
+		err = daemonStatus(c, daemonID)
+	case commandList:
+		err = listAIS(c, daemonID)
+	default:
+		return fmt.Errorf(invalidCmdMsg, req)
+	}
+	return err
+}
+
+// Displays smap of single daemon
+func daemonSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+	newURL, err := daemonDirectURL(daemonID)
 	if err != nil {
 		return err
 	}
+
+	baseParams.URL = newURL
+	body, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return err
+	}
+	return templates.DisplayOutput(body, templates.SmapTmpl, flagIsSet(c, jsonFlag.Name))
+}
+
+// Displays the config of a daemon
+func daemonConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+	newURL, err := daemonDirectURL(daemonID)
+	if err != nil {
+		return err
+	}
+	baseParams.URL = newURL
+	body, err := api.GetDaemonConfig(baseParams)
+	if err != nil {
+		return err
+	}
+	return templates.DisplayOutput(body, templates.ConfigTmpl, flagIsSet(c, jsonFlag.Name))
+}
+
+// Displays the stats of a daemon
+func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+	if res, ok := proxy[daemonID]; ok {
+		return templates.DisplayOutput(res, templates.ProxyStatsTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if res, ok := target[daemonID]; ok {
+		return templates.DisplayOutput(res, templates.TargetStatsTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if daemonID == "" {
+		body, err := api.GetClusterStats(baseParams)
+		if err != nil {
+			return err
+		}
+		return templates.DisplayOutput(body, templates.StatsTmpl, flagIsSet(c, jsonFlag.Name))
+	}
+	return fmt.Errorf(invalidDaemonMsg, daemonID)
+}
+
+// Displays the status of the cluster or daemon
+func daemonStatus(c *cli.Context, daemonID string) (err error) {
+	if res, proxyOK := proxy[daemonID]; proxyOK {
+		err = templates.DisplayOutput(res, templates.ProxyInfoSingleTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if res, targetOK := target[daemonID]; targetOK {
+		err = templates.DisplayOutput(res, templates.TargetInfoSingleTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if daemonID == cmn.Proxy {
+		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if daemonID == cmn.Target {
+		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, flagIsSet(c, jsonFlag.Name))
+	} else if daemonID == "" {
+		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, flagIsSet(c, jsonFlag.Name)); err != nil {
+			return err
+		}
+		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, flagIsSet(c, jsonFlag.Name))
+	} else {
+		return fmt.Errorf(invalidDaemonMsg, daemonID)
+	}
+
+	return err
+}
+
+// Display smap-like information of each individual daemon in the entire cluster
+func listAIS(c *cli.Context, whichDaemon string) (err error) {
 	outputTemplate := templates.ListTmpl
-	if c.Bool("verbose") {
+	if c.Bool(verboseFlag.Name) {
 		outputTemplate = templates.ListTmplVerbose
 	}
 
-	whichDaemon := c.Args().First()
 	switch whichDaemon {
 	case cmn.Proxy:
 		err = templates.DisplayOutput(proxy, outputTemplate)
@@ -55,81 +182,4 @@ func ListAIS(c *cli.Context) error {
 		return fmt.Errorf("list usage: list ['%s' or '%s' or 'all']", cmn.Proxy, cmn.Target)
 	}
 	return err
-}
-
-func DaemonStatus(c *cli.Context) error {
-	daemonID := c.Args().First()
-	err := fillMap(ClusterURL)
-	if err != nil {
-		return err
-	}
-
-	if res, proxyOK := proxy[daemonID]; proxyOK {
-		err = templates.DisplayOutput(res, templates.ProxyInfoSingleTmpl, c.Bool("json"))
-	} else if res, targetOK := target[daemonID]; targetOK {
-		err = templates.DisplayOutput(res, templates.TargetInfoSingleTmpl, c.Bool("json"))
-	} else if daemonID == cmn.Proxy {
-		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, c.Bool("json"))
-	} else if daemonID == cmn.Target {
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, c.Bool("json"))
-	} else if daemonID == "" {
-		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, c.Bool("json")); err != nil {
-			return err
-		}
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, c.Bool("json"))
-	} else {
-		return fmt.Errorf("%s is not a valid DAEMON_ID", daemonID)
-	}
-
-	return err
-}
-
-// Querying information
-func GetQueryHandler(c *cli.Context) error {
-	if err := fillMap(ClusterURL); err != nil {
-		return err
-	}
-	baseParams := cliAPIParams(ClusterURL)
-	daemonID := c.Args().First()
-	req := c.Command.Name
-	switch req {
-	case cmn.GetWhatSmap:
-		newURL, err := daemonDirectURL(daemonID)
-		if err != nil {
-			return err
-		}
-
-		baseParams.URL = newURL
-		body, err := api.GetClusterMap(baseParams)
-		if err != nil {
-			return err
-		}
-		return templates.DisplayOutput(body, templates.SmapTmpl, c.Bool("json"))
-	case cmn.GetWhatConfig:
-		newURL, err := daemonDirectURL(daemonID)
-		if err != nil {
-			return err
-		}
-		baseParams.URL = newURL
-		body, err := api.GetDaemonConfig(baseParams)
-		if err != nil {
-			return err
-		}
-		return templates.DisplayOutput(body, templates.ConfigTmpl, c.Bool("json"))
-	case cmn.GetWhatStats:
-		if res, ok := proxy[daemonID]; ok {
-			return templates.DisplayOutput(res, templates.ProxyStatsTmpl, c.Bool("json"))
-		} else if res, ok := target[daemonID]; ok {
-			return templates.DisplayOutput(res, templates.TargetStatsTmpl, c.Bool("json"))
-		} else if daemonID == "" {
-			body, err := api.GetClusterStats(baseParams)
-			if err != nil {
-				return err
-			}
-			return templates.DisplayOutput(body, templates.StatsTmpl, c.Bool("json"))
-		}
-		return fmt.Errorf("%s is not a valid DAEMON_ID", daemonID)
-	default:
-		return fmt.Errorf("invalid command name '%s'", req)
-	}
 }

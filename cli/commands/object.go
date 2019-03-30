@@ -20,23 +20,23 @@ import (
 )
 
 const (
-	ObjGet = "get"
-	ObjPut = "put"
-	ObjDel = "delete"
+	objGet = "get"
+	objPut = "put"
+	objDel = "delete"
 )
 
 var (
-	BaseObjectFlags = []cli.Flag{
+	baseObjectFlags = []cli.Flag{
 		bucketFlag,
 		keyFlag,
 		bckProviderFlag,
 	}
 
-	ObjectFlags = map[string][]cli.Flag{
-		ObjPut: append(
+	objectFlags = map[string][]cli.Flag{
+		objPut: append(
 			[]cli.Flag{bodyFlag},
-			BaseObjectFlags...),
-		ObjGet: append(
+			baseObjectFlags...),
+		objGet: append(
 			[]cli.Flag{
 				outFileFlag,
 				offsetFlag,
@@ -44,8 +44,8 @@ var (
 				checksumFlag,
 				propsFlag,
 			},
-			BaseObjectFlags...),
-		ObjDel: append(
+			baseObjectFlags...),
+		objDel: append(
 			[]cli.Flag{
 				listFlag,
 				rangeFlag,
@@ -54,141 +54,177 @@ var (
 				waitFlag,
 				deadlineFlag,
 			},
-			BaseObjectFlags...),
-		CommandRename: []cli.Flag{
+			baseObjectFlags...),
+		commandRename: []cli.Flag{
 			bucketFlag,
 			newKeyFlag,
 			keyFlag,
 		},
 	}
 
-	ObjectDelGetText  = "%s object %s --bucket <value> --key <value>"
-	ObjectGetUsage    = fmt.Sprintf(ObjectDelGetText, cliName, ObjGet)
-	ObjectDelUsage    = fmt.Sprintf(ObjectDelGetText, cliName, ObjDel)
-	ObjectPutUsage    = fmt.Sprintf("%s object %s --bucket <value> --key <value> --body <value>", cliName, ObjPut)
-	ObjectRenameUsage = fmt.Sprintf("%s object %s --bucket <value> --key <value> --newkey <value> ", cliName, CommandRename)
+	objectDelGetText  = "%s object %s --bucket <value> --key <value>"
+	objectGetUsage    = fmt.Sprintf(objectDelGetText, cliName, objGet)
+	objectDelUsage    = fmt.Sprintf(objectDelGetText, cliName, objDel)
+	objectPutUsage    = fmt.Sprintf("%s object %s --bucket <value> --key <value> --body <value>", cliName, objPut)
+	objectRenameUsage = fmt.Sprintf("%s object %s --bucket <value> --key <value> --newkey <value> ", cliName, commandRename)
+
+	ObjectCmds = []cli.Command{
+		{
+			Name:  "object",
+			Usage: "commands that interact with objects",
+			Flags: baseObjectFlags,
+			Subcommands: []cli.Command{
+				{
+					Name:         objGet,
+					Usage:        "gets the object from the specified bucket",
+					UsageText:    objectGetUsage,
+					Flags:        objectFlags[objGet],
+					Action:       objectHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         objPut,
+					Usage:        "puts the object to the specified bucket",
+					UsageText:    objectPutUsage,
+					Flags:        objectFlags[objPut],
+					Action:       objectHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         objDel,
+					Usage:        "deletes the object from the specified bucket",
+					UsageText:    objectDelUsage,
+					Flags:        objectFlags[objDel],
+					Action:       objectHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         commandRename,
+					Usage:        "renames the local object",
+					UsageText:    objectRenameUsage,
+					Flags:        objectFlags[commandRename],
+					Action:       objectHandler,
+					BashComplete: flagList,
+				},
+			},
+		},
+	}
 )
 
-func ObjectHandler(c *cli.Context) error {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
-	)
-
-	if err := checkFlags(c, bucketFlag.Name, keyFlag.Name); err != nil {
+func objectHandler(c *cli.Context) (err error) {
+	if err = checkFlags(c, bucketFlag.Name); err != nil {
 		return err
 	}
 
-	obj := parseFlag(c, keyFlag.Name)
-	bucket = parseFlag(c, bucketFlag.Name)
+	bucket := parseFlag(c, bucketFlag.Name)
 	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}
 
+	baseParams := cliAPIParams(ClusterURL)
 	commandName := c.Command.Name
 	switch commandName {
-	case ObjGet:
-		var objLen int64
-		query := url.Values{}
-		query.Add(cmn.URLParamBckProvider, bckProvider)
-		query.Add(cmn.URLParamOffset, parseFlag(c, offsetFlag.Name))
-		query.Add(cmn.URLParamLength, parseFlag(c, lengthFlag.Name))
-		objArgs := api.GetObjectInput{Writer: os.Stdout, Query: query}
-
-		// Output to user location
-		if flagIsSet(c, outFileFlag.Name) {
-			outFile := parseFlag(c, outFileFlag.Name)
-			f, err := os.Create(outFile)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			objArgs = api.GetObjectInput{Writer: f, Query: query}
-		}
-
-		// XOR
-		if flagIsSet(c, lengthFlag.Name) != flagIsSet(c, offsetFlag.Name) {
-			return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
-		}
-
-		// Object Props
-		if c.Bool(propsFlag.Name) {
-			objProps, err := api.HeadObject(baseParams, bucket, bckProvider, obj)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("%s has size %s (%d B) and version '%s'\n", obj, cmn.B2S(int64(objProps.Size), 2), objProps.Size, objProps.Version)
-			return nil
-		}
-
-		// Checksum validation
-		if c.Bool(checksumFlag.Name) {
-			objLen, err = api.GetObjectWithValidation(baseParams, bucket, obj, objArgs)
-		} else {
-			objLen, err = api.GetObject(baseParams, bucket, obj, objArgs)
-		}
-		if err != nil {
-			return err
-		}
-
-		if flagIsSet(c, lengthFlag.Name) {
-			fmt.Printf("\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
-			return nil
-		}
-		fmt.Printf("%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
-	case ObjPut:
-		if err := checkFlags(c, bodyFlag.Name); err != nil {
-			return err
-		}
-		source := parseFlag(c, bodyFlag.Name)
-		path, err := filepath.Abs(source)
-		if err != nil {
-			return err
-		}
-		reader, err := cmn.NewFileHandle(path)
-		if err != nil {
-			return err
-		}
-
-		putArgs := api.PutObjectArgs{baseParams, bucket, bckProvider, obj, "", reader}
-		err = api.PutObject(putArgs)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s put into %s bucket\n", obj, bucket)
-	case CommandRename:
-		if err := checkFlags(c, newKeyFlag.Name, bucketFlag.Name, keyFlag.Name); err != nil {
-			return err
-		}
-		newName := parseFlag(c, newKeyFlag.Name)
-		err := api.RenameObject(baseParams, bucket, obj, newName)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s renamed to %s\n", obj, newName)
+	case objGet:
+		err = retrieveObject(c, baseParams, bucket, bckProvider)
+	case objPut:
+		err = putObject(c, baseParams, bucket, bckProvider)
+	case objDel:
+		err = deleteObject(c, baseParams, bucket, bckProvider)
+	case commandRename:
+		err = renameObject(c, baseParams, bucket)
 	default:
-		return fmt.Errorf("invalid command name '%s'", commandName)
+		return fmt.Errorf(invalidCmdMsg, commandName)
 	}
+	return err
+}
+
+// Get object from bucket
+func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
+	if err = checkFlags(c, keyFlag.Name); err != nil {
+		return err
+	}
+	obj := parseFlag(c, keyFlag.Name)
+	objLen := int64(0)
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamOffset, parseFlag(c, offsetFlag.Name))
+	query.Add(cmn.URLParamLength, parseFlag(c, lengthFlag.Name))
+	objArgs := api.GetObjectInput{Writer: os.Stdout, Query: query}
+
+	// Output to user location
+	if flagIsSet(c, outFileFlag.Name) {
+		outFile := parseFlag(c, outFileFlag.Name)
+		f, err := os.Create(outFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		objArgs = api.GetObjectInput{Writer: f, Query: query}
+	}
+
+	//Otherwise, saves to local cached of bucket
+	if flagIsSet(c, lengthFlag.Name) != flagIsSet(c, offsetFlag.Name) {
+		return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+	}
+
+	// Object Props
+	if flagIsSet(c, propsFlag.Name) {
+		objProps, err := api.HeadObject(baseParams, bucket, bckProvider, obj)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s has size %s (%d B) and version '%s'\n", obj, cmn.B2S(int64(objProps.Size), 2), objProps.Size, objProps.Version)
+		return nil
+	}
+
+	// Checksum validation
+	if flagIsSet(c, checksumFlag.Name) {
+		objLen, err = api.GetObjectWithValidation(baseParams, bucket, obj, objArgs)
+	} else {
+		objLen, err = api.GetObject(baseParams, bucket, obj, objArgs)
+	}
+	if err != nil {
+		return err
+	}
+
+	if flagIsSet(c, lengthFlag.Name) {
+		fmt.Printf("\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		return nil
+	}
+	fmt.Printf("%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
+	return
+}
+
+// Put object into bucket
+func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
+	if err := checkFlags(c, bodyFlag.Name, keyFlag.Name); err != nil {
+		return err
+	}
+	source := parseFlag(c, bodyFlag.Name)
+	obj := parseFlag(c, keyFlag.Name)
+	path, err := filepath.Abs(source)
+	if err != nil {
+		return err
+	}
+	reader, err := cmn.NewFileHandle(path)
+	if err != nil {
+		return err
+	}
+
+	putArgs := api.PutObjectArgs{baseParams, bucket, bckProvider, obj, "", reader}
+	err = api.PutObject(putArgs)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s put into %s bucket\n", obj, bucket)
 	return nil
 }
 
-func DeleteObject(c *cli.Context) error {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
-		wait       = c.Bool(waitFlag.Name)
-	)
+// Deletes object from bucket
+func deleteObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
+	wait := flagIsSet(c, waitFlag.Name)
 
-	if err := checkFlags(c, bucketFlag.Name); err != nil {
-		return err
-	}
-
-	bucket = parseFlag(c, bucketFlag.Name)
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
-	if err != nil {
-		return err
-	}
 	deadline, err := time.ParseDuration(parseFlag(c, deadlineFlag.Name))
 	if err != nil {
 		return err
@@ -232,4 +268,19 @@ func DeleteObject(c *cli.Context) error {
 	}
 
 	return errors.New(c.Command.UsageText)
+}
+
+// Renames object
+func renameObject(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	if err = checkFlags(c, keyFlag.Name, newKeyFlag.Name); err != nil {
+		return err
+	}
+	obj := parseFlag(c, keyFlag.Name)
+	newName := parseFlag(c, newKeyFlag.Name)
+	if err = api.RenameObject(baseParams, bucket, obj, newName); err != nil {
+		return err
+	}
+
+	fmt.Printf("%s renamed to %s\n", obj, newName)
+	return
 }

@@ -1,13 +1,13 @@
-# AISCLI
+# AIS CLI
 > Under development
 
 ## How To Use
-1. To get started using the AISCLI tool, run `go install`. 
+1. To get started using the AIS CLI tool, run `deploy_cli.sh`. 
 
 2. Export the `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`) to configure the CLI tool to point to the AIS cluster.
  ```sh
  $ export AIS_URL=http://localhost:8080
- $ aiscli --help
+ $ ais --help
  ```
  Should return the list of commands for the CLI
 
@@ -22,7 +22,7 @@ The CLI allows for users to query information about the cluster or daemons.
 
 #### config
 
-`aiscli config [DAEMON_ID]`
+`ais config [DAEMON_ID]`
 
 Returns the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the configuration of the daemon that the `AIS_URL` is pointed at.
 
@@ -32,7 +32,7 @@ Returns the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will ret
 
 #### list
 
-`aiscli list`
+`ais list`
 
 Lists all of the Daemons in the AIS cluster
 
@@ -42,7 +42,7 @@ Lists all of the Daemons in the AIS cluster
 
 #### smap
 
-`aiscli smap [DAEMON_ID]`
+`ais smap [DAEMON_ID]`
 Returns the cluster map (smap) of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the smap of the daemon that the `AIS_URL` is pointed at.
 
 | Flag | Type | Description | Default |
@@ -51,7 +51,7 @@ Returns the cluster map (smap) of the `DAEMON_ID`. If `DAEMON_ID` is not set, it
 
 #### stats
 
-`aiscli stats [DAEMON_ID]`
+`ais stats [DAEMON_ID]`
 Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the stats of the daemon that the `AIS_URL` is pointed at.
 
 | Flag | Type | Description | Default |
@@ -60,7 +60,7 @@ Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return 
 
 #### status
 
-`aiscli status [OPTION]`
+`ais status [OPTION]`
 
 Returns the status of the `OPTION`. `OPTION` is either `proxy`, `target`, or `DAEMON_ID`. If `OPTION` is not set, it will return the status all the daemons in the AIS cluster.
 
@@ -75,7 +75,7 @@ The CLI allows for users to interact with objects in the AIS cluster.
 
 #### get
 
-`aiscli object get --bucket <value> --key <value>`
+`ais object get --bucket <value> --key <value>`
 
 Gets the object from the bucket. If `--outfile` is empty, it stores the file in a locally cached version in the bucket.
 
@@ -93,7 +93,7 @@ Gets the object from the bucket. If `--outfile` is empty, it stores the file in 
     
 #### put
 
-`aiscli object put --bucket <value> --key <value> --body <value>`
+`ais object put --bucket <value> --key <value> --body <value>`
 
 Put an object into the bucket.
 
@@ -106,7 +106,7 @@ Put an object into the bucket.
 
 #### delete
 
-`aiscli object delete --bucket <value> --key <value>`
+`ais object delete --bucket <value> --key <value>`
 
 Deletes an object from the bucket.
 
@@ -124,7 +124,7 @@ Deletes an object from the bucket.
 
 #### rename
 
-`aiscli object rename --bucket <value> --key  <value> --newkey <value>`
+`ais object rename --bucket <value> --key  <value> --newkey <value>`
 
 Rename object from the bucket.
 
@@ -141,7 +141,7 @@ The CLI allows for users to interact with buckets in the AIS cluster.
 
 #### create
 
-`aiscli bucket create --bucket <value>`
+`ais bucket create --bucket <value>`
 
 Creates a local bucket.
 
@@ -152,7 +152,7 @@ Creates a local bucket.
 
 #### delete 
 
-`aiscli bucket destroy --bucket <value>`
+`ais bucket destroy --bucket <value>`
 
 Destroys a local bucket.
 
@@ -163,7 +163,7 @@ Destroys a local bucket.
 
 #### rename
 
-`aiscli bucket rename --bucket <value> --newbucket <value> `
+`ais bucket rename --bucket <value> --newbucket <value> `
 
 Renames a local bucket.
 
@@ -175,9 +175,9 @@ Renames a local bucket.
 
 #### names
 
-`aiscli bucket names`
+`ais bucket names`
 
-Returns the names of the buckets
+Returns the names of the buckets.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -187,7 +187,7 @@ Returns the names of the buckets
 
 #### list
 
-`aiscli bucket list --bucket <value>`
+`ais bucket list --bucket <value>`
 
 Lists all the objects along with some of the objects' properties. For the full list of properties, see [here](../docs/bucket.md#list-bucket).
 
@@ -204,7 +204,7 @@ Lists all the objects along with some of the objects' properties. For the full l
 
 #### setprops
 
-`aiscli bucket setprops --bucket <value> [list of key=value]`
+`ais bucket setprops --bucket <value> [list of key=value]`
 
 Sets bucket properties. For the available options, see [bucket-properties](../docs/bucket.md#properties-and-options).
 
@@ -214,9 +214,9 @@ Sets bucket properties. For the available options, see [bucket-properties](../do
 | `--bprovider` | [Provider](#enums) | locality of bucket | `""` |
 | `--json` | bool | use json as input | `false` |
 
-Example: `aiscli bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror.copies=2'`
+Example: `ais bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror.copies=2'`
 
-JSON equivalent example: `aiscli bucket setprops --bucket mybucket --json '{"mirror" : {"enabled": true, "copies" : 2}}'`
+JSON equivalent example: `ais bucket setprops --bucket mybucket --json '{"mirror" : {"enabled": true, "copies" : 2}}'`
 
 
 ### Downloader
@@ -238,7 +238,7 @@ JSON equivalent example: `aiscli bucket setprops --bucket mybucket --json '{"mir
 
 #### single
 
-`aiscli download single --bucket <value> --link <value> --objname <value>`
+`ais download single --bucket <value> --link <value> --objname <value>`
 
 Downloads a single object from `link` location and saves it as `objname` in provided `bucket`.
 
@@ -250,12 +250,12 @@ Downloads a single object from `link` location and saves it as `objname` in prov
 | `--objname` | string | name of the object the download is saved as. If no objname is provided, the name will be the last element in the URL's path | `""` |
 
 Examples:
-* `aiscli download single --bucket local-lpr --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"`
-* `aiscli download single --bucket local-lpr --description "imagenet" --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
+* `ais download single --bucket local-lpr --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"`
+* `ais download single --bucket local-lpr --description "imagenet" --link "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz" --objname "imagenet_train-000000.tgz"` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
 
 #### range
 
-`aiscli download range --bucket <value> --base <value> --template <value>`
+`ais download range --bucket <value> --base <value> --template <value>`
 
 Downloads a list of objects depending on provided `template` from `base` and saves it to the provided `bucket`.
 `base` and objects from `template` are concatenated with `/` so eg. for `base=https://storage.googleapis.com/lpr-vision` and `template=imagenet/imagenet_train-{000000..000140}.tgz` the resulting URL will be: `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz`, `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz`, ...
@@ -268,11 +268,11 @@ Downloads a list of objects depending on provided `template` from `base` and sav
 | `--template` | string | bash template describing names of the objects in the URL | `""` |
 
 Examples:
-* `aiscli download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000000..000140}.tgz"` will download all objects in the range from `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz` to `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000140.tgz`.
-* `aiscli download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000022..000140..2}.tgz"` same as above while skipping every other object in the specified range
+* `ais download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000000..000140}.tgz"` will download all objects in the range from `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000000.tgz` to `https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000140.tgz`.
+* `ais download range --bucket local-lpr --base "https://storage.googleapis.com/lpr-vision" --template "imagenet/imagenet_train-{000022..000140..2}.tgz"` same as above while skipping every other object in the specified range
 #### status
 
-`aiscli download status --id <value>`
+`ais download status --id <value>`
 
 Retrieves status of the download with provided `id` which is returned upon creation of every download job.
 
@@ -283,12 +283,12 @@ Retrieves status of the download with provided `id` which is returned upon creat
 | `--refresh` | int | refreshing rate of the progress bar (in miliseconds), works only if `--progress` flag is set | `1000` |
 
 Examples:
-* `aiscli download status --id "5JjIuGemR"` returns the condensed status of the download
-* `aiscli download status --id "5JjIuGemR" --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
+* `ais download status --id "5JjIuGemR"` returns the condensed status of the download
+* `ais download status --id "5JjIuGemR" --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
 
 #### cancel
 
-`aiscli download cancel --id <value>`
+`ais download cancel --id <value>`
 
 Cancels download job given its id.
 
@@ -297,11 +297,11 @@ Cancels download job given its id.
 | `--id` | string | unique identifier of download job returned upon job creation | `""` |
 
 Examples:
-* `aiscli download cancel --id "5JjIuGemR"` cancels the download job
+* `ais download cancel --id "5JjIuGemR"` cancels the download job
 
 #### ls
 
-`aiscli download ls --regex <value>`
+`ais download ls --regex <value>`
 
 Lists downloads which descriptions match given `regex`.
 
@@ -310,8 +310,8 @@ Lists downloads which descriptions match given `regex`.
 | `--regex` | string | regex for the description of download requests | `""` |
 
 Examples:
-* `aiscli download ls` lists all downloads
-* `aiscli download ls --regex "^downloads-(.*)"` lists all downloads which description starts with `downloads-` prefix
+* `ais download ls` lists all downloads
+* `ais download ls --regex "^downloads-(.*)"` lists all downloads which description starts with `downloads-` prefix
 
 ### Enums
 
