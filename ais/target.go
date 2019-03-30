@@ -55,6 +55,10 @@ const (
 	getFromNeighAfterJoin = time.Second * 30
 
 	rebalanceStreamName = "rebalance"
+
+	bucketMDFixup    = "fixup"
+	bucketMDReceive  = "receive"
+	bucketMDRegister = "register"
 )
 
 type (
@@ -398,7 +402,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	t.gfn.stopts = time.Now().Add(getFromNeighAfterJoin)
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
-	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, "register"); errstr != "" {
+	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, bucketMDRegister); errstr != "" {
 		t.gfn.lookup = false
 		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
@@ -1460,7 +1464,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if newbucketmd != nil {
-		if errstr = t.receiveBucketMD(newbucketmd, actionlb, "receive"); errstr != "" {
+		if errstr = t.receiveBucketMD(newbucketmd, actionlb, bucketMDReceive); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -2728,7 +2732,7 @@ func (t *targetrunner) bmdVersionFixup() {
 		return
 	}
 	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newbucketmd)
-	t.receiveBucketMD(newbucketmd, msgInt, "fixup")
+	t.receiveBucketMD(newbucketmd, msgInt, bucketMDFixup)
 }
 
 //===========================
@@ -3469,7 +3473,11 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 		}
 	}
 
-	t.ecmanager.BucketsMDChanged()
+	if tag != bucketMDRegister {
+		// Don't call ecmanager as it has not benn initialized just yet
+		// ecmanager will pick up fresh bucketMD when initialized
+		t.ecmanager.BucketsMDChanged()
+	}
 
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*create*/, bucketsToCreate...)
 
