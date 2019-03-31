@@ -28,8 +28,9 @@ cat > $CONFFILE <<EOL
 		"retry_sync_time":	"2s"
 	},
 	"timeout": {
-		"default_timeout":	"30s",
+		"default_timeout":	"10s",
 		"default_long_timeout":	"30m",
+		"list_timeout":		"2m",
 		"max_keepalive":	"4s",
 		"proxy_ping":		"100ms",
 		"cplane_operation":	"1s",

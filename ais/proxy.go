@@ -1382,7 +1382,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 			query:  query,
 			body:   actionMsgBytes,
 		},
-		timeout: defaultTimeout,
+		timeout: cmn.GCO.Get().Timeout.List,
 	}
 	res := p.call(args)
 	if res.err != nil {
@@ -1788,7 +1788,7 @@ func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg,
 	cmn.AssertNoErr(err)
 
 	if wait {
-		timeout = longTimeout
+		timeout = cmn.GCO.Get().Timeout.List
 	} else {
 		timeout = defaultTimeout
 	}

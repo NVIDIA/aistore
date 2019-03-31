@@ -319,6 +319,8 @@ type TimeoutConf struct {
 	SendFile           time.Duration `json:"-"` //
 	StartupStr         string        `json:"startup_time"`
 	Startup            time.Duration `json:"-"` //
+	ListStr            string        `json:"list_timeout"`
+	List               time.Duration `json:"-"` //
 }
 
 type ProxyConf struct {
@@ -760,6 +762,9 @@ func (c *TimeoutConf) Validate() (err error) {
 	}
 	if c.DefaultLong, err = time.ParseDuration(c.DefaultLongStr); err != nil {
 		return fmt.Errorf("bad timeout.default_long format %s, err %v", c.DefaultLongStr, err)
+	}
+	if c.List, err = time.ParseDuration(c.ListStr); err != nil {
+		return fmt.Errorf("bad timeout.list_timeout format %s, err %v", c.ListStr, err)
 	}
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("bad timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
