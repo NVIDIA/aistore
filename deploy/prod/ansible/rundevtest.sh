@@ -35,7 +35,7 @@ cdir=$(pwd)
 echo Run go tests from $cdir
 
 echo run AIStore tests with cloud bucket devtestcloud
-BUCKET=devtestcloud go test -v -p 1 -count 1 -timeout 60m ./...
+BUCKET=devtestcloud go test -v -p 1 -count 1 -timeout 120m ./...
 
 cloudExitStatus=$?
 echo devtest exit status $cloudExitStatus
