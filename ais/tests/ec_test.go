@@ -408,7 +408,7 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, s
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		ecSliceCnt, ecParityCnt, seed, concurr)
-	err := api.SetBucketProps(baseParams, name, bckProps)
+	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
 
 	if err != nil {
 		tutils.DestroyLocalBucket(t, proxyURL, name)
@@ -473,29 +473,29 @@ func TestECChange(t *testing.T) {
 	tutils.Logln("Trying to set too many slices")
 	bucketProps.EC.DataSlices = 25
 	bucketProps.EC.ParitySlices = 25
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tassert.Error(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
 
 	tutils.Logln("Enabling EC")
 	bucketProps.EC.DataSlices = 1
 	bucketProps.EC.ParitySlices = 1
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	tutils.Logln("Trying to set EC options to the same values")
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	tutils.Logln("Trying to disable EC")
 	bucketProps.EC.Enabled = false
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	if err != nil {
 		t.Errorf("Disabling EC failed: %v", err)
 	}
 
 	tutils.Logln("Trying to re-enable EC")
 	bucketProps.EC.Enabled = true
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	if err != nil {
 		t.Errorf("Enabling EC failed: %v", err)
 	}
@@ -503,7 +503,7 @@ func TestECChange(t *testing.T) {
 	tutils.Logln("Trying to modify EC options when EC is enabled")
 	bucketProps.EC.Enabled = true
 	bucketProps.EC.ObjSizeLimit = 300000
-	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err = api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tassert.Error(t, err != nil, "Modifiying EC properties must fail")
 
 	tutils.Logln("Resetting bucket properties")
@@ -824,7 +824,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles)
 
 	// Disable EC, put normal files, check if were created properly
-	err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+	err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
 	tutils.CheckError(err, t)
 
 	wg.Add(numFiles)
@@ -845,7 +845,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles*2)
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
-	err = api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+	err = api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
 	tutils.CheckError(err, t)
 
 	wg.Add(numFiles)
@@ -934,35 +934,35 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	// Create different disable/enable actions to test if system persists behaving well
 	go func() {
-		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
 		tutils.CheckError(err, t)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+		err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
 		tutils.CheckError(err, t)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
 		tutils.CheckError(err, t)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, false)
+		err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
 		tutils.CheckError(err, t)
 	}()
 
 	time.Sleep(300 * time.Millisecond)
 
 	go func() {
-		err := api.SetBucketProp(baseParams, TestLocalBucketName, cmn.HeaderBucketECEnabled, true)
+		err := api.SetBucketProps(baseParams, TestLocalBucketName, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
 		tutils.CheckError(err, t)
 	}()
 

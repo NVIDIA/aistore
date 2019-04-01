@@ -1496,7 +1496,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	// Enable bucket level LRU properties
 	bucketProps.LRU.Enabled = true
-	err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), m.bucket, bucketProps)
+	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), m.bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	target := extractTargetNodes(m.smap)[0]

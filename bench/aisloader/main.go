@@ -215,7 +215,7 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
 	f.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
 	f.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
-	f.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
+	f.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketPropsMsg format)")
 	f.Int64Var(&p.seed, "seed", 0, "Seed for random source, 0=use current time")
 	f.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
 	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
@@ -422,7 +422,7 @@ func setupBucket(runParams *params) error {
 		change = true
 	}
 	if change {
-		if err = api.SetBucketProps(baseParams, runParams.bucket, *oldProps); err != nil {
+		if err = api.SetBucketPropsMsg(baseParams, runParams.bucket, *oldProps); err != nil {
 			return fmt.Errorf("failed to enable EC for the bucket %s properties: %v", runParams.bucket, err)
 		}
 	}

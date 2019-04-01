@@ -16,11 +16,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// SetBucketProps API
+// SetBucketPropsMsg API
 //
-// Set the properties of a bucket, using the bucket name and the bucket properties to be set.
+// Set the properties of a bucket using the bucket name and the entire bucket property structure to be set.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
+func SetBucketPropsMsg(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
 	if props.Cksum.Type == "" {
 		props.Cksum.Type = cmn.ChecksumInherit
 	}
@@ -40,26 +40,25 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 	return err
 }
 
-// SetBucketProp API
+// SetBucketProps API
 //
-// Set a single propertie of a bucket, using the bucket name, and the bucket property's name and value to be set.
-// The function converts a property to a string to simplify route selection(it is
-// either single string value or entire bucket property structure) and to avoid
-// a lot of type reflexlection checks.
+// Set properties of a bucket using the bucket name, and key value pairs.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProp(baseParams *BaseParams, bucket, prop string, value interface{}, query ...url.Values) error {
-	strValue := fmt.Sprintf("%v", value)
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Name: prop, Value: strValue})
-	if err != nil {
-		return err
-	}
+func SetBucketProps(baseParams *BaseParams, bucket string, nvs cmn.SimpleKVs, query ...url.Values) error {
 	optParams := OptionalParams{}
+	q := url.Values{}
 	if len(query) > 0 {
-		optParams.Query = query[0]
+		q = query[0]
 	}
+
+	for key, val := range nvs {
+		q.Add(key, val)
+	}
+
+	optParams.Query = q
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = DoHTTPRequest(baseParams, path, b, optParams)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActSetProps)
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }
 

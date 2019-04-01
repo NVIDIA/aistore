@@ -919,7 +919,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs []string) (errstr string) {
+func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.SimpleKVs) (errstr string) {
 	const errFmt = "Invalid %s value %q: %v"
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
@@ -934,11 +934,18 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs []st
 
 	// HTTP headers display property names title-cased so that LRULowWM becomes Lrulowwm, etc.
 	// - make sure to lowercase therefore
-	for i := 0; i < len(nvs) && errstr == ""; i += 2 {
-		name, value := strings.ToLower(nvs[i]), nvs[i+1]
+	for key, val := range nvs {
+		name, value := strings.ToLower(key), val
 		if glog.V(4) {
 			glog.Infof("Updating bucket %s property %s => %s", bucket, name, value)
 		}
+		// Disable ability to set EC properties once enabled
+		if !bprops.EC.Updatable(name) {
+			errstr = "Cannot change EC configuration after it is enabled"
+			p.bmdowner.Unlock()
+			return
+		}
+
 		switch name {
 		case cmn.HeaderBucketECEnabled:
 			if v, err := strconv.ParseBool(value); err == nil {
@@ -993,11 +1000,13 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs []st
 		default:
 			errstr = fmt.Sprintf("Changing property %s is not supported", name)
 		}
+
+		if errstr != "" {
+			p.bmdowner.Unlock()
+			return
+		}
 	}
-	if errstr != "" {
-		p.bmdowner.Unlock()
-		return
-	}
+
 	clone.set(bucket, bckIsLocal, bprops)
 	if e := p.savebmdconf(clone, config); e != "" {
 		glog.Errorln(e)
@@ -1010,9 +1019,10 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs []st
 }
 
 // PUT /v1/buckets/bucket-name
+// PUT /v1/buckets/bucket-name/setprops
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var bckIsLocal, ok bool
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
@@ -1022,26 +1032,29 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, _, err := cmn.ReadBytes(r)
-	if err != nil {
+	// Setting bucket props using URL query strings
+	if len(apitems) > 1 {
+		if apitems[1] != cmn.ActSetProps {
+			s := fmt.Sprintf("Invalid request [%s] - expecting '%s'", apitems[1], cmn.ActSetProps)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+
+		query := r.URL.Query()
+		query.Del(cmn.URLParamBckProvider)
+		kvs := cmn.NewSimpleKVsFromQuery(query)
+
+		if errstr := p.updateBucketProps(bucket, bckIsLocal, kvs); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+		}
 		return
 	}
 
-	msg := cmn.ActionMsg{}
-	// use a shortcut if the message is a string
-	if err = jsoniter.Unmarshal(b, &msg); err == nil {
-		if valstr, ok := msg.Value.(string); ok && msg.Action == cmn.ActSetProps {
-			if errstr := p.updateBucketProps(bucket, bckIsLocal, []string{msg.Name, valstr}); errstr != "" {
-				p.invalmsghdlr(w, r, errstr)
-			}
-			return
-		}
-	}
-
 	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
+	// Note: this use case is for setting all bucket props
 	nprops := cmn.DefaultBucketProps()
-	msg = cmn.ActionMsg{Value: nprops}
-	if err = jsoniter.Unmarshal(b, &msg); err != nil {
+	msg := cmn.ActionMsg{Value: nprops}
+	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1277,14 +1290,14 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 	// enable/disable accordingly and
 	// finalize via updating the bucket's mirror configuration (compare with httpbckput)
 	var (
-		nvs       []string
+		nvs       cmn.SimpleKVs
 		copiesStr = strconv.FormatInt(int64(copies), 10)
 	)
 	if copies > 1 {
-		nvs = []string{cmn.HeaderBucketCopies, copiesStr, cmn.HeaderBucketMirrorEnabled, "true"}
+		nvs = cmn.SimpleKVs{cmn.HeaderBucketCopies: copiesStr, cmn.HeaderBucketMirrorEnabled: "true"}
 	} else {
 		cmn.Assert(copies == 1)
-		nvs = []string{cmn.HeaderBucketCopies, copiesStr, cmn.HeaderBucketMirrorEnabled, "false"}
+		nvs = cmn.SimpleKVs{cmn.HeaderBucketCopies: copiesStr, cmn.HeaderBucketMirrorEnabled: "false"}
 	}
 	//
 	// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf

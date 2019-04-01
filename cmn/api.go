@@ -831,6 +831,12 @@ type ECConf struct {
 	Enabled      bool  `json:"enabled"`       // EC is enabled
 }
 
+func (c *ECConf) Updatable(field string) bool {
+	return (c.Enabled && !(field == HeaderBucketECData ||
+		field == HeaderBucketECParity ||
+		field == HeaderBucketECMinSize)) || !c.Enabled
+}
+
 // ObjectProps
 type ObjectProps struct {
 	Size    int

@@ -122,7 +122,7 @@ The full list of bucket properties are:
 | EC | ec | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
 
 
-`SetBucketProp (Single)` allows the following configurations to be changed:
+`SetBucketProps` allows the following configurations to be changed:
 
 | Property | Type | Description |
 | --- | --- | --- |

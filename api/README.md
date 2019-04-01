@@ -271,8 +271,9 @@ Evicts a cloud bucket using its name as the identifier
 Error from AIStore in completing the request
 ___
 
-#### SetBucketProps
-Sets the properties of a bucket, using the bucket name as the identifier and the bucket properties to be set
+#### SetBucketPropsMsg
+Sets the properties of a bucket via action message, using the bucket name as the identifier and the bucket properties to be set
+> Need to set all bucket properties
 
 ##### Parameters
 | Name       | Type            | Description                                                                           |

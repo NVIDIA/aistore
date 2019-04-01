@@ -189,7 +189,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderAIS
 	bucketProps.NextTierURL = proxyURLNext
-	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
+	err = api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, bucket, t)
 
@@ -267,7 +267,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderAIS
 	bucketProps.NextTierURL = proxyURLNext
-	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
+	err = api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, bucket, t)
 

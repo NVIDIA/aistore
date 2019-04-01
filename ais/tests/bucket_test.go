@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -49,7 +50,7 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.Cksum = globalConfig.Cksum
 	globalProps.LRU = testBucketProps(t).LRU
 
-	err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
@@ -107,7 +108,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 
 	for _, url := range invalidDaemonURLs {
 		bucketProps.NextTierURL = url
-		if err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps); err == nil {
+		if err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps); err == nil {
 			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
 		}
 	}
@@ -266,7 +267,7 @@ func TestBucketSingleProp(t *testing.T) {
 
 	tutils.Logf("Changing bucket %q properties...\n", bucket)
 	// Enabling EC should set default value for number of slices if it is 0
-	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECEnabled, true); err != nil {
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -283,7 +284,7 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorEnabled, true); err != nil {
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -296,15 +297,23 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
+	// Need to disable EC first
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
+		t.Error(err)
+	}
+
 	// Change a few more bucket properties
-	err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECData, dataSlices)
-	if err == nil {
-		err = api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECParity, paritySlices)
+	if err := api.SetBucketProps(baseParams, bucket,
+		cmn.SimpleKVs{
+			cmn.HeaderBucketECData:    strconv.Itoa(dataSlices),
+			cmn.HeaderBucketECParity:  strconv.Itoa(paritySlices),
+			cmn.HeaderBucketECMinSize: strconv.Itoa(objLimit),
+		}); err != nil {
+		t.Error(err)
 	}
-	if err == nil {
-		err = api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECMinSize, objLimit)
-	}
-	if err != nil {
+
+	// Enable EC again
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -320,7 +329,8 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
-	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorThresh, mirrorThreshold); err != nil {
+	if err := api.SetBucketProps(baseParams, bucket,
+		cmn.SimpleKVs{cmn.HeaderBucketMirrorThresh: strconv.Itoa(mirrorThreshold)}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -331,7 +341,7 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable EC
-	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketECEnabled, false); err != nil {
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -342,7 +352,7 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable Mirroring
-	if err := api.SetBucketProp(baseParams, bucket, cmn.HeaderBucketMirrorEnabled, false); err != nil {
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"}); err != nil {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -443,7 +453,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		// copy default config and change one field
 		bucketProps.Mirror = config.Mirror
 		bucketProps.Mirror.Enabled = true
-		err = api.SetBucketProps(baseParams, m.bucket, bucketProps)
+		err = api.SetBucketPropsMsg(baseParams, m.bucket, bucketProps)
 		tutils.CheckFatal(err, t)
 
 		p, err := api.HeadBucket(baseParams, m.bucket)
@@ -539,9 +549,9 @@ func TestCloudMirror(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// enable mirror
-	err = api.SetBucketProp(baseParams, clibucket, cmn.HeaderBucketMirrorEnabled, true)
+	err = api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
 	tutils.CheckFatal(err, t)
-	defer api.SetBucketProp(baseParams, clibucket, cmn.HeaderBucketMirrorEnabled, false)
+	defer api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
 
 	// list
 	msg := &cmn.SelectMsg{}

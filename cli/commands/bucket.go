@@ -245,14 +245,14 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return err
 	}
 
-	// For setting bucket props (multiple)
+	// For setting bucket props via action message
 	if flagIsSet(c, jsonFlag.Name) {
 		props := cmn.BucketProps{}
 		inputProps := []byte(c.Args().First())
 		if err := json.Unmarshal(inputProps, &props); err != nil {
 			return err
 		}
-		if err = api.SetBucketProps(baseParams, bckName, props, query); err != nil {
+		if err = api.SetBucketPropsMsg(baseParams, bckName, props, query); err != nil {
 			return err
 		}
 
@@ -260,16 +260,17 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return nil
 	}
 
-	// For setting bucket prop (single)
+	// For setting bucket props via URL query string
 	keyVals := c.Args()
+	nvs := cmn.SimpleKVs{}
 	for _, ele := range keyVals {
 		pairs := makeList(ele, "=")
-		if err = api.SetBucketProp(baseParams, bckName, pairs[0], pairs[1], query); err != nil {
-			return err
-		}
-		fmt.Printf("%s set to %v\n", pairs[0], pairs[1])
+		nvs[pairs[0]] = pairs[1]
 	}
 
+	if err = api.SetBucketProps(baseParams, bckName, nvs, query); err != nil {
+		return err
+	}
 	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bckName)
 	return nil
 }

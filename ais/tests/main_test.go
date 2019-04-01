@@ -704,10 +704,10 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	}
 
 	// Set Props Object
-	err = api.SetBucketProps(baseParams, bucketName, bucketPropsLocal, queryLocal)
+	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsLocal, queryLocal)
 	tutils.CheckFatal(err, t)
 
-	err = api.SetBucketProps(baseParams, bucketName, bucketPropsCloud, queryCloud)
+	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsCloud, queryCloud)
 	tutils.CheckFatal(err, t)
 
 	// Validate local bucket props are set
@@ -832,7 +832,7 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.Cksum.ValidateWarmGet = true
 	bucketProps.LRU.Enabled = true
 
-	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	p, err := api.HeadBucket(baseParams, TestLocalBucketName)
@@ -856,7 +856,7 @@ func TestHeadCloudBucket(t *testing.T) {
 	bucketProps.Cksum.ValidateColdGet = true
 	bucketProps.LRU.Enabled = true
 
-	err := api.SetBucketProps(baseParams, clibucket, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, clibucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
@@ -1293,7 +1293,8 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 
 	//test property, mirror is disabled for cloud bucket that hasn't been accessed, even if system config says otherwise
-	api.SetBucketProp(tutils.DefaultBaseAPIParams(t), bucket, cmn.HeaderBucketMirrorEnabled, true)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	tutils.CheckFatal(err, t)
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 	tutils.CheckFatal(err, t)
 	if !bProps.Mirror.Enabled {
