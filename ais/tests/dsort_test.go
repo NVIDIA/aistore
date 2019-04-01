@@ -56,35 +56,6 @@ func generateDSortDesc() string {
 	return dsortDescCurPrefix + time.Now().Format(time.RFC3339Nano)
 }
 
-func clearDSortList(t *testing.T) {
-	for {
-		seenRunningDSort := false
-		listDSort, err := tutils.ListDSort(proxyURL, dsortDescAllRegex)
-		tutils.CheckFatal(err, t)
-		for k, v := range listDSort {
-			if v.Archived {
-				err = tutils.RemoveDSort(proxyURL, k)
-				tutils.CheckFatal(err, t)
-			} else {
-				// We get here when dsort is aborted because a target goes down
-				// but when it rejoins it thinks the dsort is not aborted and doesn't do cleanup
-				// this happens in TestDistributedSortKillTargetDuringPhases
-				tutils.Logf("Stopping: %v...\n", k)
-				err = tutils.AbortDSort(proxyURL, k)
-				tutils.CheckFatal(err, t)
-				seenRunningDSort = true
-			}
-		}
-
-		if !seenRunningDSort {
-			break
-		}
-
-		time.Sleep(time.Second)
-	}
-
-}
-
 func (df *dsortFramework) init() {
 	// Assumption is that all prefixes end with dash: "-"
 	df.inputPrefix = df.inputTempl[:strings.Index(df.inputTempl, "-")+1]
@@ -271,8 +242,36 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	}
 }
 
+func (df *dsortFramework) clearDSortList() {
+	for {
+		seenRunningDSort := false
+		listDSort, err := tutils.ListDSort(df.m.proxyURL, dsortDescAllRegex)
+		tutils.CheckFatal(err, df.m.t)
+		for k, v := range listDSort {
+			if v.Archived {
+				err = tutils.RemoveDSort(df.m.proxyURL, k)
+				tutils.CheckFatal(err, df.m.t)
+			} else {
+				// We get here when dsort is aborted because a target goes down
+				// but when it rejoins it thinks the dsort is not aborted and doesn't do cleanup
+				// this happens in TestDistributedSortKillTargetDuringPhases
+				tutils.Logf("Stopping: %v...\n", k)
+				err = tutils.AbortDSort(df.m.proxyURL, k)
+				tutils.CheckFatal(err, df.m.t)
+				seenRunningDSort = true
+			}
+		}
+
+		if !seenRunningDSort {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
 func (df *dsortFramework) checkDSortList(expNumEntries ...int) {
-	defer clearDSortList(df.m.t)
+	defer df.clearDSortList()
 
 	expNumEntriesVal := 1
 	if len(expNumEntries) > 0 {
@@ -385,7 +384,7 @@ func TestDistributedSort(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -442,7 +441,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local output bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
@@ -497,7 +496,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local buckets
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -549,7 +548,7 @@ func TestDistributedSortParallel(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -589,7 +588,7 @@ func TestDistributedSortChain(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -634,7 +633,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -692,7 +691,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -756,7 +755,7 @@ func TestDistributedSortZip(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -814,7 +813,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -876,7 +875,7 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -938,7 +937,7 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1000,7 +999,7 @@ func TestDistributedSortWithContentString(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1058,7 +1057,7 @@ func TestDistributedSortAbort(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1128,7 +1127,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1203,7 +1202,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	}
 	targets := extractTargetNodes(m.smap)
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1282,7 +1281,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	}
 	targets := extractTargetNodes(m.smap)
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	tutils.Logln("killing target...")
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
@@ -1353,7 +1352,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	clearDSortList(t)
+	dsortFW.clearDSortList()
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
