@@ -39,6 +39,10 @@ const (
 	// Constant seeds for UUID generator
 	uuidWorker = 1
 	uuidSeed   = 17
+	// Alphabet used for generating UUIDs - it is similar to the
+	// shortid.DEFAULT_ABC with the difference that is more random and hopefully
+	// `-` and `_` are not so frequently picked.
+	uuidABC = "5nZJDft6LuzsjGNpPwY7r_Qa3-9vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk"
 )
 
 var toBiBytes = map[string]int64{
@@ -106,7 +110,7 @@ type (
 )
 
 func init() {
-	sid := shortid.MustNew(uuidWorker /* worker */, shortid.DEFAULT_ABC, uuidSeed /* seed */)
+	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
 	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
 	// should fork it and change it to the newer date?
 	shortid.SetDefault(sid)

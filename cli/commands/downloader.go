@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
-
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 )
 
 const (
@@ -25,6 +25,7 @@ const (
 	downloadCloud  = "cloud"
 	downloadStatus = "status"
 	downloadCancel = "cancel"
+	downloadRemove = "rm"
 	downloadList   = "ls"
 
 	progressBarRefreshRateUnit    = time.Millisecond
@@ -73,6 +74,9 @@ var (
 		downloadCancel: []cli.Flag{
 			idFlag,
 		},
+		downloadRemove: []cli.Flag{
+			idFlag,
+		},
 		downloadList: {
 			regexFlag,
 		},
@@ -83,6 +87,7 @@ var (
 	downloadCloudUsage  = fmt.Sprintf("%s download --bucket <value> [FLAGS...] %s --prefix <value> --suffix <value>", cliName, downloadCloud)
 	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
 	downloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadCancel)
+	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
 	downloadListUsage   = fmt.Sprintf("%s download %s --id <value> --regex <value>", cliName, downloadList)
 
 	DownloaderCmds = []cli.Command{
@@ -128,6 +133,14 @@ var (
 					Usage:        "cancels download job with given id",
 					UsageText:    downloadCancelUsage,
 					Flags:        downloadFlags[downloadCancel],
+					Action:       downloadAdminHandler,
+					BashComplete: flagList,
+				},
+				{
+					Name:         downloadRemove,
+					Usage:        "removes download job with given id from the list",
+					UsageText:    downloadRemoveUsage,
+					Flags:        downloadFlags[downloadRemove],
 					Action:       downloadAdminHandler,
 					BashComplete: flagList,
 				},
@@ -267,13 +280,24 @@ func downloadAdminHandler(c *cli.Context) error {
 			return err
 		}
 		fmt.Printf("download canceled: %s\n", id)
+	case downloadRemove:
+		if err := checkFlags(c, idFlag.Name); err != nil {
+			return err
+		}
+
+		if err := api.DownloadRemove(baseParams, id); err != nil {
+			return err
+		}
+		fmt.Printf("download removed: %s\n", id)
 	case downloadList:
 		list, err := api.DownloadGetList(baseParams, regex)
 		if err != nil {
 			return err
 		}
-		for _, j := range list {
-			fmt.Printf("%s\n", j.String())
+
+		err = templates.DisplayOutput(list, templates.DownloadListTmpl)
+		if err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("invalid command name '%s'", commandName)

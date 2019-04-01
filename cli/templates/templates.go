@@ -199,6 +199,10 @@ const (
 		ProxyConfTmpl + LRUConfTmpl + XactionConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
+
+	DownloadListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
+	DownloadListBody   = "{{$value.ID}}\t {{if (eq $value.NumPending 0)}}Finished{{else}}{{$value.NumPending}} pending{{end}} \t {{$value.Description}}\n"
+	DownloadListTmpl   = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 )
 
 var (

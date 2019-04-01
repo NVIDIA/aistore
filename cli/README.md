@@ -223,17 +223,12 @@ JSON equivalent example: `ais bucket setprops --bucket mybucket --json '{"mirror
 
 [AIS Downloader](../downloader/README.md) supports following types of download requests:
 
-**single** - download a single object
-
-**range** - download multiple objects based on a given naming pattern
-
-**status** - display status of a given download job
-
-**cancel** - cancel given download job
-
-**ls** - list current download jobs and their states
-
-
+* **single** - download a single object
+* **range** - download multiple objects based on a given naming pattern
+* **status** - display status of a given download job
+* **cancel** - cancel given download job
+* **rm** - remove finished download job from the list
+* **ls** - list current download jobs and their states
 
 
 #### single
@@ -298,6 +293,19 @@ Cancels download job given its id.
 
 Examples:
 * `ais download cancel --id "5JjIuGemR"` cancels the download job
+
+#### rm
+
+`ais download rm --id <value>`
+
+Remove finished download job from the list given its id.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--id` | string | unique identifier of download job returned upon job creation | `""` |
+
+Examples:
+* `ais download rm --id "5JjIuGemR"` removes the download job
 
 #### ls
 
