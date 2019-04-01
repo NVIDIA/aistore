@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -24,13 +25,18 @@ import (
 
 type ecManager struct {
 	sync.RWMutex
+
+	t         *targetrunner
+	smap      *cluster.Smap
+	targetCnt int32     // atomic, to avoid races between read/write on smap
+	bowner    *bmdowner // bucket manager
+	bckMD     *bucketMD // bucket metadata, used to get EC enabled/disabled information
+
+	xacts map[string]*ec.BckXacts // bckName -> xact map, only local buckets allowed, no naming collisions
+
 	bndlOnce   sync.Once
-	t          *targetrunner
-	xacts      map[string]*ec.Xacts // bckName -> xact map, only local buckets allowed, no naming collisions
-	bowner     *bmdowner            // bucket manager
-	bckMD      *bucketMD            // bucket metadata, used to get EC enabled/disabled information
-	netReq     string               // network used to send object request
-	netResp    string               // network used to send/receive slices
+	netReq     string // network used to send object request
+	netResp    string // network used to send/receive slices
 	reqBundle  *transport.StreamBundle
 	respBundle *transport.StreamBundle
 }
@@ -47,14 +53,21 @@ func newECM(t *targetrunner) *ecManager {
 		netResp = cmn.NetworkPublic
 	}
 
+	smap := t.smapowner.Get()
+	targetCnt := int32(smap.CountTargets())
+
 	ECM = &ecManager{
-		netReq:  netReq,
-		netResp: netResp,
-		t:       t,
-		bowner:  t.bmdowner,
-		xacts:   make(map[string]*ec.Xacts),
-		bckMD:   t.bmdowner.get(),
+		netReq:    netReq,
+		netResp:   netResp,
+		t:         t,
+		smap:      smap,
+		targetCnt: targetCnt,
+		bowner:    t.bmdowner,
+		xacts:     make(map[string]*ec.BckXacts),
+		bckMD:     t.bmdowner.get(),
 	}
+
+	t.smaplisteners.Reg(ECM)
 
 	for _, bck := range ECM.bckMD.LBmap {
 		if bck.EC.Enabled {
@@ -140,7 +153,7 @@ func (mgr *ecManager) restoreBckPutXact(bckName string) *ec.XactPut {
 	return xact
 }
 
-func (mgr *ecManager) restoreBckReqXact(bckName string) *ec.XactRespond {
+func (mgr *ecManager) restoreBckRespXact(bckName string) *ec.XactRespond {
 	xact := mgr.getBckXacts(bckName).Req()
 	if xact == nil || xact.Finished() {
 		xact = mgr.t.xactions.renewRespondEC(bckName)
@@ -150,14 +163,14 @@ func (mgr *ecManager) restoreBckReqXact(bckName string) *ec.XactRespond {
 	return xact
 }
 
-func (mgr *ecManager) getBckXacts(bckName string) *ec.Xacts {
+func (mgr *ecManager) getBckXacts(bckName string) *ec.BckXacts {
 	mgr.RLock()
 	defer mgr.RUnlock()
 
 	xacts, ok := mgr.xacts[bckName]
 
 	if !ok {
-		xacts = &ec.Xacts{}
+		xacts = &ec.BckXacts{}
 		mgr.xacts[bckName] = xacts
 	}
 
@@ -192,7 +205,7 @@ func (mgr *ecManager) makeRecvRequest() transport.Receive {
 			}
 		}
 
-		mgr.restoreBckReqXact(hdr.Bucket).DispatchReq(iReq, hdr.Bucket, hdr.Objname)
+		mgr.restoreBckRespXact(hdr.Bucket).DispatchReq(iReq, hdr.Bucket, hdr.Objname)
 	}
 }
 
@@ -217,8 +230,10 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 
 		switch iReq.Act {
 		case ec.ReqPut:
-			mgr.restoreBckReqXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
+			mgr.restoreBckRespXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
 		case ec.ReqMeta, ec.RespPut:
+			// Process this request even if there might not be enough targets. It might have been started when there was,
+			// so there is a chance to complete restore successfully
 			mgr.restoreBckGetXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
 		default:
 			glog.Errorf("Unknown EC response action %d", iReq.Act)
@@ -230,6 +245,18 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	if !lom.BckProps.EC.Enabled {
 		return ec.ErrorECDisabled
 	}
+
+	isECCopy := ec.IsECCopy(lom.Size(), &lom.BckProps.EC)
+
+	targetCnt := atomic.LoadInt32(&mgr.targetCnt)
+
+	// tradeoff: encoding small object might require just 1 additional target available
+	// we will start xaction to satisfy this request
+	if required := lom.BckProps.EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
+		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
+		return ec.ErrorInsufficientTargets
+	}
+
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
@@ -275,6 +302,13 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		return ec.ErrorECDisabled
 	}
 
+	targetCnt := atomic.LoadInt32(&mgr.targetCnt)
+	// note: restore replica object is done with GFN, safe to always abort
+	if required := lom.BckProps.EC.RequiredRestoreTargets(); int(targetCnt) < required {
+		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
+		return ec.ErrorInsufficientTargets
+	}
+
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 	req := &ec.Request{
 		Action: ec.ActRestore,
@@ -309,7 +343,9 @@ func (mgr *ecManager) BucketsMDChanged() {
 		return
 	}
 
+	mgr.Lock()
 	mgr.bckMD = newBckMD
+	mgr.Unlock()
 
 	if newBckMD.ecUsed() && !oldBckMD.ecUsed() {
 		// init EC streams if there were not initialized on the start
@@ -329,4 +365,58 @@ func (mgr *ecManager) BucketsMDChanged() {
 			}
 		}
 	}
+}
+
+func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
+	for {
+		newSmapVersion, ok := <-newSmapVersionChannel
+
+		if !ok {
+			// channel closed by Unreg
+			// We should end xactions and stop listening
+			for _, bck := range mgr.xacts {
+				bck.StopGet()
+				bck.StopPut()
+			}
+
+			return
+		}
+
+		if newSmapVersion <= mgr.smap.Version {
+			continue
+		}
+
+		mgr.smap = mgr.t.smapowner.Get()
+		targetCnt := mgr.smap.CountTargets()
+		atomic.StoreInt32(&mgr.targetCnt, int32(targetCnt))
+
+		mgr.RLock()
+
+		// ecManager is initialized before being registered for smap changes
+		// bckMD will be present at this point
+		// stopping relevant EC xactions which can't be satisfied with current number of targets
+		// respond xaction is never stopped as it should respond regardless of the other targets
+		for bckName, bckProps := range mgr.bckMD.LBmap {
+			bckXacts := mgr.getBckXacts(bckName)
+			if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
+				glog.Warningf("Not enough targets for EC encoding for bucket %s; actual: %v, expected: %v", bckName, targetCnt, required)
+				bckXacts.StopPut()
+			}
+
+			// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
+			// if one target was killed, and a new one joined, this condition will be satisfied even though
+			// slices of the object are not present on the new target
+			if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
+				glog.Warningf("Not enough targets for EC restoring for bucket %s; actual: %v, expected: %v", bckName, targetCnt, required)
+				bckXacts.StopGet()
+			}
+		}
+
+		mgr.RUnlock()
+	}
+}
+
+// implementing cluster.Slistener interface
+func (mgr *ecManager) String() string {
+	return "ecmanager"
 }

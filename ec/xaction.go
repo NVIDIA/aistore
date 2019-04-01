@@ -408,33 +408,45 @@ func (r *xactECBase) ReqEnableMountpath(mpath string)  { /* do nothing */ }
 func (r *xactECBase) ReqDisableMountpath(mpath string) { /* do nothing */ }
 
 type (
-	Xacts struct {
+	BckXacts struct {
 		get *XactGet
 		put *XactPut
 		req *XactRespond
 	}
 )
 
-func (xacts *Xacts) Get() *XactGet {
+func (xacts *BckXacts) Get() *XactGet {
 	return xacts.get
 }
 
-func (xacts *Xacts) Put() *XactPut {
+func (xacts *BckXacts) Put() *XactPut {
 	return xacts.put
 }
 
-func (xacts *Xacts) Req() *XactRespond {
+func (xacts *BckXacts) Req() *XactRespond {
 	return xacts.req
 }
 
-func (xacts *Xacts) SetGet(xact *XactGet) {
+func (xacts *BckXacts) SetGet(xact *XactGet) {
 	xacts.get = xact
 }
 
-func (xacts *Xacts) SetPut(xact *XactPut) {
+func (xacts *BckXacts) SetPut(xact *XactPut) {
 	xacts.put = xact
 }
 
-func (xacts *Xacts) SetReq(xact *XactRespond) {
+func (xacts *BckXacts) SetReq(xact *XactRespond) {
 	xacts.req = xact
+}
+
+func (xacts *BckXacts) StopGet() {
+	if xacts.get != nil && !xacts.get.Finished() {
+		xacts.get.stop()
+	}
+}
+
+func (xacts *BckXacts) StopPut() {
+	if xacts.put != nil && !xacts.put.Finished() {
+		xacts.put.stop()
+	}
 }

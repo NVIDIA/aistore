@@ -270,9 +270,10 @@ var (
 	mem2         = &memsys.Mem2{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
 
-	ErrorECDisabled = errors.New("EC is disabled for bucket")
-	ErrorNoMetafile = errors.New("no metafile")
-	ErrorNotFound   = errors.New("not found")
+	ErrorECDisabled          = errors.New("EC is disabled for bucket")
+	ErrorNoMetafile          = errors.New("no metafile")
+	ErrorNotFound            = errors.New("not found")
+	ErrorInsufficientTargets = errors.New("insufficient targets")
 )
 
 func Init() {

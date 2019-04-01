@@ -779,13 +779,12 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	// data slices + parity slices + original object
-	required := c.DataSlices + c.ParitySlices + 1
-	if args.TargetCnt < required {
+	if required := c.RequiredEncodeTargets(); args.TargetCnt < required {
 		return fmt.Errorf(
 			"erasure coding requires %d targets to use %d data and %d parity slices "+
 				"(the cluster has only %d targets)",
 			required, c.DataSlices, c.ParitySlices, args.TargetCnt)
+
 	}
 	return nil
 }

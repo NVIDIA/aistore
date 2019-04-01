@@ -777,10 +777,15 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		}
 	}
 
+	// HACK: if there's not enough EC targets to restore an sliced object, we might be able to restore it
+	// if it was replicated. In this case even just one additional target might be sufficient
+	// This won't succeed if an object was sliced, neither will ecmanager.RestoreObject(lom)
+	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= t.smapowner.Get().CountTargets()
+
 	// check cluster-wide ("ask neighbors")
 	aborted, running = t.xactions.globalRebStatus()
 	gfnActive, smap := t.gfn.global.active()
-	if aborted || running || gfnActive {
+	if aborted || running || gfnActive || !enoughECRestoreTargets {
 		if !gfnActive {
 			smap = t.smapowner.get()
 		}

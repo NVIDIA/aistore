@@ -859,6 +859,16 @@ func (c *ECConf) Updatable(field string) bool {
 		field == HeaderBucketECMinSize)) || !c.Enabled
 }
 
+func (c *ECConf) RequiredEncodeTargets() int {
+	// data slices + parity slices + 1 target for original object
+	return c.DataSlices + c.ParitySlices + 1
+}
+
+func (c *ECConf) RequiredRestoreTargets() int {
+	// data slices + 1 target for original object
+	return c.DataSlices + 1
+}
+
 // ObjectProps
 type ObjectProps struct {
 	Size    int

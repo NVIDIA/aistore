@@ -639,9 +639,11 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
+	// FIXME: when fewer targets than sliceCnt+1, send slices to those available anyway
 	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
 	if errstr != "" {
-		return errors.New(errstr)
+		glog.Warning(errstr)
+		return nil
 	}
 	emptyNodes := make([]string, 0, len(targets))
 	for _, t := range targets {

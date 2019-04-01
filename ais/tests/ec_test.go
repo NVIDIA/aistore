@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -44,8 +45,8 @@ const (
 )
 
 var (
-	ecSliceCnt  = 2
-	ecParityCnt = 2
+	ecDataSliceCnt   = 2
+	ecParitySliceCnt = 2
 )
 
 func defaultECBckProps() cmn.BucketProps {
@@ -54,8 +55,8 @@ func defaultECBckProps() cmn.BucketProps {
 		EC: cmn.ECConf{
 			Enabled:      true,
 			ObjSizeLimit: ecObjLimit,
-			DataSlices:   ecSliceCnt,
-			ParitySlices: ecParityCnt,
+			DataSlices:   ecDataSliceCnt,
+			ParitySlices: ecParitySliceCnt,
 		},
 	}
 }
@@ -67,17 +68,17 @@ func ecSliceNumInit(t *testing.T, smap cluster.Smap) error {
 	}
 
 	if tCnt == 4 {
-		ecSliceCnt = 1
-		ecParityCnt = 1
+		ecDataSliceCnt = 1
+		ecParitySliceCnt = 1
 		return nil
 	} else if tCnt == 5 {
-		ecSliceCnt = 1
-		ecParityCnt = 2
+		ecDataSliceCnt = 1
+		ecParitySliceCnt = 2
 		return nil
 	}
 
-	ecSliceCnt = 2
-	ecParityCnt = 2
+	ecDataSliceCnt = 2
+	ecParitySliceCnt = 2
 	return nil
 }
 
@@ -211,15 +212,15 @@ func randObjectSize(rnd *rand.Rand, n, every int) (
 	// full object copy+meta: 1+1
 	// number of metafiles: parity+slices
 	// number of slices: slices+parity
-	totalCnt = 2 + (ecSliceCnt+ecParityCnt)*2
+	totalCnt = 2 + (ecDataSliceCnt+ecParitySliceCnt)*2
 	objSize = int64(ecMinBigSize + rnd.Intn(ecBigDelta))
-	sliceSize = ec.SliceSize(objSize, ecSliceCnt)
+	sliceSize = ec.SliceSize(objSize, ecDataSliceCnt)
 	if (n+1)%every == 0 {
 		// Small object case
 		// full object copy+meta: 1+1
 		// number of metafiles: parity
 		// number of slices: parity
-		totalCnt = 2 + ecParityCnt*2
+		totalCnt = 2 + ecParitySliceCnt*2
 		objSize = int64(ecMinSmallSize + rnd.Intn(ecSmallDelta))
 		sliceSize = objSize
 	}
@@ -323,15 +324,15 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 				}
 			}
 
-			metaCntMust := ecParityCnt + 1
+			metaCntMust := ecParitySliceCnt + 1
 			if doEC {
-				metaCntMust = ecParityCnt + ecSliceCnt + 1
+				metaCntMust = ecParitySliceCnt + ecDataSliceCnt + 1
 			}
-			tassert.Error(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, ecParityCnt+1)
+			tassert.Error(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, ecParitySliceCnt+1)
 			if doEC {
-				tassert.Error(t, sliceCnt == ecParityCnt+ecSliceCnt, "Number of chunks mismatch: %d, expected %d", sliceCnt, ecParityCnt+ecSliceCnt)
+				tassert.Error(t, sliceCnt == ecParitySliceCnt+ecDataSliceCnt, "Number of chunks mismatch: %d, expected %d", sliceCnt, ecParitySliceCnt+ecDataSliceCnt)
 			} else {
-				tassert.Error(t, replCnt == ecParityCnt+1, "Number replicas mismatch: %d, expected %d", replCnt, ecParityCnt)
+				tassert.Error(t, replCnt == ecParitySliceCnt+1, "Number replicas mismatch: %d, expected %d", replCnt, ecParitySliceCnt)
 			}
 
 			if mainObjPath == "" {
@@ -407,7 +408,7 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, s
 	tutils.CreateFreshLocalBucket(t, proxyURLReadOnly, name)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
-		ecSliceCnt, ecParityCnt, seed, concurr)
+		ecDataSliceCnt, ecParitySliceCnt, seed, concurr)
 	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
 
 	if err != nil {
@@ -442,6 +443,24 @@ func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string) {
 				t.Errorf("Some slices were not cleaned up after DEL: %#v", partsAfterDelete)
 			}
 		}(idx)
+	}
+	wg.Wait()
+}
+
+func objectsExist(t *testing.T, baseParams *api.BaseParams, bckName, objPatt string, numFiles int) {
+	wg := &sync.WaitGroup{}
+	getOneObj := func(idx int, objName string) {
+		defer wg.Done()
+		objPath := ecTestDir + objName
+		_, err := api.GetObject(baseParams, bckName, objPath)
+		tutils.CheckFatal(err, t)
+	}
+
+	tutils.Logln("Reading all objects...")
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go getOneObj(i, objName)
 	}
 	wg.Wait()
 }
@@ -511,6 +530,36 @@ func TestECChange(t *testing.T) {
 	tassert.Error(t, err != nil, "Resetting properties when EC is enabled must fail")
 }
 
+func createECReplicas(t *testing.T, baseParams *api.BaseParams, objName string, sema chan struct{}, rnd *rand.Rand, fullPath string) {
+	sema <- struct{}{}
+	defer func() {
+		<-sema
+	}()
+
+	totalCnt := 2 + ecParitySliceCnt*2
+	objSize := int64(ecMinSmallSize + rnd.Intn(ecSmallDelta))
+	sliceSize := objSize
+
+	objPath := ecTestDir + objName
+
+	tutils.Logf("Creating %s, size %8d\n", objPath, objSize)
+	r, err := tutils.NewRandReader(int64(objSize), false)
+	tutils.CheckFatal(err, t)
+	defer r.Close()
+
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: TestLocalBucketName, Object: objPath, Reader: r}
+	err = api.PutObject(putArgs)
+	tutils.CheckFatal(err, t)
+
+	tutils.Logf("Waiting for %s\n", objPath)
+	foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, false, fullPath, objName)
+
+	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	if mainObjPath == "" {
+		t.Errorf("Full copy is not found")
+	}
+}
+
 func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, objName string, idx int, sema chan struct{}, rnd *rand.Rand, fullPath string) {
 	const (
 		sleepRestoreTime = 5 * time.Second // wait time after GET restores slices
@@ -525,7 +574,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, objName
 
 	delSlice := false // delete only main object
 	deletedFiles := 1
-	if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
+	if ecDataSliceCnt+ecParitySliceCnt > 2 && rnd.Intn(100) < sliceDelPct {
 		// delete a random slice, too
 		delSlice = true
 		deletedFiles = 2
@@ -679,9 +728,9 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 // Returns path to main object and map of all object's slices and metadata
 func createECFile(t *testing.T, objName, fullPath string, baseParams *api.BaseParams) (map[string]int64, string) {
-	totalCnt := 2 + (ecSliceCnt+ecParityCnt)*2
+	totalCnt := 2 + (ecDataSliceCnt+ecParitySliceCnt)*2
 	objSize := int64(ecMinBigSize * 2)
-	sliceSize := ec.SliceSize(objSize, ecSliceCnt)
+	sliceSize := ec.SliceSize(objSize, ecDataSliceCnt)
 	objPath := ecTestDir + objName
 
 	r, err := tutils.NewRandReader(int64(objSize), false)
@@ -1259,7 +1308,7 @@ func TestECXattrs(t *testing.T) {
 	oneObj := func(idx int, objName string) {
 		delSlice := false // delete only main object
 		deletedFiles := 1
-		if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
+		if ecDataSliceCnt+ecParitySliceCnt > 2 && rnd.Intn(100) < sliceDelPct {
 			// delete a random slice, too
 			delSlice = true
 			deletedFiles = 2
@@ -1373,6 +1422,39 @@ func TestECXattrs(t *testing.T) {
 	}
 }
 
+func removeTarget(t *testing.T, smap cluster.Smap) (cluster.Smap, *cluster.Snode) {
+	removeTarget := extractTargetNodes(smap)[0]
+	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
+	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
+	tutils.CheckFatal(err, t)
+	smap, err = waitForPrimaryProxy(
+		proxyURL,
+		"target is gone",
+		smap.Version, testing.Verbose(),
+		len(smap.Pmap),
+		len(smap.Tmap)-1,
+	)
+	tutils.CheckFatal(err, t)
+
+	return smap, removeTarget
+}
+
+func restoreTarget(t *testing.T, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
+	tutils.Logf("Reregistering target...\n")
+	err := tutils.RegisterTarget(proxyURL, target, smap)
+	tutils.CheckFatal(err, t)
+	smap, err = waitForPrimaryProxy(
+		proxyURL,
+		"to join target back",
+		smap.Version, testing.Verbose(),
+		len(smap.Pmap),
+		len(smap.Tmap)+1,
+	)
+	tutils.CheckFatal(err, t)
+
+	return smap
+}
+
 // Lost target test:
 // - puts some objects
 // - kills a random target
@@ -1400,6 +1482,9 @@ func TestECEmergencyTarget(t *testing.T) {
 	if err := ecSliceNumInit(t, smap); err != nil {
 		t.Fatal(err)
 	}
+	// Increase number of EC data slices, now there's just enough targets to handle EC requests
+	// Encoding will fail if even one is missing, restoring should still work
+	ecDataSliceCnt++
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1463,57 +1548,15 @@ func TestECEmergencyTarget(t *testing.T) {
 	}
 
 	// 2. Kill a random target
-	removeTarget := extractTargetNodes(smap)[0]
-	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
-	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
-	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
-		proxyURL,
-		"target is gone",
-		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)-1,
-	)
-	tutils.CheckFatal(err, t)
+	var removedTarget *cluster.Snode
+	smap, removedTarget = removeTarget(t, smap)
 
 	defer func() {
-		// Restore target
-		tutils.Logf("Reregistering target...\n")
-		err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
-		tutils.CheckFatal(err, t)
-		smap, err = waitForPrimaryProxy(
-			proxyURL,
-			"to join target back",
-			smap.Version, testing.Verbose(),
-			len(smap.Pmap),
-			len(smap.Tmap)+1,
-		)
-		tutils.CheckFatal(err, t)
+		smap = restoreTarget(t, smap, removedTarget)
 	}()
 
 	// 3. Read objects
-	tutils.Logln("Reading all objects...")
-	getOneObj := func(idx int, objName string) {
-		defer func() {
-			wg.Done()
-			<-semaphore
-		}()
-		start := time.Now()
-		objPath := ecTestDir + objName
-		_, err = api.GetObject(baseParams, TestLocalBucketName, objPath)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Logf("Object %s get in %v", objName, time.Since(start))
-	}
-
-	wg.Add(numFiles)
-	for i := 0; i < numFiles; i++ {
-		objName := fmt.Sprintf(objPatt, i)
-		semaphore <- struct{}{}
-		go getOneObj(i, objName)
-	}
-	wg.Wait()
+	objectsExist(t, baseParams, TestLocalBucketName, objPatt, numFiles)
 
 	// 4. Check that ListBucket returns correct number of items
 	tutils.Logln("DONE\nReading bucket list...")
@@ -1527,6 +1570,149 @@ func TestECEmergencyTarget(t *testing.T) {
 	if len(reslist.Entries) != numFiles {
 		t.Errorf("Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
 	}
+}
+
+func TestECEmergencyTargetForReplica(t *testing.T) {
+	const (
+		objPatt  = "obj-rest-%04d"
+		numFiles = 50
+		semaCnt  = 8
+	)
+
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		sema     = make(chan struct{}, semaCnt)
+	)
+
+	initialSmap := getClusterMap(t, proxyURL)
+
+	if len(initialSmap.Tmap) > 10 {
+		// Reason: calculating main obj directory based on DeamonID
+		// see getOneObj, 'HACK' annotation
+		t.Skip("Test requires at most 10 targets")
+	}
+
+	if err := ecSliceNumInit(t, initialSmap); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, target := range initialSmap.Tmap {
+		target.Digest()
+	}
+
+	// Increase number of EC data slices, now there's just enough targets to handle EC requests
+	// Encoding will fail if even one is missing, restoring should still work
+	ecDataSliceCnt++
+
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
+
+	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
+
+	seed := time.Now().UnixNano()
+	rnd := rand.New(rand.NewSource(seed))
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, 0, baseParams)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	wg := sync.WaitGroup{}
+
+	// put a file
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func(i int) {
+			createECReplicas(t, baseParams, objName, sema, rnd, fullPath)
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	// kill #dataslices of targets, normal EC restore won't be possible
+	// 2. Kill a random target
+	removedTargets := make([]*cluster.Snode, 0, ecDataSliceCnt)
+	smap := getClusterMap(t, proxyURL)
+
+	for i := ecDataSliceCnt - 1; i >= 0; i-- {
+		var removedTarget *cluster.Snode
+		smap, removedTarget = removeTarget(t, smap)
+		removedTargets = append(removedTargets, removedTarget)
+	}
+
+	defer func() {
+		// Restore targets
+		smap = getClusterMap(t, proxyURL)
+		for _, target := range removedTargets {
+			smap = restoreTarget(t, smap, target)
+		}
+	}()
+
+	hasTarget := func(targets []*cluster.Snode, target *cluster.Snode) bool {
+		for _, tr := range targets {
+			if tr.DaemonID == target.DaemonID {
+				return true
+			}
+		}
+		return false
+	}
+
+	getOneObj := func(idx int, objName string) {
+		defer wg.Done()
+
+		// hack: calculate which targets stored a replica
+		targets, errstr := cluster.HrwTargetList(TestLocalBucketName, ecTestDir+objName, &initialSmap, ecParitySliceCnt+1)
+		tassert.Error(t, errstr == "", errstr)
+
+		mainTarget := targets[0]
+		targets = targets[1:]
+
+		replicas, _ := ecGetAllLocalSlices(rootDir, objName)
+		// HACK: this tells directory of target based on last number of it's port
+		// This is usually true, but undefined if target has > 9 nodes
+		// as the last digit becomes ambiguous
+		targetDir := mainTarget.DaemonID[len(mainTarget.DaemonID)-1]
+
+		for p := range replicas {
+			if strings.Contains(p, path.Join(rootDir, string(targetDir))) {
+				// Delete the actual main object
+				// NOTE: this might fail if the targetDir is not calculated correctly
+				tutils.CheckFatal(os.Remove(p), t)
+				break
+			}
+		}
+
+		for _, target := range targets {
+			if !hasTarget(removedTargets, target) {
+				// there exists a target which was not killed and stores replica
+				objPath := ecTestDir + objName
+				_, err := api.GetObject(baseParams, TestLocalBucketName, objPath)
+				tutils.CheckFatal(err, t)
+				return
+			}
+		}
+	}
+
+	tutils.Logln("Reading all objects...")
+	wg.Add(numFiles)
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go getOneObj(i, objName)
+	}
+	wg.Wait()
+
+	clearAllECObjects(t, numFiles, objPatt, fullPath)
 }
 
 // Lost mountpah test:
@@ -1637,20 +1823,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	}()
 
 	// 3. Read objects
-	getOneObj := func(idx int, objName string) {
-		defer wg.Done()
-		objPath := ecTestDir + objName
-		_, err = api.GetObject(baseParams, TestLocalBucketName, objPath)
-		tutils.CheckFatal(err, t)
-	}
-
-	tutils.Logln("Reading all objects...")
-	wg.Add(numFiles)
-	for i := 0; i < numFiles; i++ {
-		objName := fmt.Sprintf(objPatt, i)
-		go getOneObj(i, objName)
-	}
-	wg.Wait()
+	objectsExist(t, baseParams, TestLocalBucketName, objPatt, numFiles)
 
 	// 4. Check that ListBucket returns correct number of items
 	tutils.Logf("DONE\nReading bucket list...\n")
