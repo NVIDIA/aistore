@@ -67,11 +67,17 @@ func checkDownloadList(t *testing.T, expNumEntries ...int) {
 	}
 }
 
-func waitForDownload(t *testing.T, id string) {
+func waitForDownload(t *testing.T, id string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+
 	for {
+		if time.Now().After(deadline) {
+			t.Errorf("Timed out waiting for download %s.", id)
+		}
+
 		all := true
 		if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
-			if resp.Finished != resp.Total {
+			if resp.Finished+len(resp.Errs) != resp.Total {
 				all = false
 			}
 		}
@@ -79,9 +85,8 @@ func waitForDownload(t *testing.T, id string) {
 		if all {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(200 * time.Millisecond)
 	}
-
 }
 
 func TestDownloadSingle(t *testing.T) {
@@ -145,13 +150,15 @@ func TestDownloadSingle(t *testing.T) {
 	id, err = api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objname, linkSmall)
 	tutils.CheckError(err, t)
 
-	waitForDownload(t, id)
+	waitForDownload(t, id, 30*time.Second)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckError(err, t)
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
 	}
+
+	// If the file was successfully downloaded, it means that its checksum was correct
 
 	checkDownloadList(t, 2)
 }
@@ -203,7 +210,7 @@ func TestDownloadMultiMap(t *testing.T) {
 	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, id)
+	waitForDownload(t, id, 10*time.Second)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
@@ -234,7 +241,7 @@ func TestDownloadMultiList(t *testing.T) {
 	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, l)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, id)
+	waitForDownload(t, id, 10*time.Second)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tutils.CheckFatal(err, t)
@@ -340,7 +347,7 @@ func TestDownloadCloud(t *testing.T) {
 	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, id)
+	waitForDownload(t, id, 10*time.Second)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
 	tutils.CheckFatal(err, t)
@@ -475,4 +482,121 @@ func TestDownloadStatusError(t *testing.T) {
 	}
 
 	checkDownloadList(t)
+}
+
+func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+
+		bucket        = TestLocalBucketName
+		objnameFirst  = "object-first"
+		objnameSecond = "object-second"
+
+		linkFirst  = "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz"
+		linkSecond = "github.com/NVIDIA/aistore"
+
+		expectedObjects = []string{objnameFirst, objnameSecond}
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	bucketProps := defaultBucketProps()
+	bucketProps.Cksum.ValidateWarmGet = true
+	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	tutils.CheckFatal(err, t)
+
+	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bucket, objnameFirst, linkFirst)
+	tutils.CheckError(err, t)
+	id2, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bucket, objnameSecond, linkSecond)
+	tutils.CheckError(err, t)
+
+	waitForDownload(t, id, 10*time.Second)
+	waitForDownload(t, id2, 5*time.Second)
+
+	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
+	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
+	// also set properly
+	tutils.EnsureObjectsExist(t, baseParams, bucket, expectedObjects...)
+}
+
+func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+
+		bucket        = TestLocalBucketName
+		objnameFirst  = "linkFirst"
+		objnameSecond = "linkSecond"
+
+		m = map[string]string{
+			"linkFirst":  "https://storage.googleapis.com/lpr-vision/cifar10_test.tgz",
+			"linkSecond": "github.com/NVIDIA/aistore",
+		}
+
+		expectedObjects = []string{objnameFirst, objnameSecond}
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	bucketProps := defaultBucketProps()
+	bucketProps.Cksum.ValidateWarmGet = true
+	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	tutils.CheckFatal(err, t)
+
+	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
+	tutils.CheckFatal(err, t)
+
+	waitForDownload(t, id, 10*time.Second)
+
+	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
+	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
+	// also set properly
+	tutils.EnsureObjectsExist(t, baseParams, bucket, expectedObjects...)
+}
+
+func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+
+		bucket = TestLocalBucketName
+
+		base     = "storage.googleapis.com/lpr-vision"
+		template = "cifar{10..100..90}_test.tgz"
+
+		expectedObjects = []string{"cifar10_test.tgz", "cifar100_test.tgz"}
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	bucketProps := defaultBucketProps()
+	bucketProps.Cksum.ValidateWarmGet = true
+	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	tutils.CheckFatal(err, t)
+
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, base, template)
+	tutils.CheckFatal(err, t)
+
+	waitForDownload(t, id, time.Minute)
+
+	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
+	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
+	// also set properly
+	tutils.EnsureObjectsExist(t, baseParams, bucket, expectedObjects...)
 }

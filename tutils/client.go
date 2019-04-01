@@ -745,6 +745,15 @@ func WaitForObjectToBeDowloaded(objName, bucket string, params *api.BaseParams, 
 	}
 }
 
+func EnsureObjectsExist(t *testing.T, params *api.BaseParams, bucket string, objectsNames ...string) {
+	for _, objName := range objectsNames {
+		_, err := api.GetObject(params, bucket, objName)
+		if err != nil {
+			t.Errorf("Unexpected GetObject(%s) error: %v.", objName, err)
+		}
+	}
+}
+
 func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {
 	var (
 		size   = objSize

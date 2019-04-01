@@ -6,6 +6,8 @@ package downloader
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -918,7 +920,8 @@ func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 
 	t.setTotalSize(response)
 
-	if err := t.parent.t.Receive(postFQN, progressReader, lom); err != nil {
+	cksum := getCksum(t.obj.Link, response)
+	if err := t.parent.t.Receive(postFQN, progressReader, lom, cluster.ColdGet, cksum); err != nil {
 		return internalErrorMessage(), err
 	}
 	return "", nil
@@ -1077,4 +1080,78 @@ func (q *queue) cleanup() {
 	q.ch = nil
 	q.m = nil
 	q.Unlock()
+}
+
+//
+// Checksum validation helpers
+//
+
+const (
+	gsHashHeader                    = "X-Goog-Hash"
+	gsHashHeaderValueSeparator      = ","
+	gsHashHeaderChecksumValuePrefix = "crc32c="
+
+	gsStorageURL    = "storage.googleapis.com"
+	gsAPIURL        = "www.googleapis.com"
+	gsAPIPathPrefix = "/storage/v1"
+
+	s3ChecksumHeader      = "ETag"
+	s3IllegalChecksumChar = "-"
+
+	s3UrlRegex = `(s3-|s3\.)?(.*)\.amazonaws\.com`
+)
+
+// Get file checksum if link points to Google storage or s3
+func getCksum(link string, resp *http.Response) cmn.CksumProvider {
+	u, err := url.Parse(link)
+	cmn.AssertNoErr(err)
+
+	if isGoogleStorageURL(u) {
+		hs, ok := resp.Header[gsHashHeader]
+		if !ok {
+			return nil
+		}
+		return cmn.NewCksum(cmn.ChecksumCRC32C, getChecksumFromGoogleFormat(hs))
+	} else if isGoogleAPIURL(u) {
+		hdr := resp.Header.Get(gsHashHeader)
+		if hdr == "" {
+			return nil
+		}
+		hs := strings.Split(hdr, gsHashHeaderValueSeparator)
+		return cmn.NewCksum(cmn.ChecksumCRC32C, getChecksumFromGoogleFormat(hs))
+	} else if isS3URL(link) {
+		if cksum := resp.Header.Get(s3ChecksumHeader); cksum != "" && !strings.Contains(cksum, s3IllegalChecksumChar) {
+			return cmn.NewCksum(cmn.ChecksumMD5, cksum)
+		}
+	}
+
+	return nil
+}
+
+func isGoogleStorageURL(u *url.URL) bool {
+	return u.Host == gsStorageURL
+}
+
+func isGoogleAPIURL(u *url.URL) bool {
+	return u.Host == gsAPIURL && strings.HasPrefix(u.Path, gsAPIPathPrefix)
+}
+
+func isS3URL(link string) bool {
+	re := regexp.MustCompile(s3UrlRegex)
+	return re.MatchString(link)
+}
+
+func getChecksumFromGoogleFormat(hs []string) string {
+	for _, h := range hs {
+		if strings.HasPrefix(h, gsHashHeaderChecksumValuePrefix) {
+			encoded := strings.TrimPrefix(h, gsHashHeaderChecksumValuePrefix)
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				return ""
+			}
+			return hex.EncodeToString(decoded)
+		}
+	}
+
+	return ""
 }

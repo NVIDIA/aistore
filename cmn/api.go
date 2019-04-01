@@ -24,6 +24,7 @@ const (
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
+	ChecksumCRC32C = "crc32c"
 	// buckets to inherit global checksum config
 	ChecksumInherit = "inherit"
 	// versioning

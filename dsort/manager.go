@@ -767,7 +767,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 
 		workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileRecvShard)
 		rc := ioutil.NopCloser(object)
-		if err := m.ctx.t.Receive(workFQN, rc, lom); err != nil {
+		if err := m.ctx.t.Receive(workFQN, rc, lom, cluster.WarmGet, nil); err != nil {
 			glog.Error(err)
 			return
 		}

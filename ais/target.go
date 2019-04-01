@@ -586,7 +586,7 @@ func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() 
 func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
 
-func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM) error {
+func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM, recvType cluster.RecvType, cksum cmn.CksumProvider) error {
 	roi := &recvObjInfo{
 		t:       t,
 		r:       reader,
@@ -594,6 +594,12 @@ func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluste
 		lom:     lom,
 		ctx:     context.Background(),
 	}
+
+	if recvType == cluster.ColdGet {
+		roi.cold = true
+		roi.cksumToCheck = cksum
+	}
+
 	err, _ := roi.recv()
 	return err
 }
@@ -2475,12 +2481,14 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	if err = roi.writeToFile(); err != nil {
 		return err, http.StatusInternalServerError
 	}
+
 	if !dryRun.disk && !dryRun.network {
 		// commit
 		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
 	}
+
 	delta := time.Since(roi.started)
 	roi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -3208,9 +3216,13 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		if roi.lom.CksumConf.ValidateColdGet && roi.cksumToCheck != nil {
 			expectedCksum = roi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
-			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5, checkCksumType)
+			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5 || checkCksumType == cmn.ChecksumCRC32C, checkCksumType)
 
 			checkHash = md5.New()
+			if checkCksumType == cmn.ChecksumCRC32C {
+				checkHash = cmn.NewCRC32C()
+			}
+
 			hashes = append(hashes, checkHash)
 		}
 	}
@@ -3224,7 +3236,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = fmt.Errorf("bad checksum expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
+			err = fmt.Errorf("bad checksum - expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
 			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}

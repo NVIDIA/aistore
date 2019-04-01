@@ -14,6 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+type RecvType int
+
+const (
+	ColdGet RecvType = iota
+	WarmGet
+)
+
 // For implementations, please refer to ais/target.go
 type Target interface {
 	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
@@ -26,6 +33,6 @@ type Target interface {
 	GetAtimeRunner() *atime.Runner
 	GetMem2() *memsys.Mem2
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
-	Receive(workFQN string, reader io.ReadCloser, lom *LOM) error
+	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.CksumProvider) error
 	GetFSPRG() fs.PathRunGroup
 }
