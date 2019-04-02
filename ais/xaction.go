@@ -410,28 +410,30 @@ func (xs *xactions) renewBckMakeNCopies(bucket string, t *targetrunner, copies i
 	xs.Unlock()
 }
 
-func (xs *xactions) abortBucketSpecific(bucket string) {
+func (xs *xactions) abortBucketSpecific(buckets ...string) {
 	wg := &sync.WaitGroup{}
-	for _, act := range perBucketXactions {
-		k := path.Join(act, bucket)
-		wg.Add(1)
-		go func(kind string, wg *sync.WaitGroup) {
-			defer wg.Done()
-			xs.Lock()
-			xx := xs.findU(kind)
-			xs.Unlock()
-			if xx == nil {
-				return
-			}
-			xx.Abort()
-			for i := 0; i < 5; i++ {
-				time.Sleep(time.Millisecond * 500)
-				if xx.Finished() {
+	for _, bucket := range buckets {
+		for _, act := range perBucketXactions {
+			k := path.Join(act, bucket)
+			wg.Add(1)
+			go func(kind string) {
+				defer wg.Done()
+				xs.Lock()
+				xx := xs.findU(kind)
+				xs.Unlock()
+				if xx == nil {
 					return
 				}
-			}
-			glog.Errorf("%s: timed-out waiting for termination", xx)
-		}(k, wg)
+				xx.Abort()
+				for i := 0; i < 5; i++ {
+					time.Sleep(time.Millisecond * 500)
+					if xx.Finished() {
+						return
+					}
+				}
+				glog.Errorf("%s: timed-out waiting for termination", xx)
+			}(k)
+		}
 	}
 	wg.Wait()
 }

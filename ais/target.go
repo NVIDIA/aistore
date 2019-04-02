@@ -3456,15 +3456,17 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	for bucket := range bucketmd.LBmap {
 		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
-			// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
-			//       disable mirroring (needed in part for cloud buckets)
-			t.xactions.abortBucketSpecific(bucket)
 		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
 				t.xactions.abortPutCopies(bucket)
 			}
 		}
 	}
+
+	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
+	//       disable mirroring (needed in part for cloud buckets)
+	t.xactions.abortBucketSpecific(bucketsToDelete...)
+
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
 
 	// Create buckets that have been added
@@ -3481,8 +3483,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 		t.ecmanager.BucketsMDChanged()
 	}
 
-	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*create*/, bucketsToCreate...)
-
+	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*true=create*/, bucketsToCreate...)
 	return
 }
 
