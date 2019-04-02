@@ -2498,6 +2498,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		err = cbErr
 		wg.Done()
 	}
+	t.rebManager.streams.Resync()
 	if err := t.rebManager.streams.SendV(hdr, file, cb, si); err != nil {
 		glog.Errorf("failed to migrate: %s, err: %v", lom.FQN, err)
 		return err.Error()

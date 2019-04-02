@@ -48,12 +48,9 @@ type regressionTestData struct {
 const (
 	rootDir = "/tmp/ais"
 
+	ListRangeStr              = "__listrange"
 	TestLocalBucketName       = "TESTLOCALBUCKET"
 	TestNonexistentBucketName = "SOMETESTNONEXISTENTBUCKET"
-	RenameLocalBucketName     = "renamebucket"
-	RenameDir                 = rootDir + "/rename"
-	RenameStr                 = "rename"
-	ListRangeStr              = "__listrange"
 )
 
 var (
@@ -432,63 +429,40 @@ func TestRenameObjects(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
+
 	var (
-		err       error
-		numPuts   = 10
-		objsPutCh = make(chan string, numPuts)
-		errCh     = make(chan error, numPuts)
-		basenames = make([]string, 0, numPuts) // basenames
-		bnewnames = make([]string, 0, numPuts) // new basenames
-		sgl       *memsys.SGL
-		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
+		renameStr    = "rename"
+		bucket       = t.Name()
+		numPuts      = 50
+		objsPutCh    = make(chan string, numPuts)
+		errCh        = make(chan error, 2*numPuts)
+		newBaseNames = make([]string, 0, numPuts) // new basenames
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	defer func() {
-		// cleanup
-		wg := &sync.WaitGroup{}
-		for _, newObj := range bnewnames {
-			wg.Add(1)
-			go tutils.Del(proxyURL, RenameLocalBucketName, newObj, "", wg, errCh, !testing.Verbose())
-		}
-
-		wg.Wait()
-		selectErr(errCh, "delete", t, false)
-		close(errCh)
-		tutils.DestroyLocalBucket(t, proxyURL, RenameLocalBucketName)
-	}()
-
-	time.Sleep(time.Second * 5)
-
-	if err = cmn.CreateDir(RenameDir); err != nil {
-		t.Errorf("Error creating dir: %v", err)
-	}
-
-	sgl = tutils.Mem2.NewSGL(1024 * 1024)
+	sgl := tutils.Mem2.NewSGL(1024 * 1024)
 	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, RenameLocalBucketName, RenameDir, readerType, RenameStr, 0, numPuts, errCh, objsPutCh, sgl)
+
+	tutils.PutRandObjs(proxyURL, bucket, "", readerType, "", 0, numPuts, errCh, objsPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(objsPutCh)
-	for fname := range objsPutCh {
-		basenames = append(basenames, fname)
-	}
 
-	// rename
-	for _, fname := range basenames {
-		oldObj := path.Join(RenameStr, fname)
-		newObj := oldObj + ".renamed" // objname fqn
-		bnewnames = append(bnewnames, newObj)
-		if err := api.RenameObject(tutils.DefaultBaseAPIParams(t), RenameLocalBucketName, oldObj, newObj); err != nil {
-			t.Fatalf("Failed to rename object from %s => %s, err: %v", oldObj, newObj, err)
+	for objName := range objsPutCh {
+		newObjName := path.Join(renameStr, objName) + ".renamed" // objname fqn
+		newBaseNames = append(newBaseNames, newObjName)
+		if err := api.RenameObject(baseParams, bucket, objName, newObjName); err != nil {
+			t.Fatalf("Failed to rename object from %s => %s, err: %v", objName, newObjName, err)
 		}
-		tutils.Logln(fmt.Sprintf("Rename %s => %s successful", oldObj, newObj))
+		tutils.Logln(fmt.Sprintf("Rename %s => %s successful", objName, newObjName))
 	}
 
 	// get renamed objects
-	waitProgressBar("Rename/move: ", time.Second*5)
-	for _, newObj := range bnewnames {
-		_, err := api.GetObject(tutils.DefaultBaseAPIParams(t), RenameLocalBucketName, newObj)
+	for _, newObjName := range newBaseNames {
+		_, err := api.GetObject(baseParams, bucket, newObjName)
 		if err != nil {
 			errCh <- err
 		}
