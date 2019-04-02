@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 
@@ -25,7 +26,8 @@ import (
 )
 
 const (
-	soakprefix = "soaktest-prim-"
+	soakprefix              = "soaktest-prim-"
+	maxRestoreTargetAttempt = 30
 )
 
 var (
@@ -101,6 +103,30 @@ func updateSysInfo() {
 	regCapacity = int64(float64(totalCapacity/100) * soakcmn.Params.RegPctCapacity)
 }
 
+func (rctx *RecipeContext) restoreTargets() {
+	smap := fetchSmap("restoreTargets")
+	for i := 0; i < maxRestoreTargetAttempt; i++ {
+		missingOne := false
+		for k, v := range rctx.origTargets {
+			if _, ok := smap.Tmap[k]; ok {
+				continue
+			}
+			if err := tutils.RegisterTarget(primaryURL, v, *smap); err != nil {
+				report.Writef(report.SummaryLevel, "got error while re-registering %s: %v", v.DaemonID, err)
+			}
+			missingOne = true
+		}
+		if !missingOne {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+		smap = fetchSmap("restoreTargets")
+		if i > 0 {
+			report.Writef(report.SummaryLevel, "Attempt %d/%d to re-register targets", i, maxRestoreTargetAttempt)
+		}
+	}
+}
+
 func (rctx *RecipeContext) PreRecipe(recipeName string) {
 	if rctx.repCtx == nil {
 		rctx.repCtx = report.NewReportContext()
@@ -133,15 +159,9 @@ func (rctx *RecipeContext) PostRecipe() error {
 	rctx.primitiveCount = map[string]int{}
 	rctx.failedPrimitives = map[string]error{}
 
-	smap := fetchSmap("PostRecipe")
-	for k, v := range rctx.origTargets {
-		_, ok := smap.Tmap[k]
-		if !ok {
-			tutils.RegisterTarget(primaryURL, v, *smap)
-			smap = fetchSmap("PostRecipe")
-		}
-	}
+	rctx.restoreTargets()
 
+	smap := fetchSmap("PostRecipe")
 	if len(rctx.origTargets) != smap.CountTargets() {
 		origTargStr, _ := json.Marshal(rctx.origTargets)
 		newTargStr, _ := json.Marshal(smap.Tmap)
