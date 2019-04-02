@@ -70,6 +70,7 @@ var (
 			idFlag,
 			progressBarFlag,
 			refreshRateFlag,
+			verboseFlag,
 		},
 		downloadCancel: []cli.Flag{
 			idFlag,
@@ -269,7 +270,8 @@ func downloadAdminHandler(c *cli.Context) error {
 				return err
 			}
 
-			fmt.Println(resp.String())
+			verbose := flagIsSet(c, verboseFlag.Name)
+			fmt.Println(resp.Print(verbose))
 		}
 	case downloadCancel:
 		if err := checkFlags(c, idFlag.Name); err != nil {

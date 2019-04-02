@@ -378,10 +378,13 @@ type DlStatusResp struct {
 	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
 }
 
-func (d *DlStatusResp) String() string {
+func (d *DlStatusResp) Print(verbose bool) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)", d.Finished, d.Total, d.Percentage))
+	if !verbose {
+		return sb.String()
+	}
 
 	if len(d.CurrentTasks) != 0 {
 		sb.WriteString("\n")

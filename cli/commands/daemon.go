@@ -163,7 +163,7 @@ func daemonStatus(c *cli.Context, daemonID string) (err error) {
 // Display smap-like information of each individual daemon in the entire cluster
 func listAIS(c *cli.Context, whichDaemon string) (err error) {
 	outputTemplate := templates.ListTmpl
-	if c.Bool(verboseFlag.Name) {
+	if flagIsSet(c, verboseFlag.Name) {
 		outputTemplate = templates.ListTmplVerbose
 	}
 
