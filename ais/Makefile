@@ -66,7 +66,8 @@ deploy_next_tier:
 .PHONY: deploy_docker stop_docker
 
 deploy_docker:
-	@cd ../deploy/dev/docker && ./deploy_docker.sh
+# pass -d=2 because need 2 mountpaths for some tests
+	@cd ../deploy/dev/docker && ./deploy_docker.sh -d=2
 
 stop_docker:
 ifeq ($(FLAGS),)

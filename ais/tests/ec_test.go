@@ -404,14 +404,14 @@ func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, obj
 }
 
 func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, seed int64, concurr int, baseParams *api.BaseParams) {
-	tutils.CreateFreshLocalBucket(t, proxyURL, name)
+	tutils.CreateFreshLocalBucket(t, proxyURLReadOnly, name)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		ecSliceCnt, ecParityCnt, seed, concurr)
 	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
 
 	if err != nil {
-		tutils.DestroyLocalBucket(t, proxyURL, name)
+		tutils.DestroyLocalBucket(t, proxyURLReadOnly, name)
 	}
 	tutils.CheckFatal(err, t)
 }
@@ -426,7 +426,7 @@ func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string) {
 			defer wg.Done()
 			objName := fmt.Sprintf(objPatt, i)
 			objPath := ecTestDir + objName
-			err := tutils.Del(proxyURL, TestLocalBucketName, objPath, "", nil, nil, true)
+			err := tutils.Del(proxyURLReadOnly, TestLocalBucketName, objPath, "", nil, nil, true)
 			tutils.CheckFatal(err, t)
 
 			deadline := time.Now().Add(time.Second * 10)

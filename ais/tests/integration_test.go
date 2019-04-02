@@ -1206,9 +1206,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	const (
-		newMountpath = "/tmp/ais/mountpath"
-	)
+	const newMountpath = "/tmp/ais/mountpath"
 
 	var (
 		m = metadata{
@@ -1229,6 +1227,14 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 	err := cmn.CreateDir(newMountpath)
 	tutils.CheckFatal(err, t)
+
+	if tutils.DockerRunning() {
+		err := tutils.DockerCreateMpathDir(0, newMountpath)
+		tutils.CheckFatal(err, t)
+	} else {
+		err := cmn.CreateDir(newMountpath)
+		tutils.CheckFatal(err, t)
+	}
 
 	defer func() {
 		if !tutils.DockerRunning() {
@@ -1253,8 +1259,15 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.wg.Wait()
 
 	// Remove new mountpath from target
-	err = api.RemoveMountpath(baseParams, newMountpath)
-	tutils.CheckFatal(err, t)
+	if tutils.DockerRunning() {
+		baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
+		if err := api.RemoveMountpath(baseParams, newMountpath); err != nil {
+			t.Error(err.Error())
+		}
+	} else {
+		err = api.RemoveMountpath(baseParams, newMountpath)
+		tutils.CheckFatal(err, t)
+	}
 
 	m.resultsBeforeAfter()
 }
