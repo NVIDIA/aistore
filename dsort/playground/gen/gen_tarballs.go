@@ -72,7 +72,7 @@ func main() {
 				fmt.Print(err)
 				return
 			}
-			util.CreateTar(tarball, i*fileInTarballCnt, (i+1)*fileInTarballCnt, fileInTarballSize, numFilesDigits)
+			util.CreateTar(tarball, i*fileInTarballCnt, (i+1)*fileInTarballCnt, fileInTarballSize, numFilesDigits, false)
 			if err = tarball.Close(); err != nil {
 				fmt.Print(err)
 			}

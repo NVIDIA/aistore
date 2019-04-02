@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/playground/gen/util"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
@@ -34,6 +35,8 @@ var (
 	tarballSize       int
 
 	client = &http.Client{}
+
+	supportedExts = []string{".tar", ".tgz"}
 )
 
 func init() {
@@ -58,6 +61,10 @@ func init() {
 }
 
 func main() {
+	if !cmn.StringInSlice(ext, supportedExts) {
+		cmn.ExitInfof("unsupported ext: %q, should be one of: %s", ext, supportedExts)
+	}
+
 	baseParams := &api.BaseParams{
 		Client: client,
 		URL:    proxyURL,
@@ -90,6 +97,7 @@ func main() {
 			glog.Fatal(err)
 		}
 
+		compressed := ext == ".tgz"
 		for shardNum := 0; shardNum < tarballCnt; shardNum++ {
 			sema <- struct{}{}
 			wg.Add(1)
@@ -100,7 +108,7 @@ func main() {
 				}()
 				name := fmt.Sprintf("%s%d%s", inputPrefix, i, ext)
 				sgl := mem.NewSGL(int64(tarballSize))
-				util.CreateTar(sgl, i*fileInTarballCnt, (i+1)*fileInTarballCnt, fileInTarballSize, numFilesDigits)
+				util.CreateTar(sgl, i*fileInTarballCnt, (i+1)*fileInTarballCnt, fileInTarballSize, numFilesDigits, compressed)
 
 				reader, err := tutils.NewSGReader(sgl, 0, false)
 				if err != nil {

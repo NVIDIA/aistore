@@ -3,6 +3,7 @@ package util
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,10 +30,23 @@ func init() {
 	fmt.Println("initialized random buffer")
 }
 
-func CreateTar(w io.Writer, start, end, size, digits int) {
+func CreateTar(w io.Writer, start, end, size, digits int, compressed bool) {
+	var (
+		gzw *gzip.Writer
+		tw  *tar.Writer
+	)
+
 	uid := os.Getuid()
 	gid := os.Getgid()
-	tw := tar.NewWriter(w)
+	if compressed {
+		gzw = gzip.NewWriter(w)
+		tw = tar.NewWriter(gzw)
+		defer gzw.Close()
+	} else {
+		tw = tar.NewWriter(w)
+	}
+	defer tw.Close()
+
 	for fileNum := start; fileNum < end; fileNum++ {
 		fileNumStr := fmt.Sprintf("%0*d", digits, fileNum)
 		mu.Lock()
@@ -53,8 +67,5 @@ func CreateTar(w io.Writer, start, end, size, digits int) {
 			fmt.Print(err)
 			return
 		}
-	}
-	if err := tw.Close(); err != nil {
-		fmt.Print(err)
 	}
 }

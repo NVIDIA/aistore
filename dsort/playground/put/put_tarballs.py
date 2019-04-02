@@ -38,7 +38,8 @@ if not args.bucket in bucket_names.local:
 for i in range(0, args.shards):
     out = io.BytesIO()
     object_name = "%s%d%s" % (args.iprefix, i, args.ext)
-    with tarfile.open(mode="w", fileobj=out) as tar:
+    mode = "w" if args.ext == '.tar' else "w:gz"
+    with tarfile.open(mode=mode, fileobj=out) as tar:
         for j in range(0, args.fcount):
             b = os.urandom(args.fsize)
             t = tarfile.TarInfo("%d.txt" % j)
