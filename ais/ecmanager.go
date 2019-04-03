@@ -128,7 +128,7 @@ func (mgr *ecManager) newPutXact(bucket string) *ec.XactPut {
 		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) newReqXact(bucket string) *ec.XactRespond {
+func (mgr *ecManager) newRespondXact(bucket string) *ec.XactRespond {
 	return ec.NewRespondXact(mgr.t, mgr.t.bmdowner,
 		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
 }

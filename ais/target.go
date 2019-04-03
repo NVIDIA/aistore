@@ -1266,7 +1266,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		t.xactions.abortPutCopies(bucket)
+		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
 		bckIsLocal := t.bmdowner.get().IsLocal(bucket)
 		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsLocal)
 	default:

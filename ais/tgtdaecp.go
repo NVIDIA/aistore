@@ -176,10 +176,10 @@ func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (errstr string) {
 
 	config := cmn.GCO.Get()
 	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruXaction := t.xactions.findU(cmn.ActLRU)
-		if lruXaction != nil {
+		lruRunning := t.xactions.globalXactRunning(cmn.ActLRU)
+		if lruRunning {
 			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
-			lruXaction.Abort()
+			t.xactions.abortGlobalXact(cmn.ActLRU)
 		}
 	}
 	return
@@ -307,22 +307,23 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
 	kindDetails := []stats.XactionDetails{}
-	matching := t.xactions.selectL(kind)
-	for _, xaction := range matching {
+
+	t.xactions.kindRange(kind, func(xact cmn.Xact) {
 		status := cmn.XactionStatusCompleted
-		if !xaction.Finished() {
+		if !xact.Finished() {
 			status = cmn.XactionStatusInProgress
 		}
 		details := stats.XactionDetails{ // FIXME: redundant vs XactBase
-			ID:        xaction.ID(),
-			Kind:      xaction.Kind(),
-			Bucket:    xaction.Bucket(),
-			StartTime: xaction.StartTime(),
-			EndTime:   xaction.EndTime(),
+			ID:        xact.ID(),
+			Kind:      xact.Kind(),
+			Bucket:    xact.Bucket(),
+			StartTime: xact.StartTime(),
+			EndTime:   xact.EndTime(),
 			Status:    status,
 		}
 		kindDetails = append(kindDetails, details)
-	}
+	})
+
 	return kindDetails
 }
 
@@ -477,14 +478,15 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 }
 
 func (t *targetrunner) stopXactions(xacts []string) {
-	for _, name := range xacts {
-		xactList := t.xactions.selectL(name)
-		for _, xact := range xactList {
-			if !xact.Finished() {
-				xact.Abort()
-			}
-		}
+	sliceHas := func(name string) bool {
+		return cmn.StringInSlice(name, xacts)
 	}
+
+	t.xactions.xactsRange(sliceHas, func(xact cmn.Xact) {
+		if !xact.Finished() {
+			xact.Abort()
+		}
+	})
 }
 
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -567,14 +569,14 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 			bucketsToDelete = append(bucketsToDelete, bucket)
 		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
 			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
-				t.xactions.abortPutCopies(bucket)
+				t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
 			}
 		}
 	}
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
-	t.xactions.abortBucketSpecific(bucketsToDelete...)
+	t.xactions.abortBuckets(bucketsToDelete...)
 
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
 

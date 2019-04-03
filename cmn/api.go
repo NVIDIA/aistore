@@ -71,7 +71,9 @@ const (
 	ActElection     = "election"
 	ActPutCopies    = "putcopies"
 	ActMakeNCopies  = "makencopies"
-	ActEC           = "ec" // erasure (en)code objects
+	ActECGet        = "ecget"  // erasure decode objects
+	ActECPut        = "ecput"  // erasure encode objects
+	ActECRespond    = "ecresp" // respond to other targets' EC requests
 	ActStartGFN     = "metasync-start-gfn"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)

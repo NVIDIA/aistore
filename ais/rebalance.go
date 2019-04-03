@@ -446,16 +446,16 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 }
 
 func (reb *rebManager) abortGlobalReb() {
-	xx := reb.t.xactions.findU(cmn.ActGlobalReb)
-	if xx == nil {
+	globalRebRunning := reb.t.xactions.globalXactRunning(cmn.ActGlobalReb)
+	if !globalRebRunning {
 		glog.Infof("not running, nothing to abort")
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Error("Global rebalance is aborting...")
 	}
-	xGlobalReb := xx.(*xactGlobalReb)
-	xGlobalReb.Abort()
+
+	reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb)
 
 	pmarker := persistentMarker(globalRebType)
 	if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {

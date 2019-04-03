@@ -107,11 +107,9 @@ func (r *XactPut) Run() (err error) {
 				}
 				// it's ok not to notify ecmanager, he'll just have stoped xact in a map
 				r.stop()
-
 				return nil
 			}
 		case msg := <-r.controlCh:
-
 			if msg.Action == ActEnableRequests {
 				r.setEcRequestsEnabled()
 				break
