@@ -233,9 +233,8 @@ func (gc *collector) run() (err error) {
 				heap.Push(gc, s)
 			} else {
 				cmn.AssertMsg(ok, s.lid)
-				delete(gc.streams, s.lid)
 				heap.Remove(gc, s.time.index)
-				close(s.workCh) // delayed close
+				s.time.ticks = 1
 			}
 		case <-gc.stopCh.Listen():
 			for _, s := range gc.streams {
@@ -295,7 +294,19 @@ func (gc *collector) Pop() interface{} {
 // collector's main method
 func (gc *collector) do() {
 	for _, s := range gc.streams {
-		if atomic.LoadInt64(&s.sessST) == active {
+		if s.Terminated() {
+			s.time.ticks--
+			if s.time.ticks <= 0 {
+				delete(gc.streams, s.lid)
+				close(s.workCh) // delayed close
+				if s.term.err == nil {
+					s.term.err = fmt.Errorf(reasonUnknown)
+				}
+				for obj := range s.workCh {
+					s.objDone(&obj, s.term.err)
+				}
+			}
+		} else if atomic.LoadInt64(&s.sessST) == active {
 			gc.update(s, s.time.ticks-1)
 		}
 	}
@@ -458,9 +469,9 @@ func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
 func (s *Stream) Terminated() bool    { return atomic.LoadInt64(&s.term.barr) != 0 }
 func (s *Stream) terminate() {
+	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
 	gc.remove(s)
 	s.Stop()
-	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
 	close(s.cmplCh)
 }
 
