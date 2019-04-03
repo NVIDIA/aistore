@@ -759,7 +759,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
-		t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, false)
+		t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, true)
 		t.rtnamemap.Unlock(lom.Uname, false)
 		return
 	}
@@ -1747,7 +1747,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	if !lom.BckIsLocal {
 		bckProvider = cmn.CloudBs
 	}
-	geturl := fmt.Sprintf("%s%s?%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, bckProvider)
+	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, bckProvider, cmn.URLParamIsGFNRequest, "true")
 	//
 	// http request
 	//
@@ -1756,7 +1756,6 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 		err = fmt.Errorf("unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
 		return
 	}
-	newr.URL.Query().Add(cmn.URLParamIsGFNRequest, "true") // This is a GFN request
 
 	// Do
 	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config.Timeout.SendFile)
