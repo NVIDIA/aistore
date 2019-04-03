@@ -149,7 +149,7 @@ var (
 	port string
 
 	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
-	dockerHostIP = envVars["PRIMARYHOSTIP"]                // Host IP of primary cluster
+	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
 	dockerPort   = envVars["PORT"]
 )
 

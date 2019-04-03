@@ -33,7 +33,7 @@ const (
 // filesystem utilization enum (<- iostat)
 const (
 	StatDiskUtil = "dutil"
-	StatQueueLen = "dquel"
+	StatDiskIOms = "dioms"
 )
 
 // lomcache mask & number of those caches
@@ -139,7 +139,7 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		ioepoch:    make(map[string]int64, 2),
 	}
 	mi.iostats[StatDiskUtil] = &iotracker{}
-	mi.iostats[StatQueueLen] = &iotracker{}
+	mi.iostats[StatDiskIOms] = &iotracker{}
 	return mi
 }
 
@@ -173,9 +173,9 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	return nil
 }
 
-// GetIOStats returns the most recently updated previous/current (utilization, queue size)
+// GetIOStats returns the most recently updated previous/current
 func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
-	cmn.Assert(name == StatDiskUtil || name == StatQueueLen)
+	cmn.Assert(name == StatDiskUtil || name == StatDiskIOms)
 	tracker := mi.iostats[name]
 	p := &tracker.prev
 	prev = p.U2F()
@@ -220,8 +220,8 @@ func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
 
 func (mi *MountpathInfo) String() string {
 	_, u := mi.GetIOstats(StatDiskUtil)
-	_, q := mi.GetIOstats(StatQueueLen)
-	return fmt.Sprintf("mp[%s, fs=%s, util=d%s:q%s]", mi.Path, mi.FileSystem, u, q)
+	_, io := mi.GetIOstats(StatDiskIOms)
+	return fmt.Sprintf("mp[%s, fs=%s, util=%s, io(ms)=%s]", mi.Path, mi.FileSystem, u, io)
 }
 
 // returns fqn for a given content-type

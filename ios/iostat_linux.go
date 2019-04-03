@@ -6,9 +6,7 @@
 package ios
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -21,7 +19,6 @@ import (
 )
 
 const (
-	iostatnumdsk     = 14
 	iostatMinVersion = 11
 )
 
@@ -31,14 +28,12 @@ type (
 		stopCh      chan error    // terminate
 		syncCh      chan struct{} // synchronize disks, maps, mountpaths
 		metricNames []string
-		reader      *bufio.Reader
 		process     *os.Process  // running iostat process. Required so it can be killed later
 		ticker      *time.Ticker // logging ticker
 		fs2disks    map[string]cmn.StringSet
 		disks2mpath cmn.SimpleKVs
 		stats       struct {
 			dutil          map[string]float32           // disk utilizations (iostat's %util)
-			dquel          map[string]float32           // disk queue lengths ("avgqu-sz" or "aqu-sz")
 			availablePaths map[string]*fs.MountpathInfo // cached fs.Mountpaths.Get
 		}
 	}
@@ -66,9 +61,6 @@ func (r *IostatRunner) ReqRemoveMountpath(mpath string)  { r.syncCh <- struct{}{
 // subscribing to config changes
 func (r *IostatRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if oldConf.Periodic.IostatTime != newConf.Periodic.IostatTime {
-		if err := r.execCmd(newConf.Periodic.IostatTime); err != nil {
-			r.Stop(err)
-		}
 		r.ticker.Stop()
 		r.ticker = time.NewTicker(newConf.Periodic.IostatTime)
 	}
@@ -81,73 +73,22 @@ func (r *IostatRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 // This code parses iostat output specifically looking for "Device", "%util",  "aqu-sz" and "avgqu-sz"
 func (r *IostatRunner) Run() error {
 	var (
-		lines      cmn.SimpleKVs
-		epoch      int64
-		lm, lc     int64 // time interval: multiplier and counter
-		responseCh = make(chan string)
+		lines  cmn.SimpleKVs
+		epoch  int64
+		lm, lc int64 // time interval: multiplier and counter
 	)
 	glog.Infof("Starting %s", r.Getname())
 	r.resyncMpathsDisks()
 	d := cmn.GCO.Get().Periodic.IostatTime
-	if err := r.execCmd(d); err != nil {
-		return err
-	}
 	r.ticker = time.NewTicker(d) // epoch = one tick
 	lm = cmn.DivCeil(int64(cmn.GCO.Get().Periodic.StatsTime), int64(d))
 	lines = make(cmn.SimpleKVs, 16)
 
 	cmn.GCO.Subscribe(r)
 
-	go func() {
-		// reader loop
-		for {
-			b, err := r.reader.ReadBytes('\n')
-			if r.process == nil {
-				return
-			}
-			if err == io.EOF {
-				continue
-			} else if err != nil {
-				if err = r.retry(2); err != nil {
-					r.stopCh <- err
-					return
-				}
-			}
-			responseCh <- string(b)
-		}
-	}()
-
 	// main loop
 	for {
 		select {
-		case line := <-responseCh:
-			fields := strings.Fields(line)
-			if len(fields) < iostatnumdsk {
-				continue
-			}
-			if strings.HasPrefix(fields[0], "Device") {
-				if len(r.metricNames) == 0 {
-					r.metricNames = append(r.metricNames, fields[1:]...)
-				}
-				continue
-			}
-			device := fields[0]
-			if mpath, ok := r.disks2mpath[device]; ok {
-				mpathInfo := r.stats.availablePaths[mpath]
-				lines[device] = strings.Join(fields, ", ")
-				for i := 1; i < len(fields); i++ {
-					name := r.metricNames[i-1]
-					fieldVal, err := strconv.ParseFloat(fields[i], 32)
-					if err != nil {
-						continue
-					}
-					if name == "%util" {
-						mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(fieldVal))
-					} else if name == "aqu-sz" || name == "avgqu-sz" {
-						mpathInfo.SetIOstats(epoch, fs.StatQueueLen, float32(fieldVal))
-					}
-				}
-			}
 		case err := <-r.stopCh:
 			r.cleanup()
 			return err
@@ -156,8 +97,29 @@ func (r *IostatRunner) Run() error {
 		case <-r.ticker.C:
 			epoch++
 			lc++
+
+			fetchedDiskStats := GetDiskStats()
+			for disk, mpath := range r.disks2mpath {
+				stat, ok := fetchedDiskStats[disk]
+				if !ok {
+					continue
+				}
+				mpathInfo := r.stats.availablePaths[mpath]
+
+				mpathInfo.SetIOstats(epoch, fs.StatDiskIOms, float32(stat.IOMs))
+				if prev, cur := mpathInfo.GetIOstats(fs.StatDiskIOms); prev.Max != 0 {
+					msElapsed := d.Nanoseconds() / (1000 * 1000) //convert to Milliseconds
+					mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(cur.Max-prev.Max)*100/float32(msElapsed))
+				}
+
+				if lc >= lm {
+					lines[disk] = stat.ToString()
+				}
+			}
+
 			if lc >= lm {
 				log(lines)
+				lines = make(cmn.SimpleKVs, 16)
 				lc = 0
 			}
 		}
@@ -206,35 +168,12 @@ func CheckIostatVersion() error {
 // private methods
 //
 
-func (r *IostatRunner) execCmd(period time.Duration) error {
-	if r.process != nil {
-		// kill previous process if running - can happen on config change
-		if err := r.process.Kill(); err != nil {
-			return err
-		}
-	}
-
-	refreshPeriod := int(period / time.Second)
-	cmd := exec.Command("iostat", "-dxm", strconv.Itoa(refreshPeriod)) // the iostat command
-	stdout, err := cmd.StdoutPipe()
-	r.reader = bufio.NewReader(stdout)
-	if err != nil {
-		return err
-	}
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-	r.process = cmd.Process
-	return nil
-}
-
 // "resync" gets triggered by mountpath changes which may or may not coincide with
 // disk degraded/faulted/removed/added type changes - TODO
 func (r *IostatRunner) resyncMpathsDisks() {
 	availablePaths, _ := fs.Mountpaths.Get()
 	l := len(availablePaths)
 	r.stats.dutil = make(map[string]float32, l)
-	r.stats.dquel = make(map[string]float32, l)
 	r.stats.availablePaths, _ = fs.Mountpaths.Get()
 	r.fs2disks = make(map[string]cmn.StringSet, len(availablePaths))
 	r.disks2mpath = make(cmn.SimpleKVs, 16)
@@ -249,22 +188,7 @@ func (r *IostatRunner) resyncMpathsDisks() {
 			r.disks2mpath[dev] = mpath
 		}
 		r.stats.dutil[mpath] = -1
-		r.stats.dquel[mpath] = -1
 	}
-}
-
-func (r *IostatRunner) retry(cnt int) (err error) {
-	for i := 0; i < cnt; i++ {
-		time.Sleep(time.Second)
-		if _, err = r.reader.ReadBytes('\n'); err == nil {
-			return
-		} else if err == io.EOF {
-			err = nil
-			continue
-		}
-		glog.Errorf("Error reading StdoutPipe %v, retrying #%d", err, i+1)
-	}
-	return
 }
 
 func (r *IostatRunner) cleanup() {

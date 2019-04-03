@@ -307,9 +307,9 @@ func TestStoreLoadIostat(t *testing.T) {
 		t.Fatal("Expecting to get /tmp")
 	}
 	mi.SetIOstats(1, StatDiskUtil, 0.7)
-	mi.SetIOstats(1, StatQueueLen, 1.3)
+	mi.SetIOstats(1, StatDiskIOms, 1.3)
 	mi.SetIOstats(2, StatDiskUtil, 1.4)
-	mi.SetIOstats(2, StatQueueLen, 2.6)
+	mi.SetIOstats(2, StatDiskIOms, 2.6)
 
 	//
 	// test various min/max, previous/current transitions
@@ -330,13 +330,13 @@ func TestStoreLoadIostat(t *testing.T) {
 	if curr.Min != 1.4 || curr.Max != math.E {
 		t.Errorf("Wrong curr stats %s, expecting (0.7, 0.7)", curr)
 	}
-	mi.SetIOstats(2, StatQueueLen, math.Pi/3)
-	prev, curr = mi.GetIOstats(StatQueueLen)
+	mi.SetIOstats(2, StatDiskIOms, math.Pi/3)
+	prev, curr = mi.GetIOstats(StatDiskIOms)
 	if prev.Min != 1.3 || curr.Min != math.Pi/3 {
 		t.Errorf("Wrong stats [%s:%s], expecting (min=1.3, min=%f)", prev, curr, math.Pi/3)
 	}
-	mi.SetIOstats(3, StatQueueLen, math.Pi)
-	prev, curr = mi.GetIOstats(StatQueueLen)
+	mi.SetIOstats(3, StatDiskIOms, math.Pi)
+	prev, curr = mi.GetIOstats(StatDiskIOms)
 	if prev.Min != math.Pi/3 || prev.Max != 2.6 || curr.Max != math.Pi {
 		t.Errorf("Wrong stats [%s:%s], expecting (%f, %f)", prev, curr, math.Pi/3, math.Pi)
 	}
