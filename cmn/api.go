@@ -403,6 +403,7 @@ type DlJobInfo struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
 	NumPending  int    `json:"num_pending"`
+	Cancelled   bool   `json:"cancelled"`
 }
 
 func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
@@ -628,6 +629,10 @@ func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
 	return objects, nil
 }
 
+func (b *DlSingleBody) Describe() string {
+	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bucket, b.Objname)
+}
+
 func (b *DlSingleBody) String() string {
 	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
 }
@@ -680,6 +685,10 @@ func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
 		objects[objname] = b.Base + objname
 	}
 	return objects, nil
+}
+
+func (b *DlRangeBody) Describe() string {
+	return fmt.Sprintf("%s%s -> %s", b.Base, b.Template, b.Bucket)
 }
 
 func (b *DlRangeBody) String() string {
@@ -739,6 +748,10 @@ func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, err
 	return objects, nil
 }
 
+func (b *DlMultiBody) Describe() string {
+	return fmt.Sprintf("multi-download -> %s", b.Bucket)
+}
+
 func (b *DlMultiBody) String() string {
 	return fmt.Sprintf("bucket: %q", b.Bucket)
 }
@@ -771,6 +784,10 @@ func (b *DlCloudBody) AsQuery() url.Values {
 	query.Add(URLParamPrefix, b.Prefix)
 	query.Add(URLParamSuffix, b.Suffix)
 	return query
+}
+
+func (b *DlCloudBody) Describe() string {
+	return fmt.Sprintf("cloud prefetch -> %s", b.Bucket)
 }
 
 const (

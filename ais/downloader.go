@@ -368,6 +368,8 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 		objectsPayload interface{}
 
 		bckIsLocal, fromCloud, ok bool
+
+		description string
 	)
 
 	payload.InitWithQuery(query)
@@ -391,11 +393,13 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		description = singlePayload.Describe()
 	} else if err := rangePayload.Validate(); err == nil {
 		if objects, err = rangePayload.ExtractPayload(); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		description = rangePayload.Describe()
 	} else if err := multiPayload.Validate(b); err == nil {
 		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -406,6 +410,7 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		description = multiPayload.Describe()
 	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
 		msg := cmn.SelectMsg{
 			Prefix:     cloudPayload.Prefix,
@@ -439,9 +444,14 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 			objects[entry.Name] = ""
 		}
 		fromCloud = true
+		description = cloudPayload.Describe()
 	} else {
 		p.invalmsghdlr(w, r, "invalid query keys or query values")
 		return
+	}
+
+	if payload.Description == "" {
+		payload.Description = description
 	}
 
 	if err := p.bulkDownloadProcessor(id, payload, objects, fromCloud); err != nil {

@@ -776,6 +776,7 @@ func (d *Downloader) dispatchList(req *request) {
 			ID:          r.ID,
 			Description: r.Description,
 			NumPending:  d.getNumPending(&r),
+			Cancelled:   r.Cancelled,
 		}
 	}
 	req.writeResp(respMap)
