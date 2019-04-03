@@ -44,17 +44,20 @@ import (
 // ================================ Background ===========================================
 
 const (
-	chanCap = 1024
-	LowWM   = 60
-	HighWM  = 80
+	chanCap      = 256
+	jmapInitSize = 32
+	LowWM        = 60
+	HighWM       = 80
 )
 
 const (
-	atimeTouch = "touch"
-	atimeGet   = "get"
+	atimeTouch = iota
+	atimeGet
 )
 
-var atimeSyncTime = time.Minute * 2 // TODO: adjust at runtime
+var (
+	atimeSyncTime = time.Minute * 2 // TODO: adjust at runtime
+)
 
 //
 // API types
@@ -70,9 +73,10 @@ type (
 		requestCh  chan *atimeRequest // Requests for file access times or set access times
 		stopCh     chan struct{}      // Control channel for stopping
 		mpathReqCh chan fs.ChangeReq
+		enabledCh  chan bool
 		joggers    map[string]*jogger // mpath -> jogger
 		mountpaths *fs.MountedFS
-		riostat    *ios.IostatRunner
+		ticker     *time.Ticker
 	}
 	// The Response object is used to return the access time of
 	// an object in the atimemap and whether it actually existed in
@@ -95,7 +99,6 @@ type (
 		getCh     chan *atimeRequest   // Requests for file access times
 		setCh     chan *atimeRequest   // Requests to set access times
 		flushCh   chan struct{}        // Request to flush atimes
-		riostat   *ios.IostatRunner
 	}
 
 	// Each request to atime.Runner via its API is encapsulated in an
@@ -109,7 +112,7 @@ type (
 		accessTime  time.Time
 		responseCh  chan *Response
 		mpath       string
-		requestType string
+		requestType int // atimeTouch || atimeGet
 	}
 )
 
@@ -123,20 +126,32 @@ func (r *Runner) ReqRemoveMountpath(mpath string)  { r.mpathReqCh <- fs.Mountpat
 func (r *Runner) ReqEnableMountpath(mpath string)  {}
 func (r *Runner) ReqDisableMountpath(mpath string) {}
 
+/*
+ * subscribing to config changes
+ */
+var _ cmn.ConfigListener = &Runner{}
+
+func (r *Runner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	if oldConf.LRU.AtimerEnabled != newConf.LRU.AtimerEnabled {
+		r.enabledCh <- newConf.LRU.AtimerEnabled
+	}
+}
+
 //================================ atime.Runner ==========================================
 
-func NewRunner(mountpaths *fs.MountedFS, riostat *ios.IostatRunner) (r *Runner) {
+func NewRunner(mountpaths *fs.MountedFS) (r *Runner) {
 	return &Runner{
 		stopCh:     make(chan struct{}, 4),
 		mpathReqCh: make(chan fs.ChangeReq, 1),
-		joggers:    make(map[string]*jogger, 8),
+		enabledCh:  make(chan bool, 1),
 		mountpaths: mountpaths,
 		requestCh:  make(chan *atimeRequest),
-		riostat:    riostat,
 	}
 }
 
 func (r *Runner) init() {
+	r.joggers = make(map[string]*jogger, 8)
+	r.ticker = time.NewTicker(atimeSyncTime)
 	availablePaths, disabledPaths := r.mountpaths.Get()
 	for mpath := range availablePaths {
 		r.addJogger(mpath)
@@ -146,14 +161,52 @@ func (r *Runner) init() {
 	}
 }
 
+func (r *Runner) term() {
+	if r.ticker != nil {
+		r.ticker.Stop()
+		r.ticker = nil
+	}
+	// NOTE: not flushing cached atimes
+	for _, jogger := range r.joggers {
+		jogger.stop()
+		jogger.atimemap = nil
+	}
+}
+
 // Run initiates the work of the receiving atime.Runner
 func (r *Runner) Run() error {
 	glog.Infof("Starting %s", r.Getname())
-	ticker := time.NewTicker(atimeSyncTime)
-	r.init()
+
+	cmn.GCO.Subscribe(r)
+	config := cmn.GCO.Get()
+	if config.LRU.AtimerEnabled {
+		goto run
+	}
+pause:
+	glog.Warningf("Atimer %s is disabled and won't handle any atime updates", r.Getname())
+	glog.Warning("including those that result from object migration and replication")
 	for {
 		select {
-		case <-ticker.C:
+		case enabled := <-r.enabledCh:
+			if enabled {
+				goto run
+			}
+		case <-r.mpathReqCh:
+		case request := <-r.requestCh:
+			if request.requestType == atimeGet {
+				request.responseCh <- &Response{}
+			}
+		case <-r.stopCh:
+			r.term()
+			return nil
+		}
+	}
+run:
+	r.init()
+	glog.Infof("Running %s", r.Getname())
+	for {
+		select {
+		case <-r.ticker.C:
 			for _, jogger := range r.joggers {
 				jogger.flushCh <- struct{}{}
 			}
@@ -172,16 +225,17 @@ func (r *Runner) Run() error {
 				} else {
 					jogger.getCh <- request
 				}
-			} else if request.requestType == atimeGet {
-				// invalid mpath so return a nil time for atime request
-				request.responseCh <- &Response{AccessTime: time.Time{}, Ok: false}
+			} else if request.requestType == atimeGet { // invalid mpath
+				request.responseCh <- &Response{}
 			}
 		case <-r.stopCh:
-			ticker.Stop() // NOTE: not flushing cached atimes
-			for _, jogger := range r.joggers {
-				jogger.stop()
-			}
+			r.term()
 			return nil
+		case enabled := <-r.enabledCh:
+			if !enabled {
+				r.term()
+				goto pause
+			}
 		}
 	}
 }
@@ -249,7 +303,8 @@ func (r *Runner) Atime(fqn, mpath string, customRespCh ...chan *Response) (respo
 
 // convenience method to obtain atime from the (atime) cache or the file itself,
 // and format accordingly
-func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache bool, format ...string) (atimestr string, atime time.Time, err error) {
+func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache bool,
+	format ...string) (atimestr string, atime time.Time, err error) {
 	var (
 		atimeResp *Response
 		finfo     os.FileInfo
@@ -293,7 +348,7 @@ func (r *Runner) addJogger(mpath string) {
 		glog.Errorf("Attempt to add mountpath %q with no corresponding filesystem", mpath)
 		return
 	}
-	jogger := r.newJogger(mpathInfo, r.riostat)
+	jogger := r.newJogger(mpathInfo)
 	r.joggers[mpath] = jogger
 	go jogger.jog()
 }
@@ -305,20 +360,20 @@ func (r *Runner) removeJogger(mpath string) {
 		return
 	}
 	jogger.stop()
+	jogger.atimemap = nil
 	delete(r.joggers, mpath)
 }
 
 //================================= jogger ===========================================
 
-func (r *Runner) newJogger(mpathInfo *fs.MountpathInfo, riostat *ios.IostatRunner) *jogger {
+func (r *Runner) newJogger(mpathInfo *fs.MountpathInfo) *jogger {
 	return &jogger{
 		mpathInfo: mpathInfo,
 		stopCh:    make(chan struct{}, 1),
-		atimemap:  make(map[string]time.Time),
+		atimemap:  make(map[string]time.Time, jmapInitSize),
 		getCh:     make(chan *atimeRequest),
 		setCh:     make(chan *atimeRequest, chanCap),
 		flushCh:   make(chan struct{}, 16),
-		riostat:   riostat,
 	}
 }
 

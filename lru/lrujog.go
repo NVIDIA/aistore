@@ -76,13 +76,18 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		return err
 	}
 	var (
-		h   = lctx.heap
-		lom = &cluster.LOM{T: lctx.ini.T, FQN: fqn}
+		h           = lctx.heap
+		lom         = &cluster.LOM{T: lctx.ini.T, FQN: fqn}
+		bckProvider = cluster.GenBucketProvider(lctx.bckIsLocal)
 	)
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || !lom.Exists() {
+	errstr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomAtime, lctx.config)
+	if errstr != "" || !lom.Exists() {
 		if glog.V(4) {
-			glog.Infof("Warning: %s", errstr)
+			glog.Infof("Warning: %s %s", lom, errstr)
 		}
+		return nil
+	}
+	if !lom.LRUEnabled() {
 		return nil
 	}
 	// workfiles: evict old or do nothing

@@ -177,6 +177,7 @@ func dryinit() {
 func aisinit(version, build string) {
 	var (
 		err         error
+		config      *cmn.Config
 		confChanged bool
 	)
 	flag.Parse()
@@ -191,9 +192,8 @@ func aisinit(version, build string) {
 		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")
 		os.Exit(2)
 	}
-	confChanged = cmn.LoadConfig(&clivars.config)
+	config, confChanged = cmn.LoadConfig(&clivars.config)
 	if confChanged {
-		config := cmn.GCO.Get()
 		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config); err != nil {
 			glog.Errorf("CLI %s: failed to write, err: %v", cmn.ActSetConfig, err)
 			os.Exit(1)
@@ -250,9 +250,8 @@ func aisinit(version, build string) {
 		sc := transport.Init()
 		ctx.rg.add(sc, xstreamc)
 
-		// fs.Mountpaths must be inited prior to all runners that utilize all
-		// or run per filesystem(s); for mountpath definition, see fs/mountfs.go
-		config := cmn.GCO.Get()
+		// fs.Mountpaths must be inited prior to all runners that utilize them
+		// for mountpath definition, see fs/mountfs.go
 		if cmn.TestingEnv() {
 			glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
 			fs.Mountpaths.DisableFsIDCheck()
@@ -267,7 +266,6 @@ func aisinit(version, build string) {
 				glog.Fatal(err)
 			}
 		}
-		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init
 
 		iostat := ios.NewIostatRunner()
 		ctx.rg.add(iostat, xiostat)
@@ -287,14 +285,11 @@ func aisinit(version, build string) {
 			t.readahead = &dummyreadahead{}
 		}
 
-		// TODO: not ready yet but will be
-		// replRunner := newReplicationRunner(t, fs.Mountpaths)
-		// ctx.rg.add(replRunner, xreplication, nil)
-		// t.fsprg.Reg(replRunner)
-
-		atime := atime.NewRunner(fs.Mountpaths, iostat)
+		atime := atime.NewRunner(fs.Mountpaths)
 		ctx.rg.add(atime, xatime)
 		t.fsprg.Reg(atime)
+
+		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 

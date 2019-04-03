@@ -86,7 +86,7 @@ type (
 	fscapacity struct {
 		Used    uint64 `json:"used"`    // bytes
 		Avail   uint64 `json:"avail"`   // ditto
-		Usedpct int64  `json:"usedpct"` // redundant ok
+		Usedpct int32  `json:"usedpct"` // redundant ok
 	}
 )
 
@@ -174,11 +174,11 @@ func (r *Trunner) housekeep(runlru bool) {
 
 func (r *Trunner) UpdateCapacityOOS() (runlru bool) {
 	var (
-		avgUsed                int64
 		config                 = cmn.GCO.Get()
 		availableMountpaths, _ = fs.Mountpaths.Get()
+		usedNow                int32
 		l                      = len(availableMountpaths)
-		oos                    = r.T.OOS()
+		_, oosPrv              = r.T.AvgCapUsed(config)
 	)
 	if l == 0 {
 		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
@@ -193,25 +193,26 @@ func (r *Trunner) UpdateCapacityOOS() (runlru bool) {
 		}
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
-		if fsCap.Usedpct >= config.LRU.HighWM {
+		if fsCap.Usedpct >= int32(config.LRU.HighWM) {
 			runlru = true
 		}
-		avgUsed += fsCap.Usedpct
+		usedNow += fsCap.Usedpct
 	}
 	r.Capacity = capacities
+
 	// handle out-of-space
-	avgUsed /= int64(l)
-	if oos && avgUsed < config.LRU.HighWM {
-		r.T.OOS(false)
+	usedNow /= int32(l)
+	_, oosNow := r.T.AvgCapUsed(config, usedNow)
+
+	if oosPrv && !oosNow {
 		r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 		glog.Infof("OOS resolved: avg used = %d%% < (hwm %d%%) across %d mountpath(s)",
-			avgUsed, config.LRU.HighWM, l)
+			usedNow, config.LRU.HighWM, l)
 		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
 		glog.Infof("PUTs are allowed to proceed, next capacity check in %v", t)
-	} else if !oos && avgUsed > config.LRU.OOS {
-		r.T.OOS(true)
+	} else if !oosPrv && oosNow {
 		r.timecounts.capLimit = cmn.MinI64(r.timecounts.capLimit, 2)
-		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", avgUsed, config.LRU.OOS, l)
+		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", usedNow, config.LRU.OOS, l)
 		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
 		glog.Warningf("OOS: disallowing new PUTs and checking capacity every %v", t)
 	}
@@ -301,6 +302,6 @@ func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
 	return &fscapacity{
 		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
 		Avail:   statfs.Bavail * uint64(statfs.Bsize),
-		Usedpct: int64(pct),
+		Usedpct: int32(pct),
 	}
 }

@@ -56,8 +56,8 @@ const (
 )
 
 var (
-	HighWaterMark    = uint32(80)
-	LowWaterMark     = uint32(60)
+	HighWaterMark    = int32(80)
+	LowWaterMark     = int32(60)
 	UpdTime          = time.Second * 20
 	configRegression = map[string]string{
 		"stats_time":        fmt.Sprintf("%v", UpdTime),
@@ -642,12 +642,12 @@ func TestGetClusterStats(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Usedpct")
 			}
-			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || usedpct != fstats.Usedpct {
+			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || usedpct != int64(fstats.Usedpct) {
 				t.Errorf("Stats are different when queried from Target and Proxy: "+
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
 					tfstats["used"], fstats.Used, tfstats["avail"], fstats.Avail, tfstats["usedpct"], fstats.Usedpct)
 			}
-			if fstats.Usedpct > int64(HighWaterMark) {
+			if fstats.Usedpct > int32(HighWaterMark) {
 				t.Error("Used Percentage above High Watermark")
 			}
 		}
@@ -716,7 +716,7 @@ func TestConfig(t *testing.T) {
 func TestLRU(t *testing.T) {
 	var (
 		errCh    = make(chan error, 100)
-		usedpct  = 100
+		usedpct  = int32(100)
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -754,7 +754,7 @@ func TestLRU(t *testing.T) {
 	for k, v := range stats.Target {
 		bytesEvictedOrig[k], filesEvictedOrig[k] = getNamedTargetStats(v, "lru.evict.size"), getNamedTargetStats(v, "lru.evict.n")
 		for _, c := range v.Capacity {
-			usedpct = cmn.Min(usedpct, int(c.Usedpct))
+			usedpct = cmn.MinI32(usedpct, c.Usedpct)
 		}
 	}
 	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
@@ -826,7 +826,7 @@ func TestLRU(t *testing.T) {
 			continue
 		}
 		for mpath, c := range v.Capacity {
-			if c.Usedpct < int64(lowwm-1) || c.Usedpct > int64(lowwm+1) {
+			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
 				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)
 			}
 		}

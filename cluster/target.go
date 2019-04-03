@@ -9,13 +9,14 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/atime"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
 // For implementations, please refer to ais/target.go
 type Target interface {
-	OOS(oos ...bool) bool
+	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
 	IsRebalancing() bool
 	RunLRU()
 	PrefetchQueueLen() int

@@ -234,7 +234,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		return err
 	}
 
-	if errstr := req.LOM.Persist(false); errstr != "" {
+	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
 		writer.Free()
 		return errors.New(errstr)
 	}
@@ -304,7 +304,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		return err
 	}
 
-	if errstr := req.LOM.Persist(false); errstr != "" {
+	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
 		return errors.New(errstr)
 	}
 
@@ -592,7 +592,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		return restored, err
 	}
 	<-c.diskCh
-	if errstr := req.LOM.Persist(false); errstr != "" {
+	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
 		return restored, errors.New(errstr)
 	}
 

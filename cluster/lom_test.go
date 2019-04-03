@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -571,7 +570,7 @@ var _ = Describe("LOM", func() {
 //
 
 func setupMockRunner(t *cluster.TargetMock) {
-	t.Atime = atime.NewRunner(fs.Mountpaths, ios.NewIostatRunner())
+	t.Atime = atime.NewRunner(fs.Mountpaths)
 	go t.Atime.Run()
 }
 

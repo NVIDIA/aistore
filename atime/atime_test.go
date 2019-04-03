@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 const (
@@ -19,7 +18,6 @@ const (
 )
 
 var (
-	riostat     *ios.IostatRunner
 	statsPeriod = time.Second
 	mpath       = "/tmp"
 )
@@ -29,13 +27,12 @@ func init() {
 	fs.Mountpaths.Add(mpath)
 
 	updateTestConfig(statsPeriod)
-	riostat = ios.NewIostatRunner()
 }
 
 func TestAtimerunnerStop(t *testing.T) {
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 	go atimer.Run()
 	time.Sleep(100 * time.Millisecond) // FIXME
 	atimer.ReqAddMountpath(mpath)
@@ -60,7 +57,7 @@ func TestAtimerunnerStop(t *testing.T) {
 func TestAtimerunnerTouch(t *testing.T) {
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -94,11 +91,10 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	defer func() { fs.Mountpaths = q }()
 
 	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner()
 
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, iostatr)
+	atimer := NewRunner(fs.Mountpaths)
 
 	go atimer.Run()
 	time.Sleep(50 * time.Millisecond)
@@ -113,7 +109,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 }
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 
@@ -138,7 +134,7 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -179,7 +175,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	fileName1 := "/tmp/cloud/bck1/fqn1"
 	fileName2 := "/tmp/local/bck2/fqn2"
 
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -213,12 +209,10 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	fileName1 := "/tmp/local/bck1/fqn1"
 	fileName2 := "/tmp/cloud/bck2/fqn2"
 
-	atimer := NewRunner(fs.Mountpaths, riostat)
+	atimer := NewRunner(fs.Mountpaths)
 
-	go riostat.Run()
 	go atimer.Run()
 	defer func() {
-		riostat.Stop(nil)
 		atimer.Stop(nil)
 	}()
 
@@ -251,5 +245,6 @@ func updateTestConfig(d time.Duration) {
 	config.Periodic.StatsTime = d
 	config.Periodic.IostatTime = time.Second
 	config.LRU.AtimeCacheMax = maxMapSize
+	config.LRU.AtimerEnabled = true
 	cmn.GCO.CommitUpdate(config)
 }

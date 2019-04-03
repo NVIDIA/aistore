@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/atime"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -31,7 +32,9 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	}
 }
 
-func (t *TargetMock) OOS(oos ...bool) bool          { return false }
+func (t *TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
+	return 0, false
+}
 func (t *TargetMock) IsRebalancing() bool           { return false }
 func (t *TargetMock) RunLRU()                       {}
 func (t *TargetMock) PrefetchQueueLen() int         { return 0 }

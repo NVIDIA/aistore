@@ -101,17 +101,10 @@ type (
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
-
 	recvObjInfo struct {
 		t       *targetrunner
-		objname string
 		bucket  string
-		// Determines if the object was already in cluster and was received
-		// because some kind of migration.
-		migrated bool
-		// Determines if the recv is cold recv: either from another cluster or cloud.
-		cold bool
-
+		objname string
 		// Reader with the content of the object.
 		r io.ReadCloser
 		// Checksum which needs to be checked on receive. It is only checked
@@ -120,17 +113,18 @@ type (
 		// Context used when receiving object which is contained in cloud bucket.
 		// It usually contains credentials to access the cloud.
 		ctx context.Context
-
 		// User specified parameter to determine which bucket to put object
 		bckProvider string
-
-		// INTERNAL
-
 		// FQN which is used only temporarily for receiving file. After
 		// successful receive is renamed to actual FQN.
 		workFQN string
 		started time.Time // started time of receiving - used to calculate the recv duration
 		lom     *cluster.LOM
+		// Determines if the object was already in cluster and was received
+		// because some kind of migration.
+		migrated bool
+		// Determines if the recv is cold recv: either from another cluster or cloud.
+		cold bool
 	}
 
 	// The state that may influence GET logic when mountpath is added/enabled
@@ -145,6 +139,12 @@ type (
 		smap         unsafe.Pointer // new smap which will be soon live
 	}
 
+	capUsed struct {
+		sync.RWMutex
+		used int32
+		oos  bool
+	}
+
 	targetrunner struct {
 		httprunner
 		cloudif        cloudif // multi-cloud backend
@@ -153,12 +153,12 @@ type (
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
 		clusterStarted int32
-		oos            int32 // out of space
 		fsprg          fsprungroup
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
 		ecmanager      *ecManager
 		rebManager     *rebManager
+		capUsed        capUsed
 		gfn            struct {
 			local  localGFN
 			global globalGFN
@@ -495,16 +495,23 @@ func (t *targetrunner) unregister() (int, error) {
 // implements cluster.Target interfaces
 var _ cluster.Target = &targetrunner{}
 
-func (t *targetrunner) OOS(oos ...bool) bool {
-	if len(oos) > 0 {
-		var v int32
-		if oos[0] {
-			v = 2019
+func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
+	if len(used) > 0 {
+		t.capUsed.Lock()
+		t.capUsed.used = used[0]
+		if t.capUsed.oos && t.capUsed.used < int32(config.LRU.HighWM) {
+			t.capUsed.oos = false
+		} else if !t.capUsed.oos && t.capUsed.used > int32(config.LRU.OOS) {
+			t.capUsed.oos = true
 		}
-		atomic.StoreInt32(&t.oos, v)
-		return v != 0
+		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
+		t.capUsed.Unlock()
+	} else {
+		t.capUsed.RLock()
+		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
+		t.capUsed.RUnlock()
 	}
-	return atomic.LoadInt32(&t.oos) != 0
+	return
 }
 
 func (t *targetrunner) IsRebalancing() bool {
@@ -1008,9 +1015,9 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		return
 	}
 
-	// Don't update atime if the request is a GFN.
+	// GFN: atime must be already set by the getFromNeighbor
 	if !coldGet && r.URL.Query().Get(cmn.URLParamIsGFNRequest) != "true" {
-		lom.UpdateAtime(started)
+		lom.UpdateAtime(started, false /* migrated */)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
@@ -1080,7 +1087,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
 	)
-
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1098,7 +1104,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if !t.verifyProxyRedirection(w, r, bucket, objname, cmn.Objects) {
 		return
 	}
-	if t.OOS() {
+	if _, oos := t.AvgCapUsed(nil); oos {
 		t.invalmsghdlr(w, r, "OOS")
 		return
 	}
@@ -1782,9 +1788,9 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	roi := &recvObjInfo{
 		t:        t,
 		workFQN:  workFQN,
-		migrated: true,
 		r:        response.Body,
 		lom:      remoteLOM,
+		migrated: true,
 	}
 
 	if err = roi.writeToFile(); err != nil {
@@ -1794,12 +1800,14 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	if err = cmn.MvFile(workFQN, remoteLOM.FQN); err != nil {
 		return
 	}
-	if errstr := remoteLOM.Persist(false); errstr != "" {
+	if errstr := remoteLOM.PersistCksumVer(); errstr != "" {
 		err = errors.New(errstr)
 		return
 	}
+	remoteLOM.UpdateAtime(atime, true /* migrated */)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Success: %s (%s, %s) from %s", remoteLOM, cmn.B2S(remoteLOM.Size, 1), remoteLOM.Cksum, neighsi)
+		glog.Infof("Success: %s (%s, %s) from %s",
+			remoteLOM, cmn.B2S(remoteLOM.Size, 1), remoteLOM.Cksum, neighsi)
 	}
 	return
 }
@@ -1911,7 +1919,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		return
 	}
 	lom.RestoredReceived(props)
-	if errstr = lom.Persist(false); errstr != "" {
+	if errstr = lom.PersistCksumVer(); errstr != "" {
 		return
 	}
 ret:
@@ -2479,8 +2487,6 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT: %s/%s, %d µs", roi.bucket, roi.objname, int64(delta/time.Microsecond))
 	}
-
-	roi.t.localMirror(roi.lom)
 	return nil, 0
 }
 
@@ -2495,15 +2501,13 @@ func (roi *recvObjInfo) commit() (errstr string, errCode int) {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, roi.workFQN, err)
 			}
 		}
-		roi.lom.SetExists(true)
+		roi.lom.SetExists(false)
+		return
 	}
-
-	if !roi.migrated && errstr == "" {
-		if err := roi.t.ecmanager.EncodeObject(roi.lom); err != nil && err != ec.ErrorECDisabled {
-			errstr = err.Error()
-		}
+	if err := roi.t.ecmanager.EncodeObject(roi.lom); err != nil && err != ec.ErrorECDisabled {
+		errstr = err.Error()
 	}
-
+	roi.t.localMirror(roi.lom)
 	return
 }
 
@@ -2540,9 +2544,13 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		errstr = fmt.Sprintf("MvFile failed => %s: %v", roi.lom, err)
 		return
 	}
-	if errstr = roi.lom.Persist(roi.migrated); errstr != "" {
+	if errstr = roi.lom.PersistCksumVer(); errstr != "" {
 		glog.Errorf("failed to persist %s: %s", roi.lom, errstr)
 	}
+	if roi.migrated {
+		roi.lom.UpdateAtime(roi.lom.Atime, true /* migrated */)
+	}
+
 	roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
 	return
 }

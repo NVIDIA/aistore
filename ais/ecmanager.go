@@ -233,7 +233,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
-	if lom.T.OOS() {
+	if _, oos := lom.T.AvgCapUsed(nil); oos {
 		return errors.New("OOS") // out of space
 	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)

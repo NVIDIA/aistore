@@ -220,7 +220,7 @@ ExtractAllShards:
 					m.releaseExtractSema()
 					return newAbortError(m.ManagerUUID)
 				}
-				if m.ctx.t.OOS() {
+				if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
 					m.releaseExtractSema()
 					return errors.New("out of space")
 				}
@@ -355,7 +355,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	m.acquireCreateSema()
 	defer m.releaseCreateSema()
 
-	if m.ctx.t.OOS() {
+	if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
 		return errors.New("out of space")
 	}
 
@@ -389,7 +389,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	if errStr := lom.Persist(false); errStr != "" {
+	if errStr := lom.PersistCksumVer(); errStr != "" {
 		return errors.New(errStr)
 	}
 

@@ -210,7 +210,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				lom.Cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
 			}
 
-			if errstr := lom.Persist(false); errstr != "" {
+			if errstr := lom.PersistCksumVer(); errstr != "" {
 				err = errors.New(errstr)
 			}
 		}

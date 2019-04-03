@@ -29,7 +29,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 var (
@@ -132,11 +131,9 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	}
 
 	updateTestConfig(time.Second)
-	iostatr := ios.NewIostatRunner()
-	atimer := NewRunner(fs.Mountpaths, iostatr)
+	atimer := NewRunner(fs.Mountpaths)
 
 	go atimer.Run()
-	go iostatr.Run()
 	for _, mpath := range mpaths {
 		atimer.ReqAddMountpath(mpath)
 	}

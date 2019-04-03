@@ -366,6 +366,10 @@ type LRUConf struct {
 
 	// Enabled: LRU will only run when set to true
 	Enabled bool `json:"enabled"`
+
+	// enable/disable atimer
+	// Warning: disabled atimer won't handle atime-setting for migrated/replicated objects
+	AtimerEnabled bool `json:"atimer_enabled"`
 }
 
 type XactionConf struct {
@@ -487,10 +491,10 @@ type DownloaderConf struct {
 // config functions
 //
 //==============================
-func LoadConfig(clivars *ConfigCLI) (changed bool) {
+func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	GCO.SetConfigFile(clivars.ConfFile)
 
-	config := GCO.BeginUpdate()
+	config = GCO.BeginUpdate()
 	defer GCO.CommitUpdate(config)
 
 	err := LocalLoad(clivars.ConfFile, &config)
@@ -937,6 +941,8 @@ func (conf *Config) update(key, value string) error {
 	// LRU
 	case "lru_enabled", "lru.enabled":
 		return updateValue(&conf.LRU.Enabled, &conf.LRU)
+	case "atimer_enabled", "lru.atimer_enabled":
+		return updateValue(&conf.LRU.AtimerEnabled, &conf.LRU)
 	case "lowwm", "lru.lowwm":
 		return updateValue(&conf.LRU.LowWM, &conf.LRU)
 	case "highwm", "lru.highwm":

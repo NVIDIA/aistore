@@ -189,7 +189,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (err error) {
 	if err = cmn.CopyFile(lom.FQN, dstLOM.FQN, buf); err != nil {
 		return
 	}
-	if errstr := dstLOM.Persist(false); errstr != "" {
+	if errstr := dstLOM.PersistCksumVer(); errstr != "" {
 		err = errors.New(errstr)
 	}
 	return
@@ -265,7 +265,7 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 		}
 		cprovider := lom.Config.CloudProvider
 		if !lom.BckIsLocal && (cprovider == "" || cprovider == cmn.ProviderAIS) {
-			// TODO: Differentiate between no cloud provider and nonexistent bucket
+			// TODO: differentiate between (no cloud provider) and (nonexistent bucket)
 			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s) or nonexistent bucket", lom, cprovider)
 			return
 		}
@@ -338,8 +338,11 @@ func (lom *LOM) BadCksumErr(cksum cmn.CksumProvider) (errstr string) {
 	return
 }
 
-// xattrs
-func (lom *LOM) Persist(setAtime bool) (errstr string) {
+// xattrs: cmn.XattrXXHash and cmn.XattrVersion
+// NOTE:
+// - cmn.XattrCopies is updated separately by the 2-way mirroring code
+// - atime is also updated explicitly via UpdateAtime()
+func (lom *LOM) PersistCksumVer() (errstr string) {
 	if lom.Cksum != nil {
 		_, cksumValue := lom.Cksum.Get()
 		if errstr = fs.SetXattr(lom.FQN, cmn.XattrXXHash, []byte(cksumValue)); errstr != "" {
@@ -349,24 +352,18 @@ func (lom *LOM) Persist(setAtime bool) (errstr string) {
 	if lom.Version != "" {
 		errstr = fs.SetXattr(lom.FQN, cmn.XattrVersion, []byte(lom.Version))
 	}
-	if setAtime {
-		lom.UpdateAtime(lom.Atime)
-	}
-
-	//       cmn.XattrCopies is also updated separately by the 2-way mirroring code
 	return
 }
 
-func (lom *LOM) UpdateAtime(at time.Time) {
+func (lom *LOM) UpdateAtime(at time.Time, migrated bool) {
 	lom.Atime = at
 	if at.IsZero() {
 		return
 	}
-	if !lom.LRUEnabled() {
-		return
+	if lom.LRUEnabled() || migrated {
+		ratime := lom.T.GetAtimeRunner()
+		ratime.Touch(lom.ParsedFQN.MpathInfo.Path, lom.FQN, at)
 	}
-	ratime := lom.T.GetAtimeRunner()
-	ratime.Touch(lom.ParsedFQN.MpathInfo.Path, lom.FQN, at)
 }
 
 // IncObjectVersion increments the current version xattrs and returns the new value.

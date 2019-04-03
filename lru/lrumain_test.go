@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
@@ -81,7 +80,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 		},
 	}}
 
-	runner := atime.NewRunner(fs.Mountpaths, ios.NewIostatRunner())
+	runner := atime.NewRunner(fs.Mountpaths)
 	go runner.Run()
 
 	target := cluster.NewTargetMock(bo)

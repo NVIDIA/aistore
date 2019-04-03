@@ -43,6 +43,22 @@ func MaxI64(a, b int64) int64 {
 	return b
 }
 
+// MinI32 returns min value of a and b for int32 types
+func MinI32(a, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// MaxI32 returns max value of a and b for int32 types
+func MaxI32(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // MinDuration returns min value of a and b time.Duration types
 func MinDuration(a, b time.Duration) time.Duration {
 	if a < b {
