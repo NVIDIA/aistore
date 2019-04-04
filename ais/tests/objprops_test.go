@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"fmt"
 	"path"
 	"sync"
 	"testing"
@@ -418,20 +419,20 @@ func propsMainTest(t *testing.T, versioning string) {
 	oldVersioning := config.Ver.Versioning
 
 	if oldChkVersion != chkVersion {
-		setClusterConfig(t, proxyURL, "version.validate_warm_get", chkVersion)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", chkVersion)})
 	}
 	if oldVersioning != versioning {
-		setClusterConfig(t, proxyURL, "versioning", versioning)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning": versioning})
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setClusterConfig(t, proxyURL, "version.validate_warm_get", oldChkVersion)
+			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", oldChkVersion)})
 		}
 		if oldVersioning != versioning {
-			setClusterConfig(t, proxyURL, "versioning", oldVersioning)
+			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning": oldVersioning})
 		}
 		if created {
 			tutils.DestroyLocalBucket(t, proxyURL, clibucket)

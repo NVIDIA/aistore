@@ -138,25 +138,19 @@ func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
 
 // SetClusterConfig API
 //
-// Given a key and a value for a specific configuration parameter
+// Given key-value pairs of cluster configuration parameters,
 // this operation sets the cluster-wide configuration accordingly.
 // Setting cluster-wide configuration requires sending the request to a proxy
-func SetClusterConfig(baseParams *BaseParams, key string, value interface{}) error {
-	valstr, err := cmn.ConvertToString(value)
-	if err != nil {
-		return err
+func SetClusterConfig(baseParams *BaseParams, nvs cmn.SimpleKVs) error {
+	optParams := OptionalParams{}
+	q := url.Values{}
+
+	for key, val := range nvs {
+		q.Add(key, val)
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Cluster)
-	configMsg := cmn.ActionMsg{
-		Action: cmn.ActSetConfig,
-		Name:   key,
-		Value:  valstr,
-	}
-	msg, err := jsoniter.Marshal(configMsg)
-	if err != nil {
-		return err
-	}
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.ActSetConfig)
+	optParams.Query = q
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }

@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	bucketCreate   = "create"
-	bucketDestroy  = "destroy"
-	bucketNames    = "names"
-	bucketSetProps = "setprops"
+	bucketCreate     = "create"
+	bucketDestroy    = "destroy"
+	bucketNames      = "names"
+	bucketSetProps   = cmn.ActSetProps
+	bucketResetProps = cmn.ActResetProps
 )
 
 var (
@@ -54,15 +55,17 @@ var (
 		bucketSetProps: append(
 			[]cli.Flag{jsonFlag},
 			baseBucketFlags...),
+		bucketResetProps: baseBucketFlags,
 	}
 
-	bucketCreateDelList = "%s bucket %s --bucket <value>"
-	bucketCreateText    = fmt.Sprintf(bucketCreateDelList, cliName, bucketCreate)
-	bucketDelText       = fmt.Sprintf(bucketCreateDelList, cliName, bucketDestroy)
-	bucketListText      = fmt.Sprintf(bucketCreateDelList, cliName, commandList)
-	bucketNamesText     = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
-	bucketRenameText    = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, commandRename)
-	bucketPropsText     = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
+	bucketGeneric        = "%s bucket %s --bucket <value>"
+	bucketCreateText     = fmt.Sprintf(bucketGeneric, cliName, bucketCreate)
+	bucketDelText        = fmt.Sprintf(bucketGeneric, cliName, bucketDestroy)
+	bucketListText       = fmt.Sprintf(bucketGeneric, cliName, commandList)
+	bucketResetPropsText = fmt.Sprintf(bucketGeneric, cliName, bucketResetProps)
+	bucketNamesText      = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
+	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, commandRename)
+	bucketPropsText      = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
 
 	BucketCmds = []cli.Command{
 		{
@@ -118,6 +121,14 @@ var (
 					Action:       bucketHandler,
 					BashComplete: flagList,
 				},
+				{
+					Name:         bucketResetProps,
+					Usage:        "resets bucket properties",
+					UsageText:    bucketResetPropsText,
+					Flags:        bucketFlags[bucketResetProps],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
 			},
 		},
 	}
@@ -145,6 +156,8 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = listBucketObj(c, baseParams, bucket)
 	case bucketSetProps:
 		err = setBucketProps(c, baseParams, bucket)
+	case bucketResetProps:
+		err = resetBucketProps(c, baseParams, bucket)
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
@@ -257,24 +270,41 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		}
 
 		fmt.Printf("Bucket props set for %s bucket\n", bckName)
-		return nil
+		return
 	}
 
 	// For setting bucket props via URL query string
-	keyVals := c.Args()
-	nvs := cmn.SimpleKVs{}
-	for _, ele := range keyVals {
-		pairs := makeList(ele, "=")
-		nvs[pairs[0]] = pairs[1]
+	nvs, err := makeKVS(c.Args(), "=")
+	if err != nil {
+		return
 	}
-
 	if err = api.SetBucketProps(baseParams, bckName, nvs, query); err != nil {
 		return err
 	}
 	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bckName)
-	return nil
+	return
 }
 
+// Resets bucket props
+func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	if err != nil {
+		return err
+	}
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	if err := bucketExists(baseParams, bucket, bckProvider); err != nil {
+		return err
+	}
+
+	if err = api.ResetBucketProps(baseParams, bucket, query); err != nil {
+		return err
+	}
+
+	fmt.Printf("Reset %s bucket properties\n", bucket)
+	return
+}
+
+// HELPERS
 func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string) {
 	if bckProvider == cmn.LocalBs || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)

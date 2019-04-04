@@ -161,24 +161,17 @@ func GetDaemonStatus(baseParams *BaseParams) (daeInfo *stats.DaemonStatus, err e
 
 // SetDaemonConfig API
 //
-// Given a key and a value for a specific configuration parameter
-// this operation sets the configuration accordingly for a specific daemon
-func SetDaemonConfig(baseParams *BaseParams, key string, value interface{}) error {
-	valstr, err := cmn.ConvertToString(value)
-	if err != nil {
-		return err
+// Given key value pairs, this operation sets the configuration accordingly for a specific daemon
+func SetDaemonConfig(baseParams *BaseParams, nvs cmn.SimpleKVs) error {
+	optParams := OptionalParams{}
+	q := url.Values{}
+
+	for key, val := range nvs {
+		q.Add(key, val)
 	}
 	baseParams.Method = http.MethodPut
-	path := cmn.URLPath(cmn.Version, cmn.Daemon)
-	configMsg := cmn.ActionMsg{
-		Action: cmn.ActSetConfig,
-		Name:   key,
-		Value:  valstr,
-	}
-	msg, err := jsoniter.Marshal(configMsg)
-	if err != nil {
-		return err
-	}
-	_, err = DoHTTPRequest(baseParams, path, msg)
+	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig)
+	optParams.Query = q
+	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
 	return err
 }

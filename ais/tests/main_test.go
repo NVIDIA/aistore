@@ -787,7 +787,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setClusterConfig(t, proxyURL, "cksum.validate_cold_get", false)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
 	}
 	start := time.Now()
 	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
@@ -800,7 +800,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Enable Cold Get Validation
-	setClusterConfig(t, proxyURL, "cksum.validate_cold_get", true)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
 	if t.Failed() {
 		goto cleanup
 	}
@@ -811,7 +811,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
 cleanup:
-	setClusterConfig(t, proxyURL, "cksum.validate_cold_get", bcoldget)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": fmt.Sprintf("%v", bcoldget)})
 	for _, fn := range fileslist {
 		wg.Add(1)
 		go tutils.Del(proxyURL, bucket, fn, "", wg, errCh, !testing.Verbose())
@@ -1175,7 +1175,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	oldWarmGet := config.Cksum.ValidateWarmGet
 	oldChecksum := config.Cksum.Type
 	if !oldWarmGet {
-		setClusterConfig(t, proxyURL, "cksum.validate_warm_get", true)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1212,7 +1212,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
-	setClusterConfig(t, proxyURL, "cksum.type", cmn.ChecksumNone)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
 	if t.Failed() {
 		goto cleanup
 	}
@@ -1228,8 +1228,11 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	setClusterConfig(t, proxyURL, "cksum.type", oldChecksum)
-	setClusterConfig(t, proxyURL, "cksum.validate_warm_get", oldWarmGet)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"cksum.type":              oldChecksum,
+		"cksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
+	})
+
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
 		wg.Add(1)
@@ -1381,7 +1384,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	if !oldWarmGet {
-		setClusterConfig(t, proxyURL, "cksum.validate_warm_get", true)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_warm_get": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1408,7 +1411,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	// Test for none checksum algo
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
-	setClusterConfig(t, proxyURL, "cksum.type", cmn.ChecksumNone)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
 	if t.Failed() {
 		goto cleanup
 	}
@@ -1425,8 +1428,10 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 cleanup:
 	// Restore old config
 	tutils.DestroyLocalBucket(t, proxyURL, bucketName)
-	setClusterConfig(t, proxyURL, "cksum.type", oldChecksum)
-	setClusterConfig(t, proxyURL, "cksum.validate_warm_get", oldWarmGet)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"cksum.type":              oldChecksum,
+		"cksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
+	})
 	close(errCh)
 	close(fileNameCh)
 }
@@ -1473,7 +1478,7 @@ func TestRangeRead(t *testing.T) {
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
-		setClusterConfig(t, proxyURL, "cksum.enable_read_range", false)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.enable_read_range": "false"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1482,7 +1487,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
-		setClusterConfig(t, proxyURL, "cksum.enable_read_range", true)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.enable_read_range": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1504,7 +1509,7 @@ cleanup:
 	go tutils.Del(proxyURL, clibucket, filepath.Join(RangeGetStr, fileName), "", wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
-	setClusterConfig(t, proxyURL, "cksum.enable_read_range", oldEnableReadRangeChecksum)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.enable_read_range": fmt.Sprintf("%v", oldEnableReadRangeChecksum)})
 	close(errCh)
 	close(fileNameCh)
 
@@ -1654,14 +1659,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
-		setClusterConfig(t, proxyURL, "cksum.type", cmn.ChecksumNone)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setClusterConfig(t, proxyURL, "cksum.validate_cold_get", false)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1678,18 +1683,20 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
 	switch clichecksum {
 	case "all":
-		setClusterConfig(t, proxyURL, "cksum.type", cmn.ChecksumXXHash)
-		setClusterConfig(t, proxyURL, "cksum.validate_cold_get", true)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+			"cksum.type":              cmn.ChecksumXXHash,
+			"cksum.validate_cold_get": "true",
+		})
 		if t.Failed() {
 			goto cleanup
 		}
 	case cmn.ChecksumXXHash:
-		setClusterConfig(t, proxyURL, "cksum.type", cmn.ChecksumXXHash)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumXXHash})
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setClusterConfig(t, proxyURL, "cksum.validate_cold_get", true)
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1712,8 +1719,10 @@ cleanup:
 	selectErr(errCh, "delete", t, false)
 	close(errCh)
 	// restore old config
-	setClusterConfig(t, proxyURL, "cksum.type", ochksum)
-	setClusterConfig(t, proxyURL, "cksum.validate_cold_get", ocoldget)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"cksum.type":              ochksum,
+		"cksum.validate_cold_get": fmt.Sprintf("%v", ocoldget),
+	})
 
 	if created {
 		tutils.DestroyLocalBucket(t, proxyURL, bucket)

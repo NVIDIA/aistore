@@ -1402,8 +1402,8 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
-	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	seed := time.Now().UnixNano()
@@ -1568,8 +1568,8 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	setClusterConfig(t, proxyURL, "rebalance.enabled", false)
-	defer setClusterConfig(t, proxyURL, "rebalance.enabled", true)
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	seed := time.Now().UnixNano()

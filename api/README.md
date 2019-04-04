@@ -41,15 +41,14 @@ Given a daemonID, it sets that proxy as the primary proxy of the cluster
 Error from AIStore in completing the request
 ___
 #### SetClusterConfig
-Given a key-value pair for a specific configuration parameter this operation sets the cluster-wide configuration accordingly. Setting cluster-wide configuration requires sending the request to a proxy
+Given key-value pairs of configuration parameters, this operation sets the cluster-wide configuration accordingly. Setting cluster-wide configuration requires sending the request to a proxy
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| key        | string       | Key of the config setting to be modified                                              |
-| value      | interface{}  | Value of the corresponding key to be modified; of dynamic type                        |
+| nvs        | key-values   | Map of key-value pairs of configuration parameters to be set                          |
 
 ##### Return
 Error from AIStore in completing the request
@@ -166,14 +165,13 @@ Error from AIStore in completing the request
 ___
 
 #### SetDaemonConfig
-Given a key-value pair for a specific configuration parameter, `SetDaemonConfig` sets the configuration accordingly for a specific daemon
+Given key-value pairs of configuration parameters, `SetDaemonConfig` sets the configuration accordingly for a specific daemon
 ##### Parameters
-| Name       | Type         | Description                                                                           |
-|------------|--------------|---------------------------------------------------------------------------------------|
-| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
-| daemonURL  | string       | URL of the daemon to which the HTTP Request is sent                                   |
-| key        | string       | Key of the config setting to be modified                                              |
-| value      | interface{}  | Value of the corresponding key to be modified; of dynamic type                        |
+| Name       | Type              | Description                                                                           |
+|------------|-------------------|---------------------------------------------------------------------------------------|
+| httpClient | *http.Client      | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| daemonURL  | string            | URL of the daemon to which the HTTP Request is sent                                   |
+| nvs        | key-values        | Map of key-value pairs of configuration parameters to be set                          |
 
 ##### Return
 Error from AIStore in completing the request

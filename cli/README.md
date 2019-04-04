@@ -69,6 +69,19 @@ Returns the status of the `OPTION`. `OPTION` is either `proxy`, `target`, or `DA
 | `--json, -j` | `bool` | output in JSON format | `false` |
 
 
+#### setconfig
+
+`ais setconfig [DAEMON_ID] [list of key=value]`
+
+Set configurations for a specific daemon or the entire cluster via key-value pairs. To set configurations for the entire cluster, use `cluster` as the `DAEMON_ID`. For the list of available runtime configurations, see [here](../docs/configuration.md#runtime-configuration).
+
+Example:
+
+Setting configuration for entire cluster
+
+ `ais setconfig cluster stats_time=10s`
+
+
 ### Object Commands
 
 The CLI allows for users to interact with objects in the AIS cluster.
@@ -217,6 +230,18 @@ Sets bucket properties. For the available options, see [bucket-properties](../do
 Example: `ais bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror.copies=2'`
 
 JSON equivalent example: `ais bucket setprops --bucket mybucket --json '{"mirror" : {"enabled": true, "copies" : 2}}'`
+
+
+#### resetprops
+
+`ais bucket resetprops --bucket <value>`
+
+Reset bucket properties to cluster default.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | name of the bucket | `""` |
+| `--bprovider` | [Provider](#enums) | locality of bucket | `""` |
 
 
 ### Downloader

@@ -22,7 +22,7 @@ func main() {
 	aisCLI.Commands = append(aisCLI.Commands, commands.DownloaderCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.ObjectCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.BucketCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, commands.DaemonCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, commands.DaeCluCmds...)
 	sort.Sort(cli.CommandsByName(aisCLI.Commands))
 
 	err := aisCLI.Run(os.Args)

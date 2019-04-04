@@ -158,11 +158,24 @@ func cleanFlag(flag string) string {
 	return strings.Split(flag, ",")[0]
 }
 
-// Users can pass in a comma separated list
+// Users can pass in a delimiter separated list
 func makeList(list, delimiter string) []string {
 	cleanList := strings.Split(list, delimiter)
 	for ii, val := range cleanList {
 		cleanList[ii] = strings.TrimSpace(val)
 	}
 	return cleanList
+}
+
+// Converts key=value to map
+func makeKVS(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
+	nvs = cmn.SimpleKVs{}
+	for _, ele := range args {
+		pairs := makeList(ele, delimiter)
+		if len(pairs) != 2 {
+			return nil, fmt.Errorf("could not parse key value: %v", pairs)
+		}
+		nvs[pairs[0]] = pairs[1]
+	}
+	return
 }

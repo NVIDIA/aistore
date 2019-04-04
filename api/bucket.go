@@ -183,8 +183,7 @@ func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketName
 		return nil, err
 	}
 	if len(b) != 0 {
-		err = jsoniter.Unmarshal(b, &bucketNames)
-		if err != nil {
+		if err = jsoniter.Unmarshal(b, &bucketNames); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
 		}
 	} else {

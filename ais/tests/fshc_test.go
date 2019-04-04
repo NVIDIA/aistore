@@ -273,8 +273,8 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tutils.Logf("*** Testing with disabled FSHC***\n")
-	setClusterConfig(t, proxyURL, "fshc_enabled", "false")
-	defer setClusterConfig(t, proxyURL, "fshc_enabled", "true")
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "false"})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "true"})
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	objList := []string{}
 	for n := 0; n < 5; n++ {
