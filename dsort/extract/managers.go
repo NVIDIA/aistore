@@ -81,6 +81,7 @@ func FreeMemory() {
 	mem.Free(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
+		MinSize: 1, // force toGC to free all (even small) memory to disk
 	})
 }
 
@@ -191,6 +192,10 @@ func (rm *RecordManager) RecordContents() *sync.Map {
 	return rm.contents
 }
 
+func (rm *RecordManager) ExtractionPaths() *sync.Map {
+	return rm.extractionPaths
+}
+
 func (rm *RecordManager) Cleanup() {
 	rm.Records.Drain()
 	rm.extractionPaths.Range(func(k, v interface{}) bool {
@@ -200,6 +205,7 @@ func (rm *RecordManager) Cleanup() {
 		rm.extractionPaths.Delete(k)
 		return true
 	})
+	rm.extractionPaths = nil
 	rm.contents.Range(func(k, v interface{}) bool {
 		if sgl, ok := v.(*memsys.SGL); ok {
 			sgl.Free()
@@ -207,6 +213,7 @@ func (rm *RecordManager) Cleanup() {
 		rm.contents.Delete(k)
 		return true
 	})
+	rm.contents = nil
 }
 
 func NewShardManager() *ShardManager {

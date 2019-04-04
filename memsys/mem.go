@@ -879,15 +879,13 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 func (s *Slab2) cleanup() (freed int64) {
 	s.muget.Lock()
 	s.muput.Lock()
-	lget := len(s.get)
-	for lget > s.pos {
-		s.get[s.pos] = nil
-		s.pos++
+	for i := s.pos; i < len(s.get); i++ {
+		s.get[i] = nil
 		freed += s.bufsize
 	}
 	for i := range s.put {
-		freed += s.bufsize
 		s.put[i] = nil
+		freed += s.bufsize
 	}
 	s.get = s.get[:0]
 	s.put = s.put[:0]

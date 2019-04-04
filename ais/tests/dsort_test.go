@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/tutils"
+	sigar "github.com/cloudfoundry/gosigar"
 )
 
 const (
@@ -57,9 +58,20 @@ func generateDSortDesc() string {
 }
 
 func (df *dsortFramework) init() {
+	if df.inputTempl == "" {
+		df.inputTempl = fmt.Sprintf("input-{0..%d}", df.tarballCnt-1)
+	}
+	if df.outputTempl == "" {
+		df.outputTempl = "output-{00000..10000}"
+	}
+
 	// Assumption is that all prefixes end with dash: "-"
 	df.inputPrefix = df.inputTempl[:strings.Index(df.inputTempl, "-")+1]
 	df.outputPrefix = df.outputTempl[:strings.Index(df.outputTempl, "-")+1]
+
+	if df.fileInTarballSize == 0 {
+		df.fileInTarballSize = cmn.KiB
+	}
 
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
 	df.outputShardSize = int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
@@ -92,32 +104,34 @@ func (df *dsortFramework) createInputShards() {
 	var (
 		err error
 	)
-	tutils.Logln("creating tarballs...")
+	tutils.Logf("creating %d tarballs...\n", df.tarballCnt)
 	wg := &sync.WaitGroup{}
 	errCh := make(chan error, df.tarballCnt)
 	for i := 0; i < df.tarballCnt; i++ {
-		path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
-		if df.algorithm.Kind == dsort.SortKindContent {
-			err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension)
-		} else if df.extension == ".tar" {
-			err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize)
-		} else if df.extension == ".tar.gz" {
-			err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize)
-		} else if df.extension == ".zip" {
-			err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
-		} else {
-			df.m.t.Fail()
-		}
-		tutils.CheckFatal(err, df.m.t)
-
-		fqn := path + df.extension
-		defer os.Remove(fqn)
-
-		reader, err := tutils.NewFileReaderFromFile(fqn, false)
-		tutils.CheckFatal(err, df.m.t)
-
 		wg.Add(1)
-		go tutils.PutAsync(wg, df.m.proxyURL, df.m.bucket, filepath.Base(fqn), reader, errCh)
+		go func(i int) {
+			path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
+			if df.algorithm.Kind == dsort.SortKindContent {
+				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension)
+			} else if df.extension == ".tar" {
+				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize)
+			} else if df.extension == ".tar.gz" {
+				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize)
+			} else if df.extension == ".zip" {
+				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
+			} else {
+				df.m.t.Fail()
+			}
+			tutils.CheckFatal(err, df.m.t)
+
+			fqn := path + df.extension
+			defer os.Remove(fqn)
+
+			reader, err := tutils.NewFileReaderFromFile(fqn, false)
+			tutils.CheckFatal(err, df.m.t)
+
+			tutils.PutAsync(wg, df.m.proxyURL, df.m.bucket, filepath.Base(fqn), reader, errCh)
+		}(i)
 	}
 	wg.Wait()
 	close(errCh)
@@ -290,14 +304,13 @@ func (df *dsortFramework) checkDSortList(expNumEntries ...int) {
 // helper for dispatching i-th dSort job
 func dispatchDSortJob(m *metadata, i int) {
 	dsortFW := &dsortFramework{
-		m:                 m,
-		inputTempl:        fmt.Sprintf("input%d-{0..999}", i),
-		outputTempl:       fmt.Sprintf("output%d-{00000..01000}", i),
-		tarballCnt:        1000,
-		fileInTarballCnt:  50,
-		fileInTarballSize: 1024,
-		extension:         ".tar",
-		maxMemUsage:       "99%",
+		m:                m,
+		inputTempl:       fmt.Sprintf("input%d-{0..999}", i),
+		outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
+		tarballCnt:       1000,
+		fileInTarballCnt: 50,
+		extension:        ".tar",
+		maxMemUsage:      "99%",
 	}
 	dsortFW.init()
 
@@ -362,14 +375,11 @@ func TestDistributedSort(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "99%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "99%",
 		}
 	)
 	if testing.Short() {
@@ -418,15 +428,12 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			bucket: t.Name() + "input",
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			outputBucket:      t.Name() + "output",
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "99%",
+			m:                m,
+			outputBucket:     t.Name() + "output",
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "99%",
 		}
 	)
 	if testing.Short() {
@@ -473,15 +480,12 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			bucket: t.Name() + "input",
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			outputBucket:      t.Name() + "output",
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "99%",
+			m:                m,
+			outputBucket:     t.Name() + "output",
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "99%",
 		}
 	)
 	if testing.Short() {
@@ -609,15 +613,12 @@ func TestDistributedSortShuffle(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			algorithm:         &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  10,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "99%",
+			m:                m,
+			algorithm:        &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
+			tarballCnt:       1000,
+			fileInTarballCnt: 10,
+			extension:        ".tar",
+			maxMemUsage:      "99%",
 		}
 	)
 
@@ -668,14 +669,12 @@ func TestDistributedSortWithDisk(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..99}",
-			outputTempl:       "output-{0..1000}",
-			tarballCnt:        100,
-			fileInTarballCnt:  10,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "1KB",
+			m:                m,
+			outputTempl:      "output-{0..1000}",
+			tarballCnt:       100,
+			fileInTarballCnt: 10,
+			extension:        ".tar",
+			maxMemUsage:      "1KB",
 		}
 	)
 
@@ -732,14 +731,11 @@ func TestDistributedSortZip(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".zip",
-			maxMemUsage:       "60%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".zip",
+			maxMemUsage:      "60%",
 		}
 	)
 
@@ -790,14 +786,11 @@ func TestDistributedSortWithCompression(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  50,
-			fileInTarballSize: 1024,
-			extension:         ".tar.gz",
-			maxMemUsage:       "60%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 50,
+			extension:        ".tar.gz",
+			maxMemUsage:      "60%",
 		}
 	)
 
@@ -854,13 +847,10 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 				Extension:  ".loss",
 				FormatType: extract.FormatTypeInt,
 			},
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "90%",
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "90%",
 		}
 	)
 	if testing.Short() {
@@ -916,13 +906,9 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 				Extension:  ".cls",
 				FormatType: extract.FormatTypeFloat,
 			},
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  50,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "90%",
+			tarballCnt:       1000,
+			fileInTarballCnt: 50, extension: ".tar",
+			maxMemUsage: "90%",
 		}
 	)
 	if testing.Short() {
@@ -978,13 +964,10 @@ func TestDistributedSortWithContentString(t *testing.T) {
 				Extension:  ".smth",
 				FormatType: extract.FormatTypeString,
 			},
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "90%",
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "90%",
 		}
 	)
 	if testing.Short() {
@@ -1034,14 +1017,11 @@ func TestDistributedSortAbort(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{0..10000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  10,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "60%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 10,
+			extension:        ".tar",
+			maxMemUsage:      "60%",
 		}
 	)
 
@@ -1104,14 +1084,11 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{0..100000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  200,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "40%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 200,
+			extension:        ".tar",
+			maxMemUsage:      "40%",
 		}
 	)
 
@@ -1178,14 +1155,12 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{0..100000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  200,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "40%",
+			m:                m,
+			outputTempl:      "output-{0..100000}",
+			tarballCnt:       1000,
+			fileInTarballCnt: 200,
+			extension:        ".tar",
+			maxMemUsage:      "40%",
 		}
 	)
 
@@ -1256,14 +1231,12 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{0..100000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "40%",
+			m:                m,
+			outputTempl:      "output-{0..100000}",
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "40%",
 		}
 	)
 
@@ -1328,14 +1301,12 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..99}",
-			outputTempl:       "output-{0..1000}",
-			tarballCnt:        100,
-			fileInTarballCnt:  10,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "40%",
+			m:                m,
+			outputTempl:      "output-{0..1000}",
+			tarballCnt:       100,
+			fileInTarballCnt: 10,
+			extension:        ".tar",
+			maxMemUsage:      "40%",
 		}
 	)
 
@@ -1397,19 +1368,13 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			bucket: TestLocalBucketName,
 		}
 		dsortFW = &dsortFramework{
-			m:                 m,
-			inputTempl:        "input-{0..999}",
-			outputTempl:       "output-{00000..01000}",
-			tarballCnt:        1000,
-			fileInTarballCnt:  100,
-			fileInTarballSize: 1024,
-			extension:         ".tar",
-			maxMemUsage:       "99%",
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			extension:        ".tar",
+			maxMemUsage:      "99%",
 		}
 	)
-	if testing.Short() {
-		t.Skip(skipping)
-	}
 
 	dsortFW.init()
 
@@ -1450,5 +1415,66 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 		}
 	}
 
+	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortOnOOM(t *testing.T) {
+	t.Skip("test can take more than couple minutes, run it only when necessary")
+
+	var (
+		mem = sigar.Mem{}
+		m   = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			fileInTarballCnt:  200,
+			fileInTarballSize: 10 * cmn.MiB,
+			extension:         ".tar",
+			maxMemUsage:       "80%",
+		}
+	)
+
+	err := mem.Get()
+	tutils.CheckFatal(err, t)
+
+	// Calculate number of shards to cause OOM and overestimate it to make sure
+	// that if dSort doesn't prevent it, it will happen. Notice that maxMemUsage
+	// is 80% so dSort should never go above this number in memory usage.
+	dsortFW.tarballCnt = int(float64(mem.ActualFree/uint64(dsortFW.fileInTarballSize)/uint64(dsortFW.fileInTarballCnt)) * 1.4)
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	dsortFW.createInputShards()
+
+	tutils.Logln("starting distributed sort...")
+	rs := dsortFW.gen()
+	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+	tutils.CheckFatal(err, t)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	dsortFW.checkOutputShards(5)
 	dsortFW.checkDSortList()
 }

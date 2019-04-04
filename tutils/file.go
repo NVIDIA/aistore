@@ -9,10 +9,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
-	"crypto/rand"
 	"fmt"
 	"io"
-	mrand "math/rand"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -51,7 +50,7 @@ func addFileToTar(tw *tar.Writer, path string, fileSize int, buf []byte) error {
 		return err
 	}
 	// copy the file data to the tarball
-	if _, err := io.Copy(tw, &file); err != nil {
+	if _, err := io.CopyBuffer(tw, &file, buf); err != nil {
 		return err
 	}
 
@@ -112,7 +111,7 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSiz
 	defer tw.Close()
 
 	for i := 0; i < fileCnt; i++ {
-		fileName := fmt.Sprintf("%d.txt", mrand.Int()) // generate random names
+		fileName := fmt.Sprintf("%d.txt", rand.Int()) // generate random names
 		if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
 			return err
 		}
@@ -134,7 +133,7 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 	defer tw.Close()
 
 	for i := 0; i < fileCnt; i++ {
-		fileName := fmt.Sprintf("%d", mrand.Int()) // generate random names
+		fileName := fmt.Sprintf("%d", rand.Int()) // generate random names
 		if err := addFileToTar(tw, fileName+".txt", fileSize, nil); err != nil {
 			return err
 		}
@@ -143,11 +142,11 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 		// random content
 		switch customFileType {
 		case extract.FormatTypeInt:
-			buf = []byte(strconv.Itoa(mrand.Int()))
+			buf = []byte(strconv.Itoa(rand.Int()))
 		case extract.FormatTypeString:
-			buf = []byte(fmt.Sprintf("%d-%d", mrand.Int(), mrand.Int()))
+			buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
 		case extract.FormatTypeFloat:
-			buf = []byte(fmt.Sprintf("%d.%d", mrand.Int(), mrand.Int()))
+			buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
 		default:
 			return fmt.Errorf("invalid custom file type: %q", customFileType)
 		}
@@ -177,7 +176,7 @@ func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int) error {
 	defer zw.Close()
 
 	for i := 0; i < fileCnt; i++ {
-		fileName := fmt.Sprintf("%d.txt", mrand.Int()) // generate random names
+		fileName := fmt.Sprintf("%d.txt", rand.Int()) // generate random names
 		if err := addFileToZip(zw, fileName, fileSize); err != nil {
 			return err
 		}
@@ -283,7 +282,7 @@ func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 	return files, nil
 }
 
-func RandomObjDir(src *mrand.Rand, dirLen, maxDepth int) (dir string) {
+func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
 	depth := src.Intn(maxDepth)
 	for i := 0; i < depth; i++ {
 		dir = filepath.Join(dir, FastRandomFilename(src, dirLen))

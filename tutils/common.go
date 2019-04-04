@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 
 	"github.com/NVIDIA/aistore/cluster"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
 )

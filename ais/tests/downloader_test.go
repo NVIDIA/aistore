@@ -456,7 +456,7 @@ func TestDownloadStatusError(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Wait to make sure both files were processed by downloader
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	resp, err := api.DownloadStatus(params, id)
 	tutils.CheckFatal(err, t)

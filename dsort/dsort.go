@@ -31,14 +31,8 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
-	sigar "github.com/cloudfoundry/gosigar"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
-)
-
-const (
-	memoryUpdateInterval      = 50 * time.Millisecond
-	unreserveMemoryBufferSize = 100000
 )
 
 var js = jsoniter.ConfigFastest
@@ -61,6 +55,11 @@ func (m *Manager) start() (err error) {
 
 	glog.Infof("starting dsort %s", m.ManagerUUID)
 
+	// start watching memory
+	if err := m.mw.watch(); err != nil {
+		return err
+	}
+
 	// Phase 1.
 	if err := m.extractLocalShards(); err != nil {
 		return err
@@ -76,8 +75,6 @@ func (m *Manager) start() (err error) {
 	if err != nil {
 		return err
 	}
-	runtime.GC()
-	debug.FreeOSMemory()
 
 	// Run phase 3. only if you are final target (and actually have any sorted records)
 	if curTargetIsFinal && m.recManager.Records.Len() > 0 {
@@ -98,6 +95,13 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
+	// In shard creation we should not expect memory increase (at least not from
+	// dSort). Also it would be really hard to have concurrent sends and memory
+	// cleanup.
+	m.mw.stopWatchingExcess()
+	runtime.GC()
+	debug.FreeOSMemory()
+
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
 	if err := m.createShardsLocally(); err != nil {
@@ -112,8 +116,6 @@ func (m *Manager) start() (err error) {
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
 	var (
-		mem                 = sigar.Mem{}
-		maxMemoryToUse      = uint64(0)
 		totalExtractedCount = uint64(0)
 	)
 
@@ -121,51 +123,6 @@ func (m *Manager) extractLocalShards() (err error) {
 	metrics := m.Metrics.Extraction
 	metrics.begin()
 	defer metrics.finish()
-
-	if err := mem.Get(); err != nil {
-		return err
-	}
-	if maxMemoryToUse, err = m.maxMemoryUsage(); err != nil {
-		return err
-	}
-	memoryUsed := mem.ActualUsed
-	reservedMemory := uint64(0)
-	unreserveMemoryCh := make(chan uint64, unreserveMemoryBufferSize)
-
-	// Starting memory updater. Since extraction phase is concurrent and we
-	// cannot know how much memory will given compressed shard extract we need
-	// to employ mechanism for updating memory. Just before extraction we
-	// estimate how much memory shard will contain (by multiplying file size and
-	// avg compress ratio). Then we update currently used memory to actual used
-	// + reserved. After we finish extraction we put reserved memory for the
-	// shard into the unreserve memory channel. Note that we cannot unreserve it
-	// right away because actual used memory has not yet been updated (but it
-	// surely changed). Once memory updater will fetch and update currently used
-	// memory in system we can unreserve memory (it is already calculated in
-	// newly fetched memory usage value). This way it is almost impossible to
-	// exceed maximum memory which we are able to use (set by user) -
-	// unfortunately it can happen when we underestimate the amount of memory
-	// which we will use when extracting compressed file.
-	ticker := time.NewTicker(memoryUpdateInterval)
-	defer ticker.Stop()
-	go func() {
-		for range ticker.C {
-			curMem := sigar.Mem{}
-			if err := curMem.Get(); err == nil {
-				atomic.SwapUint64(&memoryUsed, curMem.ActualUsed)
-
-				unreserve := true
-				for unreserve {
-					select {
-					case size := <-unreserveMemoryCh:
-						atomic.AddUint64(&reservedMemory, ^uint64(size-1)) // decrement by size
-					default:
-						unreserve = false
-					}
-				}
-			}
-		}
-	}()
 
 	metrics.Lock()
 	metrics.ToSeenCnt = m.rs.InputFormat.RangeCount
@@ -250,33 +207,27 @@ ExtractAllShards:
 				}
 
 				expectedUncompressedSize := uint64(float64(fi.Size()) / m.avgCompressionRatio())
-				reservedMemoryTmp := atomic.AddUint64(&reservedMemory, expectedUncompressedSize)
-
-				// expected total memory after all objects will be extracted is equal
-				// to: previously reserved memory + uncompressed size of shard + current memory used
-				expectedTotalMemoryUsed := reservedMemoryTmp + atomic.LoadUint64(&memoryUsed)
-
-				// Switch to extracting to disk if we hit this target's memory usage threshold.
-				var toDisk bool
-				if expectedTotalMemoryUsed >= maxMemoryToUse {
-					toDisk = true
-				}
+				toDisk := m.mw.reserveMem(expectedUncompressedSize)
 
 				reader := io.NewSectionReader(f, 0, fi.Size())
 				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(fqn, reader, m.recManager, toDisk)
+
+				// Make sure that compression rate is updated before releasing
+				// next extractor goroutine.
+				if m.extractCreator.UsingCompression() {
+					m.addCompressionSizes(compressedSize, extractedSize)
+				}
+
 				m.releaseExtractSema()
 				m.ctx.nameLocker.Unlock(uname, false)
 
-				unreserveMemoryCh <- expectedUncompressedSize // schedule unreserving memory on next memory update
+				m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 				if err != nil {
 					f.Close()
 					return fmt.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
 				}
 				f.Close()
 				m.addToTotalInputShardsSeen(1)
-				if m.extractCreator.UsingCompression() {
-					m.addCompressionSizes(compressedSize, extractedSize)
-				}
 
 				metrics.Lock()
 				metrics.ExtractedRecordCnt += extractedCount
@@ -301,6 +252,9 @@ ExtractAllShards:
 	if err := group.Wait(); err != nil {
 		return err
 	}
+
+	// We will no longer reserve any memory
+	m.mw.stopWatchingReserved()
 
 	// FIXME: maybe there is a way to check this faster or earlier?
 	//

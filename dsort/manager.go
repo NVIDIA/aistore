@@ -1,9 +1,7 @@
+// Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
@@ -116,7 +114,6 @@ type Manager struct {
 		ch    chan int32
 	}
 	refCount    int64 // Reference counter used to determine if we can do cleanup
-	maxMemUsage *parsedMemUsage
 	state       progressState
 	extractSema struct {
 		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to ExtractShard
@@ -139,6 +136,7 @@ type Manager struct {
 		mu sync.Mutex
 		m  map[string]struct{} // finished acks: daemonID -> ack
 	}
+	mw *memoryWatcher
 
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
@@ -185,7 +183,6 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.received.ch = make(chan int32, 10)
 	m.totalInputShardsSeen = 0
 	m.refCount = 0
-	m.maxMemUsage = rs.MaxMemUsage
 
 	// By default we want avg compression ratio to be equal to 1
 	m.compression.compressed = 1
@@ -220,6 +217,15 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	m.streamWriters.writers = make(map[string]*streamWriter, 10000)
 	m.callTimeout = defaultCallTimeout
+
+	// Memory watcher
+	mem := sigar.Mem{}
+	if err := mem.Get(); err != nil {
+		return err
+	}
+	maxMemoryToUse := calcMaxMemoryUsage(rs.MaxMemUsage, mem)
+	m.mw = newMemoryWatcher(m, maxMemoryToUse)
+
 	return nil
 }
 
@@ -332,6 +338,7 @@ func (m *Manager) cleanup() {
 	}
 
 	m.lock()
+	m.mw.stop()
 	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
 
@@ -573,22 +580,6 @@ func (m *Manager) lock() {
 
 func (m *Manager) unlock() {
 	m.mu.Unlock()
-}
-
-func (m *Manager) maxMemoryUsage() (uint64, error) {
-	mem := sigar.Mem{}
-	if err := mem.Get(); err != nil {
-		return 0, err
-	}
-	switch m.maxMemUsage.Type {
-	case memPercent:
-		return m.maxMemUsage.Value * (mem.Total / 100), nil
-	case memNumber:
-		return cmn.MinU64(m.maxMemUsage.Value, mem.Total), nil
-	default:
-		cmn.AssertMsg(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", m.maxMemUsage.Type))
-		return 0, nil
-	}
 }
 
 func (m *Manager) acquireExtractSema() {
@@ -999,4 +990,16 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 
 func (m *Manager) String() string {
 	return m.ManagerUUID
+}
+
+func calcMaxMemoryUsage(maxUsage *parsedMemUsage, mem sigar.Mem) uint64 {
+	switch maxUsage.Type {
+	case memPercent:
+		return maxUsage.Value * (mem.Total / 100)
+	case memNumber:
+		return cmn.MinU64(maxUsage.Value, mem.Total)
+	default:
+		cmn.AssertMsg(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type))
+		return 0
+	}
 }
