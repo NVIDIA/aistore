@@ -3593,8 +3593,17 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb {
-		go t.rebManager.runGlobalReb(newsmap, newTargetID)
-		return
+		if cmd, ok := msgInt.Value.(string); ok {
+			switch cmd {
+			case cmn.RebStart:
+				go t.rebManager.runGlobalReb(newsmap, newTargetID)
+			case cmn.RebAbort:
+				t.rebManager.abortGlobalReb()
+			default:
+				errstr = fmt.Sprintf("Expecting %q or %q in the action message value, getting %s", cmn.RebStart, cmn.RebAbort, cmd)
+			}
+			return
+		}
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")

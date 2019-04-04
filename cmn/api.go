@@ -179,6 +179,11 @@ const (
 	URLParamDescription = "description"
 )
 
+const (
+	RebStart = "start"
+	RebAbort = "abort"
+)
+
 // SelectMsg represents properties and options for requests which fetch entities
 // Note: if Fast is `true` then paging is disabled - all items are returned
 //       in one response. The result list is unsorted and contains only object

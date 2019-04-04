@@ -432,6 +432,24 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 	}
 }
 
+func (reb *rebManager) abortGlobalReb() {
+	xx := reb.t.xactions.findU(cmn.ActGlobalReb)
+	if xx == nil {
+		glog.Infof("not running, nothing to abort")
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Error("Global rebalance is aborting...")
+	}
+	xGlobalReb := xx.(*xactGlobalReb)
+	xGlobalReb.Abort()
+
+	pmarker := persistentMarker(globalRebType)
+	if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
+		glog.Errorf("failed to remove in-progress mark %s, err: %v", pmarker, err)
+	}
+}
+
 func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	var (
 		wg       = &sync.WaitGroup{}
@@ -521,7 +539,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		}
 		if !xreb.Aborted() {
 			if err := os.Remove(pmarker); err != nil {
-				glog.Errorf("Failed to remove rebalance-in-progress mark %s, err: %v", pmarker, err)
+				glog.Errorf("failed to remove in-progress mark %s, err: %v", pmarker, err)
 			}
 		}
 		if totalObjectsMoved > 0 {

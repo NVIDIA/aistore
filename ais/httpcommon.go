@@ -866,7 +866,8 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msgInt 
 	}
 	localsmap := h.smapowner.get()
 	myver := localsmap.version()
-	if newsmap.version() == myver {
+	isManualReb := msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
+	if newsmap.version() == myver && !isManualReb {
 		newsmap = nil
 		return
 	}
