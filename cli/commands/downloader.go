@@ -66,16 +66,16 @@ var (
 			},
 			baseDownloadFlags...,
 		),
-		downloadStatus: []cli.Flag{
+		downloadStatus: {
 			idFlag,
 			progressBarFlag,
 			refreshRateFlag,
 			verboseFlag,
 		},
-		downloadCancel: []cli.Flag{
+		downloadCancel: {
 			idFlag,
 		},
-		downloadRemove: []cli.Flag{
+		downloadRemove: {
 			idFlag,
 		},
 		downloadList: {
@@ -323,15 +323,19 @@ type downloadingResult struct {
 	totalFiles        int
 	finishedFiles     int
 	downloadingErrors map[string]string
+	cancelled         bool
 }
 
 func (d downloadingResult) String() string {
-	var sb strings.Builder
+	if d.cancelled {
+		return "Download was cancelled."
+	}
 
 	if d.finishedFiles == d.totalFiles {
-		sb.WriteString("All files successfully downloaded.")
-		return sb.String()
+		return "All files successfully downloaded."
 	}
+
+	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.\n", d.finishedFiles, d.totalFiles))
 	sb.WriteString("Following files caused downloading errors:")
@@ -361,6 +365,8 @@ type progressBar struct {
 	totalFiles    int
 	finishedFiles int
 
+	cancelled bool
+
 	errors map[string]string
 }
 
@@ -376,9 +382,12 @@ func newProgressBar(baseParams *api.BaseParams, id string, refreshTime time.Dura
 }
 
 func (b *progressBar) run() (downloadingResult, error) {
-	err := b.start()
+	finished, err := b.start()
 	if err != nil {
 		return downloadingResult{}, err
+	}
+	if finished {
+		return b.result(), nil
 	}
 
 	// All files = finished ones + ones that had downloading errors
@@ -390,24 +399,33 @@ func (b *progressBar) run() (downloadingResult, error) {
 			b.cleanBars()
 			return downloadingResult{}, err
 		}
+		if resp.Cancelled {
+			b.cancelled = true
+			break
+		}
 
 		b.updateDownloadingErrors(resp.Errs)
 		b.updateBars(resp)
 	}
 
 	b.cleanBars()
-	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors}, nil
+	return b.result(), nil
 }
 
-func (b *progressBar) start() error {
+func (b *progressBar) start() (bool, error) {
 	resp, err := api.DownloadStatus(b.params, b.id)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	b.updateDownloadingErrors(resp.Errs)
 	b.finishedFiles = resp.Finished
 	b.totalFiles = resp.Total
+	b.cancelled = resp.Cancelled
+
+	if b.finishedFiles+len(b.errors) == b.totalFiles || b.cancelled {
+		return true, err
+	}
 
 	b.totalBar = b.p.AddBar(
 		int64(b.totalFiles),
@@ -422,7 +440,7 @@ func (b *progressBar) start() error {
 
 	b.updateBars(resp)
 
-	return nil
+	return false, nil
 }
 
 func (b *progressBar) updateBars(downloadStatus cmn.DlStatusResp) {
@@ -528,4 +546,8 @@ func (b *progressBar) cleanBars() {
 	b.totalBar.SetTotal(int64(b.totalFiles), true)
 
 	b.p.Wait()
+}
+
+func (b *progressBar) result() downloadingResult {
+	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, cancelled: b.cancelled}
 }

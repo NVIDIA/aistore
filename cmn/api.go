@@ -384,6 +384,10 @@ type DlStatusResp struct {
 }
 
 func (d *DlStatusResp) Print(verbose bool) string {
+	if d.Cancelled {
+		return "Download was cancelled."
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)", d.Finished, d.Total, d.Percentage))
