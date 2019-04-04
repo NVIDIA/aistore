@@ -423,6 +423,11 @@ func (m *Manager) startDSort() {
 		// If we were aborted by some other process this means that we do not
 		// broadcast abort (we assume that daemon aborted us, aborted also others).
 		if !m.aborted() {
+			// Self-abort: better do it before sending broadcast to avoid
+			// inconsistent state: other have aborted but we didn't due to some
+			// problem.
+			m.abort()
+
 			glog.Warning("broadcasting abort to other targets")
 			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
 			broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap, ctx.node)

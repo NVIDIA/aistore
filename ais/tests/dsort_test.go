@@ -1388,3 +1388,64 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 
 	dsortFW.checkDSortList()
 }
+
+func TestDistributedSortSelfAbort(t *testing.T) {
+	var (
+		err error
+		m   = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			inputTempl:        "input-{0..999}",
+			outputTempl:       "output-{00000..01000}",
+			tarballCnt:        1000,
+			fileInTarballCnt:  100,
+			fileInTarballSize: 1024,
+			extension:         ".tar",
+			maxMemUsage:       "99%",
+		}
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	tutils.Logln("starting distributed sort without any files generated...")
+	rs := dsortFW.gen()
+	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+	tutils.CheckFatal(err, t)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, t)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	// Check that all nodes have aborted their jobs
+	for target, metrics := range allMetrics {
+		if !metrics.Aborted {
+			t.Errorf("dsort was not aborted by target: %s", target)
+		}
+	}
+
+	dsortFW.checkDSortList()
+}
