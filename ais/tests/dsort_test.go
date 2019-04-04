@@ -1434,6 +1434,9 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	tutils.Logln("finished distributed sort")
 
+	// Wait a while for all targets to abort
+	time.Sleep(2 * time.Second)
+
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
 	tutils.CheckFatal(err, t)
 	if len(allMetrics) != m.originalTargetCount {
