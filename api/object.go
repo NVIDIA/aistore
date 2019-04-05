@@ -239,14 +239,8 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read response, err: %v", err)
-		}
-		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
-	}
-	return nil
+	_, err = checkBadStatus(req, resp)
+	return err
 }
 
 // RenameObject API

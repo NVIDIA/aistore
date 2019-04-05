@@ -7,6 +7,7 @@ package cmn
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -20,6 +21,47 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	jsoniter "github.com/json-iterator/go"
 )
+
+// Error structure for HTTP errors
+type HTTPError struct {
+	Status     int    `json:"status"`
+	Message    string `json:"message"`
+	Method     string `json:"method"`
+	URLPath    string `json:"url_path"`
+	RemoteAddr string `json:"remote_addr"`
+	Trace      string `json:"trace"`
+}
+
+// Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
+//   DELETE /v1/buckets/abc from 127.0.0.1:54064| ([httpcommon.go, #840] <- [proxy.go, #484] <- [proxy.go, #264])
+func (e *HTTPError) String() string {
+	return http.StatusText(e.Status) + ": " + e.Message + ": " + e.Method + " " + e.URLPath + " from " + e.RemoteAddr + "| (" + e.Trace + ")"
+}
+
+// Implements error interface
+func (e *HTTPError) Error() string {
+	// Stop from escaping <, > ,and &
+	buf := new(bytes.Buffer)
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(e); err != nil {
+		return err.Error()
+	}
+	return buf.String()
+}
+
+// newHTTPError returns a HTTPError struct.
+// There are cases where the message is already formatted as a HTTPError (from target)
+// in which case, returns true otherwise false
+// NOTE: The format of the error message is being used in the CLI
+// If there are any changes, please make sure to update `errorHandler` in the CLI
+func NewHTTPError(r *http.Request, msg string, status int) (*HTTPError, bool) {
+	var httpErr HTTPError
+	if err := jsoniter.UnmarshalFromString(msg, &httpErr); err == nil {
+		return &httpErr, true
+	}
+	return &HTTPError{Status: status, Message: msg, Method: r.Method, URLPath: r.URL.Path, RemoteAddr: r.RemoteAddr}, false
+}
 
 // URLPath returns a HTTP URL path by joining all segments with "/"
 func URLPath(segments ...string) string {
@@ -92,11 +134,6 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 	return apiItems, nil
 }
 
-// ErrHTTP returns a formatted error string for an HTTP request.
-func ErrHTTP(r *http.Request, msg string, status int) string {
-	return http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
-}
-
 func InvalidHandler(w http.ResponseWriter, r *http.Request) {
 	InvalidHandlerWithMsg(w, r, "invalid request")
 }
@@ -108,8 +145,8 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 		status = errCode[0]
 	}
 
-	s := ErrHTTP(r, msg, status)
-	http.Error(w, s, status)
+	err, _ := NewHTTPError(r, msg, status)
+	http.Error(w, err.Error(), status)
 }
 
 // InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.
@@ -119,10 +156,16 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 		status = errCode[0]
 	}
 
+	err, isHTTPError := NewHTTPError(r, msg, status)
+
+	if isHTTPError {
+		glog.Errorln(err.String())
+		http.Error(w, err.Error(), status)
+		return
+	}
+
 	var errMsg bytes.Buffer
-	errMsg.WriteString(ErrHTTP(r, msg, status))
 	if !strings.Contains(msg, ".go, #") {
-		errMsg.WriteString("| (")
 		for i := 1; i < 4; i++ {
 			if _, file, line, ok := runtime.Caller(i); ok {
 				f := filepath.Base(file)
@@ -132,12 +175,10 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 				fmt.Fprintf(&errMsg, "[%s, #%d]", f, line)
 			}
 		}
-		errMsg.WriteRune(')')
 	}
-
-	msg = errMsg.String()
-	glog.Errorln(msg)
-	http.Error(w, msg, status)
+	err.Trace = errMsg.String()
+	glog.Errorln(err.String())
+	http.Error(w, err.Error(), status)
 }
 
 func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {

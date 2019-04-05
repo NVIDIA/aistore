@@ -478,7 +478,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 	// Unregister same target again
 	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	if err == nil || !strings.Contains(err.Error(), "Not Found") {
+	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatal("Unregistering the same target twice must return error 404")
 	}
 	n = len(getClusterMap(t, m.proxyURL).Tmap)

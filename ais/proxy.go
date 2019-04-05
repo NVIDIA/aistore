@@ -754,6 +754,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := p.createLocalBucket(&msg, bucket); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
 	case cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {

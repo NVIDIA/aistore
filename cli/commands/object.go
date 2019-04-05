@@ -136,7 +136,7 @@ func objectHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, commandName)
 	}
-	return err
+	return errorHandler(err)
 }
 
 // Get object from bucket

@@ -71,7 +71,7 @@ func New() AISCLI {
 
 func (aisCLI AISCLI) Init() {
 	aisCLI.Name = cliName
-	aisCLI.Usage = "CLI tool for AIS"
+	aisCLI.Usage = "CLI tool for AIStore"
 	aisCLI.Version = "0.1"
 	aisCLI.EnableBashCompletion = true
 	cli.VersionFlag = cli.BoolFlag{

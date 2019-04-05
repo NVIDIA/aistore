@@ -609,7 +609,7 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	// err == nil && bad status: response.Body contains the error message
 	if response.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
+		err = fmt.Errorf("%s", outjson)
 		errstr = err.Error()
 		status = response.StatusCode
 		return callResult{args.si, outjson, err, errstr, status}

@@ -80,12 +80,21 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s, err: %v", baseParams.Method, err)
 	}
+	return checkBadStatus(req, resp)
+}
+
+func checkBadStatus(req *http.Request, resp *http.Response) (*http.Response, error) {
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response, err: %v", err)
 		}
-		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+		// If body is empty (ie from HEAD Object)
+		if len(b) == 0 {
+			return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+		}
+		err, _ = cmn.NewHTTPError(req, string(b), resp.StatusCode)
+		return nil, err
 	}
 	return resp, nil
 }

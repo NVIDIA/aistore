@@ -48,7 +48,7 @@ var (
 // Checks if URL is valid by trying to get Smap
 func TestAISURL(clusterURL string) error {
 	if ClusterURL == "" {
-		return errors.New("env variable 'AIS_URL' unset")
+		return errors.New("env variable 'AIS_URL' is not set")
 	}
 	baseParams := cliAPIParams(clusterURL)
 	_, err := api.GetClusterMap(baseParams)
@@ -264,4 +264,14 @@ func parseDest(rawURL string) (bucket, objName string, err error) {
 	}
 	destObjName = strings.Trim(destObjName, "/")
 	return destBucket, destObjName, nil
+}
+
+// Formats the error message from HTTPErrors (see http.go)
+func errorHandler(e error) error {
+	switch err := e.(type) {
+	case *cmn.HTTPError:
+		return fmt.Errorf("%s (%d): %s", http.StatusText(err.Status), err.Status, err.Message)
+	default:
+		return err
+	}
 }

@@ -23,12 +23,12 @@ var (
 	daemonFlag = cli.StringFlag{Name: cmn.Daemon, Usage: "daemon id"}
 
 	daecluFlags = map[string][]cli.Flag{
-		cmn.GetWhatSmap:         []cli.Flag{jsonFlag},
-		cmn.GetWhatDaemonStatus: []cli.Flag{jsonFlag},
-		cmn.GetWhatConfig:       []cli.Flag{jsonFlag},
-		cmn.GetWhatStats:        []cli.Flag{jsonFlag},
-		commandList:             []cli.Flag{verboseFlag},
-		cmn.ActSetProps:         []cli.Flag{daemonFlag},
+		cmn.GetWhatSmap:         {jsonFlag},
+		cmn.GetWhatDaemonStatus: {jsonFlag},
+		cmn.GetWhatConfig:       {jsonFlag},
+		cmn.GetWhatStats:        {jsonFlag},
+		commandList:             {verboseFlag},
+		cmn.ActSetProps:         {daemonFlag},
 	}
 
 	daemonSetConfText = fmt.Sprintf("%s %s --daemon <value>", cliName, cmn.ActSetProps)
@@ -106,7 +106,7 @@ func queryHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
-	return err
+	return errorHandler(err)
 }
 
 // Displays smap of single daemon
