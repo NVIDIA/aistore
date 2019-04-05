@@ -408,7 +408,7 @@ func TestDownloadStatus(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Wait for the short file to be downloaded
-	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestLocalBucketName, params, 2*time.Second)
+	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestLocalBucketName, params, 5*time.Second)
 	tutils.CheckFatal(err, t)
 
 	resp, err := api.DownloadStatus(params, id)

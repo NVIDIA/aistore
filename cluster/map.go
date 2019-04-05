@@ -119,6 +119,15 @@ type (
 	}
 )
 
+func (m *Smap) InitDigests() {
+	for _, node := range m.Tmap {
+		node.Digest()
+	}
+	for _, node := range m.Pmap {
+		node.Digest()
+	}
+}
+
 func (m *Smap) CountTargets() int { return len(m.Tmap) }
 func (m *Smap) CountProxies() int { return len(m.Pmap) }
 

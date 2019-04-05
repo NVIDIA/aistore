@@ -230,12 +230,7 @@ func (r *smapowner) Listeners() cluster.SmapListeners {
 //
 
 func (r *smapowner) put(smap *smapX) {
-	for _, snode := range smap.Tmap {
-		snode.Digest()
-	}
-	for _, snode := range smap.Pmap {
-		snode.Digest()
-	}
+	smap.InitDigests()
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 
 	if r.listeners != nil {

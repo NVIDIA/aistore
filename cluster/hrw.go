@@ -23,6 +23,7 @@ func Uname(bucket, objname string) string {
 	return path.Join(bucket, objname)
 }
 
+// Requires elements of smap.Tmap to have their idDigest initialized
 func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 	var (
 		max    uint64
@@ -30,6 +31,7 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 		digest = xxhash.ChecksumString64S(name, MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
+		// Assumes that sinfo.idDigest is initialized
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
 		if cs > max {
 			max = cs
