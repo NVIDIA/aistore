@@ -107,7 +107,7 @@ type (
 		r io.ReadCloser
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
-		cksumToCheck cmn.CksumProvider
+		cksumToCheck cmn.Cksummer
 		// Context used when receiving object which is contained in cloud bucket.
 		// It usually contains credentials to access the cloud.
 		ctx context.Context
@@ -521,7 +521,7 @@ func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() 
 func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
 
-func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM, recvType cluster.RecvType, cksum cmn.CksumProvider) error {
+func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM, recvType cluster.RecvType, cksum cmn.Cksummer) error {
 	roi := &recvObjInfo{
 		t:       t,
 		r:       reader,
@@ -767,7 +767,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		oldFQN, oldSize := getFromOtherLocalFS(lom)
 		if oldFQN != "" {
 			lom.FQN = oldFQN
-			lom.Size(oldSize)
+			lom.SetSize(oldSize)
 			lom.SetExists(true)
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("restored from LFS %s (%s)", lom, cmn.B2S(oldSize, 1))
@@ -2282,7 +2282,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		if errstr != "" {
 			return
 		}
-		roi.lom.Version(ver)
+		roi.lom.SetVersion(ver)
 	}
 
 	// Lock the uname for the object and rename it from workFQN to actual FQN.
@@ -2292,7 +2292,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 			roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 			return
 		}
-		roi.lom.Version(ver)
+		roi.lom.SetVersion(ver)
 	}
 	if errstr = roi.lom.DelAllCopies(); errstr != "" {
 		roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
@@ -2565,7 +2565,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		written int64
 
 		checkCksumType      string
-		expectedCksum       cmn.CksumProvider
+		expectedCksum       cmn.Cksummer
 		saveHash, checkHash hash.Hash
 		hashes              []hash.Hash
 	)
@@ -2586,7 +2586,8 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 			// If migration validation is not required we can just take
 			// calculated checksum by some other node (from which we received
 			// the object). If not present we need to calculate it.
-			if roi.lom.Cksum(roi.cksumToCheck) == nil {
+			roi.lom.SetCksum(roi.cksumToCheck)
+			if roi.cksumToCheck == nil {
 				saveHash = xxhash.New64()
 				hashes = []hash.Hash{saveHash}
 			}
@@ -2615,18 +2616,19 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		roi.t.fshc(err, roi.workFQN)
 		return
 	}
-	roi.lom.Size(written)
+	roi.lom.SetSize(written)
 
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = fmt.Errorf("bad checksum - expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
+			err = fmt.Errorf("bad checksum - expected %s, got: %s; workFQN: %q",
+				expectedCksum.String(), computedCksum.String(), roi.workFQN)
 			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
 	}
 	if saveHash != nil {
-		roi.lom.Cksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
+		roi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
 	}
 
 	if err = file.Close(); err != nil {

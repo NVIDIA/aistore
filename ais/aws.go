@@ -343,8 +343,8 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 //=======================
 func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var (
-		cksum        cmn.CksumProvider
-		cksumToCheck cmn.CksumProvider
+		cksum        cmn.Cksummer
+		cksumToCheck cmn.Cksummer
 	)
 
 	sess := createSession(ctx)
@@ -372,9 +372,9 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname str
 	}
 
 	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname}
-	lom.Cksum(cksum)
+	lom.SetCksum(cksum)
 	if obj.VersionId != nil {
-		lom.Version(*obj.VersionId)
+		lom.SetVersion(*obj.VersionId)
 	}
 	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
 		return
@@ -397,7 +397,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname str
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.CksumProvider) (version string, errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		uploadoutput *s3manager.UploadOutput

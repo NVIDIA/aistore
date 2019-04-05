@@ -38,7 +38,7 @@ func (m *emptyCloud) headobject(ctx context.Context, bucket string, objname stri
 func (m *emptyCloud) getobj(ctx context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int) {
 	return nil, fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
 }
-func (m *emptyCloud) putobj(ctx context.Context, file *os.File, bucket, objname string, cksum cmn.CksumProvider) (version string, errstr string, errcode int) {
+func (m *emptyCloud) putobj(ctx context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int) {
 	return "", fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
 }
 func (m *emptyCloud) deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int) {

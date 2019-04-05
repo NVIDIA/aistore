@@ -19,7 +19,7 @@ func NewCRC32C() hash.Hash {
 // typed checksum value
 //
 type (
-	CksumProvider interface {
+	Cksummer interface {
 		Get() (string, string)
 		String() string
 	}
@@ -37,7 +37,7 @@ type (
 	}
 )
 
-func NewCksum(kind string, val string) CksumProvider {
+func NewCksum(kind string, val string) Cksummer {
 	if kind == "" {
 		return nil
 	}
@@ -58,7 +58,7 @@ func HashToStr(h hash.Hash) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func EqCksum(a, b CksumProvider) bool {
+func EqCksum(a, b Cksummer) bool {
 	if a == nil || b == nil {
 		return false
 	}

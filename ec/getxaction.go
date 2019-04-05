@@ -95,11 +95,11 @@ func (r *XactGet) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs t
 			return
 		}
 
-		writer.lom.Version(objAttrs.Version)
-		writer.lom.Atime(time.Unix(0, objAttrs.Atime))
+		writer.lom.SetVersion(objAttrs.Version)
+		writer.lom.SetAtime(time.Unix(0, objAttrs.Atime))
 
 		if objAttrs.CksumType != "" {
-			writer.lom.Cksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
+			writer.lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
 		}
 
 		if err := r.writerReceive(writer, iReq.Exists, objAttrs, object); err != nil {

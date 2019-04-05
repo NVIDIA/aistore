@@ -94,8 +94,8 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 		glog.Error(err)
 		return
 	}
-	roi.lom.Atime(time.Unix(0, hdr.ObjAttrs.Atime))
-	roi.lom.Version(hdr.ObjAttrs.Version)
+	roi.lom.SetAtime(time.Unix(0, hdr.ObjAttrs.Atime))
+	roi.lom.SetVersion(hdr.ObjAttrs.Version)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)

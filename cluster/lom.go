@@ -44,7 +44,7 @@ type (
 		uname   string
 		size    int64
 		version string
-		cksum   cmn.CksumProvider
+		cksum   cmn.Cksummer
 		atime   time.Time
 		copyFQN []string
 	}
@@ -77,37 +77,22 @@ type (
 // LOM public methods
 //
 
-func (lom *LOM) Uname() string     { return lom.md.uname }
-func (lom *LOM) CopyFQN() []string { return lom.md.copyFQN }
-func (lom *LOM) Size(size ...int64) int64 {
-	if len(size) > 0 {
-		lom.md.size = size[0]
-	}
-	return lom.md.size
-}
-func (lom *LOM) Version(ver ...string) string {
-	if len(ver) > 0 {
-		lom.md.version = ver[0]
-	}
-	return lom.md.version
-}
-func (lom *LOM) Cksum(cksum ...cmn.CksumProvider) cmn.CksumProvider {
-	if len(cksum) > 0 {
-		lom.md.cksum = cksum[0]
-	}
-	return lom.md.cksum
-}
-func (lom *LOM) Atime(atime ...time.Time) time.Time {
-	if len(atime) > 0 {
-		lom.md.atime = atime[0]
-	}
-	return lom.md.atime
-}
-func (lom *LOM) Exists() bool     { return lom.exists }
-func (lom *LOM) LRUEnabled() bool { return lom.BckProps.LRU.Enabled }
-func (lom *LOM) Misplaced() bool  { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
-func (lom *LOM) HasCopies() bool  { return !lom.IsCopy() && lom.NumCopies() > 1 }
-func (lom *LOM) NumCopies() int   { return len(lom.md.copyFQN) + 1 }
+func (lom *LOM) Uname() string               { return lom.md.uname }
+func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
+func (lom *LOM) Size() int64                 { return lom.md.size }
+func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
+func (lom *LOM) Version() string             { return lom.md.version }
+func (lom *LOM) SetVersion(ver string)       { lom.md.version = ver }
+func (lom *LOM) Cksum() cmn.Cksummer         { return lom.md.cksum }
+func (lom *LOM) SetCksum(cksum cmn.Cksummer) { lom.md.cksum = cksum }
+func (lom *LOM) Atime() time.Time            { return lom.md.atime }
+func (lom *LOM) SetAtime(atime time.Time)    { lom.md.atime = atime }
+func (lom *LOM) Exists() bool                { return lom.exists }
+func (lom *LOM) SetExists(exists bool)       { lom.exists = exists }
+func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
+func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
+func (lom *LOM) HasCopies() bool             { return !lom.IsCopy() && lom.NumCopies() > 1 }
+func (lom *LOM) NumCopies() int              { return len(lom.md.copyFQN) + 1 }
 func (lom *LOM) IsCopy() bool {
 	return len(lom.md.copyFQN) == 1 && lom.md.copyFQN[0] == lom.HrwFQN // is a local copy of an object
 }
@@ -121,8 +106,6 @@ func (lom *LOM) Atimestr(format ...string) string {
 	}
 	return lom.md.atime.Format(f)
 }
-func (lom *LOM) SetExists(exists bool) { lom.exists = exists }
-
 func (lom *LOM) RestoredReceived(from *LOM) {
 	if from.md.version != "" {
 		lom.md.version = from.md.version
@@ -137,7 +120,7 @@ func (lom *LOM) RestoredReceived(from *LOM) {
 	lom.BadCksum = false
 	lom.SetExists(true)
 }
-func (lom *LOM) CloneAndSet(cksum cmn.CksumProvider, version string, atime time.Time, fqn ...string) *LOM {
+func (lom *LOM) CloneAndSet(cksum cmn.Cksummer, version string, atime time.Time, fqn ...string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
 	if cksum != nil {
@@ -357,7 +340,7 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 	return
 }
 
-func (lom *LOM) BadCksumErr(cksum cmn.CksumProvider) (errstr string) {
+func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
 	if lom.md.cksum != nil {
 		errstr = fmt.Sprintf("BAD CHECKSUM: %s (%s != %s)", lom, cksum, lom.md.cksum)
 	} else {

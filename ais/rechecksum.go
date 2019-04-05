@@ -104,7 +104,7 @@ func (rcksctx *recksumctx) walk(fqn string, osfi os.FileInfo, err error) error {
 
 	// TODO: future scrubber to |cluster.LomCksumPresentRecomp, and scrub
 	lom := &cluster.LOM{FQN: fqn}
-	lom.Size(osfi.Size())
+	lom.SetSize(osfi.Size())
 	_ = lom.Fill("", cluster.LomCksum|cluster.LomCksumMissingRecomp)
 	return nil
 }

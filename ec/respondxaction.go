@@ -204,12 +204,12 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				slab.Free(buf)
 				return
 			}
-			lom.Version(objAttrs.Version)
-			lom.Atime(time.Unix(0, objAttrs.Atime))
+			lom.SetVersion(objAttrs.Version)
+			lom.SetAtime(time.Unix(0, objAttrs.Atime))
 
 			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if objAttrs.CksumType != "" {
-				lom.Cksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
+				lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
 			}
 
 			if errstr := lom.PersistCksumVer(); errstr != "" {

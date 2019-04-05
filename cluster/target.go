@@ -33,6 +33,6 @@ type Target interface {
 	GetAtimeRunner() *atime.Runner
 	GetMem2() *memsys.Mem2
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
-	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.CksumProvider) error
+	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer) error
 	GetFSPRG() fs.PathRunGroup
 }

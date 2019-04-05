@@ -551,7 +551,7 @@ func TestFS(t *testing.T) {
 		put(t, fs, file2Path, 0, content1)
 
 		err := fs.Mkdir(context.Background(), dir1Path, os.ModePerm)
-		if err != nil {
+		if err != nil && !os.IsExist(err) {
 			t.Fatalf("Failed to create directory, err = %v", err)
 		}
 
@@ -563,7 +563,7 @@ func TestFS(t *testing.T) {
 		put(t, fs, file3Path, 0, content2)
 
 		err = fs.Mkdir(context.Background(), dir12Path, os.ModePerm)
-		if err != nil {
+		if err != nil && !os.IsExist(err) {
 			t.Fatalf("Failed to create directory, err = %v", err)
 		}
 

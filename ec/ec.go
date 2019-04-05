@@ -207,7 +207,7 @@ type (
 		n       int64              // number of byte sent/received
 		refCnt  int32              // number of references
 		workFQN string             // FQN for temporary slice/replica
-		cksum   cmn.CksumProvider  // checksum of the slice
+		cksum   cmn.Cksummer       // checksum of the slice
 	}
 
 	// a source for data response: the data to send to the caller

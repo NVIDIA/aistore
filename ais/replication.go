@@ -410,7 +410,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 			errstr := fmt.Sprintf("Failed to parse atime string: %s to int, err: %v", timeStr, err)
 			return errors.New(errstr)
 		}
-		lom.Atime(time.Unix(0, atimeInt)) // FIXME: not used
+		lom.SetAtime(time.Unix(0, atimeInt)) // FIXME: not used
 	}
 	if err, _ := r.t.doPut(httpReq, lom.Bucket, lom.Objname); err != nil {
 		return err

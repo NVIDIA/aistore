@@ -46,7 +46,7 @@ func (t *TargetMock) GetMem2() *memsys.Mem2         { return memsys.Init() }
 func (t *TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int) {
 	return "", http.StatusOK
 }
-func (t *TargetMock) Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.CksumProvider) error {
+func (t *TargetMock) Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer) error {
 	return nil
 }
 func (t *TargetMock) GetFSPRG() fs.PathRunGroup { return nil }

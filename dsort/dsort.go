@@ -386,7 +386,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if lom.CksumConf.Type != cmn.ChecksumNone {
 		cksumValue = cmn.HashToStr(h)
 		cmn.Assert(cksumValue != "")
-		lom.Cksum(cmn.NewCksum(cksumType, cksumValue))
+		lom.SetCksum(cmn.NewCksum(cksumType, cksumValue))
 	}
 
 	if err := cmn.MvFile(workFQN, lom.FQN); err != nil {

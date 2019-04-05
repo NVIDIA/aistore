@@ -556,7 +556,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
 		lom := *req.LOM
-		lom.Cksum(slices[i].cksum)
+		lom.SetCksum(slices[i].cksum)
 
 		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, &lom, src, nil)
 		if err != nil {
