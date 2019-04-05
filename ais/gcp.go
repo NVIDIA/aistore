@@ -354,7 +354,9 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Cksum: cksum, Version: strconv.FormatInt(attrs.Generation, 10)}
+	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname}
+	lom.Cksum(cksum)
+	lom.Version(strconv.FormatInt(attrs.Generation, 10))
 	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
 		return
 	}

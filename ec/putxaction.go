@@ -84,7 +84,7 @@ func (r *XactPut) Run() (err error) {
 			lastAction = time.Now()
 			switch req.Action {
 			case ActSplit:
-				r.stats.updateEncode(req.LOM.Size)
+				r.stats.updateEncode(req.LOM.Size())
 			case ActDelete:
 				r.stats.updateDelete()
 			default:
@@ -168,7 +168,8 @@ func (r *XactPut) Encode(req *Request) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
 	if glog.V(4) {
-		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s", r.bckName, len(r.ecCh), req.LOM.Uname)
+		glog.Infof("ECXAction for bucket %s (queue = %d): encode object %s",
+			r.bckName, len(r.ecCh), req.LOM.Uname())
 	}
 
 	r.dispatchDecodingRequest(req)
@@ -205,7 +206,7 @@ func (r *XactPut) dispatchRequest(req *Request) {
 		jogger, ok := r.putJoggers[req.LOM.ParsedFQN.MpathInfo.Path]
 		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 		if glog.V(4) {
-			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname)
+			glog.Infof("ECXAction (bg queue = %d): dispatching object %s....", len(jogger.workCh), req.LOM.Uname())
 		}
 		r.stats.updateQueue(len(jogger.workCh))
 		jogger.workCh <- req

@@ -107,17 +107,17 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 	return
 }
 
-func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, errstr string) {
+func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, digest uint64, errstr string) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
 		errstr = fmt.Sprintf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objname)
 		return
 	}
 	var (
-		max    uint64
-		name   = Uname(bucket, objname)
-		digest = xxhash.ChecksumString64S(name, MLCG32)
+		max  uint64
+		name = Uname(bucket, objname)
 	)
+	digest = xxhash.ChecksumString64S(name, MLCG32)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs > max {

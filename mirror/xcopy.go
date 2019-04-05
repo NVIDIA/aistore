@@ -209,21 +209,22 @@ func (j *jogger) walk(fqn string, osfi os.FileInfo, err error) error {
 }
 
 func (j *jogger) delCopies(lom *cluster.LOM) (err error) {
-	j.parent.Namelocker.Lock(lom.Uname, true)
+	j.parent.Namelocker.Lock(lom.Uname(), true)
 	if j.parent.Copies == 1 {
 		if errstr := lom.DelAllCopies(); errstr != "" {
 			err = errors.New(errstr)
 		}
 	} else {
-		for i := len(lom.CopyFQN) - 1; i >= j.parent.Copies-1; i-- {
-			cpyfqn := lom.CopyFQN[i]
+		copies := lom.CopyFQN()
+		for i := len(copies) - 1; i >= j.parent.Copies-1; i-- {
+			cpyfqn := copies[i]
 			if errstr := lom.DelCopy(cpyfqn); errstr != "" {
 				err = errors.New(errstr)
 				break
 			}
 		}
 	}
-	j.parent.Namelocker.Unlock(lom.Uname, true)
+	j.parent.Namelocker.Unlock(lom.Uname(), true)
 	return
 }
 

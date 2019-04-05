@@ -82,7 +82,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, errstr := cluster.FQN(tp, bucket, objname, bckIsLocal)
+		fqnMeta, _, errstr := cluster.FQN(tp, bucket, objname, bckIsLocal)
 		if errstr != "" {
 			return errors.New(errstr)
 		}
@@ -95,7 +95,6 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 }
 
 // DispatchReq is responsible for handling request from other targets
-// which require a response
 func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 	bckIsLocal := r.bmd.Get().IsLocal(bucket)
 	daemonID := iReq.Sender
@@ -107,18 +106,20 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			glog.Errorf("Failed to delete %s/%s: %v", bucket, objName, err)
 		}
 	case reqGet:
-		//slice or replica request: send the object's data to the caller
+		// slice or replica request: send the object's data to the caller
 		var fqn, errstr string
 		if iReq.IsSlice {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
+			fqn, _, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
-			fqn, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
+			//        LOM right away
+			fqn, _, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
 		}
 		if errstr != "" {
 			glog.Errorf(errstr)
@@ -130,7 +131,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, errstr := cluster.FQN(MetaType, bucket, objName, bckIsLocal)
+		fqn, _, errstr := cluster.FQN(MetaType, bucket, objName, bckIsLocal)
 		if errstr != "" {
 			glog.Errorf(errstr)
 			return
@@ -174,7 +175,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
 			}
-			objFQN, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
+			objFQN, _, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return
@@ -184,7 +185,8 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				glog.Infof("Got replica response from %s (%s/%s)",
 					iReq.Sender, bucket, objName)
 			}
-			objFQN, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			// FIXME: vs. lom.Fill() a few lines below
+			objFQN, _, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return
@@ -202,12 +204,12 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				slab.Free(buf)
 				return
 			}
-			lom.Version = objAttrs.Version
-			lom.Atime = time.Unix(0, objAttrs.Atime)
+			lom.Version(objAttrs.Version)
+			lom.Atime(time.Unix(0, objAttrs.Atime))
 
 			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if objAttrs.CksumType != "" {
-				lom.Cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
+				lom.Cksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
 			}
 
 			if errstr := lom.PersistCksumVer(); errstr != "" {

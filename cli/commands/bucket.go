@@ -15,7 +15,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -197,7 +196,7 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 
 // Lists bucket names
 func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -247,7 +246,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return errors.New("expected at least one argument")
 	}
 
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}
@@ -287,7 +286,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}

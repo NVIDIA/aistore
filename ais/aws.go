@@ -371,9 +371,10 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname str
 		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
 	}
 
-	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Cksum: cksum}
+	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname}
+	lom.Cksum(cksum)
 	if obj.VersionId != nil {
-		lom.Version = *obj.VersionId
+		lom.Version(*obj.VersionId)
 	}
 	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
 		return

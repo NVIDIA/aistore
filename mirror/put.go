@@ -211,8 +211,8 @@ loop:
 }
 
 func (j *copier) addCopy(lom *cluster.LOM) {
-	j.parent.Namelocker.Lock(lom.Uname, false)
-	defer j.parent.Namelocker.Unlock(lom.Uname, false)
+	j.parent.Namelocker.Lock(lom.Uname(), false)
+	defer j.parent.Namelocker.Unlock(lom.Uname(), false)
 
 	if err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)

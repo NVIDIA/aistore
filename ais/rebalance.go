@@ -94,8 +94,8 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 		glog.Error(err)
 		return
 	}
-	roi.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
-	roi.lom.Version = hdr.ObjAttrs.Version
+	roi.lom.Atime(time.Unix(0, hdr.ObjAttrs.Atime))
+	roi.lom.Version(hdr.ObjAttrs.Version)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
@@ -189,15 +189,15 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 
 	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
-	rj.t.rtnamemap.Lock(lom.Uname, false)
+	rj.t.rtnamemap.Lock(lom.Uname(), false)
 
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		glog.Errorf("failed to open file: %s, err: %v", lom.FQN, err)
-		rj.t.rtnamemap.Unlock(lom.Uname, false)
+		rj.t.rtnamemap.Unlock(lom.Uname(), false)
 		return err
 	}
 
-	cksumType, cksumValue := lom.Cksum.Get()
+	cksumType, cksumValue := lom.Cksum().Get()
 	hdr := transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
@@ -205,17 +205,17 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		Opaque:  []byte(rj.t.si.DaemonID),
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       fi.Size(),
-			Atime:      lom.Atime.UnixNano(),
+			Atime:      lom.Atime().UnixNano(),
 			CksumType:  cksumType,
 			CksumValue: cksumValue,
-			Version:    lom.Version,
+			Version:    lom.Version(),
 		},
 	}
 
 	rj.wg.Add(1) // NOTE: Done happens in case of SendV error or in rebalanceObjCallback.
 	if err := rj.t.rebManager.streams.SendV(hdr, file, rj.rebalanceObjCallback, si); err != nil {
 		glog.Errorf("failed to rebalance: %s, err: %v", lom.FQN, err)
-		rj.t.rtnamemap.Unlock(lom.Uname, false)
+		rj.t.rtnamemap.Unlock(lom.Uname(), false)
 		rj.wg.Done()
 		return err
 	}
@@ -292,9 +292,9 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 
-	rj.t.rtnamemap.Lock(lom.Uname, false)
+	rj.t.rtnamemap.Lock(lom.Uname(), false)
 	if err := lom.CopyObject(lom.HrwFQN, rj.buf); err != nil {
-		rj.t.rtnamemap.Unlock(lom.Uname, false)
+		rj.t.rtnamemap.Unlock(lom.Uname(), false)
 		if !os.IsNotExist(err) {
 			rj.xreb.Abort()
 			rj.t.fshc(err, lom.HrwFQN)
@@ -302,7 +302,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
-	rj.t.rtnamemap.Unlock(lom.Uname, false)
+	rj.t.rtnamemap.Unlock(lom.Uname(), false)
 	rj.objectsMoved++
 	rj.bytesMoved += fileInfo.Size()
 	return nil

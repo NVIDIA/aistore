@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -117,7 +116,7 @@ func objectHandler(c *cli.Context) (err error) {
 	}
 
 	bucket := parseFlag(c, bucketFlag.Name)
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}

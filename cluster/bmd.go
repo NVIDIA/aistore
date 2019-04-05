@@ -7,26 +7,8 @@ package cluster
 import (
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-)
-
-var (
-	// Translates the various query values for URLParamBckProvider for cluster use
-	bckProviderMap = map[string]string{
-		// Cloud values
-		cmn.CloudBs:        cmn.CloudBs,
-		cmn.ProviderAmazon: cmn.CloudBs,
-		cmn.ProviderGoogle: cmn.CloudBs,
-
-		// Local values
-		cmn.LocalBs:     cmn.LocalBs,
-		cmn.ProviderAIS: cmn.LocalBs,
-
-		// unset
-		"": "",
-	}
 )
 
 // interface to Get current bucket-metadata instance
@@ -69,7 +51,7 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 	}
 	config := cmn.GCO.Get()
 
-	normalizedBckProvider, err := TranslateBckProvider(bckProvider)
+	normalizedBckProvider, err := cmn.BckProviderFromStr(bckProvider)
 	if err != nil {
 		return false, err
 	}
@@ -84,7 +66,7 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 		isLocal = true
 	case cmn.CloudBs:
 		// Check if user does have the associated cloud
-		if !isValidCloudProvider(bckProvider, config.CloudProvider) {
+		if !cmn.IsValidCloudProvider(bckProvider, config.CloudProvider) {
 			err = fmt.Errorf("cluster cloud provider %q, mis-match bucket provider %q", config.CloudProvider, bckProvider)
 			return
 		}
@@ -93,19 +75,6 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 		isLocal = bckIsLocal
 	}
 	return
-}
-
-func TranslateBckProvider(bckProvider string) (string, error) {
-	bckProvider = strings.ToLower(bckProvider)
-	val, ok := bckProviderMap[bckProvider]
-	if !ok {
-		return "", fmt.Errorf("invalid value %q for %q", bckProvider, cmn.URLParamBckProvider)
-	}
-	return val, nil
-}
-
-func isValidCloudProvider(bckProvider, cloudProvider string) bool {
-	return bckProvider == cloudProvider || bckProvider == cmn.CloudBs
 }
 
 func validateBucketName(bucket string) bool {

@@ -157,8 +157,8 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 		glog.Warningf("Failed to read file stats: %s", errstr)
 	}
 
-	if err == nil && lom.Size != 0 {
-		sz = lom.Size
+	if err == nil && lom.Size() != 0 {
+		sz = lom.Size()
 		reader = fh
 	} else {
 		ireq.Exists = false
@@ -166,12 +166,12 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 	cmn.Assert((sz == 0 && reader == nil) || (sz != 0 && reader != nil))
 	objAttrs := transport.ObjectAttrs{
 		Size:    sz,
-		Version: lom.Version,
-		Atime:   lom.Atime.UnixNano(),
+		Version: lom.Version(),
+		Atime:   lom.Atime().UnixNano(),
 	}
 
-	if lom.Cksum != nil {
-		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
+	if lom.Cksum() != nil {
+		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 
 	rHdr := transport.Header{
@@ -332,11 +332,11 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	objAttrs := transport.ObjectAttrs{
 		Size:    src.size,
-		Version: lom.Version,
-		Atime:   lom.Atime.UnixNano(),
+		Version: lom.Version(),
+		Atime:   lom.Atime().UnixNano(),
 	}
-	if lom.Cksum != nil {
-		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum.Get()
+	if lom.Cksum() != nil {
+		objAttrs.CksumType, objAttrs.CksumValue = lom.Cksum().Get()
 	}
 	hdr := transport.Header{
 		Objname:  lom.Objname,

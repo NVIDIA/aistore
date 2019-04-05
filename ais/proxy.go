@@ -304,7 +304,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	bucket := apiItems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	normalizedBckProvider, err := cluster.TranslateBckProvider(bckProvider)
+	normalizedBckProvider, err := cmn.BckProviderFromStr(bckProvider)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

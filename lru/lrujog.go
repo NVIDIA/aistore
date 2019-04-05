@@ -78,7 +78,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
 		h           = lctx.heap
 		lom         = &cluster.LOM{T: lctx.ini.T, FQN: fqn}
-		bckProvider = cluster.GenBucketProvider(lctx.bckIsLocal)
+		bckProvider = cmn.BckProviderFromLocal(lctx.bckIsLocal)
 	)
 	errstr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomAtime, lctx.config)
 	if errstr != "" || !lom.Exists() {
@@ -105,10 +105,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// objects
 	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
-	if lom.Atime.After(lctx.dontevictime) {
-		if glog.V(4) {
-			glog.Infof("dont-evict: %s(%v > %v)", lom, lom.Atime, lctx.dontevictime)
-		}
+	if lom.Atime().After(lctx.dontevictime) {
 		return nil
 	}
 
@@ -124,7 +121,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
 	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
-	if lctx.cursize >= lctx.totsize && lom.Atime.After(lctx.newest) {
+	if lctx.cursize >= lctx.totsize && lom.Atime().After(lctx.newest) {
 		return nil
 	}
 	// push and update the context
@@ -133,9 +130,9 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	fi := &fileInfo{fqn: fqn, lom: lom}
 	heap.Push(h, fi)
-	lctx.cursize += fi.lom.Size
-	if lom.Atime.After(lctx.newest) {
-		lctx.newest = lom.Atime
+	lctx.cursize += fi.lom.Size()
+	if lom.Atime().After(lctx.newest) {
+		lctx.newest = lom.Atime()
 	}
 	return nil
 }
@@ -164,7 +161,7 @@ func (lctx *lructx) evict() (err error) {
 	for h.Len() > 0 && lctx.totsize > 0 {
 		fi := heap.Pop(h).(*fileInfo)
 		if lctx.evictObj(fi) {
-			bevicted += fi.lom.Size
+			bevicted += fi.lom.Size()
 			fevicted++
 			if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
 				return
@@ -177,8 +174,8 @@ func (lctx *lructx) evict() (err error) {
 }
 
 func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
-	lctx.totsize -= fi.lom.Size
-	capCheck += fi.lom.Size
+	lctx.totsize -= fi.lom.Size()
+	capCheck += fi.lom.Size()
 	if err := lctx.yieldTerm(); err != nil {
 		return 0, err
 	}
@@ -206,12 +203,12 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 }
 
 func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
-	lctx.ini.Namelocker.Lock(fi.lom.Uname, true)
+	lctx.ini.Namelocker.Lock(fi.lom.Uname(), true)
 	// local replica must be go with the object; the replica, however, is
 	// located in a different local FS and belongs, therefore, to a different LRU jogger
 	// (hence, precise size accounting TODO)
 	if errstr := fi.lom.DelAllCopies(); errstr != "" {
-		glog.Warningf("remove(%s=>%s): %s", fi.lom, fi.lom.CopyFQN, errstr)
+		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.CopyFQN(), errstr)
 	}
 	if err := os.Remove(fi.lom.FQN); err == nil {
 		glog.Infof("Evicted %s", fi.lom)
@@ -221,7 +218,7 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 	} else {
 		glog.Errorf("Failed to evict %s, err: %v", fi.lom, err)
 	}
-	lctx.ini.Namelocker.Unlock(fi.lom.Uname, true)
+	lctx.ini.Namelocker.Unlock(fi.lom.Uname(), true)
 	return
 }
 
@@ -279,7 +276,7 @@ func (h fileInfoMinHeap) Len() int { return len(h) }
 func (h fileInfoMinHeap) Less(i, j int) bool {
 	li := h[i].lom
 	lj := h[j].lom
-	return li.Atime.Before(lj.Atime)
+	return li.Atime().Before(lj.Atime())
 }
 
 func (h fileInfoMinHeap) Swap(i, j int) {

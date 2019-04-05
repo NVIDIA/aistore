@@ -27,6 +27,42 @@ const (
 	LocalBs = "local"
 )
 
+var (
+	// Translates the various query values for URLParamBckProvider for cluster use
+	bckProviderMap = map[string]string{
+		// Cloud values
+		CloudBs:        CloudBs,
+		ProviderAmazon: CloudBs,
+		ProviderGoogle: CloudBs,
+
+		// Local values
+		LocalBs:     LocalBs,
+		ProviderAIS: LocalBs,
+
+		// unset
+		"": "",
+	}
+)
+
+// bucket-is-local to provider helper
+func BckProviderFromLocal(isLocal bool) string {
+	if isLocal {
+		return LocalBs
+	}
+	return CloudBs
+}
+func BckProviderFromStr(provider string) (val string, err error) {
+	var ok bool
+	val, ok = bckProviderMap[strings.ToLower(provider)]
+	if !ok {
+		err = errors.New("invalid bucket provider '" + provider + "'")
+	}
+	return
+}
+func IsValidCloudProvider(bckProvider, cloudProvider string) bool {
+	return bckProvider == cloudProvider || bckProvider == CloudBs
+}
+
 // $CONFDIR/*
 const (
 	SmapBackupFile      = "smap.json"

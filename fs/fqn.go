@@ -27,6 +27,7 @@ type ParsedFQN struct {
 	ContentType string
 	Bucket      string
 	Objname     string
+	Digest      uint64
 	IsLocal     bool
 }
 

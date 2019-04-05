@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb"
@@ -119,7 +118,7 @@ func downloadHandler(c *cli.Context) error {
 		id string
 	)
 
-	bckProvider, err := cluster.TranslateBckProvider(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
 	if err != nil {
 		return err
 	}

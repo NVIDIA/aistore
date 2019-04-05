@@ -173,8 +173,8 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		return
 	}
 	coldGet = !lom.Exists()
-	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(false) {
-		if coldGet, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
+	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version() != "" && versioningConfigured(false) {
+		if coldGet, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version()); errstr != "" {
 			return
 		}
 	}
@@ -191,9 +191,9 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		glog.Infof("prefetch: %s", lom)
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)
-	t.statsif.Add(stats.PrefetchSize, lom.Size)
+	t.statsif.Add(stats.PrefetchSize, lom.Size())
 	if vchanged {
-		t.statsif.Add(stats.VerChangeSize, lom.Size)
+		t.statsif.Add(stats.VerChangeSize, lom.Size())
 		t.statsif.Add(stats.VerChangeCount, 1)
 	}
 }

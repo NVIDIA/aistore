@@ -318,8 +318,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return fmt.Errorf("%s/%s %s", lom.Bucket, lom.Objname, cmn.DoesNotExist)
 	}
 	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname)
-	r.t.rtnamemap.Lock(lom.Uname, req.deleteObject)
-	defer r.t.rtnamemap.Unlock(lom.Uname, req.deleteObject)
+	r.t.rtnamemap.Lock(lom.Uname(), req.deleteObject)
+	defer r.t.rtnamemap.Unlock(lom.Uname(), req.deleteObject)
 
 	if errstr = lom.Fill(bckProvider, cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
@@ -354,8 +354,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	// specify source direct URL in request header
 	httpReq.Header.Add(cmn.HeaderObjReplicSrc, r.directURL)
-	if lom.Cksum != nil {
-		cksumType, cksumValue := lom.Cksum.Get()
+	if lom.Cksum() != nil {
+		cksumType, cksumValue := lom.Cksum().Get()
 		httpReq.Header.Add(cmn.HeaderObjCksumType, cksumType)
 		httpReq.Header.Add(cmn.HeaderObjCksumVal, cksumValue)
 	}
@@ -410,7 +410,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 			errstr := fmt.Sprintf("Failed to parse atime string: %s to int, err: %v", timeStr, err)
 			return errors.New(errstr)
 		}
-		lom.Atime = time.Unix(0, atimeInt) // FIXME: not used
+		lom.Atime(time.Unix(0, atimeInt)) // FIXME: not used
 	}
 	if err, _ := r.t.doPut(httpReq, lom.Bucket, lom.Objname); err != nil {
 		return err

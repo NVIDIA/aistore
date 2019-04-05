@@ -95,7 +95,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Fill("", 0)).To(BeEmpty())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredLocalFQN))
 
-				Expect(lom.Uname).To(BeEquivalentTo(cluster.Uname(bucketLocalA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Uname(bucketLocalA, testObject)))
 				Expect(lom.BckIsLocal).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -115,7 +115,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bucket).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.Objname).To(BeEquivalentTo(testObject))
 
-				Expect(lom.Uname).To(BeEquivalentTo(cluster.Uname(bucketLocalA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Uname(bucketLocalA, testObject)))
 				Expect(lom.BckIsLocal).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -149,7 +149,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Fill("", 0)).To(BeEmpty())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredCloudFQN))
 
-				Expect(lom.Uname).To(BeEquivalentTo(cluster.Uname(bucketCloudA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Uname(bucketCloudA, testObject)))
 				Expect(lom.BckIsLocal).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -168,7 +168,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bucket).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.Objname).To(BeEquivalentTo(testObject))
 
-				Expect(lom.Uname).To(BeEquivalentTo(cluster.Uname(bucketCloudA, testObject)))
+				Expect(lom.Uname()).To(BeEquivalentTo(cluster.Uname(bucketCloudA, testObject)))
 				Expect(lom.BckIsLocal).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -254,7 +254,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Fill("", cluster.LomFstat)).To(BeEmpty())
 
 				Expect(lom.Exists()).To(BeTrue())
-				Expect(lom.Size).To(BeEquivalentTo(testFileSize))
+				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
 			})
 		})
 
@@ -270,7 +270,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 				Expect(lom.Fill("", cluster.LomAtime)).To(BeEmpty())
 
-				Expect(lom.Atime).To(BeEquivalentTo(desiredAtime))
+				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
 				Expect(lom.Atimestr()).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
@@ -284,7 +284,7 @@ var _ = Describe("LOM", func() {
 
 				Expect(lom.Fill("", cluster.LomAtime)).To(BeEmpty())
 
-				Expect(lom.Atime).To(BeEquivalentTo(desiredAtime))
+				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
 				Expect(lom.Atimestr()).To(BeEquivalentTo(desiredAtime.Format(cmn.RFC822)))
 			})
 		})
@@ -302,7 +302,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: noneFQN}
 				Expect(lom.Fill("", cluster.LomCksum|cluster.LomCksumMissingRecomp)).To(BeEmpty())
 
-				Expect(lom.Cksum).To(BeNil())
+				Expect(lom.Cksum()).To(BeNil())
 			})
 
 			It("should not retrieve cksum when it was not previously computed", func() {
@@ -310,7 +310,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 
 				Expect(lom.Fill("", cluster.LomCksum)).To(BeEmpty())
-				Expect(lom.Cksum).To(BeNil())
+				Expect(lom.Cksum()).To(BeNil())
 			})
 
 			It("should be able to verify checksum", func() {
@@ -321,7 +321,7 @@ var _ = Describe("LOM", func() {
 
 				Expect(lom.Fill("", cluster.LomCksum|cluster.LomCksumPresentRecomp)).To(BeEmpty())
 
-				_, val := lom.Cksum.Get()
+				_, val := lom.Cksum().Get()
 				Expect(val).To(BeEquivalentTo(expectedChecksum))
 				Expect(lom.BadCksum).To(BeFalse())
 			})
@@ -334,7 +334,7 @@ var _ = Describe("LOM", func() {
 
 				Expect(lom.Fill("", cluster.LomCksum|cluster.LomCksumPresentRecomp)).ToNot(BeEmpty())
 
-				_, cksumValue := lom.Cksum.Get()
+				_, cksumValue := lom.Cksum().Get()
 				Expect(cksumValue).To(BeEquivalentTo(badChecksum))
 				Expect(lom.BadCksum).To(BeTrue())
 			})
@@ -346,7 +346,7 @@ var _ = Describe("LOM", func() {
 
 				Expect(lom.Fill("", cluster.LomCksum|cluster.LomCksumMissingRecomp)).To(BeEmpty())
 
-				_, cksumValue := lom.Cksum.Get()
+				_, cksumValue := lom.Cksum().Get()
 				Expect(cksumValue).To(BeEquivalentTo(expectedHash))
 				xattrVal, _ := fs.GetXattr(lom.FQN, cmn.XattrXXHash)
 				Expect(xattrVal).To(BeEquivalentTo(expectedHash))
@@ -365,7 +365,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 
 				Expect(lom.Fill("", cluster.LomVersion)).To(BeEmpty())
-				Expect(lom.Version).To(BeEquivalentTo(desiredVersion))
+				Expect(lom.Version()).To(BeEquivalentTo(desiredVersion))
 			})
 		})
 
@@ -382,7 +382,7 @@ var _ = Describe("LOM", func() {
 				lom := &cluster.LOM{T: tMock, FQN: localFQN}
 
 				Expect(lom.Fill("", cluster.LomCopy)).To(BeEmpty())
-				Expect(lom.CopyFQN[0]).To(BeEquivalentTo(copyFQN))
+				Expect(lom.CopyFQN()[0]).To(BeEquivalentTo(copyFQN))
 			})
 		})
 	})
@@ -443,7 +443,7 @@ var _ = Describe("LOM", func() {
 				xattr, _ = fs.GetXattr(localFQN, cmn.XattrCopies)
 				Expect(string(xattr)).To(BeEquivalentTo(copyFQN))
 
-				Expect(lom.CopyFQN[0]).To(BeEquivalentTo(copyFQN))
+				Expect(lom.CopyFQN()[0]).To(BeEquivalentTo(copyFQN))
 
 				// Check msic copy data
 				lomCopy := &cluster.LOM{T: tMock, FQN: copyFQN}
@@ -484,7 +484,7 @@ var _ = Describe("LOM", func() {
 			lomEmpty := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomEmpty.Fill("", 0)).To(BeEmpty())
 
-			copiedLOM := lomEmpty.CloneAndSet(cluster.LOMCopyProps{})
+			copiedLOM := lomEmpty.CloneAndSet(nil, "", time.Time{})
 			Expect(copiedLOM).To(Equal(lomEmpty))
 		})
 
@@ -496,26 +496,22 @@ var _ = Describe("LOM", func() {
 			lomEmpty := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomEmpty.Fill("", 0)).To(BeEmpty())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomEmpty.Cksum).To(BeNil())
-			Expect(lomEmpty.Version).To(BeEmpty())
+			Expect(lomEmpty.Cksum()).To(BeNil())
+			Expect(lomEmpty.Version()).To(BeEmpty())
 
 			cksum := cmn.NewCksum(cmn.ChecksumXXHash, "something")
 			version := "102"
-			copiedLOM := lomEmpty.CloneAndSet(cluster.LOMCopyProps{
-				FQN:     desiredCloudFQN,
-				Cksum:   cksum,
-				Version: version,
-			})
+			copiedLOM := lomEmpty.CloneAndSet(cksum, version, time.Time{}, desiredCloudFQN)
 			Expect(copiedLOM.FQN).To(Equal(desiredCloudFQN))
-			Expect(copiedLOM.Uname).To(Equal(cluster.Uname(sameBucketName, testObject)))
+			Expect(copiedLOM.Uname()).To(Equal(cluster.Uname(sameBucketName, testObject)))
 			Expect(copiedLOM.BckIsLocal).To(BeFalse())
 			Expect(copiedLOM.ParsedFQN.IsLocal).To(BeFalse())
 			Expect(copiedLOM.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
 			Expect(copiedLOM.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(copiedLOM.ParsedFQN.Objname).To(Equal(testObject))
 			Expect(copiedLOM.ParsedFQN.ContentType).To(Equal(fs.ObjectType))
-			Expect(copiedLOM.Cksum).To(Equal(cksum))
-			Expect(copiedLOM.Version).To(Equal(version))
+			Expect(copiedLOM.Cksum()).To(Equal(cksum))
+			Expect(copiedLOM.Version()).To(Equal(version))
 		})
 	})
 
@@ -530,7 +526,7 @@ var _ = Describe("LOM", func() {
 			lomEmpty := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomEmpty.Fill("", 0)).To(BeEmpty())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomEmpty.Uname).To(Equal(cluster.Uname(sameBucketName, testObject)))
+			Expect(lomEmpty.Uname()).To(Equal(cluster.Uname(sameBucketName, testObject)))
 			Expect(lomEmpty.BckIsLocal).To(BeTrue())
 			Expect(lomEmpty.ParsedFQN.IsLocal).To(BeTrue())
 			Expect(lomEmpty.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
@@ -541,7 +537,7 @@ var _ = Describe("LOM", func() {
 			lomLocal := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomLocal.Fill(cmn.LocalBs, 0)).To(BeEmpty())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
-			Expect(lomLocal.Uname).To(Equal(cluster.Uname(sameBucketName, testObject)))
+			Expect(lomLocal.Uname()).To(Equal(cluster.Uname(sameBucketName, testObject)))
 			Expect(lomLocal.BckIsLocal).To(BeTrue())
 			Expect(lomLocal.ParsedFQN.IsLocal).To(BeTrue())
 			Expect(lomLocal.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
@@ -552,7 +548,7 @@ var _ = Describe("LOM", func() {
 			lomCloud := &cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}
 			Expect(lomCloud.Fill(cmn.CloudBs, 0)).To(BeEmpty())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
-			Expect(lomCloud.Uname).To(Equal(cluster.Uname(sameBucketName, testObject)))
+			Expect(lomCloud.Uname()).To(Equal(cluster.Uname(sameBucketName, testObject)))
 			Expect(lomCloud.BckIsLocal).To(BeFalse())
 			Expect(lomCloud.ParsedFQN.IsLocal).To(BeFalse())
 			Expect(lomCloud.ParsedFQN.MpathInfo.Path).To(Equal(mpath))

@@ -208,13 +208,17 @@ ExtractAllShards:
 				if si.DaemonID != m.ctx.node.DaemonID {
 					return nil
 				}
+				//
+				// FIXME: replace the following 5 lines with lom.Fill(m.rs.BckProvider, 0)
+				//
 				bckIsLocal := m.rs.BckProvider == cmn.LocalBs
-				fqn, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, bckIsLocal)
+				fqn, _, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, bckIsLocal)
 				if errStr != "" {
 					return errors.New(errStr)
 				}
 				uname := cluster.Uname(m.rs.Bucket, shardName)
 
+				//
 				m.acquireExtractSema()
 				if m.aborted() {
 					m.releaseExtractSema()
@@ -382,7 +386,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if lom.CksumConf.Type != cmn.ChecksumNone {
 		cksumValue = cmn.HashToStr(h)
 		cmn.Assert(cksumValue != "")
-		lom.Cksum = cmn.NewCksum(cksumType, cksumValue)
+		lom.Cksum(cmn.NewCksum(cksumType, cksumValue))
 	}
 
 	if err := cmn.MvFile(workFQN, lom.FQN); err != nil {
@@ -403,8 +407,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
 	if si.DaemonID != m.ctx.node.DaemonID {
-		m.ctx.nameLocker.Lock(lom.Uname, false)
-		defer m.ctx.nameLocker.Unlock(lom.Uname, false)
+		m.ctx.nameLocker.Lock(lom.Uname(), false)
+		defer m.ctx.nameLocker.Unlock(lom.Uname(), false)
 
 		file, err := cmn.NewFileHandle(lom.FQN)
 		if err != nil {

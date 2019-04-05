@@ -22,7 +22,7 @@ import (
 
 const MLCG32 = 1103515245
 
-// Mountpath Change enum
+// mountpath lifecycle-change enum
 const (
 	Add     = "add-mp"
 	Remove  = "remove-mp"
@@ -34,6 +34,11 @@ const (
 const (
 	StatDiskUtil = "dutil"
 	StatQueueLen = "dquel"
+)
+
+// lomcache mask & number of those caches
+const (
+	LomCacheMask = 0x3f
 )
 
 // globals
@@ -78,6 +83,13 @@ type (
 		// where cmn.PairU32 structs atomically store the corresponding float32 bits
 		iostats map[string]*iotracker
 		ioepoch map[string]int64
+
+		// LOM caches
+		lomcaches [LomCacheMask + 1]LomCache
+	}
+	LomCache struct {
+		Len int64
+		M   sync.Map
 	}
 	iotracker struct {
 		prev cmn.PairU32
@@ -130,6 +142,8 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	mi.iostats[StatQueueLen] = &iotracker{}
 	return mi
 }
+
+func (mi *MountpathInfo) LomCache(idx int) *LomCache { return &mi.lomcaches[idx] }
 
 // FastRemoveDir removes directory in steps:
 // 1. Synchronously gets temporary directory name

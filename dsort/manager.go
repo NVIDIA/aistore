@@ -750,13 +750,13 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		defer slab.Free(buf)
 
 		lom := &cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}
-		bckProvider := cluster.GenBucketProvider(hdr.IsLocal)
+		bckProvider := cmn.BckProviderFromLocal(hdr.IsLocal)
 		if errStr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCksum); errStr != "" {
 			glog.Error(errStr)
 			return
 		}
 		if lom.Exists() {
-			if lom.Cksum != nil && cmn.EqCksum(lom.Cksum, cksum) {
+			if lom.Cksum() != nil && cmn.EqCksum(lom.Cksum(), cksum) {
 				glog.Infof("shard (%s) already exists and checksums are equal, skipping", lom)
 				io.Copy(ioutil.Discard, object) // drain the reader
 				return

@@ -47,7 +47,7 @@ func (c *putJogger) run() {
 			ecConf := req.LOM.BckProps.EC
 
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
-			memRequired := req.LOM.Size * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
+			memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 			c.toDisk = useDisk(memRequired)
 			req.tm = time.Now()
 			c.ec(req)
@@ -115,9 +115,9 @@ func (c *putJogger) encode(req *Request) error {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
 	ecConf := req.LOM.BckProps.EC
-	_, cksumValue := req.LOM.Cksum.Get()
+	_, cksumValue := req.LOM.Cksum().Get()
 	meta := &Metadata{
-		Size:        req.LOM.Size,
+		Size:        req.LOM.Size(),
 		Data:        ecConf.DataSlices,
 		Parity:      ecConf.ParitySlices,
 		IsCopy:      req.IsCopy,
@@ -143,7 +143,7 @@ func (c *putJogger) encode(req *Request) error {
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	metaFQN, _, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -173,7 +173,7 @@ func (c *putJogger) encode(req *Request) error {
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	fqnMeta, _, errstr := cluster.FQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, errstr)
 		return nil
@@ -233,7 +233,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	}
 	src := &dataSource{
 		reader:   fh,
-		size:     req.LOM.Size,
+		size:     req.LOM.Size(),
 		metadata: metadata,
 		reqType:  ReqPut,
 	}
@@ -493,7 +493,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	wg := sync.WaitGroup{}
 	ch := make(chan error, totalCnt)
 	mainObj := &slice{refCnt: int32(ecConf.DataSlices), obj: objReader}
-	sliceSize := SliceSize(req.LOM.Size, ecConf.DataSlices)
+	sliceSize := SliceSize(req.LOM.Size(), ecConf.DataSlices)
 
 	// transfer a slice to remote target
 	// If the slice is data one - no immediate cleanup is required because this
@@ -556,7 +556,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 		// Put in lom actual object's checksum. It will be stored in slice's xattrs on dest target
 		lom := *req.LOM
-		lom.Cksum = slices[i].cksum
+		lom.Cksum(slices[i].cksum)
 
 		err = c.parent.writeRemote([]string{targets[i+1].DaemonID}, &lom, src, nil)
 		if err != nil {

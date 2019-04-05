@@ -36,8 +36,6 @@ const (
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
-	//nolint:unused
-	xreplication = "replication" // TODO: fix replication
 )
 
 type (
@@ -357,15 +355,6 @@ func getmem2() *memsys.Mem2 {
 func gettargetkeepalive() *targetKeepaliveRunner {
 	r := ctx.rg.runmap[xtargetkeepalive]
 	rr, ok := r.(*targetKeepaliveRunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-// TODO: fix replication
-//nolint:unused
-func getreplicationrunner() *replicationRunner {
-	r := ctx.rg.runmap[xreplication]
-	rr, ok := r.(*replicationRunner)
 	cmn.Assert(ok)
 	return rr
 }

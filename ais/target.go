@@ -17,13 +17,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -302,7 +300,6 @@ func (t *targetrunner) Run() error {
 		{r: cmn.Objects, h: t.objectHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraData}},
 		{r: cmn.Daemon, h: t.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		{r: cmn.Tokens, h: t.tokenHandler, net: []string{cmn.NetworkPublic}},
-		{r: cmn.Push, h: t.pushHandler, net: []string{cmn.NetworkPublic}},
 
 		{r: cmn.Download, h: t.downloadHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Metasync, h: t.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
@@ -422,68 +419,6 @@ func (t *targetrunner) Stop(err error) {
 	if sleep {
 		time.Sleep(time.Second)
 	}
-}
-
-// target registration with proxy
-func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
-	var (
-		res  callResult
-		meta targetRegMeta
-	)
-	if !keepalive {
-		res = t.join(false, nil)
-	} else { // keepalive
-		url, psi := t.getPrimaryURLAndSI()
-		res = t.registerToURL(url, psi, timeout, false, nil, keepalive)
-	}
-	if res.err != nil {
-		return res.status, res.err
-	}
-	// not being sent at cluster startup and keepalive
-	if len(res.outjson) == 0 {
-		return
-	}
-	// There's a window of time between:
-	// a) target joining existing cluster and b) cluster starting to rebalance itself
-	// The latter is driven by metasync (see metasync.go) distributing the new Smap.
-	// To handle incoming GETs within this window (which would typically take a few seconds or less)
-	// we need to have the current cluster-wide metadata and the temporary gfn state:
-	err = jsoniter.Unmarshal(res.outjson, &meta)
-	cmn.AssertNoErr(err)
-
-	t.gfn.global.activate(meta.Smap)
-
-	// bmd
-	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
-	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, bucketMDRegister); errstr != "" {
-		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
-	} else {
-		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
-	}
-	// smap
-	if errstr := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
-	} else {
-		glog.Infof("registered %s: Smap v%d", t.si.Name(), t.smapowner.get().version())
-	}
-	return
-}
-
-func (t *targetrunner) unregister() (int, error) {
-	smap := t.smapowner.get()
-	if smap == nil || !smap.isValid() {
-		return 0, nil
-	}
-	args := callArgs{
-		si: smap.ProxySI,
-		req: reqArgs{
-			method: http.MethodDelete,
-			path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.DaemonID),
-		},
-		timeout: defaultTimeout,
-	}
-	res := t.call(args)
-	return res.status, res.err
 }
 
 //===========================================================================================
@@ -653,7 +588,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	bucket := apiItems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	normalizedBckProvider, err := cluster.TranslateBckProvider(bckProvider)
+	normalizedBckProvider, err := cmn.BckProviderFromStr(bckProvider)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -742,14 +677,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. under lock: versioning, checksum, restore from cluster
-	t.rtnamemap.Lock(lom.Uname, false)
+	t.rtnamemap.Lock(lom.Uname(), false)
 	coldGet := !lom.Exists()
 
 	if !coldGet {
 		if errstr = lom.Fill(bckProvider, cluster.LomVersion|cluster.LomCksum|cluster.LomAtime); errstr != "" {
 			_ = lom.Fill(bckProvider, cluster.LomFstat)
 			if lom.Exists() {
-				t.rtnamemap.Unlock(lom.Uname, false)
+				t.rtnamemap.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr)
 				return
 			}
@@ -761,19 +696,19 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if coldGet && lom.BckIsLocal && !dryRun.disk && !dryRun.network {
 		// does not exist in the local bucket: restore from neighbors
 		if errstr, errcode = t.restoreObjLBNeigh(lom, r, started); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, false)
+			t.rtnamemap.Unlock(lom.Uname(), false)
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
 		t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, true)
-		t.rtnamemap.Unlock(lom.Uname, false)
+		t.rtnamemap.Unlock(lom.Uname(), false)
 		return
 	}
 
 	if !coldGet && !lom.BckIsLocal { // exists && cloud-bucket : check ver if requested
-		if versioncfg.ValidateWarmGet && (lom.Version != "" && versioningConfigured(lom.BckIsLocal)) {
-			if coldGet, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
-				t.rtnamemap.Unlock(lom.Uname, false)
+		if versioncfg.ValidateWarmGet && (lom.Version() != "" && versioningConfigured(lom.BckIsLocal)) {
+			if coldGet, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version()); errstr != "" {
+				t.rtnamemap.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr, errcode)
 				return
 			}
@@ -789,13 +724,13 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				if err := os.Remove(lom.FQN); err != nil {
 					glog.Warningf("%s - failed to remove, err: %v", errstr, err)
 				}
-				t.rtnamemap.Unlock(lom.Uname, false)
+				t.rtnamemap.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 			}
 			coldGet = true
 		} else if errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, false)
+			t.rtnamemap.Unlock(lom.Uname(), false)
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
@@ -803,7 +738,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// 3. coldget
 	if coldGet && !dryRun.disk && !dryRun.network {
-		t.rtnamemap.Unlock(lom.Uname, false)
+		t.rtnamemap.Unlock(lom.Uname(), false)
 		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -813,7 +748,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// 4. finally
 	t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, coldGet)
-	t.rtnamemap.Unlock(lom.Uname, false)
+	t.rtnamemap.Unlock(lom.Uname(), false)
 }
 
 //
@@ -832,7 +767,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 		oldFQN, oldSize := getFromOtherLocalFS(lom)
 		if oldFQN != "" {
 			lom.FQN = oldFQN
-			lom.Size = oldSize
+			lom.Size(oldSize)
 			lom.SetExists(true)
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("restored from LFS %s (%s)", lom, cmn.B2S(oldSize, 1))
@@ -863,7 +798,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 			}
 			lom.RestoredReceived(props)
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("restored from a neighbor: %s (%s)", lom, cmn.B2S(lom.Size, 1))
+				glog.Infof("restored from a neighbor: %s (%s)", lom, cmn.B2S(lom.Size(), 1))
 			}
 			return
 		}
@@ -871,7 +806,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, star
 
 	if t.getFromTier(lom) {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("restored from tier: %s (%s)", lom, cmn.B2S(lom.Size, 1))
+			glog.Infof("restored from tier: %s (%s)", lom, cmn.B2S(lom.Size(), 1))
 		}
 		return
 	}
@@ -932,18 +867,18 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	cksumRange := lom.CksumConf.Type != cmn.ChecksumNone && rangeLen > 0 && lom.CksumConf.EnableReadRange
 	hdr := w.Header()
 
-	if lom.Cksum != nil && !cksumRange {
-		cksumType, cksumValue := lom.Cksum.Get()
+	if lom.Cksum() != nil && !cksumRange {
+		cksumType, cksumValue := lom.Cksum().Get()
 		hdr.Add(cmn.HeaderObjCksumType, cksumType)
 		hdr.Add(cmn.HeaderObjCksumVal, cksumValue)
 	}
-	if lom.Version != "" {
-		hdr.Add(cmn.HeaderObjVersion, lom.Version)
+	if lom.Version() != "" {
+		hdr.Add(cmn.HeaderObjVersion, lom.Version())
 	}
-	hdr.Add(cmn.HeaderObjSize, strconv.FormatInt(lom.Size, 10))
+	hdr.Add(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
 
-	timeInt := lom.Atime.UnixNano()
-	if lom.Atime.IsZero() {
+	timeInt := lom.Atime().UnixNano()
+	if lom.Atime().IsZero() {
 		timeInt = 0
 	}
 	hdr.Add(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
@@ -965,7 +900,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
 		return
 	}
-	if lom.Size == 0 {
+	if lom.Size() == 0 {
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
 	}
@@ -985,7 +920,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	if rangeLen == 0 {
 		reader = file
 		// No need to allocate buffer for whole object (it might be very large).
-		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size, 8*cmn.MiB))
+		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size(), 8*cmn.MiB))
 	} else {
 		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(rangeLen, 8*cmn.MiB))
 		if cksumRange {
@@ -1462,10 +1397,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		objmeta = make(cmn.SimpleKVs)
-		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size, 10)
-		objmeta[cmn.HeaderObjVersion] = lom.Version
+		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size(), 10)
+		objmeta[cmn.HeaderObjVersion] = lom.Version()
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size, 1), lom.Version)
+			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
 	} else {
 		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), bucket, objname)
@@ -1477,166 +1412,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	hdr := w.Header()
 	for k, v := range objmeta {
 		hdr.Add(k, v)
-	}
-}
-
-// handler for: /v1/tokens
-func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodDelete:
-		t.httpTokenDelete(w, r)
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /tokens path")
-	}
-}
-
-// [METHOD] /v1/metasync
-func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut:
-		t.metasyncHandlerPut(w, r)
-	case http.MethodPost:
-		t.metasyncHandlerPost(w, r)
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /metasync path")
-	}
-}
-
-// PUT /v1/metasync
-func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	var payload = make(cmn.SimpleKVs)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		return
-	}
-
-	newsmap, actionsmap, errstr := t.extractSmap(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newsmap != nil {
-		errstr = t.receiveSmap(newsmap, actionsmap)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
-		}
-	}
-
-	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newbucketmd != nil {
-		if errstr = t.receiveBucketMD(newbucketmd, actionlb, bucketMDReceive); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
-		}
-	}
-
-	revokedTokens, errstr := t.extractRevokedTokenList(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-	t.authn.updateRevokedList(revokedTokens)
-}
-
-// POST /v1/metasync
-func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
-	var payload = make(cmn.SimpleKVs)
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		return
-	}
-
-	newSmap, msgInt, errstr := t.extractSmap(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newSmap != nil && msgInt.Action == cmn.ActStartGFN {
-		t.gfn.global.activate(newSmap)
-	}
-}
-
-// GET /v1/health
-func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	aborted, running := t.xactions.globalRebStatus()
-	if !aborted && !running {
-		aborted, running = t.xactions.localRebStatus()
-	}
-	status := &thealthstatus{IsRebalancing: aborted || running}
-
-	jsbytes, err := jsoniter.Marshal(status)
-	cmn.AssertNoErr(err)
-	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
-		return
-	}
-
-	query := r.URL.Query()
-	from := query.Get(cmn.URLParamFromID)
-	smap := t.smapowner.get()
-	if smap.GetProxy(from) != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t.si.Name(), from)
-		}
-		t.keepalive.heardFrom(from, false)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t.si.Name(), smap.printname(from))
-	}
-}
-
-// [METHOD] /v1/push/bucket-name
-func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Push)
-	if err != nil {
-		return
-	}
-	bucket := apitems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
-	}
-	if pusher, ok := w.(http.Pusher); ok {
-		objnamebytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			s := fmt.Sprintf("Could not read Request Body: %v", err)
-			if err == io.EOF {
-				trailer := r.Trailer.Get("Error")
-				if trailer != "" {
-					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s",
-						r.Method, err, trailer)
-				}
-			}
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		objnames := make([]string, 0)
-		err = jsoniter.Unmarshal(objnamebytes, &objnames)
-		if err != nil {
-			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-
-		for _, objname := range objnames {
-			err := pusher.Push(cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname), nil)
-			if err != nil {
-				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
-				return
-			}
-		}
-	} else {
-		t.invalmsghdlr(w, r, "Pusher Unavailable")
-		return
-	}
-
-	if _, err = w.Write([]byte("Pushed Object List")); err != nil {
-		s := fmt.Sprintf("Error writing response: %v", err)
-		glog.Error(s)
 	}
 }
 
@@ -1753,7 +1528,8 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	if !lom.BckIsLocal {
 		bckProvider = cmn.CloudBs
 	}
-	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, bckProvider, cmn.URLParamIsGFNRequest, "true")
+	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s",
+		neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, bckProvider, cmn.URLParamIsGFNRequest, "true")
 	//
 	// http request
 	//
@@ -1788,7 +1564,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 		return
 	}
 
-	remoteLOM = lom.CloneAndSet(cluster.LOMCopyProps{Cksum: cksum, Version: version, Atime: atime})
+	remoteLOM = lom.CloneAndSet(cksum, version, atime)
 
 	roi := &recvObjInfo{
 		t:        t,
@@ -1812,7 +1588,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	remoteLOM.UpdateAtime(atime, true /* migrated */)
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Success: %s (%s, %s) from %s",
-			remoteLOM, cmn.B2S(remoteLOM.Size, 1), remoteLOM.Cksum, neighsi)
+			remoteLOM, cmn.B2S(remoteLOM.Size(), 1), remoteLOM.Cksum(), neighsi)
 	}
 	return
 }
@@ -1844,12 +1620,12 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		props           *cluster.LOM
 	)
 	if prefetch {
-		if !t.rtnamemap.TryLock(lom.Uname, true) {
+		if !t.rtnamemap.TryLock(lom.Uname(), true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
 			return "skip", 0
 		}
 	} else {
-		t.rtnamemap.Lock(lom.Uname, true) // one cold-GET at a time
+		t.rtnamemap.Lock(lom.Uname(), true) // one cold-GET at a time
 	}
 
 	// refill
@@ -1861,8 +1637,8 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	// existence, access & versioning
 	coldGet := !lom.Exists()
 	if !coldGet {
-		if versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(lom.BckIsLocal) {
-			vchanged, errv, _ = t.checkCloudVersion(ct, lom.Bucket, lom.Objname, lom.Version)
+		if versioncfg.ValidateWarmGet && lom.Version() != "" && versioningConfigured(lom.BckIsLocal) {
+			vchanged, errv, _ = t.checkCloudVersion(ct, lom.Bucket, lom.Objname, lom.Version())
 			if errv == "" {
 				coldGet = vchanged
 			}
@@ -1872,7 +1648,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 			if lom.BadCksum {
 				coldGet = true
 			} else if errstr == "" {
-				if lom.Cksum == nil {
+				if lom.Cksum() == nil {
 					coldGet = true
 				}
 			} else {
@@ -1883,7 +1659,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfileColdget)
 	if !coldGet {
 		_ = lom.Fill("", cluster.LomCksum)
-		glog.Infof("cold-GET race: %s(%s, ver=%s) - nothing to do", lom, cmn.B2S(lom.Size, 1), lom.Version)
+		glog.Infof("cold-GET race: %s(%s, ver=%s) - nothing to do", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		crace = true
 		goto ret
 	}
@@ -1905,13 +1681,13 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	//
 	if coldGet {
 		if props, errstr, errcode = getcloudif().getobj(ct, workFQN, lom.Bucket, lom.Objname); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, true)
+			t.rtnamemap.Unlock(lom.Uname(), true)
 			return
 		}
 	}
 	defer func() {
 		if errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, true)
+			t.rtnamemap.Unlock(lom.Uname(), true)
 			if errRemove := os.Remove(workFQN); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, workFQN, errRemove)
 				t.fshc(errRemove, workFQN)
@@ -1932,17 +1708,17 @@ ret:
 	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
 	//
 	if prefetch {
-		t.rtnamemap.Unlock(lom.Uname, true)
+		t.rtnamemap.Unlock(lom.Uname(), true)
 	} else {
 		if vchanged {
 			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1},
-				stats.NamedVal64{stats.GetColdSize, lom.Size},
-				stats.NamedVal64{stats.VerChangeSize, lom.Size},
+				stats.NamedVal64{stats.GetColdSize, lom.Size()},
+				stats.NamedVal64{stats.VerChangeSize, lom.Size()},
 				stats.NamedVal64{stats.VerChangeCount, 1})
 		} else if !crace {
-			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, lom.Size})
+			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, lom.Size()})
 		}
-		t.rtnamemap.DowngradeLock(lom.Uname)
+		t.rtnamemap.DowngradeLock(lom.Uname())
 	}
 	return
 }
@@ -2305,17 +2081,17 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 		lom.Fill("", lomAction)
 	}
 	if ci.needAtime {
-		fileInfo.Atime = cmn.FormatTime(lom.Atime, ci.msg.TimeFormat)
+		fileInfo.Atime = cmn.FormatTime(lom.Atime(), ci.msg.TimeFormat)
 	}
 	if ci.needCtime {
 		fileInfo.Ctime = cmn.FormatTime(osfi.ModTime(), ci.msg.TimeFormat)
 	}
-	if ci.needChkSum && lom.Cksum != nil {
-		_, storedCksum := lom.Cksum.Get()
+	if ci.needChkSum && lom.Cksum() != nil {
+		_, storedCksum := lom.Cksum().Get()
 		fileInfo.Checksum = hex.EncodeToString([]byte(storedCksum))
 	}
 	if ci.needVersion {
-		fileInfo.Version = lom.Version
+		fileInfo.Version = lom.Version()
 	}
 	if ci.needCopies {
 		fileInfo.Copies = int16(lom.NumCopies())
@@ -2422,32 +2198,6 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error
 	return roi.recv()
 }
 
-// TODO: this function is for now unused because replication does not work
-//nolint:unused
-func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replicaSrc string) (errstr string) {
-	var (
-		started    = time.Now()
-		bckIsLocal = t.bmdowner.get().IsLocal(bucket)
-	)
-
-	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, bckIsLocal)
-	if errstr != "" {
-		return errstr
-	}
-	err := getreplicationrunner().reqReceiveReplica(replicaSrc, fqn, r)
-
-	if err != nil {
-		return err.Error()
-	}
-
-	delta := time.Since(started)
-	t.statsif.AddMany(stats.NamedVal64{stats.ReplPutCount, 1}, stats.NamedVal64{stats.ReplPutLatency, int64(delta)})
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
-	}
-	return ""
-}
-
 func (roi *recvObjInfo) init() error {
 	cmn.Assert(roi.t != nil)
 	roi.started = time.Now()
@@ -2468,7 +2218,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	// optimize out if the checksums do match
 	if roi.lom.Exists() && roi.cksumToCheck != nil {
 		if errstr := roi.lom.Fill(roi.bckProvider, cluster.LomCksum); errstr == "" {
-			if cmn.EqCksum(roi.lom.Cksum, roi.cksumToCheck) {
+			if cmn.EqCksum(roi.lom.Cksum(), roi.cksumToCheck) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s is valid %s: PUT is a no-op", roi.lom, roi.cksumToCheck)
 				}
@@ -2519,35 +2269,37 @@ func (roi *recvObjInfo) commit() (errstr string, errCode int) {
 }
 
 func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
+	var ver string
 	if !roi.lom.BckIsLocal && !roi.migrated {
 		file, err := os.Open(roi.workFQN)
 		if err != nil {
 			errstr = fmt.Sprintf("failed to open %s err: %v", roi.workFQN, err)
 			return
 		}
-
-		cmn.Assert(roi.lom.Cksum != nil)
-		roi.lom.Version, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Cksum)
+		cmn.Assert(roi.lom.Cksum() != nil)
+		ver, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Cksum())
 		file.Close()
 		if errstr != "" {
 			return
 		}
+		roi.lom.Version(ver)
 	}
 
 	// Lock the uname for the object and rename it from workFQN to actual FQN.
-	roi.t.rtnamemap.Lock(roi.lom.Uname, true)
+	roi.t.rtnamemap.Lock(roi.lom.Uname(), true)
 	if roi.lom.BckIsLocal && versioningConfigured(true) {
-		if roi.lom.Version, errstr = roi.lom.IncObjectVersion(); errstr != "" {
-			roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+		if ver, errstr = roi.lom.IncObjectVersion(); errstr != "" {
+			roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 			return
 		}
+		roi.lom.Version(ver)
 	}
 	if errstr = roi.lom.DelAllCopies(); errstr != "" {
-		roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+		roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 		return
 	}
 	if err := cmn.MvFile(roi.workFQN, roi.lom.FQN); err != nil {
-		roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+		roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 		errstr = fmt.Sprintf("MvFile failed => %s: %v", roi.lom, err)
 		return
 	}
@@ -2555,10 +2307,10 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		glog.Errorf("failed to persist %s: %s", roi.lom, errstr)
 	}
 	if roi.migrated {
-		roi.lom.UpdateAtime(roi.lom.Atime, true /* migrated */)
+		roi.lom.UpdateAtime(roi.lom.Atime(), true /* migrated */)
 	}
 
-	roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+	roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 	return
 }
 
@@ -2597,8 +2349,8 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		errstr  string
 		errcode int
 	)
-	t.rtnamemap.Lock(lom.Uname, true)
-	defer t.rtnamemap.Unlock(lom.Uname, true)
+	t.rtnamemap.Lock(lom.Uname(), true)
+	defer t.rtnamemap.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
 	if errstr := lom.Fill("", cluster.LomFstat); errstr != "" {
@@ -2625,7 +2377,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 			cmn.Assert(!lom.BckIsLocal)
 			t.statsif.AddMany(
 				stats.NamedVal64{stats.LruEvictCount, 1},
-				stats.NamedVal64{stats.LruEvictSize, lom.Size})
+				stats.NamedVal64{stats.LruEvictSize, lom.Size()})
 		}
 	}
 	return nil
@@ -2669,7 +2421,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	bucketmd := t.bmdowner.get()
 	bckIsLocalFrom := bucketmd.IsLocal(bucketFrom)
-	fqn, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
+	fqn, _, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
 	if errstr != "" {
 		return
 	}
@@ -2681,7 +2433,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		bckIsLocalTo := bucketmd.IsLocal(bucketTo)
-		newFQN, errstr = cluster.FQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
+		newFQN, _, errstr = cluster.FQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
 		if errstr != "" {
 			return
 		}
@@ -2712,7 +2464,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomVersion|cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
 		return errstr
 	}
-	cksumType, cksumValue := lom.Cksum.Get()
+	cksumType, cksumValue := lom.Cksum().Get()
 	hdr := transport.Header{
 		Bucket:  bucketTo,
 		Objname: objnameTo,
@@ -2720,10 +2472,10 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		Opaque:  []byte(t.si.DaemonID),
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       fi.Size(),
-			Atime:      lom.Atime.UnixNano(),
+			Atime:      lom.Atime().UnixNano(),
 			CksumType:  cksumType,
 			CksumValue: cksumValue,
-			Version:    lom.Version,
+			Version:    lom.Version(),
 		},
 	}
 	wg := &sync.WaitGroup{}
@@ -2755,374 +2507,6 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 		errcode = http.StatusInternalServerError
 	}
 	return
-}
-
-func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (errstr string) {
-	smap := t.smapowner.get()
-	if smap == nil || !smap.isValid() {
-		return "smap nil or missing"
-	}
-	psi := smap.ProxySI
-	q := url.Values{}
-	q.Add(cmn.URLParamWhat, what)
-	args := callArgs{
-		si: psi,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   psi.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			query:  q,
-		},
-		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
-	}
-	res := t.call(args)
-	if res.err != nil {
-		return fmt.Sprintf("failed to %s=%s, err: %v", what, cmn.GetWhatBucketMeta, res.err)
-	}
-
-	err := jsoniter.Unmarshal(res.outjson, outStruct)
-	if err != nil {
-		return fmt.Sprintf("unexpected: failed to unmarshal %s=%s response, err: %v [%v]",
-			what, psi.IntraControlNet.DirectURL, err, string(res.outjson))
-	}
-
-	return ""
-}
-
-func (t *targetrunner) smapVersionFixup() {
-	newsmap := &smapX{}
-	errstr := t.fetchPrimaryMD(cmn.GetWhatSmap, newsmap)
-	if errstr != "" {
-		glog.Errorf(errstr)
-		return
-	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newsmap, nil)
-	t.receiveSmap(newsmap, msgInt)
-}
-
-func (t *targetrunner) bmdVersionFixup() {
-	newbucketmd := &bucketMD{}
-	errstr := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newbucketmd)
-	if errstr != "" {
-		glog.Errorf(errstr)
-		return
-	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newbucketmd)
-	t.receiveBucketMD(newbucketmd, msgInt, bucketMDFixup)
-}
-
-//===========================
-//
-// control plane
-//
-//===========================
-
-// [METHOD] /v1/daemon
-func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		t.httpdaeget(w, r)
-	case http.MethodPut:
-		t.httpdaeput(w, r)
-	case http.MethodPost:
-		t.httpdaepost(w, r)
-	case http.MethodDelete:
-		t.httpdaedelete(w, r)
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /daemon path")
-	}
-}
-
-func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
-	if err != nil {
-		return
-	}
-	if len(apitems) > 0 {
-		switch apitems[0] {
-		// PUT /v1/daemon/proxy/newprimaryproxyid
-		case cmn.Proxy:
-			t.httpdaesetprimaryproxy(w, r, apitems)
-			return
-		case cmn.SyncSmap:
-			var newsmap = &smapX{}
-			if cmn.ReadJSON(w, r, newsmap) != nil {
-				return
-			}
-			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
-			}
-			glog.Infof("%s: %s v%d done", t.si.Name(), cmn.SyncSmap, newsmap.version())
-			return
-		case cmn.Mountpaths:
-			t.handleMountpathReq(w, r)
-			return
-		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
-			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-			if errstr := t.setConfig(kvs); errstr != "" {
-				t.invalmsghdlr(w, r, errstr)
-				return
-			}
-			return
-		}
-	}
-	//
-	// other PUT /daemon actions
-	//
-	var msg cmn.ActionMsg
-	if cmn.ReadJSON(w, r, &msg) != nil {
-		return
-	}
-	switch msg.Action {
-	case cmn.ActSetConfig: // setconfig #2 - via action message
-		var (
-			value string
-			ok    bool
-		)
-		if value, ok = msg.Value.(string); !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse action '%s' value: (%v, %T) not a string",
-				cmn.ActSetConfig, msg.Value, msg.Value))
-			return
-		}
-		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if errstr := t.setConfig(kvs); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
-		}
-	case cmn.ActShutdown:
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	default:
-		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
-		t.invalmsghdlr(w, r, s)
-	}
-}
-
-func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (errstr string) {
-	prevConfig := cmn.GCO.Get()
-	if err := cmn.SetConfigMany(kvs); err != nil {
-		return err.Error()
-	}
-
-	config := cmn.GCO.Get()
-	if prevConfig.LRU.Enabled && !config.LRU.Enabled {
-		lruXaction := t.xactions.findU(cmn.ActLRU)
-		if lruXaction != nil {
-			glog.V(3).Infof("Aborting LRU due to lru.enabled config change")
-			lruXaction.Abort()
-		}
-	}
-	return
-}
-
-func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apitems []string) {
-	var (
-		prepare bool
-		err     error
-	)
-	if len(apitems) != 2 {
-		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apitems), 2)
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-
-	proxyid := apitems[1]
-	query := r.URL.Query()
-	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = strconv.ParseBool(preparestr); err != nil {
-		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-
-	smap := t.smapowner.get()
-	psi := smap.GetProxy(proxyid)
-	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-	if prepare {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Info("Preparation step: do nothing")
-		}
-		return
-	}
-	t.smapowner.Lock()
-	smap = t.smapowner.get()
-	if smap.ProxySI.DaemonID != psi.DaemonID {
-		clone := smap.clone()
-		clone.ProxySI = psi
-		if s := t.smapowner.persist(clone, false /*saveSmap*/); s != "" {
-			t.smapowner.Unlock()
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		t.smapowner.put(clone)
-	}
-	t.smapowner.Unlock()
-}
-
-func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
-	httpdaeWhat := "httpdaeget-" + getWhat
-	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
-		t.httprunner.httpdaeget(w, r)
-	case cmn.GetWhatSysInfo:
-		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
-	case cmn.GetWhatStats:
-		rst := getstorstatsrunner()
-		jsbytes, err := rst.GetWhatStats()
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
-	case cmn.GetWhatXaction:
-		var (
-			jsbytes     []byte
-			err         error
-			sts         = getstorstatsrunner()
-			kind        = r.URL.Query().Get(cmn.URLParamProps)
-			kindDetails = t.getXactionsByKind(kind)
-		)
-		if kind == cmn.ActGlobalReb {
-			jsbytes = sts.GetRebalanceStats(kindDetails)
-		} else if kind == cmn.ActPrefetch {
-			jsbytes = sts.GetPrefetchStats(kindDetails)
-		} else {
-			jsbytes, err = jsoniter.Marshal(kindDetails)
-			cmn.AssertNoErr(err)
-		}
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
-	case cmn.GetWhatMountpaths:
-		mpList := cmn.MountpathList{}
-		availablePaths, disabledPaths := fs.Mountpaths.Get()
-		mpList.Available = make([]string, len(availablePaths))
-		mpList.Disabled = make([]string, len(disabledPaths))
-
-		idx := 0
-		for mpath := range availablePaths {
-			mpList.Available[idx] = mpath
-			idx++
-		}
-		idx = 0
-		for mpath := range disabledPaths {
-			mpList.Disabled[idx] = mpath
-			idx++
-		}
-		jsbytes, err := jsoniter.Marshal(&mpList)
-		if err != nil {
-			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
-	case cmn.GetWhatDaemonStatus:
-		tstats := getstorstatsrunner()
-		msg := &stats.DaemonStatus{
-			Snode:       t.httprunner.si,
-			SmapVersion: t.smapowner.get().Version,
-			SysInfo:     gmem2.FetchSysInfo(),
-			Stats:       tstats.Core,
-			Capacity:    tstats.Capacity,
-		}
-		jsbytes, err := jsoniter.Marshal(msg)
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
-	default:
-		t.httprunner.httpdaeget(w, r)
-	}
-}
-
-func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
-	kindDetails := []stats.XactionDetails{}
-	matching := t.xactions.selectL(kind)
-	for _, xaction := range matching {
-		status := cmn.XactionStatusCompleted
-		if !xaction.Finished() {
-			status = cmn.XactionStatusInProgress
-		}
-		details := stats.XactionDetails{ // FIXME: redundant vs XactBase
-			ID:        xaction.ID(),
-			Kind:      xaction.Kind(),
-			Bucket:    xaction.Bucket(),
-			StartTime: xaction.StartTime(),
-			EndTime:   xaction.EndTime(),
-			Status:    status,
-		}
-		kindDetails = append(kindDetails, details)
-	}
-	return kindDetails
-}
-
-// register target
-// enable/disable mountpath
-func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Daemon)
-	if err != nil {
-		return
-	}
-
-	if len(apiItems) > 0 {
-		switch apiItems[0] {
-		case cmn.Register:
-			// TODO: this is duplicated in `t.register`. The difference is that
-			// here we are reregistered by the user and in `t.register` is
-			// registering new target. This needs to be consolidated somehow.
-			//
-			// There's a window of time between:
-			// a) target joining existing cluster and b) cluster starting to rebalance itself
-			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
-			// To handle incoming GETs within this window (which would typically take a few seconds or less)
-			t.gfn.global.activate(t.smapowner.get())
-
-			if glog.V(3) {
-				glog.Infoln("Sending register signal to target keepalive control channel")
-			}
-			gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
-			return
-		case cmn.Mountpaths:
-			t.handleMountpathReq(w, r)
-			return
-		default:
-			t.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
-			return
-		}
-	}
-
-	if status, err := t.register(false, defaultTimeout); err != nil {
-		s := fmt.Sprintf("%s failed to register with proxy, status %d, err: %v", t.si, status, err)
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-
-	if glog.V(3) {
-		glog.Infof("Registered %s(self)", t.si.Name())
-	}
-}
-
-// unregister
-// remove mountpath
-func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Daemon)
-	if err != nil {
-		return
-	}
-
-	switch apiItems[0] {
-	case cmn.Mountpaths:
-		t.handleMountpathReq(w, r)
-		return
-	case cmn.Unregister:
-		if glog.V(3) {
-			glog.Infoln("Sending unregister signal to target keepalive control channel")
-		}
-		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
-		return
-	default:
-		t.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
-		return
-	}
 }
 
 //====================== common for both cold GET and PUT ======================================
@@ -3202,7 +2586,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 			// If migration validation is not required we can just take
 			// calculated checksum by some other node (from which we received
 			// the object). If not present we need to calculate it.
-			if roi.lom.Cksum = roi.cksumToCheck; roi.lom.Cksum == nil {
+			if roi.lom.Cksum(roi.cksumToCheck) == nil {
 				saveHash = xxhash.New64()
 				hashes = []hash.Hash{saveHash}
 			}
@@ -3231,7 +2615,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		roi.t.fshc(err, roi.workFQN)
 		return
 	}
-	roi.lom.Size = written
+	roi.lom.Size(written)
 
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
@@ -3242,7 +2626,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		}
 	}
 	if saveHash != nil {
-		roi.lom.Cksum = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash))
+		roi.lom.Cksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
 	}
 
 	if err = file.Close(); err != nil {
@@ -3251,11 +2635,6 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	return nil
 }
 
-//==============================================================================
-//
-// target's misc utilities and helpers
-//
-//==============================================================================
 func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (redelta int64) {
 	s := query.Get(cmn.URLParamUnixTime)
 	if s == "" {
@@ -3268,83 +2647,6 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	}
 	redelta = started.UnixNano() - pts
 	return
-}
-
-// create local directories to test multiple fspaths
-func (t *targetrunner) testCachepathMounts() {
-	config := cmn.GCO.Get()
-	var instpath string
-	if config.TestFSP.Instance > 0 {
-		instpath = filepath.Join(config.TestFSP.Root, strconv.Itoa(config.TestFSP.Instance))
-	} else {
-		// container, VM, etc.
-		instpath = config.TestFSP.Root
-	}
-	for i := 0; i < config.TestFSP.Count; i++ {
-		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
-		if err := cmn.CreateDir(mpath); err != nil {
-			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
-			os.Exit(1)
-		}
-
-		err := fs.Mountpaths.Add(mpath)
-		cmn.AssertNoErr(err)
-	}
-}
-
-func (t *targetrunner) detectMpathChanges() {
-	// mpath config dir
-	mpathconfigfqn := filepath.Join(cmn.GCO.Get().Confdir, cmn.MountpathBackupFile)
-
-	type mfs struct {
-		Available cmn.StringSet `json:"available"`
-		Disabled  cmn.StringSet `json:"disabled"`
-	}
-
-	// load old/prev and compare
-	var (
-		oldfs = mfs{}
-		newfs = mfs{
-			Available: make(cmn.StringSet),
-			Disabled:  make(cmn.StringSet),
-		}
-	)
-
-	availablePaths, disabledPath := fs.Mountpaths.Get()
-	for mpath := range availablePaths {
-		newfs.Available[mpath] = struct{}{}
-	}
-	for mpath := range disabledPath {
-		newfs.Disabled[mpath] = struct{}{}
-	}
-
-	if err := cmn.LocalLoad(mpathconfigfqn, &oldfs); err != nil {
-		if !os.IsNotExist(err) && err != io.EOF {
-			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
-		}
-		return
-	}
-
-	if !reflect.DeepEqual(oldfs, newfs) {
-		oldfsPprint := fmt.Sprintf(
-			"available: %v\ndisabled: %v",
-			oldfs.Available.String(), oldfs.Disabled.String(),
-		)
-		newfsPprint := fmt.Sprintf(
-			"available: %v\ndisabled: %v",
-			newfs.Available.String(), newfs.Disabled.String(),
-		)
-
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.Name(), mpathconfigfqn)
-		glog.Errorln("OLD: ====================")
-		glog.Errorln(oldfsPprint)
-		glog.Errorln("NEW: ====================")
-		glog.Errorln(newfsPprint)
-	}
-	// persist
-	if err := cmn.LocalSave(mpathconfigfqn, newfs); err != nil {
-		glog.Errorf("Error writing config file: %v", err)
-	}
 }
 
 // fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
@@ -3366,428 +2668,6 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	getfshealthchecker().OnErr(filepath)
-}
-
-// Decrypts token and retreives userID from request header
-// Returns empty userID in case of token is invalid
-func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
-	token := ""
-	tokenParts := strings.SplitN(header.Get("Authorization"), " ", 2)
-	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
-		token = tokenParts[1]
-	}
-
-	if token == "" {
-		// no token in header = use default credentials
-		return nil, nil
-	}
-
-	authrec, err := t.authn.validateToken(token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt token [%s]: %v", token, err)
-	}
-
-	return authrec, nil
-}
-
-// If Authn server is enabled then the function tries to read a user credentials
-// (at this moment userID is enough) from HTTP request header: looks for
-// 'Authorization' header and decrypts it.
-// Extracted user information is put to context that is passed to all consumers
-func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
-	ct := context.Background()
-	config := cmn.GCO.Get()
-
-	if config.Auth.CredDir == "" || !config.Auth.Enabled {
-		return ct
-	}
-
-	user, err := t.userFromRequest(header)
-	if err != nil {
-		glog.Errorf("Failed to extract token: %v", err)
-		return ct
-	}
-
-	if user != nil {
-		ct = context.WithValue(ct, ctxUserID, user.userID)
-		ct = context.WithValue(ct, ctxCredsDir, config.Auth.CredDir)
-		ct = context.WithValue(ct, ctxUserCreds, user.creds)
-	}
-
-	return ct
-}
-
-func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
-	msg := cmn.ActionMsg{}
-	if cmn.ReadJSON(w, r, &msg) != nil {
-		return
-	}
-
-	mountpath, ok := msg.Value.(string)
-	if !ok {
-		t.invalmsghdlr(w, r, "Invalid value in request")
-		return
-	}
-
-	if mountpath == "" {
-		t.invalmsghdlr(w, r, "Mountpath is not defined")
-		return
-	}
-
-	switch msg.Action {
-	case cmn.ActMountpathEnable:
-		t.handleEnableMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathDisable:
-		t.handleDisableMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathAdd:
-		t.handleAddMountpathReq(w, r, mountpath)
-	case cmn.ActMountpathRemove:
-		t.handleRemoveMountpathReq(w, r, mountpath)
-	default:
-		t.invalmsghdlr(w, r, "Invalid action in request")
-	}
-}
-
-func (t *targetrunner) stopXactions(xacts []string) {
-	for _, name := range xacts {
-		xactList := t.xactions.selectL(name)
-		for _, xact := range xactList {
-			if !xact.Finished() {
-				xact.Abort()
-			}
-		}
-	}
-}
-
-func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
-	enabled, exists := t.fsprg.enableMountpath(mountpath)
-	if !enabled && exists {
-		w.WriteHeader(http.StatusNoContent)
-		t.gfn.local.deactivate()
-		return
-	}
-
-	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
-		t.gfn.local.deactivate()
-		return
-	}
-	t.stopXactions(mountpathXactions)
-}
-
-func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := t.fsprg.disableMountpath(mountpath)
-	if !enabled && exists {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
-		return
-	}
-
-	t.stopXactions(mountpathXactions)
-}
-
-func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
-	err := t.fsprg.addMountpath(mountpath)
-	if err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
-		t.gfn.local.deactivate()
-		return
-	}
-	t.stopXactions(mountpathXactions)
-}
-
-func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := t.fsprg.removeMountpath(mountpath)
-	if err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
-		return
-	}
-
-	t.stopXactions(mountpathXactions)
-}
-
-// FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag string) (errstr string) {
-	if msgInt.Action == "" {
-		glog.Infof("%s %s v%d", tag, bmdTermName, newbucketmd.version())
-	} else {
-		glog.Infof("%s %s v%d, action %s", tag, bmdTermName, newbucketmd.version(), msgInt.Action)
-	}
-	t.bmdowner.Lock()
-	bucketmd := t.bmdowner.get()
-	myver := bucketmd.version()
-	if newbucketmd.version() <= myver {
-		t.bmdowner.Unlock()
-		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
-		}
-		return
-	}
-	t.bmdowner.put(newbucketmd)
-	t.bmdowner.Unlock()
-
-	// Delete buckets that do not exist in the new bucket metadata
-	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
-	for bucket := range bucketmd.LBmap {
-		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
-			bucketsToDelete = append(bucketsToDelete, bucket)
-		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
-			if bprops.Mirror.Enabled && !nprops.Mirror.Enabled {
-				t.xactions.abortPutCopies(bucket)
-			}
-		}
-	}
-
-	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
-	//       disable mirroring (needed in part for cloud buckets)
-	t.xactions.abortBucketSpecific(bucketsToDelete...)
-
-	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
-
-	// Create buckets that have been added
-	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
-	for bckName := range newbucketmd.LBmap {
-		if _, ok := bucketmd.LBmap[bckName]; !ok {
-			bucketsToCreate = append(bucketsToCreate, bckName)
-		}
-	}
-
-	if tag != bucketMDRegister {
-		// Don't call ecmanager as it has not benn initialized just yet
-		// ecmanager will pick up fresh bucketMD when initialized
-		t.ecmanager.BucketsMDChanged()
-	}
-
-	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*true=create*/, bucketsToCreate...)
-	return
-}
-
-func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (errstr string) {
-	var (
-		newTargetID, s             string
-		iPresent, newTargetPresent bool
-	)
-	// proxy => target control protocol (see p.httpclupost)
-	action, newDaemonID := msgInt.Action, msgInt.NewDaemonID
-	if action == cmn.ActRegTarget {
-		newTargetID = newDaemonID
-		s = fmt.Sprintf(", %s %s(new target ID)", msgInt.Action, newTargetID)
-	} else if msgInt.Action != "" {
-		s = ", action " + msgInt.Action
-	}
-	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
-		t.si.Name(), newsmap.version(), newsmap.CountTargets(), newsmap.ProxySI.Name(), s)
-	for id, si := range newsmap.Tmap { // log
-		if id == t.si.DaemonID {
-			iPresent = true
-			glog.Infof("%s <= self", si.Name())
-		} else if id == newTargetID {
-			newTargetPresent = true // only if not self
-		} else {
-			glog.Infof("%s", si.Name())
-		}
-	}
-	if !iPresent {
-		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", t.si.Name(), newsmap.pp())
-		return
-	}
-	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
-		errstr = fmt.Sprintf("Not finding %s(new target) in the new %s", newTargetID, newsmap.pp())
-		return
-	}
-	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-		return
-	}
-	if msgInt.Action == cmn.ActGlobalReb {
-		if cmd, ok := msgInt.Value.(string); ok {
-			switch cmd {
-			case cmn.RebStart:
-				go t.rebManager.runGlobalReb(newsmap, newTargetID)
-			case cmn.RebAbort:
-				t.rebManager.abortGlobalReb()
-			default:
-				errstr = fmt.Sprintf("Expecting %q or %q in the action message value, getting %s", cmn.RebStart, cmn.RebAbort, cmd)
-			}
-			return
-		}
-	}
-	if !cmn.GCO.Get().Rebalance.Enabled {
-		glog.Infoln("auto-rebalancing disabled")
-		return
-	}
-	if newTargetID == "" {
-		return
-	}
-	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
-	go t.rebManager.runGlobalReb(newsmap, newTargetID)
-	return
-}
-
-func (t *targetrunner) ensureLatestMD(msgInt actionMsgInternal) {
-	smap := t.smapowner.Get()
-	smapVersion := msgInt.SmapVersion
-	if smap.Version < smapVersion {
-		glog.Errorf("own smap version %d < %d - fetching latest for %v", smap.Version, smapVersion, msgInt.Action)
-		t.statsif.Add(stats.ErrMetadataCount, 1)
-		t.smapVersionFixup()
-	} else if smap.Version > smapVersion {
-		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own smap version %d > %d - encountered during %v", smap.Version, smapVersion, msgInt.Action)
-		t.statsif.Add(stats.ErrMetadataCount, 1)
-	}
-
-	bucketmd := t.bmdowner.Get()
-	bmdVersion := msgInt.BMDVersion
-	if bucketmd.Version < bmdVersion {
-		glog.Errorf("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
-		t.statsif.Add(stats.ErrMetadataCount, 1)
-		t.bmdVersionFixup()
-	} else if bucketmd.Version > bmdVersion {
-		//if metasync outraces the request, we end up here, just log it and continue
-		glog.Errorf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
-		t.statsif.Add(stats.ErrMetadataCount, 1)
-	}
-}
-
-func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
-	for {
-		time.Sleep(time.Second)
-		smap := t.smapowner.get()
-		if smap == nil || !smap.isValid() {
-			continue
-		}
-		psi := smap.ProxySI
-		args := callArgs{
-			si: psi,
-			req: reqArgs{
-				method: http.MethodGet,
-				base:   psi.IntraControlNet.DirectURL,
-				path:   cmn.URLPath(cmn.Version, cmn.Health),
-			},
-			timeout: timeout,
-		}
-		res := t.call(args)
-		if res.err != nil {
-			continue
-		}
-		proxystats := &stats.CoreStats{}
-		err := jsoniter.Unmarshal(res.outjson, proxystats)
-		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
-				psi.PublicNet.DirectURL, err, string(res.outjson))
-			continue
-		}
-		if proxystats.Tracker[stats.Uptime].Value != 0 {
-			glog.Infof("%s startup: primary %s", t.si.Name(), psi.Name())
-			break
-		}
-	}
-	atomic.StoreInt32(&t.clusterStarted, 1)
-}
-
-func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &TokenList{}
-	if _, err := t.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Tokens); err != nil {
-		return
-	}
-
-	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
-		return
-	}
-
-	t.authn.updateRevokedList(tokenList)
-}
-
-// unregisters the target and marks it as disabled by an internal event
-func (t *targetrunner) disable() error {
-	var (
-		status int
-		eunreg error
-	)
-
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
-
-	if t.regstate.disabled {
-		return nil
-	}
-
-	glog.Infof("Disabling %s", t.si.Name())
-	for i := 0; i < maxRetrySeconds; i++ {
-		if status, eunreg = t.unregister(); eunreg != nil {
-			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying unregistration...", t.si.Name())
-				time.Sleep(time.Second)
-				continue
-			}
-		}
-		break
-	}
-
-	if status >= http.StatusBadRequest || eunreg != nil {
-		// do not update state on error
-		if eunreg == nil {
-			eunreg = fmt.Errorf("error unregistering %s, http status %d", t.si.Name(), status)
-		}
-		return eunreg
-	}
-
-	t.regstate.disabled = true
-	glog.Infof("%s has been disabled (unregistered)", t.si.Name())
-	return nil
-}
-
-// registers the target again if it was disabled by and internal event
-func (t *targetrunner) enable() error {
-	var (
-		status int
-		ereg   error
-	)
-
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
-
-	if !t.regstate.disabled {
-		return nil
-	}
-
-	glog.Infof("Enabling %s", t.si.Name())
-	for i := 0; i < maxRetrySeconds; i++ {
-		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
-			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("%s: retrying registration...", t.si.Name())
-				time.Sleep(time.Second)
-				continue
-			}
-		}
-		break
-	}
-
-	if status >= http.StatusBadRequest || ereg != nil {
-		// do not update state on error
-		if ereg == nil {
-			ereg = fmt.Errorf("error registering %s, http status: %d", t.si.Name(), status)
-		}
-		return ereg
-	}
-
-	t.regstate.disabled = false
-	glog.Infof("%s has been enabled", t.si.Name())
-	return nil
-}
-
-// Disable implements fspathDispatcher interface
-func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
-	// TODO: notify admin that the mountpath is gone
-	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	t.stopXactions(mountpathXactions)
-	return t.fsprg.disableMountpath(mountpath)
 }
 
 func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {

@@ -243,7 +243,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 
 	req := &ec.Request{
 		Action: ec.ActSplit,
-		IsCopy: ec.IsECCopy(lom.Size, &lom.BckProps.EC),
+		IsCopy: ec.IsECCopy(lom.Size(), &lom.BckProps.EC),
 		LOM:    lom,
 	}
 

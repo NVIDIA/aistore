@@ -29,7 +29,7 @@ loop:
 			continue
 		}
 		if lom.HasCopies() {
-			for _, cpyfqn := range lom.CopyFQN {
+			for _, cpyfqn := range lom.CopyFQN() {
 				parsedFQN, err := fs.Mountpaths.FQN2Info(cpyfqn) // can be optimized via lom.init
 				if err != nil {
 					glog.Errorf("%s: failed to parse copyFQN %s, err: %v", lom, cpyfqn, err)

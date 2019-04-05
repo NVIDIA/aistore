@@ -174,7 +174,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 
 	src := &dataSource{
 		reader:   srcReader,
-		size:     lom.Size,
+		size:     lom.Size(),
 		metadata: metadata,
 		reqType:  ReqPut,
 	}
@@ -222,11 +222,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	}
 
 	// Save received replica and its metadata locally - it is main replica
-	objFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
-	if errstr != "" {
-		writer.Free()
-		return errors.New(errstr)
-	}
+	objFQN := req.LOM.FQN
 	req.LOM.FQN = objFQN
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 	if err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer); err != nil {
@@ -261,10 +257,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, nodes map[string]*Metadata, buffer []byte) error {
 	var writer *os.File
 	// try read a replica from targets one by one until the replica is got
-	objFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
-	if errstr != "" {
-		return errors.New(errstr)
-	}
+	objFQN := req.LOM.FQN
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec-restore-repl")
 
 	for node := range nodes {
@@ -284,7 +277,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		err = c.parent.readRemote(req.LOM, node, uname, iReqBuf, w)
 		w.Close()
 
-		if err == nil && req.LOM.Size != 0 {
+		if err == nil && req.LOM.Size() != 0 {
 			// a valid replica is found - break and do not free SGL
 			writer = w
 			break
@@ -576,12 +569,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	src := io.MultiReader(srcReaders...)
-	mainFQN, errstr := cluster.FQN(fs.ObjectType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	mainFQN := req.LOM.FQN
 	if glog.V(4) {
 		glog.Infof("Saving main object %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, mainFQN)
-	}
-	if errstr != "" {
-		return restored, errors.New(errstr)
 	}
 
 	c.diskCh <- struct{}{}
