@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,9 +19,8 @@ type signalError struct {
 	sig syscall.Signal
 }
 
-func (se *signalError) Error() string {
-	return fmt.Sprintf("Signal %d", se.sig)
-}
+func (se *signalError) Error() string { return fmt.Sprintf("Signal %d", se.sig) }
+func pexit()                          { time.Sleep(time.Second * 3); os.Exit(3) }
 
 //===========================================================================
 //
@@ -40,8 +40,11 @@ func (r *sigrunner) Run() error {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
-	s := <-r.chsig
+	s, ok := <-r.chsig
 	signal.Stop(r.chsig) // stop immediately
+	if ok {
+		go pexit()
+	}
 	switch s {
 	case syscall.SIGHUP: // kill -SIGHUP XXXX
 		return &signalError{sig: syscall.SIGHUP}
