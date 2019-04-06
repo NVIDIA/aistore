@@ -99,6 +99,9 @@ func parseCmdLine() {
 
 	f.BoolVar(&soakcmn.Params.Short, "short", false, "Skips the longer recipes, makes the default reg-phaseduration shorter")
 
+	f.BoolVar(&soakcmn.Params.KeepTargets, "keeptargets", false, "skips the recipes that remove targets")
+	f.BoolVar(&soakcmn.Params.LocalCleanup, "localcleanup", false, "disables cleaning up buckets from other soaktests")
+
 	f.BoolVar(&soakcmn.Params.RecDisable, "rec-disable", false, "Skips running recipes, and just continuously run regression phases")
 	f.StringVar(&recipeListStr, "rec-list", "", "Comma-delimited list of RecipeIDs to run, if set '--short' will be ignored")
 	f.IntVar(&soakcmn.Params.NumCycles, "rec-cycles", 0, "Stop after cycling through all the recipes this many times, 0=infinite")
@@ -284,6 +287,9 @@ func main() {
 	}
 
 	// Params are all good at this point
+
+	// do cleanup before starting to avoid going over capacity
+	soakprim.CleanupSoak()
 
 	report.InitReportFiles()
 

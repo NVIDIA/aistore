@@ -19,6 +19,9 @@ type SoakParams struct {
 
 	Short bool //if true, skips the longer recipes and make default RegPhaseDuration shorter
 
+	KeepTargets  bool //if true, skips the recipes that remove targets
+	LocalCleanup bool //if true, disables cleaning up buckets from other soak test runs
+
 	RecDisable     bool             //if true, skips running recipes, can't be true if any of the below are set
 	RecSet         map[int]struct{} //numbers of recipes to run, starting at 0, if nil run all of them, if set short is ignored
 	NumCycles      int              //numbers of times to cycle through recipes

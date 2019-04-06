@@ -26,11 +26,13 @@ import (
 )
 
 const (
-	soakprefix              = "soaktest-prim-"
+	soakPrefix              = "soaktest-prim"
 	maxRestoreTargetAttempt = 30
 )
 
 var (
+	uniqueProcessPrefix = fmt.Sprintf("%s-%d-", soakPrefix, os.Getpid())
+
 	Terminated bool
 	RunningCh  chan struct{} // chan with nothing written, closed when Terimated is true
 
@@ -83,6 +85,7 @@ func SetPrimaryURL() {
 
 func CleanupSoak() {
 	cleanupRecipeBuckets()
+	cleanupAllRecipeBuckets()
 	cleanupRegression()
 }
 
@@ -194,18 +197,31 @@ func cleanupRecipeBuckets() {
 	}
 }
 
-func bckNamePrefix(bucketname string) string {
-	return soakprefix + bucketname
+func cleanupAllRecipeBuckets() {
+	if soakcmn.Params.LocalCleanup {
+		return
+	}
+
+	bckNames, _ := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
+	for _, bckName := range bckNames.Local {
+		if strings.HasPrefix(bckName, soakPrefix) {
+			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckName)
+		}
+	}
+}
+
+func bckNamePrefix(bckName string) string {
+	return uniqueProcessPrefix + bckName
 }
 
 func bcknameDePrefix(bckName string) (res string) {
-	if strings.HasPrefix(bckName, soakprefix) {
-		return strings.TrimPrefix(bckName, soakprefix)
+	if strings.HasPrefix(bckName, uniqueProcessPrefix) {
+		return strings.TrimPrefix(bckName, uniqueProcessPrefix)
 	}
 	return ""
 }
 
-//fetchBuckets returns a list of buckets in the proxy without the soakprefix
+//fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
 	bckNames, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
 

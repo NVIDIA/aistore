@@ -32,6 +32,9 @@ SK accepts a number of command line arguments, all of which can also be passed b
 
  - `-short` - Skips the longer recipes, makes the default  `-reg-phaseduration` shorter.
 
+ - `-keeptargets` - Skips the recipes that remove targets.
+ - `-nocleanup` - Disables cleaning up buckets from other SK.
+
  - `-rec-disable` - Skips running recipes, if true will just continuously run regression phases.
  - `-rec-list` - Comma-delimited list of RecipeIDs to run (use `./soaktest.sh ls` to get RecipeIDs), if set `-short` will be ignored.
  - `-rec-cycles` - Stops after running this many recipe cycles, 0=infinite.
@@ -73,6 +76,18 @@ SK supports additional commands:
     - Run soaktest using RecipeID 1 and 3, allocating 0.2% of capacity to recipes, and 0.1% to regression 
  - `./soaktest.sh --rec-disable --reg-phasedisable`
     - Don't run anything and just cleanup
+
+Note that running multiple SK in parallel is supported, the requirement is that `-localcleanup` is set on all SK, and `-keeptargets` is set on all but one SK that runs recipes.
+
+For example, the following script runs 5 separate instances of SK
+
+```
+./soaktest.sh --short --nocleanup --rec-primworkers=4 --reg-phasedisable
+./soaktest.sh --nocleanup --keeptargets
+./soaktest.sh --rec-disable --reg-workers=4 --nocleanup
+./soaktest.sh --short --nocleanup --keeptargets
+./soaktest.sh --short --reg-phasedisable --nocleanup --keeptargets
+```
 
  ## Output
 

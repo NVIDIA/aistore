@@ -31,28 +31,28 @@ const (
 var (
 	loadedRecipes = []*Recipe{
 		&Recipe{
-			1, "Basic PUT GET", true,
+			1, "Basic PUT GET", true, false,
 			"basic recipe that PUTs and GETs into buckets, considered the `hello world` of recipes",
 			recBasicPut,
 		},
 		&Recipe{
-			2, "Basic Target Down", true,
+			2, "Basic Target Down", true, true,
 			"basic recipe where a target goes down and comes back up during PUT/GET",
 			recBasicTargDown,
 		},
 		&Recipe{
-			3, "EC Target Down", true,
+			3, "EC Target Down", true, true,
 			"basic recipe for EC by performing GET while a target is down",
 			recECTargDown,
 		},
 		&Recipe{
-			4, "Read Part Config", true,
+			4, "Read Part Config", true, false,
 			"recipe that reads parts of files and config from bucket",
 			recReadPartCfg,
 		},
 
 		&Recipe{
-			5, "Cycle PUT GET", false,
+			5, "Cycle PUT GET", false, false,
 			"constantly cycles through buckets, running PUT in one, GET in another, and deleting the last",
 			recCyclePut,
 		},
@@ -65,8 +65,9 @@ type Recipe struct {
 	RecipeID int
 	Name     string
 
-	Short       bool
-	Description string
+	Short        bool
+	KillsTargets bool
+	Description  string
 
 	run func(*soakprim.RecipeContext)
 }
@@ -100,6 +101,8 @@ func GetShuffledRecipeList() []*Recipe {
 				continue
 			}
 		} else if soakcmn.Params.Short && !r.Short {
+			continue
+		} else if soakcmn.Params.KeepTargets && r.KillsTargets {
 			continue
 		}
 

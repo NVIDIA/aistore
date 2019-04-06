@@ -24,10 +24,13 @@ const (
 	regBucketPrefix = "soaktest-reg"
 )
 
+var (
+	bckName = fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid())
+)
+
 type regressionContext struct {
-	wg      *sync.WaitGroup
-	stopCh  chan struct{}
-	bckName string
+	wg     *sync.WaitGroup
+	stopCh chan struct{}
 }
 
 //regression runs a constant get request throughout the testing
@@ -37,18 +40,14 @@ func cleanupRegression() {
 	cmn.AssertNoErr(err)
 
 	for _, name := range names.Local {
-		if strings.HasPrefix(name, regBucketPrefix) {
-			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), name)
+		if strings.HasPrefix(name, regBucketPrefix) && (!soakcmn.Params.LocalCleanup || name == bckName) {
+			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckName)
 		}
 	}
 }
 
 func setupRegression() *regressionContext {
-	cleanupRegression() //clean up previous regressions first
-
 	regctx := &regressionContext{}
-
-	regctx.bckName = fmt.Sprintf("%s-%d", regBucketPrefix, os.Getpid())
 
 	report.Writef(report.ConsoleLevel, "Setting up regression (maximum %v)...\n", regCapacity)
 
@@ -60,7 +59,7 @@ func setupRegression() *regressionContext {
 		minsize:      soakcmn.Params.RegMinFilesize,
 		maxsize:      soakcmn.Params.RegMaxFilesize,
 	}
-	AISExec(aisStopCh, soakcmn.OpTypePut, regctx.bckName, soakcmn.Params.RegSetupWorkers, params)
+	AISExec(aisStopCh, soakcmn.OpTypePut, bckName, soakcmn.Params.RegSetupWorkers, params)
 	setupStat := <-aisStopCh
 	close(aisStopCh)
 
@@ -120,7 +119,7 @@ func (rctx *RecipeContext) StartRegression() {
 	for i := 0; i < soakcmn.Params.RegInstances; i++ {
 		tag := fmt.Sprintf("regression %d", i+1)
 		regCtx.wg.Add(1)
-		go regressionWorker(tag, rctx.regCtx.bckName, regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
+		go regressionWorker(tag, bckName, regCtx.stopCh, regCtx.wg, rctx.repCtx.RecordRegression)
 	}
 }
 
