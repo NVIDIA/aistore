@@ -28,7 +28,7 @@ endif
 .PHONY: build
 
 build:
-	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/aisnode.go
+	GODEBUG=madvdontneed=1 GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" ${LDFLAGS} setup/aisnode.go
 
 # Target for cleaning deployment
 .PHONY: kill rmcache clean

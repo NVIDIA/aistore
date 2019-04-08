@@ -87,6 +87,18 @@ import (
 // or forcefully "reduce" (see reduce()) one if and when the amount of free
 // memory falls below watermark.
 //
+// Near `go build` or `go install` one can find `GODEBUG=madvdontneed=1`. This
+// is to revert behavior which was changed in 1.12: https://golang.org/doc/go1.12#runtime
+// More specifically Go maintainers decided to use new `MADV_FREE` flag which
+// may prevent memory being freed to kernel in case Go's runtime decide to run
+// GC. But this doesn't stop kernel to kill the process in case of OOM - it is
+// quite grotesque, kernel decides not to get pages from the process and at the
+// same time it may kill it for not returning pages... Since memory is critical
+// in couple of operations we need to make sure that we it is returned to the
+// kernel so `aisnode` will not blow up and this is why `madvdontneed` is
+// needed. More: https://golang.org/src/runtime/mem_linux.go (func sysUnused,
+// lines 100-120).
+//
 // ========================== end of TOO ========================================
 
 const Numslabs = 128 / 4 // [4K - 128K] at 4K increments
@@ -140,22 +152,23 @@ var memPressureText = map[int]string{
 //
 type (
 	Slab2 struct {
+		m *Mem2 // pointer to the parent/creator
+
 		bufsize      int64
 		tag          string
 		get, put     [][]byte
 		muget, muput sync.Mutex
-		l2cache      sync.Pool
 		stats        struct {
-			Hits, Miss int64
+			Hits int64
 		}
-		pmindepth       *int64
-		pos             int
-		usespool, debug bool
+		pmindepth *int64
+		pos       int
+		debug     bool
 	}
 	Stats2 struct {
-		Hits, Miss [Numslabs]int64
-		Adeltas    [Numslabs]int64
-		Idle       [Numslabs]time.Time
+		Hits    [Numslabs]int64
+		Adeltas [Numslabs]int64
+		Idle    [Numslabs]time.Time
 	}
 	ReqStats2 struct {
 		Wg    *sync.WaitGroup
@@ -181,7 +194,7 @@ type (
 		MinFree     uint64        // memory that must be available at all times
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
 		swap        uint64        // actual swap size
-		Swapping    int           // max = SwappingMax; halves every r.time.d unless swapping
+		Swapping    int32         // max = SwappingMax; halves every r.time.d unless swapping
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
 		Debug       bool
@@ -238,35 +251,16 @@ func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64) *SGL {
 	return sgl
 }
 
-func (r *Mem2) MaxAllocRingLen() (slabBufSize int64, ringLen int) {
-	for _, s := range r.rings {
-		if lget := len(s.get); lget > ringLen { // NOTE: not locking - don't care whether the value is racy
-			ringLen = lget
-			slabBufSize = s.bufsize
-		}
-	}
-	return
-}
-func (r *Mem2) MaxFreeRingLen() (slabBufSize int64, ringLen int) {
-	for _, s := range r.rings {
-		if lput := len(s.put); lput > ringLen {
-			ringLen = lput
-			slabBufSize = s.bufsize
-		}
-	}
-	return
-}
-
 // returns an estimate for the current memory pressured expressed as one of the enumerated values
 func (r *Mem2) MemPressure() int {
 	mem := sigar.Mem{}
 	mem.Get()
 	swap := sigar.Swap{}
 	swap.Get()
-	if swap.Used > r.swap {
-		r.Swapping = SwappingMax
+	if swap.Used > atomic.LoadUint64(&r.swap) {
+		atomic.StoreInt32(&r.Swapping, SwappingMax)
 	}
-	if r.Swapping > 0 {
+	if atomic.LoadInt32(&r.Swapping) > 0 {
 		return OOM
 	}
 	if mem.ActualFree > r.lowwm {
@@ -356,7 +350,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	r.sorted = make([]sortpair, Numslabs)
 	swap := sigar.Swap{}
 	swap.Get()
-	r.swap = swap.Used
+	atomic.StoreUint64(&r.swap, swap.Used)
 	atomic.StoreInt64(&r.mindepth, int64(mindepth))
 	atomic.StoreInt64(&r.toGC, 0)
 
@@ -365,15 +359,15 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 
 	// init slabs
 	for i := range r.rings {
-		slab := &Slab2{bufsize: int64(cmn.KiB * 4 * (i + 1)),
-			get: make([][]byte, 0, mindepth),
-			put: make([][]byte, 0, mindepth),
+		slab := &Slab2{
+			m:       r,
+			bufsize: int64(cmn.KiB * 4 * (i + 1)),
+			get:     make([][]byte, 0, mindepth),
+			put:     make([][]byte, 0, mindepth),
 		}
-		slab.l2cache = sync.Pool{New: nil}
 		slab.tag = r.Getname() + "." + cmn.B2S(slab.bufsize, 0)
 		slab.pmindepth = &r.mindepth
 		slab.debug = r.Debug
-		slab.usespool = false // NOTE: not using sync.Pool as l2
 		r.rings[i] = slab
 	}
 
@@ -454,7 +448,6 @@ func (r *Mem2) Run() error {
 			r.doStats()
 			for i := 0; i < Numslabs; i++ {
 				req.Stats.Hits[i] = r.stats.Hits[i]
-				req.Stats.Miss[i] = r.stats.Miss[i]
 				req.Stats.Adeltas[i] = r.stats.Adeltas[i]
 				req.Stats.Idle[i] = r.stats.Idle[i]
 			}
@@ -536,10 +529,30 @@ func (s *Slab2) Alloc() (buf []byte) {
 	return
 }
 
-func (s *Slab2) Free(buf []byte) {
-	s.muput.Lock()
-	s._free(buf)
-	s.muput.Unlock()
+func (s *Slab2) Free(bufs ...[]byte) {
+	// NOTE: races are expected between getting length of the `s.put` slice
+	// and putting something in it. But since `maxdepth` is not hard limit,
+	// we cannot ever exceed we are trading this check in favor of maybe bigger
+	// slices. Also freeing buffers to the same slab at the same point in time
+	// is rather unusual we don't expect this happen often.
+	if len(s.put) < maxdepth {
+		s.muput.Lock()
+		for _, buf := range bufs {
+			if s.debug {
+				cmn.Assert(len(buf) == int(s.bufsize))
+				for i := 0; i < len(buf); i += len(DEADBEEF) {
+					copy(buf[i:], []byte(DEADBEEF))
+				}
+			}
+			s.put = append(s.put, buf)
+		}
+		s.muput.Unlock()
+	} else {
+		// When we just discard buffer, since the `s.put` cache is full, then
+		// we need to remember how much memory we discarded and take it into
+		// account when determining if we should return memory to the system.
+		atomic.AddInt64(&s.m.toGC, s.bufsize*int64(len(bufs)))
+	}
 }
 
 //============================================================================
@@ -590,9 +603,9 @@ func (r *Mem2) work() {
 	swap.Get()
 	swapping := swap.Used > r.swap
 	if swapping {
-		r.Swapping = SwappingMax
+		atomic.StoreInt32(&r.Swapping, SwappingMax)
 	} else {
-		r.Swapping /= 2
+		atomic.StoreInt32(&r.Swapping, atomic.LoadInt32(&r.Swapping)/2)
 	}
 	r.swap = swap.Used
 
@@ -722,10 +735,13 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 	}
 	toGC := atomic.LoadInt64(&r.toGC)
 	if toGC > minsize {
-		str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One,
-			cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2))
+		str := fmt.Sprintf(
+			"GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC_size: %s",
+			force, swapping, avg.One, cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2),
+		)
 		if force || swapping { // Heu #4
-			glog.Errorf("%s - freeing memory to the OS...", str)
+			glog.Warningf("%s - freeing memory to the OS...", str)
+			runtime.GC()
 			debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
 		} else { // Heu #5
 			glog.Infof(str)
@@ -744,11 +760,9 @@ func (r *Mem2) fsort(i, j int) bool {
 func (r *Mem2) doStats() {
 	now := time.Now()
 	for i, s := range r.rings {
-		prev := r.stats.Hits[i] + r.stats.Miss[i]
+		prev := r.stats.Hits[i]
 		r.stats.Hits[i] = atomic.LoadInt64(&s.stats.Hits)
-		r.stats.Miss[i] = atomic.LoadInt64(&s.stats.Miss)
-		curr := r.stats.Hits[i] + r.stats.Miss[i]
-		r.stats.Adeltas[i] = curr - prev
+		r.stats.Adeltas[i] = r.stats.Hits[i] - prev
 		isZero := r.stats.Idle[i].IsZero()
 		if r.stats.Adeltas[i] == 0 && isZero {
 			r.stats.Idle[i] = now
@@ -772,24 +786,10 @@ func (s *Slab2) _alloc() (buf []byte) {
 		atomic.AddInt64(&s.stats.Hits, 1)
 		return
 	}
-	// try l2
-	if s.usespool {
-		x := s.l2cache.Get()
-		if x != nil {
-			pbuf := x.(*[]byte)
-			buf = *pbuf
-			atomic.AddInt64(&s.stats.Hits, 1)
-			return
-		}
-	}
 	return s._allocSlow()
 }
 
 func (s *Slab2) _allocSlow() (buf []byte) {
-	var (
-		lput   int
-		missed bool
-	)
 	curmindepth := atomic.LoadInt64(s.pmindepth)
 	if curmindepth == 0 {
 		curmindepth = 1
@@ -798,9 +798,9 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 		cmn.Assert(len(s.get) == s.pos)
 	}
 	s.muput.Lock()
-	lput = len(s.put)
+	lput := len(s.put)
 	if cnt := int(curmindepth) - lput; cnt > 0 {
-		missed = s.grow(cnt)
+		s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
 	if s.debug {
@@ -813,51 +813,18 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 	s.pos = 0
 	buf = s.get[s.pos]
 	s.pos++
-	if missed {
-		atomic.AddInt64(&s.stats.Miss, 1)
-	} else {
-		atomic.AddInt64(&s.stats.Hits, 1)
-	}
+	atomic.AddInt64(&s.stats.Hits, 1)
 	return
 }
 
-func (s *Slab2) grow(cnt int) bool {
+func (s *Slab2) grow(cnt int) {
 	if bool(glog.V(4)) || s.debug {
 		lput := len(s.put)
 		glog.Infof("%s: grow by %d => %d", s.tag, cnt, lput+cnt)
 	}
-	if s.usespool {
-		for ; cnt > 0; cnt-- {
-			x := s.l2cache.Get()
-			if x == nil {
-				break
-			}
-			pbuf := x.(*[]byte)
-			buf := *pbuf
-			s.put = append(s.put, buf)
-		}
-		if cnt == 0 {
-			return false
-		}
-	}
 	for ; cnt > 0; cnt-- {
 		buf := make([]byte, s.bufsize)
 		s.put = append(s.put, buf)
-	}
-	return true
-}
-
-func (s *Slab2) _free(buf []byte) {
-	if len(s.put) < maxdepth {
-		if s.debug {
-			cmn.Assert(len(buf) == int(s.bufsize))
-			for i := 0; i < len(buf); i += len(DEADBEEF) {
-				copy(buf[i:], []byte(DEADBEEF))
-			}
-		}
-		s.put = append(s.put, buf)
-	} else if s.usespool {
-		s.l2cache.Put(&buf)
 	}
 }
 
@@ -878,10 +845,6 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 		for ; cnt > 0; cnt-- {
 			lput--
-			if s.usespool && todepth > 0 && freed < sizetoGC/4 { // Heu #8
-				buf := s.put[lput]
-				s.l2cache.Put(&buf)
-			}
 			s.put[lput] = nil
 			freed += s.bufsize
 		}

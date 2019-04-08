@@ -14,4 +14,4 @@ fi
 VERSION=`git rev-parse --short HEAD`
 BUILD=`date +%FT%T%z`
 echo "Cloud provider set to: ${CLDPROVIDER}"
-GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
+GODEBUG=madvdontneed=1 GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go

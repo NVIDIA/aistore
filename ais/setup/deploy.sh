@@ -182,7 +182,7 @@ BUILD=`date +%FT%T%z`
 if [ "$ENABLE_CODE_COVERAGE" == "" ]
 then
 	EXE=$GOPATH/bin/aisnode
-	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
+	GODEBUG=madvdontneed=1 GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/aisnode.go
 else
 	echo "Note: code test-coverage enabled!"
 	EXE=$GOPATH/bin/ais_coverage.test
@@ -193,7 +193,7 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 # build authn
-GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ../authn
+GODEBUG=madvdontneed=1 GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ../authn
 if [ $? -ne 0 ]; then
 	exit 1
 fi

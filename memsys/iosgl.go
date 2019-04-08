@@ -157,12 +157,7 @@ func (z *SGL) Free() {
 		glog.Errorln(s1)
 		return
 	}
-	z.slab.muput.Lock()
-	for i := 0; i < len(z.sgl); i++ {
-		z.slab._free(z.sgl[i])
-	}
-	z.slab.muput.Unlock()
-
+	z.slab.Free(z.sgl...)
 	z.sgl = z.sgl[:0]
 	z.sgl, z.slab = nil, nil
 	z.woff = 0xDEADBEEF

@@ -144,7 +144,7 @@ do
         # debug/source image with a built binary, use that
         /go/bin/aisnode $ARGS
     elif [[ -d /go/src/github.com/NVIDIA/aistore/ais ]]; then
-        (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
+        (cd /go/src/github.com/NVIDIA/aistore/ais && GODEBUG=madvdontneed=1 go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
     else
         echo "Cannot find an ais binary or source tree"
     fi

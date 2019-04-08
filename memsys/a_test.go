@@ -125,10 +125,6 @@ func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
 		case <-c:
 			return
 		case <-time.After(5 * time.Second):
-			bufsize, len := mem.MaxAllocRingLen()
-			tutils.Logf("max alloc ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
-			bufsize, len = mem.MaxFreeRingLen()
-			tutils.Logf("max free  ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
 			if p := mem.MemPressure(); p > memsys.MemPressureLow {
 				tutils.Logf("memory pressure %s\n", memsys.MemPressureText(p))
 			}
@@ -174,7 +170,6 @@ func printstats(mem *memsys.Mem2) {
 		prevStats, currStats memsys.Stats2
 		req                  = memsys.ReqStats2{Wg: &sync.WaitGroup{}, Stats: &currStats}
 		ravghits             = make([]float64, memsys.Numslabs)
-		ravgmiss             = make([]float64, memsys.Numslabs)
 	)
 	for {
 		time.Sleep(mem.TimeIval)
@@ -182,7 +177,7 @@ func printstats(mem *memsys.Mem2) {
 		mem.GetStats(req)
 		req.Wg.Wait()
 		for i := 0; i < memsys.Numslabs; i++ {
-			ftot := float64(currStats.Hits[i] + currStats.Miss[i])
+			ftot := float64(currStats.Hits[i])
 			if ftot == 0 {
 				continue
 			}
@@ -192,12 +187,6 @@ func printstats(mem *memsys.Mem2) {
 				x := float64(currStats.Hits[i]) / ftot
 				ravghits[i] = ravghits[i]*0.4 + x*0.6
 			}
-			if ravgmiss[i] == 0 {
-				ravgmiss[i] = float64(currStats.Miss[i]) / ftot
-			} else {
-				x := float64(currStats.Miss[i]) / ftot
-				ravgmiss[i] = ravgmiss[i]*0.4 + x*0.6
-			}
 		}
 		str := ""
 		for i := 0; i < memsys.Numslabs; i++ {
@@ -206,15 +195,11 @@ func printstats(mem *memsys.Mem2) {
 				fmt.Println(err)
 				return
 			}
-			if ravghits[i] < 0.0001 && ravgmiss[i] < 0.0001 {
+			if ravghits[i] < 0.0001 || ravghits[i] > 0.9999 {
 				continue
 			}
-			if ravghits[i] > 0.9999 {
-				continue
-			}
-			str += fmt.Sprintf("%s (%.2f, %.2f) ", slab.Tag(), ravghits[i], ravgmiss[i])
+			str += fmt.Sprintf("%s (%.2f) ", slab.Tag(), ravghits[i])
 			prevStats.Hits[i] = currStats.Hits[i]
-			prevStats.Miss[i] = currStats.Miss[i]
 			prevStats.Adeltas[i] = currStats.Adeltas[i]
 			prevStats.Idle[i] = currStats.Idle[i]
 		}

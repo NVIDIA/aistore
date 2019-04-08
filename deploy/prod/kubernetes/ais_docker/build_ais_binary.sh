@@ -76,7 +76,7 @@ echo "Cloud provider set to: ${CLDPROVIDER}"
 
 (
     cd $GOPATH/src/$AIS_SRC &&
-    go build \
+    GODEBUG=madvdontneed=1 go build \
       -o $DEST \
       -tags="${CLDPROVIDER}" \
       -ldflags "$LDEXTRAFLAGS -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" \
