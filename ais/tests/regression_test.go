@@ -508,7 +508,7 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestObjectsVersions(t *testing.T) {
-	propsMainTest(t, cmn.VersionAll)
+	propsMainTest(t, true /*versioning enabled*/)
 }
 
 func TestRebalance(t *testing.T) {

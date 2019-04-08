@@ -160,7 +160,6 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		errstr            string
 		vchanged, coldGet bool
 		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-		versioncfg        = &cmn.GCO.Get().Ver
 	)
 	if errstr = lom.Fill(bckProvider, cluster.LomFstat|cluster.LomVersion|cluster.LomCksum); errstr != "" {
 		glog.Error(errstr)
@@ -173,7 +172,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		return
 	}
 	coldGet = !lom.Exists()
-	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version() != "" && versioningConfigured(false) {
+	if lom.Exists() && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
 		if coldGet, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version()); errstr != "" {
 			return
 		}

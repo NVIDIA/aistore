@@ -61,8 +61,6 @@ type (
 		bucketMD    *BMD
 		AtimeRespCh chan *atime.Response
 		Config      *cmn.Config
-		CksumConf   *cmn.CksumConf
-		MirrorConf  *cmn.MirrorConf
 		BckProps    *cmn.BucketProps
 		// internal+mountpath
 		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
@@ -95,6 +93,23 @@ func (lom *LOM) HasCopies() bool             { return !lom.IsCopy() && lom.NumCo
 func (lom *LOM) NumCopies() int              { return len(lom.md.copyFQN) + 1 }
 func (lom *LOM) IsCopy() bool {
 	return len(lom.md.copyFQN) == 1 && lom.md.copyFQN[0] == lom.HrwFQN // is a local copy of an object
+}
+func (lom *LOM) CksumConf() *cmn.CksumConf {
+	conf := &lom.BckProps.Cksum
+	if conf.Type == cmn.PropInherit {
+		conf = &lom.Config.Cksum
+	}
+	return conf
+}
+func (lom *LOM) VerConf() *cmn.VersionConf {
+	conf := &lom.BckProps.Versioning
+	if conf.Type == cmn.PropInherit {
+		conf = &lom.Config.Ver
+	}
+	return conf
+}
+func (lom *LOM) MirrorConf() *cmn.MirrorConf {
+	return &lom.BckProps.Mirror
 }
 func (lom *LOM) GenFQN(ty, prefix string) string {
 	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
@@ -280,14 +295,9 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 			errstr = fmt.Sprintf("%s: cloud bucket with no cloud provider (%s) or nonexistent bucket", lom, cprovider)
 			return
 		}
-		lom.CksumConf = &lom.BckProps.Cksum
-		if lom.CksumConf.Type == cmn.ChecksumInherit {
-			lom.CksumConf = &lom.Config.Cksum
-		}
-		lom.MirrorConf = &lom.BckProps.Mirror
 	}
 	// [local copy] always enforce LomCopy if the following is true
-	if (lom.Misplaced() || action&LomFstat != 0) && lom.MirrorConf.Copies != 0 {
+	if (lom.Misplaced() || action&LomFstat != 0) && lom.MirrorConf().Copies != 0 {
 		action |= LomCopy
 	}
 	//
@@ -317,7 +327,8 @@ func (lom *LOM) Fill(bckProvider string, action int, config ...*cmn.Config) (err
 	}
 	if action&LomAtime != 0 { // FIXME: RFC822 format
 		var err error
-		_, lom.md.atime, err = lom.T.GetAtimeRunner().FormatAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
+		_, lom.md.atime, err = lom.T.GetAtimeRunner().FormatAtime(lom.FQN,
+			lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
 		if err != nil {
 			return err.Error()
 		}
@@ -415,7 +426,7 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 			return
 		}
 		_, uc := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-		if uc.Max < u.Max-float32(lom.MirrorConf.UtilThresh) && uc.Min <= u.Min {
+		if uc.Max < u.Max-float32(lom.MirrorConf().UtilThresh) && uc.Min <= u.Min {
 			if uc.Max < umin.Max && uc.Min <= umin.Min {
 				fqn = cpyfqn
 				umin = uc
@@ -525,7 +536,7 @@ func (lom *LOM) checksum(action int) (errstr string) {
 	var (
 		storedCksum, computedCksum string
 		b                          []byte
-		cksumType                  = lom.CksumConf.Type
+		cksumType                  = lom.CksumConf().Type
 	)
 	if cksumType == cmn.ChecksumNone {
 		return

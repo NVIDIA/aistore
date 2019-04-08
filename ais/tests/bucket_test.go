@@ -26,7 +26,7 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	globalConfig := getDaemonConfig(t, proxyURL)
 
 	return &cmn.BucketProps{
-		Cksum: cmn.CksumConf{Type: cmn.ChecksumInherit},
+		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
 		LRU:   globalConfig.LRU,
 	}
 }

@@ -2991,11 +2991,11 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 
 func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketChecksumNew string) bool {
 	checksumOld := globalChecksum
-	if bucketChecksumOld != cmn.ChecksumInherit {
+	if bucketChecksumOld != cmn.PropInherit {
 		checksumOld = bucketChecksumOld
 	}
 	checksumNew := globalChecksum
-	if bucketChecksumNew != cmn.ChecksumInherit {
+	if bucketChecksumNew != cmn.PropInherit {
 		checksumNew = bucketChecksumNew
 	}
 	return checksumNew != cmn.ChecksumNone && checksumNew != checksumOld

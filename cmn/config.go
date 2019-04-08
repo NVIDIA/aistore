@@ -449,8 +449,9 @@ type CksumConf struct {
 }
 
 type VersionConf struct {
-	Versioning      string `json:"versioning"`        // types of objects versioning is enabled for: all, cloud, local, none
-	ValidateWarmGet bool   `json:"validate_warm_get"` // True: validate object version upon warm GET
+	Type            string `json:"type"`              // inherited/owned
+	Enabled         bool   `json:"enabled"`           // defined by the Versioning; can be redefined on a bucket level
+	ValidateWarmGet bool   `json:"validate_warm_get"` // validate object version upon warm GET
 }
 
 type TestfspathConf struct {
@@ -608,21 +609,6 @@ func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	return
 }
 
-func ValidateVersion(version string) error {
-	versions := []string{VersionAll, VersionCloud, VersionLocal, VersionNone}
-	versionValid := false
-	for _, v := range versions {
-		if v == version {
-			versionValid = true
-			break
-		}
-	}
-	if !versionValid {
-		return fmt.Errorf("invalid version: %s - expecting one of %s", version, strings.Join(versions, ", "))
-	}
-	return nil
-}
-
 func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Xaction, &c.LRU, &c.Mirror, &c.Cksum,
@@ -734,12 +720,20 @@ func (c *CksumConf) Validate() error {
 }
 
 func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
-	if c.Type != ChecksumInherit && c.Type != ChecksumNone && c.Type != ChecksumXXHash {
+	if c.Type != PropInherit && c.Type != ChecksumNone && c.Type != ChecksumXXHash {
 		return fmt.Errorf("invalid checksum.type: %s (expected one of: [%s, %s, %s])",
-			c.Type, ChecksumXXHash, ChecksumNone, ChecksumInherit)
+			c.Type, ChecksumXXHash, ChecksumNone, PropInherit)
 	}
 	return nil
 }
+
+func (c *VersionConf) Validate() error {
+	if c.ValidateWarmGet && !c.Enabled {
+		return errors.New("validate-warm-get requires versioning to be enabled")
+	}
+	return nil
+}
+func (c *VersionConf) ValidateAsProps() error { return c.Validate() }
 
 func (c *MirrorConf) Validate() error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
@@ -842,10 +836,6 @@ func (c *PeriodConf) Validate() (err error) {
 		return fmt.Errorf("bad periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
 	}
 	return nil
-}
-
-func (c *VersionConf) Validate() error {
-	return ValidateVersion(c.Versioning)
 }
 
 func (c *KeepaliveConf) Validate() (err error) {
@@ -1027,8 +1017,8 @@ func (conf *Config) update(key, value string) error {
 		return updateValue(&conf.Cksum.EnableReadRange, &conf.Cksum)
 
 	// VERSION
-	case "versioning", "version.versioning":
-		return updateValue(&conf.Ver.Versioning, &conf.Ver)
+	case "versioning_enabled", "versioning.enabled":
+		return updateValue(&conf.Ver.Enabled)
 	case "validate_version_warm_get", "version.validate_warm_get":
 		return updateValue(&conf.Ver.ValidateWarmGet)
 

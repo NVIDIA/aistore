@@ -627,12 +627,11 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		errcode    int
-		started    time.Time
-		config     = cmn.GCO.Get()
-		versioncfg = &config.Ver
-		ct         = t.contextWithAuth(r.Header)
-		query      = r.URL.Query()
+		errcode int
+		started time.Time
+		config  = cmn.GCO.Get()
+		ct      = t.contextWithAuth(r.Header)
+		query   = r.URL.Query()
 	)
 	//
 	// 1. start, init lom, readahead
@@ -661,7 +660,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if lom.MirrorConf.Enabled {
+	if lom.MirrorConf().Enabled {
 		if errstr = lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
 			// Log error but don't abort get operation, it is not critical.
 			glog.Error(errstr)
@@ -706,7 +705,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !coldGet && !lom.BckIsLocal { // exists && cloud-bucket : check ver if requested
-		if versioncfg.ValidateWarmGet && (lom.Version() != "" && versioningConfigured(lom.BckIsLocal)) {
+		if lom.Version() != "" && lom.VerConf().ValidateWarmGet {
 			if coldGet, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version()); errstr != "" {
 				t.rtnamemap.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr, errcode)
@@ -716,7 +715,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// checksum validation, if requested
-	if !coldGet && lom.CksumConf.ValidateWarmGet {
+	if !coldGet && lom.CksumConf().ValidateWarmGet {
 		errstr = lom.Fill(bckProvider, cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 		if lom.BadCksum {
 			glog.Errorln(errstr)
@@ -864,7 +863,8 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}()
 
-	cksumRange := lom.CksumConf.Type != cmn.ChecksumNone && rangeLen > 0 && lom.CksumConf.EnableReadRange
+	ckConf := lom.CksumConf()
+	cksumRange := ckConf.Type != cmn.ChecksumNone && rangeLen > 0 && ckConf.EnableReadRange
 	hdr := w.Header()
 
 	if lom.Cksum() != nil && !cksumRange {
@@ -932,7 +932,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 			}
 			reader = rangeReader
-			hdr.Add(cmn.HeaderObjCksumType, lom.CksumConf.Type)
+			hdr.Add(cmn.HeaderObjCksumType, ckConf.Type)
 			hdr.Add(cmn.HeaderObjCksumVal, cksum)
 		} else {
 			reader = io.NewSectionReader(file, rangeOff, rangeLen)
@@ -1299,6 +1299,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 
+	config := cmn.GCO.Get()
 	if !bckIsLocal {
 		bucketProps, errstr, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
 		if errstr != "" {
@@ -1308,11 +1309,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		bucketProps = make(cmn.SimpleKVs)
 		bucketProps[cmn.HeaderCloudProvider] = cmn.ProviderAIS
-		bucketProps[cmn.HeaderVersioning] = cmn.VersionLocal
-	}
-	// double check if we support versioning internally for the bucket
-	if !versioningConfigured(bckIsLocal) {
-		bucketProps[cmn.HeaderVersioning] = cmn.VersionNone
 	}
 
 	hdr := w.Header()
@@ -1325,10 +1321,13 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if props == nil {
 		return
 	}
-	config := cmn.GCO.Get()
 	cksumConf := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if ok && props.Cksum.Type != cmn.ChecksumInherit {
+	if ok && props.Cksum.Type != cmn.PropInherit {
 		cksumConf = &props.Cksum
+	}
+	verConf := &config.Ver
+	if ok {
+		verConf = &props.Versioning
 	}
 	// transfer bucket props via http header;
 	// (it is totally legal for Cloud buckets to not have locally cached props)
@@ -1339,6 +1338,10 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
 	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
 	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumConf.EnableReadRange))
+
+	hdr.Add(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
+	hdr.Add(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
+
 	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
 	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.LRU.AtimeCacheMax, 10))
@@ -1613,7 +1616,6 @@ func (t *targetrunner) getFromTier(lom *cluster.LOM) (ok bool) {
 // FIXME: recomputes checksum if called with a bad one (optimize)
 func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
 	var (
-		versioncfg      = &lom.Config.Ver
 		errv            string
 		vchanged, crace bool
 		err             error
@@ -1637,13 +1639,13 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	// existence, access & versioning
 	coldGet := !lom.Exists()
 	if !coldGet {
-		if versioncfg.ValidateWarmGet && lom.Version() != "" && versioningConfigured(lom.BckIsLocal) {
+		if lom.Version() != "" && lom.VerConf().ValidateWarmGet {
 			vchanged, errv, _ = t.checkCloudVersion(ct, lom.Bucket, lom.Objname, lom.Version())
 			if errv == "" {
 				coldGet = vchanged
 			}
 		}
-		if !coldGet && lom.CksumConf.ValidateWarmGet {
+		if !coldGet && lom.CksumConf().ValidateWarmGet {
 			errstr := lom.Fill("", cluster.LomCksum|cluster.LomCksumPresentRecomp|cluster.LomCksumMissingRecomp)
 			if lom.BadCksum {
 				coldGet = true
@@ -2287,7 +2289,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 
 	// Lock the uname for the object and rename it from workFQN to actual FQN.
 	roi.t.rtnamemap.Lock(roi.lom.Uname(), true)
-	if roi.lom.BckIsLocal && versioningConfigured(true) {
+	if roi.lom.BckIsLocal && roi.lom.VerConf().Enabled {
 		if ver, errstr = roi.lom.IncObjectVersion(); errstr != "" {
 			roi.t.rtnamemap.Unlock(roi.lom.Uname(), true)
 			return
@@ -2315,13 +2317,14 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 }
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
-	if !lom.MirrorConf.Enabled || dryRun.disk {
+	mirrConf := lom.MirrorConf()
+	if !mirrConf.Enabled || dryRun.disk {
 		return
 	}
-	if nmp := fs.Mountpaths.NumAvail(); nmp < int(lom.MirrorConf.Copies) {
+	if nmp := fs.Mountpaths.NumAvail(); nmp < int(mirrConf.Copies) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)",
-				nmp, lom.Bucket, lom.MirrorConf.Copies)
+				nmp, lom.Bucket, mirrConf.Copies)
 		}
 		return
 	}
@@ -2570,11 +2573,12 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		hashes              []hash.Hash
 	)
 
-	if !roi.cold && roi.lom.CksumConf.Type != cmn.ChecksumNone {
-		checkCksumType = roi.lom.CksumConf.Type
+	roiCkConf := roi.lom.CksumConf()
+	if !roi.cold && roiCkConf.Type != cmn.ChecksumNone {
+		checkCksumType = roiCkConf.Type
 		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
 
-		if !roi.migrated || roi.lom.CksumConf.ValidateClusterMigration {
+		if !roi.migrated || roiCkConf.ValidateClusterMigration {
 			saveHash = xxhash.New64()
 			hashes = []hash.Hash{saveHash}
 
@@ -2598,7 +2602,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		hashes = []hash.Hash{saveHash}
 
 		// if configured and the cksum is provied we should also check md5 hash (aws, gcp)
-		if roi.lom.CksumConf.ValidateColdGet && roi.cksumToCheck != nil {
+		if roiCkConf.ValidateColdGet && roi.cksumToCheck != nil {
 			expectedCksum = roi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
 			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5 || checkCksumType == cmn.ChecksumCRC32C, checkCksumType)

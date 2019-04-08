@@ -69,9 +69,9 @@ cat > $CONFFILE <<EOL
 		"validate_cluster_migration": false,
 		"enable_read_range":          false
 	},
-	"version": {
-		"versioning":        "all",
-		"validate_warm_get": false
+	"versioning": {
+		"enabled":		"true",
+		"validate_warm_get":	false
 	},
 	"fspaths": {
 		$FSPATHS

@@ -359,7 +359,7 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 	xcopy = &mirror.XactCopy{
 		XactDemandBase: *base,
 		Slab:           slab,
-		Mirror:         *lom.MirrorConf,
+		Mirror:         *lom.MirrorConf(),
 		T:              t,
 		Namelocker:     t.rtnamemap,
 		BckIsLocal:     lom.BckIsLocal,

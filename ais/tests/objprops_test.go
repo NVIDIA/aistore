@@ -7,6 +7,7 @@ package ais_test
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -410,19 +411,19 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	propsCleanupObjects(t, proxyURL, bucket, newVersions)
 }
 
-func propsMainTest(t *testing.T, versioning string) {
+func propsMainTest(t *testing.T, versioning bool) {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	chkVersion := true
 
 	config := getDaemonConfig(t, proxyURL)
 	oldChkVersion := config.Ver.ValidateWarmGet
-	oldVersioning := config.Ver.Versioning
+	oldVersioning := config.Ver.Enabled
 
 	if oldChkVersion != chkVersion {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", chkVersion)})
 	}
 	if oldVersioning != versioning {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning": versioning})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning.enabled": strconv.FormatBool(versioning)})
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
@@ -432,7 +433,7 @@ func propsMainTest(t *testing.T, versioning string) {
 			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", oldChkVersion)})
 		}
 		if oldVersioning != versioning {
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning": oldVersioning})
+			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning.enabled": strconv.FormatBool(oldVersioning)})
 		}
 		if created {
 			tutils.DestroyLocalBucket(t, proxyURL, clibucket)
@@ -443,7 +444,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
-	versionEnabled := props.Versioning != cmn.VersionNone
+	versionEnabled := props.Versioning.Enabled
 	bckIsLocal := props.CloudProvider == cmn.ProviderAIS
 	propsTestCore(t, versionEnabled, bckIsLocal)
 }
@@ -453,7 +454,7 @@ func TestObjPropsVersionEnabled(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	propsMainTest(t, cmn.VersionAll)
+	propsMainTest(t, true)
 }
 
 func TestObjPropsVersionDisabled(t *testing.T) {
@@ -461,5 +462,5 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	propsMainTest(t, cmn.VersionNone)
+	propsMainTest(t, false)
 }

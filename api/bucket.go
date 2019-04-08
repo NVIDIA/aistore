@@ -22,7 +22,7 @@ import (
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketPropsMsg(baseParams *BaseParams, bucket string, props cmn.BucketProps, query ...url.Values) error {
 	if props.Cksum.Type == "" {
-		props.Cksum.Type = cmn.ChecksumInherit
+		props.Cksum.Type = cmn.PropInherit
 	}
 
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
@@ -85,78 +85,120 @@ func ResetBucketProps(baseParams *BaseParams, bucket string, query ...url.Values
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cmn.BucketProps, error) {
+func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *cmn.BucketProps, err error) {
+	var (
+		path      = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+		optParams = OptionalParams{}
+		r         *http.Response
+		n         int64
+		u         uint64
+		b         bool
+	)
 	baseParams.Method = http.MethodHead
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	optParams := OptionalParams{}
 	if len(query) > 0 {
 		optParams.Query = query[0]
 	}
-
-	r, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
-	if err != nil {
-		return nil, err
+	if r, err = doHTTPRequestGetResp(baseParams, path, nil, optParams); err != nil {
+		return
 	}
 	defer r.Body.Close()
 
 	cksumProps := cmn.CksumConf{
 		Type: r.Header.Get(cmn.HeaderBucketChecksumType),
 	}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
 		cksumProps.ValidateColdGet = b
+	} else {
+		return
 	}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
 		cksumProps.ValidateWarmGet = b
+	} else {
+		return
 	}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateRange)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateRange)); err == nil {
 		cksumProps.EnableReadRange = b
+	} else {
+		return
+	}
+
+	verProps := cmn.VersionConf{}
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketVerEnabled)); err == nil {
+		verProps.Enabled = b
+	} else {
+		return
+	}
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketVerValidateWarm)); err == nil {
+		verProps.ValidateWarmGet = b
+	} else {
+		return
 	}
 
 	lruProps := cmn.LRUConf{
 		DontEvictTimeStr:   r.Header.Get(cmn.HeaderBucketDontEvictTime),
 		CapacityUpdTimeStr: r.Header.Get(cmn.HeaderBucketCapUpdTime),
 	}
-	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRULowWM), 10, 32); err == nil {
-		lruProps.LowWM = int64(b)
+	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRULowWM), 10, 32); err == nil {
+		lruProps.LowWM = int64(u)
+	} else {
+		return
 	}
-	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUHighWM), 10, 32); err == nil {
-		lruProps.HighWM = int64(b)
+	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUHighWM), 10, 32); err == nil {
+		lruProps.HighWM = int64(u)
+	} else {
+		return
 	}
-	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
-		lruProps.AtimeCacheMax = b
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
+		lruProps.AtimeCacheMax = n
+	} else {
+		return
 	}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
 		lruProps.Enabled = b
+	} else {
+		return
 	}
 
 	mirrorProps := cmn.MirrorConf{}
-	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
-		mirrorProps.Copies = b
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
+		mirrorProps.Copies = n
+	} else {
+		return
 	}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
 		mirrorProps.Enabled = b
+	} else {
+		return
 	}
-	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketMirrorThresh), 10, 32); err == nil {
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketMirrorThresh), 10, 32); err == nil {
 		mirrorProps.UtilThresh = n
+	} else {
+		return
 	}
 
 	ecProps := cmn.ECConf{}
-	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
 		ecProps.Enabled = b
+	} else {
+		return
 	}
-	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECMinSize), 10, 64); err == nil {
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECMinSize), 10, 64); err == nil {
 		ecProps.ObjSizeLimit = n
+	} else {
+		return
 	}
-	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECData), 10, 32); err == nil {
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECData), 10, 32); err == nil {
 		ecProps.DataSlices = int(n)
 	}
-	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECParity), 10, 32); err == nil {
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECParity), 10, 32); err == nil {
 		ecProps.ParitySlices = int(n)
+	} else {
+		return
 	}
 
-	return &cmn.BucketProps{
+	p = &cmn.BucketProps{
 		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
-		Versioning:    r.Header.Get(cmn.HeaderVersioning),
+		Versioning:    verProps,
 		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
 		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
@@ -164,7 +206,8 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (*cm
 		LRU:           lruProps,
 		Mirror:        mirrorProps,
 		EC:            ecProps,
-	}, nil
+	}
+	return
 }
 
 // GetBucketNames API

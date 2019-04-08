@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 //===========================================================================
@@ -171,17 +170,4 @@ func parsebool(s string) (value bool, err error) {
 	}
 	value, err = strconv.ParseBool(s)
 	return
-}
-
-// versioningConfigured returns true if versioning for a given bucket is enabled
-// NOTE:
-//    AWS bucket versioning can be disabled on the cloud. In this case we do not
-//    save/read/update version using xattrs. And the function returns that the
-//    versioning is unsupported even if versioning is 'all' or 'cloud'.
-func versioningConfigured(isLocal bool) bool {
-	versioning := cmn.GCO.Get().Ver.Versioning
-	if isLocal {
-		return versioning == cmn.VersionAll || versioning == cmn.VersionLocal
-	}
-	return versioning == cmn.VersionAll || versioning == cmn.VersionCloud
 }

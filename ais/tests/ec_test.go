@@ -1250,7 +1250,8 @@ func TestECXattrs(t *testing.T) {
 	rnd := rand.New(rand.NewSource(seed))
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps()
-	bckProps.Versioning = "all"
+	bckProps.Versioning.Type = cmn.PropOwn
+	bckProps.Versioning.Enabled = true
 
 	newLocalBckWithProps(t, TestLocalBucketName, bckProps, seed, 0, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)

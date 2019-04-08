@@ -368,8 +368,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return fmt.Errorf("failed to create new shard file, err: %v", err)
 	}
 
-	if lom.CksumConf.Type != cmn.ChecksumNone {
-		cksumType = lom.CksumConf.Type
+	chksum := lom.CksumConf()
+	if chksum.Type != cmn.ChecksumNone {
+		cksumType = chksum.Type
 		cmn.AssertMsg(cksumType == cmn.ChecksumXXHash, cksumType)
 		h = xxhash.New64()
 		w = io.MultiWriter(shardFile, h)
@@ -383,7 +384,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	if lom.CksumConf.Type != cmn.ChecksumNone {
+	if chksum.Type != cmn.ChecksumNone {
 		cksumValue = cmn.HashToStr(h)
 		cmn.Assert(cksumValue != "")
 		lom.SetCksum(cmn.NewCksum(cksumType, cksumValue))

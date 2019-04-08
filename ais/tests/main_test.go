@@ -864,13 +864,6 @@ func TestHeadCloudBucket(t *testing.T) {
 
 	p, err := api.HeadBucket(baseParams, clibucket)
 	tutils.CheckFatal(err, t)
-
-	versionModes := []string{cmn.VersionAll, cmn.VersionCloud, cmn.VersionLocal, cmn.VersionNone}
-	if !cmn.StringInSlice(p.Versioning, versionModes) {
-		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
-			clibucket, p.Versioning, strings.Join(versionModes, ", "))
-	}
-
 	validateBucketProps(t, bucketProps, *p)
 }
 
@@ -899,7 +892,7 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1"}
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: ""}
 	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)

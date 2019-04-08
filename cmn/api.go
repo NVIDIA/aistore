@@ -25,13 +25,12 @@ const (
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
 	ChecksumCRC32C = "crc32c"
-	// buckets to inherit global checksum config
-	ChecksumInherit = "inherit"
-	// versioning
-	VersionAll   = "all"
-	VersionCloud = "cloud"
-	VersionLocal = "local"
-	VersionNone  = "none"
+)
+
+// Bucket property type (used by cksum, versioning)
+const (
+	PropInherit = "inherit" // inherit bucket property from global config
+	PropOwn     = "own"     // bucket has its own configuration
 )
 
 // ActionMsg is a JSON-formatted control structures for the REST API
@@ -102,7 +101,6 @@ const (
 // in set single bucket property request.
 const (
 	HeaderCloudProvider = "cloud_provider" // from Cloud Provider enum
-	HeaderVersioning    = "versioning"     // Versioning state for a bucket: "enabled"/"disabled"
 
 	// tiering
 	HeaderNextTierURL = "next_tier_url" // URL of the next tier in a AIStore multi-tier environment
@@ -111,9 +109,11 @@ const (
 
 	// bucket props
 	HeaderBucketChecksumType    = "cksum.type"              // Checksum type used for objects in the bucket
-	HeaderBucketValidateColdGet = "cksum.validate_cold_get" // Cold get validation policy used for objects in the bucket
-	HeaderBucketValidateWarmGet = "cksum.validate_warm_get" // Warm get validation policy used for objects in the bucket
+	HeaderBucketValidateColdGet = "cksum.validate_cold_get" // Validate checksum on cold GET
+	HeaderBucketValidateWarmGet = "cksum.validate_warm_get" // Validate checksum on warm GET
 	HeaderBucketValidateRange   = "cksum.enable_read_range" // Byte range validation policy used for objects in the bucket
+	HeaderBucketVerEnabled      = "ver.enabled"             // Enable/disable object versioning in a bucket
+	HeaderBucketVerValidateWarm = "ver.validate_warm_get"   // Validate version on warm GET
 	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true
 	HeaderBucketLRULowWM        = "lru.lowwm"               // Capacity usage low water mark
 	HeaderBucketLRUHighWM       = "lru.highwm"              // Capacity usage high water mark
@@ -818,7 +818,7 @@ type BucketProps struct {
 	// Versioning defines what kind of buckets should use versioning to
 	// detect if the object must be redownloaded.
 	// Values: "all", "cloud", "local" or "none".
-	Versioning string
+	Versioning VersionConf `json:"versioning,omitempty"`
 
 	// NextTierURL is an absolute URI corresponding to the primary proxy
 	// of the next tier configured for the bucket specified
@@ -868,7 +868,7 @@ type ObjectProps struct {
 func DefaultBucketProps() *BucketProps {
 	c := GCO.Clone()
 
-	c.Cksum.Type = ChecksumInherit
+	c.Cksum.Type = PropInherit
 	return &BucketProps{
 		Cksum:  c.Cksum,
 		LRU:    c.LRU,
@@ -887,8 +887,15 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 	}
 	if from.Cksum.Type != "" {
 		to.Cksum.Type = from.Cksum.Type
-		if from.Cksum.Type != ChecksumInherit {
+		if from.Cksum.Type != PropInherit {
 			to.Cksum = from.Cksum
+		}
+	}
+	if from.Versioning.Type != "" {
+		if from.Versioning.Type != PropInherit {
+			to.Versioning = from.Versioning
+		} else {
+			to.Versioning.Type = from.Versioning.Type
 		}
 	}
 

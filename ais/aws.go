@@ -278,11 +278,8 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 		errcode = awsErrorToHTTP(err)
 		errstr = fmt.Sprintf("The bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
 	} else {
-		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
-			bucketprops[cmn.HeaderVersioning] = cmn.VersionCloud
-		} else {
-			bucketprops[cmn.HeaderVersioning] = cmn.VersionNone
-		}
+		bucketprops[cmn.HeaderBucketVerEnabled] =
+			strconv.FormatBool(result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled)
 	}
 	return
 }
