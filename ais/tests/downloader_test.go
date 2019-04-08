@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"testing"
@@ -594,4 +595,30 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
 	// also set properly
 	tutils.EnsureObjectsExist(t, baseParams, bucket, expectedObjects...)
+}
+
+func TestDownloadIntoNonexistentBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		bucket  = TestNonexistentBucketName
+		params  = tutils.DefaultBaseAPIParams(t)
+		objName = "object"
+		obj     = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
+	)
+
+	_, err := api.DownloadSingle(params, generateDownloadDesc(), bucket, objName, obj)
+
+	if err == nil {
+		t.Fatalf("Expected an error, but go no errors.")
+	}
+	httpErr, ok := err.(*cmn.HTTPError)
+	if !ok {
+		t.Fatalf("Expected an error of type *cmn.HTTPError, but got: %T.", err)
+	}
+	if httpErr.Status != http.StatusBadRequest {
+		t.Errorf("Expected status: %d, got: %d.", http.StatusBadRequest, httpErr.Status)
+	}
 }

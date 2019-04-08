@@ -48,11 +48,12 @@ type regressionTestData struct {
 const (
 	rootDir = "/tmp/ais"
 
-	TestLocalBucketName   = "TESTLOCALBUCKET"
-	RenameLocalBucketName = "renamebucket"
-	RenameDir             = rootDir + "/rename"
-	RenameStr             = "rename"
-	ListRangeStr          = "__listrange"
+	TestLocalBucketName       = "TESTLOCALBUCKET"
+	TestNonexistentBucketName = "SOMETESTNONEXISTENTBUCKET"
+	RenameLocalBucketName     = "renamebucket"
+	RenameDir                 = rootDir + "/rename"
+	RenameStr                 = "rename"
+	ListRangeStr              = "__listrange"
 )
 
 var (

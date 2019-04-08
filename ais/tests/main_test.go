@@ -867,6 +867,27 @@ func TestHeadCloudBucket(t *testing.T) {
 	validateBucketProps(t, bucketProps, *p)
 }
 
+func TestHeadNonexistentBucket(t *testing.T) {
+	var (
+		bucket     = TestNonexistentBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
+	_, err := api.HeadBucket(baseParams, bucket)
+
+	if err == nil {
+		t.Fatalf("Expected an error, but go no errors.")
+	}
+	httpErr, ok := err.(*cmn.HTTPError)
+	if !ok {
+		t.Fatalf("Expected an error of type *cmn.HTTPError, but got: %T.", err)
+	}
+	if httpErr.Status != http.StatusNotFound {
+		t.Errorf("Expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status)
+	}
+}
+
 func TestHeadObject(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)

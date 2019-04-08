@@ -1410,6 +1410,33 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 	}, res.err
 }
 
+func (p *proxyrunner) checkIfCloudBucketExists(bucket string) (bool, error) {
+	var si *cluster.Snode
+	// Use random map iteration order to choose a random target to ask
+	smap := p.smapowner.get()
+	for _, si = range smap.Tmap {
+		break
+	}
+
+	args := callArgs{
+		si: si,
+		req: reqArgs{
+			method: http.MethodHead,
+			base:   si.URL(cmn.NetworkIntraData),
+			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+		},
+		timeout: defaultTimeout,
+	}
+
+	resp := p.call(args)
+
+	if resp.err != nil && resp.status != http.StatusNotFound {
+		return false, fmt.Errorf("failed to check if bucket exists contacting %s: %v", si.URL(cmn.NetworkIntraData), resp.err)
+	}
+
+	return resp.status != http.StatusNotFound, nil
+}
+
 // Receives and aggregates info on locally cached objects and merges the two lists
 func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh chan *localFilePage, errCh chan error) {
 	for rb := range dataCh {

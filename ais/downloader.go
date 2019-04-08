@@ -376,6 +376,17 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
 		return
 	}
+	if !bckIsLocal {
+		exists, err := p.checkIfCloudBucketExists(payload.Bucket)
+		if err != nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Error checking if bucket exists in cloud: %v.", err))
+			return
+		}
+		if !exists {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not exist.", payload.Bucket))
+			return
+		}
+	}
 
 	singlePayload.InitWithQuery(query)
 	rangePayload.InitWithQuery(query)

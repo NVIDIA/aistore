@@ -619,7 +619,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{args.si, outjson, err, errstr, status}
+	return callResult{args.si, outjson, err, errstr, response.StatusCode}
 }
 
 //
