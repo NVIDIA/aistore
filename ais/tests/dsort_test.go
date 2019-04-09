@@ -1200,7 +1200,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
-	targets := extractTargetNodes(m.smap)
+	targets := tutils.ExtractTargetNodes(m.smap)
 
 	dsortFW.clearDSortList()
 
@@ -1278,7 +1278,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
-	targets := extractTargetNodes(m.smap)
+	targets := tutils.ExtractTargetNodes(m.smap)
 
 	dsortFW.clearDSortList()
 

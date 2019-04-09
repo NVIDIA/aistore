@@ -1422,39 +1422,6 @@ func TestECXattrs(t *testing.T) {
 	}
 }
 
-func removeTarget(t *testing.T, smap cluster.Smap) (cluster.Smap, *cluster.Snode) {
-	removeTarget := extractTargetNodes(smap)[0]
-	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
-	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
-	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
-		proxyURL,
-		"target is gone",
-		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)-1,
-	)
-	tutils.CheckFatal(err, t)
-
-	return smap, removeTarget
-}
-
-func restoreTarget(t *testing.T, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
-	tutils.Logf("Reregistering target...\n")
-	err := tutils.RegisterTarget(proxyURL, target, smap)
-	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
-		proxyURL,
-		"to join target back",
-		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)+1,
-	)
-	tutils.CheckFatal(err, t)
-
-	return smap
-}
-
 // Lost target test:
 // - puts some objects
 // - kills a random target
@@ -1549,10 +1516,10 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	// 2. Kill a random target
 	var removedTarget *cluster.Snode
-	smap, removedTarget = removeTarget(t, smap)
+	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
 
 	defer func() {
-		smap = restoreTarget(t, smap, removedTarget)
+		smap = tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
 	}()
 
 	// 3. Read objects
@@ -1647,7 +1614,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	for i := ecDataSliceCnt - 1; i >= 0; i-- {
 		var removedTarget *cluster.Snode
-		smap, removedTarget = removeTarget(t, smap)
+		smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
 		removedTargets = append(removedTargets, removedTarget)
 	}
 
@@ -1655,7 +1622,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		// Restore targets
 		smap = getClusterMap(t, proxyURL)
 		for _, target := range removedTargets {
-			smap = restoreTarget(t, smap, target)
+			smap = tutils.RestoreTarget(t, proxyURL, smap, target)
 		}
 	}()
 
@@ -1744,7 +1711,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	removeTarget := extractTargetNodes(smap)[0]
+	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
 
 	mpathList, err := api.GetMountpaths(tgtParams)

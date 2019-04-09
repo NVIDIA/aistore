@@ -425,7 +425,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 	m.saveClusterState()
 
 	{
-		targets := extractTargetNodes(m.smap)
+		targets := tutils.ExtractTargetNodes(m.smap)
 		baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
 		mpList, err := api.GetMountpaths(baseParams)
 		tutils.CheckFatal(err, t)
@@ -588,7 +588,7 @@ func TestCloudMirror(t *testing.T) {
 
 	smap := getClusterMap(t, baseParams.URL)
 	{
-		targets := extractTargetNodes(smap)
+		targets := tutils.ExtractTargetNodes(smap)
 		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
 		mpList, err := api.GetMountpaths(baseTgtParams)
 		tutils.CheckFatal(err, t)

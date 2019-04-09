@@ -531,7 +531,7 @@ func TestRebalance(t *testing.T) {
 	if l < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 	}
-	randomTarget = extractTargetNodes(smap)[0]
+	randomTarget = tutils.ExtractTargetNodes(smap)[0]
 
 	err := tutils.UnregisterTarget(proxyURL, randomTarget.DaemonID)
 	tutils.CheckFatal(err, t)

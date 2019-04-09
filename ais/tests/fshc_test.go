@@ -400,7 +400,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tutils.CheckFatal(err, t)
 	}
 
-	smap, err = waitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
 	tutils.CheckFatal(err, t)
 
 	tutils.Logf("Restoring target %s mountpaths\n", tgtURL)
@@ -409,6 +409,6 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tutils.CheckFatal(err, t)
 	}
 
-	smap, err = waitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
 	tutils.CheckFatal(err, t)
 }

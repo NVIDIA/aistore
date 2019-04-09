@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
@@ -40,7 +39,9 @@ var (
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
-	readProxyURL = "http://localhost:8080" // Just setting a default, will get actual value later
+	readProxyURL       = "http://localhost:8080" // Just setting a default, will get actual value later
+	mockDaemonID       = "MOCK"
+	proxyChangeLatency = time.Minute * 2
 )
 
 const (
@@ -597,74 +598,6 @@ func UnregisterTarget(proxyURL, sid string) error {
 	// sync because update will not be scheduled
 	if ok {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, idsToIgnore)
-	}
-	return nil
-}
-
-func RegisterTarget(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
-	_, ok := smap.Tmap[targetNode.DaemonID]
-	baseParams := BaseAPIParams(proxyURL)
-	if err := api.RegisterTarget(baseParams, targetNode); err != nil {
-		return err
-	}
-
-	// If target is already in cluster we should not wait for map version
-	// sync because update will not be scheduled
-	if !ok {
-		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
-	}
-	return nil
-}
-
-func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64, idsToIgnore []string) error {
-	inList := func(s string, values []string) bool {
-		for _, v := range values {
-			if s == v {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	checkAwaitingDaemon := func(smap cluster.Smap, idsToIgnore []string) (string, string, bool) {
-		for _, d := range smap.Pmap {
-			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.PublicNet.DirectURL, true
-			}
-		}
-		for _, d := range smap.Tmap {
-			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.PublicNet.DirectURL, true
-			}
-		}
-
-		return "", "", false
-	}
-
-	for {
-		sid, url, exists := checkAwaitingDaemon(smap, idsToIgnore)
-		if !exists {
-			break
-		}
-		baseParams := BaseAPIParams(url)
-		daemonSmap, err := api.GetClusterMap(baseParams)
-		if err != nil && !cmn.IsErrConnectionRefused(err) {
-			return err
-		}
-
-		if err == nil && daemonSmap.Version > prevVersion {
-			idsToIgnore = append(idsToIgnore, sid)
-			smap = daemonSmap // update smap for newer version
-			continue
-		}
-
-		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
-		}
-
-		fmt.Printf("wait for Smap > v%d: %s\n", prevVersion, url)
-		time.Sleep(time.Second)
 	}
 	return nil
 }

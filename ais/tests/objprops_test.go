@@ -229,12 +229,12 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
 
-	removeTarget := extractTargetNodes(smap)[0]
+	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 
 	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
 	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
 	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"target is gone",
 		smap.Version, testing.Verbose(),
@@ -251,7 +251,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
 	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to join target back",
 		smap.Version, testing.Verbose(),

@@ -154,7 +154,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	// cmd and args are the original command line of how the proxy is started
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose())
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 	tutils.Logf("New primary elected: %s\n", newPrimaryID)
 
@@ -166,7 +166,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose())
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
@@ -212,7 +212,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	tcmd, targs, err := kill(targetID, targetPort)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
 	tutils.CheckFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -225,7 +225,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
 
-	_, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount, origTargetCount)
+	_, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount, origTargetCount)
 	tutils.CheckFatal(err, t)
 }
 
@@ -259,13 +259,13 @@ func proxyCrash(t *testing.T) {
 	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(proxyURL, "to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
 	tutils.CheckFatal(err, t)
 
 	err = restore(secondCmd, secondArgs, false, "proxy")
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(proxyURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
 	tutils.CheckFatal(err, t)
 
 	if _, ok := smap.Pmap[secondID]; !ok {
@@ -310,18 +310,18 @@ func primaryAndProxyCrash(t *testing.T) {
 	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-2)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-2)
 	tutils.CheckFatal(err, t)
 
 	err = restore(cmd, args, true, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
 	tutils.CheckFatal(err, t)
 	err = restore(secondCmd, secondArgs, false, "proxy")
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
 	tutils.CheckFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -354,7 +354,7 @@ func targetRejoin(t *testing.T) {
 
 	cmd, args, err := kill(id, port)
 	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'target crashed'", smap.Version, testing.Verbose())
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to synchronize on 'target crashed'", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -364,7 +364,7 @@ func targetRejoin(t *testing.T) {
 	err = restore(cmd, args, false, "target")
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 
 	if _, ok := smap.Tmap[id]; !ok {
@@ -392,8 +392,8 @@ func crashAndFastRestore(t *testing.T) {
 
 	// Note: using (version - 1) because the primary will restart with its old version,
 	//       there will be no version change for this restore, so force beginning version to 1 less
-	//       than the original version in order to use waitForPrimaryProxy
-	smap, err = waitForPrimaryProxy(proxyURL, "to restore", smap.Version-1, testing.Verbose())
+	//       than the original version in order to use WaitForPrimaryProxy
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to restore", smap.Version-1, testing.Verbose())
 	tutils.CheckFatal(err, t)
 
 	if smap.ProxySI.DaemonID != id {
@@ -422,14 +422,14 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	go runMockTarget(t, proxyURL, mocktgt, stopch, &smap)
 
-	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
 	tutils.CheckFatal(err, t)
 
 	oldPrimaryID := smap.ProxySI.DaemonID
 	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), oldProxyCnt-1, oldTargetCnt+1)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), oldProxyCnt-1, oldTargetCnt+1)
 	tutils.CheckFatal(err, t)
 
 	err = restore(cmd, args, true, "proxy (prev primary)")
@@ -448,7 +448,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	mocktgt.voteInProgress = false
 
-	smap, err = waitForPrimaryProxy(newPrimaryURL, "to synchronize new Smap", smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
+	smap, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to synchronize new Smap", smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
 	tutils.CheckFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -470,7 +470,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	default:
 	}
 
-	_, err = waitForPrimaryProxy(newPrimaryURL, "to kill mock target", smap.Version, testing.Verbose())
+	_, err = tutils.WaitForPrimaryProxy(newPrimaryURL, "to kill mock target", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 }
 
@@ -521,7 +521,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(nextProxyURL, "to designate new primary", oldVer, testing.Verbose(), oldProxyCnt-1)
+	smap, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to designate new primary", oldVer, testing.Verbose(), oldProxyCnt-1)
 	tutils.CheckFatal(err, t)
 
 	if smap.ProxySI == nil {
@@ -535,7 +535,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
 
-	_, err = waitForPrimaryProxy(nextProxyURL, "to restore", smap.Version, testing.Verbose())
+	_, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to restore", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 }
 
@@ -709,7 +709,7 @@ loop:
 		// let the workers go to the dying primary for a little while longer to generate errored requests
 		time.Sleep(time.Second)
 
-		smap, err = waitForPrimaryProxy(nextProxyURL, "to propagate 'primary crashed'", smap.Version, testing.Verbose())
+		smap, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to propagate 'primary crashed'", smap.Version, testing.Verbose())
 		tutils.CheckFatal(err, t)
 
 		for _, ch := range proxyurlchs {
@@ -719,7 +719,7 @@ loop:
 		err = restore(cmd, args, false, "proxy (prev primary)")
 		tutils.CheckFatal(err, t)
 
-		_, err = waitForPrimaryProxy(nextProxyURL, "to synchronize on 'primary restored'", smap.Version, testing.Verbose())
+		_, err = tutils.WaitForPrimaryProxy(nextProxyURL, "to synchronize on 'primary restored'", smap.Version, testing.Verbose())
 		tutils.CheckFatal(err, t)
 	}
 }
@@ -801,7 +801,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	err := api.SetPrimaryProxy(baseParams, toID)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
+	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 	if smap.ProxySI.DaemonID != toID {
 		t.Fatalf("Expected primary=%s, got %s", toID, smap.ProxySI.DaemonID)
@@ -951,108 +951,6 @@ func checkPmapVersions(t *testing.T, proxyURL string) {
 	}
 }
 
-// waitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its
-// version changed at least once from the original version and then settles down(doesn't change anymore)
-// if primary proxy is successfully updated, wait until the map is populated to all members of the cluster
-// returns the latest smap of the cluster
-//
-// The function always waits until SMap's version increases but there are
-// two optional parameters for extra checks: proxyCount and targetCount(nodeCnt...).
-// If they are not zeroes then besides version check the function waits for given
-// number of proxies and/or targets are present in SMap.
-// It is useful if the test kills more than one proxy/target. In this case the
-// primary proxy may run two metasync calls and we cannot tell if the current SMap
-// is what we are waiting for only by looking at its version.
-func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (cluster.Smap, error) {
-	var (
-		lastVersion          int64
-		timeUntil, timeStart time.Time
-		totalProxies         int
-		totalTargets         int
-	)
-	timeStart = time.Now()
-	timeUntil = timeStart.Add(proxyChangeLatency)
-	if len(nodeCnt) > 0 {
-		totalProxies = nodeCnt[0]
-	}
-	if len(nodeCnt) > 1 {
-		totalTargets = nodeCnt[1]
-	}
-
-	if verbose {
-		if totalProxies > 0 {
-			tutils.Logf("Waiting for %d proxies\n", totalProxies)
-		}
-		if totalTargets > 0 {
-			tutils.Logf("Waiting for %d targets\n", totalTargets)
-		}
-		tutils.Logf("Waiting for the cluster %s [Smap version > %d]\n", reason, origVersion)
-	}
-
-	var loopCnt int
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	for {
-		smap, err := api.GetClusterMap(baseParams)
-		if err != nil && !cmn.IsErrConnectionRefused(err) {
-			return cluster.Smap{}, err
-		}
-
-		doCheckSMap := (totalTargets == 0 || len(smap.Tmap) == totalTargets) &&
-			(totalProxies == 0 || len(smap.Pmap) == totalProxies)
-		if !doCheckSMap {
-			d := time.Since(timeStart)
-			expectedTargets, expectedProxies := totalTargets, totalProxies
-			if totalTargets == 0 {
-				expectedTargets = len(smap.Tmap)
-			}
-			if totalProxies == 0 {
-				expectedProxies = len(smap.Pmap)
-			}
-			tutils.Logf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyURL, len(smap.Tmap), expectedTargets, len(smap.Pmap), expectedProxies, d.Truncate(time.Second))
-		}
-
-		// if the primary's map changed to the state we want, wait for the map get populated
-		if err == nil && smap.Version == lastVersion && smap.Version > origVersion && doCheckSMap {
-			for {
-				smap, err = api.GetClusterMap(baseParams)
-				if err == nil {
-					break
-				}
-
-				if !cmn.IsErrConnectionRefused(err) {
-					return smap, err
-				}
-
-				if time.Now().After(timeUntil) {
-					return smap, fmt.Errorf("primary proxy's Smap timed out")
-				}
-				time.Sleep(time.Second)
-			}
-
-			// skip primary proxy and mock targets
-			var proxyID string
-			for _, p := range smap.Pmap {
-				if p.PublicNet.DirectURL == proxyURL {
-					proxyID = p.DaemonID
-				}
-			}
-			err = tutils.WaitMapVersionSync(timeUntil, smap, origVersion, []string{mockDaemonID, proxyID})
-			return smap, err
-		}
-
-		if time.Now().After(timeUntil) {
-			break
-		}
-
-		lastVersion = smap.Version
-		loopCnt++
-		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
-	}
-
-	return cluster.Smap{}, fmt.Errorf("timed out waiting for the cluster to stabilize")
-}
-
 // primarySetToOriginal reads original primary proxy from configuration and
 // makes it a primary proxy again
 // NOTE: This test cannot be run as separate test. It requires that original
@@ -1162,7 +1060,7 @@ func networkFailureTarget(t *testing.T) {
 	oldNetworks, err := tutils.DisconnectContainer(targetID)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"target is down",
 		smap.Version, testing.Verbose(),
@@ -1175,7 +1073,7 @@ func networkFailureTarget(t *testing.T) {
 	err = tutils.ConnectContainer(targetID, oldNetworks)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to check cluster state",
 		smap.Version, testing.Verbose(),
@@ -1201,7 +1099,7 @@ func networkFailureProxy(t *testing.T) {
 	oldNetworks, err := tutils.DisconnectContainer(proxyID)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"proxy is down",
 		smap.Version, testing.Verbose(),
@@ -1214,7 +1112,7 @@ func networkFailureProxy(t *testing.T) {
 	err = tutils.ConnectContainer(proxyID, oldNetworks)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to check cluster state",
 		smap.Version, testing.Verbose(),
@@ -1247,7 +1145,7 @@ func networkFailurePrimary(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Check smap
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		newPrimaryURL,
 		"original primary is gone",
 		smap.Version, testing.Verbose(),
@@ -1284,7 +1182,7 @@ func networkFailurePrimary(t *testing.T) {
 	_, err = api.DoHTTPRequest(baseParams, path, nil)
 	tutils.CheckFatal(err, t)
 
-	smap, err = waitForPrimaryProxy(
+	smap, err = tutils.WaitForPrimaryProxy(
 		newPrimaryURL,
 		"original primary joined the new primary",
 		smap.Version, testing.Verbose(),
@@ -1345,7 +1243,7 @@ func primaryAndNextCrash(t *testing.T) {
 	if errSecond == nil {
 		// the cluster should vote, so the smap version should be increased at
 		// least by 100, that is why +99
-		smap, err = waitForPrimaryProxy(finalPrimaryURL, "to designate new primary", smap.Version+99, testing.Verbose(), origProxyCount-2)
+		smap, err = tutils.WaitForPrimaryProxy(finalPrimaryURL, "to designate new primary", smap.Version+99, testing.Verbose(), origProxyCount-2)
 	}
 	if err != nil {
 		t.Error(err)
@@ -1360,10 +1258,10 @@ func primaryAndNextCrash(t *testing.T) {
 	// restore next and prev primaries in the reversed order
 	err = restore(cmdSecond, argsSecond, true, "proxy (next primary)")
 	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(finalPrimaryURL, "to restore next primary", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = tutils.WaitForPrimaryProxy(finalPrimaryURL, "to restore next primary", smap.Version, testing.Verbose(), origProxyCount-1)
 	tutils.CheckFatal(err, t)
 	err = restore(cmdFirst, argsFirst, true, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(finalPrimaryURL, "to restore prev primary", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = tutils.WaitForPrimaryProxy(finalPrimaryURL, "to restore prev primary", smap.Version, testing.Verbose(), origProxyCount)
 	tutils.CheckFatal(err, t)
 }
