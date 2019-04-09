@@ -246,21 +246,17 @@ func (t *targetrunner) Run() error {
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		cmn.ExitLogf("%s", err)
 	}
 	if err := fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		cmn.ExitLogf("%s", err)
 	}
 
 	if err := fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		cmn.ExitLogf("%s", err)
 	}
 	if err := fs.Mountpaths.CreateBucketDir(cmn.CloudBs); err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		cmn.ExitLogf("%s", err)
 	}
 	t.detectMpathChanges()
 
@@ -309,8 +305,7 @@ func (t *targetrunner) Run() error {
 	t.registerNetworkHandlers(networkHandlers)
 
 	if err := t.setupRebalanceManager(); err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		cmn.ExitLogf("%s", err)
 	}
 
 	pid := int64(os.Getpid())

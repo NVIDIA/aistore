@@ -47,10 +47,8 @@ func Test_download(t *testing.T) {
 		t.Skip("test requires a Cloud bucket")
 	}
 
-	if err := tutils.Tcping(proxyURL); err != nil {
-		tutils.Logf("%s: %v\n", proxyURL, err)
-		os.Exit(1)
-	}
+	err := tutils.PingURL(proxyURL)
+	tutils.CheckFatal(err, t)
 
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)

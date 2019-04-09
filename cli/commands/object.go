@@ -173,7 +173,7 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s has size %s (%d B) and version '%s'\n", obj, cmn.B2S(int64(objProps.Size), 2), objProps.Size, objProps.Version)
+		fmt.Printf("%s has size %s (%d B) and version %q\n", obj, cmn.B2S(int64(objProps.Size), 2), objProps.Size, objProps.Version)
 		return nil
 	}
 

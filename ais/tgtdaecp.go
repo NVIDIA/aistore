@@ -698,8 +698,7 @@ func (t *targetrunner) testCachepathMounts() {
 	for i := 0; i < config.TestFSP.Count; i++ {
 		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
 		if err := cmn.CreateDir(mpath); err != nil {
-			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
-			os.Exit(1)
+			cmn.ExitLogf("Cannot create test cache dir %q, err: %s", mpath, err)
 		}
 
 		err := fs.Mountpaths.Add(mpath)

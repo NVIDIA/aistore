@@ -49,13 +49,11 @@ func init() {
 	flag.Parse()
 
 	if duration, err = time.ParseDuration(d); err != nil {
-		fmt.Printf("Invalid duration '%s'\n", d)
-		os.Exit(1)
+		cmn.ExitInfof("Invalid duration %q", d)
 	}
 
 	if flushFreq, err = time.ParseDuration(f); err != nil {
-		fmt.Printf("Invalid duration '%s'\n", d)
-		os.Exit(1)
+		cmn.ExitInfof("Invalid duration %q", f)
 	}
 
 	atimeSyncTime = flushFreq

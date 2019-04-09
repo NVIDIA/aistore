@@ -1,23 +1,22 @@
-//This file is used as command-line interpreter for AIS
+// Package main is used as command-line interpreter for AIS
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"sort"
 
 	"github.com/NVIDIA/aistore/cli/commands"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
 func main() {
 	if err := commands.TestAISURL(commands.ClusterURL); err != nil {
-		fmt.Printf("Could not connect to AIS cluster: %v\n", err)
-		os.Exit(1)
+		cmn.ExitInfof("Could not connect to AIS cluster: %s", err)
 	}
 
 	aisCLI := commands.New()
@@ -37,8 +36,6 @@ func main() {
 	}()
 
 	if err := aisCLI.RunLong(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		cmn.ExitInfof("%s", err)
 	}
-
 }

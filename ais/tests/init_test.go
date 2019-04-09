@@ -6,11 +6,11 @@ package ais_test
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -114,8 +114,7 @@ func init() {
 func TestMain(m *testing.M) {
 	clibucket = os.Getenv("BUCKET")
 	if len(clibucket) == 0 {
-		fmt.Println("Bucket name is empty.")
-		os.Exit(1)
+		cmn.ExitInfof("Bucket name is empty")
 	}
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
@@ -128,14 +127,12 @@ func TestMain(m *testing.M) {
 	// finds who is the current primary proxy
 	url, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
-		tutils.Logf("Failed to get primary proxy, err = %v", err)
-		os.Exit(1)
+		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
 	}
 	proxyURLReadOnly = url
 
 	if proxyURLReadOnly == proxyNextTierURLReadOnly {
-		fmt.Println("Proxy Url for first and next tier cluster cannot be the same")
-		os.Exit(1)
+		cmn.ExitInfof("Proxy URL for first and next tier cluster cannot be the same")
 	}
 
 	os.Exit(m.Run())

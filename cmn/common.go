@@ -236,9 +236,15 @@ func ConvertToString(value interface{}) (valstr string, err error) {
 }
 
 func ExitInfof(f string, a ...interface{}) {
-	fmt.Printf(f, a...)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, f, a...)
+	fmt.Fprintln(os.Stderr)
 	os.Exit(1)
+}
+
+func ExitLogf(f string, a ...interface{}) {
+	glog.Errorf(f, a...)
+	glog.Flush()
+	ExitInfof(f, a...)
 }
 
 const assertMsg = "assertion failed"

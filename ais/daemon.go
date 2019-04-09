@@ -186,15 +186,14 @@ func aisinit(version, build string) {
 		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", dryRun.size, dryRun.sizeStr)
 	}
 	if clivars.config.ConfFile == "" {
-		fmt.Fprintf(os.Stderr, "Missing configuration file (must be provided via command line)\n")
-		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")
-		os.Exit(2)
+		str := "Missing configuration file (must be provided via command line)\n"
+		str += "Usage: ... -role=<proxy|target> -config=<conf.json> ..."
+		cmn.ExitLogf(str)
 	}
 	config, confChanged = cmn.LoadConfig(&clivars.config)
 	if confChanged {
 		if err := cmn.LocalSave(cmn.GCO.GetConfigFile(), config); err != nil {
-			glog.Errorf("CLI %s: failed to write, err: %v", cmn.ActSetConfig, err)
-			os.Exit(1)
+			cmn.ExitLogf("CLI %s: failed to write, err: %s", cmn.ActSetConfig, err)
 		}
 		glog.Infof("CLI %s: stored", cmn.ActSetConfig)
 	}
@@ -296,12 +295,10 @@ func aisinit(version, build string) {
 	if clivars.confjson != "" {
 		var nvmap cmn.SimpleKVs
 		if err = jsoniter.Unmarshal([]byte(clivars.confjson), &nvmap); err != nil {
-			glog.Errorf("Failed to unmarshal JSON [%s], err: %v", clivars.confjson, err)
-			os.Exit(1)
+			cmn.ExitLogf("Failed to unmarshal JSON [%s], err: %s", clivars.confjson, err)
 		}
 		if err := cmn.SetConfigMany(nvmap); err != nil {
-			glog.Errorf("Failed to set config: %v", err)
-			os.Exit(1)
+			cmn.ExitLogf("Failed to set config: %s", err)
 		}
 	}
 }
@@ -319,8 +316,7 @@ func Run(version, build string) {
 	if ok {
 		goto m
 	}
-	glog.Errorf("Terminated with err: %v\n", err)
-	os.Exit(1)
+	cmn.ExitLogf("Terminated with err: %s", err)
 m:
 	glog.Infoln("Terminated OK")
 	glog.Flush()

@@ -437,8 +437,7 @@ func main() {
 
 	runParams, err = parseCmdLine()
 	if err != nil {
-		fmt.Fprintln(os.Stdout, "err: "+err.Error())
-		os.Exit(2)
+		cmn.ExitInfof("%s", err)
 	}
 
 	// If neither duration nor put upper bound is specified, it is a no op.
@@ -465,8 +464,7 @@ func main() {
 	}
 
 	if err := setupBucket(&runParams); err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		cmn.ExitInfof("%s", err)
 	}
 
 	if !runParams.getConfig {
@@ -501,8 +499,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("%s", "Failed to connect to statsd server")
 		if runParams.statsdRequired {
-			fmt.Println("... aborting")
-			os.Exit(1)
+			cmn.ExitInfof("... aborting")
 		} else {
 			fmt.Println("... proceeding anyway")
 		}

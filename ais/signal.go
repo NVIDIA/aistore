@@ -20,7 +20,7 @@ type signalError struct {
 }
 
 func (se *signalError) Error() string { return fmt.Sprintf("Signal %d", se.sig) }
-func pexit()                          { time.Sleep(time.Second * 3); os.Exit(3) }
+func pexit()                          { time.Sleep(time.Second * 3); os.Exit(1) }
 
 //===========================================================================
 //

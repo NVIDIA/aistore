@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -541,20 +540,16 @@ func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	// internal error.
 
 	if err != nil {
-		glog.Errorf("failed to load config %q, err: %v", clivars.ConfFile, err)
-		os.Exit(1)
+		ExitLogf("Failed to load config %q, err: %s", clivars.ConfFile, err)
 	}
 	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		glog.Errorf("failed to flag-set glog dir %q, err: %v", config.Log.Dir, err)
-		os.Exit(1)
+		ExitLogf("Failed to flag-set glog dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err = CreateDir(config.Log.Dir); err != nil {
-		glog.Errorf("failed to create log dir %q, err: %v", config.Log.Dir, err)
-		os.Exit(1)
+		ExitLogf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err := config.Validate(); err != nil {
-		glog.Errorf("%v", err)
-		os.Exit(1)
+		ExitLogf("%s", err)
 	}
 
 	// glog rotate
@@ -594,14 +589,12 @@ func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	}
 	if clivars.LogLevel != "" {
 		if err = SetLogLevel(config, clivars.LogLevel); err != nil {
-			glog.Errorf("Failed to set log level = %s, err: %v", clivars.LogLevel, err)
-			os.Exit(1)
+			ExitLogf("Failed to set log level = %s, err: %s", clivars.LogLevel, err)
 		}
 		config.Log.Level = clivars.LogLevel
 		changed = true
 	} else if err = SetLogLevel(config, config.Log.Level); err != nil {
-		glog.Errorf("Failed to set log level = %s, err: %v", config.Log.Level, err)
-		os.Exit(1)
+		ExitLogf("Failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)

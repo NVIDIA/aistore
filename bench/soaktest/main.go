@@ -18,15 +18,14 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
-
 	"github.com/NVIDIA/aistore/bench/soaktest/recipes"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/scheduler"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -176,20 +175,17 @@ func main() {
 			if x != "" {
 				newID, err := strconv.Atoi(x)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "can't parse RecipeID list: %v\n", recipeListStr)
-					os.Exit(1)
+					cmn.ExitInfof("Cannot parse RecipeID list: %v", recipeListStr)
 				}
 				if _, ok := valid[newID]; !ok {
-					fmt.Fprintf(os.Stderr, "invalid RecipeID: %v\n", newID)
-					os.Exit(1)
+					cmn.ExitInfof("Invalid RecipeID: %v", newID)
 				}
 				recipeList = append(recipeList, newID)
 			}
 		}
 
 		if len(recipeList) == 0 {
-			fmt.Fprintln(os.Stderr, "RecipeID list empty")
-			os.Exit(1)
+			cmn.ExitInfof("RecipeID list empty")
 		}
 
 		//de-dup
@@ -206,13 +202,11 @@ func main() {
 		} else {
 			var err error
 			if *outp, err = cmn.S2B(inp); err != nil {
-				fmt.Fprintf(os.Stderr, "%v is not a size\n", inp)
-				os.Exit(1)
+				cmn.ExitInfof("%v is not a size", inp)
 			}
 		}
 		if *outp <= 0 {
-			fmt.Fprintf(os.Stderr, "%v must be positive number\n", inp)
-			os.Exit(1)
+			cmn.ExitInfof("%v must be positive number", inp)
 		}
 	}
 
@@ -220,30 +214,25 @@ func main() {
 	checkFilesize(recMinFilesizeStr, recMinFilesizeDefault, &soakcmn.Params.RecMinFilesize)
 	checkFilesize(recMaxFilesizeStr, recMaxFilesizeDefault, &soakcmn.Params.RecMaxFilesize)
 	if soakcmn.Params.RecMaxFilesize < soakcmn.Params.RecMinFilesize {
-		fmt.Fprintf(os.Stderr, "recipe filesize: max %v must be at least min %v\n", recMaxFilesizeStr, recMinFilesizeStr)
-		os.Exit(1)
+		cmn.ExitInfof("Recipe filesize: max %v must be at least min %v", recMaxFilesizeStr, recMinFilesizeStr)
 	}
 
 	// Sanity check filesizes for regression
 	checkFilesize(regMinFilesizeStr, regMinFilesizeDefault, &soakcmn.Params.RegMinFilesize)
 	checkFilesize(regMaxFilesizeStr, regMaxFilesizeDefault, &soakcmn.Params.RegMaxFilesize)
 	if soakcmn.Params.RegMaxFilesize < soakcmn.Params.RegMinFilesize {
-		fmt.Fprintf(os.Stderr, "regression filesize: max %v must be at least min %v\n", regMaxFilesizeStr, regMinFilesizeStr)
-		os.Exit(1)
+		cmn.ExitInfof("Regression filesize: max %v must be at least min %v", regMaxFilesizeStr, regMinFilesizeStr)
 	}
 
 	// Sanity check for number of workers
 	if soakcmn.Params.RecPrimWorkers < 1 {
-		fmt.Fprintln(os.Stderr, "rec-primworkers must be at least 1")
-		os.Exit(1)
+		cmn.ExitInfof("rec-primworkers must be at least 1")
 	}
 	if soakcmn.Params.RegSetupWorkers < 1 {
-		fmt.Fprintln(os.Stderr, "reg-setupworkers must be at least 1")
-		os.Exit(1)
+		cmn.ExitInfof("reg-setupworkers must be at least 1")
 	}
 	if soakcmn.Params.RegWorkers < 1 {
-		fmt.Fprintln(os.Stderr, "reg-workers must be at least 1")
-		os.Exit(1)
+		cmn.ExitInfof("reg-workers must be at least 1")
 	}
 
 	// Sanity check for ip and port
@@ -258,15 +247,12 @@ func main() {
 			soakcmn.Params.Port = "8080"
 		}
 	} else if soakcmn.Params.IP == "" {
-		fmt.Fprintln(os.Stderr, "port specified without ip")
-		os.Exit(1)
+		cmn.ExitInfof("Port specified without IP")
 	} else if soakcmn.Params.Port == "" {
-		fmt.Fprintln(os.Stderr, "ip specified without port")
-		os.Exit(1)
+		cmn.ExitInfof("IP specified without port")
 	}
-	if err := tutils.Tcping(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot connect to %s:%s, reason: %v\n", soakcmn.Params.IP, soakcmn.Params.Port, err)
-		os.Exit(1)
+	if err := tutils.PingURL(soakcmn.Params.IP + ":" + soakcmn.Params.Port); err != nil {
+		cmn.ExitInfof("Cannot connect to %s:%s, reason: %s", soakcmn.Params.IP, soakcmn.Params.Port, err)
 	}
 	soakprim.SetPrimaryURL()
 

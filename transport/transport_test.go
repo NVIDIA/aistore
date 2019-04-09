@@ -31,7 +31,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -72,8 +71,7 @@ func init() {
 	flag.StringVar(&d, "duration", "30s", "test duration")
 	flag.Parse()
 	if duration, err = time.ParseDuration(d); err != nil {
-		fmt.Printf("Invalid duration '%s'\n", d)
-		os.Exit(1)
+		cmn.ExitInfof("Invalid duration %q", d)
 	}
 	Mem2 = memsys.Init()
 

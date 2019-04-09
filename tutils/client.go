@@ -161,7 +161,7 @@ func NewReqError(msg string, code int) ReqError {
 	}
 }
 
-func Tcping(url string) (err error) {
+func PingURL(url string) (err error) {
 	addr := strings.TrimPrefix(url, "http://")
 	if addr == url {
 		addr = strings.TrimPrefix(url, "https://")
