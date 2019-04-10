@@ -38,7 +38,7 @@ spec:
         ports:
           - containerPort: 8080
       nodeSelector:
-          nodename: ais-target
+          nodename: ${TARGET_LABEL}
       volumes:
         - name: ais-config
           configMap:

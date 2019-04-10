@@ -29,7 +29,7 @@ $ sudo openssl req \
   -newkey rsa:4096 -nodes -sha256 -keyout /certs/domain.key \
   -x509 -days 365 -out /certs/domain.crt
 ```
-You'll be prompted to fill out some information for your certificate. You can leave them with their default values. You should end up with two files `domain.crt` and `domain.key`.
+You'll be prompted to fill out some information for your certificate. You should end up with two files `domain.crt` and `domain.key`.
 
 4. To allow access for Docker to trust these certificates,
 ```sh
@@ -135,7 +135,9 @@ $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-proxy
 # Assigns the node to host the target Pods
 $ kubectl label node <YOUR_NODE_NAME_HERE> nodename=ais-target
 ```
-This allows the pods to be ran on particular nodes.
+This allows the pods to be assigned to particular nodes.
+
+> For a single node cluster, assign the nodename to be 'ais'
 
  * untaint the node:
 
@@ -163,38 +165,21 @@ $ kubectl scale --replicas=<REPLICA_COUNT> -f aistarget_deployment.yml
 ```
 Setting the number of replicas to `6` will create six targets.
 
-#### Deploying a Single Node Cluster
-AIStore can also be deployed on a single-node Kubernetes cluster. The setup are similar to the multi-node deployment but users will need to slightly modify the deployment files. For each of the deployment files, modify
-```sh
-nodeSelector:
-    nodename: ais-XXX
-```
-to
-```sh
-nodeSelector:
-    nodename: ais
-```
-
 
 #### Interacting with the Cluster
-To interact with the cluster
- * SSH into the proxy
-
+To interact with the cluster, install the `AIS` CLI tool
 ```sh
-$ kubectl exec -it <AIS_PRIMARY_PROXY_NAME> -- /bin/bash
+$ cd ../../../cli
+$ ./deploy_cli.sh
 ```
-Example : `kubectl exec -it aisprimaryproxy-77456674db-6fzq5 -- /bin/bash`
+This will create a binary named `ais` that can be used to interact with the cluster. Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_URL` environment variable to the URL of the primary proxy. 
 
- * To create a local bucket with name `abc`
+Example:
 ```sh
-$ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://<IP_OF_PRIMARY_PROXY>:8080/v1/buckets/abc
+$ export AIS_URL=http://10.244.0.4:8080
 ```
-> The proxy inside the cluster is running at port 8080.
 
- * Also, you can query cluster information directly from the web browser. Just type `http://localhost:31337/v1/daemon?what=config`.
- 
- For the full list of commands, see the [HTTP_API](docs/http_api.md).
-> This uses port `31337` to communicate with the node.
+For the list of available commands, see [here](../../../cli/README.md).
 
  * To run tests, SSH into the primary proxy
  

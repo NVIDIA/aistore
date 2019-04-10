@@ -4,10 +4,12 @@ GRAPHITE_PORT=2003
 GRAPHITE_SERVER="52.41.234.112"
 usage() {
     echo "Usage: $0"
-    echo "   -a|--aws   : aws.env - AWS credentials"
-    echo "   -g         : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
-    echo "   -p         : port of graphite server (default is $GRAPHITE_PORT)"
-    echo "   -h|--host  : IP of your local Docker registry host"
+    echo "   -a|--aws    : aws.env - AWS credentials"
+    echo "   -m|--multi  : multiple-node Kubernetes cluster"
+    echo "   -s|--single : single node Kubernetes cluster"
+    echo "   -g          : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
+    echo "   -p          : port of graphite server (default is $GRAPHITE_PORT)"
+    echo "   -h|--host   : IP of your local Docker registry host"
     echo
     exit 1;
 }
@@ -37,6 +39,18 @@ case $i in
         shift
         ;;
 
+    -m|--multi)
+        CLUSTER_CONFIG="multi"
+        shift # past argument
+        ;;
+
+    -m|--multi)
+        if [ "${CLUSTER_CONFIG}" != "multi" ]; then
+            CLUSTER_CONFIG="single"
+        fi
+        shift # past argument
+        ;;
+
     *)
         usage
         ;;
@@ -49,7 +63,7 @@ create_local_repo() {
         docker-compose down
     fi
     echo "Creating local repository and building image..."
-    docker-compose up -d
+    docker-compose up -d --force-recreate
     
     echo "Pushing to repository..."
     docker push localhost:5000/ais:v1
@@ -75,6 +89,7 @@ LOGDIR="/tmp/ais/log"
 LOGLEVEL="3"
 CONFDIR="/usr/nvidia"
 DOCKER_HOST_IP=""
+CLUSTER_CONFIG=""
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -82,6 +97,22 @@ DOCKER_HOST_IP=""
 #
 ###################################
 TEST_FSPATH_ROOT="/tmp/ais/"
+
+PROXY_LABEL=""
+TARGET_LABEL=""
+echo "Enter 's' for single node cluster configuration or 'm' for multi-node configuration.."
+read CLUSTER_CONFIG
+if [ "$CLUSTER_CONFIG" = "s" ]; then
+    PROXY_LABEL="ais"
+    TARGET_LABEL="ais"
+elif [ $CLUSTER_CONFIG = 'm' ] ; then
+    PROXY_LABEL="ais-proxy"
+    TARGET_LABEL="ais-target"
+else
+    echo "Invalid cluster configuration."
+    usage
+fi
+
 
 echo Enter number of target servers:
 read TARGET_CNT
@@ -130,9 +161,8 @@ then
    fspath=${fspath#","}
 fi
 
-echo $FSPATHS
 FSPATHS=$fspath
-TESTFSPATHCOUNT=$testfspathcnt
+TEST_FSPATH_COUNT=$testfspathcnt
 LOCAL_AWS="/aisconfig/aws.env"
 CLDPROVIDER="" # See deploy.sh for more informations about empty CLDPROVIDER
 echo Select Cloud Provider:
@@ -207,6 +237,9 @@ CONFFILE_COLLECTD="collectd.conf"
 export CONFDIR=/aisconfig
 export PROXYURL="http://${HOST}:${PORT}"
 export DOCKER_HOST_IP=$DOCKER_HOST_IP
+export PROXY_LABEL=$PROXY_LABEL
+export TARGET_LABEL=$TARGET_LABEL
+
 echo $DIR
 source $DIR/../../../ais/setup/config.sh
 
