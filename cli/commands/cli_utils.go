@@ -6,6 +6,10 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -26,6 +30,9 @@ const (
 
 var (
 	// Common Flags
+	watchFlag   = cli.BoolFlag{Name: "watch", Usage: "watch an action"}
+	refreshFlag = cli.StringFlag{Name: "refresh", Usage: "refresh period", Value: "5s"}
+
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
@@ -61,7 +68,23 @@ var (
 	pageSizeFlag  = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag  = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
+
+	clear map[string]func()
 )
+
+func init() {
+	clear = make(map[string]func())
+	clear["linux"] = func() {
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
+	clear["windows"] = func() {
+		cmd := exec.Command("cmd", "/c", "cls")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
+}
 
 func New() AISCLI {
 	aisCLI := AISCLI{cli.NewApp()}
@@ -78,6 +101,38 @@ func (aisCLI AISCLI) Init() {
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
+}
+
+func clearScreen() error {
+	clearFunc, ok := clear[runtime.GOOS]
+	if !ok {
+		return fmt.Errorf("%s is not supported", runtime.GOOS)
+	}
+	clearFunc()
+	return nil
+}
+
+func (aisCLI AISCLI) RunLong(input []string) error {
+	if err := aisCLI.Run(input); err != nil {
+		return err
+	}
+
+	rate, err := time.ParseDuration(refreshRate)
+	if err != nil {
+		return fmt.Errorf("Could not convert %q to time duration: %v", refreshRate, err)
+	}
+
+	for watch {
+		time.Sleep(rate)
+		if err := clearScreen(); err != nil {
+			return err
+		}
+		fmt.Printf("Refreshing every %s (CTRL+C to stop): %s\n", refreshRate, input)
+		if err := aisCLI.Run(input); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func flagIsSet(c *cli.Context, flag string) bool {

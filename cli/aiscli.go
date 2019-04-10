@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 
 	"github.com/NVIDIA/aistore/cli/commands"
@@ -18,6 +19,7 @@ func main() {
 		fmt.Printf("Could not connect to AIS cluster: %v\n", err)
 		os.Exit(1)
 	}
+
 	aisCLI := commands.New()
 	aisCLI.Commands = append(aisCLI.Commands, commands.DownloaderCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.ObjectCmds...)
@@ -25,9 +27,18 @@ func main() {
 	aisCLI.Commands = append(aisCLI.Commands, commands.DaeCluCmds...)
 	sort.Sort(cli.CommandsByName(aisCLI.Commands))
 
-	err := aisCLI.Run(os.Args)
-	if err != nil {
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, os.Interrupt)
+
+	// Handle exit
+	go func() {
+		<-stopCh
+		os.Exit(0)
+	}()
+
+	if err := aisCLI.RunLong(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
 }

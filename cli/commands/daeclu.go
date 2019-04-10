@@ -20,13 +20,14 @@ var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
 
-	daemonFlag = cli.StringFlag{Name: cmn.Daemon, Usage: "daemon id"}
+	daemonFlag      = cli.StringFlag{Name: cmn.Daemon, Usage: "daemon id"}
+	daecluBaseFlags = []cli.Flag{watchFlag, refreshFlag}
 
 	daecluFlags = map[string][]cli.Flag{
-		cmn.GetWhatSmap:         {jsonFlag},
-		cmn.GetWhatDaemonStatus: {jsonFlag},
-		cmn.GetWhatConfig:       {jsonFlag},
-		cmn.GetWhatStats:        {jsonFlag},
+		cmn.GetWhatSmap:         append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
+		cmn.GetWhatDaemonStatus: append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
+		cmn.GetWhatConfig:       append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
+		cmn.GetWhatStats:        append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
 		commandList:             {verboseFlag},
 		cmn.ActSetProps:         {daemonFlag},
 	}
@@ -84,8 +85,13 @@ var (
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
 	if err = fillMap(ClusterURL); err != nil {
-		return err
+		return errorHandler(err)
 	}
+	watch = flagIsSet(c, watchFlag.Name)
+	if flagIsSet(c, refreshFlag.Name) {
+		refreshRate = parseFlag(c, refreshFlag.Name)
+	}
+
 	baseParams := cliAPIParams(ClusterURL)
 	daemonID := c.Args().First()
 	req := c.Command.Name

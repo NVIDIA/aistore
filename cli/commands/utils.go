@@ -33,13 +33,16 @@ const (
 )
 
 var (
-	ClusterURL = os.Getenv("AIS_URL") // The URL that points to the AIS cluster
-	transport  = &http.Transport{
+	ClusterURL  = os.Getenv("AIS_URL") // The URL that points to the AIS cluster
+	watch       = false
+	refreshRate = "5s"
+
+	transport = &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout: 60 * time.Second,
 		}).DialContext,
 	}
-	HTTPClient = &http.Client{
+	httpClient = &http.Client{
 		Timeout:   300 * time.Second,
 		Transport: transport,
 	}
@@ -57,7 +60,7 @@ func TestAISURL(clusterURL string) error {
 
 func cliAPIParams(proxyURL string) *api.BaseParams {
 	return &api.BaseParams{
-		Client: HTTPClient,
+		Client: httpClient,
 		URL:    proxyURL,
 	}
 }
@@ -185,7 +188,7 @@ func makeKVS(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
 	for _, ele := range args {
 		pairs := makeList(ele, delimiter)
 		if len(pairs) != 2 {
-			return nil, fmt.Errorf("could not parse key value: %v", pairs)
+			return nil, fmt.Errorf("Could not parse key value: %v", pairs)
 		}
 		nvs[pairs[0]] = pairs[1]
 	}
