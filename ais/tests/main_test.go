@@ -27,11 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -1151,9 +1152,9 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		fqn         string
 		fileName    string
 		oldFileInfo os.FileInfo
-		errstr      string
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
+		tMock       = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1212,14 +1213,10 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
 	oldFileInfo, err = os.Stat(fqn)
-	if err != nil {
-		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
-	}
+	tassert.Errorf(t, err == nil, "Failed while reading the bucket from the local file system. Error: [%v]", err)
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
-	if errstr != "" {
-		t.Error(errstr)
-	}
+	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
+	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
 	// Test for no checksum algo
@@ -1231,14 +1228,11 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
-	if errstr != "" {
-		t.Error(errstr)
-	}
+	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	tassert.CheckError(t, err)
+
 	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, path.Join(ChecksumWarmValidateStr, fileName))
-	if err != nil {
-		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
-	}
+	tassert.Errorf(t, err == nil, "A GET on an object when checksum algo is none should pass. Error: %v", err)
 
 cleanup:
 	// Restore old config
@@ -1367,8 +1361,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		bucketName = TestLocalBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		fqn        string
-		errstr     string
 		err        error
+		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
 	)
 
 	if tutils.DockerRunning() {
@@ -1416,10 +1410,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
-	if errstr != "" {
-		t.Error(errstr)
-	}
+	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bucketName, fileName, t)
 
 	// Test for none checksum algo
@@ -1430,10 +1422,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
-	if errstr != "" {
-		t.Error(errstr)
-	}
+	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	tassert.CheckError(t, err)
 	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bucketName, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")

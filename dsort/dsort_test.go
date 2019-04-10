@@ -257,15 +257,7 @@ func (tctx *testContext) setup() {
 	time.Sleep(time.Millisecond * 100)
 
 	ctx.smap = smap
-	ctx.t = cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
-		LBmap: map[string]*cmn.BucketProps{
-			testBucket: &cmn.BucketProps{
-				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
-			},
-		},
-		CBmap:   map[string]*cmn.BucketProps{},
-		Version: 1,
-	}})
+	ctx.t = cluster.NewTargetMock(cluster.NewBaseBownerMock(testBucket))
 	ctx.nameLocker = &nameLockerMock{}
 	tctx.smap = smap
 	tctx.targets = targets

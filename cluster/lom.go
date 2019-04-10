@@ -5,11 +5,9 @@
 package cluster
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -30,10 +28,7 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const (
-	copyNameSepa = "\"\""
-	pkgName      = "cluster"
-)
+const pkgName = "cluster"
 
 type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
@@ -88,6 +83,7 @@ func init() {
 func (lom *LOM) Uname() string               { return lom.md.uname }
 func (lom *LOM) BMD() *BMD                   { return lom.bucketMD }
 func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
+func (lom *LOM) SetCopyFQN(cpyFQN []string)  { lom.md.copyFQN = cpyFQN }
 func (lom *LOM) Size() int64                 { return lom.md.size }
 func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
 func (lom *LOM) Version() string             { return lom.md.version }
@@ -136,25 +132,30 @@ func (lom *LOM) GenFQN(ty, prefix string) string {
 //
 // local copy management
 //
-func (lom *LOM) SetXcopy(cpyfqn string) (errstr string) { // cross-ref
-	var copies string
-	if len(lom.md.copyFQN) == 0 {
-		lom.md.copyFQN = []string{cpyfqn}
-		copies = cpyfqn
-	} else {
-		lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn)
-		copies = strings.Join(lom.md.copyFQN, copyNameSepa)
-	}
-	if errstr = fs.SetXattr(lom.FQN, cmn.XattrCopies, []byte(copies)); errstr == "" {
-		if errstr = fs.SetXattr(cpyfqn, cmn.XattrCopies, []byte(lom.FQN)); errstr == "" {
-			return // ok
+func (lom *LOM) SetXcopy(cpyfqn string) string { // cross-ref
+	var (
+		copyLOM *LOM
+		errstr  string
+		err     error
+	)
+
+	lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn)
+
+	if err = lom.Persist(); err == nil {
+		copyLOM = lom.clone(cpyfqn)
+		copyLOM.md.copyFQN = []string{lom.FQN}
+		if err = copyLOM.Persist(); err == nil {
+			// ok
+			return ""
 		}
 	}
+	errstr = err.Error()
+
 	// on error
 	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 		lom.T.FSHC(err, lom.FQN)
 	}
-	return
+	return errstr
 }
 
 func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
@@ -173,7 +174,13 @@ func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
 		return fmt.Sprintf("lom %s(%d): copy %s %s", lom, l, cpyfqn, cmn.DoesNotExist)
 	}
 	if l == 1 {
-		return lom.DelAllCopies()
+		errstr = lom.DelAllCopies()
+
+		if err := lom.Persist(); errstr == "" && err != nil {
+			errstr = err.Error()
+		}
+
+		return errstr
 	}
 	if cpyidx < l-1 {
 		copy(lom.md.copyFQN[cpyidx:], lom.md.copyFQN[cpyidx+1:])
@@ -182,8 +189,11 @@ func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
 	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 		return err.Error()
 	}
-	copies := strings.Join(lom.md.copyFQN, copyNameSepa)
-	errstr = fs.SetXattr(lom.FQN, cmn.XattrCopies, []byte(copies))
+
+	if err := lom.Persist(); err != nil {
+		return err.Error()
+	}
+
 	return
 }
 
@@ -205,8 +215,9 @@ func (lom *LOM) DelAllCopies() (errstr string) {
 	} else if n < len(lom.md.copyFQN) {
 		glog.Errorf("%s: failed to remove copies(%d, %d), err: %s", lom, n, len(lom.md.copyFQN), errstr)
 	}
+
 	lom.md.copyFQN = []string{}
-	errstr = fs.DelXattr(lom.FQN, cmn.XattrCopies)
+
 	return
 }
 
@@ -219,8 +230,8 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	if err = cmn.CopyFile(lom.FQN, dst.FQN, buf); err != nil {
 		return
 	}
-	if errstr := dst.PersistCksumVer(); errstr != "" {
-		err = errors.New(errstr)
+	if err := dst.Persist(); err != nil {
+		return nil, err
 	}
 	return
 }
@@ -281,21 +292,6 @@ func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
 	return
 }
 
-// xattrs: cmn.XattrXXHash and cmn.XattrVersion
-// NOTE:   cmn.XattrCopies is updated separately by the 2-way mirroring code
-func (lom *LOM) PersistCksumVer() (errstr string) {
-	if lom.md.cksum != nil {
-		_, cksumValue := lom.md.cksum.Get()
-		if errstr = fs.SetXattr(lom.FQN, cmn.XattrXXHash, []byte(cksumValue)); errstr != "" {
-			return errstr
-		}
-	}
-	if lom.md.version != "" {
-		errstr = fs.SetXattr(lom.FQN, cmn.XattrVersion, []byte(lom.md.version))
-	}
-	return
-}
-
 // IncObjectVersion increments the current version xattrs and returns the new value.
 // If the current version is empty (local bucket versioning (re)enabled, new file)
 // the version is set to "1"
@@ -306,16 +302,20 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 		return
 	}
 
-	var vbytes []byte
-	if vbytes, errstr = fs.GetXattr(lom.FQN, cmn.XattrVersion); errstr != "" {
-		return
+	md, err := readMetaFromFS(lom.FQN)
+	if err != nil {
+		return "", err.Error()
 	}
-	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {
-		newVersion = initialVersion
-	} else {
-		newVersion = fmt.Sprintf("%d", currValue+1)
+	if md.version == "" {
+		return initialVersion, ""
 	}
-	return
+
+	numVersion, err := strconv.Atoi(md.version)
+	if err != nil {
+		return "", err.Error()
+	}
+
+	return fmt.Sprintf("%d", numVersion+1), ""
 }
 
 // best-effort GET load balancing (see also `mirror` for loadBalancePUT)
@@ -381,18 +381,19 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 		cmn.Assert(storedCksum != "")
 	}
 	{ // FIXME: single xattr-meta
-		var b []byte
-		cmn.Assert(cksumType == cmn.ChecksumXXHash)
-		if b, errstr = fs.GetXattr(lom.FQN, cmn.XattrXXHash); errstr != "" {
-			lom.BadCksum = true
-			return
+		var v cmn.Cksummer
+		fsMD, err := readMetaFromFS(lom.FQN)
+
+		if err != nil {
+			return err.Error()
+		}
+		if fsMD != nil {
+			v = fsMD.cksum
 		}
 
-		if !recompute && lom.md.cksum == nil && len(b) == 0 {
+		if !recompute && lom.md.cksum == nil && v == nil {
 			return
 		}
-		v := cmn.NewCksum(cksumType, string(b))
-
 		// both checksums were missing and recompute requested, go immediately to computing
 		recomputeEmptyCksms := recompute && v == nil && lom.md.cksum == nil
 
@@ -412,12 +413,13 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 		return
 	}
 	if storedCksum == "" {
-		if errstr = fs.SetXattr(lom.FQN, cmn.XattrXXHash, []byte(computedCksum)); errstr != "" {
-			lom.md.cksum = nil
-			lom.T.FSHC(errors.New(errstr), lom.FQN)
-			return
-		}
+		oldCksm := lom.md.cksum
 		lom.md.cksum = cmn.NewCksum(cksumType, computedCksum)
+		if err := lom.Persist(); err != nil {
+			lom.md.cksum = oldCksm
+			return err.Error()
+		}
+
 		lom.ReCache()
 		return
 	}
@@ -644,9 +646,8 @@ func (lom *LOM) Uncache() {
 
 func (lom *LOM) FromFS() (errstr string) {
 	var (
-		finfo              os.FileInfo
-		err                error
-		version, b, cpyfqn []byte
+		finfo os.FileInfo
+		err   error
 	)
 	// fstat
 	lom.exists = true
@@ -660,30 +661,15 @@ func (lom *LOM) FromFS() (errstr string) {
 		return
 	}
 	lom.md.size = finfo.Size()
-	// version
-	if version, errstr = fs.GetXattr(lom.FQN, cmn.XattrVersion); errstr != "" {
-		return
+
+	if err := lom.LoadMetaFromFS(); err != nil {
+		return err.Error()
 	}
-	lom.md.version = string(version)
+
 	// atime
 	atime := ios.GetATime(finfo)
 	lom.md.atime = atime.UnixNano()
 	lom.md.atimefs = lom.md.atime
-	// cksum
-	if cksumType := lom.CksumConf().Type; cksumType != cmn.ChecksumNone {
-		cmn.Assert(cksumType == cmn.ChecksumXXHash)
-		if b, errstr = fs.GetXattr(lom.FQN, cmn.XattrXXHash); errstr != "" {
-			return
-		}
-		lom.md.cksum = cmn.NewCksum(cksumType, string(b))
-	}
-	// copies
-	if cpyfqn, errstr = fs.GetXattr(lom.FQN, cmn.XattrCopies); errstr != "" {
-		return
-	}
-	if len(cpyfqn) > 0 && !lom.IsCopy() {
-		lom.md.copyFQN = strings.Split(string(cpyfqn), copyNameSepa)
-	}
 	return
 }
 

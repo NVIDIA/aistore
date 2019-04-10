@@ -232,9 +232,9 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		return err
 	}
 
-	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
+	if err := req.LOM.Persist(); err != nil {
 		writer.Free()
-		return errors.New(errstr)
+		return err
 	}
 
 	b, err := jsoniter.Marshal(meta)
@@ -299,8 +299,8 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		return err
 	}
 
-	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
-		return errors.New(errstr)
+	if err := req.LOM.Persist(); err != nil {
+		return err
 	}
 
 	b, err := jsoniter.Marshal(meta)
@@ -611,8 +611,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 	<-c.diskCh
 	req.LOM.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, hash))
-	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
-		return restored, errors.New(errstr)
+	// Persist called without a lock. It's not a problem, as the LOM should not be used as the object is missing
+	if err := req.LOM.Persist(); err != nil {
+		return restored, err
 	}
 
 	// save object's metadata locally

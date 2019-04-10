@@ -19,9 +19,8 @@ import (
 // string enum: http header, checksum, versioning
 const (
 	// http header
-	XattrXXHash  = "user.obj.xxhash"
-	XattrVersion = "user.obj.version"
-	XattrCopies  = "user.obj.copies"
+
+	XattrMeta = "user.obj.ais-meta"
 	// checksum hash function
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"

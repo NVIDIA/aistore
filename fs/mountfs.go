@@ -241,6 +241,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	}
 
 	mp := newMountpath(mpath, statfs.Fsid, fs)
+
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 

@@ -1528,8 +1528,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 	if err = cmn.MvFile(workFQN, lom.FQN); err != nil {
 		return
 	}
-	if errstr := lom.PersistCksumVer(); errstr != "" {
-		err = errors.New(errstr)
+	if err = lom.Persist(); err != nil {
 		return
 	}
 	lom.ReCache()
@@ -1573,7 +1572,8 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		t.fshc(err, lom.FQN)
 		return
 	}
-	if errstr = lom.PersistCksumVer(); errstr != "" {
+	if err = lom.Persist(); err != nil {
+		errstr = err.Error()
 		return
 	}
 	lom.ReCache()
@@ -2160,6 +2160,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		}
 		lom.SetVersion(ver)
 	}
+	// Don't persist meta, it will be persisted after move
 	if errstr = lom.DelAllCopies(); errstr != "" {
 		return
 	}
@@ -2167,7 +2168,8 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		errstr = fmt.Sprintf("MvFile failed => %s: %v", lom, err)
 		return
 	}
-	if errstr = lom.PersistCksumVer(); errstr != "" {
+	if err := lom.Persist(); err != nil {
+		errstr = err.Error()
 		glog.Errorf("failed to persist %s: %s", lom, errstr)
 	}
 	lom.ReCache()
@@ -2227,6 +2229,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		}
 	}
 	if delFromAIS {
+		// Don't persis meta as object will be soon removed anyway
 		if errs := lom.DelAllCopies(); errs != "" {
 			glog.Errorf("%s: %s", lom, errs)
 		}

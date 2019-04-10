@@ -207,6 +207,8 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 	// local replica must be go with the object; the replica, however, is
 	// located in a different local FS and belongs, therefore, to a different LRU jogger
 	// (hence, precise size accounting TODO)
+
+	// Don't persist meta as object will be soon removed
 	if errstr := fi.lom.DelAllCopies(); errstr != "" {
 		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.CopyFQN(), errstr)
 	}

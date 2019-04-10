@@ -155,6 +155,8 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 		size += lom.Size() * int64(lom.NumCopies()-1)
 		if errstr := lom.DelAllCopies(); errstr != "" {
 			err = errors.New(errstr)
+		} else {
+			err = lom.Persist()
 		}
 	} else {
 		copies := lom.CopyFQN()
@@ -177,12 +179,14 @@ func (j *xcopyJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
 			if err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
+				j.parent.namelocker.Unlock(lom.Uname(), false)
 				return
 			}
 			size += lom.Size()
 			if glog.V(4) {
 				glog.Infof("%s: %s=>%s", lom, lom.ParsedFQN.MpathInfo, mpather.mountpathInfo())
 			}
+			j.parent.namelocker.Unlock(lom.Uname(), false)
 		} else {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return

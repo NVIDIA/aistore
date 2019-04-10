@@ -107,3 +107,27 @@ func NewInvalidCksumError(eHash string, aHash string) InvalidCksumError {
 		ExpectedHash: eHash,
 	}
 }
+
+// ErrorOnce should be used to collect possible consecutive errors
+// NOTE: presence of earlier error should not affect following calls
+// Example: err := Check(obj.field1); errC.PutErr(err); err = Check(obj.field2); errC.PutErr(err) is alright
+// However: val, err := Parse(obj.field1); errCPutErr(err); val2, err := Parse(val.field2); errC.PutErr(err)
+// might cause nil dereference if first err was present
+type ErrorOnce struct {
+	err error
+}
+
+func (e *ErrorOnce) PutErr(err error) {
+	if e.err != nil {
+		e.err = err
+	}
+}
+
+func (e *ErrorOnce) GetErr() error {
+	return e.err
+}
+
+//nolint:unused
+func (e *ErrorOnce) Flush() {
+	e.err = nil
+}

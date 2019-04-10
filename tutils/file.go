@@ -9,6 +9,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -16,6 +17,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 
 	"github.com/NVIDIA/aistore/dsort/extract"
 )
@@ -288,4 +292,35 @@ func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
 		dir = filepath.Join(dir, FastRandomFilename(src, dirLen))
 	}
 	return
+}
+
+func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
+	lom := cluster.LOM{FQN: fqn, T: t}
+
+	lom.SetCksum(value)
+	return lom.Persist()
+}
+
+func SetXattrVersion(fqn string, value string, t cluster.Target) error {
+	lom := cluster.LOM{FQN: fqn, T: t}
+
+	lom.SetVersion(value)
+	return lom.Persist()
+}
+
+func SetXattrCopy(fqn string, value []string, t cluster.Target) error {
+	lom := cluster.LOM{FQN: fqn, T: t}
+
+	lom.SetCopyFQN(value)
+	return lom.Persist()
+}
+
+func GetXattrLom(fqn, bckProvider string, t cluster.Target) (*cluster.LOM, error) {
+	lom, errstr := cluster.LOM{T: t, FQN: fqn, BucketProvider: bckProvider}.Init()
+
+	if errstr != "" {
+		return nil, errors.New(errstr)
+	}
+
+	return lom, lom.LoadMetaFromFS()
 }

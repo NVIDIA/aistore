@@ -38,11 +38,3 @@ func SetXattr(fqn, attrname string, data []byte) (errstr string) {
 	}
 	return
 }
-
-func DelXattr(fqn string, attrname string) (errstr string) {
-	err := syscall.Removexattr(fqn, attrname)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to remove xattr %s: %s, err: [%v]", attrname, fqn, err)
-	}
-	return
-}
