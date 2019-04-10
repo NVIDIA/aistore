@@ -51,6 +51,7 @@ const (
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
 	ActRenameLB     = "renamelb"
+	ActRegisterCB   = "registercb"
 	ActEvictCB      = "evictcb"
 	ActResetProps   = "resetprops"
 	ActSetConfig    = "setconfig"
@@ -974,3 +975,10 @@ func validateCloudProvider(provider string, bckIsLocal bool) error {
 	}
 	return nil
 }
+
+// Common errors
+
+var (
+	ErrorBucketAlreadyExists      = errors.New("bucket already exists")
+	ErrorCloudBucketDoesNotExists = errors.New("cloud bucket does not exist")
+)

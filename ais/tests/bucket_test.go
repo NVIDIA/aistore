@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -360,6 +361,61 @@ func TestBucketSingleProp(t *testing.T) {
 		if p.Mirror.Enabled {
 			t.Error("Mirroring was not disabled")
 		}
+	}
+}
+
+func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
+	var (
+		bucket string
+
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		query      = url.Values{}
+	)
+	query.Set(cmn.URLParamBckProvider, "cloud")
+
+	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
+	tutils.CheckFatal(err, t)
+
+	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}, query)
+
+	if err == nil {
+		t.Fatalf("Expected SetBucketProps error, but got none.")
+	}
+
+	errAsHTTPError, ok := err.(*cmn.HTTPError)
+	if !ok {
+		t.Fatalf("Expected error of *cmn.HTTPError type.")
+	}
+	if errAsHTTPError.Status != http.StatusNotFound {
+		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
+	}
+}
+
+func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
+	var (
+		bucket string
+
+		baseParams  = tutils.DefaultBaseAPIParams(t)
+		bucketProps = defaultBucketProps()
+		query       = url.Values{}
+	)
+	query.Set(cmn.URLParamBckProvider, "cloud")
+
+	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
+	tutils.CheckFatal(err, t)
+
+	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps, query)
+
+	if err == nil {
+		t.Fatalf("Expected SetBucketPropsMsg error, but got none.")
+	}
+
+	errAsHTTPError, ok := err.(*cmn.HTTPError)
+	if !ok {
+		t.Fatalf("Expected error of *cmn.HTTPError type.")
+	}
+	if errAsHTTPError.Status != http.StatusNotFound {
+		t.Errorf("Expected status: %d, but got: %d.", http.StatusNotFound, errAsHTTPError.Status)
 	}
 }
 

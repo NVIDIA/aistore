@@ -5,13 +5,18 @@
 package tutils
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"runtime/debug"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/NVIDIA/aistore/api"
 
 	"github.com/NVIDIA/aistore/cluster"
 
@@ -92,6 +97,27 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix, bucketName string
 		newNameHrw, _ = cluster.HrwTarget(bucketName, newName, smap)
 	}
 	return newName
+}
+
+func GenerateNonexistentBucketName(prefix string, baseParams *api.BaseParams) (string, error) {
+	for i := 0; i < 100; i++ {
+		name := prefix + FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 8)
+		_, err := api.HeadBucket(baseParams, name)
+		if err == nil {
+			continue
+		}
+		errHTTP, ok := err.(*cmn.HTTPError)
+		if !ok {
+			return "", fmt.Errorf("error generating bucket name: expected error of type *cmn.HTTPError, but got: %T", err)
+		}
+		if errHTTP.Status == http.StatusNotFound {
+			return name, nil
+		}
+
+		return "", fmt.Errorf("error generating bucket name: unexpected HEAD request error: %v", err)
+	}
+
+	return "", errors.New("error generating bucket name: too many tries gave no result")
 }
 
 // copyRandWithHash reads data from random source and writes it to a writer while

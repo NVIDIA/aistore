@@ -370,21 +370,23 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 		bckIsLocal, fromCloud, ok bool
 
 		description string
+		bucket      string
 	)
 
 	payload.InitWithQuery(query)
-	if bckIsLocal, ok = p.validateBucket(w, r, payload.Bucket, payload.BckProvider); !ok {
+	bucket = payload.Bucket
+
+	if bckIsLocal, ok = p.validateBucket(w, r, bucket, payload.BckProvider); !ok {
 		return
 	}
 	if !bckIsLocal {
-		exists, err := p.checkIfCloudBucketExists(payload.Bucket)
-		if err != nil {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Error checking if bucket exists in cloud: %v.", err))
-			return
-		}
+		_, exists := p.bmdowner.Get().Get(bucket, false)
+
 		if !exists {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not exist.", payload.Bucket))
-			return
+			if err := p.handleUnknownCB(bucket); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
 		}
 	}
 
@@ -431,7 +433,7 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 
 		bckEntries := make([]*cmn.BucketEntry, 0, 1024)
 		for {
-			curBckEntries, err := p.listBucket(r, payload.Bucket, payload.BckProvider, msg)
+			curBckEntries, err := p.listBucket(r, bucket, payload.BckProvider, msg)
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error())
 				return
@@ -491,6 +493,58 @@ func (p *proxyrunner) respondWithID(w http.ResponseWriter, r *http.Request, id s
 	if err != nil {
 		glog.Errorf("Failed to write to http response: %v.", err)
 	}
+}
+
+// Handles the case when given `bucket` is a cloud bucket and it is not present in BMD's CBmap.
+// Checks if the bucket exists in cloud and registers it at the primary proxy.
+func (p *proxyrunner) handleUnknownCB(bucket string) error {
+	existsInCloud, err := p.doesCloudBucketExist(bucket)
+	if err != nil {
+		return fmt.Errorf("error checking if bucket exists in cloud: %v", err)
+	}
+
+	if !existsInCloud {
+		return fmt.Errorf("bucket %s does not exist", bucket)
+	}
+
+	// The bucket exists. Add it to CBmap
+
+	smap := p.smapowner.get()
+	actionMsg := cmn.ActionMsg{Action: cmn.ActRegisterCB}
+
+	// This is the primary proxy, update the CBmap
+	if smap.isPrimary(p.si) {
+		err := p.createBucket(&actionMsg, bucket, false)
+		if err != nil && err != cmn.ErrorBucketAlreadyExists {
+			return err
+		}
+		return nil
+	}
+
+	// This is not the primary proxy - call the primary to update the global CBmap
+
+	actionMsgBytes, err := jsoniter.Marshal(actionMsg)
+	if err != nil {
+		return fmt.Errorf("error marshalling ActionMsg: %v", err)
+	}
+
+	args := callArgs{
+		si: smap.ProxySI,
+		req: reqArgs{
+			method: http.MethodPost,
+			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			body:   actionMsgBytes,
+		},
+		timeout: defaultTimeout,
+	}
+	res := p.call(args)
+
+	// Status conflict means that the bucket was already registered. This is not an error
+	if res.status == http.StatusConflict {
+		return nil
+	}
+
+	return res.err
 }
 
 ////////////

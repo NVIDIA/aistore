@@ -477,31 +477,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		p.bmdowner.Lock()
-		bucketmd := p.bmdowner.get()
-		if !bucketmd.IsLocal(bucket) {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not appear to be local or %s",
-				bucket, cmn.DoesNotExist))
+		if _, err := p.destroyBucket(&msg, bucket, true); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		clone := bucketmd.clone()
-		if !clone.del(bucket, true) {
-			p.bmdowner.Unlock()
-			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucket)
-			p.invalmsghdlr(w, r, s)
-			return
-		}
-		if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, errstr)
-			return
-		}
-		p.bmdowner.put(clone)
-		p.bmdowner.Unlock()
-
-		msgInt := p.newActionMsgInternal(&msg, nil, clone)
-		p.metasyncer.sync(true, revspair{clone, msgInt})
 	case cmn.ActEvictCB:
 		if bckProvider == "" {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
@@ -514,26 +493,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bucketmd := p.bmdowner.get()
-		if bucketmd.isPresent(bucket, bckIsLocal) {
-			p.bmdowner.Lock()
-			clone := bucketmd.clone()
-			clone.del(bucket, false)
-			if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
-				p.bmdowner.Unlock()
-				p.invalmsghdlr(w, r, errstr)
-				return
-			}
-			p.bmdowner.put(clone)
-			p.bmdowner.Unlock()
-			bucketmd = clone
 
-			msgInt := p.newActionMsgInternal(&msg, nil, clone)
-			p.metasyncer.sync(true, revspair{clone, msgInt})
-		} else {
-			if glog.V(3) {
-				glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bucket, cmn.DoesNotExist)
-			}
+		bucketmd, err := p.destroyBucket(&msg, bucket, false)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
 
 		msgInt := p.newActionMsgInternal(&msg, nil, bucketmd)
@@ -693,15 +657,15 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
-func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error {
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool) error {
 	config := cmn.GCO.Get()
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := cmn.DefaultBucketProps()
-	if !clone.add(bucket, true, bucketProps) {
+	bucketProps := cmn.DefaultBucketProps
+	if !clone.add(bucket, local, bucketProps()) {
 		p.bmdowner.Unlock()
-		return fmt.Errorf("local bucket %s already exists", bucket)
+		return cmn.ErrorBucketAlreadyExists
 	}
 	if errstr := p.savebmdconf(clone, config); errstr != "" {
 		p.bmdowner.Unlock()
@@ -712,6 +676,40 @@ func (p *proxyrunner) createLocalBucket(msg *cmn.ActionMsg, bucket string) error
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 	return nil
+}
+
+func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local bool) (*bucketMD, error) {
+	p.bmdowner.Lock()
+	bucketmd := p.bmdowner.get()
+
+	if local && !bucketmd.IsLocal(bucket) {
+		p.bmdowner.Unlock()
+		return nil, fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
+	}
+	if !local && !bucketmd.isPresent(bucket, false) {
+		if glog.V(4) {
+			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bucket, cmn.DoesNotExist)
+		}
+		p.bmdowner.Unlock()
+		return bucketmd, nil
+	}
+
+	clone := bucketmd.clone()
+	if !clone.del(bucket, local) {
+		p.bmdowner.Unlock()
+		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist)
+	}
+	if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
+		p.bmdowner.Unlock()
+		return nil, fmt.Errorf(errstr)
+	}
+	p.bmdowner.put(clone)
+	p.bmdowner.Unlock()
+
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
+
+	return clone, nil
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -751,8 +749,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if err := p.createLocalBucket(&msg, bucket); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+		if err := p.createBucket(&msg, bucket, true); err != nil {
+			errCode := http.StatusInternalServerError
+			if err == cmn.ErrorBucketAlreadyExists {
+				errCode = http.StatusConflict
+			}
+			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
 	case cmn.ActRenameLB:
@@ -790,6 +792,18 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bmd := p.bmdowner.get()
 		msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 		p.metasyncer.sync(false, revspair{bmd, msgInt})
+	case cmn.ActRegisterCB:
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
+		if err := p.createBucket(&msg, bucket, false); err != nil {
+			errCode := http.StatusInternalServerError
+			if err == cmn.ErrorBucketAlreadyExists {
+				errCode = http.StatusConflict
+			}
+			p.invalmsghdlr(w, r, err.Error(), errCode)
+			return
+		}
 	case cmn.ActPrefetch:
 		// Check that users didn't specify bprovider=cloud
 		if bckProvider == "" {
@@ -919,8 +933,8 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.SimpleKVs) (errstr string) {
-	const errFmt = "Invalid %s value %q: %v"
+func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.SimpleKVs) (errRet error) {
+	const errFmt = "invalid %s value %q: %v"
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	config := cmn.GCO.Get()
@@ -928,6 +942,17 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 	bprops, exists := clone.Get(bucket, bckIsLocal)
 	if !exists {
 		cmn.Assert(!bckIsLocal)
+
+		existsInCloud, err := p.doesCloudBucketExist(bucket)
+		if err != nil {
+			p.bmdowner.Unlock()
+			return err
+		}
+		if !existsInCloud {
+			p.bmdowner.Unlock()
+			return cmn.ErrorCloudBucketDoesNotExists
+		}
+
 		bprops = cmn.DefaultBucketProps()
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
@@ -941,7 +966,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		}
 		// Disable ability to set EC properties once enabled
 		if !bprops.EC.Updatable(name) {
-			errstr = "Cannot change EC configuration after it is enabled"
+			errRet = errors.New("cannot change EC configuration after it is enabled")
 			p.bmdowner.Unlock()
 			return
 		}
@@ -959,49 +984,49 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				}
 				bprops.EC.Enabled = v
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketECData:
 			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
 				bprops.EC.DataSlices = int(v)
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketECParity:
 			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
 				bprops.EC.ParitySlices = int(v)
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketECMinSize:
 			if v, err := strconv.ParseInt(value, 10, 64); err == nil {
 				bprops.EC.ObjSizeLimit = v
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketCopies:
 			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, mirror.MaxNCopies); err == nil {
 				bprops.Mirror.Copies = v
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketMirrorThresh:
 			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
 				bprops.Mirror.UtilThresh = v
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketMirrorEnabled:
 			if v, err := strconv.ParseBool(value); err == nil {
 				bprops.Mirror.Enabled = v
 			} else {
-				errstr = fmt.Sprintf(errFmt, name, value, err)
+				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		default:
-			errstr = fmt.Sprintf("Changing property %s is not supported", name)
+			errRet = fmt.Errorf("changing property %s is not supported", name)
 		}
 
-		if errstr != "" {
+		if errRet != nil {
 			p.bmdowner.Unlock()
 			return
 		}
@@ -1044,9 +1069,15 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		query.Del(cmn.URLParamBckProvider)
 		kvs := cmn.NewSimpleKVsFromQuery(query)
 
-		if errstr := p.updateBucketProps(bucket, bckIsLocal, kvs); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
+		err := p.updateBucketProps(bucket, bckIsLocal, kvs)
+		if err == cmn.ErrorCloudBucketDoesNotExists {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+			return
 		}
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
+
 		return
 	}
 
@@ -1073,6 +1104,19 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	bprops, exists := clone.Get(bucket, bckIsLocal)
 	if !exists {
 		cmn.Assert(!bckIsLocal)
+
+		existsInCloud, err := p.doesCloudBucketExist(bucket)
+		if err != nil {
+			p.bmdowner.Unlock()
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if !existsInCloud {
+			p.bmdowner.Unlock()
+			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not exist.", bucket), http.StatusNotFound)
+			return
+		}
+
 		bprops = cmn.DefaultBucketProps()
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
@@ -1302,8 +1346,8 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 	//
 	// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf
 	//
-	if errstr := p.updateBucketProps(bucket, bckIsLocal, nvs); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if err := p.updateBucketProps(bucket, bckIsLocal, nvs); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 	}
 }
 
@@ -1409,7 +1453,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 	}, res.err
 }
 
-func (p *proxyrunner) checkIfCloudBucketExists(bucket string) (bool, error) {
+func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
 	var si *cluster.Snode
 	// Use random map iteration order to choose a random target to ask
 	smap := p.smapowner.get()
