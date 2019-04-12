@@ -139,7 +139,7 @@ func (mw *memoryWatcher) watchExcess(memStat sigar.Mem) {
 				ep.Store(path, struct{}{})
 
 				sgl := value.(*memsys.SGL)
-				if err := cmn.SaveReader(path.(string), sgl, buf); err != nil {
+				if _, err := cmn.SaveReader(path.(string), sgl, buf, false); err != nil {
 					glog.Error(err)
 				} else {
 					rc.Delete(path)

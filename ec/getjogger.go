@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/reedsolomon"
 )
@@ -224,8 +225,9 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	// Save received replica and its metadata locally - it is main replica
 	objFQN := req.LOM.FQN
 	req.LOM.FQN = objFQN
+	req.LOM.SetSize(writer.Size())
 	tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-	if err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer); err != nil {
+	if _, err := cmn.SaveReaderSafe(tmpFQN, objFQN, memsys.NewReader(writer), buffer, false); err != nil {
 		writer.Free()
 		return err
 	}
@@ -241,7 +243,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		return err
 	}
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
 		writer.Free()
 		<-c.diskCh
 		return err
@@ -306,7 +308,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		return err
 	}
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-	if err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
 		<-c.diskCh
 		return err
 	}
@@ -407,7 +409,9 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	return slices, idToNode, nil
 }
 
-func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, idToNode map[int]string, toDisk bool, id int, sliceSize int64) error {
+func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
+	hashes []*xxhash.XXHash64, idToNode map[int]string, toDisk bool,
+	id int, sliceSize int64) error {
 	if toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", id)
 		fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
@@ -415,12 +419,14 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice, idToNod
 		if err != nil {
 			return err
 		}
-		writers[id] = file
+		hashes[id] = xxhash.New64()
+		writers[id] = io.MultiWriter(file, hashes[id])
 		restored[id] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
 		sgl := mem2.NewSGL(sliceSize)
 		restored[id] = &slice{obj: sgl, n: sliceSize}
-		writers[id] = sgl
+		hashes[id] = xxhash.New64()
+		writers[id] = io.MultiWriter(sgl, hashes[id])
 	}
 
 	// id from slices object differs from id of idToNode object
@@ -467,6 +473,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	readers := make([]io.Reader, sliceCnt)
 	writers := make([]io.Writer, sliceCnt)
 	restored := make([]*slice, sliceCnt)
+	hashes := make([]*xxhash.XXHash64, sliceCnt)
 
 	cksmWg := &sync.WaitGroup{}
 	cksmErrCh := make(chan int, sliceCnt)
@@ -488,7 +495,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 			}
 		}
 		if sl == nil || sl.writer == nil {
-			if err = noSliceWriter(req, writers, restored, idToNode, toDisk, i, sliceSize); err != nil {
+			if err = noSliceWriter(req, writers, restored, hashes, idToNode, toDisk, i, sliceSize); err != nil {
 				break
 			}
 		} else {
@@ -532,7 +539,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	for i := range cksmErrCh {
 		// slice's checksum did not match, however we might be able to restore object anyway
 		glog.Warningf("Slice checksum mismatch for %s", req.LOM.Objname)
-		if err := noSliceWriter(req, writers, restored, idToNode, toDisk, i, sliceSize); err != nil {
+		if err := noSliceWriter(req, writers, restored, hashes, idToNode, toDisk, i, sliceSize); err != nil {
 			return restored, err
 		}
 		readers[i] = nil
@@ -540,6 +547,19 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 
 	if err = stream.Reconstruct(readers, writers); err != nil {
 		return restored, err
+	}
+
+	version := ""
+	for idx, rst := range restored {
+		if rst == nil {
+			continue
+		}
+		if hashes[idx] != nil {
+			rst.cksum = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(hashes[idx]))
+		}
+		if version == "" && rst.version != "" {
+			version = rst.version
+		}
 	}
 
 	srcReaders := make([]io.Reader, meta.Data)
@@ -577,12 +597,20 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 
 	c.diskCh <- struct{}{}
 	req.LOM.FQN = mainFQN
+	req.LOM.SetSize(meta.Size)
+	if version != "" {
+		req.LOM.SetVersion(version)
+	}
 	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
-	if err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, meta.Size); err != nil {
+	// recalculate hash for the main object before saving the object's xattrs
+	// otherwise the main object gets hash from one of slices
+	hash, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size)
+	if err != nil {
 		<-c.diskCh
 		return restored, err
 	}
 	<-c.diskCh
+	req.LOM.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, hash))
 	if errstr := req.LOM.PersistCksumVer(); errstr != "" {
 		return restored, errors.New(errstr)
 	}
@@ -598,7 +626,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	if glog.V(4) {
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, metaFQN)
 	}
-	if err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer); err != nil {
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
 		return restored, err
 	}
 
@@ -717,7 +745,9 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		if glog.V(4) {
 			glog.Infof("Sending slice %d %s/%s to %s", sliceMeta.SliceID+1, req.LOM.Bucket, req.LOM.Objname, tgt)
 		}
-		if err := c.parent.writeRemote([]string{tgt}, req.LOM, dataSrc, cb); err != nil {
+		sliceLOM := *req.LOM
+		sliceLOM.SetCksum(sl.cksum)
+		if err := c.parent.writeRemote([]string{tgt}, &sliceLOM, dataSrc, cb); err != nil {
 			glog.Errorf("Failed to send slice %d of %s/%s to %s", idx+1, req.LOM.Bucket, req.LOM.Objname, tgt)
 		}
 

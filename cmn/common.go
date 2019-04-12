@@ -484,44 +484,56 @@ func PathWalkErr(err error) string {
 // Saves the reader directly to a local file
 // `size` is an optional argument, if it is set only first `size` bytes
 // are saved to the file
-func SaveReader(fqn string, reader io.Reader, buf []byte, size ...int64) error {
+func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum string, err error) {
 	file, err := CreateFile(fqn)
 	if err != nil {
-		return err
+		return "", err
 	}
 
+	var (
+		hasher *xxhash.XXHash64
+		writer io.Writer = file
+	)
+	if needCksum {
+		hasher = xxhash.New64()
+		writer = io.MultiWriter(file, hasher)
+	}
 	if len(size) != 0 {
 		sz := size[0]
-		_, err = io.CopyBuffer(file, io.LimitReader(reader, sz), buf)
+		_, err = io.CopyBuffer(writer, io.LimitReader(reader, sz), buf)
 	} else {
-		_, err = io.CopyBuffer(file, reader, buf)
+		_, err = io.CopyBuffer(writer, reader, buf)
 	}
 
 	file.Close()
 	if err != nil {
-		return fmt.Errorf("failed to save to %q: %v", fqn, err)
+		return "", fmt.Errorf("failed to save to %q: %v", fqn, err)
 	}
 
-	return nil
+	if needCksum {
+		cksum = HashToStr(hasher)
+	}
+
+	return cksum, nil
 }
 
 // Saves the reader to a temporary file `tmpfqn`, and if everything is OK
 // it moves the temporary file to a given `fqn`
 // `size` is an optional argument, if it is set only first `size` bytes
 // are saved to the file
-func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, size ...int64) error {
+func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum string, err error) {
 	if fqn == "" {
-		return nil
+		return "", nil
 	}
 
-	if err := SaveReader(tmpfqn, reader, buf, size...); err != nil {
-		return err
+	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size...); err != nil {
+		return "", err
 	}
 
 	if err := MvFile(tmpfqn, fqn); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return cksum, nil
 }
 
 // WriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes

@@ -29,12 +29,13 @@ type (
 		Finished() bool
 	}
 	XactBase struct {
-		id     int64
-		sutime int64
-		eutime int64
-		kind   string
-		bucket string
-		abrt   chan struct{}
+		id      int64
+		sutime  int64
+		eutime  int64
+		kind    string
+		bucket  string
+		abrt    chan struct{}
+		aborted int32
 	}
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -84,12 +85,7 @@ func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) Finished() bool             { return atomic.LoadInt64(&xact.eutime) != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool {
-	select {
-	case <-xact.ChanAbort():
-		return true
-	default:
-		return false
-	}
+	return atomic.LoadInt32(&xact.aborted) != 0
 }
 
 func (xact *XactBase) String() string {
@@ -131,6 +127,10 @@ func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 }
 
 func (xact *XactBase) Abort() {
+	if !atomic.CompareAndSwapInt32(&xact.aborted, 0, 1) {
+		glog.Infof("ABORT: Already aborted, skipping: " + xact.String())
+		return
+	}
 	atomic.StoreInt64(&xact.eutime, time.Now().UnixNano())
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())

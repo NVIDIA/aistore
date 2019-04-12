@@ -127,7 +127,7 @@ func getRandomFileName(fileCounter int) string {
 
 func saveRandomFile(filename string, size int64) {
 	buff := make([]byte, size)
-	err := cmn.SaveReader(filename, rand.Reader, buff, size)
+	_, err := cmn.SaveReader(filename, rand.Reader, buff, false, size)
 	Expect(err).NotTo(HaveOccurred())
 }
 

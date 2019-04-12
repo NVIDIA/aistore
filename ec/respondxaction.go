@@ -196,7 +196,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		// save slice/object
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
 		buf, slab := mem2.AllocFromSlab2(cmn.MiB)
-		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
+		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		if err == nil {
 			lom, errstr := cluster.LOM{FQN: objFQN, T: r.t}.Init()
 			if errstr != "" {
@@ -228,7 +228,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 		metaBuf, err := meta.marshal()
 		if err == nil {
-			err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf)
+			_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
 		}
 
 		slab.Free(buf)

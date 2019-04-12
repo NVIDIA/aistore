@@ -44,6 +44,11 @@ const (
 	ecBigDelta     = 10 * cmn.MiB
 )
 
+type ecSliceMD struct {
+	size int64
+	hash string
+}
+
 var (
 	ecDataSliceCnt   = 2
 	ecParitySliceCnt = 2
@@ -86,8 +91,8 @@ func ecSliceNumInit(t *testing.T, smap cluster.Smap) error {
 // replica is the replica that is on the target chosen by proxy using HrwTarget
 // algorithm on GET request from a client.
 // The function uses heuristics to detect the main one: it should be the oldest
-func ecGetAllLocalSlices(objDir, objName string) (map[string]int64, string) {
-	foundParts := make(map[string]int64)
+func ecGetAllLocalSlices(objDir, objName string) (map[string]ecSliceMD, string) {
+	foundParts := make(map[string]ecSliceMD)
 	oldest := time.Now()
 	main := ""
 
@@ -103,7 +108,8 @@ func ecGetAllLocalSlices(objDir, objName string) (map[string]int64, string) {
 		}
 
 		if strings.Contains(path, objName) {
-			foundParts[path] = info.Size()
+			b, _ := fs.GetXattr(path, cmn.XattrXXHash)
+			foundParts[path] = ecSliceMD{info.Size(), string(b)}
 			if strings.Contains(path, ecDataDir) && oldest.After(info.ModTime()) {
 				main = path
 				oldest = info.ModTime()
@@ -140,23 +146,37 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 	return lst
 }
 
-func ecCheckSlices(t *testing.T, sliceList map[string]int64,
+func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	objFullPath string, objSize, sliceSize int64,
 	totalCnt int) (mainObjPath string) {
 	tassert.Error(t, len(sliceList) == totalCnt, "Expected number of objects for %q: %d, found: %d\n%+v",
 		objFullPath, totalCnt, len(sliceList), sliceList)
 
+	sliced := sliceSize < objSize
+	hashes := make(map[string]bool)
 	metaCnt := 0
-	for k, v := range sliceList {
+	for k, md := range sliceList {
 		if strings.Contains(k, ecMetaDir) {
 			metaCnt++
-			tassert.Error(t, v <= 512, "Metafile %q size is too big: %d", k, v)
+			tassert.Error(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
 		} else if strings.Contains(k, ecSliceDir) {
-			tassert.Error(t, v == sliceSize, "Slice %q size mismatch: %d, expected %d", k, v, sliceSize)
+			tassert.Error(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
+			if sliced {
+				if _, ok := hashes[md.hash]; ok {
+					t.Errorf("Duplicated slice hash(slice) %q: %s\n", objFullPath, md.hash)
+				}
+				hashes[md.hash] = true
+			}
 		} else {
 			tassert.Error(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
-			tassert.Error(t, v == objSize, "File %q size mismatch: got %d, expected %d", k, v, objSize)
+			tassert.Error(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
 			mainObjPath = k
+			if sliced {
+				if _, ok := hashes[md.hash]; ok {
+					t.Errorf("Duplicated slice hash(main) %q: %s\n", objFullPath, md.hash)
+				}
+				hashes[md.hash] = true
+			}
 		}
 	}
 
@@ -166,23 +186,23 @@ func ecCheckSlices(t *testing.T, sliceList map[string]int64,
 	return
 }
 
-func waitForECFinishes(totalCnt int, objSize, sliceSize int64, doEC bool, fullPath, objName string) (foundParts map[string]int64, mainObjPath string) {
+func waitForECFinishes(totalCnt int, objSize, sliceSize int64, doEC bool, fullPath, objName string) (foundParts map[string]ecSliceMD, mainObjPath string) {
 	deadLine := time.Now().Add(ECPutTimeOut)
 	for time.Now().Before(deadLine) {
 		foundParts, mainObjPath = ecGetAllLocalSlices(fullPath, objName)
 		if len(foundParts) == totalCnt {
 			same := true
-			for nm, sz := range foundParts {
+			for nm, md := range foundParts {
 				if doEC {
 					if strings.Contains(nm, ecSliceDir) {
-						if sz != sliceSize {
+						if md.size != sliceSize {
 							same = false
 							break
 						}
 					}
 				} else {
 					if strings.Contains(nm, ecDataDir) {
-						if sz != objSize {
+						if md.size != objSize {
 							same = false
 							break
 						}
@@ -228,7 +248,7 @@ func randObjectSize(rnd *rand.Rand, n, every int) (
 	return
 }
 
-func calculateSlicesCount(slices map[string]int64) map[string]int {
+func calculateSlicesCount(slices map[string]ecSliceMD) map[string]int {
 	calc := make(map[string]int, len(slices))
 	for k := range slices {
 		o := filepath.Base(k)
@@ -303,22 +323,22 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 				return
 			}
 			metaCnt, sliceCnt, replCnt := 0, 0, 0
-			for k, v := range foundParts {
+			for k, md := range foundParts {
 				if strings.Contains(k, ecMetaDir) {
 					metaCnt++
-					tassert.Error(t, v <= 512, "Metafile %q size is too big: %d", k, v)
+					tassert.Error(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
 				} else if strings.Contains(k, ecSliceDir) {
 					sliceCnt++
-					if v != sliceSize && doEC {
-						t.Errorf("Slice %q size mismatch: %d, expected %d", k, v, sliceSize)
+					if md.size != sliceSize && doEC {
+						t.Errorf("Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 					}
-					if v != objSize && !doEC {
-						t.Errorf("Copy %q size mismatch: %d, expected %d", k, v, objSize)
+					if md.size != objSize && !doEC {
+						t.Errorf("Copy %q size mismatch: %d, expected %d", k, md.size, objSize)
 					}
 				} else {
 					objFullPath := fullPath + objName
 					tassert.Error(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '..%s']", k, objFullPath)
-					tassert.Error(t, v == objSize, "File %q size mismatch: got %d, expected %d", k, v, objSize)
+					tassert.Error(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
 					mainObjPath = k
 					replCnt++
 				}
@@ -353,14 +373,14 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 
 			if doEC {
 				partsAfterRestore, _ := ecGetAllLocalSlices(fullPath, objName)
-				restoredSize, ok := partsAfterRestore[mainObjPath]
+				md, ok := partsAfterRestore[mainObjPath]
 				if !ok || len(partsAfterRestore) != len(foundParts) {
 					t.Errorf("File is not restored: %#v", partsAfterRestore)
 					return
 				}
 
-				if restoredSize != objSize {
-					t.Errorf("File is restored incorrectly, size mismatches: %d, expected %d", restoredSize, objSize)
+				if md.size != objSize {
+					t.Errorf("File is restored incorrectly, size mismatches: %d, expected %d", md.size, objSize)
 					return
 				}
 			}
@@ -657,7 +677,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, objName
 
 	if doEC {
 		deadline := time.Now().Add(sleepRestoreTime)
-		var partsAfterRestore map[string]int64
+		var partsAfterRestore map[string]ecSliceMD
 		for time.Now().Before(deadline) {
 			time.Sleep(time.Millisecond * 250)
 			partsAfterRestore, _ = ecGetAllLocalSlices(fullPath, objName)
@@ -731,7 +751,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 }
 
 // Returns path to main object and map of all object's slices and metadata
-func createECFile(t *testing.T, objName, fullPath string, baseParams *api.BaseParams) (map[string]int64, string) {
+func createECFile(t *testing.T, objName, fullPath string, baseParams *api.BaseParams) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (ecDataSliceCnt+ecParitySliceCnt)*2
 	objSize := int64(ecMinBigSize * 2)
 	sliceSize := ec.SliceSize(objSize, ecDataSliceCnt)
@@ -1233,7 +1253,7 @@ func TestECExtraStress(t *testing.T) {
 	wg.Wait()
 	close(cntCh)
 
-	var foundParts map[string]int64
+	var foundParts map[string]ecSliceMD
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	startedWaiting := time.Now()
 	deadLine := startedWaiting.Add(waitAllTime)
@@ -1388,7 +1408,7 @@ func TestECXattrs(t *testing.T) {
 
 		if doEC {
 			deadline := time.Now().Add(sleepRestoreTime)
-			var partsAfterRestore map[string]int64
+			var partsAfterRestore map[string]ecSliceMD
 			for time.Now().Before(deadline) {
 				time.Sleep(time.Millisecond * 250)
 				partsAfterRestore, _ = ecGetAllLocalSlices(fullPath, objName)
@@ -1461,15 +1481,15 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, concurr, baseParams)
+	bckProps := defaultECBckProps()
+	bckProps.Rebalance.Enabled = false
+	newLocalBckWithProps(t, TestLocalBucketName, bckProps, seed, concurr, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	wg := &sync.WaitGroup{}
@@ -1583,8 +1603,6 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 
@@ -1592,7 +1610,9 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	rnd := rand.New(rand.NewSource(seed))
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, 0, baseParams)
+	bckProps := defaultECBckProps()
+	bckProps.Rebalance.Enabled = false
+	newLocalBckWithProps(t, TestLocalBucketName, bckProps, seed, 0, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	wg := sync.WaitGroup{}
@@ -1730,14 +1750,14 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "false"})
-	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"rebalance.enabled": "true"})
 
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
 	seed := time.Now().UnixNano()
 	rnd := rand.New(rand.NewSource(seed))
 
-	newLocalBckWithProps(t, TestLocalBucketName, defaultECBckProps(), seed, concurr, baseParams)
+	bckProps := defaultECBckProps()
+	bckProps.Rebalance.Enabled = false
+	newLocalBckWithProps(t, TestLocalBucketName, bckProps, seed, concurr, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	wg := &sync.WaitGroup{}

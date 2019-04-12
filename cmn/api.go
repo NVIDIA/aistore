@@ -130,6 +130,7 @@ const (
 	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
 	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
+	HeaderRebalanceEnabled      = "rebalance.enabled"       // starts rebalance automatically on Smap/Mountpath changes when set to true
 
 	// object meta
 	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
@@ -847,6 +848,9 @@ type BucketProps struct {
 	// EC defines erasure coding setting for the bucket
 	EC ECConf `json:"ec"`
 
+	// Rebalance defines auto-rebalance policy for the bucket
+	Rebalance RebalanceConf `json:"rebalance"`
+
 	// unique bucket ID
 	BID int64
 }
@@ -890,6 +894,7 @@ func DefaultBucketProps() *BucketProps {
 		LRU:        c.LRU,
 		Mirror:     c.Mirror,
 		Versioning: c.Ver,
+		Rebalance:  c.Rebalance,
 	}
 }
 
@@ -919,6 +924,7 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 	to.LRU = from.LRU
 	to.Mirror = from.Mirror
 	to.EC = from.EC
+	to.Rebalance = from.Rebalance
 }
 
 func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluster func(string) bool) error {

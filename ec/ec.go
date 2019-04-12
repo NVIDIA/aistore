@@ -208,6 +208,7 @@ type (
 		refCnt  int32              // number of references
 		workFQN string             // FQN for temporary slice/replica
 		cksum   cmn.Cksummer       // checksum of the slice
+		version string             // version of the remote object
 	}
 
 	// a source for data response: the data to send to the caller

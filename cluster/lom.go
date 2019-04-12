@@ -104,6 +104,7 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 	}
 	return conf
 }
+func (lom *LOM) RebalanceConf() *cmn.RebalanceConf { return &lom.BckProps.Rebalance }
 func (lom *LOM) GenFQN(ty, prefix string) string {
 	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
 }

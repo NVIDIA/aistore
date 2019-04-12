@@ -387,6 +387,9 @@ func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transpor
 	}
 
 	writer.cksum = cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue)
+	if writer.version != "" && objAttrs.Version != "" {
+		writer.version = objAttrs.Version
+	}
 
 	writer.wg.Done()
 	slab.Free(buf)

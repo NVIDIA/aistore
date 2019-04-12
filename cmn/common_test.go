@@ -98,7 +98,7 @@ func TestSaveReader(t *testing.T) {
 	filename := filepath.Join(tmpDir, "savereadertest.txt")
 	byteBuffer := make([]byte, bytesToRead)
 
-	if err := SaveReader(filename, rand.Reader, byteBuffer, bytesToRead); err != nil {
+	if _, err := SaveReader(filename, rand.Reader, byteBuffer, false, bytesToRead); err != nil {
 		t.Errorf("SaveReader failed to read %d bytes", bytesToRead)
 	}
 
@@ -112,7 +112,7 @@ func TestSaveReaderWithNoSize(t *testing.T) {
 	byteBuffer := make([]byte, bytesLimit*2)
 	reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-	if err := SaveReader(filename, reader, byteBuffer); err != nil {
+	if _, err := SaveReader(filename, reader, byteBuffer, false); err != nil {
 		t.Errorf("SaveReader failed to read %d bytes", bytesLimit)
 	}
 
@@ -181,7 +181,7 @@ func TestCopyFile(t *testing.T) {
 	dstFilename := filepath.Join(tmpDir, "copyfiledst.txt")
 
 	// creates a file of random bytes
-	SaveReader(srcFilename, rand.Reader, make([]byte, 1000), 1000)
+	SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
 	if err := CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
 		t.Error(err)
 	}

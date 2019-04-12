@@ -1009,6 +1009,12 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
+		case cmn.HeaderRebalanceEnabled:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Rebalance.Enabled = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
 		default:
 			errRet = fmt.Errorf("changing property %s is not supported", name)
 		}
