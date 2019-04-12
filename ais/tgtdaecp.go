@@ -250,20 +250,44 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatXaction:
 		var (
-			jsbytes     []byte
-			err         error
-			sts         = getstorstatsrunner()
-			kind        = r.URL.Query().Get(cmn.URLParamProps)
-			kindDetails = t.getXactionsByKind(kind)
+			jsbytes []byte
+			err     error
+			msg     cmn.ActionMsg
 		)
-		if kind == cmn.ActGlobalReb {
-			jsbytes = sts.GetRebalanceStats(kindDetails)
-		} else if kind == cmn.ActPrefetch {
-			jsbytes = sts.GetPrefetchStats(kindDetails)
-		} else {
-			jsbytes, err = jsoniter.Marshal(kindDetails)
-			cmn.AssertNoErr(err)
+
+		if cmn.ReadJSON(w, r, &msg) != nil {
+			t.invalmsghdlr(w, r, "Could not parse action message:", http.StatusBadRequest)
+			return
 		}
+
+		xactMsg, err := cmn.ReadXactionRequestMessage(&msg)
+		if err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse xaction action message: %s", err.Error()), http.StatusBadRequest)
+			return
+		}
+
+		kind, bucket := msg.Name, xactMsg.Bucket
+
+		switch msg.Action {
+		case cmn.ActXactStats:
+			jsbytes, err = t.xactStatsRequest(kind, bucket)
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		case cmn.ActXactStop:
+			t.xactions.doAbort(kind, bucket)
+			return
+		case cmn.ActXactStart:
+			if err := t.xactsStartRequest(kind, bucket); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+			}
+			return
+		default:
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unrecognized xaction action %s", msg.Action), http.StatusBadRequest)
+			return
+		}
+
 		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
@@ -305,26 +329,59 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
-	kindDetails := []stats.XactionDetails{}
+func (t *targetrunner) xactStatsRequest(kind, bucket string) ([]byte, error) {
+	xactStats, err := t.xactions.getStats(kind, bucket)
 
-	t.xactions.kindRange(kind, func(xact cmn.Xact) {
-		status := cmn.XactionStatusCompleted
-		if !xact.Finished() {
-			status = cmn.XactionStatusInProgress
-		}
-		details := stats.XactionDetails{ // FIXME: redundant vs XactBase
-			ID:        xact.ID(),
-			Kind:      xact.Kind(),
-			Bucket:    xact.Bucket(),
-			StartTime: xact.StartTime(),
-			EndTime:   xact.EndTime(),
-			Status:    status,
-		}
-		kindDetails = append(kindDetails, details)
-	})
+	if err != nil {
+		return nil, err
+	}
 
-	return kindDetails
+	return jsoniter.Marshal(xactStats)
+}
+
+func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
+	if kind == "" {
+		return fmt.Errorf("kind of xaction to start not specified")
+	}
+
+	if bucket == "" {
+		switch kind {
+		case cmn.ActLRU:
+			go t.RunLRU()
+		case cmn.ActLocalReb:
+			go t.rebManager.runLocalReb()
+		case cmn.ActGlobalReb:
+			go t.rebManager.runGlobalReb(t.smapowner.get(), t.si.DaemonID)
+		case cmn.ActPrefetch:
+			go t.Prefetch()
+		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
+			return fmt.Errorf("%s xaction start not supported", kind)
+		case cmn.ActElection:
+			return fmt.Errorf("%s not supported by target node", kind)
+		default:
+			return fmt.Errorf("unknown %s xaction", kind)
+		}
+		return nil
+	}
+
+	if !t.bmdowner.Get().IsLocal(bucket) {
+		return fmt.Errorf("%s bucket is not a local bucket", bucket)
+	}
+
+	switch kind {
+	case cmn.ActECPut:
+		t.ecmanager.restoreBckPutXact(bucket)
+	case cmn.ActECGet:
+		t.ecmanager.restoreBckGetXact(bucket)
+	case cmn.ActECRespond:
+		t.ecmanager.restoreBckRespXact(bucket)
+	case cmn.ActMakeNCopies:
+		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
+	case cmn.ActPutCopies:
+		return fmt.Errorf("%s currently not supported", kind)
+	}
+
+	return nil
 }
 
 // register target

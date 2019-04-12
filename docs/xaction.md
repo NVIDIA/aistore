@@ -28,23 +28,86 @@ Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) 
 * Reducing number of object replicas in a given locally-mirrored bucket (see [Storage Services](/docs/storage_svcs.md));
 * and more.
 
-The picture illustrates results of a generic query that checks whether the (in this example) LRU-based cache eviction has already finished in a cluster containing 3 storage targets (which it has, as per the "status" field below):
+There are different actions which may be taken upon xaction. Actions include stats, start and stop. 
+List of supported actions can be found in the [API](/cmn/api.go)
 
-<img src="images/ais-xaction-lru.png" alt="Querying LRU progress" width="320">
-
-The query itself looks as follows:
-
+Request query is generic for all of the actions. 
+Responses to query are different for different actions and are described in sections of actions
+Query looks as follows:  
+1.Single target request:
 ```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=lru
+curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction' 
+```    
+To simplify the logic, result is always an array, even if there's only one element in the result
+
+2.Proxy request, which executes a request on all targets within the cluster, and responds with list of targets' responses:
+```shell
+curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
+```
+Response of a query to proxy is a map of deamonID -> target's response. If any of targets responded with error status code, proxy's response
+will result in the same error response.
+
+For both (target's and proxy's) requests the following apply:
+- actiontype has to be always specified
+- if xactionname is empty and bucketname is empty, request will be executed on all xactions
+- if xactionname is empty and bucketname is not empty, request will be executed on all bucket's xactions
+- if xactionname is name of global xaction, bucketname is disregarded
+
+#### Stats
+Stats request results in list of requested xactions. Statistics of each xaction share base format which looks as follow:
+```json
+[  
+   {  
+      "id":1,
+      "kind":"ecget",
+      "bucket":"test",
+      "startTime":"2019-04-15T12:40:18.721697505-07:00",
+      "endTime":"0001-01-01T00:00:00Z",
+      "status":"InProgress"
+   },
+   {  
+      "id":2,
+      "kind":"ecput",
+      "bucket":"test",
+      "startTime":"2019-04-15T12:40:18.721723865-07:00",
+      "endTime":"0001-01-01T00:00:00Z",
+      "status":"InProgress"
+   }
+]
+```
+Any xaction can have additional fields, which are included in additional field called `"ext"`
+
+Example rebalance stats response:
+```json
+[
+    {
+      "id": 3,
+      "kind": "rebalance",
+      "bucket": "",
+      "start_time": "2019-04-15T13:38:51.556388821-07:00",
+      "end_time": "0001-01-01T00:00:00Z",
+      "status": "InProgress",
+      "count": 0,
+      "ext": {
+        "num_sent_files": 0,
+        "num_sent_bytes": 0,
+        "num_recv_files": 0,
+        "num_recv_bytes": 0
+      }
+    }
+]
 ```
 
->> As always, `localhost:8080` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address.
+#### Start & Stop
 
-The corresponding [RESTful API](/docs/http_api.md) includes support for querying absolutely all xactions including global-rebalancing and prefetch operations:
+If Start/Stop action was successful, target's response contains only successful http code. If Start/Stop request was send to proxy and all targets
+responded with successful http code, proxy will respond with successful http code. Response body should be omitted.
 
-```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=prefetch
-```
+If Start/Stop action was not successful, target's response contains error code and error message. If Start/Stop request was send to proxy and at least one
+of targets responded with error code, proxy will respond with the same error code and error message.
 
-At the time of this writing, unlike all the rest xactions global-rebalancing and prefetch queries provide [extended statistics](/stats/xaction_stats.go) on top and in addition to the generic "common denominator" mentioned and illustrated above.
+
+>> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address 
+and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation)
+
+The corresponding [RESTful API](/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.

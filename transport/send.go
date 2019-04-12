@@ -101,7 +101,7 @@ type (
 		Num     int64   // number of transferred objects
 		Size    int64   // transferred size, in bytes
 		Offset  int64   // stream offset, in bytes
-		IdleDur int64   // the time stream was idle since the previous GetStats call
+		IdleDur int64   // the time stream was idle since the previous getStats call
 		TotlDur int64   // total time since --/---/---
 		IdlePct float64 // idle time % since --/---/--
 	}
@@ -494,7 +494,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	now := time.Now().UnixNano()
 	stats.TotlDur = now - atomic.LoadInt64(&s.time.start)
 	stats.IdlePct = float64(atomic.LoadInt64(&s.stats.IdleDur)) * 100 / float64(stats.TotlDur)
-	stats.IdlePct = cmn.MinF64(100, stats.IdlePct) // GetStats is async vis-à-vis IdleDur += deltas
+	stats.IdlePct = cmn.MinF64(100, stats.IdlePct) // getStats is async vis-à-vis IdleDur += deltas
 	atomic.StoreInt64(&s.time.start, now)
 	atomic.StoreInt64(&s.stats.IdleDur, 0)
 	return

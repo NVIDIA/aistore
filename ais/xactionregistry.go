@@ -7,9 +7,10 @@ package ais
 import (
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/NVIDIA/aistore/stats"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 
@@ -177,10 +178,6 @@ func (r *xactionsRegistry) uniqueID() int64 {
 	return atomic.AddInt64(&r.nextid, 1)
 }
 
-func (r *xactionsRegistry) kindRange(kind string, doAction func(cmn.Xact)) {
-	r.xactsRange(func(m string) bool { return strings.Contains(m, kind) }, doAction)
-}
-
 func (r *xactionsRegistry) xactsRange(matches func(string) bool, doAction func(cmn.Xact)) {
 	r.byID.Range(func(_, value interface{}) bool {
 		entry := value.(xactEntry)
@@ -229,7 +226,7 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 }
 
 //nolint:unused
-func (r *xactionsRegistry) globalXactStats(kind string) (xactStats, error) {
+func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, error) {
 	val, ok := r.globalXacts.Load(kind)
 	if !ok {
 		return nil, fmt.Errorf("xact %s does not exist", kind)
@@ -238,7 +235,7 @@ func (r *xactionsRegistry) globalXactStats(kind string) (xactStats, error) {
 	entry := val.(xactEntry)
 	entry.RLock()
 	defer entry.RUnlock()
-	return entry.Stats(), nil
+	return []stats.XactStats{entry.Stats()}, nil
 }
 
 func (r *xactionsRegistry) abortGlobalXact(kind string) {
@@ -253,40 +250,112 @@ func (r *xactionsRegistry) abortGlobalXact(kind string) {
 	entry.RUnlock()
 }
 
-//nolint:unused
-func (r *xactionsRegistry) bucketXactRunning(kind, bucket string) bool {
-	val, ok := r.buckets.Load(bucket)
+// Returns stats of xaction with given 'kind' on a given bucket
+func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string) ([]stats.XactStats, error) {
+	bucketXats, ok := r.getBucketsXacts(bucket)
 	if !ok {
-		return false
+		return nil, fmt.Errorf("no bucket %s for xact %s", bucket, kind)
 	}
 
-	xacts := val.(*sync.Map)
-	val, ok = xacts.Load(kind)
+	val, ok := bucketXats.Load(kind)
 	if !ok {
-		return false
+		return nil, fmt.Errorf("xact %s for bucket %s does not exist", kind, bucket)
 	}
 
 	entry := val.(xactEntry)
 	entry.RLock()
 	defer entry.RUnlock()
-	return !entry.Get().Finished()
+	return []stats.XactStats{entry.Stats()}, nil
 }
 
-//nolint:unused
-func (r *xactionsRegistry) bucketXactStats(kind, bucket string) (xactStats, error) {
+// Returns stats of all present xactions
+func (r *xactionsRegistry) allXactsStats() []stats.XactStats {
+	return statsFromXactionsMap(&r.byID)
+}
+
+func (r *xactionsRegistry) getNonBucketSpecificStats(kind string) ([]stats.XactStats, error) {
+	// no bucket and no kind - request for all xactions
+	if kind == "" {
+		return r.allXactsStats(), nil
+	}
+
+	global, err := cmn.XactKind.IsGlobalKind(kind)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if global {
+		return r.globalXactStats(kind)
+	}
+
+	return nil, fmt.Errorf("xaction %s is not a global xaction", kind)
+}
+
+// Returns stats of all xactions of a given bucket
+func (r *xactionsRegistry) bucketAllXactsStats(bucket string) ([]stats.XactStats, error) {
+	bucketsXacts, ok := r.getBucketsXacts(bucket)
+
+	if !ok {
+		return nil, fmt.Errorf("xactions for %s bucket not found", bucket)
+	}
+
+	return statsFromXactionsMap(bucketsXacts), nil
+}
+
+func (r *xactionsRegistry) getStats(kind, bucket string) ([]stats.XactStats, error) {
+	if bucket == "" {
+		// no bucket - either all xactions or a global xaction
+		return r.getNonBucketSpecificStats(kind)
+	}
+
+	// both bucket and kind present - request for specific bucket's xaction
+	if kind != "" {
+		return r.bucketSingleXactStats(kind, bucket)
+	}
+
+	// bucket present and no kind - request for all available bucket's xactions
+	return r.bucketAllXactsStats(bucket)
+}
+
+func (r *xactionsRegistry) doAbort(kind, bucket string) {
+	// no bucket and no kind - request for all available xactions
+	if bucket == "" && kind == "" {
+		r.abortAll()
+	}
+	// bucket present and no kind - request for all available bucket's xactions
+	if bucket != "" && kind == "" {
+		r.abortBuckets(bucket)
+	}
+	// both bucket and kind present - request for specific bucket's xaction
+	if bucket != "" && kind != "" {
+		r.abortBucketXact(kind, bucket)
+	}
+	// no bucket, but kind present - request for specific global xaction
+	if bucket == "" && kind != "" {
+		r.abortGlobalXact(kind)
+	}
+}
+
+func (r *xactionsRegistry) getBucketsXacts(bucket string) (m *sync.Map, ok bool) {
 	val, ok := r.buckets.Load(bucket)
 	if !ok {
-		return nil, fmt.Errorf("xact %s for bucket %s does not exist", kind, bucket)
+		return nil, false
 	}
+	return val.(*sync.Map), true
+}
 
-	xacts := val.(*sync.Map)
-	val, ok = xacts.Load(bucket)
-	if !ok {
-		return nil, fmt.Errorf("xact %s for bucket %s does not exist", kind, bucket)
-	}
+func statsFromXactionsMap(m *sync.Map) []stats.XactStats {
+	const expectedXactionsSize = 10
+	statsList := make([]stats.XactStats, 0, expectedXactionsSize)
 
-	entry := val.(xactEntry)
-	entry.RLock()
-	defer entry.RUnlock()
-	return entry.Stats(), nil
+	m.Range(func(_, val interface{}) bool {
+		entry := val.(xactEntry)
+		entry.RLock()
+		statsList = append(statsList, entry.Stats())
+		entry.RUnlock()
+		return true
+	})
+
+	return statsList
 }

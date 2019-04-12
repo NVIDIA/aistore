@@ -1291,26 +1291,26 @@ OUTER:
 		}
 
 		targetsCompleted := 0
-		for _, targetStats := range rebalanceStats.TargetStats {
-			if len(targetStats.Xactions) > 0 {
-				for _, xaction := range targetStats.Xactions {
-					if xaction.Status != cmn.XactionStatusCompleted {
+		for _, targetStats := range rebalanceStats {
+			if len(targetStats) > 0 {
+				for _, xaction := range targetStats {
+					if xaction.Status() != cmn.XactionStatusCompleted {
 						continue OUTER
 					}
 				}
 			}
 
 			targetsCompleted++
-			if targetsCompleted == len(rebalanceStats.TargetStats) {
+			if targetsCompleted == len(rebalanceStats) {
 				return
 			}
 		}
 	}
 }
 
-func getXactionRebalance(proxyURL string) (stats.RebalanceStats, error) {
-	var rebalanceStats stats.RebalanceStats
-	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.ActGlobalReb)
+func getXactionRebalance(proxyURL string) (map[string][]stats.RebalanceTargetStats, error) {
+	var rebalanceStats map[string][]stats.RebalanceTargetStats
+	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.ActGlobalReb, cmn.ActXactStats, "")
 	if err != nil {
 		return rebalanceStats, err
 	}

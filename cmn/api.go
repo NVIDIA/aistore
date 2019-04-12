@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // string enum: http header, checksum, versioning
@@ -40,12 +42,36 @@ type ActionMsg struct {
 	Value  interface{} `json:"value"`
 }
 
+type XactKindMeta struct {
+	IsGlobal bool
+}
+
+type XactKindType map[string]XactKindMeta
+
+var XactKind = XactKindType{
+	// global kinds
+	ActLRU:          {true},
+	ActElection:     {true},
+	ActLocalReb:     {true},
+	ActGlobalReb:    {true},
+	ActPrefetch:     {true},
+	ActDownload:     {true},
+	ActEvictObjects: {true},
+	ActDelete:       {true},
+
+	// bucket's kinds
+	ActECGet:       {},
+	ActECPut:       {},
+	ActECRespond:   {},
+	ActMakeNCopies: {},
+	ActPutCopies:   {},
+}
+
 // ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown     = "shutdown"
 	ActGlobalReb    = "rebalance"      // global cluster-wide rebalance
 	ActLocalReb     = "localrebalance" // local rebalance
-	ActRechecksum   = "rechecksum"
 	ActLRU          = "lru"
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
@@ -82,6 +108,11 @@ const (
 	ActMountpathDisable = "disable"
 	ActMountpathAdd     = "add"
 	ActMountpathRemove  = "remove"
+
+	// Actions for xactions
+	ActXactStats = "stats"
+	ActXactStop  = "stop"
+	ActXactStart = "start"
 
 	// auxiliary actions
 	ActPersist = "persist" // store a piece of metadata or configuration
@@ -228,6 +259,11 @@ type RangeMsg struct {
 type MountpathList struct {
 	Available []string `json:"available"`
 	Disabled  []string `json:"disabled"`
+}
+
+type XactionExtMsg struct {
+	Target string `json:"target,omitempty"`
+	Bucket string `json:"bucket,omitempty"`
 }
 
 //===================
@@ -796,11 +832,6 @@ func (b *DlCloudBody) Describe() string {
 }
 
 const (
-	// Used by various Xaction APIs
-	XactionRebalance = ActGlobalReb
-	XactionPrefetch  = ActPrefetch
-	XactionDownload  = ActDownload
-
 	// Denote the status of an Xaction
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
@@ -984,6 +1015,29 @@ func validateCloudProvider(provider string, bckIsLocal bool) error {
 		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", ProviderAIS)
 	}
 	return nil
+}
+
+func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
+	xactMsg := &XactionExtMsg{}
+	xactMsgJSON, err := jsoniter.Marshal(actionMsg.Value)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal action message: %v. error: %v", actionMsg, err)
+	}
+	if err = jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
+		return nil, err
+	}
+
+	return xactMsg, nil
+}
+
+func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
+	kindMeta, ok := k[kind]
+
+	if !ok {
+		return false, fmt.Errorf("xaction kind %s not recognized", kind)
+	}
+
+	return kindMeta.IsGlobal, nil
 }
 
 // Common errors

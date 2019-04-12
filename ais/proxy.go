@@ -2477,30 +2477,35 @@ func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return false
 	}
-	var (
-		jsbytes []byte
-		err     error
-		kind    = r.URL.Query().Get(cmn.URLParamProps)
-	)
-	if kind == cmn.ActGlobalReb || kind == cmn.ActPrefetch {
-		outputXactionStats := &stats.XactionStats{}
-		outputXactionStats.Kind = kind
-		outputXactionStats.TargetStats = results
-		jsbytes, err = jsoniter.Marshal(outputXactionStats)
-	} else {
-		jsbytes, err = jsoniter.Marshal(results)
-	}
+
+	jsbytes, err := jsoniter.Marshal(results)
 	cmn.AssertNoErr(err)
 	return p.writeJSON(w, r, jsbytes, "getXaction")
 }
 
 func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	smapX := p.smapowner.get()
+
+	var (
+		msgBody []byte
+		errstr  string
+		err     error
+	)
+
+	if r.Body != nil {
+		msgBody, errstr, err = cmn.ReadBytes(r)
+
+		if err != nil {
+			p.invalmsghdlr(w, r, errstr)
+			return nil, false
+		}
+	}
+
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
 		r.URL.Query(),
 		r.Method,
-		nil, // message
+		msgBody, // message
 		smapX,
 		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,

@@ -257,43 +257,6 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 }
 
 //
-// xaction
-//
-
-func (r *Trunner) GetPrefetchStats(allXactionDetails []XactionDetails) []byte {
-	v := r.Core.Tracker[PrefetchCount]
-	v.RLock()
-	prefetchXactionStats := PrefetchTargetStats{
-		Xactions:           allXactionDetails,
-		NumBytesPrefetched: r.Core.Tracker[PrefetchCount].Value,
-		NumFilesPrefetched: r.Core.Tracker[PrefetchSize].Value,
-	}
-	v.RUnlock()
-	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
-	cmn.AssertNoErr(err)
-	return jsonBytes
-}
-
-func (r *Trunner) GetRebalanceStats(allXactionDetails []XactionDetails) []byte {
-	vr := r.Core.Tracker[RxCount]
-	vt := r.Core.Tracker[TxCount]
-	vr.RLock()
-	vt.RLock()
-	rebalanceXactionStats := RebalanceTargetStats{
-		Xactions:     allXactionDetails,
-		NumRecvBytes: r.Core.Tracker[RxSize].Value,
-		NumRecvFiles: r.Core.Tracker[RxCount].Value,
-		NumSentBytes: r.Core.Tracker[TxSize].Value,
-		NumSentFiles: r.Core.Tracker[TxCount].Value,
-	}
-	vt.RUnlock()
-	vr.RUnlock()
-	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
-	cmn.AssertNoErr(err)
-	return jsonBytes
-}
-
-//
 // misc
 //
 

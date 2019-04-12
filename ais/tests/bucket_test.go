@@ -519,17 +519,17 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 	timedout := 60 // seconds
 	ok := false
 	for i := 0; i < timedout+1; i++ {
-		var allDetails = make(map[string][]stats.XactionDetails) // TODO: missing API
+		var allDetails = make(map[string][]stats.BaseXactStats) // TODO: missing API
 		time.Sleep(time.Second)
 
-		responseBytes, err := tutils.GetXactionResponse(baseParams.URL, cmn.ActMakeNCopies)
+		responseBytes, err := tutils.GetXactionResponse(baseParams.URL, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
 		tutils.CheckFatal(err, t)
 		err = json.Unmarshal(responseBytes, &allDetails)
 		tutils.CheckFatal(err, t)
 		ok = true
 		for tid := range allDetails {
 			detail := allDetails[tid][0] // TODO
-			if detail.Status == cmn.XactionStatusInProgress {
+			if detail.Status() == cmn.XactionStatusInProgress {
 				ok = false
 				break
 			}

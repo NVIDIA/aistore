@@ -8,42 +8,100 @@ package stats
 import (
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
-type (
-	XactionStats struct {
-		Kind        string                         `json:"kind"`
-		TargetStats map[string]jsoniter.RawMessage `json:"target"`
-	}
-	// FIXME: redundant vs. XactBase
-	XactionDetails struct {
-		ID        int64     `json:"id"`
-		Kind      string    `json:"kind"`
-		Bucket    string    `json:"bucket"`
-		StartTime time.Time `json:"startTime"`
-		EndTime   time.Time `json:"endTime"`
-		Status    string    `json:"status"`
-	}
+type XactStats interface {
+	Count() int64
+	ID() int64
+	Kind() string
+	Bucket() string
+	StartTime() time.Time
+	EndTime() time.Time
+	Status() string
+}
 
-	RebalanceTargetStats struct {
-		Xactions     []XactionDetails `json:"xactionDetails"`
-		NumSentFiles int64            `json:"numSentFiles"`
-		NumSentBytes int64            `json:"numSentBytes"`
-		NumRecvFiles int64            `json:"numRecvFiles"`
-		NumRecvBytes int64            `json:"numRecvBytes"`
+type BaseXactStats struct {
+	IDX        int64     `json:"id"`
+	KindX      string    `json:"kind"`
+	BucketX    string    `json:"bucket"`
+	StartTimeX time.Time `json:"start_time"`
+	EndTimeX   time.Time `json:"end_time"`
+	StatusX    string    `json:"status"`
+	XactCountX int64     `json:"count"`
+}
+
+// Used to cast to generic stats type, with some more information in ext
+//nolint:unused
+type BaseXactStatsExt struct {
+	BaseXactStats
+	Ext interface{} `json:"ext"`
+}
+
+func (b *BaseXactStats) Count() int64 {
+	return b.XactCountX
+}
+func (b *BaseXactStats) ID() int64            { return b.IDX }
+func (b *BaseXactStats) Kind() string         { return b.KindX }
+func (b *BaseXactStats) Bucket() string       { return b.BucketX }
+func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
+func (b *BaseXactStats) EndTime() time.Time   { return b.EndTimeX }
+func (b *BaseXactStats) Status() string       { return b.StatusX }
+func (b *BaseXactStats) FromXact(xact cmn.Xact, bucket string) *BaseXactStats {
+	b.StatusX = cmn.XactionStatusInProgress
+	if xact.Finished() {
+		b.StatusX = cmn.XactionStatusCompleted
 	}
-	RebalanceStats struct {
-		Kind        string                          `json:"kind"`
-		TargetStats map[string]RebalanceTargetStats `json:"target"`
-	}
-	PrefetchTargetStats struct {
-		Xactions           []XactionDetails `json:"xactionDetails"`
-		NumFilesPrefetched int64            `json:"numFilesPrefetched"`
-		NumBytesPrefetched int64            `json:"numBytesPrefetched"`
-	}
-	PrefetchStats struct {
-		Kind        string                   `json:"kind"`
-		TargetStats map[string]PrefetchStats `json:"target"`
-	}
-)
+	b.IDX = xact.ID()
+	b.KindX = xact.Kind()
+	b.StartTimeX = xact.StartTime()
+	b.EndTimeX = xact.EndTime()
+	b.BucketX = bucket
+	return b
+}
+
+type RebalanceTargetStats struct {
+	BaseXactStats
+	Ext ExtRebalanceStats `json:"ext"`
+}
+
+type ExtRebalanceStats struct {
+	NumSentFiles int64 `json:"num_sent_files"`
+	NumSentBytes int64 `json:"num_sent_bytes"`
+	NumRecvFiles int64 `json:"num_recv_files"`
+	NumRecvBytes int64 `json:"num_recv_bytes"`
+}
+
+func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {
+	vr := r.Core.Tracker[RxCount]
+	vt := r.Core.Tracker[TxCount]
+	vr.RLock()
+	vt.RLock()
+
+	s.Ext.NumRecvBytes = r.Core.Tracker[RxSize].Value
+	s.Ext.NumRecvFiles = r.Core.Tracker[RxCount].Value
+	s.Ext.NumSentBytes = r.Core.Tracker[TxSize].Value
+	s.Ext.NumSentFiles = r.Core.Tracker[TxCount].Value
+
+	vt.RUnlock()
+	vr.RUnlock()
+}
+
+type PrefetchTargetStats struct {
+	BaseXactStats
+	Ext ExtPrefetchStats `json:"ext"`
+}
+
+type ExtPrefetchStats struct {
+	NumFilesPrefetched int64 `json:"num_files_prefetched"`
+	NumBytesPrefetched int64 `json:"num_bytes_prefetched"`
+}
+
+func (s *PrefetchTargetStats) FillFromTrunner(r *Trunner) {
+	v := r.Core.Tracker[PrefetchCount]
+	v.RLock()
+
+	s.Ext.NumBytesPrefetched = r.Core.Tracker[PrefetchCount].Value
+	s.Ext.NumFilesPrefetched = r.Core.Tracker[PrefetchSize].Value
+	v.RUnlock()
+}

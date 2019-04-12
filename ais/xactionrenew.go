@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -17,20 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/mirror"
 )
-
-type xactEntry interface {
-	Get() cmn.Xact
-	Abort()
-	RLock()
-	RUnlock()
-	Lock()
-	Unlock()
-	Stats() xactStats
-}
-
-type xactStats interface {
-	Count() int64
-}
 
 // RENEW FUNCTIONS
 
@@ -274,6 +261,7 @@ func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bucket)
 	go xec.Run()
 	entry.xact = xec
+	entry.bucket = bucket
 	r.byID.Store(id, entry)
 	return xec
 }
@@ -306,6 +294,7 @@ func (r *xactionsRegistry) renewPutEC(bucket string) *ec.XactPut {
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bucket)
 	go xec.Run()
 	entry.xact = xec
+	entry.bucket = bucket
 	r.byID.Store(id, entry)
 	return xec
 }
@@ -338,6 +327,7 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bucket)
 	go xec.Run()
 	entry.xact = xec
+	entry.bucket = bucket
 	r.byID.Store(id, entry)
 	return xec
 }
@@ -381,6 +371,7 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 
 	go xmnc.Run()
 	entry.xact = xmnc
+	entry.bucket = bucket
 	r.byID.Store(id, entry)
 }
 
@@ -434,6 +425,7 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 		xcopy = nil
 	} else {
 		newEntry.xact = xcopy
+		newEntry.bucket = lom.Bucket
 		r.byID.Store(id, newEntry)
 	}
 	return xcopy
@@ -464,22 +456,21 @@ func makeXactRebBase(id int64, rebType int, runnerCnt int) xactRebBase {
 type (
 	baseXactEntry struct {
 		sync.RWMutex
-		baseXactStats
-	}
-	baseXactStats struct {
-		count int64
+		stats stats.BaseXactStats
 	}
 	lruEntry struct {
 		baseXactEntry
 		xact *xactLRU
 	}
 	prefetchEntry struct {
-		baseXactEntry
-		xact *xactPrefetch
+		sync.RWMutex
+		stats stats.PrefetchTargetStats
+		xact  *xactPrefetch
 	}
 	globalRebEntry struct {
-		baseXactEntry
-		xact *xactGlobalReb
+		sync.RWMutex
+		stats stats.RebalanceTargetStats
+		xact  *xactGlobalReb
 	}
 	localRebEntry struct {
 		baseXactEntry
@@ -499,37 +490,65 @@ type (
 	}
 	getECEntry struct {
 		baseXactEntry
-		xact *ec.XactGet
+		xact   *ec.XactGet
+		bucket string
 	}
 	putECEntry struct {
 		baseXactEntry
-		xact *ec.XactPut
+		xact   *ec.XactPut
+		bucket string
 	}
 	respondECEntry struct {
 		baseXactEntry
-		xact *ec.XactRespond
+		xact   *ec.XactRespond
+		bucket string
 	}
 	putCopiesEntry struct {
 		baseXactEntry
-		xact *mirror.XactCopy
+		xact   *mirror.XactCopy
+		bucket string
+	}
+
+	makeNCopiesEntry struct {
+		baseXactEntry
+		xact   *mirror.XactBckMakeNCopies
+		bucket string
 	}
 )
 
-func (b baseXactStats) Count() int64 {
-	return b.count
+type xactEntry interface {
+	Get() cmn.Xact
+	Abort()
+	RLock()
+	RUnlock()
+	Lock()
+	Unlock()
+	Stats() stats.XactStats
 }
 
 func (e *lruEntry) Get() cmn.Xact { return e.xact }
 
-func (e *lruEntry) Stats() xactStats { return e.baseXactStats }
+func (e *lruEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, "")
+	e.RUnlock()
+	return s
+}
 func (e *lruEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
 	}
 }
 
-func (e *prefetchEntry) Get() cmn.Xact    { return e.xact }
-func (e *prefetchEntry) Stats() xactStats { return e.baseXactStats }
+func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
+func (e *prefetchEntry) Stats() stats.XactStats {
+	e.RLock()
+	e.stats.FromXact(e.xact, "")
+	e.stats.FillFromTrunner(getstorstatsrunner())
+	s := &e.stats
+	e.RUnlock()
+	return s
+}
 
 func (e *prefetchEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -537,8 +556,15 @@ func (e *prefetchEntry) Abort() {
 	}
 }
 
-func (e *globalRebEntry) Get() cmn.Xact    { return e.xact }
-func (e *globalRebEntry) Stats() xactStats { return e.baseXactStats }
+func (e *globalRebEntry) Get() cmn.Xact { return e.xact }
+func (e *globalRebEntry) Stats() stats.XactStats {
+	e.RLock()
+	e.stats.FromXact(e.xact, "")
+	e.stats.FillFromTrunner(getstorstatsrunner())
+	s := &e.stats
+	e.RUnlock()
+	return s
+}
 
 func (e *globalRebEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -546,8 +572,13 @@ func (e *globalRebEntry) Abort() {
 	}
 }
 
-func (e *localRebEntry) Get() cmn.Xact    { return e.xact }
-func (e *localRebEntry) Stats() xactStats { return e.baseXactStats }
+func (e *localRebEntry) Get() cmn.Xact { return e.xact }
+func (e *localRebEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, "")
+	e.RUnlock()
+	return s
+}
 
 func (e *localRebEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -555,8 +586,13 @@ func (e *localRebEntry) Abort() {
 	}
 }
 
-func (e *electionEntry) Get() cmn.Xact    { return e.xact }
-func (e *electionEntry) Stats() xactStats { return e.baseXactStats }
+func (e *electionEntry) Get() cmn.Xact { return e.xact }
+func (e *electionEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, "")
+	e.RUnlock()
+	return s
+}
 
 func (e *electionEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -564,8 +600,13 @@ func (e *electionEntry) Abort() {
 	}
 }
 
-func (e *evictDeleteEntry) Get() cmn.Xact    { return e.xact }
-func (e *evictDeleteEntry) Stats() xactStats { return e.baseXactStats }
+func (e *evictDeleteEntry) Get() cmn.Xact { return e.xact }
+func (e *evictDeleteEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, "")
+	e.RUnlock()
+	return s
+}
 
 func (e *evictDeleteEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -574,8 +615,12 @@ func (e *evictDeleteEntry) Abort() {
 }
 
 func (e *downloaderEntry) Get() cmn.Xact { return e.xact }
-
-func (e *downloaderEntry) Stats() xactStats { return e.baseXactStats }
+func (e *downloaderEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, "")
+	e.RUnlock()
+	return s
+}
 func (e *downloaderEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
@@ -583,11 +628,12 @@ func (e *downloaderEntry) Abort() {
 }
 
 func (e *getECEntry) Get() cmn.Xact { return e.xact }
-func (e *getECEntry) Stats() xactStats {
+func (e *getECEntry) Stats() stats.XactStats {
 	e.RLock()
-	defer e.RUnlock()
-	e.baseXactStats.count = e.xact.Stats().GetReq
-	return e.baseXactStats
+	e.stats.XactCountX = e.xact.Stats().GetReq
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
 }
 func (e *getECEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
@@ -596,11 +642,12 @@ func (e *getECEntry) Abort() {
 }
 
 func (e *putECEntry) Get() cmn.Xact { return e.xact }
-func (e *putECEntry) Stats() xactStats {
+func (e *putECEntry) Stats() stats.XactStats {
 	e.RLock()
-	defer e.RUnlock()
-	e.baseXactStats.count = e.xact.Stats().PutReq
-	return e.baseXactStats
+	e.stats.XactCountX = e.xact.Stats().PutReq
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
 }
 
 func (e *putECEntry) Abort() {
@@ -609,29 +656,39 @@ func (e *putECEntry) Abort() {
 	}
 }
 
-func (e *respondECEntry) Get() cmn.Xact    { return e.xact }
-func (e *respondECEntry) Stats() xactStats { return e.baseXactStats }
+func (e *respondECEntry) Get() cmn.Xact { return e.xact }
+func (e *respondECEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
+}
 func (e *respondECEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
 	}
 }
 
-type makeNCopiesEntry struct {
-	baseXactEntry
-	xact *mirror.XactBckMakeNCopies
+func (e *makeNCopiesEntry) Get() cmn.Xact { return e.xact }
+func (e *makeNCopiesEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
 }
-
-func (e *makeNCopiesEntry) Get() cmn.Xact    { return e.xact }
-func (e *makeNCopiesEntry) Stats() xactStats { return e.baseXactStats }
 func (e *makeNCopiesEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
 	}
 }
 
-func (e *putCopiesEntry) Get() cmn.Xact    { return e.xact }
-func (e *putCopiesEntry) Stats() xactStats { return e.baseXactStats }
+func (e *putCopiesEntry) Get() cmn.Xact { return e.xact }
+func (e *putCopiesEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
+}
 func (e *putCopiesEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()

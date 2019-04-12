@@ -599,29 +599,28 @@ func UnregisterTarget(proxyURL, sid string) error {
 }
 
 // TODO: rename, and move to the api package
-func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
-	q := GetWhatRawQuery(cmn.GetWhatXaction, kind)
-	url := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), q)
-	r, err := HTTPClient.Get(url)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
+func GetXactionResponse(proxyURL string, kind, action, bucket string) ([]byte, error) {
+	q := GetWhatRawQuery(cmn.GetWhatXaction, "")
 
-	if err != nil {
-		return []byte{}, err
+	actMsg := &cmn.ActionMsg{
+		Action: action,
+		Name:   kind,
+		Value: cmn.XactionExtMsg{
+			Bucket: bucket,
+		},
 	}
 
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return []byte{},
-			fmt.Errorf("GET xaction, HTTP Status %d", r.StatusCode)
+	path := fmt.Sprintf("%s?%s", cmn.URLPath(cmn.Version, cmn.Cluster), q)
+	bs, err := jsoniter.Marshal(actMsg)
+	if err != nil {
+		return nil, err
 	}
 
-	var response []byte
-	response, err = ioutil.ReadAll(r.Body)
+	apiParams := BaseAPIParams(proxyURL)
+
+	response, err := api.DoHTTPRequest(apiParams, path, bs)
 	if err != nil {
-		return []byte{}, fmt.Errorf("failed to read response, err: %v", err)
+		return nil, fmt.Errorf("failed to read response, err: %v", err)
 	}
 
 	return response, nil

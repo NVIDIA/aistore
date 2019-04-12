@@ -192,6 +192,8 @@ func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {
 			}
 		}
 	}
+	r.Body.Close()
+
 	return b, errDetails, err
 }
 
