@@ -112,7 +112,6 @@ const (
 		" MaxTotal: {{$obj.MaxTotal}}\n"
 	PeriodConfTmpl = "\n{{$obj := .Periodic}}Period Config\n" +
 		" Stats Time: {{$obj.StatsTimeStr}}\n" +
-		" IO Stats Time: {{$obj.IostatTimeStr}}\n" +
 		" Retry Sync Time: {{$obj.RetrySyncTimeStr}}\n"
 	TimeoutConfTmpl = "\n{{$obj := .Timeout}}Timeout Config\n" +
 		" Default Timout: {{$obj.DefaultStr}}\n" +
@@ -131,14 +130,15 @@ const (
 		" Low WM: {{$obj.LowWM}}\n" +
 		" High WM: {{$obj.HighWM}}\n" +
 		" Out-of-Space: {{$obj.OOS}}\n" +
-		" Max Cache Entries: {{$obj.AtimeCacheMax}}\n" +
 		" Dont Evict Time: {{$obj.DontEvictTimeStr}}\n" +
 		" Capacity Update Time: {{$obj.CapacityUpdTimeStr}}\n" +
 		" Local Buckets: {{$obj.LocalBuckets}}\n" +
 		" Enabled: {{$obj.Enabled}}\n"
-	XactionConfTmpl = "\n{{$obj := .Xaction}}Xaction Config\n" +
+	DiskConfTmpl = "\n{{$obj := .Disk}}Disk Config\n" +
 		" Disk Until Low WM: {{$obj.DiskUtilLowWM}}\n" +
-		" Disk Until High WM: {{$obj.DiskUtilHighWM}}\n"
+		" Disk Until High WM: {{$obj.DiskUtilHighWM}}\n" +
+		" IO Stats Time Long: {{$obj.IostatTimeLongStr}}\n" +
+		" IO Stats Time Short: {{$obj.IostatTimeShortStr}}\n"
 	RebalanceConfTmpl = "\n{{$obj := .Rebalance}}Rebalance Config\n" +
 		" Destination Retry Time: {{$obj.DestRetryTimeStr}}\n" +
 		" Enabled: {{$obj.Enabled}}\n"
@@ -153,7 +153,6 @@ const (
 		" Validate Cluster Migration: {{$obj.ValidateClusterMigration}}\n" +
 		" Enable Read Range: {{$obj.EnableReadRange}}\n"
 	VerConfTmpl = "\n{{$obj := .Ver}}Version Config\n" +
-		" Versioning: {{$obj.Versioning}}\n" +
 		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n"
 	FSpathsConfTmpl = "\n{{$obj := .FSpaths}}File System Paths Config\n" +
 		"{{range $key, $val := $obj}}" +
@@ -202,7 +201,7 @@ const (
 
 	ConfigTmpl = "\nConfig Directory: {{.Confdir}}\t Cloud Provider: {{.CloudProvider}}\n" +
 		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
-		ProxyConfTmpl + LRUConfTmpl + XactionConfTmpl + RebalanceConfTmpl +
+		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
 

@@ -249,13 +249,13 @@ func (j *jogger) addCopies(lom *cluster.LOM) (err error) {
 
 // [throttle]
 func (j *jogger) yieldTerm() error {
-	xaction := &j.config.Xaction
+	diskConf := &j.config.Disk
 	select {
 	case <-j.stopCh:
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
 	default:
-		_, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
-		if curr.Max >= float32(xaction.DiskUtilHighWM) && curr.Min > float32(xaction.DiskUtilLowWM) {
+		curr := j.mpathInfo.Iostat.GetDiskUtil()
+		if curr >= diskConf.DiskUtilHighWM {
 			time.Sleep(cmn.ThrottleSleepAvg)
 		} else {
 			time.Sleep(cmn.ThrottleSleepMin)

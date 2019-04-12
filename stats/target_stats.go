@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"fmt"
 	"strings"
 	"syscall"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -64,7 +64,6 @@ type (
 	Trunner struct {
 		statsRunner
 		T        cluster.Target         `json:"-"`
-		Riostat  *ios.IostatRunner      `json:"-"`
 		Core     *CoreStats             `json:"core"`
 		Capacity map[string]*fscapacity `json:"capacity"`
 		// inner state
@@ -139,9 +138,10 @@ func (r *Trunner) log() (runlru bool) {
 	}
 
 	// 2. capacity
+	availableMountpaths, _ := fs.Mountpaths.Get()
 	r.timecounts.capIdx++
 	if r.timecounts.capIdx >= r.timecounts.capLimit {
-		runlru = r.UpdateCapacityOOS()
+		runlru = r.UpdateCapacityOOS(availableMountpaths)
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
 			b, err := jsoniter.Marshal(fsCapacity)
@@ -151,7 +151,16 @@ func (r *Trunner) log() (runlru bool) {
 		}
 	}
 
-	// 3. log
+	// 3. io stats
+	for mpath, mpathInfo := range availableMountpaths {
+		ioStr := mpathInfo.Iostat.ToString()
+		if ioStr != "" {
+			ioStr = fmt.Sprintf("%s: %s", mpath, ioStr)
+			r.lines = append(r.lines, ioStr)
+		}
+	}
+
+	// 4. log
 	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}
@@ -172,18 +181,21 @@ func (r *Trunner) housekeep(runlru bool) {
 	r.statsRunner.housekeep(runlru)
 }
 
-func (r *Trunner) UpdateCapacityOOS() (runlru bool) {
-	var (
-		config                 = cmn.GCO.Get()
+func (r *Trunner) UpdateCapacityOOS(availableMountpaths map[string]*fs.MountpathInfo) (runlru bool) {
+	if availableMountpaths == nil {
 		availableMountpaths, _ = fs.Mountpaths.Get()
-		usedNow                int32
-		l                      = len(availableMountpaths)
-		_, oosPrv              = r.T.AvgCapUsed(config)
+	}
+	var (
+		config    = cmn.GCO.Get()
+		usedNow   int32
+		l         = len(availableMountpaths)
+		_, oosPrv = r.T.AvgCapUsed(config)
 	)
 	if l == 0 {
 		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
 		return
 	}
+
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
 	for mpath := range availableMountpaths {
 		statfs := &syscall.Statfs_t{}

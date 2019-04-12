@@ -12,7 +12,8 @@ export PROXY=`cat ./inventory/proxy.txt`
 export PROXYURL='http://'$PROXY':8081'
 export GRAPHITE_SERVER=`cat ./inventory/graphana.txt`
 
-export IOSTAT_TIME=1s
+export IOSTAT_TIME_LONG=1s
+export IOSTAT_TIME_SHORT=100ms
 export MIRROR_UTIL_THRESH=15
 FSP=
 for disk in "$@"; do

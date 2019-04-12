@@ -1,9 +1,8 @@
-// Package ios is a collection of interfaces to the local storage subsystem;
-// the package includes OS-dependent implementations for those interfaces.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
  */
-package ios
+package fs
 
 import (
 	"os"
@@ -12,31 +11,34 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	jsoniter "github.com/json-iterator/go"
 )
 
+// test file for ios/dutils_linux.go
+// placed here because it requires fs to set up the testing environment
+
 func init() {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 }
 
 func TestGetDiskFromFileSystem(t *testing.T) {
 	path := "/tmp"
-	fileSystem, err := fs.Fqn2fsAtStartup(path)
+	fileSystem, err := Fqn2fsAtStartup(path)
 	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
-	disks := fs2disks(fileSystem)
+	disks := ios.Fs2disks(fileSystem)
 	if len(disks) == 0 {
 		t.Errorf("Invalid FS disks: [%s]", fileSystem)
 	}
 
 	path = "asdasd"
-	fileSystem, err = fs.Fqn2fsAtStartup(path)
+	fileSystem, err = Fqn2fsAtStartup(path)
 	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
-	disks = fs2disks(path)
+	disks = ios.Fs2disks(path)
 	if len(disks) != 0 {
 		t.Errorf("Invalid FS disks: [%s]", fileSystem)
 	}
@@ -68,7 +70,7 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to marshal input json. Error: [%v]", err)
 	}
-	disks := lsblkOutput2disks(bytes, "md0")
+	disks := ios.LsblkOutput2disks(bytes, "md0")
 	if len(disks) != 2 {
 		t.Errorf("Invalid number of disks returned. Disks: [%v]", disks)
 	}
@@ -78,7 +80,7 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 	if _, ok := disks["xvdd"]; !ok {
 		t.Errorf("Expected disk [xvdd] not returned. Disks: [%v]", disks)
 	}
-	disks = lsblkOutput2disks(bytes, "xvda1")
+	disks = ios.LsblkOutput2disks(bytes, "xvda1")
 	if len(disks) != 1 {
 		t.Errorf("Invalid number of disks returned. Disks: [%v]", disks)
 	}
@@ -88,101 +90,101 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 }
 
 func TestSearchValidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	oldMPs := setAvailableMountPaths("/")
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/abc")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	oldMPs := setAvailableMountPaths("/")
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	oldMPs := setAvailableMountPaths("")
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
 
 	oldMPs := setAvailableMountPaths("/tmp", "/tmp/x")
 
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/xabc")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/tmp/xabc")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/x/abc")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/tmp/x/abc")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSimilarCases(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
 
 	oldMPs := setAvailableMountPaths("/tmp/abc")
 
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp/abc")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("/tmp/abc")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/abc/")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/tmp/abc/")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/abx")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/abx")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "/abx")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS()
+	Mountpaths = NewMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("/tmp")
 	longestPrefix := mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/tmp/")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/tmp/")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _ = fs.Mountpaths.Path2MpathInfo("/abx")
+	mpathInfo, _ = Mountpaths.Path2MpathInfo("/abx")
 	longestPrefix = mpathInfo.Path
 	tassert.Errorf(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func setAvailableMountPaths(paths ...string) []string {
-	fs.Mountpaths.DisableFsIDCheck()
+	Mountpaths.DisableFsIDCheck()
 
-	availablePaths, _ := fs.Mountpaths.Get()
+	availablePaths, _ := Mountpaths.Get()
 	oldPaths := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		oldPaths = append(oldPaths, mpathInfo.Path)
 	}
 
 	for _, mpathInfo := range availablePaths {
-		fs.Mountpaths.Remove(mpathInfo.Path)
+		Mountpaths.Remove(mpathInfo.Path)
 	}
 
 	for _, path := range paths {
@@ -190,7 +192,7 @@ func setAvailableMountPaths(paths ...string) []string {
 			continue
 		}
 
-		fs.Mountpaths.Add(path)
+		Mountpaths.Add(path)
 	}
 
 	return oldPaths
@@ -254,7 +256,7 @@ func TestLsblk(t *testing.T) {
 
 	for _, tst := range testSets {
 		t.Log(tst.desc)
-		disks := lsblkOutput2disks(out, tst.dev)
+		disks := ios.LsblkOutput2disks(out, tst.dev)
 		if len(disks) != tst.diskCnt {
 			t.Errorf("Expected %d disk(s) for %s but found %d (%v)",
 				tst.diskCnt, tst.dev, len(disks), disks)

@@ -5,8 +5,6 @@
 package fs
 
 import (
-	"fmt"
-	"math"
 	"os"
 	"testing"
 
@@ -293,54 +291,6 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 	}
 
 	assertMountpathCount(t, mfs, 1, 1)
-}
-
-func TestStoreLoadIostat(t *testing.T) {
-	mfs := NewMountedFS()
-	err := mfs.Add("/tmp")
-	if err != nil {
-		t.Error("adding existing mountpath failed")
-	}
-	availableMountpaths, _ := mfs.Get()
-	mi, ok := availableMountpaths["/tmp"]
-	if !ok {
-		t.Fatal("Expecting to get /tmp")
-	}
-	mi.SetIOstats(1, StatDiskUtil, 0.7)
-	mi.SetIOstats(1, StatDiskIOms, 1.3)
-	mi.SetIOstats(2, StatDiskUtil, 1.4)
-	mi.SetIOstats(2, StatDiskIOms, 2.6)
-
-	//
-	// test various min/max, previous/current transitions
-	//
-	prev, curr := mi.GetIOstats(StatDiskUtil)
-	if prev.Min != 0.7 || curr.Min != 1.4 {
-		t.Errorf("Wrong util stats [%s:%s], expecting (0.7, 1.4)", prev, curr)
-	}
-	if prev.Max != 0.7 || curr.Max != 1.4 {
-		t.Errorf("Wrong util stats [%s:%s], expecting (0.7, 1.4)", prev, curr)
-	}
-	mi.SetIOstats(2, StatDiskUtil, math.E)
-
-	prev, curr = mi.GetIOstats(StatDiskUtil)
-	if prev.Min != 0.7 || prev.Max != 0.7 {
-		t.Errorf("Wrong prev stats %s, expecting (0.7, 0.7)", prev)
-	}
-	if curr.Min != 1.4 || curr.Max != math.E {
-		t.Errorf("Wrong curr stats %s, expecting (0.7, 0.7)", curr)
-	}
-	mi.SetIOstats(2, StatDiskIOms, math.Pi/3)
-	prev, curr = mi.GetIOstats(StatDiskIOms)
-	if prev.Min != 1.3 || curr.Min != math.Pi/3 {
-		t.Errorf("Wrong stats [%s:%s], expecting (min=1.3, min=%f)", prev, curr, math.Pi/3)
-	}
-	mi.SetIOstats(3, StatDiskIOms, math.Pi)
-	prev, curr = mi.GetIOstats(StatDiskIOms)
-	if prev.Min != math.Pi/3 || prev.Max != 2.6 || curr.Max != math.Pi {
-		t.Errorf("Wrong stats [%s:%s], expecting (%f, %f)", prev, curr, math.Pi/3, math.Pi)
-	}
-	fmt.Println("Success:", mi)
 }
 
 func assertMountpathCount(t *testing.T, mfs *MountedFS, availableCount, disabledCount int) {

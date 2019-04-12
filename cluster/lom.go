@@ -325,21 +325,22 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 		return
 	}
 	var mp *fs.MountpathInfo
-	_, u := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-	umin := u
+	utilMin := lom.ParsedFQN.MpathInfo.Iostat.GetDiskUtil()
 	for _, cpyfqn := range lom.md.copyFQN {
+		if utilMin < lom.MirrorConf().UtilThresh {
+			break
+		}
+
 		parsedCpyFQN, err := fs.Mountpaths.FQN2Info(cpyfqn)
 		if err != nil {
 			glog.Errorln(err)
 			return
 		}
-		_, uc := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
-		if uc.Max < u.Max-float32(lom.MirrorConf().UtilThresh) && uc.Min <= u.Min {
-			if uc.Max < umin.Max && uc.Min <= umin.Min {
-				fqn = cpyfqn
-				umin = uc
-				mp = parsedCpyFQN.MpathInfo
-			}
+		utilCur := parsedCpyFQN.MpathInfo.Iostat.GetDiskUtil()
+		if utilCur < utilMin {
+			fqn = cpyfqn
+			utilMin = utilCur
+			mp = parsedCpyFQN.MpathInfo
 		}
 	}
 	if mp != nil && bool(glog.V(4)) {

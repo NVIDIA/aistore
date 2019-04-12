@@ -23,9 +23,8 @@
 		"max_total": 67108864
 	},
 	"periodic": {
-		"stats_time":		"10s",
-		"iostat_time":		"{{ .Values.common_config.periodic.iostat_time }}",
-		"retry_sync_time":	"2s"
+		"stats_time":        "10s",
+		"retry_sync_time":   "2s"
 	},
 	"timeout": {
 		"default_timeout":	"10s",
@@ -53,9 +52,11 @@
 		"local_buckets": false,
 		"enabled":  	true
 	},
-	"xaction":{
+	"disk":{
 	    "disk_util_low_wm":      20,
-	    "disk_util_high_wm":     80
+		"disk_util_high_wm":     80,
+		"iostat_time_long":  "{{ .Values.common_config.disk.iostat_time_long }}",
+		"iostat_time_short": "{{ .Values.common_config.disk.iostat_time_short }}"
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",

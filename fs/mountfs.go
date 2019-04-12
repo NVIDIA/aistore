@@ -11,11 +11,13 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -27,12 +29,6 @@ const (
 	Remove  = "remove-mp"
 	Enable  = "enable-mp"
 	Disable = "disable-mp"
-)
-
-// filesystem utilization enum (<- iostat)
-const (
-	StatDiskUtil = "dutil"
-	StatDiskIOms = "dioms"
 )
 
 // lomcache mask & number of those caches
@@ -72,26 +68,17 @@ type (
 		Fsid       syscall.Fsid
 		FileSystem string
 		PathDigest uint64
+		Iostat     *ios.IostatContext
 
 		// atomic, only increasing counter to prevent name conflicts
 		// see: FastRemoveDir method
 		removeDirCounter atomic.Uint64
-
-		// FileSystem utilization represented as utilizations and queue lengths
-		// of the underlying disks, where cmn.PairF32 structs atomically store
-		// the corresponding float32 bits.
-		iostats map[string]*iotracker
-		ioepoch map[string]int64
 
 		// LOM caches
 		lomcaches [LomCacheMask + 1]LomCache
 	}
 	LomCache struct {
 		M sync.Map
-	}
-	iotracker struct {
-		prev *atomic.PairF32
-		curr *atomic.PairF32
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -121,13 +108,6 @@ func MountpathRem(p string) ChangeReq { return ChangeReq{Action: Remove, Path: p
 func MountpathEnb(p string) ChangeReq { return ChangeReq{Action: Enable, Path: p} }
 func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: p} }
 
-func newIotracker() *iotracker {
-	return &iotracker{
-		prev: atomic.NewPairF32(),
-		curr: atomic.NewPairF32(),
-	}
-}
-
 //
 // MountpathInfo
 //
@@ -140,11 +120,8 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
-		iostats:    make(map[string]*iotracker, 2),
-		ioepoch:    make(map[string]int64, 2),
+		Iostat:     ios.NewIostatContext(fs),
 	}
-	mi.iostats[StatDiskUtil] = newIotracker()
-	mi.iostats[StatDiskIOms] = newIotracker()
 	return mi
 }
 
@@ -178,49 +155,16 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	return nil
 }
 
-// GetIOStats returns the most recently updated previous/current
-func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
-	cmn.Assert(name == StatDiskUtil || name == StatDiskIOms)
-	tracker := mi.iostats[name]
-	return cmn.NewPairF32(tracker.prev), cmn.NewPairF32(tracker.curr)
-}
-
-func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
+func (mi *MountpathInfo) IsIdle(config *cmn.Config, timestamp time.Time) bool {
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	prev, curr := mi.GetIOstats(StatDiskUtil)
-	return prev.Max >= 0 && prev.Max < float32(config.Xaction.DiskUtilLowWM) &&
-		curr.Max >= 0 && curr.Max < float32(config.Xaction.DiskUtilLowWM)
-}
-
-// SetIOstats is called by the iostat runner directly to fill-in the most recently
-// updated utilizations and queue lengths of the disks used by this mountpath
-// (or, more precisely, the underlying local FS)
-func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
-	tracker := mi.iostats[name]
-	if mi.ioepoch[name] < epoch {
-		// current => prev, f => curr, mi.epoch = epoch
-		curr := tracker.curr
-		curr.CopyTo(tracker.prev)
-		curr.Init(f)
-		mi.ioepoch[name] = epoch
-	} else {
-		// curr min/max
-		curr := tracker.curr
-		min, max := curr.Load()
-		if max < f {
-			curr.Max.Store(f)
-		} else if min > f {
-			curr.Min.Store(f)
-		}
-	}
+	curr := mi.Iostat.GetDiskUtil(timestamp)
+	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
 func (mi *MountpathInfo) String() string {
-	_, u := mi.GetIOstats(StatDiskUtil)
-	_, io := mi.GetIOstats(StatDiskIOms)
-	return fmt.Sprintf("mp[%s, fs=%s, util=%s, io(ms)=%s]", mi.Path, mi.FileSystem, u, io)
+	return fmt.Sprintf("mp[%s, fs=%s, iostat=(%v)]", mi.Path, mi.FileSystem, mi.Iostat)
 }
 
 // returns fqn for a given content-type

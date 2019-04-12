@@ -147,7 +147,7 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 // load balancing decision must (... TODO ...) be configurable and a function of:
 // - current utilization (%) of the filesystem's disks;
 // - current disk queue lengths and their respective minimums and maximums during
-//   the reporting period (config.Periodic.IostatTime);
+//   the reporting period (config.Periodic.IostatTimeLong);
 // - previous values of the same, and their corresponding averages.
 //
 // Further, load balancers must take into account relative priorities of

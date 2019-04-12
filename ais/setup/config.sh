@@ -23,9 +23,8 @@ cat > $CONFFILE <<EOL
 		"max_total": 67108864
 	},
 	"periodic": {
-		"stats_time":		"10s",
-		"iostat_time":		"${IOSTAT_TIME:-2s}",
-		"retry_sync_time":	"2s"
+		"stats_time":        "10s",
+		"retry_sync_time":   "2s"
 	},
 	"timeout": {
 		"default_timeout":	"10s",
@@ -52,7 +51,9 @@ cat > $CONFFILE <<EOL
 		"local_buckets":	false,
 		"enabled":		true
 	},
-	"xaction":{
+	"disk":{
+	    "iostat_time_long":  "${IOSTAT_TIME_LONG:-2s}",
+	    "iostat_time_short": "${IOSTAT_TIME_SHORT:-100ms}",
 	    "disk_util_low_wm":  20,
 	    "disk_util_high_wm": 80
 	},

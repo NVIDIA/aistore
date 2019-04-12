@@ -1,13 +1,13 @@
 if [[ "$#" < 1 ]]; then
     # print all mountpoints
     echo "available mountpoints (pass as args to run):"
-    lsblk | grep -e "disk" -e "part" | awk '{print $7}' | grep -ve "^$"
+    lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$"
     exit 0
 fi
 
 for mountpoint in "$@"
 do
-    lsblk | grep -e "disk" -e "part" | awk '{print $7}' | grep -ve "^$" | grep -Fx "${mountpoint}" &> /dev/null
+    lsblk | grep -e "disk" -e "raid" -e "part" | awk '{print $7}' | grep -ve "^$" | grep -Fx "${mountpoint}" &> /dev/null
     if [[ "$?" -ne 0 ]]; then
       echo "${mountpoint} is not in a valid mountpoint (re-run without args to get list)"
       exit 1

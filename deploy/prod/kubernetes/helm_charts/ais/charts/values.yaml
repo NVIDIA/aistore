@@ -37,8 +37,9 @@ common_config:
   log:
     dir: /var/log/ais
     level : 3
-  periodic:
-    iostat_time: "2s"
+  disk:
+    iostat_time_long: "2s"
+    iostat_time_short: "100ms"
   auth:
     secret        : aBitLongSecretKey
     enabled       : false

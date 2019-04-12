@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
@@ -31,7 +30,6 @@ const (
 	xstorstats       = "storstats"
 	xproxykeepalive  = "proxykeepalive"
 	xtargetkeepalive = "targetkeepalive"
-	xiostat          = "iostat"
 	xlomcache        = "lomcache"
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
@@ -219,11 +217,6 @@ func aisinit(version, build string) {
 
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
-		// iostat is required: ensure that it is installed and its version is right
-		if err := ios.CheckIostatVersion(); err != nil {
-			glog.Exit(err)
-		}
-
 		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
 
 		// system-wide gen-purpose memory manager and slab/SGL allocator
@@ -253,11 +246,6 @@ func aisinit(version, build string) {
 			}
 		}
 
-		iostat := ios.NewIostatRunner()
-		ctx.rg.add(iostat, xiostat)
-		t.fsprg.Reg(iostat)
-		ts.Riostat = iostat
-
 		fshc := health.NewFSHC(fs.Mountpaths, gmem2, fs.CSM)
 		ctx.rg.add(fshc, xfshc)
 		t.fsprg.Reg(fshc)
@@ -274,7 +262,7 @@ func aisinit(version, build string) {
 		lct := cluster.NewLomCacheRunner(gmem2, t)
 		ctx.rg.add(lct, xlomcache)
 
-		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init
+		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 

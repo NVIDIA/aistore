@@ -21,7 +21,7 @@ type mpather interface {
 }
 
 func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {
-	var util = cmn.PairF32{101, 101}
+	var util int64 = 101
 loop:
 	for _, j := range mpathers {
 		mpathInfo := j.mountpathInfo()
@@ -40,7 +40,7 @@ loop:
 				}
 			}
 		}
-		if _, u := mpathInfo.GetIOstats(fs.StatDiskUtil); u.Max < util.Max && u.Min <= util.Min {
+		if u := mpathInfo.Iostat.GetDiskUtil(); u < util {
 			out = j
 			util = u
 		}

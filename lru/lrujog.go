@@ -187,11 +187,11 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 		now := time.Now()
 		lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
 		if ok && usedpct < lctx.config.LRU.HighWM {
-			if !lctx.mpathInfo.IsIdle(lctx.config) {
+			if !lctx.mpathInfo.IsIdle(lctx.config, now) {
 				// throttle self
 				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedpct)
-				_, curr := lctx.mpathInfo.GetIOstats(fs.StatDiskUtil)
-				ratioUtilization := cmn.Ratio(lctx.config.Xaction.DiskUtilHighWM, lctx.config.Xaction.DiskUtilLowWM, int64(curr.Max))
+				curr := lctx.mpathInfo.Iostat.GetDiskUtil(now)
+				ratioUtilization := cmn.Ratio(lctx.config.Disk.DiskUtilHighWM, lctx.config.Disk.DiskUtilLowWM, curr)
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true
 					time.Sleep(cmn.ThrottleSleepMax)

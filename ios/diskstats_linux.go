@@ -8,6 +8,11 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
+)
+
+const (
+	largeNumDisks = 3
 )
 
 type DiskStat struct {
@@ -43,13 +48,48 @@ func (ds *DiskStat) ToString() string {
 	}, " ")
 }
 
-func GetDiskStats() (output DiskStats) {
-	output = make(DiskStats)
+func GetDiskStats(disks cmn.StringSet) DiskStats {
+	if len(disks) < largeNumDisks {
+		output := make(DiskStats, len(disks))
+
+		for disk := range disks {
+			stat, ok := readSingleDiskStat(disk)
+			if !ok {
+				continue
+			}
+			output[disk] = stat
+		}
+		return output
+	}
+
+	return readMultipleDiskStats(disks)
+}
+
+func readSingleDiskStat(disk string) (DiskStat, bool) {
+	file, err := os.Open(fmt.Sprintf("/sys/class/block/%v/stat", disk))
+	if err != nil {
+		glog.Error(err)
+		return DiskStat{}, false
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Scan()
+	fields := strings.Fields(scanner.Text())
+
+	if len(fields) < 11 {
+		return DiskStat{}, false
+	}
+
+	return extractDiskStat(fields, 0), true
+}
+
+func readMultipleDiskStats(disks cmn.StringSet) DiskStats {
+	output := make(DiskStats, len(disks))
 
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
 		glog.Error(err)
-		return
+		return output
 	}
 
 	scanner := bufio.NewScanner(file)
@@ -64,24 +104,31 @@ func GetDiskStats() (output DiskStats) {
 		if len(fields) < 14 {
 			continue
 		}
-
 		deviceName := fields[2]
-		output[deviceName] = DiskStat{
-			extractI64(fields[3]),
-			extractI64(fields[4]),
-			extractI64(fields[5]),
-			extractI64(fields[6]),
-			extractI64(fields[7]),
-			extractI64(fields[8]),
-			extractI64(fields[9]),
-			extractI64(fields[10]),
-			extractI64(fields[11]),
-			extractI64(fields[12]),
-			extractI64(fields[13]),
+		if _, ok := disks[deviceName]; !ok {
+			continue
 		}
+
+		output[deviceName] = extractDiskStat(fields, 3)
 	}
 
 	return output
+}
+
+func extractDiskStat(fields []string, offset int) DiskStat {
+	return DiskStat{
+		extractI64(fields[offset]),
+		extractI64(fields[offset+1]),
+		extractI64(fields[offset+2]),
+		extractI64(fields[offset+3]),
+		extractI64(fields[offset+4]),
+		extractI64(fields[offset+5]),
+		extractI64(fields[offset+6]),
+		extractI64(fields[offset+7]),
+		extractI64(fields[offset+8]),
+		extractI64(fields[offset+9]),
+		extractI64(fields[offset+10]),
+	}
 }
 
 func extractI64(field string) int64 {

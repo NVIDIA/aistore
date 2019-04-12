@@ -52,16 +52,16 @@ This will result in a JSON structure that'll contain all configuration sections 
 
 Most configuration options can be updated - on an individual (target or proxy) daemon or the entire cluster. For example:
 
-* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: entire **cluster**)
+* Set `stats_time` = 1 minute, `iostat_time_long` = 4 seconds (scope of the operation: entire **cluster**)
 ```shell
-# curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time=4s'
+# curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time_long=4s'
 ```
 
-> As of v2.0, AIS configuration includes a section called `periodic`. The `periodic` in turn contains several knobs - one of those knobs is `stats_time`, another - `iostat_time`. To update one or both of those named variables on all or one of the clustered nodes, you could:
+> As of v2.0, AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `iostat_time_long`, another - `disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 
-* Set `stats_time` = 1 minute, `iostat_time` = 4 seconds (scope of the operation: **one AIS node**)
+* Set `iostat_time_long` = 3 seconds, `disk_util_low_wm` = 40 percent (scope of the operation: **one AIS node**)
 ```shell
-# curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?periodic.stats_time=1m&iostat_time=4s'
+# curl -i -X PUT 'http://G-or-T/v1/daemon/setconfig?disk.iostat_time_long=3s&disk_util_low_wm=40'
 ```
 
 > Notice the **naming convention**: an AIS knob can be referred to by its fully-qualified name: `section-tag.variable-tag`. When there's no ambiguity, the name of the configuration section can be omitted. For instance, `periodic.stats_time` and `stats_time` both reference the same knob and can be used interchangeably.
@@ -78,6 +78,8 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
 | disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
 | disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
+| iostat_time_long | 2s | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
+| iostat_time_short | 100ms | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
 | capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
 | dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |

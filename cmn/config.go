@@ -296,7 +296,7 @@ type Config struct {
 	Timeout          TimeoutConf     `json:"timeout"`
 	Proxy            ProxyConf       `json:"proxy"`
 	LRU              LRUConf         `json:"lru"`
-	Xaction          XactionConf     `json:"xaction"`
+	Disk             DiskConf        `json:"disk"`
 	Rebalance        RebalanceConf   `json:"rebalance"`
 	Replication      ReplicationConf `json:"replication"`
 	Cksum            CksumConf       `json:"cksum"`
@@ -335,11 +335,9 @@ type LogConf struct {
 
 type PeriodConf struct {
 	StatsTimeStr     string `json:"stats_time"`
-	IostatTimeStr    string `json:"iostat_time"`
 	RetrySyncTimeStr string `json:"retry_sync_time"`
 	// omitempty
 	StatsTime     time.Duration `json:"-"`
-	IostatTime    time.Duration `json:"-"`
 	RetrySyncTime time.Duration `json:"-"`
 }
 
@@ -405,9 +403,14 @@ type LRUConf struct {
 	Enabled bool `json:"enabled"`
 }
 
-type XactionConf struct {
-	DiskUtilLowWM  int64 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
-	DiskUtilHighWM int64 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
+type DiskConf struct {
+	DiskUtilLowWM   int64         `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
+	DiskUtilHighWM  int64         `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
+	IostatTimeLong  time.Duration `json:"-"`
+	IostatTimeShort time.Duration `json:"-"`
+
+	IostatTimeLongStr  string `json:"iostat_time_long"`
+	IostatTimeShortStr string `json:"iostat_time_short"`
 }
 
 type RebalanceConf struct {
@@ -614,7 +617,7 @@ func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 
 func (c *Config) Validate() error {
 	validators := []Validator{
-		&c.Xaction, &c.LRU, &c.Mirror, &c.Cksum,
+		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
 		&c.Downloader,
 	}
@@ -650,11 +653,28 @@ func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }
 
-func (c *XactionConf) Validate() error {
+func (c *DiskConf) Validate() (err error) {
 	lwm, hwm := c.DiskUtilLowWM, c.DiskUtilHighWM
 	if lwm <= 0 || hwm <= lwm || hwm > 100 {
-		return fmt.Errorf("invalid xaction (disk_util_lwm, disk_util_hwm) configuration %+v", c)
+		return fmt.Errorf("invalid disk (disk_util_lwm, disk_util_hwm) configuration %+v", c)
 	}
+
+	if c.IostatTimeLong, err = time.ParseDuration(c.IostatTimeLongStr); err != nil {
+		return fmt.Errorf("bad disk.iostat_time_long format %s, err %v", c.IostatTimeLongStr, err)
+	}
+	if c.IostatTimeShort, err = time.ParseDuration(c.IostatTimeShortStr); err != nil {
+		return fmt.Errorf("bad disk.iostat_time_short format %s, err %v", c.IostatTimeShortStr, err)
+	}
+	if c.IostatTimeLong <= 0 {
+		return fmt.Errorf("disk.iostat_time_long is zero")
+	}
+	if c.IostatTimeShort <= 0 {
+		return fmt.Errorf("disk.iostat_time_short is zero")
+	}
+	if c.IostatTimeLong < c.IostatTimeShort {
+		return fmt.Errorf("disk.iostat_time_long %v shorter than disk.iostat_time_short %v", c.IostatTimeLong, c.IostatTimeShort)
+	}
+
 	return nil
 }
 
@@ -794,9 +814,6 @@ func (c *RebalanceConf) Validate() (err error) {
 func (c *PeriodConf) Validate() (err error) {
 	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
 		return fmt.Errorf("bad periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
-	}
-	if c.IostatTime, err = time.ParseDuration(c.IostatTimeStr); err != nil {
-		return fmt.Errorf("bad periodic.iostat_time format %s, err %v", c.IostatTimeStr, err)
 	}
 	if c.RetrySyncTime, err = time.ParseDuration(c.RetrySyncTimeStr); err != nil {
 		return fmt.Errorf("bad periodic.retry_sync_time format %s, err %v", c.RetrySyncTimeStr, err)
@@ -939,8 +956,6 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	// PERIODIC
 	case "stats_time", "periodic.stats_time":
 		return &conf.Periodic, updateValue(&conf.Periodic.StatsTimeStr)
-	case "iostat_time", "periodic.iostat_time":
-		return &conf.Periodic, updateValue(&conf.Periodic.IostatTimeStr)
 
 	// LRU
 	case "lru_enabled", "lru.enabled":
@@ -956,11 +971,15 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	case "lru_local_buckets", "lru.local_buckets":
 		return &conf.LRU, updateValue(&conf.LRU.LocalBuckets)
 
-	// XACTION
-	case "disk_util_low_wm", "xaction.disk_util_low_wm":
-		return &conf.Xaction, updateValue(&conf.Xaction.DiskUtilLowWM)
-	case "disk_util_high_wm", "xaction.disk_util_high_wm":
-		return &conf.Xaction, updateValue(&conf.Xaction.DiskUtilHighWM)
+	// DISK
+	case "disk_util_low_wm", "disk.disk_util_low_wm":
+		return &conf.Disk, updateValue(&conf.Disk.DiskUtilLowWM)
+	case "disk_util_high_wm", "disk.disk_util_high_wm":
+		return &conf.Disk, updateValue(&conf.Disk.DiskUtilHighWM)
+	case "iostat_time_long", "disk.iostat_time_long":
+		return &conf.Disk, updateValue(&conf.Disk.IostatTimeLongStr)
+	case "iostat_time_short", "disk.iostat_time_short":
+		return &conf.Disk, updateValue(&conf.Disk.IostatTimeShortStr)
 
 	// REBALANCE
 	case "dest_retry_time", "rebalance.dest_retry_time":

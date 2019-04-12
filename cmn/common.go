@@ -632,7 +632,7 @@ func LocalLoad(pathname string, v interface{}) (err error) {
 }
 
 func Ratio(high, low, curr int64) float32 {
-	Assert(high > low && high <= 100 && low < 100 && low > 0)
+	Assert(high > low && high <= 100 && low > 0)
 	if curr <= low {
 		return 0
 	}
@@ -640,6 +640,17 @@ func Ratio(high, low, curr int64) float32 {
 		return 1
 	}
 	return float32(curr-low) / float32(high-low)
+}
+
+func RatioPct(high, low, curr int64) int64 {
+	Assert(high > low && high <= 100 && low > 0)
+	if curr <= low {
+		return 0
+	}
+	if curr >= high {
+		return 100
+	}
+	return (curr - low) * 100 / (high - low)
 }
 
 //

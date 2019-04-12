@@ -23,13 +23,10 @@ type BlockDevice struct {
 	BlockDevices []BlockDevice `json:"children"`
 }
 
-//
-// private
-//
-
-// This method is used when starting iostat runner to
-// retrieve the disks associated with a filesystem.
-func fs2disks(fs string) (disks cmn.StringSet) {
+// Fs2disks is used when a mountpath is added to
+// retrieve the disk(s) associated with a filesystem.
+// This returns multiple disks only if the filesystem is RAID.
+func Fs2disks(fs string) (disks cmn.StringSet) {
 	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
 	outputBytes, err := getDiskCommand.Output()
 	if err != nil {
@@ -40,9 +37,31 @@ func fs2disks(fs string) (disks cmn.StringSet) {
 		glog.Errorf("Failed to lsblk - no disks?")
 		return
 	}
-	disks = lsblkOutput2disks(outputBytes, fs)
+	disks = LsblkOutput2disks(outputBytes, fs)
 	return
 }
+
+func LsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet) {
+	disks = make(cmn.StringSet)
+	device := strings.TrimPrefix(fs, "/dev/")
+	var lsBlkOutput LsBlk
+	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
+	if err != nil {
+		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
+		return
+	}
+
+	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
+	if glog.V(4) {
+		glog.Infof("Device: %s, disk list: %v\n", device, disks)
+	}
+
+	return disks
+}
+
+//
+// private
+//
 
 func childMatches(devList []BlockDevice, device string) bool {
 	for _, dev := range devList {
@@ -70,22 +89,4 @@ func findDevDisks(devList []BlockDevice, device string, disks cmn.StringSet) {
 			}
 		}
 	}
-}
-
-func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet) {
-	disks = make(cmn.StringSet)
-	device := strings.TrimPrefix(fs, "/dev/")
-	var lsBlkOutput LsBlk
-	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
-	if err != nil {
-		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
-		return
-	}
-
-	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
-	if glog.V(4) {
-		glog.Infof("Device: %s, disk list: %v\n", device, disks)
-	}
-
-	return disks
 }
