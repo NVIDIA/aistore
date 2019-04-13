@@ -915,7 +915,7 @@ func (c *DownloaderConf) Validate() (err error) {
 	return nil
 }
 
-func (conf *Config) update(key, value string) error {
+func (conf *Config) update(key, value string) (Validator, error) {
 	// updateValue sets `to` value (required to be pointer) and runs number of
 	// provided validators which would check if the value which was just set is
 	// correct.
@@ -938,11 +938,6 @@ func (conf *Config) update(key, value string) error {
 			return fmt.Errorf("failed to parse %q, %s err: %v", key, value, err)
 		}
 
-		for _, v := range validators {
-			if err := v.Validate(); err != nil {
-				return fmt.Errorf("failed to set %q, err: %v", key, err)
-			}
-		}
 		return nil
 	}
 
@@ -950,103 +945,103 @@ func (conf *Config) update(key, value string) error {
 	// TOP LEVEL CONFIG
 	case "vmodule":
 		if err := SetGLogVModule(value); err != nil {
-			return fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
+			return nil, fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
 	case "log_level", "log.level":
 		if err := SetLogLevel(conf, value); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", value, err)
+			return nil, fmt.Errorf("failed to set log level = %s, err: %v", value, err)
 		}
 
 	// PERIODIC
 	case "stats_time", "periodic.stats_time":
-		return updateValue(&conf.Periodic.StatsTimeStr, &conf.Periodic)
+		return &conf.Periodic, updateValue(&conf.Periodic.StatsTimeStr)
 	case "iostat_time", "periodic.iostat_time":
-		return updateValue(&conf.Periodic.IostatTimeStr, &conf.Periodic)
+		return &conf.Periodic, updateValue(&conf.Periodic.IostatTimeStr)
 
 	// LRU
 	case "lru_enabled", "lru.enabled":
-		return updateValue(&conf.LRU.Enabled, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.Enabled)
 	case "atimer_enabled", "lru.atimer_enabled":
-		return updateValue(&conf.LRU.AtimerEnabled, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.AtimerEnabled)
 	case "lowwm", "lru.lowwm":
-		return updateValue(&conf.LRU.LowWM, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.LowWM)
 	case "highwm", "lru.highwm":
-		return updateValue(&conf.LRU.HighWM, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.HighWM)
 	case "dont_evict_time", "lru.dont_evict_time":
-		return updateValue(&conf.LRU.DontEvictTimeStr, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.DontEvictTimeStr)
 	case "capacity_upd_time", "lru.capacity_upd_time":
-		return updateValue(&conf.LRU.CapacityUpdTimeStr, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
 	case "lru_local_buckets", "lru.local_buckets":
-		return updateValue(&conf.LRU.LocalBuckets, &conf.LRU)
+		return &conf.LRU, updateValue(&conf.LRU.LocalBuckets)
 
 	// XACTION
 	case "disk_util_low_wm", "xaction.disk_util_low_wm":
-		return updateValue(&conf.Xaction.DiskUtilLowWM, &conf.Xaction)
+		return &conf.Xaction, updateValue(&conf.Xaction.DiskUtilLowWM)
 	case "disk_util_high_wm", "xaction.disk_util_high_wm":
-		return updateValue(&conf.Xaction.DiskUtilHighWM, &conf.Xaction)
+		return &conf.Xaction, updateValue(&conf.Xaction.DiskUtilHighWM)
 
 	// REBALANCE
 	case "dest_retry_time", "rebalance.dest_retry_time":
-		return updateValue(&conf.Rebalance.DestRetryTimeStr, &conf.Rebalance)
+		return &conf.Rebalance, updateValue(&conf.Rebalance.DestRetryTimeStr)
 	case "rebalance_enabled", "rebalance.enabled":
-		return updateValue(&conf.Rebalance.Enabled)
+		return nil, updateValue(&conf.Rebalance.Enabled)
 
 	// TIMEOUT
 	case "send_file_time", "timeout.send_file_time":
-		return updateValue(&conf.Timeout.SendFileStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.SendFileStr)
 	case "default_timeout", "timeout.default_timeout":
-		return updateValue(&conf.Timeout.DefaultStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.DefaultStr)
 	case "default_long_timeout", "timeout.default_long_timeout":
-		return updateValue(&conf.Timeout.DefaultLongStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.DefaultLongStr)
 	case "proxy_ping", "timeout.proxy_ping":
-		return updateValue(&conf.Timeout.ProxyPingStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.ProxyPingStr)
 	case "cplane_operation", "timeout.cplane_operation":
-		return updateValue(&conf.Timeout.CplaneOperationStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.CplaneOperationStr)
 	case "max_keepalive", "timeout.max_keepalive":
-		return updateValue(&conf.Timeout.MaxKeepaliveStr, &conf.Timeout)
+		return &conf.Timeout, updateValue(&conf.Timeout.MaxKeepaliveStr)
 
 	// CHECKSUM
 	case "checksum", "cksum.type":
-		return updateValue(&conf.Cksum.Type, &conf.Cksum)
+		return &conf.Cksum, updateValue(&conf.Cksum.Type)
 	case "validate_checksum_cold_get", "cksum.validate_cold_get":
-		return updateValue(&conf.Cksum.ValidateColdGet, &conf.Cksum)
+		return &conf.Cksum, updateValue(&conf.Cksum.ValidateColdGet)
 	case "validate_checksum_warm_get", "cksum.validate_warm_get":
-		return updateValue(&conf.Cksum.ValidateWarmGet, &conf.Cksum)
+		return &conf.Cksum, updateValue(&conf.Cksum.ValidateWarmGet)
 	case "enable_read_range_checksum", "cksum.enable_read_range":
-		return updateValue(&conf.Cksum.EnableReadRange, &conf.Cksum)
+		return &conf.Cksum, updateValue(&conf.Cksum.EnableReadRange)
 
 	// VERSION
 	case "versioning_enabled", "versioning.enabled":
-		return updateValue(&conf.Ver.Enabled)
+		return nil, updateValue(&conf.Ver.Enabled)
 	case "validate_version_warm_get", "version.validate_warm_get":
-		return updateValue(&conf.Ver.ValidateWarmGet)
+		return nil, updateValue(&conf.Ver.ValidateWarmGet)
 
 	// FSHC
 	case "fshc_enabled", "fshc.enabled":
-		return updateValue(&conf.FSHC.Enabled)
+		return nil, updateValue(&conf.FSHC.Enabled)
 
 	// MIRROR
 	case "mirror_enabled", "mirror.enabled":
-		return updateValue(&conf.Mirror.Enabled, &conf.Mirror)
+		return &conf.Mirror, updateValue(&conf.Mirror.Enabled)
 	case "mirror_burst_buffer", "mirror.burst_buffer":
-		return updateValue(&conf.Mirror.Burst, &conf.Mirror)
+		return &conf.Mirror, updateValue(&conf.Mirror.Burst)
 	case "mirror_util_thresh", "mirror.util_thresh":
-		return updateValue(&conf.Mirror.UtilThresh, &conf.Mirror)
+		return &conf.Mirror, updateValue(&conf.Mirror.UtilThresh)
 
 	// KEEPALIVE
 	case "keepalivetracker.proxy.interval":
-		return updateValue(&conf.KeepaliveTracker.Proxy.IntervalStr, &conf.KeepaliveTracker)
+		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Proxy.IntervalStr)
 	case "keepalivetracker.proxy.factor":
-		return updateValue(&conf.KeepaliveTracker.Proxy.Factor, &conf.KeepaliveTracker)
+		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Proxy.Factor)
 	case "keepalivetracker.target.interval":
-		return updateValue(&conf.KeepaliveTracker.Target.IntervalStr, &conf.KeepaliveTracker)
+		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.IntervalStr)
 	case "keepalivetracker.target.factor":
-		return updateValue(&conf.KeepaliveTracker.Target.Factor, &conf.KeepaliveTracker)
+		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.Factor)
 
 	default:
-		return fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
+		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
 	}
-	return nil
+	return nil, nil
 }
 
 func SetConfigMany(nvmap SimpleKVs) (err error) {
@@ -1059,6 +1054,9 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 	var (
 		persist bool
 	)
+
+	validators := make(map[Validator]struct{})
+
 	for name, value := range nvmap {
 		if name == ActPersist {
 			if persist, err = strconv.ParseBool(value); err != nil {
@@ -1066,13 +1064,30 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 				GCO.DiscardUpdate()
 				return
 			}
-		} else if err = conf.update(name, value); err != nil {
-			GCO.DiscardUpdate()
-			return
+		} else {
+			validator, err := conf.update(name, value)
+			if err != nil {
+				GCO.DiscardUpdate()
+				return err
+			}
+			if validator != nil {
+				validators[validator] = struct{}{}
+			}
+
 		}
 
 		glog.Infof("%s: %s=%s", ActSetConfig, name, value)
 	}
+
+	// validate after everything is set
+	for val := range validators {
+		err := val.Validate()
+		if err != nil {
+			GCO.DiscardUpdate()
+			return err
+		}
+	}
+
 	GCO.CommitUpdate(conf)
 
 	if persist {
