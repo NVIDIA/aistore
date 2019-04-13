@@ -106,11 +106,14 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xac
 			glog.V(4).Infof("%s already running, nothing to do", xGlobalReb)
 			return nil
 		}
-		xGlobalReb.Abort()
-		for i := 0; i < xGlobalReb.runnerCnt; i++ {
-			<-xGlobalReb.confirmCh
+
+		if !xGlobalReb.Finished() {
+			xGlobalReb.Abort()
+			for i := 0; i < xGlobalReb.runnerCnt; i++ {
+				<-xGlobalReb.confirmCh
+			}
+			close(xGlobalReb.confirmCh)
 		}
-		close(xGlobalReb.confirmCh)
 	}
 
 	// here we have possibly both locks
@@ -138,12 +141,16 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 		entry.Lock()
 		defer entry.Unlock()
 
-		xLocalReb := entry.xact
-		xLocalReb.Abort()
-		for i := 0; i < xLocalReb.runnerCnt; i++ {
-			<-xLocalReb.confirmCh
+		if !entry.xact.Finished() {
+			xLocalReb := entry.xact
+			xLocalReb.Abort()
+
+			for i := 0; i < xLocalReb.runnerCnt; i++ {
+				<-xLocalReb.confirmCh
+			}
+			close(xLocalReb.confirmCh)
 		}
-		close(xLocalReb.confirmCh)
+
 	}
 
 	// here we have possibly both locks
@@ -200,7 +207,7 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	xdel := &xactEvictDelete{XactBase: *cmn.NewXactBase(id, xact)}
 	newEntry.xact = xdel
 
-	r.globalXacts.Store(cmn.ActEvictObjects, newEntry)
+	r.globalXacts.Store(xact, newEntry)
 	r.byID.Store(id, newEntry)
 	return xdel
 }
@@ -350,7 +357,7 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 		entry.Lock()
 		defer entry.Unlock()
 
-		if entry.xact.Finished() {
+		if !entry.xact.Finished() {
 			glog.V(4).Infof("nothing to do: %s", entry.xact)
 			return
 		}
@@ -377,11 +384,12 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 	r.byID.Store(id, entry)
 }
 
-func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mirror.XactCopy) {
+func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mirror.XactCopy {
 	bckXacts := r.bucketsXacts(lom.Bucket)
 
 	newEntry := &putCopiesEntry{}
 	newEntry.Lock()
+	defer newEntry.Unlock()
 
 	val, loaded := bckXacts.LoadOrStore(cmn.ActPutCopies, newEntry)
 
@@ -389,8 +397,10 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xc
 		entry := val.(*putCopiesEntry)
 		entry.RLock()
 		defer entry.RUnlock()
-		entry.xact.Renew()
-		return
+
+		if !entry.xact.Finished() {
+			return entry.xact
+		}
 	}
 
 	val, ok := bckXacts.Load(cmn.ActMakeNCopies)
@@ -410,7 +420,7 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xc
 	id := r.uniqueID()
 	base := cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket)
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-	xcopy = &mirror.XactCopy{
+	xcopy := &mirror.XactCopy{
 		XactDemandBase: *base,
 		Slab:           slab,
 		Mirror:         *lom.MirrorConf(),
@@ -426,7 +436,7 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xc
 		newEntry.xact = xcopy
 		r.byID.Store(id, newEntry)
 	}
-	return
+	return xcopy
 }
 
 func (r *xactionsRegistry) renewRechecksum(bucket string) *xactRechecksum {
@@ -434,6 +444,7 @@ func (r *xactionsRegistry) renewRechecksum(bucket string) *xactRechecksum {
 
 	newEntry := &checksumEntry{}
 	newEntry.Lock()
+	defer newEntry.Unlock()
 
 	val, loaded := bckXacts.LoadOrStore(cmn.ActRechecksum, newEntry)
 
