@@ -749,9 +749,12 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		buf, slab := mem.AllocFromSlab2(cmn.MiB)
 		defer slab.Free(buf)
 
-		lom := &cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}
 		bckProvider := cmn.BckProviderFromLocal(hdr.IsLocal)
-		if errStr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCksum); errStr != "" {
+		lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname, BucketProvider: bckProvider}.Init()
+		if errStr == "" {
+			errStr = lom.Load(true)
+		}
+		if errStr != "" {
 			glog.Error(errStr)
 			return
 		}

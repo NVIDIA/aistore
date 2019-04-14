@@ -122,12 +122,9 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-		if errstr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomCopy); errstr != "" {
+		lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+		if errstr != "" {
 			glog.Errorln(errstr)
-			continue
-		}
-		if evict && !lom.Exists() {
 			continue
 		}
 		err := t.objDelete(ct, lom, evict)
@@ -159,9 +156,13 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 	var (
 		errstr            string
 		vchanged, coldGet bool
-		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 	)
-	if errstr = lom.Fill(bckProvider, cluster.LomFstat|cluster.LomVersion|cluster.LomCksum); errstr != "" {
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+	if errstr != "" {
+		glog.Error(errstr)
+		return
+	}
+	if errstr = lom.Load(true); errstr != "" {
 		glog.Error(errstr)
 		return
 	}
@@ -173,7 +174,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 	}
 	coldGet = !lom.Exists()
 	if lom.Exists() && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
-		if coldGet, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version()); errstr != "" {
+		if coldGet, errstr, _ = t.checkCloudVersion(ct, lom); errstr != "" {
 			return
 		}
 	}

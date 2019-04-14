@@ -19,9 +19,7 @@ const MLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
-func Uname(bucket, objname string) string {
-	return path.Join(bucket, objname)
-}
+func Uname(bucket, objname string) string { return path.Join(bucket, objname) }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
 func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {

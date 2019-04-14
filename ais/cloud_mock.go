@@ -32,17 +32,17 @@ func (m *emptyCloud) listbucket(ctx context.Context, bucket string, msg *cmn.Sel
 func (m *emptyCloud) headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int) {
 	return cmn.SimpleKVs{}, fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
 }
-func (m *emptyCloud) headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
-	return cmn.SimpleKVs{}, fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
+func (m *emptyCloud) headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
+	return cmn.SimpleKVs{}, fmt.Sprintf(bucketDoesNotExist, lom.Bucket, cmn.DoesNotExist), http.StatusNotFound
 }
-func (m *emptyCloud) getobj(ctx context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int) {
-	return nil, fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
+func (m *emptyCloud) getobj(ctx context.Context, fqn string, lom *cluster.LOM) (errstr string, errcode int) {
+	return fmt.Sprintf(bucketDoesNotExist, lom.Bucket, cmn.DoesNotExist), http.StatusNotFound
 }
-func (m *emptyCloud) putobj(ctx context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int) {
-	return "", fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
+func (m *emptyCloud) putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, errstr string, errcode int) {
+	return "", fmt.Sprintf(bucketDoesNotExist, lom.Bucket, cmn.DoesNotExist), http.StatusNotFound
 }
-func (m *emptyCloud) deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int) {
-	return fmt.Sprintf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
+func (m *emptyCloud) deleteobj(ctx context.Context, lom *cluster.LOM) (errstr string, errcode int) {
+	return fmt.Sprintf(bucketDoesNotExist, lom.Bucket, cmn.DoesNotExist), http.StatusNotFound
 }
 
 // the function must not fail - it should return empty list

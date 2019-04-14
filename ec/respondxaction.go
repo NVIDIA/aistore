@@ -198,14 +198,14 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		buf, slab := mem2.AllocFromSlab2(cmn.MiB)
 		err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf)
 		if err == nil {
-			lom := &cluster.LOM{FQN: objFQN, T: r.t}
-			if errstr := lom.Fill("", 0); errstr != "" {
+			lom, errstr := cluster.LOM{FQN: objFQN, T: r.t}.Init()
+			if errstr != "" {
 				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, errstr)
 				slab.Free(buf)
 				return
 			}
 			lom.SetVersion(objAttrs.Version)
-			lom.SetAtime(time.Unix(0, objAttrs.Atime))
+			lom.SetAtimeUnix(objAttrs.Atime)
 
 			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if objAttrs.CksumType != "" {

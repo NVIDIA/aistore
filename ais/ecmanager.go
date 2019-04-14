@@ -274,7 +274,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		LOM:    lom,
 	}
 
-	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
+	if errstr := lom.Load(true); errstr != "" {
 		return errors.New(errstr)
 	}
 

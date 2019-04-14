@@ -1646,9 +1646,12 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
+		bckProvider = cmn.CloudBs
 	)
 
-	created := createLocalBucketIfNotExists(t, proxyURL, bucket)
+	if !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skipf("%s requires a cloud bucket", t.Name())
+	}
 	ldir := filepath.Join(LocalSrcDir, ChksumValidStr)
 	if err := cmn.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
@@ -1670,7 +1673,7 @@ func Test_checksum(t *testing.T) {
 		}
 	}
 	// Delete it from cache.
-	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
+	evictobjects(t, proxyURL, bckProvider, fileslist)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
@@ -1694,7 +1697,7 @@ func Test_checksum(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without any checksum validation: %v\n", totalio, duration)
 	selectErr(errCh, "get", t, false)
-	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
+	evictobjects(t, proxyURL, bckProvider, fileslist)
 	switch clichecksum {
 	case "all":
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
@@ -1737,10 +1740,6 @@ cleanup:
 		"cksum.type":              ochksum,
 		"cksum.validate_cold_get": fmt.Sprintf("%v", ocoldget),
 	})
-
-	if created {
-		tutils.DestroyLocalBucket(t, proxyURL, bucket)
-	}
 }
 
 // deletefromfilelist requires that errCh be twice the size of len(fileslist) as each
@@ -1837,10 +1836,6 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 		t.Errorf("Expected write policy: %s, received write policy: %s",
 			expected.WritePolicy, actual.WritePolicy)
 	}
-	if actual.NextTierURL != expected.NextTierURL {
-		t.Errorf("Expected next tier URL: %s, received next tier URL: %s",
-			expected.NextTierURL, actual.NextTierURL)
-	}
 	if actual.Cksum.Type != expected.Cksum.Type {
 		t.Errorf("Expected checksum type: %s, received checksum type: %s",
 			expected.Cksum.Type, actual.Cksum.Type)
@@ -1902,5 +1897,12 @@ func defaultBucketProps() cmn.BucketProps {
 			CapacityUpdTimeStr: "2m",
 			Enabled:            false,
 		},
+	}
+}
+
+func resetBucketProps(proxyURL, bucket string, t *testing.T) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	if err := api.ResetBucketProps(baseParams, bucket); err != nil {
+		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }

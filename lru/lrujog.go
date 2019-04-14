@@ -77,14 +77,14 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	var (
 		h           = lctx.heap
-		lom         = &cluster.LOM{T: lctx.ini.T, FQN: fqn}
 		bckProvider = cmn.BckProviderFromLocal(lctx.bckIsLocal)
 	)
-	errstr := lom.Fill(bckProvider, cluster.LomFstat|cluster.LomAtime, lctx.config)
-	if errstr != "" || !lom.Exists() {
-		if glog.V(4) {
-			glog.Infof("Warning: %s %s", lom, errstr)
-		}
+	lom, errstr := cluster.LOM{T: lctx.ini.T, FQN: fqn, BucketProvider: bckProvider}.Init(lctx.config)
+	if errstr != "" {
+		return nil
+	}
+	errstr = lom.Load(false)
+	if errstr != "" {
 		return nil
 	}
 	if !lom.LRUEnabled() {

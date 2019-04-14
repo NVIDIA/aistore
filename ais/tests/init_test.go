@@ -30,8 +30,6 @@ const (
 	DeleteStr               = "delete"
 	SmokeDir                = "/tmp/ais/smoke" // smoke test dir
 	SmokeStr                = "smoke"
-	ReplicationDir          = "/tmp/ais/replicationTest"
-	ReplicationStr          = "replicationTest"
 	largefilesize           = 4                            // in MB
 	proxyURL                = "http://localhost:8080"      // the url for the cluster's proxy (local)
 	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)

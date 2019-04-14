@@ -736,12 +736,15 @@ func FormatTime(t time.Time, format string) string {
 	}
 }
 
-func ParseTime(timeStr string) (t time.Time, err error) {
-	timeInt, err := strconv.ParseInt(timeStr, 10, 64)
-	if err != nil {
-		err = fmt.Errorf("failed to parse atime string: %s to int, err: %v", timeStr, err)
+func S2TimeUnix(timeStr string) (tunix int64, err error) {
+	tunix, err = strconv.ParseInt(timeStr, 10, 64)
+	return
+}
+func S2Time(timeStr string) (t time.Time, err error) {
+	var tunix int64
+	if tunix, err = strconv.ParseInt(timeStr, 10, 64); err != nil {
 		return
 	}
-	t = time.Unix(0, timeInt)
+	t = time.Unix(0, tunix)
 	return
 }

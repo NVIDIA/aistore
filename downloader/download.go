@@ -522,14 +522,15 @@ func (d *Downloader) dispatchDownload(t *task) {
 		added, ok bool
 		j         *jogger
 	)
-
-	lom := &cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.obj.Objname}
-	errstr := lom.Fill(t.bckProvider, cluster.LomFstat)
+	lom, errstr := cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.obj.Objname, BucketProvider: t.bckProvider}.Init()
+	if errstr == "" {
+		errstr = lom.Load(true)
+	}
 	if errstr != "" {
 		resp.err, resp.statusCode = errors.New(errstr), http.StatusInternalServerError
 		goto finalize
 	}
-	if lom.Exists() {
+	if lom.Exists() { // FIXME: checksum, etc.
 		resp.resp = fmt.Sprintf("object %q already exists - skipping", t.obj.Objname)
 		goto finalize
 	}
@@ -602,8 +603,10 @@ func (d *Downloader) dispatchCancel(req *request) {
 			req.bucket = body.Bucket
 			req.bckProvider = body.BckProvider
 
-			lom := &cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.obj.Objname}
-			errstr := lom.Fill(req.bckProvider, cluster.LomFstat)
+			lom, errstr := cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.obj.Objname}.Init()
+			if errstr == "" {
+				errstr = lom.Load(false)
+			}
 			if errstr != "" {
 				errs = append(errs, response{
 					err:        errors.New(errstr),
@@ -652,21 +655,22 @@ func (d *Downloader) dispatchStatus(req *request) {
 
 	errs := make([]response, 0, len(body.Objs))
 	for _, obj := range body.Objs {
-		lom := &cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname}
-		errstr := lom.Fill(body.BckProvider, cluster.LomFstat)
+		lom, errstr := cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname, BucketProvider: body.BckProvider}.Init()
+		if errstr == "" {
+			errstr = lom.Load(true)
+		}
 		if errstr != "" {
-			// TODO: if lom.Fill returned error because the bucket does not exist anymore this should not cause InternalServerError
 			errs = append(errs, response{
 				err:        errors.New(errstr),
 				statusCode: http.StatusInternalServerError,
 			})
 			continue
 		}
-		if lom.Exists() {
-			// It is possible this file already existed on cluster and was never downloaded.
+		if lom.Exists() { // FIXME: checksum, etc.
 			finished++
 			continue
 		}
+
 		req.fqn = lom.FQN
 
 		if lom.ParsedFQN.MpathInfo == nil {
@@ -857,9 +861,11 @@ func (t *task) download() {
 		statusMsg string
 		err       error
 	)
-
-	lom := &cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}
-	if errstr := lom.Fill(t.bckProvider, cluster.LomFstat); errstr != "" {
+	lom, errstr := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init()
+	if errstr == "" {
+		errstr = lom.Load(true)
+	}
+	if errstr != "" {
 		t.abort(internalErrorMessage(), errors.New(errstr))
 		return
 	}

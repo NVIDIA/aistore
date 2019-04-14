@@ -95,13 +95,6 @@ func (r *XactGet) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs t
 			return
 		}
 
-		writer.lom.SetVersion(objAttrs.Version)
-		writer.lom.SetAtime(time.Unix(0, objAttrs.Atime))
-
-		if objAttrs.CksumType != "" {
-			writer.lom.SetCksum(cmn.NewCksum(objAttrs.CksumType, objAttrs.CksumValue))
-		}
-
 		if err := r.writerReceive(writer, iReq.Exists, objAttrs, object); err != nil {
 			glog.Errorf("Failed to read replica: %v", err)
 		}

@@ -349,6 +349,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 		// create SGL to receive the slice data and save it to correct
 		// position in the slice list
 		var writer *slice
+		var lom = *(req.LOM)
 		if toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
 			fqn := fs.CSM.GenContentFQN(req.LOM.FQN, fs.WorkfileType, prefix)
@@ -359,14 +360,14 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 			writer = &slice{
 				writer:  fh,
 				wg:      wgSlices,
-				lom:     req.LOM,
+				lom:     &lom,
 				workFQN: fqn,
 			}
 		} else {
 			writer = &slice{
 				writer: mem2.NewSGL(cmn.KiB * 512),
 				wg:     wgSlices,
-				lom:    req.LOM,
+				lom:    &lom,
 			}
 		}
 		slices[v.SliceID-1] = writer
@@ -601,6 +602,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		return restored, err
 	}
 
+	req.LOM.ReCache()
 	return restored, nil
 }
 

@@ -132,6 +132,9 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 	if err != nil {
 		return 0, fmt.Errorf("failed to Copy HTTP response body, err: %v", err)
 	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return 0, fmt.Errorf("returned with status code: %d", resp.StatusCode)
+	}
 	return n, nil
 }
 

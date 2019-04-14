@@ -301,12 +301,11 @@ func (r *Runner) Atime(fqn, mpath string, customRespCh ...chan *Response) (respo
 	return responseCh
 }
 
-// convenience method to obtain atime from the (atime) cache or the file itself,
-// and format accordingly
-func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache bool,
-	format ...string) (atimestr string, atime time.Time, err error) {
+// convenience method to obtain atime from the (atime) cache or the file itself
+func (r *Runner) GetAtime(fqn, mpath string, respCh chan *Response, useCache bool) (timeunix int64, err error) {
 	var (
 		atimeResp *Response
+		atime     time.Time
 		finfo     os.FileInfo
 		ok        bool
 	)
@@ -325,11 +324,7 @@ func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache 
 		}
 	}
 	if err == nil {
-		if len(format) > 0 {
-			atimestr = atime.Format(format[0])
-		} else {
-			atimestr = atime.Format(cmn.RFC822)
-		}
+		timeunix = atime.UnixNano()
 	}
 	return
 }

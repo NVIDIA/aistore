@@ -266,7 +266,7 @@ func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan e
 // Returns:
 // * SGL that hold all the objects data
 // * constructed from the main object slices
-func generateSlicesToMemory(fqn string, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
+func generateSlicesToMemory(lom *cluster.LOM, dataSlices, paritySlices int) (cmn.ReadOpenCloser, []*slice, error) {
 	var (
 		totalCnt = paritySlices + dataSlices
 		slices   = make([]*slice, totalCnt)
@@ -274,11 +274,11 @@ func generateSlicesToMemory(fqn string, dataSlices, paritySlices int) (cmn.ReadO
 	)
 
 	// read the object into memory
-	sgl, err := readFile(fqn)
+	sgl, err := readFile(lom)
 	if err != nil {
 		return sgl, slices, err
 	}
-	fileSize := sgl.Size()
+	fileSize := lom.Size()
 
 	sliceSize := SliceSize(fileSize, dataSlices)
 	padSize := sliceSize*int64(dataSlices) - fileSize
@@ -481,7 +481,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 	if c.toDisk {
 		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
 	} else {
-		objReader, slices, err = generateSlicesToMemory(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)
+		objReader, slices, err = generateSlicesToMemory(req.LOM, ecConf.DataSlices, ecConf.ParitySlices)
 	}
 
 	if err != nil {

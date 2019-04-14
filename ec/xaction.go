@@ -151,12 +151,16 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 	)
 	ireq := r.newIntraReq(act, nil)
 	fh, err := cmn.NewFileHandle(fqn)
-	lom := &cluster.LOM{FQN: fqn, T: r.t}
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomAtime|cluster.LomVersion|cluster.LomCksum); errstr != "" {
-		// an error is OK. Log it and try to go on with what has been read
-		glog.Warningf("Failed to read file stats: %s", errstr)
+	// this lom is for local slice/metafile requested by another target
+	// to restore the object. So, just create lom and call FromFS
+	// because LOM cache does not keep non-objects
+	lom, errstr := cluster.LOM{FQN: fqn, T: r.t}.Init()
+	if errstr != "" {
+		glog.Warningf("Failed to read file stats #1: %s", errstr)
 	}
-
+	if errstr := lom.FromFS(); errstr != "" {
+		glog.Warningf("Failed to read file stats #2: %s", errstr)
+	}
 	if err == nil && lom.Size() != 0 {
 		sz = lom.Size()
 		reader = fh
@@ -271,7 +275,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
-	lom.Fill("", cluster.LomFstat)
+	_ = lom.Load(true) // FIXME: handle errors
 	if glog.V(4) {
 		glog.Infof("Received object %s/%s from %s", lom.Bucket, lom.Objname, daemonID)
 	}

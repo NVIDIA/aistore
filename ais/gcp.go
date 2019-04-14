@@ -306,24 +306,24 @@ func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
-	if glog.V(4) {
-		glog.Infof("headobject %s/%s", bucket, objname)
-	}
+func (gcpimpl *gcpimpl) headobject(ct context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
 	objmeta = make(cmn.SimpleKVs)
 
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	attrs, err := gcpclient.Bucket(bucket).Object(objname).Attrs(gctx)
+	attrs, err := gcpclient.Bucket(lom.Bucket).Object(lom.Objname).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 		return
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
 	objmeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
+	if glog.V(4) {
+		glog.Infof("HEAD %s", lom)
+	}
 	return
 }
 
@@ -332,16 +332,16 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string, objname string) (lom *cluster.LOM, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, lom *cluster.LOM) (errstr string, errcode int) {
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	o := gcpclient.Bucket(bucket).Object(objname)
+	o := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: failed to get obj metadata, err: %v", lom, err)
 		return
 	}
 
@@ -350,16 +350,17 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("The object %s/%s either %s or is not accessible, err: %v", bucket, objname, cmn.DoesNotExist, err)
+		errstr = fmt.Sprintf("%s: either %s or is inaccessible, err: %v", lom, cmn.DoesNotExist, err)
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname}
-	lom.SetCksum(cksum)
-	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
-	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
+	bckProvider, _ := cmn.BckProviderFromStr(cmn.CloudBs)
+	lom, errstr = cluster.LOM{T: gcpimpl.t, Bucket: lom.Bucket, Objname: lom.Objname, BucketProvider: bckProvider}.Init()
+	if errstr != "" {
 		return
 	}
+	lom.SetCksum(cksum)
+	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
 	roi := &recvObjInfo{
 		t:            gcpimpl.t,
 		cold:         true,
@@ -374,60 +375,60 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("GET %s/%s", bucket, objname)
+		glog.Infof("GET %s", lom)
 	}
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, lom *cluster.LOM) (version string, errstr string, errcode int) {
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
 
 	md := make(cmn.SimpleKVs)
-	md[gcpChecksumType], md[gcpChecksumVal] = cksum.Get()
+	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
 
-	gcpObj := gcpclient.Bucket(bucket).Object(objname)
+	gcpObj := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
 	buf, slab := gmem2.AllocFromSlab2(0)
 	written, err := io.CopyBuffer(wc, file, buf)
 	slab.Free(buf)
 	if err != nil {
-		errstr = fmt.Sprintf("PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("PUT %s/%s: failed to close wc, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: PUT failed to close, err: %v", lom, err)
 		return
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("PUT %s/%s: failed to read updated object attributes, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: PUT failed to read objattrs, err: %v", lom, err)
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
 	if glog.V(4) {
-		glog.Infof("PUT %s/%s, size %d, version %s", bucket, objname, written, version)
+		glog.Infof("PUT %s, size %d, version %s", lom, written, version)
 	}
 	return
 }
 
-func (gcpimpl *gcpimpl) deleteobj(ct context.Context, bucket, objname string) (errstr string, errcode int) {
+func (gcpimpl *gcpimpl) deleteobj(ct context.Context, lom *cluster.LOM) (errstr string, errcode int) {
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	o := gcpclient.Bucket(bucket).Object(objname)
+	o := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
 	err := o.Delete(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to DELETE %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: DELETE failed, err: %v", lom, err)
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("DELETE %s/%s", bucket, objname)
+		glog.Infof("DELETE %s", lom)
 	}
 	return
 }

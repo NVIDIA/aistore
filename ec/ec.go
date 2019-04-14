@@ -300,17 +300,13 @@ func unique(prefix, bucket, objname string) string {
 
 // Reads local file to SGL
 // Used by a target when responding to request for metafile/replica/slice
-func readFile(fqn string) (sgl *memsys.SGL, err error) {
-	fi, err := os.Stat(fqn)
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.Open(fqn)
+func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
+	f, err := os.Open(lom.FQN)
 	if err != nil {
 		return nil, err
 	}
 
-	sgl = mem2.NewSGL(fi.Size())
+	sgl = mem2.NewSGL(lom.Size())
 	buf, slab := mem2.AllocFromSlab2(cmn.KiB * 32)
 	_, err = io.CopyBuffer(sgl, f, buf)
 	f.Close()

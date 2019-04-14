@@ -439,33 +439,6 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 	return xcopy
 }
 
-func (r *xactionsRegistry) renewRechecksum(bucket string) *xactRechecksum {
-	bckXacts := r.bucketsXacts(bucket)
-
-	newEntry := &checksumEntry{}
-	newEntry.Lock()
-	defer newEntry.Unlock()
-
-	val, loaded := bckXacts.LoadOrStore(cmn.ActRechecksum, newEntry)
-
-	if loaded {
-		if glog.V(4) {
-			entry := val.(*checksumEntry)
-			entry.RLock()
-			glog.Infof("%s already running for bucket %s, nothing to do", entry.xact, bucket)
-			entry.RUnlock()
-		}
-
-		return nil
-	}
-
-	id := r.uniqueID()
-	xrcksum := &xactRechecksum{XactBase: *cmn.NewXactBase(id, cmn.ActRechecksum), bucket: bucket}
-	newEntry.xact = xrcksum
-	r.byID.Store(id, newEntry)
-	return xrcksum
-}
-
 // HELPERS
 
 func makeXactRebBase(id int64, rebType int, runnerCnt int) xactRebBase {
@@ -493,69 +466,52 @@ type (
 		sync.RWMutex
 		baseXactStats
 	}
-
 	baseXactStats struct {
 		count int64
 	}
-
 	lruEntry struct {
 		baseXactEntry
 		xact *xactLRU
 	}
-
 	prefetchEntry struct {
 		baseXactEntry
 		xact *xactPrefetch
 	}
-
 	globalRebEntry struct {
 		baseXactEntry
 		xact *xactGlobalReb
 	}
-
 	localRebEntry struct {
 		baseXactEntry
 		xact *xactLocalReb
 	}
-
 	electionEntry struct {
 		baseXactEntry
 		xact *xactElection
 	}
-
 	evictDeleteEntry struct {
 		baseXactEntry
 		xact *xactEvictDelete
 	}
-
 	downloaderEntry struct {
 		baseXactEntry
 		xact *downloader.Downloader
 	}
-
 	getECEntry struct {
 		baseXactEntry
 		xact *ec.XactGet
 	}
-
 	putECEntry struct {
 		baseXactEntry
 		xact *ec.XactPut
 	}
-
 	respondECEntry struct {
 		baseXactEntry
 		xact *ec.XactRespond
 	}
-
 	putCopiesEntry struct {
 		baseXactEntry
 		xact *mirror.XactCopy
-	}
-
-	checksumEntry struct {
-		baseXactEntry
-		xact *xactRechecksum
 	}
 )
 
@@ -677,14 +633,6 @@ func (e *makeNCopiesEntry) Abort() {
 func (e *putCopiesEntry) Get() cmn.Xact    { return e.xact }
 func (e *putCopiesEntry) Stats() xactStats { return e.baseXactStats }
 func (e *putCopiesEntry) Abort() {
-	if e.xact != nil && !e.xact.Finished() {
-		e.xact.Abort()
-	}
-}
-
-func (e *checksumEntry) Get() cmn.Xact    { return e.xact }
-func (e *checksumEntry) Stats() xactStats { return e.baseXactStats }
-func (e *checksumEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
 	}

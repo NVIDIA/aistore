@@ -209,7 +209,7 @@ ExtractAllShards:
 					return nil
 				}
 				//
-				// FIXME: replace the following 5 lines with lom.Fill(m.rs.BckProvider, 0)
+				// FIXME: replace the following 5 lines with lom.Init()
 				//
 				bckIsLocal := m.rs.BckProvider == cmn.LocalBs
 				fqn, _, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, bckIsLocal)
@@ -343,8 +343,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		beforeCreation = time.Now()
 	}
 
-	lom := &cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}
-	if errStr := lom.Fill(bckProvider, cluster.LomFstat); errStr != "" {
+	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName, BucketProvider: bckProvider}.Init()
+	if errStr == "" {
+		errStr = lom.Load(true)
+	}
+	if errStr != "" {
 		return errors.New(errStr)
 	}
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
@@ -378,7 +381,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		w = shardFile
 	}
 
-	_, err = m.extractCreator.CreateShard(s, w, loadContent)
+	written, err := m.extractCreator.CreateShard(s, w, loadContent)
 	shardFile.Close()
 	if err != nil {
 		return err
@@ -393,10 +396,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if err := cmn.MvFile(workFQN, lom.FQN); err != nil {
 		return err
 	}
-
+	lom.SetSize(written)
 	if errStr := lom.PersistCksumVer(); errStr != "" {
 		return errors.New(errStr)
 	}
+	lom.ReCache()
 
 	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	if errStr != "" {

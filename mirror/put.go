@@ -77,7 +77,7 @@ func (r *XactCopy) Run() error {
 	for {
 		select {
 		case lom := <-r.workCh:
-			if errstr := lom.Fill("", cluster.LomCopy); errstr != "" {
+			if errstr := lom.Load(true); errstr != "" {
 				glog.Errorln(errstr)
 				break
 			}

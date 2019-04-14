@@ -308,20 +308,17 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
-	if glog.V(4) {
-		glog.Infof("headobject %s/%s", bucket, objname)
-	}
+func (awsimpl *awsimpl) headobject(ct context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, errstr string, errcode int) {
 	objmeta = make(cmn.SimpleKVs)
 
 	sess := createSession(ct)
 	svc := s3.New(sess)
-	input := &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)}
+	input := &s3.HeadObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)}
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 		return
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
@@ -330,6 +327,9 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 	}
 	size := strconv.FormatInt(*headOutput.ContentLength, 10)
 	objmeta[cmn.HeaderObjSize] = size
+	if glog.V(4) {
+		glog.Infof("HEAD %s", lom)
+	}
 	return
 }
 
@@ -338,21 +338,20 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster.LOM) (errstr string, errcode int) {
 	var (
 		cksum        cmn.Cksummer
 		cksumToCheck cmn.Cksummer
 	)
-
 	sess := createSession(ctx)
 	svc := s3.New(sess)
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objname),
+		Bucket: aws.String(lom.Bucket),
+		Key:    aws.String(lom.Objname),
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to GET %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
 		return
 	}
 	// may not have ais metadata
@@ -367,40 +366,34 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN, bucket, objname str
 	if !strings.Contains(md5, awsMultipartDelim) {
 		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
 	}
-
-	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname}
 	lom.SetCksum(cksum)
 	if obj.VersionId != nil {
 		lom.SetVersion(*obj.VersionId)
 	}
-	if errstr = lom.Fill(cmn.CloudBs, 0); errstr != "" {
-		return
-	}
 	roi := &recvObjInfo{
 		t:            awsimpl.t,
-		cold:         true,
+		lom:          lom,
 		r:            obj.Body,
 		cksumToCheck: cksumToCheck,
-		lom:          lom,
 		workFQN:      workFQN,
+		cold:         true,
 	}
 	if err := roi.writeToFile(); err != nil {
 		errstr = err.Error()
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("GET %s/%s", bucket, objname)
+		glog.Infof("GET %s", lom)
 	}
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.LOM) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		uploadoutput *s3manager.UploadOutput
 	)
-
-	cksumType, cksumValue := cksum.Get()
+	cksumType, cksumValue := lom.Cksum().Get()
 	md := make(map[string]*string)
 	md[awsChecksumType] = aws.String(cksumType)
 	md[awsChecksumVal] = aws.String(cksumValue)
@@ -408,38 +401,38 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	sess := createSession(ct)
 	uploader := s3manager.NewUploader(sess)
 	uploadoutput, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:   aws.String(bucket),
-		Key:      aws.String(objname),
+		Bucket:   aws.String(lom.Bucket),
+		Key:      aws.String(lom.Objname),
 		Body:     file,
 		Metadata: md,
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to PUT %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
 		return
 	}
 	if glog.V(4) {
 		if uploadoutput.VersionID != nil {
 			version = *uploadoutput.VersionID
-			glog.Infof("PUT %s/%s, version %s", bucket, objname, version)
+			glog.Infof("PUT %s, version %s", lom, version)
 		} else {
-			glog.Infof("PUT %s/%s", bucket, objname)
+			glog.Infof("PUT %s", lom)
 		}
 	}
 	return
 }
 
-func (awsimpl *awsimpl) deleteobj(ct context.Context, bucket, objname string) (errstr string, errcode int) {
+func (awsimpl *awsimpl) deleteobj(ct context.Context, lom *cluster.LOM) (errstr string, errcode int) {
 	sess := createSession(ct)
 	svc := s3.New(sess)
-	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
+	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("Failed to DELETE %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("%s: DELETE failed, err: %v", lom, err)
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("DELETE %s/%s", bucket, objname)
+		glog.Infof("DELETE %s", lom)
 	}
 	return
 }

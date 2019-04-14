@@ -33,6 +33,21 @@ func (m *BMD) IsLocal(bucket string) bool {
 	return ok
 }
 
+func (m *BMD) Exists(b string, bckID int64, local bool) (exists bool) {
+	var (
+		p  *cmn.BucketProps
+		mm = m.LBmap
+	)
+	if !local {
+		mm = m.CBmap
+	}
+	p, exists = mm[b]
+	if exists && (bckID != 0 && p.BID != bckID) {
+		exists = false
+	}
+	return
+}
+
 func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
 	mm := m.LBmap
 	if !local {

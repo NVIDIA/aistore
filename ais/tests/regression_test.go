@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
@@ -276,18 +275,6 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	_, err = api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bucket, path.Join(SmokeStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
-	}
-
-	// Test corrupting the file xattr
-	fName = <-filenameCh
-	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("Corrupting file xattr[%s]: %s\n", fName, fqn)
-	if errstr := fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde")); errstr != "" {
-		t.Error(errstr)
-	}
-	_, err = api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bucket, path.Join(SmokeStr, fName))
-	if err == nil {
-		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
 }
 

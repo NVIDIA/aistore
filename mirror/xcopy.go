@@ -175,11 +175,11 @@ func (j *jogger) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: j.parent.T, FQN: fqn}
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || !lom.Exists() {
-		if glog.V(4) {
-			glog.Infof("Warning: %s", errstr)
-		}
+	lom, errstr := cluster.LOM{T: j.parent.T, FQN: fqn}.Init(j.config)
+	if errstr != "" {
+		return nil
+	}
+	if errstr := lom.Load(true); errstr != "" || !lom.Exists() {
 		return nil
 	}
 	if lom.IsCopy() {
@@ -224,6 +224,7 @@ func (j *jogger) delCopies(lom *cluster.LOM) (err error) {
 			}
 		}
 	}
+	lom.ReCache()
 	j.parent.Namelocker.Unlock(lom.Uname(), true)
 	return
 }

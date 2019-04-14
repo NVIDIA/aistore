@@ -83,21 +83,21 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 		glog.Error(err)
 		return
 	}
-
+	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init()
+	if errstr != "" {
+		glog.Error(errstr)
+		return
+	}
+	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
+	lom.SetVersion(hdr.ObjAttrs.Version)
 	roi := &recvObjInfo{
 		t:            reb.t,
-		objname:      hdr.Objname,
-		bucket:       hdr.Bucket,
+		lom:          lom,
 		migrated:     true,
 		r:            ioutil.NopCloser(objReader),
 		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 	}
-	if err := roi.init(); err != nil {
-		glog.Error(err)
-		return
-	}
-	roi.lom.SetAtime(time.Unix(0, hdr.ObjAttrs.Atime))
-	roi.lom.SetVersion(hdr.ObjAttrs.Version)
+	roi.init()
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
@@ -144,26 +144,31 @@ func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadC
 }
 
 // the walking callback is executed by the LRU xaction
-func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
+func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err error) {
 	var (
-		file *cmn.FileHandle
+		file                  *cmn.FileHandle
+		lom                   *cluster.LOM
+		si                    *cluster.Snode
+		errstr                string
+		hdr                   transport.Header
+		cksum                 cmn.Cksummer
+		cksumType, cksumValue string
 	)
-
 	if rj.xreb.Aborted() {
 		return fmt.Errorf("%s: aborted, path %s", rj.xreb, rj.mpath)
 	}
-	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
+	if inerr != nil {
+		if errstr = cmn.PathWalkErr(inerr); errstr != "" {
 			glog.Errorf(errstr)
-			return err
+			return inerr
 		}
 		return nil
 	}
 	if fi.Mode().IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rj.m.t, FQN: fqn}
-	if errstr := lom.Fill("", 0); errstr != "" {
+	lom, errstr = cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
+	if errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
 		}
@@ -171,7 +176,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	}
 
 	// rebalance, maybe
-	si, errstr := hrwTarget(lom.Bucket, lom.Objname, rj.smap)
+	si, errstr = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -179,39 +184,32 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		return nil
 	}
 
-	// Skip objects which were already sent via GFN. Since we use probabilistic
-	// filters it may happen than even though we sent given object through GFN
-	// the filter will answer 'false' in `Lookup` - but this is something that
-	// we need to accept.
+	// Skip objects that were already sent via GFN (due to probabilistic filtering
+	// false-positives, albeit rare, are still possible)
 	uname := lom.Uname()
 	if rj.m.objectsSent.Lookup([]byte(uname)) {
 		rj.m.objectsSent.Delete([]byte(uname)) // it will not be used anymore
 		return nil
 	}
 
-	// do rebalance
+	// LOCK & rebalance
 	if glog.V(4) {
 		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
 	}
+	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in rebalanceObjCallback()
 
-	if errstr := lom.Fill("", cluster.LomAtime|cluster.LomCksum|cluster.LomCksumMissingRecomp); errstr != "" {
-		return errors.New(errstr)
+	errstr = lom.Load(false)
+	if errstr != "" || !lom.Exists() || lom.IsCopy() {
+		goto rerr
 	}
-	if !lom.Exists() || lom.IsCopy() {
-		return nil
+	if cksum, errstr = lom.CksumComputeIfMissing(); errstr != "" {
+		goto rerr
 	}
-
-	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
-	rj.m.t.rtnamemap.Lock(uname, false)
-
+	cksumType, cksumValue = cksum.Get()
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
-		glog.Errorf("failed to open file: %s, err: %v", lom.FQN, err)
-		rj.m.t.rtnamemap.Unlock(uname, false)
-		return err
+		goto rerr
 	}
-
-	cksumType, cksumValue := lom.Cksum().Get()
-	hdr := transport.Header{
+	hdr = transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
 		IsLocal: lom.BckIsLocal,
@@ -225,14 +223,21 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 		},
 	}
 
-	rj.wg.Add(1) // NOTE: Done happens in case of SendV error or in rebalanceObjCallback.
+	rj.wg.Add(1) // NOTE: wg.Done() in rebalanceObjCallback()
 	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.rebalanceObjCallback, si); err != nil {
-		glog.Errorf("failed to rebalance: %s, err: %v", lom.FQN, err)
-		rj.m.t.rtnamemap.Unlock(uname, false)
 		rj.wg.Done()
-		return err
+		goto rerr
 	}
 	return nil
+rerr:
+	rj.m.t.rtnamemap.Unlock(uname, false)
+	if errstr != "" {
+		err = errors.New(errstr)
+	}
+	if err != nil && bool(glog.V(4)) {
+		glog.Errorf("%s, err: %v", lom, err)
+	}
+	return
 }
 
 //
@@ -270,10 +275,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	lom := &cluster.LOM{T: rj.m.t, FQN: fqn}
-	if errstr := lom.Fill("", cluster.LomFstat|cluster.LomCopy); errstr != "" {
+	lom, errstr := cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
+	if errstr != "" {
 		if glog.V(4) {
-			glog.Infof("%s, err %v - skipping...", lom, err)
+			glog.Infof("%s, err %v - skipping #1...", lom, errstr)
+		}
+		return nil
+	}
+	errstr = lom.Load(false)
+	if errstr != "" {
+		if glog.V(4) {
+			glog.Infof("%s, err %v - skipping #2...", lom, errstr)
 		}
 		return nil
 	}
@@ -306,15 +318,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	}
 
 	rj.m.t.rtnamemap.Lock(lom.Uname(), false)
-	if err := lom.CopyObject(lom.HrwFQN, rj.buf); err != nil {
+	dst, erc := lom.CopyObject(lom.HrwFQN, rj.buf)
+	if erc != nil {
 		rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
-		if !os.IsNotExist(err) {
+		if !os.IsNotExist(erc) {
 			rj.xreb.Abort()
-			rj.m.t.fshc(err, lom.HrwFQN)
-			return err
+			rj.m.t.fshc(erc, lom.HrwFQN)
+			return erc
 		}
 		return nil
 	}
+	dst.Load(true)
 	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
 	rj.objectsMoved++
 	rj.bytesMoved += fileInfo.Size()

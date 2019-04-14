@@ -43,10 +43,6 @@ type (
 		proxyrunner *proxyrunner
 		vr          *VoteRecord
 	}
-	xactRechecksum struct {
-		cmn.XactBase
-		bucket string
-	}
 )
 
 type xactionsRegistry struct {

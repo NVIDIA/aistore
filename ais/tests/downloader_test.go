@@ -345,7 +345,7 @@ func TestDownloadCloud(t *testing.T) {
 	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
 	tutils.CheckFatal(err, t)
 
-	waitForDownload(t, id, 10*time.Second)
+	waitForDownload(t, id, time.Minute)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
 	tutils.CheckFatal(err, t)

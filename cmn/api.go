@@ -846,6 +846,9 @@ type BucketProps struct {
 
 	// EC defines erasure coding setting for the bucket
 	EC ECConf `json:"ec"`
+
+	// unique bucket ID
+	BID int64
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -883,9 +886,10 @@ func DefaultBucketProps() *BucketProps {
 
 	c.Cksum.Type = PropInherit
 	return &BucketProps{
-		Cksum:  c.Cksum,
-		LRU:    c.LRU,
-		Mirror: c.Mirror,
+		Cksum:      c.Cksum,
+		LRU:        c.LRU,
+		Mirror:     c.Mirror,
+		Versioning: c.Ver,
 	}
 }
 

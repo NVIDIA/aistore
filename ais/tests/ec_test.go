@@ -417,7 +417,7 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, s
 	tutils.CheckFatal(err, t)
 }
 
-func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string) {
+func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string, failOnDelErr bool) {
 	tutils.Logln("Deleting objects...")
 	wg := sync.WaitGroup{}
 
@@ -428,7 +428,11 @@ func clearAllECObjects(t *testing.T, numFiles int, objPatt, fullPath string) {
 			objName := fmt.Sprintf(objPatt, i)
 			objPath := ecTestDir + objName
 			err := tutils.Del(proxyURLReadOnly, TestLocalBucketName, objPath, "", nil, nil, true)
-			tutils.CheckFatal(err, t)
+			if failOnDelErr {
+				tutils.CheckFatal(err, t)
+			} else if err != nil {
+				t.Log(err.Error())
+			}
 
 			deadline := time.Now().Add(time.Second * 10)
 			var partsAfterDelete map[string]int64
@@ -723,7 +727,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	assertBucketSize(t, baseParams, TestLocalBucketName, numFiles)
 
-	clearAllECObjects(t, numFiles, objPatt, fullPath)
+	clearAllECObjects(t, numFiles, objPatt, fullPath, true)
 }
 
 // Returns path to main object and map of all object's slices and metadata
@@ -754,7 +758,7 @@ func createECFile(t *testing.T, objName, fullPath string, baseParams *api.BasePa
 // Checks that after corrupting all slices it is not possible to recover a file
 func TestECChecksum(t *testing.T) {
 	const (
-		objPatt = "obj-xattr-%04d"
+		objPatt = "obj-cksum-%04d"
 	)
 
 	if testing.Short() {
@@ -1420,6 +1424,8 @@ func TestECXattrs(t *testing.T) {
 	if len(reslist.Entries) != numFiles {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), 1)
 	}
+
+	clearAllECObjects(t, numFiles, objPatt, fullPath, true)
 }
 
 // Lost target test:
@@ -1679,7 +1685,9 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 	wg.Wait()
 
-	clearAllECObjects(t, numFiles, objPatt, fullPath)
+	// it is OK to have some Del failed with "object not found" because
+	// some targets are still dead at this point
+	clearAllECObjects(t, numFiles, objPatt, fullPath, false)
 }
 
 // Lost mountpah test:

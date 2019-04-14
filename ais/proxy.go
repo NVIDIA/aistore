@@ -440,14 +440,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
-	var redirecturl string
-	if replica, _ := isReplicationPUT(r); !replica {
-		// regular PUT
-		redirecturl = p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	} else {
-		// replication PUT
-		redirecturl = p.redirectURL(r, si.IntraDataNet.DirectURL, started, bucket)
-	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.PutCount, 1)
@@ -493,7 +486,6 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-
 		bucketmd, err := p.destroyBucket(&msg, bucket, false)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -682,18 +674,16 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 	p.bmdowner.Lock()
 	bucketmd := p.bmdowner.get()
 
-	if local && !bucketmd.IsLocal(bucket) {
-		p.bmdowner.Unlock()
-		return nil, fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
-	}
-	if !local && !bucketmd.isPresent(bucket, false) {
-		if glog.V(4) {
+	if !bucketmd.Exists(bucket, 0 /*ID=any*/, local) {
+		var err error
+		if local {
+			err = fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
+		} else if glog.V(4) {
 			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bucket, cmn.DoesNotExist)
 		}
 		p.bmdowner.Unlock()
-		return bucketmd, nil
+		return bucketmd, err
 	}
-
 	clone := bucketmd.clone()
 	if !clone.del(bucket, local) {
 		p.bmdowner.Unlock()
@@ -896,9 +886,6 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActRename:
 		p.filrename(w, r, &msg)
-		return
-	case cmn.ActReplicate:
-		p.replicate(w, r, &msg)
 		return
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
@@ -1141,11 +1128,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		recksum := rechecksumRequired(cmn.GCO.Get().Cksum.Type, bprops.Cksum.Type, nprops.Cksum.Type)
 		bprops.CopyFrom(nprops)
-		if recksum {
-			go p.notifyTargetsRechecksum(bucket)
-		}
 	case cmn.ActResetProps:
 		if bprops.EC.Enabled {
 			p.bmdowner.Unlock()
@@ -1823,10 +1806,6 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.RenameCount, 1)
-}
-
-func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	p.invalmsghdlr(w, r, cmn.NotSupported) // see also: daemon.go, config.sh, and tests/replication
 }
 
 func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method, bckProvider string) {
@@ -3057,40 +3036,6 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 		}
 	}
 	return true
-}
-
-func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketChecksumNew string) bool {
-	checksumOld := globalChecksum
-	if bucketChecksumOld != cmn.PropInherit {
-		checksumOld = bucketChecksumOld
-	}
-	checksumNew := globalChecksum
-	if bucketChecksumNew != cmn.PropInherit {
-		checksumNew = bucketChecksumNew
-	}
-	return checksumNew != cmn.ChecksumNone && checksumNew != checksumOld
-}
-
-func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
-	smap := p.smapowner.get()
-	jsbytes, err := jsoniter.Marshal(p.newActionMsgInternalStr(cmn.ActRechecksum, smap, nil))
-	cmn.AssertNoErr(err)
-
-	res := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-		nil,
-		http.MethodPost,
-		jsbytes,
-		smap,
-		cmn.GCO.Get().Timeout.Default,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
-	for r := range res {
-		if r.err != nil {
-			glog.Warningf("Target %s failed to re-checksum objects in bucket %s", r.si, bucket)
-		}
-	}
 }
 
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed

@@ -116,11 +116,11 @@ type cloudif interface {
 	headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
-	headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int)
+	headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, errstr string, errcode int)
 	//
-	getobj(ctx context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int)
-	putobj(ctx context.Context, file *os.File, bucket, objname string, cksum cmn.Cksummer) (version string, errstr string, errcode int)
-	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
+	getobj(ctx context.Context, fqn string, lom *cluster.LOM) (errstr string, errcode int)
+	putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, errstr string, errcode int)
+	deleteobj(ctx context.Context, lom *cluster.LOM) (errstr string, errcode int)
 }
 
 func (u reqArgs) url() string {
@@ -1073,9 +1073,4 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	}
 	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
 	return
-}
-
-func isReplicationPUT(r *http.Request) (isreplica bool, replicasrc string) {
-	replicasrc = r.Header.Get(cmn.HeaderObjReplicSrc)
-	return replicasrc != "", replicasrc
 }

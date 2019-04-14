@@ -53,8 +53,9 @@ func (m *bucketMD) add(b string, local bool, p *cmn.BucketProps) bool {
 	if _, ok := mm[b]; ok {
 		return false
 	}
-	mm[b] = p
 	m.Version++
+	p.BID = m.Version
+	mm[b] = p
 	return true
 }
 
@@ -69,15 +70,6 @@ func (m *bucketMD) del(b string, local bool) bool {
 	delete(mm, b)
 	m.Version++
 	return true
-}
-
-func (m *bucketMD) isPresent(b string, local bool) (present bool) {
-	mm := m.LBmap
-	if !local {
-		mm = m.CBmap
-	}
-	_, present = mm[b]
-	return
 }
 
 func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
