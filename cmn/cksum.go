@@ -50,7 +50,7 @@ func NewCksum(kind string, val string) Cksummer {
 	if kind == ChecksumMD5 {
 		return Cksumvalmd5{kind, val}
 	}
-	Assert(kind == ChecksumCRC32C)
+	AssertMsg(kind == ChecksumCRC32C, kind)
 	return Cksumvalcrc32c{kind, val}
 }
 

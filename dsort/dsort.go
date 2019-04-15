@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"math"
 	"net/http"
@@ -276,8 +275,6 @@ func (m *Manager) genShardName(s *extract.Shard) string {
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
-		shardFile      *os.File
-		w              io.Writer
 		beforeCreation time.Time
 		loadContent    = m.loadContent()
 		metrics        = m.Metrics.Creation
@@ -287,10 +284,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		bucket      = m.rs.OutputBucket
 		bckProvider = m.rs.OutputBckProvider
 
-		// variables which may be not set, depending on context
-		h          hash.Hash
-		cksumType  string
-		cksumValue string
+		errCh = make(chan error, 2)
 	)
 
 	if m.Metrics.extended {
@@ -320,41 +314,44 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return errors.New("out of space")
 	}
 
-	shardFile, err = cmn.CreateFile(workFQN)
-	if err != nil {
-		return fmt.Errorf("failed to create new shard file, err: %v", err)
+	wg := &sync.WaitGroup{}
+	r, w := io.Pipe()
+	wg.Add(2)
+	go func() {
+		err := m.ctx.t.Receive(workFQN, r, lom, cluster.WarmGet, nil)
+		errCh <- err
+		wg.Done()
+	}()
+
+	go func() {
+		_, err := m.extractCreator.CreateShard(s, w, loadContent)
+		errCh <- err
+		w.CloseWithError(err) // if `nil`, the writer will close with EOF
+		wg.Done()
+	}()
+
+	finishes := 0
+	for finishes < 2 && err == nil {
+		select {
+		case err = <-errCh:
+			if err != nil {
+				r.CloseWithError(err)
+				w.CloseWithError(err)
+			}
+			finishes++
+		case <-m.listenAborted():
+			err = newAbortError(m.ManagerUUID)
+			r.CloseWithError(err)
+			w.CloseWithError(err)
+		}
 	}
 
-	chksum := lom.CksumConf()
-	if chksum.Type != cmn.ChecksumNone {
-		cksumType = chksum.Type
-		cmn.AssertMsg(cksumType == cmn.ChecksumXXHash, cksumType)
-		h = xxhash.New64()
-		w = io.MultiWriter(shardFile, h)
-	} else {
-		w = shardFile
-	}
+	wg.Wait()
+	close(errCh)
 
-	written, err := m.extractCreator.CreateShard(s, w, loadContent)
-	shardFile.Close()
 	if err != nil {
 		return err
 	}
-
-	if chksum.Type != cmn.ChecksumNone {
-		cksumValue = cmn.HashToStr(h)
-		cmn.Assert(cksumValue != "")
-		lom.SetCksum(cmn.NewCksum(cksumType, cksumValue))
-	}
-
-	if err := cmn.MvFile(workFQN, lom.FQN); err != nil {
-		return err
-	}
-	lom.SetSize(written)
-	if errStr := lom.PersistCksumVer(); errStr != "" {
-		return errors.New(errStr)
-	}
-	lom.ReCache()
 
 	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	if errStr != "" {
@@ -383,14 +380,15 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			goto exit
 		}
 
+		cksumType, cksumValue := lom.Cksum().Get()
 		hdr := transport.Header{
 			Bucket:  bucket,
 			Objname: shardName,
 			IsLocal: bckProvider == cmn.LocalBs,
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       stat.Size(),
-				CksumValue: cksumValue,
 				CksumType:  cksumType,
+				CksumValue: cksumValue,
 			},
 		}
 

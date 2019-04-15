@@ -684,15 +684,17 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.responseCallback); err != nil {
+				f.Close()
 				glog.Error(err)
 			}
 		} else {
+			m.recManager.RecordContents().Delete(hdr.Objname)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
+				sgl.Free()
 				glog.Error(err)
 			}
-			m.recManager.RecordContents().Delete(hdr.Objname)
 		}
 	}
 }
@@ -791,13 +793,13 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				}
 				f.Close()
 			} else {
+				m.recManager.RecordContents().Delete(pathToContent)
 				sgl := v.(*memsys.SGL)
 				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
 					sgl.Free()
 					return written, err
 				}
 				sgl.Free()
-				m.recManager.RecordContents().Delete(pathToContent)
 			}
 
 			written += n
