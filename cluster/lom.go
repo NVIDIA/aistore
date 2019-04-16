@@ -332,6 +332,9 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 // Returns stored checksum (if present) and computed checksum (if requested)
 // MAY compute and store a missing (xxhash) checksum
 //
+// If xattr checksum is different than lom's metadata checksum, returns error
+// and do not recompute checksum even if recompute set to true.
+//
 // Checksums: brief theory of operations ========================================
 //
 // * objects are stored in the cluster with their content checksums and in accordance
@@ -367,11 +370,16 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 			lom.BadCksum = true
 			return
 		}
+
 		if !recompute && lom.md.cksum == nil && len(b) == 0 {
 			return
 		}
 		v := cmn.NewCksum(cksumType, string(b))
-		if !cmn.EqCksum(lom.md.cksum, v) {
+
+		// both checksums were missing and recompute requested, go immediately to computing
+		recomputeEmptyCksms := recompute && v == nil && lom.md.cksum == nil
+
+		if !recomputeEmptyCksms && !cmn.EqCksum(lom.md.cksum, v) {
 			lom.BadCksum = true
 			errstr = lom.BadCksumErr(v)
 			lom.Uncache()
