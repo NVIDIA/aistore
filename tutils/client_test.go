@@ -40,7 +40,7 @@ func TestPutSG(t *testing.T) {
 	size := int64(10)
 	sgl := tutils.Mem2.NewSGL(size)
 	defer sgl.Free()
-	err := putSG(sgl, size, false /* withHash */)
+	err := putSG(sgl, size, true /* withHash */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func putRand(size int64, withHash bool) error {
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	sgl.Reset()
-	r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
+	r, err := tutils.NewSGReader(sgl, size, withHash)
 	if err != nil {
 		return err
 	}

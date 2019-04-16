@@ -63,7 +63,7 @@ func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *clu
 }
 
 func ExtractTargetNodes(smap cluster.Smap) []*cluster.Snode {
-	var targets []*cluster.Snode
+	targets := make([]*cluster.Snode, 0, len(smap.Tmap))
 	for _, target := range smap.Tmap {
 		targets = append(targets, target)
 	}

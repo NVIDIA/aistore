@@ -47,7 +47,7 @@ func main() {
 	flag.StringVar(&tmpDir, "tmpdir", "/tmp/ais", "temporary directory to store files used by webdav")
 	flag.IntVar(&logLevel, "webdav-loglevel", logLevelNone, "verbose level(0 = none, 1 = webdav, 2 = ais)")
 	flag.Parse()
-	u := url.URL{Scheme: "http", Host: proxy}
+	u := &url.URL{Scheme: "http", Host: proxy}
 
 	h := &webdav.Handler{
 		FileSystem: NewFS(u, tmpDir),

@@ -216,7 +216,7 @@ func (r *readahead) demux(fqn string) *rahjogger {
 //
 //===========================================
 
-func (rj *rahjogger) jog() error {
+func (rj *rahjogger) jog() {
 	glog.Infof("Starting readahead-mpath(%s)", rj.mpath)
 	ticker := time.NewTicker(rahGCTime)
 	for {
@@ -257,7 +257,7 @@ func (rj *rahjogger) jog() error {
 			rj.Unlock()
 		case <-rj.stopCh:
 			ticker.Stop()
-			return nil
+			return
 		}
 	}
 }

@@ -160,7 +160,8 @@ func (s *CoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b,
 func (s *CoreStats) doAdd(name string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.AssertMsg(ok, "Invalid stats name '"+name+"'")
-	if v.kind == KindLatency {
+	switch v.kind {
+	case KindLatency:
 		if strings.HasSuffix(name, ".µs") {
 			nroot := strings.TrimSuffix(name, ".µs")
 			s.statsdC.Send(nroot, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
@@ -171,17 +172,19 @@ func (s *CoreStats) doAdd(name string, val int64) {
 		v.cumulative += val
 		v.Value += val
 		v.Unlock()
-	} else if v.kind == KindThroughput {
+	case KindThroughput:
 		v.Lock()
 		v.cumulative += val
 		v.Value += val
 		v.Unlock()
-	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
-		nroot := strings.TrimSuffix(name, ".n")
-		s.statsdC.Send(nroot, metric{statsd.Counter, "count", val})
-		v.Lock()
-		v.Value += val
-		v.Unlock()
+	case KindCounter:
+		if strings.HasSuffix(name, ".n") {
+			nroot := strings.TrimSuffix(name, ".n")
+			s.statsdC.Send(nroot, metric{statsd.Counter, "count", val})
+			v.Lock()
+			v.Value += val
+			v.Unlock()
+		}
 	}
 }
 

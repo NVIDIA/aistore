@@ -387,7 +387,7 @@ func TestFS(t *testing.T) {
 
 	leader = strings.TrimPrefix(leader, "http://")
 	existingFilesInTestRoot := readTestRoot(t)
-	fs := NewFS(url.URL{Scheme: "http", Host: leader}, rootDir)
+	fs := NewFS(&url.URL{Scheme: "http", Host: leader}, rootDir)
 
 	// clean up
 	defer func() {
@@ -886,7 +886,7 @@ func TestFS(t *testing.T) {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)
 		}
 
-		fs1 := NewFS(url.URL{Scheme: "http", Host: leader}, rootDir)
+		fs1 := NewFS(&url.URL{Scheme: "http", Host: leader}, rootDir)
 		_, err = fs1.Stat(context.Background(), dir30Path) // file6Path)
 		if err != nil {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)

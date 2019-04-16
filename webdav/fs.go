@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -581,11 +580,9 @@ func (fs *FileSystem) newFile(name string) (*File, error) {
 
 	if f.bucketNode() != nil {
 		f.bucketExists = true
-	} else {
-		if fs.proxy.doesBucketExist(f.bucket) {
-			fs.root.addChild(f.bucket)
-			f.bucketExists = true
-		}
+	} else if fs.proxy.doesBucketExist(f.bucket) {
+		fs.root.addChild(f.bucket)
+		f.bucketExists = true
 	}
 
 	if f.typ == Bucket || !f.bucketExists {
@@ -655,7 +652,7 @@ func join(pth string, base string) string {
 }
 
 // NewFS returns a AIStore file system
-func NewFS(url url.URL, localDir string) webdav.FileSystem {
+func NewFS(url fmt.Stringer, localDir string) webdav.FileSystem {
 	return &FileSystem{
 		&proxyServer{url.String()},
 		localDir,

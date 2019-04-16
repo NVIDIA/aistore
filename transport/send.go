@@ -212,7 +212,7 @@ func (sc *StreamCollector) Run() (err error) {
 }
 func (sc *StreamCollector) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", sc.Getname(), err)
-	gc.stop(err)
+	gc.stop()
 }
 
 func (gc *collector) run() (err error) {
@@ -246,7 +246,7 @@ func (gc *collector) run() (err error) {
 	}
 }
 
-func (gc *collector) stop(err error) {
+func (gc *collector) stop() {
 	gc.stopCh.Close()
 }
 

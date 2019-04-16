@@ -338,7 +338,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, versionDir, filesize, int(numPuts), errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, versionDir, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh)
 	close(errCh)

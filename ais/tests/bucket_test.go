@@ -100,7 +100,7 @@ func TestListObjects(t *testing.T) {
 				if wid == workerCount-1 { // last worker puts leftovers
 					objectsToPut += objectCount % workerCount
 				}
-				putRR(t, wid, proxyURL, reader, bucket, objDir, objectsToPut)
+				putRR(t, reader, bucket, objDir, objectsToPut)
 				wg.Done()
 			}(wid)
 		}

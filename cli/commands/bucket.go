@@ -181,13 +181,13 @@ func bucketHandler(c *cli.Context) (err error) {
 
 	switch command {
 	case bucketCreate:
-		err = createBucket(c, baseParams, bucket)
+		err = createBucket(baseParams, bucket)
 	case bucketDestroy:
-		err = destroyBucket(c, baseParams, bucket)
+		err = destroyBucket(baseParams, bucket)
 	case commandRename:
 		err = renameBucket(c, baseParams, bucket)
 	case bucketEvict:
-		err = evictBucket(c, baseParams, bucket)
+		err = evictBucket(baseParams, bucket)
 	case bucketNames:
 		err = listBucketNames(c, baseParams)
 	case commandList:
@@ -207,7 +207,7 @@ func bucketHandler(c *cli.Context) (err error) {
 }
 
 // Creates new local bucket
-func createBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func createBucket(baseParams *api.BaseParams, bucket string) (err error) {
 	if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
 		return
 	}
@@ -216,7 +216,7 @@ func createBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 }
 
 // Destroy local bucket
-func destroyBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func destroyBucket(baseParams *api.BaseParams, bucket string) (err error) {
 	if err = api.DestroyLocalBucket(baseParams, bucket); err != nil {
 		return
 	}
@@ -238,7 +238,7 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 }
 
 // Evict a cloud bucket
-func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func evictBucket(baseParams *api.BaseParams, bucket string) (err error) {
 	query := url.Values{cmn.URLParamBckProvider: []string{cmn.CloudBs}}
 	if err = api.EvictCloudBucket(baseParams, bucket, query); err != nil {
 		return
@@ -304,9 +304,8 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return
 	}
 	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
-	bckName := parseFlag(c, bucketFlag.Name)
 
-	if err = canReachBucket(baseParams, bckName, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
 		return
 	}
 
@@ -317,11 +316,11 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		if err = json.Unmarshal(inputProps, &props); err != nil {
 			return
 		}
-		if err = api.SetBucketPropsMsg(baseParams, bckName, props, query); err != nil {
+		if err = api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
 			return
 		}
 
-		fmt.Printf("Bucket props set for %s bucket\n", bckName)
+		fmt.Printf("Bucket props set for %s bucket\n", bucket)
 		return
 	}
 
@@ -330,10 +329,10 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	if err != nil {
 		return
 	}
-	if err = api.SetBucketProps(baseParams, bckName, nvs, query); err != nil {
+	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
 		return
 	}
-	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bckName)
+	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bucket)
 	return
 }
 

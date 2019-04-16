@@ -372,7 +372,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		},
 		{
 			"Full list - small pageSize - no limit",
-			prefix, int(numFiles / 7), 0,
+			prefix, numFiles / 7, 0,
 			numFiles,
 		},
 		{
@@ -609,7 +609,7 @@ func TestGetClusterStats(t *testing.T) {
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
 					tfstats["used"], fstats.Used, tfstats["avail"], fstats.Avail, tfstats["usedpct"], fstats.Usedpct)
 			}
-			if fstats.Usedpct > int32(HighWaterMark) {
+			if fstats.Usedpct > HighWaterMark {
 				t.Error("Used Percentage above High Watermark")
 			}
 		}
@@ -691,7 +691,7 @@ func TestLRU(t *testing.T) {
 		t.Skipf("%s test requires a cloud bucket", t.Name())
 	}
 
-	getRandomFiles(proxyURL, 20, clibucket, "", t, nil, errCh)
+	getRandomFiles(proxyURL, 20, clibucket, "", t, errCh)
 	// The error could be no object in the bucket. In that case, consider it as not an error;
 	// this test will be skipped
 	if len(errCh) != 0 {
@@ -713,7 +713,7 @@ func TestLRU(t *testing.T) {
 		hwms[k] = cfg.LRU.HighWM
 	}
 	// add a few more
-	getRandomFiles(proxyURL, 3, clibucket, "", t, nil, errCh)
+	getRandomFiles(proxyURL, 3, clibucket, "", t, errCh)
 	selectErr(errCh, "get", t, true)
 	//
 	// find out min usage %% across all targets
@@ -786,7 +786,7 @@ func TestLRU(t *testing.T) {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime/2)
-	getRandomFiles(proxyURL, 1, clibucket, "", t, nil, errCh)
+	getRandomFiles(proxyURL, 1, clibucket, "", t, errCh)
 	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
@@ -1260,7 +1260,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		bucket = rtd.renamedBucket
 	}
 
-	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, nil, errCh)
+	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, errCh)
 	selectErr(errCh, "get", t, false)
 	for fname := range filesPutCh {
 		wg.Add(1)
@@ -1387,16 +1387,16 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	return
 }
 
-func getClusterMap(t *testing.T, URL string) cluster.Smap {
-	baseParams := tutils.BaseAPIParams(URL)
+func getClusterMap(t *testing.T, url string) cluster.Smap {
+	baseParams := tutils.BaseAPIParams(url)
 	smap, err := api.GetClusterMap(baseParams)
 	tutils.CheckFatal(err, t)
 	return smap
 }
 
-func getDaemonConfig(t *testing.T, URL string) (config *cmn.Config) {
+func getDaemonConfig(t *testing.T, url string) (config *cmn.Config) {
 	var err error
-	baseParams := tutils.BaseAPIParams(URL)
+	baseParams := tutils.BaseAPIParams(url)
 	config, err = api.GetDaemonConfig(baseParams)
 	tutils.CheckFatal(err, t)
 	return

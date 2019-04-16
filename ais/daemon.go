@@ -100,12 +100,12 @@ func (g *rungroup) run() error {
 	}
 	g.errCh = make(chan error, len(g.runarr))
 	g.stopCh = make(chan error, 1)
-	for i, r := range g.runarr {
-		go func(i int, r cmn.Runner) {
+	for _, r := range g.runarr {
+		go func(r cmn.Runner) {
 			err := r.Run()
 			glog.Warningf("Runner [%s] exited with err [%v].", r.Getname(), err)
 			g.errCh <- err
-		}(i, r)
+		}(r)
 	}
 
 	// wait here for (any/first) runner termination

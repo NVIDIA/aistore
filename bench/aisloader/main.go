@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -487,7 +488,7 @@ func main() {
 		signal.Notify(osSigChan, syscall.SIGINT, syscall.SIGTERM)
 	}
 
-	logRunParams(runParams, os.Stdout)
+	logRunParams(runParams)
 
 	host, err := os.Hostname()
 	if err != nil {
@@ -605,7 +606,7 @@ L:
 }
 
 // lonRunParams show run parameters in json format
-func logRunParams(p params, to *os.File) {
+func logRunParams(p params) {
 	b, _ := json.MarshalIndent(struct {
 		Seed          int64  `json:"seed"`
 		URL           string `json:"proxy"`
@@ -631,7 +632,7 @@ func logRunParams(p params, to *os.File) {
 		MinSize:       p.minSize,
 		MaxSize:       p.maxSize,
 		NumWorkers:    p.numWorkers,
-		StatsInterval: time.Duration(time.Second * time.Duration(runParams.statsShowInterval)).String(),
+		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		Backing:       p.readerType,
 		Cleanup:       p.cleanUp,
 	}, "", "   ")
@@ -696,7 +697,7 @@ func prettyTimeStamp() string {
 	return time.Now().String()[11:19]
 }
 
-func preWriteStats(to *os.File, jsonFormat bool) {
+func preWriteStats(to io.Writer, jsonFormat bool) {
 	fmt.Fprintln(to)
 	if !jsonFormat {
 		fmt.Fprintf(to, statsPrintHeader,
@@ -706,14 +707,14 @@ func preWriteStats(to *os.File, jsonFormat bool) {
 	}
 }
 
-func postWriteStats(to *os.File, jsonFormat bool) {
+func postWriteStats(to io.Writer, jsonFormat bool) {
 	if jsonFormat {
 		fmt.Fprintln(to)
 		fmt.Fprintln(to, "]")
 	}
 }
 
-func writeFinalStats(to *os.File, jsonFormat bool, s sts) {
+func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {
 	if !jsonFormat {
 		writeHumanReadibleFinalStats(to, s)
 	} else {
@@ -721,7 +722,7 @@ func writeFinalStats(to *os.File, jsonFormat bool, s sts) {
 	}
 }
 
-func writeIntervalStats(to *os.File, jsonFormat bool, s, t sts) {
+func writeIntervalStats(to io.Writer, jsonFormat bool, s, t sts) {
 	if !jsonFormat {
 		writeHumanReadibleIntervalStats(to, s, t)
 	} else {
@@ -745,7 +746,7 @@ func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
 	return stats
 }
 
-func writeStatsJSON(to *os.File, s sts, withcomma ...bool) {
+func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 	stats := struct {
 		Get *jsonStats `json:"get"`
 		Put *jsonStats `json:"put"`
@@ -768,7 +769,7 @@ func writeStatsJSON(to *os.File, s sts, withcomma ...bool) {
 	}
 }
 
-func writeHumanReadibleIntervalStats(to *os.File, s, t sts) {
+func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
@@ -802,7 +803,7 @@ func writeHumanReadibleIntervalStats(to *os.File, s, t sts) {
 	}
 }
 
-func writeHumanReadibleFinalStats(to *os.File, t sts) {
+func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
@@ -831,7 +832,7 @@ func writeHumanReadibleFinalStats(to *os.File, t sts) {
 
 // writeStatus writes stats to the writter.
 // if final = true, writes the total; otherwise writes the interval stats
-func writeStats(to *os.File, jsonFormat, final bool, s, t sts) {
+func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 	if final {
 		writeFinalStats(to, jsonFormat, t)
 	} else {

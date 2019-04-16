@@ -115,7 +115,7 @@ func unlockFile(idx int, fileExists bool) {
 }
 
 // generates a list of random file names and a buffer to keep random data for filling up files
-func generateRandomData(t *testing.T, seed int64, fileCount int) {
+func generateRandomData(seed int64, fileCount int) {
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	fileNames = make([]string, fileCount)
@@ -331,7 +331,7 @@ func rwstress(t *testing.T) {
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles)
 
-	generateRandomData(t, baseseed+10000, numFiles)
+	generateRandomData(baseseed+10000, numFiles)
 
 	var wg sync.WaitGroup
 	doneCh := make(chan int, 2)

@@ -12,13 +12,10 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-
-	"github.com/NVIDIA/aistore/cmn"
-
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
-
+	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
@@ -91,8 +88,8 @@ func (rec *Recipe) RunRecipe(rctx *soakprim.RecipeContext) {
 }
 
 func GetShuffledRecipeList() []*Recipe {
-	var shuffledRecipes []*Recipe
 	perm := rnd.Perm(len(loadedRecipes))
+	shuffledRecipes := make([]*Recipe, 0, len(perm))
 	for _, randIndex := range perm {
 		r := loadedRecipes[randIndex]
 

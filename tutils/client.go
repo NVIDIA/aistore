@@ -196,10 +196,8 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 			if err != nil {
 				return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 			}
-		} else {
-			if length, err = io.CopyBuffer(w, r.Body, buf); err != nil {
-				return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-			}
+		} else if length, err = io.CopyBuffer(w, r.Body, buf); err != nil {
+			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 		}
 	} else {
 		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
@@ -304,9 +302,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
-	}
+	req.GetBody = reader.Open
 	if hash != "" {
 		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
 		req.Header.Set(cmn.HeaderObjCksumVal, hash)

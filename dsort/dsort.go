@@ -727,7 +727,7 @@ func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRec
 // randomTargetOrder returns a cluster.Snode slice for targets in a pseudorandom order.
 func randomTargetOrder(salt uint64, tmap map[string]*cluster.Snode) []*cluster.Snode {
 	targets := make(map[uint64]*cluster.Snode, len(tmap))
-	var keys []uint64
+	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {
 		c := xxhash.Checksum64S([]byte(i), salt)
 		targets[c] = d

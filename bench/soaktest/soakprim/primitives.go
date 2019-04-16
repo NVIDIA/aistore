@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
-
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -44,12 +43,12 @@ func (rctx *RecipeContext) startPrim(primType string) *primTag {
 	return tag
 }
 
-func (rctx *RecipeContext) finishPrim(tag *primTag) {
+func (rctx *RecipeContext) finishPrim(tag fmt.Stringer) {
 	if err := recover(); err != nil {
 		rctx.failedPrimitives[tag.String()] = err.(error)
 	}
 
-	report.Writef(report.DetailLevel, "--- %v ENDED ---\n", tag)
+	report.Writef(report.DetailLevel, "--- %s ENDED ---\n", tag)
 
 	rctx.wg.Done()
 }

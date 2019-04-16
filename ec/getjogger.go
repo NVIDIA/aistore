@@ -659,7 +659,7 @@ func getNextNonEmptySlice(slices []*slice, start int) (*slice, int) {
 // * meta - rebuilt object's metadata
 // * slices - object slices reconstructed by `restoreMainObj`
 // * idToNode - a map of targets that already contain a slice (SliceID <-> target)
-func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) error {
+func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []*slice, idToNode map[int]string) {
 	sliceCnt := meta.Data + meta.Parity
 	nodeToID := make(map[string]int, len(idToNode))
 	// transpose SliceID <-> DaemonID map for faster lookup
@@ -673,7 +673,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
 	if errstr != "" {
 		glog.Warning(errstr)
-		return nil
+		return
 	}
 	emptyNodes := make([]string, 0, len(targets))
 	for _, t := range targets {
@@ -763,8 +763,6 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 		sl.free()
 		sl, idx = getNextNonEmptySlice(slices, idx)
 	}
-
-	return nil
 }
 
 // main function that starts restoring an object that was encoded
@@ -806,12 +804,8 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 	// Start a background process that uploads reconstructed data to
 	// remote targets and then return from the function
 	go func() {
-		if err := c.uploadRestoredSlices(req, meta, restored, idToNode); err != nil {
-			glog.Errorf("Failed to restore slices of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
-			freeSlices(restored)
-			freeSlices(slices)
-			return
-		}
+		c.uploadRestoredSlices(req, meta, restored, idToNode)
+
 		// do not free `restored` here - it is done in transport callback when
 		// transport completes sending restored slices to correct target
 		freeSlices(slices)

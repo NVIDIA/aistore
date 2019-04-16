@@ -650,7 +650,7 @@ do:
 	// check if dryrun is enabled to stop from getting LOM
 	if coldGet && lom.BckIsLocal && !dryRun.disk && !dryRun.network {
 		// does not exist in the local bucket: restore from neighbors
-		if errstr, errcode = t.restoreObjLBNeigh(lom, r, started); errstr != "" {
+		if errstr, errcode = t.restoreObjLBNeigh(lom, r); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname(), false)
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -720,7 +720,7 @@ get:
 //		targets using erasure coding(if it is on)
 // FIXME: must be done => (getfqn, and under write lock)
 //
-func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request, started time.Time) (errstr string, errcode int) {
+func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.localRebStatus()
 	gfnActive := t.gfn.local.active()
@@ -936,12 +936,12 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	return
 }
 
-func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
+func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64, buf []byte) (
 	cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, errstr string) {
 	var (
 		err error
 	)
-	rangeReader = io.NewSectionReader(file, offset, length)
+	rangeReader = io.NewSectionReader(r, offset, length)
 	if length <= maxBytesInMem {
 		sgl = gmem2.NewSGL(length)
 		if _, cksumValue, err = cmn.WriteWithHash(sgl, rangeReader, buf); err != nil {
@@ -1067,10 +1067,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			err := t.listRangeOperation(r, apitems, bckProvider, &msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
-			} else {
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
-				}
+			} else if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
 			}
 			return
 		}
@@ -1637,15 +1635,15 @@ func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Sn
 }
 
 // should not be called for local buckets
-func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg) (outbytes []byte, errstr string, errcode int) {
+func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg) (outbytes []byte, errstr string) {
 	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
-		return nil, err.Error(), 0
+		return nil, err.Error()
 	}
 
 	outbytes, err = jsoniter.Marshal(reslist)
 	if err != nil {
-		return nil, err.Error(), 0
+		return nil, err.Error()
 	}
 	return
 }
@@ -1693,12 +1691,10 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg)
 				r.failedPath = dir
 				r.err = err
 			}
-		} else {
-			if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
-				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-				r.failedPath = dir
-				r.err = err
-			}
+		} else if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
+			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
+			r.failedPath = dir
+			r.err = err
 		}
 		ch <- r
 		wg.Done()
@@ -1857,7 +1853,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	msg.Fast = false // fast mode does not make sense for Cloud buckets
 	if useCache {
 		tag = "cloud cached"
-		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
+		jsbytes, errstr = t.listCachedObjects(bucket, &msg)
 	} else {
 		tag = "cloud"
 		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)

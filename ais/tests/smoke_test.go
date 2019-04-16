@@ -38,12 +38,10 @@ func Test_smoke(t *testing.T) {
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fp := make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
-	bs := int64(baseseed)
 	for _, fs := range objSizes {
 		for _, r := range ratios {
 			s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
-			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, bs, fp) })
-			bs += int64(numworkers + 1)
+			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, fp) })
 		}
 	}
 
@@ -68,7 +66,7 @@ func Test_smoke(t *testing.T) {
 	}
 }
 
-func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, bseed int64, filesPutCh chan string) {
+func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, filesPutCh chan string) {
 	// Start the worker pools
 	errCh := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
@@ -100,10 +98,10 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, bseed
 			nPut--
 		} else {
 			wg.Add(1)
-			go func(i int) {
-				getRandomFiles(proxyURL, numops, clibucket, SmokeStr+"/", t, nil, errCh)
+			go func() {
+				getRandomFiles(proxyURL, numops, clibucket, SmokeStr+"/", t, errCh)
 				wg.Done()
-			}(i)
+			}()
 			nGet--
 		}
 	}
@@ -115,11 +113,7 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, bseed
 	}
 }
 
-func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errCh chan error) {
-	if wg != nil {
-		defer wg.Done()
-	}
-
+func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *testing.T, errCh chan error) {
 	var (
 		src        = rand.NewSource(time.Now().UnixNano())
 		random     = rand.New(src)

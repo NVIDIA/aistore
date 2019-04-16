@@ -46,7 +46,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()
 
-	err := registerMockTarget(proxyURL, mocktgt, smap)
+	err := registerMockTarget(proxyURL, smap)
 	if err != nil {
 		t.Errorf("failed to start http server for mock target: %v", err)
 		return
@@ -58,7 +58,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	s.Shutdown(context.Background())
 }
 
-func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Smap) error {
+func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	var (
 		jsonDaemonInfo []byte
 		err            error

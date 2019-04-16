@@ -29,16 +29,16 @@ func TestRandomReaderPutStress(t *testing.T) {
 		reader, err := tutils.NewRandReader(fileSize, true)
 		tutils.CheckFatal(err, t)
 		wg.Add(1)
-		go func(workerId int) {
-			putRR(t, workerId, proxyURL, reader, bucket, dir, numobjects)
+		go func() {
+			putRR(t, reader, bucket, dir, numobjects)
 			wg.Done()
-		}(i)
+		}()
 	}
 	wg.Wait()
 	tutils.DestroyLocalBucket(t, proxyURL, bucket)
 }
 
-func putRR(t *testing.T, id int, proxyURL string, reader tutils.Reader, bucket, dir string, numobjects int) {
+func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, numobjects int) {
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < numobjects; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)

@@ -912,7 +912,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	// updateValue sets `to` value (required to be pointer) and runs number of
 	// provided validators which would check if the value which was just set is
 	// correct.
-	updateValue := func(to interface{}, validators ...Validator) error {
+	updateValue := func(to interface{}) error {
 		// `to` parameter needs to pointer so we can set it
 		Assert(reflect.ValueOf(to).Kind() == reflect.Ptr)
 

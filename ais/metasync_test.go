@@ -422,7 +422,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	primary.smapowner.put(clone)
 
 	// function shared between the two cases: start proxy, wait for a sync call
-	f := func(n int) {
+	f := func() {
 		wg := &sync.WaitGroup{}
 		s := &http.Server{Addr: addrInfo.String()}
 
@@ -443,7 +443,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	syncer.sync(false, revspair{smap, msgInt})
 	time.Sleep(time.Millisecond)
 	// sync will return even though the sync actually failed, and there is no error return
-	f(1)
+	f()
 
 	// testcase #2: long delay
 	clone = primary.smapowner.get().clone()
@@ -451,8 +451,8 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	primary.smapowner.put(clone)
 	msgInt = primary.newActionMsgInternalStr("", clone, nil)
 	syncer.sync(false, revspair{clone, msgInt})
-	time.Sleep(time.Second * 2)
-	f(2)
+	time.Sleep(2 * time.Second)
+	f()
 
 	// only cares if the sync call comes, no need to verify the id and cnt as we are the one
 	// filling those in above
@@ -564,8 +564,8 @@ func TestMetaSyncData(t *testing.T) {
 
 	exp[smaptag] = string(b)
 	expRetry[smaptag] = string(b)
-	exp[smaptag+actiontag] = string(emptyActionMsgInt)
-	expRetry[smaptag+actiontag] = string(emptyActionMsgInt)
+	exp[smaptag+actiontag] = emptyActionMsgInt
+	expRetry[smaptag+actiontag] = emptyActionMsgInt
 
 	syncer.sync(false, revspair{smap, &actionMsgInternal{}})
 	match(t, expRetry, ch, 1)
@@ -591,8 +591,8 @@ func TestMetaSyncData(t *testing.T) {
 
 	exp[bucketmdtag] = string(b)
 	expRetry[bucketmdtag] = string(b)
-	exp[bucketmdtag+actiontag] = string(emptyActionMsgInt)
-	expRetry[bucketmdtag+actiontag] = string(emptyActionMsgInt)
+	exp[bucketmdtag+actiontag] = emptyActionMsgInt
+	expRetry[bucketmdtag+actiontag] = emptyActionMsgInt
 
 	syncer.sync(false, revspair{bucketmd, &actionMsgInternal{}})
 	match(t, exp, ch, 1)

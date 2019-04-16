@@ -59,7 +59,8 @@ func mockGetFSUsedPercentage(path string) (usedPrecentage int64, ok bool) {
 	return int64(initialDiskUsagePct * 100), true
 }
 
-func getMockGetFSStats(currentFilesNum int, currDiskUsage float64) func(string) (uint64, uint64, int64, error) {
+func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64, error) {
+	currDiskUsage := initialDiskUsagePct
 	return func(string) (blocks uint64, bavail uint64, bsize int64, err error) {
 		bsize = blockSize
 		btaken := uint64(currentFilesNum * fileSize / blockSize)
@@ -89,7 +90,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 	return target
 }
 
-func newInitLRU(t *cluster.TargetMock) *InitLRU {
+func newInitLRU(t cluster.Target) *InitLRU {
 	xlru := &xactMock{}
 	return &InitLRU{
 		Xlru:                xlru,
@@ -97,7 +98,7 @@ func newInitLRU(t *cluster.TargetMock) *InitLRU {
 		Statsif:             &statsLRUMock{},
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
-		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles, initialDiskUsagePct),
+		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles),
 	}
 }
 
@@ -131,17 +132,17 @@ func saveRandomFile(filename string, size int64) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-func saveRandomFilesWithMetadata(dirname string, files []fileMetadata) {
+func saveRandomFilesWithMetadata(files []fileMetadata) {
 	for _, file := range files {
-		saveRandomFile(path.Join(dirname, file.name), file.size)
+		saveRandomFile(path.Join(filesPath, file.name), file.size)
 	}
 }
 
 // Saves random bytes to a file with random name.
 // timestamps and names are not increasing in the same manner
-func saveRandomFiles(dirname string, filesNumber int, size int64) {
+func saveRandomFiles(filesNumber int) {
 	for i := 0; i < filesNumber; i++ {
-		saveRandomFile(path.Join(dirname, getRandomFileName(i)), size)
+		saveRandomFile(path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
 }
 
@@ -170,7 +171,7 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should evict correct number of files", func() {
-				saveRandomFiles(filesPath, numberOfCreatedFiles, fileSize)
+				saveRandomFiles(numberOfCreatedFiles)
 
 				InitAndRun(ini)
 
@@ -187,16 +188,16 @@ var _ = Describe("LRU tests", func() {
 			It("should evict the oldest files", func() {
 				const numberOfFiles = 6
 
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles, initialDiskUsagePct)
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
 				oldFiles := []fileMetadata{
 					fileMetadata{getRandomFileName(3), fileSize},
 					fileMetadata{getRandomFileName(4), fileSize},
 					fileMetadata{getRandomFileName(5), fileSize},
 				}
-				saveRandomFilesWithMetadata(filesPath, oldFiles)
+				saveRandomFilesWithMetadata(oldFiles)
 				time.Sleep(1 * time.Second)
-				saveRandomFiles(filesPath, 3, fileSize)
+				saveRandomFiles(3)
 
 				InitAndRun(ini)
 
@@ -228,7 +229,7 @@ var _ = Describe("LRU tests", func() {
 					{getRandomFileName(2), int64(4 * cmn.MiB)},
 					{getRandomFileName(3), int64(8 * cmn.MiB)},
 				}
-				saveRandomFilesWithMetadata(filesPath, files)
+				saveRandomFilesWithMetadata(files)
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
@@ -253,9 +254,9 @@ var _ = Describe("LRU tests", func() {
 				config.LRU.LowWM = 40
 				cmn.GCO.CommitUpdate(config)
 
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles, initialDiskUsagePct)
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(filesPath, numberOfFiles, fileSize)
+				saveRandomFiles(numberOfFiles)
 
 				InitAndRun(ini)
 
@@ -270,9 +271,9 @@ var _ = Describe("LRU tests", func() {
 				config.LRU.DontEvictTime = 5 * time.Minute
 				cmn.GCO.CommitUpdate(config)
 
-				ini.GetFSStats = getMockGetFSStats(numberOfFiles, initialDiskUsagePct)
+				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(filesPath, numberOfFiles, fileSize)
+				saveRandomFiles(numberOfFiles)
 
 				InitAndRun(ini)
 

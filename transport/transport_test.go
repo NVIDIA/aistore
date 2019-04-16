@@ -496,7 +496,7 @@ func Test_ObjAttrs(t *testing.T) {
 // test helpers
 //
 
-func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock *sync.Mutex) {
+func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock sync.Locker) {
 	if wg != nil {
 		defer wg.Done()
 	}

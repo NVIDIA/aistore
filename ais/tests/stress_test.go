@@ -42,13 +42,13 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 	tutils.Logf("\n%d workers each performing PUT of %d objects of size %d\n", workerCount, objectCountPerWorker, objSize)
 	for wid := 0; wid < workerCount; wid++ {
 		wg.Add(1)
-		go func(wid int) {
+		go func() {
 			reader, err := tutils.NewRandReader(objSize, true)
 			tutils.CheckFatal(err, t)
 			objDir := tutils.RandomObjDir(random, 10, 5)
-			putRR(t, wid, proxyURL, reader, bucket, objDir, objectCountPerWorker)
+			putRR(t, reader, bucket, objDir, objectCountPerWorker)
 			wg.Done()
-		}(wid)
+		}()
 	}
 	wg.Wait()
 	tutils.Logf("Took %v to PUT %d total objects\n", time.Since(startPut), totalObjs)
@@ -82,13 +82,13 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		tutils.Logf("\n%d workers each performing PUT of %d objects of size %d\n", workerCount, numObjs, objSize)
 		for wid := 0; wid < workerCount; wid++ {
 			wg.Add(1)
-			go func(wid int) {
+			go func() {
 				reader, err := tutils.NewRandReader(objSize, true)
 				tutils.CheckFatal(err, t)
 				objDir := tutils.RandomObjDir(random, 10, 5)
-				putRR(t, wid, proxyURL, reader, bucket, objDir, numObjs)
+				putRR(t, reader, bucket, objDir, numObjs)
 				wg.Done()
-			}(wid)
+			}()
 		}
 		wg.Wait()
 		tutils.Logf("Took %v to PUT %d total objects\n", time.Since(startPut), totalObjs)

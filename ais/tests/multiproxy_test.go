@@ -561,7 +561,7 @@ func concurrentPutGetDel(t *testing.T) {
 		wg.Add(1)
 		go func(url string, cid int64) {
 			defer wg.Done()
-			errCh <- proxyPutGetDelete(int64(baseseed)+cid, 100, url)
+			errCh <- proxyPutGetDelete(baseseed+cid, 100, url)
 		}(v.PublicNet.DirectURL, cid)
 	}
 
@@ -681,7 +681,7 @@ loop:
 }
 
 // primaryKiller kills primary proxy, notifies all workers, and restore it.
-func primaryKiller(t *testing.T, proxyURL string, seed int64, stopch <-chan struct{}, proxyurlchs []chan string,
+func primaryKiller(t *testing.T, proxyURL string, stopch <-chan struct{}, proxyurlchs []chan string,
 	errCh chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -730,7 +730,7 @@ loop:
 // the process is repeated until a pre-defined time duration is reached.
 func proxyStress(t *testing.T) {
 	var (
-		bs          = int64(baseseed)
+		bs          = baseseed
 		errChs      = make([]chan error, numworkers+1)
 		stopchs     = make([]chan struct{}, numworkers+1)
 		proxyurlchs = make([]chan string, numworkers)
@@ -758,7 +758,7 @@ func proxyStress(t *testing.T) {
 	errChs[numworkers] = make(chan error, defaultChanSize)
 	stopchs[numworkers] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, proxyURL, bs, stopchs[numworkers], proxyurlchs, errChs[numworkers], &wg)
+	go primaryKiller(t, proxyURL, stopchs[numworkers], proxyurlchs, errChs[numworkers], &wg)
 
 	timer := time.After(multiProxyTestDuration)
 loop:
@@ -790,7 +790,7 @@ loop:
 // directURL	- DirectURL of the proxy that we send the request to
 //           	  (not necessarily the current primary)
 // toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
-func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, toID, toURL string) {
+func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, toID string) {
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
@@ -1005,7 +1005,7 @@ func primarySetToOriginal(t *testing.T) {
 		return
 	}
 
-	setPrimaryTo(t, proxyURL, smap, "", origID, origURL)
+	setPrimaryTo(t, proxyURL, smap, "", origID)
 }
 
 // This is duplicated in the tests because the `idDigest` of `daemonInfo` is not

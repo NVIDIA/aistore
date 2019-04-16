@@ -312,7 +312,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	// list bucket names
 	if bucket == cmn.ListAll {
-		p.getbucketnames(w, r, bucket, normalizedBckProvider)
+		p.getbucketnames(w, r, normalizedBckProvider)
 		return
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
@@ -337,8 +337,8 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	pReq, err := http.NewRequest(r.Method, redirecturl, r.Body)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	pReq, err := http.NewRequest(r.Method, redirectURL, r.Body)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -395,7 +395,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 		}
-		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+		redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 		if config.Readahead.Enabled && config.Readahead.ByProxy {
 			go func(url string) {
 				url += "&" + cmn.URLParamReadahead + "=true"
@@ -412,9 +412,9 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				if res.err != nil {
 					glog.Errorf("Failed readahead %s/%s => %s: %v", bucket, objname, si, res.err)
 				}
-			}(redirecturl)
+			}(redirectURL)
 		}
-		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	}
 	p.statsif.Add(stats.GetCount, 1)
 }
@@ -440,8 +440,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.PutCount, 1)
 }
@@ -553,8 +553,8 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.DeleteCount, 1)
 }
@@ -885,7 +885,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		p.filrename(w, r, &msg)
+		p.objRename(w, r)
 		return
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
@@ -916,8 +916,8 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.SimpleKVs) (errRet error) {
@@ -1178,11 +1178,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 	if checkCached {
-		redirecturl += fmt.Sprintf("&%s=true", cmn.URLParamCheckCached)
+		redirectURL += fmt.Sprintf("&%s=true", cmn.URLParamCheckCached)
 	}
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 //============================
@@ -1340,7 +1340,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 	}
 }
 
-func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec, bckProvider string) {
+func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
 	bucketmd := p.bmdowner.get()
 	bckProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
 	if bckProvider == cmn.LocalBs {
@@ -1378,7 +1378,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	}
 }
 
-func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, bucket string) (redirect string) {
+func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time) (redirect string) {
 	var (
 		query    = url.Values{}
 		bucketmd = p.bmdowner.get()
@@ -1390,7 +1390,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
 	query.Add(cmn.URLParamBMDVersion, bucketmd.vstr)
-	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(ts.UnixNano()), 10))
+	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(ts.UnixNano(), 10))
 	redirect += query.Encode()
 	return
 }
@@ -1782,7 +1782,7 @@ func (p *proxyrunner) savebmdconf(bucketmd *bucketMD, config *cmn.Config) (errst
 	return
 }
 
-func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
@@ -1808,8 +1808,8 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.RenameCount, 1)
 }
@@ -2439,12 +2439,10 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 		if glog.V(4) {
 			glog.Infof("Updated JSON URL Path: %s", r.URL.Path)
 		}
-	} else {
+	} else if glog.V(4) {
 		// original url looks like - no cleanup required:
 		//    http://storage.googleapis.com/<bucket>/<object>
-		if glog.V(4) {
-			glog.Infof("XML GCP request for object: %v", s)
-		}
+		glog.Infof("XML GCP request for object: %v", s)
 	}
 
 	if len(s) > 1 {

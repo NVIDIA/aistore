@@ -96,8 +96,7 @@ func validateBucketName(bucket string) bool {
 	if bucket == "" {
 		return false
 	}
-	reg, err := regexp.Compile(`^[\.a-zA-Z0-9_-]*$`)
-	cmn.AssertNoErr(err)
+	reg := regexp.MustCompile(`^[\.a-zA-Z0-9_-]*$`)
 	if !reg.MatchString(bucket) {
 		return false
 	}

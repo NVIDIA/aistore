@@ -109,7 +109,7 @@ func (r *IostatRunner) Run() error {
 				mpathInfo.SetIOstats(epoch, fs.StatDiskIOms, float32(stat.IOMs))
 				if prev, cur := mpathInfo.GetIOstats(fs.StatDiskIOms); prev.Max != 0 {
 					msElapsed := d.Nanoseconds() / (1000 * 1000) //convert to Milliseconds
-					mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(cur.Max-prev.Max)*100/float32(msElapsed))
+					mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, (cur.Max-prev.Max)*100/float32(msElapsed))
 				}
 
 				if lc >= lm {

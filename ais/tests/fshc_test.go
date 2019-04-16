@@ -219,7 +219,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	defer sgl.Free()
 
 	// generate some filenames to PUT to them in a loop
-	generateRandomData(t, seed, numObjs)
+	generateRandomData(seed, numObjs)
 
 	// start PUT in a loop for some time
 	chstop := make(chan struct{})

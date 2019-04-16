@@ -120,10 +120,9 @@ func decryptToken(tokenStr string) (*authRec, error) {
 				glog.Warningf("Value is not string: %v [%T]", value, value)
 			}
 		}
-	} else {
-		if glog.V(4) {
-			glog.Infof("Token for %s does not contain credentials", rec.userID)
-		}
+	} else if glog.V(4) {
+		glog.Infof("Token for %s does not contain credentials", rec.userID)
+
 	}
 
 	return rec, nil

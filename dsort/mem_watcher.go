@@ -83,7 +83,7 @@ func (mw *memoryWatcher) watchReserved() {
 			for unreserve {
 				select {
 				case size := <-mw.unreserveMemoryCh:
-					atomic.AddUint64(&mw.reservedMemory, ^uint64(size-1)) // decrement by size
+					atomic.AddUint64(&mw.reservedMemory, ^(size - 1)) // decrement by size
 				default:
 					unreserve = false
 				}

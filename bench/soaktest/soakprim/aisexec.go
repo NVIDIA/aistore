@@ -18,12 +18,10 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/soakcmn"
-
 	"github.com/NVIDIA/aistore/bench/soaktest/stats"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	jsoniter "github.com/json-iterator/go"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 type (
@@ -134,7 +132,7 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWork
 		return
 	}
 
-	aisloaderStats, err := parseAisloaderResponse(opType, result, params.pctput)
+	aisloaderStats, err := parseAisloaderResponse(opType, result)
 
 	if err != nil {
 		report.Writef(report.SummaryLevel, "error parsing aisloader response")
@@ -145,7 +143,7 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWork
 	ch <- aisloaderStats
 }
 
-func parseAisloaderResponse(opType string, response []byte, totalputsize int) (*stats.PrimitiveStat, error) {
+func parseAisloaderResponse(opType string, response []byte) (*stats.PrimitiveStat, error) {
 	aisloaderresp := make([]aisloaderResponse, 0)
 	err := jsoniter.Unmarshal(response, &aisloaderresp)
 
@@ -153,7 +151,7 @@ func parseAisloaderResponse(opType string, response []byte, totalputsize int) (*
 		return nil, err
 	}
 
-	if len(aisloaderresp) <= 0 {
+	if len(aisloaderresp) == 0 {
 		return nil, errors.New("aisloader returned empty response, expected at least summary")
 	}
 

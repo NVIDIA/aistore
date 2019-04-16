@@ -12,6 +12,15 @@ linters:
     - ineffassign
     - deadcode
     - typecheck
+    - interfacer
+    - misspell
+    - prealloc
+    - unconvert
+    - unparam
+    - gocritic
+    # following linters produce a lot false positives, enable only when needed:
+    # - gosec
+    # - scopelint
     # not using structcheck since it doesn't handle embedded structs
 
 linters-settings:
@@ -22,6 +31,9 @@ linters-settings:
   errcheck:
     check-blank: false
     check-type-assertions: false
+  gocritic:
+    disabled-checks:
+      - ifElseChain
 
 issues:
   # use default exclude rules 

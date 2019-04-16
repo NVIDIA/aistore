@@ -146,7 +146,7 @@ func Test_matchdelete(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], wg, errCh, clibucket)
 	}
 
 	// list the bucket
@@ -308,7 +308,7 @@ func Test_putdeleteRange(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], wg, errCh, clibucket)
 	}
 
 	num := 0
@@ -362,7 +362,7 @@ func Test_putdelete(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], wg, errCh, clibucket)
 	}
 
 	num := 0
@@ -782,13 +782,13 @@ func Test_coldgetmd5(t *testing.T) {
 	for fname := range filesPutCh {
 		fileslist = append(fileslist, filepath.Join(ColdValidStr, fname))
 	}
-	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
+	evictObjects(t, proxyURL, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
 	}
 	start := time.Now()
-	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
+	getFromObjList(proxyURL, bucket, errCh, fileslist, false)
 	curr := time.Now()
 	duration := curr.Sub(start)
 	if t.Failed() {
@@ -796,14 +796,14 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without MD5 validation: %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
-	evictobjects(t, proxyURL, cmn.CloudBs, fileslist)
+	evictObjects(t, proxyURL, fileslist)
 	// Enable Cold Get Validation
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
 	if t.Failed() {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, true)
+	getFromObjList(proxyURL, bucket, errCh, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
@@ -1080,7 +1080,7 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 	return
 }
 
-func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errCh chan error, bucket string) {
+func deleteFiles(proxyURL string, keynames <-chan string, wg *sync.WaitGroup, errCh chan error, bucket string) {
 	defer wg.Done()
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
@@ -1302,7 +1302,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	for fname := range filesPutCh {
 		fileslist = append(fileslist, filepath.Join(EvictCBStr, fname))
 	}
-	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
+	getFromObjList(proxyURL, bucket, errCh, fileslist, false)
 	for _, fname := range fileslist {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); !b {
 			t.Fatalf("Object not cached: %s", fname)
@@ -1537,7 +1537,7 @@ func testValidCases(fileSize uint64, t *testing.T, proxyURL, bucketName string, 
 	byteRange := int64(500)
 	iterations := int64(fileSize) / byteRange
 	for i := int64(0); i < iterations; i += byteRange {
-		verifyValidRanges(t, proxyURL, bucketName, fileName, int64(i), byteRange, byteRange, checkEntireObjCkSum, checkDir)
+		verifyValidRanges(t, proxyURL, bucketName, fileName, i, byteRange, byteRange, checkEntireObjCkSum, checkDir)
 	}
 	verifyValidRanges(t, proxyURL, bucketName, fileName, byteRange*iterations, byteRange, int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
 	verifyValidRanges(t, proxyURL, bucketName, fileName, int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
@@ -1644,7 +1644,6 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
-		bckProvider = cmn.CloudBs
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1662,7 +1661,7 @@ func Test_checksum(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(filesize)
 	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ChksumValidStr, filesize, int(numPuts), errCh, filesPutCh, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ChksumValidStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
@@ -1671,7 +1670,7 @@ func Test_checksum(t *testing.T) {
 		}
 	}
 	// Delete it from cache.
-	evictobjects(t, proxyURL, bckProvider, fileslist)
+	evictObjects(t, proxyURL, fileslist)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
@@ -1687,7 +1686,7 @@ func Test_checksum(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
+	getFromObjList(proxyURL, bucket, errCh, fileslist, false)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	if t.Failed() {
@@ -1695,7 +1694,7 @@ func Test_checksum(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without any checksum validation: %v\n", totalio, duration)
 	selectErr(errCh, "get", t, false)
-	evictobjects(t, proxyURL, bckProvider, fileslist)
+	evictObjects(t, proxyURL, fileslist)
 	switch clichecksum {
 	case "all":
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
@@ -1724,7 +1723,7 @@ func Test_checksum(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, true)
+	getFromObjList(proxyURL, bucket, errCh, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	tutils.Logf("GET %d MB and validate checksum (%s): %v\n", totalio, clichecksum, duration)
@@ -1753,7 +1752,7 @@ func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []s
 	wg.Wait()
 }
 
-func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string, validate bool) {
+func getFromObjList(proxyURL, bucket string, errCh chan error, fileslist []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < len(fileslist); i++ {
@@ -1776,8 +1775,8 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 	getsGroup.Wait()
 }
 
-func evictobjects(t *testing.T, proxyURL, bckProvider string, fileslist []string) {
-	err := api.EvictList(tutils.BaseAPIParams(proxyURL), clibucket, bckProvider, fileslist, true, 0)
+func evictObjects(t *testing.T, proxyURL string, fileslist []string) {
+	err := api.EvictList(tutils.BaseAPIParams(proxyURL), clibucket, cmn.CloudBs, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}

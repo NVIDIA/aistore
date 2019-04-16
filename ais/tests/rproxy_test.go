@@ -35,7 +35,7 @@ var (
 )
 
 // search for the full path of cached object
-func pathForCached(filename string) string {
+func pathForCached() string {
 	var fpath string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if fpath != "" {
@@ -110,7 +110,7 @@ func TestRProxyGCS(t *testing.T) {
 	}
 
 	// look for leftovers and cleanup if found
-	pathCached := pathForCached(GcsFilename)
+	pathCached := pathForCached()
 	if pathCached != "" {
 		tutils.Logf("Found in cache: %s. Removing...\n", pathCached)
 		os.Remove(pathCached)
@@ -125,7 +125,7 @@ func TestRProxyGCS(t *testing.T) {
 	t.Log(string(out))
 	tutils.CheckFatal(err, t)
 
-	pathCached = pathForCached(GcsFilename)
+	pathCached = pathForCached()
 	if pathCached == "" {
 		t.Fatalf("Object was not cached")
 	}

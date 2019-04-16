@@ -49,7 +49,7 @@ func normalizeObjName(objName string) (string, error) {
 func (p *proxyrunner) targetDownloadRequest(method string, path string, si *cluster.Snode, msg interface{}) dlResponse {
 	query := url.Values{}
 	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
-	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(int64(time.Now().UnixNano()), 10))
+	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 10))
 
 	body, err := jsoniter.Marshal(msg)
 	if err != nil {

@@ -1438,7 +1438,7 @@ func TestForwardCP(t *testing.T) {
 	m.gets()
 
 	go func() {
-		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID, nextProxyURL)
+		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID)
 		m.proxyURL = nextProxyURL
 		m.wg.Done()
 	}()

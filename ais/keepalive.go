@@ -290,7 +290,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 
 // min & max keepalive stats
 func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
-	min, max := time.Duration(time.Hour), time.Duration(0)
+	min, max := time.Hour, time.Duration(0)
 	for lat := range latencyCh {
 		if min > lat && lat != 0 {
 			min = lat
@@ -299,7 +299,7 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 			max = lat
 		}
 	}
-	if min != time.Duration(time.Hour) {
+	if min != time.Hour {
 		pkr.p.statsif.Add(stats.KeepAliveMinLatency, int64(min))
 	}
 	if max != 0 {

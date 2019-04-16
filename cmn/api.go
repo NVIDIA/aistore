@@ -710,7 +710,7 @@ func (b *DlMultiBody) InitWithQuery(query url.Values) {
 }
 
 func (b *DlMultiBody) Validate(body []byte) error {
-	if len(body) <= 0 {
+	if len(body) == 0 {
 		return errors.New("body should not be empty")
 	}
 

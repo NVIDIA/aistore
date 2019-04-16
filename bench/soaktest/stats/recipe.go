@@ -34,7 +34,7 @@ func (rs *RecipeStats) Add(p *PrimitiveStat) {
 		rs.numFatal++
 		return
 	}
-	rs.latencyTotal += time.Duration(int64(p.RequestCount) * int64(p.Latency))
+	rs.latencyTotal += time.Duration(p.RequestCount * int64(p.Latency))
 	if p.LatencyMin > 0 && (p.LatencyMin < rs.minLatency || rs.minLatency == 0) {
 		rs.minLatency = p.LatencyMin
 	}

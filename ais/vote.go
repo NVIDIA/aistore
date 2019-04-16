@@ -281,11 +281,11 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		return
 	}
 	glog.Infoln(xele.String())
-	p.doProxyElection(vr, curPrimary, xele)
+	p.doProxyElection(vr, curPrimary)
 	xele.EndTime(time.Now())
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xele *xactElection) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	// First, ping current proxy with a short timeout: (Primary? State)
 	primaryURL := curPrimary.IntraControlNet.DirectURL
 	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
@@ -568,7 +568,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 				if res.err == nil {
 					break
 				}
-				sleepTime = sleepTime + sleepTime/2
+				sleepTime += sleepTime / 2
 			}
 		}
 		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
