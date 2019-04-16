@@ -59,7 +59,6 @@ save_env() {
     echo "FSPATHS=${FSPATHS}" >> ${TMP_ENV}
 
     echo "NODISKIO=${NODISKIO-false}" >> ${TMP_ENV}
-    echo "NONETIO=${NONETIO-false}" >> ${TMP_ENV}
     echo "DRYOBJSIZE=${DRYOBJSIZE-8m}" >> ${TMP_ENV}
 
     echo "GRAPHITE_PORT=${GRAPHITE_PORT}" >> ${TMP_ENV}
@@ -86,7 +85,6 @@ save_setup() {
 
     echo "DRYRUN"=$DRYRUN >> ${SETUP_FILE}
     echo "NODISKIO"=$NODISKIO >> ${SETUP_FILE}
-    echo "NONETIO"=$NONETIO >> ${SETUP_FILE}
     echo "DRYOBJSIZE"=$DRYOBJSIZE >> ${SETUP_FILE}
 
     echo "FS_LIST=$FS_LIST" >> ${SETUP_FILE}
@@ -114,8 +112,6 @@ get_setup() {
 deploy_mode() {
     if $NODISKIO; then
         echo "Deployed in no disk IO mode with ${DRYOBJSIZE} fake object size."
-    elif $NONETIO; then
-        echo "Deployed in no network IO mode with ${DRYOBJSIZE} fake object size."
     else
         echo "Deployed in normal mode."
     fi
@@ -124,7 +120,7 @@ deploy_mode() {
 deploy_quickstart() {
     DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     cp $DIR/../../../ais/setup/config.sh config.sh
-    
+
     QS_AWSDIR=${1:-'~/.aws/'}
     QS_AWSDIR="${QS_AWSDIR/#\~/$HOME}"
     if docker ps | grep ais-quickstart > /dev/null 2>&1; then
@@ -173,7 +169,6 @@ GRAFANA=false
 # Indicate which dry-run mode the cluster is running on
 DRYRUN=0
 NODISKIO=false
-NONETIO=false
 DRYOBJSIZE="8m"
 
 for i in "$@"
@@ -189,7 +184,7 @@ case $i in
         CLOUD=2
         shift # past argument
         ;;
-    
+
     -nocloud)
         CLOUD=3
         shift # past argument
@@ -264,14 +259,6 @@ case $i in
         NODISKIO="${i#*=}"
         if $NODISKIO; then
             DRYRUN=1
-        fi
-        shift # past argument=value
-        ;;
-
-    -nonetio=*|--nonetio=*)
-        NONETIO="${i#*=}"
-        if $NONETIO; then
-            DRYRUN=2
         fi
         shift # past argument=value
         ;;

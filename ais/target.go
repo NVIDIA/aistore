@@ -648,7 +648,7 @@ do:
 	}
 	coldGet := !lom.Exists()
 	// check if dryrun is enabled to stop from getting LOM
-	if coldGet && lom.BckIsLocal && !dryRun.disk && !dryRun.network {
+	if coldGet && lom.BckIsLocal && !dryRun.disk {
 		// does not exist in the local bucket: restore from neighbors
 		if errstr, errcode = t.restoreObjLBNeigh(lom, r); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname(), false)
@@ -690,7 +690,7 @@ do:
 	}
 
 	// 3. coldget
-	if coldGet && !dryRun.disk && !dryRun.network {
+	if coldGet && !dryRun.disk {
 		t.rtnamemap.Unlock(lom.Uname(), false)
 		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
@@ -841,15 +841,13 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 	// loopback if disk IO is disabled
 	if dryRun.disk {
-		if !dryRun.network {
-			rd := newDryReader(dryRun.size)
-			if _, err = io.Copy(w, rd); err != nil {
-				// NOTE: Cannot return invalid handler because it will be double header write
-				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
-				glog.Error(errstr)
-				t.statsif.Add(stats.ErrGetCount, 1)
-				return
-			}
+		rd := newDryReader(dryRun.size)
+		if _, err = io.Copy(w, rd); err != nil {
+			// NOTE: Cannot return invalid handler because it will be double header write
+			errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
+			glog.Error(errstr)
+			t.statsif.Add(stats.ErrGetCount, 1)
+			return
 		}
 		delta := time.Since(started)
 		t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
@@ -891,17 +889,9 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}
 
-	if !dryRun.network {
-		written, err = io.CopyBuffer(w, reader, buf)
-	} else {
-		written, err = io.CopyBuffer(ioutil.Discard, reader, buf)
-	}
+	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
-		if !dryRun.network {
-			errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)
-		} else {
-			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", fqn, err)
-		}
+		errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)
 		glog.Error(errstr)
 		t.fshc(err, fqn)
 		t.statsif.Add(stats.ErrGetCount, 1)
@@ -2109,7 +2099,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	if err = roi.writeToFile(); err != nil {
 		return err, http.StatusInternalServerError
 	}
-	if !dryRun.disk && !dryRun.network {
+	if !dryRun.disk {
 		// commit
 		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
@@ -2406,11 +2396,8 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		reader = roi.r
 	)
 
-	if dryRun.disk && dryRun.network {
+	if dryRun.disk {
 		return
-	}
-	if dryRun.network {
-		reader = newDryReader(dryRun.size)
 	}
 	if !dryRun.disk {
 		if file, err = cmn.CreateFile(roi.workFQN); err != nil {
@@ -2434,7 +2421,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		}
 	}()
 
-	if dryRun.disk || dryRun.network {
+	if dryRun.disk {
 		_, err = cmn.ReceiveAndChecksum(writer, reader, buf)
 		return err
 	}

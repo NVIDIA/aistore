@@ -67,7 +67,6 @@ type dryRunConfig struct {
 	sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRYOBJSIZE)
 	size    int64  // as above converted to bytes from a string like '8m'
 	disk    bool   // dry-run disk (-nodiskio/AIS_NODISKIO)
-	network bool   // dry-run network (-nonetio/AIS_NONETIO)
 }
 
 //====================
@@ -135,7 +134,6 @@ func init() {
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 
 	flag.BoolVar(&dryRun.disk, "nodiskio", false, "dry-run: if true, no disk operations for GET and PUT")
-	flag.BoolVar(&dryRun.network, "nonetio", false, "dry-run: if true, no network operations for GET and PUT")
 	flag.StringVar(&dryRun.sizeStr, "dryobjsize", "8m", "dry-run: in-memory random content")
 }
 
@@ -144,10 +142,6 @@ func dryinit() {
 	str := os.Getenv("AIS_NODISKIO")
 	if b, err := strconv.ParseBool(str); err == nil {
 		dryRun.disk = b
-	}
-	str = os.Getenv("AIS_NONETIO")
-	if b, err := strconv.ParseBool(str); err == nil {
-		dryRun.network = b
 	}
 	str = os.Getenv("AIS_DRYOBJSIZE")
 	if str != "" {
@@ -159,11 +153,6 @@ func dryinit() {
 		warning := "Dry-run: disk IO will be disabled"
 		fmt.Fprintf(os.Stderr, "%s\n", warning)
 		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, dryRun.sizeStr)
-	}
-	if dryRun.network {
-		warning := "Dry-run: GET won't return objects, PUT won't send objects"
-		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Info(warning)
 	}
 }
 

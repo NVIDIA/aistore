@@ -20,5 +20,4 @@ services:
         - TARGETS=${TARGET_CNT-1000}
         - CLDPROVIDER=${CLDPROVIDER-}
         - NODISKIO=${NODISKIO-false}
-        - NONETIO=${NONETIO-false}
         - DRYOBJSIZE=${DRYOBJSIZE-8MB}

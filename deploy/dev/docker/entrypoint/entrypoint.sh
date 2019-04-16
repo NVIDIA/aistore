@@ -26,7 +26,6 @@ else
         -role=${ROLE} \
         -ntargets=${TARGET_CNT} \
         -nodiskio=${NODISKIO} \
-        -nonetio=${NONETIO} \
         -dryobjsize=${DRYOBJSIZE} \
         -alsologtostderr=true
 fi

@@ -46,12 +46,9 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
 ARG CLDPROVIDER
 ENV CLD $CLDPROVIDER
 
-# Dry Run 
+# Dry Run
 ARG NODISKIO
 ENV NODISK $NODISKIO
-
-ARG NONETIO
-ENV NONET $NONETIO
 
 ARG DRYOBJSIZE
 ENV OBJSIZE $DRYOBJSIZE
@@ -72,4 +69,4 @@ cd $WORKDIR && GODEBUG=madvdontneed=1 go install -tags=\"${CLD}\" -ldflags \"-w 
 cd $GOBIN && $GOBIN/aisnode -config=\$1 -role=\$2 -ntargets=\$3 -nodiskio=\$4 -nonetio=\$5 -dryobjsize=\$6 -alsologtostderr=true  \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $NONET $OBJSIZE"]
+CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT $NODISK $OBJSIZE"]
