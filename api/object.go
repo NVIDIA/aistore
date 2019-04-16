@@ -48,10 +48,16 @@ type PutObjectArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string) (*cmn.ObjectProps, error) {
+func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, checkCached ...bool) (*cmn.ObjectProps, error) {
+	checkIsCached := false
+	if len(checkCached) > 0 {
+		checkIsCached = checkCached[0]
+	}
 	baseParams.Method = http.MethodHead
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamCheckCached, strconv.FormatBool(checkIsCached))
 	params := OptionalParams{Query: query}
 
 	r, err := doHTTPRequestGetResp(baseParams, path, nil, params)
@@ -59,6 +65,10 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string) (*cm
 		return nil, err
 	}
 	defer r.Body.Close()
+	if checkIsCached {
+		io.Copy(ioutil.Discard, r.Body)
+		return nil, err
+	}
 
 	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderObjSize))
 	if err != nil {

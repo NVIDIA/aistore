@@ -191,6 +191,12 @@ const (
 		" Interval: \t{{$obj.Proxy.IntervalStr}}\t \t{{$obj.Target.IntervalStr}}\n" +
 		" Name: \t{{$obj.Proxy.Name}}\t \t{{$obj.Target.Name}}\n" +
 		" Factor: \t{{$obj.Proxy.Factor}}\t \t{{$obj.Target.Factor}}\n"
+	ECConfTmpl = "\n{{$obj := .EC}}EC Config\t \t\n" +
+		" Object Size Limit:{{$obj.ObjSizeLimit}}\t  Data Slices:{{$obj.DataSlices}}\n" +
+		" Parity Slice:{{$obj.ParitySlices}}\t Enabled:{{$obj.Enabled}}\n"
+	BucketVerConfTmpl = "\n{{$obj := .Versioning}}Bucket Versioning\n" +
+		" Type:{{$obj.Type}}\n Validate Warm Get:{{$obj.ValidateWarmGet}}\t Enabled:{{$obj.Enabled}}\n"
+
 	DownloaderTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
 		" Timeout: {{$obj.TimeoutStr}}\n"
 
@@ -199,6 +205,9 @@ const (
 		ProxyConfTmpl + LRUConfTmpl + XactionConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
+
+	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
+		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
 
 	DownloadListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
 	DownloadListBody   = "{{$value.ID}}\t " +

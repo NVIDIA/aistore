@@ -53,6 +53,8 @@ Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | output in JSON format | `false` |
+| `--watch` | `bool` | watch the progress of metric | `false` |
+| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |
 
 ### status
 
@@ -63,3 +65,5 @@ Returns the status of the `OPTION`. `OPTION` is either `proxy`, `target`, or `DA
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | output in JSON format | `false` |
+| `--watch` | `bool` | watch the progress of metric | `false` |
+| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |

@@ -108,7 +108,7 @@ In other words, AIS n-way mirroring is intended to withstand loss of disks, not 
 
 The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-> Unlike [erasure conding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
+> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
 > As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
 

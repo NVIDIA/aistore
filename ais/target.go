@@ -805,7 +805,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		reader          io.Reader
 		written         int64
 		err             error
-		isGFNRequest, _ = parsebool(r.URL.Query().Get(cmn.URLParamIsGFNRequest))
+		isGFNRequest, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamIsGFNRequest))
 	)
 	defer func() {
 		// rahfcacher.got()
@@ -1337,7 +1337,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objmeta                 cmn.SimpleKVs
 	)
 	query := r.URL.Query()
-	checkCached, _ = parsebool(query.Get(cmn.URLParamCheckCached))
+	checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -2384,7 +2384,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
 	useCacheStr := r.URL.Query().Get(cmn.URLParamCached)
 	var err error
-	if useCache, err = parsebool(useCacheStr); err != nil {
+	if useCache, err = cmn.ParseBool(useCacheStr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
 			cmn.URLParamCached, useCacheStr)
 		errcode = http.StatusInternalServerError

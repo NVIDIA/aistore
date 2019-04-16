@@ -247,6 +247,14 @@ func ExitLogf(f string, a ...interface{}) {
 	ExitInfof(f, a...)
 }
 
+func ParseBool(s string) (value bool, err error) {
+	if s == "" {
+		return
+	}
+	value, err = strconv.ParseBool(s)
+	return
+}
+
 const assertMsg = "assertion failed"
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below

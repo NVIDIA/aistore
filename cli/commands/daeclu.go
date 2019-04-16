@@ -24,9 +24,9 @@ var (
 	daecluBaseFlags = []cli.Flag{watchFlag, refreshFlag}
 
 	daecluFlags = map[string][]cli.Flag{
-		cmn.GetWhatSmap:         append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
+		cmn.GetWhatSmap:         {jsonFlag},
 		cmn.GetWhatDaemonStatus: append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
-		cmn.GetWhatConfig:       append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
+		cmn.GetWhatConfig:       {jsonFlag},
 		cmn.GetWhatStats:        append([]cli.Flag{jsonFlag}, daecluBaseFlags...),
 		commandList:             {verboseFlag},
 		cmn.ActSetProps:         {daemonFlag},

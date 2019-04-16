@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -162,12 +161,4 @@ func isSyscallWriteError(err error) bool {
 	default:
 		return false
 	}
-}
-
-func parsebool(s string) (value bool, err error) {
-	if s == "" {
-		return
-	}
-	value, err = strconv.ParseBool(s)
-	return
 }

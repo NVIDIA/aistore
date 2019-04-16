@@ -26,6 +26,29 @@ Destroys a local bucket.
 | `--bucket` | string | name of the bucket to be deleted | `""` |
 
 
+### evict
+
+`ais bucket evict --bucket <value>`
+
+Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | name of the cloud bucket to be evicted | `""` |
+
+
+### getprops
+
+`ais bucket getprops --bucket <value>`
+
+Gets the [properties](../../docs/bucket.md#properties-and-options) of the bucket.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | name of the bucket | `""` |
+| `--bprovider` | [Provider](../README.md#enums) | locality of bucket | `""` |
+
+
 ### list
 
 `ais bucket list --bucket <value>`
@@ -47,6 +70,19 @@ Lists all the objects along with some of the objects' properties. For the full l
 `ais bucket list --bucket mylocalbucket --prefix "mytestfolder/" --regex ".txt`
 
 Returns all objects matching `.txt` under the `mytestfolder` directory from `mylocalbucket` bucket
+
+
+### makencopies
+
+`ais bucket makencopies --bucket <value> --copies <value>`
+
+Starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--bucket` | string | name of the bucket | `""` |
+| `--copies` | int | number of copies | `1` |
+| `--bprovider` | [Provider](../README.md#enums) | locality of bucket | `""` |
 
 ### names
 

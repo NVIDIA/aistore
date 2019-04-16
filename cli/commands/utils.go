@@ -278,3 +278,11 @@ func errorHandler(e error) error {
 		return err
 	}
 }
+
+func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) error {
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {
+		return fmt.Errorf("could not reach %q bucket: %v", bckName, err)
+	}
+	return nil
+}

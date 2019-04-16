@@ -1153,7 +1153,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	query := r.URL.Query()
-	checkCached, _ := parsebool(query.Get(cmn.URLParamCheckCached))
+	checkCached, _ := cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -2085,7 +2085,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		q := r.URL.Query()
-		force, _ := parsebool(q.Get(cmn.URLParamForce))
+		force, _ := cmn.ParseBool(q.Get(cmn.URLParamForce))
 		if p.smapowner.get().isPrimary(p.si) && !force {
 			s := fmt.Sprintf("Cannot shutdown primary proxy without %s=true query parameter", cmn.URLParamForce)
 			p.invalmsghdlr(w, r, s)
@@ -2182,7 +2182,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	proxyID := apitems[1]
-	force, _ := parsebool(r.URL.Query().Get(cmn.URLParamForce))
+	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	// forceful primary change
 	if force && apitems[0] == cmn.Proxy {
 		if !p.smapowner.get().isPrimary(p.si) {
@@ -2629,7 +2629,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				keepalive = apitems[1] == cmn.Keepalive
 			}
 			s := r.URL.Query().Get(cmn.URLParamNonElectable)
-			if nonElectable, err = parsebool(s); err != nil {
+			if nonElectable, err = cmn.ParseBool(s); err != nil {
 				glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
 			}
 		}

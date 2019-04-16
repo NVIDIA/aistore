@@ -23,6 +23,8 @@ const (
 	cliName       = "ais"
 	commandList   = "list"
 	commandRename = "rename"
+	commandProps  = "props"
+	commandEvict  = "evict"
 
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
@@ -36,7 +38,7 @@ var (
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
-	propsFlag    = cli.BoolFlag{Name: "props", Usage: "properties of resource (object, bucket)"}
+	propsFlag    = cli.BoolFlag{Name: commandProps, Usage: "properties of resource (object, bucket)"}
 	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are saved to, eg. 'imagenet'"}
@@ -62,12 +64,14 @@ var (
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
 	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
 	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
+	cachedFlag   = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
 
 	// Bucket
 	newBucketFlag = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
 	pageSizeFlag  = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag  = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
+	copiesFlag    = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 
 	clear map[string]func()
 )
