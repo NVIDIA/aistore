@@ -6,9 +6,9 @@ package dsort
 
 import (
 	"runtime/debug"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
@@ -29,8 +29,8 @@ type memoryWatcher struct {
 	excessTicker      *time.Ticker
 	reservedTicker    *time.Ticker
 	maxMemoryToUse    uint64
-	reservedMemory    uint64
-	memoryUsed        uint64 // memory used in specifc point in time, it is refreshed once in a while
+	reservedMemory    atomic.Uint64
+	memoryUsed        atomic.Uint64 // memory used in specifc point in time, it is refreshed once in a while
 	unreserveMemoryCh chan uint64
 	stopCh            cmn.StopCh
 }
@@ -52,7 +52,7 @@ func (mw *memoryWatcher) watch() error {
 	if err := mem.Get(); err != nil {
 		return err
 	}
-	mw.memoryUsed = mem.ActualUsed
+	mw.memoryUsed.Store(mem.ActualUsed)
 
 	go mw.watchReserved()
 	go mw.watchExcess(mem)
@@ -77,13 +77,13 @@ func (mw *memoryWatcher) watchReserved() {
 	for range mw.reservedTicker.C {
 		curMem := sigar.Mem{}
 		if err := curMem.Get(); err == nil {
-			atomic.StoreUint64(&mw.memoryUsed, curMem.ActualUsed)
+			mw.memoryUsed.Store(curMem.ActualUsed)
 
 			unreserve := true
 			for unreserve {
 				select {
 				case size := <-mw.unreserveMemoryCh:
-					atomic.AddUint64(&mw.reservedMemory, ^(size - 1)) // decrement by size
+					mw.reservedMemory.Sub(size)
 				default:
 					unreserve = false
 				}
@@ -159,10 +159,10 @@ func (mw *memoryWatcher) watchExcess(memStat sigar.Mem) {
 }
 
 func (mw *memoryWatcher) reserveMem(toReserve uint64) (exceeding bool) {
-	newReservedMemory := atomic.AddUint64(&mw.reservedMemory, toReserve)
+	newReservedMemory := mw.reservedMemory.Add(toReserve)
 	// expected total memory after all objects will be extracted is equal
 	// to: previously reserved memory + uncompressed size of shard + current memory used
-	expectedTotalMemoryUsed := newReservedMemory + atomic.LoadUint64(&mw.memoryUsed)
+	expectedTotalMemoryUsed := newReservedMemory + mw.memoryUsed.Load()
 
 	exceeding = expectedTotalMemoryUsed >= mw.maxMemoryToUse
 	return

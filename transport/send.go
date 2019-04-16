@@ -18,10 +18,10 @@ import (
 	"path"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xoshiro256"
@@ -60,7 +60,7 @@ type (
 		client          *http.Client // http client this send-stream will use
 		toURL, trname   string       // http endpoint
 		sessID          int64        // stream session ID
-		sessST          int64        // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
+		sessST          atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
 		stats           Stats        // stream stats
 		Numcur, Sizecur int64        // gets reset to zero upon each timeout
 		// internals
@@ -72,9 +72,9 @@ type (
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
-			start   int64         // to support idle(%)
+			start   atomic.Int64  // to support idle(%)
 			idleOut time.Duration // idle timeout
-			posted  int64         // num posted since the last GC do()
+			posted  atomic.Int64  // num posted since the last GC do()
 			ticks   int           // num 1s ticks until idle timeout
 			index   int           // heap stuff
 		}
@@ -83,7 +83,7 @@ type (
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objname, etc. fields
 		term      struct {
-			barr   int64
+			barr   atomic.Int64
 			err    error
 			reason *string
 		}
@@ -98,12 +98,12 @@ type (
 	}
 	// stream stats
 	Stats struct {
-		Num     int64   // number of transferred objects
-		Size    int64   // transferred size, in bytes
-		Offset  int64   // stream offset, in bytes
-		IdleDur int64   // the time stream was idle since the previous getStats call
-		TotlDur int64   // total time since --/---/---
-		IdlePct float64 // idle time % since --/---/--
+		Num     atomic.Int64 // number of transferred objects
+		Size    atomic.Int64 // transferred size, in bytes
+		Offset  atomic.Int64 // stream offset, in bytes
+		IdleDur atomic.Int64 // the time stream was idle since the previous getStats call
+		TotlDur int64        // total time since --/---/---
+		IdlePct float64      // idle time % since --/---/--
 	}
 	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
 
@@ -143,7 +143,7 @@ type (
 		hdr      Header        // object header
 		reader   io.ReadCloser // reader, to read the object, and close when done
 		callback SendCallback  // callback fired when sending is done OR when the stream terminates (see term.reason)
-		prc      *int64        // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
+		prc      *atomic.Int64 // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
 	}
 	sendoff struct {
 		obj obj
@@ -173,7 +173,7 @@ type (
 var (
 	nopRC      = &nopReadCloser{}
 	background = context.Background()
-	sessID     = int64(100) // unique session IDs starting from 101
+	sessID     = *atomic.NewInt64(100) // unique session IDs starting from 101
 	sc         = &StreamCollector{}
 	gc         *collector // real collector
 )
@@ -306,7 +306,7 @@ func (gc *collector) do() {
 					s.objDone(&obj, s.term.err)
 				}
 			}
-		} else if atomic.LoadInt64(&s.sessST) == active {
+		} else if s.sessST.Load() == active {
 			gc.update(s, s.time.ticks-1)
 		}
 	}
@@ -315,10 +315,10 @@ func (gc *collector) do() {
 			continue
 		}
 		gc.update(s, int(s.time.idleOut/tickUnit))
-		if atomic.SwapInt64(&s.time.posted, 0) > 0 {
+		if s.time.posted.Swap(0) > 0 {
 			continue
 		}
-		if len(s.workCh) == 0 && atomic.CompareAndSwapInt64(&s.sessST, active, inactive) {
+		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
 			s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: active => inactive", s)
@@ -355,7 +355,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		s.time.idleOut = tickUnit
 	}
 	s.time.ticks = int(s.time.idleOut / tickUnit)
-	s.sessID = atomic.AddInt64(&sessID, 1)
+	s.sessID = sessID.Inc()
 	s.trname = path.Base(u.Path)
 	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
 
@@ -380,7 +380,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.stopCh = cmn.NewStopCh()
 	s.postCh = make(chan struct{}, 1)
 	s.maxheader = make([]byte, maxHeaderSize) // NOTE: must be large enough to accommodate all max-size Header
-	atomic.StoreInt64(&s.sessST, inactive)    // NOTE: initiate HTTP session upon arrival of the first object
+	s.sessST.Store(inactive)                  // NOTE: initiate HTTP session upon arrival of the first object
 
 	var ctx context.Context
 	if extra != nil && extra.Ctx != nil {
@@ -389,7 +389,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		ctx = background
 	}
 
-	atomic.StoreInt64(&s.time.start, time.Now().UnixNano())
+	s.time.start.Store(time.Now().UnixNano())
 	s.term.reason = new(string)
 
 	s.wg.Add(2)
@@ -425,15 +425,15 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 // stream(s).
 //
 // ---------------------------------------------------------------------------------------
-func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, prc ...*int64) (err error) {
+func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, prc ...*atomic.Int64) (err error) {
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
 			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
 		glog.Errorln(err)
 		return
 	}
-	atomic.AddInt64(&s.time.posted, 1)
-	if atomic.CompareAndSwapInt64(&s.sessST, inactive, active) {
+	s.time.posted.Inc()
+	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
 		if glog.FastV(4, glog.SmoduleTransport) {
 			glog.Infof("%s: inactive => active", s)
@@ -467,9 +467,9 @@ func (s *Stream) Stop() {
 func (s *Stream) URL() string         { return s.toURL }
 func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
-func (s *Stream) Terminated() bool    { return atomic.LoadInt64(&s.term.barr) != 0 }
+func (s *Stream) Terminated() bool    { return s.term.barr.Load() != 0 }
 func (s *Stream) terminate() {
-	atomic.StoreInt64(&s.term.barr, 0xDEADBEEF)
+	s.term.barr.Store(0xDEADBEEF)
 	gc.remove(s)
 	s.Stop()
 	close(s.cmplCh)
@@ -487,16 +487,16 @@ func (s *Stream) TermInfo() (string, error) {
 
 func (s *Stream) GetStats() (stats Stats) {
 	// byte-num transfer stats
-	stats.Num = atomic.LoadInt64(&s.stats.Num)
-	stats.Offset = atomic.LoadInt64(&s.stats.Offset)
-	stats.Size = atomic.LoadInt64(&s.stats.Size)
+	stats.Num.Store(s.stats.Num.Load())
+	stats.Offset.Store(s.stats.Offset.Load())
+	stats.Size.Store(s.stats.Size.Load())
 	// idle(%)
 	now := time.Now().UnixNano()
-	stats.TotlDur = now - atomic.LoadInt64(&s.time.start)
-	stats.IdlePct = float64(atomic.LoadInt64(&s.stats.IdleDur)) * 100 / float64(stats.TotlDur)
+	stats.TotlDur = now - s.time.start.Load()
+	stats.IdlePct = float64(s.stats.IdleDur.Load()) * 100 / float64(stats.TotlDur)
 	stats.IdlePct = cmn.MinF64(100, stats.IdlePct) // getStats is async vis-à-vis IdleDur += deltas
-	atomic.StoreInt64(&s.time.start, now)
-	atomic.StoreInt64(&s.stats.IdleDur, 0)
+	s.time.start.Store(now)
+	s.stats.IdleDur.Store(0)
 	return
 }
 
@@ -510,7 +510,7 @@ func (hdr *Header) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 || hdr.Is
 
 func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 	for {
-		if atomic.LoadInt64(&s.sessST) == active {
+		if s.sessST.Load() == active {
 			if dryrun {
 				s.dryrun()
 			} else if err := s.doRequest(ctx); err != nil {
@@ -568,7 +568,7 @@ func (s *Stream) cmplLoop() {
 func (s *Stream) objDone(obj *obj, err error) {
 	var rc int64
 	if obj.prc != nil {
-		rc = atomic.AddInt64(obj.prc, -1)
+		rc = obj.prc.Dec()
 		cmn.Assert(rc >= 0) // remove
 	}
 	// SCQ completion callback
@@ -604,7 +604,7 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 			*s.term.reason = reasonStopped
 			return
 		case <-s.postCh:
-			atomic.StoreInt64(&s.sessST, active)
+			s.sessST.Store(active)
 			next = true // initiate new HTTP/TCP session
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s: active <- posted", s)
@@ -674,7 +674,7 @@ repeat:
 		s.header = s.maxheader[:l]
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
-		num := atomic.LoadInt64(&s.stats.Num)
+		num := s.stats.Num.Load()
 		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
 		err = io.EOF
 		return
@@ -684,7 +684,7 @@ repeat:
 func (s *Stream) deactivate() (n int, err error) {
 	err = io.EOF
 	if glog.FastV(4, glog.SmoduleTransport) {
-		num := atomic.LoadInt64(&s.stats.Num)
+		num := s.stats.Num.Load()
 		glog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
 	}
 	return
@@ -695,9 +695,9 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	s.sendoff.off += int64(n)
 	if s.sendoff.off >= int64(len(s.header)) {
 		cmn.Assert(s.sendoff.off == int64(len(s.header)))
-		atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
+		s.stats.Offset.Add(s.sendoff.off)
 		if glog.FastV(4, glog.SmoduleTransport) {
-			num := atomic.LoadInt64(&s.stats.Num)
+			num := s.stats.Num.Load()
 			glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
 		}
 		s.sendoff.dod = s.sendoff.off
@@ -737,8 +737,8 @@ func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
 
 	s.Sizecur += s.sendoff.off
-	atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
-	atomic.AddInt64(&s.stats.Size, s.sendoff.off)
+	s.stats.Offset.Add(s.sendoff.off)
+	s.stats.Size.Add(s.sendoff.off)
 
 	if err != nil {
 		goto exit
@@ -749,10 +749,10 @@ func (s *Stream) eoObj(err error) {
 		goto exit
 	}
 	s.Numcur++
-	atomic.AddInt64(&s.stats.Num, 1)
+	s.stats.Num.Inc()
 
 	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num, obj.hdr.Objname)
+		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.hdr.Objname)
 	}
 exit:
 	if err != nil {
@@ -823,7 +823,7 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 }
 
 // addIdle
-func (s *Stream) addIdle(beg time.Time) { atomic.AddInt64(&s.stats.IdleDur, int64(time.Since(beg))) }
+func (s *Stream) addIdle(beg time.Time) { s.stats.IdleDur.Add(int64(time.Since(beg))) }
 
 //
 // dry-run ---------------------------

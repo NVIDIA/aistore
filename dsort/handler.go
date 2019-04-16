@@ -541,7 +541,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager.addToTotalInputShardsSeen(d)
 		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
-		glog.V(4).Infof("total times received records from another target: %d", dsortManager.received.count)
+		glog.V(4).Infof("total times received records from another target: %d", dsortManager.received.count.Load())
 	}
 }
 

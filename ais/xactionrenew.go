@@ -9,14 +9,13 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 // RENEW FUNCTIONS
@@ -366,10 +365,9 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 	// we already have possibly both locks
 	// entry variable is one which is actually present in bucketXacts under makeNCopies
 	id := r.uniqueID()
-	base := cmn.NewXactBase(id, cmn.ActMakeNCopies, bucket)
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
 	xmnc := &mirror.XactBckMakeNCopies{
-		XactBase:   *base,
+		XactBase:   *cmn.NewXactBase(id, cmn.ActMakeNCopies, bucket),
 		T:          t,
 		Namelocker: t.rtnamemap,
 		Slab:       slab,
@@ -417,10 +415,9 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 
 	// construct new
 	id := r.uniqueID()
-	base := cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket)
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
 	xcopy := &mirror.XactCopy{
-		XactDemandBase: *base,
+		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket),
 		Slab:           slab,
 		Mirror:         *lom.MirrorConf(),
 		T:              t,

@@ -13,8 +13,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
-	"sync/atomic"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -28,9 +28,9 @@ type ecManager struct {
 
 	t         *targetrunner
 	smap      *cluster.Smap
-	targetCnt int32     // atomic, to avoid races between read/write on smap
-	bowner    *bmdowner // bucket manager
-	bckMD     *bucketMD // bucket metadata, used to get EC enabled/disabled information
+	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
+	bowner    *bmdowner    // bucket manager
+	bckMD     *bucketMD    // bucket metadata, used to get EC enabled/disabled information
 
 	xacts map[string]*ec.BckXacts // bckName -> xact map, only local buckets allowed, no naming collisions
 
@@ -54,20 +54,19 @@ func newECM(t *targetrunner) *ecManager {
 	}
 
 	smap := t.smapowner.Get()
-	targetCnt := int32(smap.CountTargets())
 
 	ECM = &ecManager{
 		netReq:    netReq,
 		netResp:   netResp,
 		t:         t,
 		smap:      smap,
-		targetCnt: targetCnt,
+		targetCnt: *atomic.NewInt32(int32(smap.CountTargets())),
 		bowner:    t.bmdowner,
 		xacts:     make(map[string]*ec.BckXacts),
 		bckMD:     t.bmdowner.get(),
 	}
 
-	t.smaplisteners.Reg(ECM)
+	t.smapowner.listeners.Reg(ECM)
 
 	for _, bck := range ECM.bckMD.LBmap {
 		if bck.EC.Enabled {
@@ -248,7 +247,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 
 	isECCopy := ec.IsECCopy(lom.Size(), &lom.BckProps.EC)
 
-	targetCnt := atomic.LoadInt32(&mgr.targetCnt)
+	targetCnt := mgr.targetCnt.Load()
 
 	// tradeoff: encoding small object might require just 1 additional target available
 	// we will start xaction to satisfy this request
@@ -302,7 +301,7 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		return ec.ErrorECDisabled
 	}
 
-	targetCnt := atomic.LoadInt32(&mgr.targetCnt)
+	targetCnt := mgr.targetCnt.Load()
 	// note: restore replica object is done with GFN, safe to always abort
 	if required := lom.BckProps.EC.RequiredRestoreTargets(); int(targetCnt) < required {
 		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
@@ -388,7 +387,7 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 
 		mgr.smap = mgr.t.smapowner.Get()
 		targetCnt := mgr.smap.CountTargets()
-		atomic.StoreInt32(&mgr.targetCnt, int32(targetCnt))
+		mgr.targetCnt.Store(int32(targetCnt))
 
 		mgr.RLock()
 

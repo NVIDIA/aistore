@@ -231,7 +231,6 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	keepalive             keepaliver
 	smapowner             *smapowner
-	smaplisteners         *smaplisteners
 	bmdowner              *bmdowner
 	xactions              *xactionsRegistry
 	statsif               stats.Tracker
@@ -340,7 +339,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 	}
 }
 
-func (h *httprunner) init(s stats.Tracker, isproxy bool) {
+func (h *httprunner) init(s stats.Tracker) {
 	h.statsif = s
 
 	config := cmn.GCO.Get()
@@ -369,9 +368,8 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		}
 	}
 
-	h.smaplisteners = newSmapListeners()
-	h.smapowner = &smapowner{listeners: h.smaplisteners}
-	h.bmdowner = &bmdowner{}
+	h.smapowner = newSmapowner()
+	h.bmdowner = newBmdowner()
 	h.xactions = newXactions() // extended actions
 }
 

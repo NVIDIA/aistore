@@ -7,8 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
-	"sync/atomic"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -45,8 +45,7 @@ type (
 
 		controlCh chan RequestsControlMsg
 
-		rejectReq int32 // marker if EC requests should be rejected
-
+		rejectReq atomic.Bool // marker if EC requests should be rejected
 	}
 
 	mpathReq struct {
@@ -116,15 +115,15 @@ func (r *xactReqBase) EnableRequests() {
 }
 
 func (r *xactReqBase) setEcRequestsDisabled() {
-	atomic.CompareAndSwapInt32(&r.rejectReq, 0, 1)
+	r.rejectReq.Store(true)
 }
 
 func (r *xactReqBase) setEcRequestsEnabled() {
-	atomic.CompareAndSwapInt32(&r.rejectReq, 1, 0)
+	r.rejectReq.Store(false)
 }
 
 func (r *xactReqBase) ecRequestsEnabled() bool {
-	return atomic.LoadInt32(&r.rejectReq) == 0
+	return !r.rejectReq.Load()
 }
 
 // Create a request header: initializes the `Sender` field with local target's

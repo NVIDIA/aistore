@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -71,7 +71,7 @@ type (
 		mem2    *memsys.Mem2
 		T       Target
 		stopCh  chan struct{}
-		stopped int32
+		stopped atomic.Bool
 	}
 )
 
@@ -727,11 +727,12 @@ const (
 	minSize2Evict = cmn.KiB * 256
 )
 
-func (r LomCacheRunner) Init(mem2 *memsys.Mem2, t Target) *LomCacheRunner {
-	r.mem2 = mem2
-	r.T = t
-	r.stopCh = make(chan struct{}, 1)
-	return &r
+func NewLomCacheRunner(mem2 *memsys.Mem2, t Target) *LomCacheRunner {
+	return &LomCacheRunner{
+		T:      t,
+		mem2:   mem2,
+		stopCh: make(chan struct{}, 1),
+	}
 }
 
 func (r *LomCacheRunner) Run() error {
@@ -773,7 +774,7 @@ func (r *LomCacheRunner) Run() error {
 			cmn.Assert(total >= evicted)
 			glog.Infof("total %d, evicted %d, timer %v", total-evicted, evicted, d)
 		case <-r.stopCh:
-			atomic.StoreInt32(&r.stopped, 2019)
+			r.stopped.Store(true)
 			timer.Stop()
 			return nil
 		}
@@ -783,7 +784,7 @@ func (r *LomCacheRunner) Stop(err error) {
 	r.stopCh <- struct{}{}
 	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 }
-func (r *LomCacheRunner) isStopping() bool { return atomic.LoadInt32(&r.stopped) != 0 }
+func (r *LomCacheRunner) isStopping() bool { return r.stopped.Load() }
 
 func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 	var (
@@ -791,7 +792,7 @@ func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 		now            = time.Now()
 		wg             = &sync.WaitGroup{}
 		bmd            = r.T.GetBowner().Get()
-		evicted, total uint32
+		evicted, total atomic.Uint32
 	)
 	for _, cache := range caches {
 		wg.Add(1)
@@ -804,7 +805,7 @@ func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 					md    = value.(*lmeta)
 					atime = time.Unix(0, md.atime)
 				)
-				atomic.AddUint32(&total, 1)
+				total.Add(1)
 				if now.Sub(atime) < d {
 					return true
 				}
@@ -815,7 +816,7 @@ func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 					// TODO: throttle via mountpath.IsIdle(), etc.
 				}
 				cache.M.Delete(hkey)
-				atomic.AddUint32(&evicted, 1)
+				evicted.Add(1)
 				return true
 			}
 			cache.M.Range(feviat)
@@ -823,7 +824,7 @@ func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 		}(cache)
 	}
 	wg.Wait()
-	numevicted, numtotal = int(atomic.LoadUint32(&evicted)), int(atomic.LoadUint32(&total))
+	numevicted, numtotal = int(evicted.Load()), int(total.Load())
 	return
 }
 

@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -182,9 +182,9 @@ type (
 		started time.Time
 		ended   time.Time
 
-		currentSize int64      // the current size of the file (updated as the download progresses)
-		totalSize   int64      // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
-		finishedCh  chan error // when a jogger finishes downloading a dlTask
+		currentSize atomic.Int64 // the current size of the file (updated as the download progresses)
+		totalSize   int64        // the total size of the file (nonzero only if Content-Length header was provided by the source of the file)
+		finishedCh  chan error   // when a jogger finishes downloading a dlTask
 
 		downloadCtx context.Context    // context with cancel function
 		cancelFunc  context.CancelFunc // used to cancel the download after the request commences
@@ -730,7 +730,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 		if task != nil && task.id == reqID {
 			info := cmn.TaskDlInfo{
 				Name:       task.obj.Objname,
-				Downloaded: atomic.LoadInt64(&task.currentSize),
+				Downloaded: task.currentSize.Load(),
 				Total:      task.totalSize,
 
 				StartTime: task.started,
@@ -892,7 +892,7 @@ func (t *task) download() {
 	}
 
 	t.parent.stats.AddMany(
-		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize},
+		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(t.started))},
 	)
 	t.finishedCh <- nil
@@ -920,7 +920,7 @@ func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 	progressReader := &progressReader{
 		r: response.Body,
 		reporter: func(n int64) {
-			atomic.AddInt64(&t.currentSize, n)
+			t.currentSize.Add(n)
 		},
 	}
 
@@ -968,7 +968,7 @@ func (t *task) abort(statusMsg string, err error) {
 func (t *task) persist() {
 	t.parent.db.persistTask(t.id, cmn.TaskDlInfo{
 		Name:       t.obj.Objname,
-		Downloaded: t.currentSize,
+		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize,
 
 		StartTime: t.started,

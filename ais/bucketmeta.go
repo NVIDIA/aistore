@@ -7,9 +7,9 @@ package ais
 import (
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -144,20 +144,22 @@ var _ cluster.Bowner = &bmdowner{}
 
 type bmdowner struct {
 	sync.Mutex
-	bucketmd unsafe.Pointer
+	bucketmd atomic.Pointer
+}
+
+func newBmdowner() *bmdowner {
+	return &bmdowner{}
 }
 
 func (r *bmdowner) put(bucketmd *bucketMD) {
 	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
-	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
+	r.bucketmd.Store(unsafe.Pointer(bucketmd))
 }
 
 // implements cluster.Bowner.Get
 func (r *bmdowner) Get() *cluster.BMD {
-	bucketmd := (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
-	return &bucketmd.BMD
+	return &r.get().BMD
 }
 func (r *bmdowner) get() (bucketmd *bucketMD) {
-	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
-	return
+	return (*bucketMD)(r.bucketmd.Load())
 }

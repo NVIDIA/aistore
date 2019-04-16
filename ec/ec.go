@@ -8,9 +8,9 @@ import (
 	"errors"
 	"io"
 	"os"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -205,7 +205,7 @@ type (
 		wg      *cmn.TimeoutGroup  // for synchronous download (for restore)
 		lom     *cluster.LOM       // for xattrs
 		n       int64              // number of byte sent/received
-		refCnt  int32              // number of references
+		refCnt  atomic.Int32       // number of references
 		workFQN string             // FQN for temporary slice/replica
 		cksum   cmn.Cksummer       // checksum of the slice
 		version string             // version of the remote object
@@ -243,7 +243,7 @@ func (s *slice) free() {
 // memory/temporary file is cleaned up
 func (s *slice) release() {
 	if s.obj != nil || s.workFQN != "" {
-		refCnt := atomic.AddInt32(&s.refCnt, -1)
+		refCnt := s.refCnt.Dec()
 		if refCnt < 1 {
 			s.free()
 		}

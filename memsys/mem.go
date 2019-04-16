@@ -16,9 +16,9 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	sigar "github.com/cloudfoundry/gosigar"
@@ -101,17 +101,17 @@ import (
 //
 // ========================== end of TOO ========================================
 
-const Numslabs = 128 / 4 // [4K - 128K] at 4K increments
+const NumSlabs = 128 / 4 // [4K - 128K] at 4K increments
 const DEADBEEF = "DEADBEEF"
 const GlobalMem2Name = "GMem2"
 const pkgName = "memsys"
 
 // mem subsystem defaults (potentially, tunables)
 const (
-	mindepth      = 128             // ring cap min; default ring growth increment
-	maxdepth      = 1024 * 24       // ring cap max
-	sizetoGC      = cmn.GiB * 2     // see heuristics ("Heu")
-	loadavg       = 10              // "idle" load average to deallocate Slabs when below
+	minDepth      = 128             // ring cap min; default ring growth increment
+	maxDepth      = 1024 * 24       // ring cap max
+	sizeToGC      = cmn.GiB * 2     // see heuristics ("Heu")
+	loadAvg       = 10              // "idle" load average to deallocate Slabs when below
 	minMemFree    = cmn.GiB         // default minimum memory size that must remain available - see AIS_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
 	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
@@ -155,21 +155,21 @@ type (
 	Slab2 struct {
 		m *Mem2 // pointer to the parent/creator
 
-		bufsize      int64
+		bufSize      int64
 		tag          string
 		get, put     [][]byte
 		muget, muput sync.Mutex
 		stats        struct {
-			Hits int64
+			Hits atomic.Int64
 		}
-		pmindepth *int64
+		pMinDepth *atomic.Int64
 		pos       int
 		debug     bool
 	}
 	Stats2 struct {
-		Hits    [Numslabs]int64
-		Adeltas [Numslabs]int64
-		Idle    [Numslabs]time.Time
+		Hits    [NumSlabs]int64
+		Adeltas [NumSlabs]int64
+		Idle    [NumSlabs]time.Time
 	}
 	ReqStats2 struct {
 		Wg    *sync.WaitGroup
@@ -183,19 +183,19 @@ type (
 			d time.Duration
 			t *time.Timer
 		}
-		lowwm    uint64
-		rings    [Numslabs]*Slab2
+		lowWM    uint64
+		rings    [NumSlabs]*Slab2
 		stats    Stats2
 		sorted   []sortpair
-		toGC     int64 // accumulates over time and triggers GC upon reaching the spec-ed limit
-		mindepth int64 // minimum ring depth aka length
-		usageLvl int64 // integer values corresponding to Mem2Initialized, Mem2Running, or Mem2Stopped
+		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching the spec-ed limit
+		minDepth atomic.Int64 // minimum ring depth aka length
+		usageLvl atomic.Int64 // integer values corresponding to Mem2Initialized, Mem2Running, or Mem2Stopped
 		// for user to specify at construction time
 		Name        string
 		MinFree     uint64        // memory that must be available at all times
 		TimeIval    time.Duration // interval of time to watch for low memory and make steps
-		swap        uint64        // actual swap size
-		Swapping    int32         // max = SwappingMax; halves every r.time.d unless swapping
+		swap        atomic.Uint64 // actual swap size
+		Swapping    atomic.Int32  // max = SwappingMax; halves every r.time.d unless swapping
 		MinPctTotal int           // same, via percentage of total
 		MinPctFree  int           // ditto, as % of free at init time
 		Debug       bool
@@ -258,19 +258,19 @@ func (r *Mem2) MemPressure() int {
 	mem.Get()
 	swap := sigar.Swap{}
 	swap.Get()
-	if swap.Used > atomic.LoadUint64(&r.swap) {
-		atomic.StoreInt32(&r.Swapping, SwappingMax)
+	if swap.Used > r.swap.Load() {
+		r.Swapping.Store(SwappingMax)
 	}
-	if atomic.LoadInt32(&r.Swapping) > 0 {
+	if r.Swapping.Load() > 0 {
 		return OOM
 	}
-	if mem.ActualFree > r.lowwm {
+	if mem.ActualFree > r.lowWM {
 		return MemPressureLow
 	}
 	if mem.ActualFree <= r.MinFree {
 		return MemPressureExtreme
 	}
-	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowwm - r.MinFree)
+	x := (mem.ActualFree - r.MinFree) * 100 / (r.lowWM - r.MinFree)
 	if x <= 25 {
 		return MemPressureHigh
 	}
@@ -286,9 +286,9 @@ func MemPressureText(v int) string { return memPressureText[v] }
 func (r *Mem2) Init(ignorerr bool) (err error) {
 	// CAS implemented to enforce only one invocation of gMem2.Init()
 	// for possible concurrent calls to memsys.Init() in multi-threaded context
-	if !atomic.CompareAndSwapInt64(&r.usageLvl, 0, Mem2Initialized) {
-		if r.usageLvl != Mem2Running {
-			logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl]))
+	if !r.usageLvl.CAS(0, Mem2Initialized) {
+		if r.usageLvl.Load() != Mem2Running {
+			logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl.Load()]))
 		}
 		return
 	}
@@ -338,7 +338,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		}
 	}
 	x := cmn.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
-	r.lowwm = cmn.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
+	r.lowWM = cmn.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
 	if r.TimeIval == 0 {
@@ -348,12 +348,12 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	r.setTimer(mem.ActualFree, mem.Total, false /*swapping */, false /* reset */)
 
 	// 5. final construction steps
-	r.sorted = make([]sortpair, Numslabs)
+	r.sorted = make([]sortpair, NumSlabs)
 	swap := sigar.Swap{}
 	swap.Get()
-	atomic.StoreUint64(&r.swap, swap.Used)
-	atomic.StoreInt64(&r.mindepth, int64(mindepth))
-	atomic.StoreInt64(&r.toGC, 0)
+	r.swap.Store(swap.Used)
+	r.minDepth.Store(minDepth)
+	r.toGC.Store(0)
 
 	r.stopCh = make(chan struct{}, 1)
 	r.statCh = make(chan ReqStats2, 1)
@@ -362,12 +362,12 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	for i := range r.rings {
 		slab := &Slab2{
 			m:       r,
-			bufsize: int64(cmn.KiB * 4 * (i + 1)),
-			get:     make([][]byte, 0, mindepth),
-			put:     make([][]byte, 0, mindepth),
+			bufSize: int64(cmn.KiB * 4 * (i + 1)),
+			get:     make([][]byte, 0, minDepth),
+			put:     make([][]byte, 0, minDepth),
 		}
-		slab.tag = r.Getname() + "." + cmn.B2S(slab.bufsize, 0)
-		slab.pmindepth = &r.mindepth
+		slab.tag = r.Getname() + "." + cmn.B2S(slab.bufSize, 0)
+		slab.pMinDepth = &r.minDepth
 		slab.debug = r.Debug
 		r.rings[i] = slab
 	}
@@ -412,9 +412,9 @@ func (r *Mem2) Free(spec FreeSpec) {
 		}
 	}
 	if freed > 0 {
-		atomic.AddInt64(&r.toGC, freed)
+		r.toGC.Add(freed)
 		if spec.MinSize == 0 {
-			spec.MinSize = sizetoGC // using default
+			spec.MinSize = sizeToGC // using default
 		}
 		mem := sigar.Mem{}
 		mem.Get()
@@ -426,18 +426,18 @@ func (r *Mem2) Free(spec FreeSpec) {
 func (r *Mem2) Run() error {
 	// if the usageLvl of GMem2 is Mem2Initialized, swaps its usageLvl to Mem2Running atomically
 	// CAS implemented to enforce only one invocation of GMem2.Run()
-	if !atomic.CompareAndSwapInt64(&r.usageLvl, Mem2Initialized, Mem2Running) {
-		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl])
+	if !r.usageLvl.CAS(Mem2Initialized, Mem2Running) {
+		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl.Load()])
 	}
 	r.time.t = time.NewTimer(r.time.d)
 	mem := sigar.Mem{}
 	mem.Get()
-	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowwm), 2)
+	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowWM), 2)
 	logMsg(fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d))
 	f := cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree > mem.Total-mem.Total/5 { // more than 80%
 		logMsg(fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f))
-	} else if mem.ActualFree < r.lowwm {
+	} else if mem.ActualFree < r.lowWM {
 		logMsg(fmt.Sprintf("Warning: free memory %s below low watermark %s at %s startup", f, l, r.Getname()))
 	}
 
@@ -447,7 +447,7 @@ func (r *Mem2) Run() error {
 			r.work()
 		case req := <-r.statCh:
 			r.doStats()
-			for i := 0; i < Numslabs; i++ {
+			for i := 0; i < NumSlabs; i++ {
 				req.Stats.Hits[i] = r.stats.Hits[i]
 				req.Stats.Adeltas[i] = r.stats.Adeltas[i]
 				req.Stats.Idle[i] = r.stats.Idle[i]
@@ -463,9 +463,9 @@ func (r *Mem2) Run() error {
 
 func (r *Mem2) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
-	if atomic.CompareAndSwapInt64(&r.usageLvl, Mem2Initialized, Mem2Stopped) {
+	if r.usageLvl.CAS(Mem2Initialized, Mem2Stopped) {
 		r.stop()
-	} else if atomic.CompareAndSwapInt64(&r.usageLvl, Mem2Running, Mem2Stopped) {
+	} else if r.usageLvl.CAS(Mem2Running, Mem2Stopped) {
 		r.stopCh <- struct{}{}
 		close(r.stopCh)
 	} else {
@@ -479,14 +479,14 @@ func (r *Mem2) stop() {
 	}
 }
 
-func (r *Mem2) GetSlab2(bufsize int64) (s *Slab2, err error) {
-	a, b := bufsize/(cmn.KiB*4), bufsize%(cmn.KiB*4)
+func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
+	a, b := bufSize/(cmn.KiB*4), bufSize%(cmn.KiB*4)
 	if b != 0 {
-		err = fmt.Errorf("bufsize %d must be multiple of 4K", bufsize)
+		err = fmt.Errorf("buf_size %d must be multiple of 4K", bufSize)
 		return
 	}
-	if a < 1 || a > Numslabs {
-		err = fmt.Errorf("bufsize %d outside valid range", bufsize)
+	if a < 1 || a > NumSlabs {
+		err = fmt.Errorf("buf_size %d outside valid range", bufSize)
 		return
 	}
 	s = r.rings[a-1]
@@ -520,7 +520,7 @@ func (r *Mem2) GetStats(req ReqStats2) {
 // Slab2 API
 //
 
-func (s *Slab2) Size() int64 { return s.bufsize }
+func (s *Slab2) Size() int64 { return s.bufSize }
 func (s *Slab2) Tag() string { return s.tag }
 
 func (s *Slab2) Alloc() (buf []byte) {
@@ -536,11 +536,11 @@ func (s *Slab2) Free(bufs ...[]byte) {
 	// we cannot ever exceed we are trading this check in favor of maybe bigger
 	// slices. Also freeing buffers to the same slab at the same point in time
 	// is rather unusual we don't expect this happen often.
-	if len(s.put) < maxdepth {
+	if len(s.put) < maxDepth {
 		s.muput.Lock()
 		for _, buf := range bufs {
 			if s.debug {
-				cmn.Assert(len(buf) == int(s.bufsize))
+				cmn.Assert(int64(len(buf)) == s.Size())
 				for i := 0; i < len(buf); i += len(DEADBEEF) {
 					copy(buf[i:], []byte(DEADBEEF))
 				}
@@ -552,7 +552,7 @@ func (s *Slab2) Free(bufs ...[]byte) {
 		// When we just discard buffer, since the `s.put` cache is full, then
 		// we need to remember how much memory we discarded and take it into
 		// account when determining if we should return memory to the system.
-		atomic.AddInt64(&s.m.toGC, s.bufsize*int64(len(bufs)))
+		s.m.toGC.Add(s.Size() * int64(len(bufs)))
 	}
 }
 
@@ -597,46 +597,46 @@ func (r *Mem2) env() (err error) {
 func (r *Mem2) work() {
 	var (
 		depth int               // => current ring depth tbd
-		limit = int64(sizetoGC) // minimum accumulated size that triggers GC
+		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
 	)
 	mem := sigar.Mem{}
 	mem.Get()
 	swap := sigar.Swap{}
 	swap.Get()
-	swapping := swap.Used > r.swap
+	swapping := swap.Used > r.swap.Load()
 	if swapping {
-		atomic.StoreInt32(&r.Swapping, SwappingMax)
+		r.Swapping.Store(SwappingMax)
 	} else {
-		atomic.StoreInt32(&r.Swapping, atomic.LoadInt32(&r.Swapping)/2)
+		r.Swapping.Store(r.Swapping.Load() / 2)
 	}
-	r.swap = swap.Used
+	r.swap.Store(swap.Used)
 
 	r.doStats()
 
 	// 1. enough => free idle
-	if mem.ActualFree > r.lowwm && !swapping {
-		atomic.StoreInt64(&r.mindepth, int64(mindepth))
+	if mem.ActualFree > r.lowWM && !swapping {
+		r.minDepth.Store(minDepth)
 		if delta := r.freeIdle(freeIdleMin); delta > 0 {
-			atomic.AddInt64(&r.toGC, delta)
-			r.doGC(mem.ActualFree, sizetoGC, false, false)
+			r.toGC.Add(delta)
+			r.doGC(mem.ActualFree, sizeToGC, false, false)
 		}
 		goto timex
 	}
 	if mem.ActualFree <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
-		depth = mindepth / 4
+		depth = minDepth / 4
 		if mem.ActualFree < r.MinFree {
-			depth = mindepth / 8
+			depth = minDepth / 8
 		}
 		if swapping {
 			depth = 1
 		}
-		atomic.StoreInt64(&r.mindepth, int64(depth))
-		limit = sizetoGC / 2
+		r.minDepth.Store(int64(depth))
+		limit = sizeToGC / 2
 	} else { // 3. in-between hysteresis
-		x := uint64(maxdepth-mindepth) * (mem.ActualFree - r.MinFree)
-		depth = mindepth + int(x/(r.lowwm-r.MinFree)) // Heu #2
-		cmn.Dassert(depth >= mindepth && depth <= maxdepth, pkgName)
-		atomic.StoreInt64(&r.mindepth, int64(mindepth/4))
+		x := uint64(maxDepth-minDepth) * (mem.ActualFree - r.MinFree)
+		depth = minDepth + int(x/(r.lowWM-r.MinFree)) // Heu #2
+		cmn.Dassert(depth >= minDepth && depth <= maxDepth, pkgName)
+		r.minDepth.Store(minDepth / 4)
 	}
 	// idle first
 	for i, s := range r.rings {
@@ -662,7 +662,7 @@ timex:
 func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 	var changed bool
 	switch {
-	case free > r.lowwm && free > total-total/5:
+	case free > r.lowWM && free > total-total/5:
 		if r.time.d != r.TimeIval*2 {
 			r.time.d = r.TimeIval * 2
 			changed = true
@@ -672,7 +672,7 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 			r.time.d = r.TimeIval / 4
 			changed = true
 		}
-	case free <= r.lowwm:
+	case free <= r.lowWM:
 		if r.time.d != r.TimeIval/2 {
 			r.time.d = r.TimeIval / 2
 			changed = true
@@ -708,7 +708,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
 				}
 			} else {
-				x := s.reduce(mindepth, true /* idle */, false /* force */)
+				x := s.reduce(minDepth, true /* idle */, false /* force */)
 				freed += x
 				if x > 0 && (bool(glog.V(4)) || r.Debug) {
 					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, cmn.B2S(x, 1))
@@ -730,10 +730,10 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 		glog.Errorf("Failed to load averages, err: %v", err)
 		avg.One = 999 // fall thru on purpose
 	}
-	if avg.One > loadavg && !force && !swapping { // Heu #3
+	if avg.One > loadAvg && !force && !swapping { // Heu #3
 		return
 	}
-	toGC := atomic.LoadInt64(&r.toGC)
+	toGC := r.toGC.Load()
 	if toGC > minsize {
 		str := fmt.Sprintf(
 			"GC(force: %t, swapping: %t); load: %.2f; free: %s; toGC_size: %s",
@@ -748,7 +748,7 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 			runtime.GC()
 		}
 		gced = true
-		atomic.StoreInt64(&r.toGC, 0)
+		r.toGC.Store(0)
 	}
 	return
 }
@@ -761,7 +761,7 @@ func (r *Mem2) doStats() {
 	now := time.Now()
 	for i, s := range r.rings {
 		prev := r.stats.Hits[i]
-		r.stats.Hits[i] = atomic.LoadInt64(&s.stats.Hits)
+		r.stats.Hits[i] = s.stats.Hits.Load()
 		r.stats.Adeltas[i] = r.stats.Hits[i] - prev
 		isZero := r.stats.Idle[i].IsZero()
 		if r.stats.Adeltas[i] == 0 && isZero {
@@ -774,36 +774,37 @@ func (r *Mem2) doStats() {
 
 func (r *Mem2) assertReadyForUse() {
 	errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
-	cmn.DassertMsg(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr, pkgName)
+	curLvl := r.usageLvl.Load()
+	cmn.DassertMsg(curLvl == Mem2Initialized || curLvl == Mem2Running, errstr, pkgName)
 }
 
 func (s *Slab2) _alloc() (buf []byte) {
 	if len(s.get) > s.pos { // fast path
 		buf = s.get[s.pos]
 		s.pos++
-		atomic.AddInt64(&s.stats.Hits, 1)
+		s.stats.Hits.Inc()
 		return
 	}
 	return s._allocSlow()
 }
 
 func (s *Slab2) _allocSlow() (buf []byte) {
-	curmindepth := atomic.LoadInt64(s.pmindepth)
-	if curmindepth == 0 {
-		curmindepth = 1
+	curMinDepth := s.pMinDepth.Load()
+	if curMinDepth == 0 {
+		curMinDepth = 1
 	}
 
 	cmn.Dassert(len(s.get) == s.pos, pkgName)
 
 	s.muput.Lock()
 	lput := len(s.put)
-	if cnt := int(curmindepth) - lput; cnt > 0 {
+	if cnt := int(curMinDepth) - lput; cnt > 0 {
 		s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
 
 	cmn.Dassert(len(s.put) == s.pos, pkgName)
-	cmn.Dassert(len(s.get) >= int(curmindepth), pkgName)
+	cmn.Dassert(len(s.get) >= int(curMinDepth), pkgName)
 
 	s.put = s.put[:0]
 	s.muput.Unlock()
@@ -811,7 +812,7 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 	s.pos = 0
 	buf = s.get[s.pos]
 	s.pos++
-	atomic.AddInt64(&s.stats.Hits, 1)
+	s.stats.Hits.Inc()
 	return
 }
 
@@ -821,7 +822,7 @@ func (s *Slab2) grow(cnt int) {
 		glog.Infof("%s: grow by %d => %d", s.tag, cnt, lput+cnt)
 	}
 	for ; cnt > 0; cnt-- {
-		buf := make([]byte, s.bufsize)
+		buf := make([]byte, s.Size())
 		s.put = append(s.put, buf)
 	}
 }
@@ -844,7 +845,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		for ; cnt > 0; cnt-- {
 			lput--
 			s.put[lput] = nil
-			freed += s.bufsize
+			freed += s.Size()
 		}
 		s.put = s.put[:lput]
 	}
@@ -867,7 +868,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		for ; cnt > 0; cnt-- {
 			s.get[s.pos] = nil
 			s.pos++
-			freed += s.bufsize
+			freed += s.Size()
 		}
 	}
 	s.muget.Unlock()
@@ -879,11 +880,11 @@ func (s *Slab2) cleanup() (freed int64) {
 	s.muput.Lock()
 	for i := s.pos; i < len(s.get); i++ {
 		s.get[i] = nil
-		freed += s.bufsize
+		freed += s.Size()
 	}
 	for i := range s.put {
 		s.put[i] = nil
-		freed += s.bufsize
+		freed += s.Size()
 	}
 	s.get = s.get[:0]
 	s.put = s.put[:0]

@@ -7,8 +7,9 @@ package cmn
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 )
 
 type (
@@ -24,8 +25,8 @@ type (
 	// designed for that and bugs can be expected, especially when previous
 	// group was not called with successful (without timeout) WaitTimeout.
 	TimeoutGroup struct {
-		jobsLeft  int32 // counter for jobs left to be done
-		postedFin int32 // determines if we have already posted fin signal
+		jobsLeft  atomic.Int32 // counter for jobs left to be done
+		postedFin atomic.Int32 // determines if we have already posted fin signal
 		fin       chan struct{}
 	}
 
@@ -38,13 +39,12 @@ type (
 
 func NewTimeoutGroup() *TimeoutGroup {
 	return &TimeoutGroup{
-		jobsLeft: 0,
-		fin:      make(chan struct{}, 1),
+		fin: make(chan struct{}, 1),
 	}
 }
 
 func (tg *TimeoutGroup) Add(delta int) {
-	atomic.AddInt32(&tg.jobsLeft, int32(delta))
+	tg.jobsLeft.Add(int32(delta))
 }
 
 // Wait waits until jobs are finished.
@@ -70,7 +70,7 @@ func (tg *TimeoutGroup) WaitTimeout(timeout time.Duration) bool {
 func (tg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan struct{}) (timed bool, stopped bool) {
 	select {
 	case <-tg.fin:
-		atomic.StoreInt32(&tg.postedFin, 0)
+		tg.postedFin.Store(0)
 		timed, stopped = false, false
 	case <-time.After(timeout):
 		timed, stopped = true, false
@@ -83,8 +83,8 @@ func (tg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan s
 // Done decrements number of jobs left to do. Panics if the number jobs left is
 // less than 0.
 func (tg *TimeoutGroup) Done() {
-	if left := atomic.AddInt32(&tg.jobsLeft, -1); left == 0 {
-		if posted := atomic.SwapInt32(&tg.postedFin, 1); posted == 0 {
+	if left := tg.jobsLeft.Dec(); left == 0 {
+		if posted := tg.postedFin.Swap(1); posted == 0 {
 			tg.fin <- struct{}{}
 		}
 	} else if left < 0 {

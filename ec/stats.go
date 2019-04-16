@@ -7,29 +7,30 @@ package ec
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 )
 
 // internal EC stats in raw format: only counters
 type stats struct {
 	bckName    string
-	queueLen   int64
-	queueCnt   int64
-	waitTime   int64
-	waitCnt    int64
-	encodeReq  int64
-	encodeTime int64
-	encodeSize int64
-	encodeErr  int64
-	decodeReq  int64
-	decodeErr  int64
-	decodeTime int64
-	deleteReq  int64
-	deleteTime int64
-	deleteErr  int64
-	objTime    int64
-	objCnt     int64
+	queueLen   atomic.Int64
+	queueCnt   atomic.Int64
+	waitTime   atomic.Int64
+	waitCnt    atomic.Int64
+	encodeReq  atomic.Int64
+	encodeTime atomic.Int64
+	encodeSize atomic.Int64
+	encodeErr  atomic.Int64
+	decodeReq  atomic.Int64
+	decodeErr  atomic.Int64
+	decodeTime atomic.Int64
+	deleteReq  atomic.Int64
+	deleteTime atomic.Int64
+	deleteErr  atomic.Int64
+	objTime    atomic.Int64
+	objCnt     atomic.Int64
 }
 
 // ECStats are stats for clients-side apps - calculated from raw counters
@@ -67,101 +68,101 @@ type ECStats struct {
 }
 
 func (s *stats) updateQueue(l int) {
-	atomic.AddInt64(&s.queueLen, int64(l))
-	atomic.AddInt64(&s.queueCnt, 1)
+	s.queueLen.Add(int64(l))
+	s.queueCnt.Inc()
 }
 
 func (s *stats) updateEncode(sz int64) {
-	atomic.AddInt64(&s.encodeSize, sz)
-	atomic.AddInt64(&s.encodeReq, 1)
+	s.encodeSize.Add(sz)
+	s.encodeReq.Inc()
 }
 
 func (s *stats) updateEncodeTime(d time.Duration, failed bool) {
-	atomic.AddInt64(&s.encodeTime, int64(d))
+	s.encodeTime.Add(int64(d))
 	if failed {
-		atomic.AddInt64(&s.encodeErr, 1)
+		s.encodeErr.Inc()
 	}
 }
 
 func (s *stats) updateDecode() {
-	atomic.AddInt64(&s.decodeReq, 1)
+	s.decodeReq.Inc()
 }
 
 func (s *stats) updateDecodeTime(d time.Duration, failed bool) {
-	atomic.AddInt64(&s.decodeTime, int64(d))
+	s.decodeTime.Add(int64(d))
 	if failed {
-		atomic.AddInt64(&s.decodeErr, 1)
+		s.decodeErr.Inc()
 	}
 }
 
 func (s *stats) updateDelete() {
-	atomic.AddInt64(&s.deleteReq, 1)
+	s.deleteReq.Inc()
 }
 
 func (s *stats) updateDeleteTime(d time.Duration, failed bool) {
-	atomic.AddInt64(&s.deleteTime, int64(d))
+	s.deleteTime.Add(int64(d))
 	if failed {
-		atomic.AddInt64(&s.deleteErr, 1)
+		s.deleteErr.Inc()
 	}
 }
 
 func (s *stats) updateWaitTime(d time.Duration) {
-	atomic.AddInt64(&s.waitTime, int64(d))
-	atomic.AddInt64(&s.waitCnt, 1)
+	s.waitTime.Add(int64(d))
+	s.waitCnt.Inc()
 }
 
 func (s *stats) updateObjTime(d time.Duration) {
-	atomic.AddInt64(&s.objTime, int64(d))
-	atomic.AddInt64(&s.objCnt, 1)
+	s.objTime.Add(int64(d))
+	s.objCnt.Inc()
 }
 
 func (s *stats) stats() *ECStats {
 	st := &ECStats{BckName: s.bckName}
 
-	val := atomic.SwapInt64(&s.queueLen, 0)
-	cnt := atomic.SwapInt64(&s.queueCnt, 0)
+	val := s.queueLen.Swap(0)
+	cnt := s.queueCnt.Swap(0)
 	if cnt > 0 {
 		st.QueueLen = float64(val) / float64(cnt)
 	}
 
-	val = atomic.SwapInt64(&s.waitTime, 0)
-	cnt = atomic.SwapInt64(&s.waitCnt, 0)
+	val = s.waitTime.Swap(0)
+	cnt = s.waitCnt.Swap(0)
 	if cnt > 0 {
 		st.WaitTime = time.Duration(val / cnt)
 	}
 
-	val = atomic.SwapInt64(&s.encodeTime, 0)
-	cnt = atomic.SwapInt64(&s.encodeReq, 0)
-	sz := atomic.SwapInt64(&s.encodeSize, 0)
+	val = s.encodeTime.Swap(0)
+	cnt = s.encodeReq.Swap(0)
+	sz := s.encodeSize.Swap(0)
 	if cnt > 0 {
 		st.EncodeTime = time.Duration(val / cnt)
 		st.EncodeSize = sz / cnt
 		st.PutReq = cnt
 	}
 
-	val = atomic.SwapInt64(&s.decodeTime, 0)
-	cnt = atomic.SwapInt64(&s.decodeReq, 0)
+	val = s.decodeTime.Swap(0)
+	cnt = s.decodeReq.Swap(0)
 	if cnt > 0 {
 		st.DecodeTime = time.Duration(val / cnt)
 		st.GetReq = cnt
 	}
 
-	val = atomic.SwapInt64(&s.deleteTime, 0)
-	cnt = atomic.SwapInt64(&s.deleteReq, 0)
+	val = s.deleteTime.Swap(0)
+	cnt = s.deleteReq.Swap(0)
 	if cnt > 0 {
 		st.DeleteTime = time.Duration(val / cnt)
 		st.DelReq = cnt
 	}
 
-	val = atomic.SwapInt64(&s.objTime, 0)
-	cnt = atomic.SwapInt64(&s.objCnt, 0)
+	val = s.objTime.Swap(0)
+	cnt = s.objCnt.Swap(0)
 	if cnt > 0 {
 		st.ObjTime = time.Duration(val / cnt)
 	}
 
-	st.EncodeErr = atomic.SwapInt64(&s.encodeErr, 0)
-	st.DecodeErr = atomic.SwapInt64(&s.decodeErr, 0)
-	st.DeleteErr = atomic.SwapInt64(&s.deleteErr, 0)
+	st.EncodeErr = s.encodeErr.Swap(0)
+	st.DecodeErr = s.decodeErr.Swap(0)
+	st.DeleteErr = s.deleteErr.Swap(0)
 
 	return st
 }

@@ -21,10 +21,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -122,14 +122,14 @@ type (
 
 	// The state that may influence GET logic when mountpath is added/enabled
 	localGFN struct {
-		lookup int32 // atomic bool
+		lookup atomic.Bool
 	}
 
 	// The state that may influence GET logic when new target joins cluster
 	globalGFN struct {
-		lookup       int32          // atomic bool
-		stopDeadline int64          // (reg-time + const) when we stop trying to GET from neighbors
-		smap         unsafe.Pointer // new smap which will be soon live
+		lookup       atomic.Bool
+		stopDeadline atomic.Int64   // (reg-time + const) when we stop trying to GET from neighbors
+		smap         atomic.Pointer // new smap which will be soon live
 	}
 
 	capUsed struct {
@@ -145,7 +145,7 @@ type (
 		rtnamemap      *rtnamemap
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
-		clusterStarted int32
+		clusterStarted atomic.Bool
 		fsprg          fsprungroup
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
@@ -161,43 +161,43 @@ type (
 )
 
 func (gfn *localGFN) active() bool {
-	return atomic.LoadInt32(&gfn.lookup) > 0
+	return gfn.lookup.Load()
 }
 
 func (gfn *localGFN) activate() {
-	atomic.StoreInt32(&gfn.lookup, 1)
+	gfn.lookup.Store(true)
 	glog.Infof("global GFN has been activated")
 }
 
 func (gfn *localGFN) deactivate() {
-	atomic.StoreInt32(&gfn.lookup, 0)
+	gfn.lookup.Store(false)
 	glog.Infof("local GFN has been deactivated")
 }
 
 func (gfn *globalGFN) active() (bool, *smapX) {
-	if atomic.LoadInt32(&gfn.lookup) == 0 {
+	if !gfn.lookup.Load() {
 		return false, nil
 	}
 
 	// Deadline exceeded - probably primary proxy notified about new smap
 	// but did not update it due to some failures.
-	if time.Now().UnixNano() > atomic.LoadInt64(&gfn.stopDeadline) {
+	if time.Now().UnixNano() > gfn.stopDeadline.Load() {
 		gfn.deactivate()
 		return false, nil
 	}
 
-	return true, (*smapX)(atomic.LoadPointer(&gfn.smap))
+	return true, (*smapX)(gfn.smap.Load())
 }
 
 func (gfn *globalGFN) activate(smap *smapX) {
-	atomic.StorePointer(&gfn.smap, unsafe.Pointer(smap))
-	atomic.StoreInt64(&gfn.stopDeadline, time.Now().UnixNano()+getFromNeighAfterJoin.Nanoseconds())
-	atomic.StoreInt32(&gfn.lookup, 1)
+	gfn.smap.Store(unsafe.Pointer(smap))
+	gfn.stopDeadline.Store(time.Now().UnixNano() + getFromNeighAfterJoin.Nanoseconds())
+	gfn.lookup.Store(true)
 	glog.Infof("global GFN has been activated")
 }
 
 func (gfn *globalGFN) deactivate() {
-	atomic.StoreInt32(&gfn.lookup, 0)
+	gfn.lookup.Store(false)
 	glog.Infof("global GFN has been deactivated")
 }
 
@@ -208,7 +208,7 @@ func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 
 	var ereg error
-	t.httprunner.init(getstorstatsrunner(), false)
+	t.httprunner.init(getstorstatsrunner())
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 

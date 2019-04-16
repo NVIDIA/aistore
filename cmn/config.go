@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
@@ -188,7 +188,7 @@ type (
 // accordingly.
 type globalConfigOwner struct {
 	mtx       sync.Mutex // mutex for protecting updates of config
-	c         unsafe.Pointer
+	c         atomic.Pointer
 	lmtx      sync.Mutex // mutex for protecting listeners
 	listeners []ConfigListener
 	confFile  string
@@ -203,12 +203,12 @@ var (
 
 func init() {
 	config := &Config{}
-	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+	GCO.c.Store(unsafe.Pointer(config))
 	loadDebugMap()
 }
 
 func (gco *globalConfigOwner) Get() *Config {
-	return (*Config)(atomic.LoadPointer(&gco.c))
+	return (*Config)(gco.c.Load())
 }
 
 func (gco *globalConfigOwner) Clone() *Config {
@@ -238,7 +238,7 @@ func (gco *globalConfigOwner) BeginUpdate() *Config {
 // NOTE: CommitUpdate should be preceded by BeginUpdate.
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
 	oldConf := gco.Get()
-	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+	GCO.c.Store(unsafe.Pointer(config))
 
 	// TODO: Notify listeners is protected by GCO lock to make sure
 	// that config updates are done in correct order. But it has

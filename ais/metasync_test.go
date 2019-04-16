@@ -12,10 +12,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -75,7 +75,7 @@ func serverTCPAddr(u string) *net.TCPAddr {
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.smapowner = &smapowner{}
+	p.smapowner = newSmapowner()
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	smap := newSmap()
 	smap.addProxy(p.si)
@@ -91,7 +91,7 @@ func newPrimary() *proxyrunner {
 	p.httpclientLongTimeout = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(&p)
 
-	p.bmdowner = &bmdowner{}
+	p.bmdowner = newBmdowner()
 	p.bmdowner.put(newBucketMD())
 	return &p
 }
@@ -630,9 +630,9 @@ func TestMetaSyncMembership(t *testing.T) {
 			syncer.Run()
 		}(&wg)
 
-		var cnt int32
+		var cnt atomic.Int32
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			atomic.AddInt32(&cnt, 1)
+			cnt.Add(1)
 			http.Error(w, "i don't know how to deal with you", http.StatusNotAcceptable)
 		}))
 
@@ -652,9 +652,9 @@ func TestMetaSyncMembership(t *testing.T) {
 		primary.smapowner.put(clone)
 
 		time.Sleep(time.Millisecond * 300)
-		cnt1 := atomic.LoadInt32(&cnt)
+		savedCnt := cnt.Load()
 		time.Sleep(time.Millisecond * 300)
-		if atomic.LoadInt32(&cnt) != cnt1 {
+		if cnt.Load() != savedCnt {
 			t.Fatal("Sync call didn't stop after traget is deleted")
 		}
 
@@ -780,9 +780,9 @@ func TestMetaSyncReceive(t *testing.T) {
 		primary.smapowner.put(clone)
 
 		proxy1 := proxyrunner{}
-		proxy1.smapowner = &smapowner{}
+		proxy1.smapowner = newSmapowner()
 		proxy1.smapowner.put(newSmap())
-		proxy1.bmdowner = &bmdowner{}
+		proxy1.bmdowner = newBmdowner()
 		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload

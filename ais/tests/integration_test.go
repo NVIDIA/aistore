@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -47,8 +47,8 @@ type metadata struct {
 	num                 int
 	numGetsEachFile     int
 	fileSize            uint64
-	numGetErrs          uint64
-	getsCompleted       uint64
+	numGetErrs          atomic.Uint64
+	getsCompleted       atomic.Uint64
 	proxyURL            string
 }
 
@@ -166,9 +166,9 @@ func (m *metadata) gets() {
 			}
 			_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
 			if err != nil {
-				atomic.AddUint64(&(m.numGetErrs), 1)
+				m.numGetErrs.Inc()
 			}
-			g := atomic.AddUint64(&(m.getsCompleted), 1)
+			g := m.getsCompleted.Inc()
 			if g%5000 == 0 {
 				tutils.Logf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
 			}
@@ -184,8 +184,8 @@ func (m *metadata) gets() {
 }
 
 func (m *metadata) ensureNoErrors() {
-	if m.numGetErrs > 0 {
-		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs)
+	if m.numGetErrs.Load() > 0 {
+		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
 	}
 }
 

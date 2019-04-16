@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,10 +17,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -80,10 +79,6 @@ type (
 		Min float32
 		Max float32
 	}
-	PairU32 struct {
-		Min uint32
-		Max uint32
-	}
 	SysInfo struct {
 		MemUsed    uint64  `json:"mem_used"`
 		MemAvail   uint64  `json:"mem_avail"`
@@ -133,25 +128,15 @@ func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
 }
 
 //
-// PairU32 & PairF32
+// PairF32
 //
-func (src *PairU32) CopyTo(dst *PairU32) {
-	atomic.StoreUint32(&dst.Min, atomic.LoadUint32(&src.Min))
-	atomic.StoreUint32(&dst.Max, atomic.LoadUint32(&src.Max))
-}
 
-func (upair *PairU32) Init(f float32) {
-	u := math.Float32bits(f)
-	atomic.StoreUint32(&upair.Max, u)
-	atomic.StoreUint32(&upair.Min, u)
-}
-
-func (upair *PairU32) U2F() (fpair PairF32) {
-	min := atomic.LoadUint32(&upair.Min)
-	fpair.Min = math.Float32frombits(min)
-	max := atomic.LoadUint32(&upair.Max)
-	fpair.Max = math.Float32frombits(max)
-	return
+func NewPairF32(p *atomic.PairF32) PairF32 {
+	min, max := p.Load()
+	return PairF32{
+		Min: min,
+		Max: max,
+	}
 }
 
 func (fpair PairF32) String() string {

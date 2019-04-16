@@ -9,10 +9,10 @@ import (
 	"math/rand"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
@@ -55,9 +55,9 @@ var (
 
 	numLoops   int
 	numFiles   int
-	putCounter int64
-	getCounter int64
-	delCounter int64
+	putCounter atomic.Int64
+	getCounter atomic.Int64
+	delCounter atomic.Int64
 )
 
 func tryLockFile(idx int) bool {
@@ -162,15 +162,15 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				return
 			}
 			if ok := tryLockFile(idx); ok {
-				n := atomic.LoadInt64(&putCounter)
+				n := putCounter.Load()
 				if rwCanRunAsync(n, numops) {
-					atomic.AddInt64(&putCounter, 1)
+					putCounter.Inc()
 					wg.Add(1)
 					localIdx := idx
 					go func() {
 						tutils.PutAsync(&wg, proxyURL, clibucket, keyname, r, errCh)
 						unlockFile(localIdx, rwFileCreated)
-						atomic.AddInt64(&putCounter, -1)
+						putCounter.Dec()
 					}()
 				} else {
 					putArgs := api.PutObjectArgs{
@@ -224,15 +224,15 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			n := atomic.LoadInt64(&delCounter)
+			n := delCounter.Load()
 			if rwCanRunAsync(n, numops) {
-				atomic.AddInt64(&delCounter, 1)
+				delCounter.Inc()
 				wg.Add(1)
 				localIdx := idx
 				go func() {
 					tutils.Del(proxyURL, clibucket, keyname, "", wg, errCh, true)
 					unlockFile(localIdx, rwFileDeleted)
-					atomic.AddInt64(&delCounter, -1)
+					delCounter.Dec()
 				}()
 			} else {
 				tutils.Del(proxyURL, clibucket, keyname, "", nil, errCh, true)
@@ -279,9 +279,9 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			n := atomic.LoadInt64(&getCounter)
+			n := getCounter.Load()
 			if rwCanRunAsync(n, numops) {
-				atomic.AddInt64(&getCounter, 1)
+				getCounter.Inc()
 				wg.Add(1)
 				localIdx := idx
 				go func() {
@@ -290,7 +290,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 						errCh <- err
 					}
 					unlockFile(localIdx, rwFileExists)
-					atomic.AddInt64(&getCounter, -1)
+					getCounter.Dec()
 					wg.Done()
 				}()
 			} else {

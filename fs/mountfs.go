@@ -6,15 +6,14 @@ package fs
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/OneOfOne/xxhash"
@@ -76,11 +75,11 @@ type (
 
 		// atomic, only increasing counter to prevent name conflicts
 		// see: FastRemoveDir method
-		removeDirCounter uint64
+		removeDirCounter atomic.Uint64
 
-		// FileSystem utilization represented as
-		// utilizations and queue lengths of the underlying disks,
-		// where cmn.PairU32 structs atomically store the corresponding float32 bits
+		// FileSystem utilization represented as utilizations and queue lengths
+		// of the underlying disks, where cmn.PairF32 structs atomically store
+		// the corresponding float32 bits.
 		iostats map[string]*iotracker
 		ioepoch map[string]int64
 
@@ -91,8 +90,8 @@ type (
 		M sync.Map
 	}
 	iotracker struct {
-		prev cmn.PairU32
-		curr cmn.PairU32
+		prev *atomic.PairF32
+		curr *atomic.PairF32
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -106,10 +105,10 @@ type (
 		// mountpath. By default it is set to true.
 		checkFsID bool
 		// Available mountpaths - mountpaths which are used to store the data.
-		available unsafe.Pointer
+		available atomic.Pointer
 		// Disabled mountpaths - mountpaths which for some reason did not pass
 		// the health check and cannot be used for a moment.
-		disabled unsafe.Pointer
+		disabled atomic.Pointer
 	}
 	ChangeReq struct {
 		Action string // MountPath action enum (above)
@@ -121,6 +120,13 @@ func MountpathAdd(p string) ChangeReq { return ChangeReq{Action: Add, Path: p} }
 func MountpathRem(p string) ChangeReq { return ChangeReq{Action: Remove, Path: p} }
 func MountpathEnb(p string) ChangeReq { return ChangeReq{Action: Enable, Path: p} }
 func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: p} }
+
+func newIotracker() *iotracker {
+	return &iotracker{
+		prev: atomic.NewPairF32(),
+		curr: atomic.NewPairF32(),
+	}
+}
 
 //
 // MountpathInfo
@@ -137,8 +143,8 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		iostats:    make(map[string]*iotracker, 2),
 		ioepoch:    make(map[string]int64, 2),
 	}
-	mi.iostats[StatDiskUtil] = &iotracker{}
-	mi.iostats[StatDiskIOms] = &iotracker{}
+	mi.iostats[StatDiskUtil] = newIotracker()
+	mi.iostats[StatDiskIOms] = newIotracker()
 	return mi
 }
 
@@ -152,7 +158,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	// dir will be renamed to non-existing bucket in WorkfileType. Then we will
 	// try to remove it asynchronously. In case of power cycle we expect that
 	// LRU will take care of removing the rest of the bucket.
-	counter := atomic.AddUint64(&mi.removeDirCounter, 1)
+	counter := mi.removeDirCounter.Inc()
 	nonExistingBucket := fmt.Sprintf("removing-%d", counter)
 	tmpDir := CSM.FQN(mi, WorkfileType, true, nonExistingBucket, "")
 	if err := os.Rename(dir, tmpDir); err != nil {
@@ -176,11 +182,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
 	cmn.Assert(name == StatDiskUtil || name == StatDiskIOms)
 	tracker := mi.iostats[name]
-	p := &tracker.prev
-	prev = p.U2F()
-	c := &tracker.curr
-	curr = c.U2F()
-	return
+	return cmn.NewPairF32(tracker.prev), cmn.NewPairF32(tracker.curr)
 }
 
 func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
@@ -199,20 +201,18 @@ func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
 	tracker := mi.iostats[name]
 	if mi.ioepoch[name] < epoch {
 		// current => prev, f => curr, mi.epoch = epoch
-		curr := &tracker.curr
-		curr.CopyTo(&tracker.prev)
+		curr := tracker.curr
+		curr.CopyTo(tracker.prev)
 		curr.Init(f)
 		mi.ioepoch[name] = epoch
 	} else {
 		// curr min/max
-		curr := &tracker.curr
-		fpair := curr.U2F()
-		if fpair.Max < f {
-			u := math.Float32bits(f)
-			atomic.StoreUint32(&curr.Max, u)
-		} else if fpair.Min > f {
-			u := math.Float32bits(f)
-			atomic.StoreUint32(&curr.Min, u)
+		curr := tracker.curr
+		min, max := curr.Load()
+		if max < f {
+			curr.Max.Store(f)
+		} else if min > f {
+			curr.Min.Store(f)
 		}
 	}
 }
@@ -403,17 +403,14 @@ func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
 
 // Returns number of available mountpaths
 func (mfs *MountedFS) NumAvail() int {
-	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
-	if available == nil {
-		return 0
-	}
+	available := (*map[string]*MountpathInfo)(mfs.available.Load())
 	return len(*available)
 }
 
 // Mountpaths returns both available and disabled mountpaths.
 func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
-	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
-	disabled := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.disabled))
+	available := (*map[string]*MountpathInfo)(mfs.available.Load())
+	disabled := (*map[string]*MountpathInfo)(mfs.disabled.Load())
 	if available == nil {
 		tmp := make(map[string]*MountpathInfo, 10)
 		available = &tmp
@@ -496,8 +493,8 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 //
 
 func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
-	atomic.StorePointer(&mfs.available, unsafe.Pointer(&available))
-	atomic.StorePointer(&mfs.disabled, unsafe.Pointer(&disabled))
+	mfs.available.Store(unsafe.Pointer(&available))
+	mfs.disabled.Store(unsafe.Pointer(&disabled))
 }
 
 func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string, failMsg string, buckets ...string) {

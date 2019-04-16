@@ -6,9 +6,9 @@ package ais
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -20,17 +20,17 @@ type (
 		sync.Mutex
 		t       *targetrunner
 		runners map[int64]fs.PathRunner // subgroup of the ctx.runners rungroup
-		nextid  int64
+		nextid  atomic.Int64
 	}
 )
 
 func (g *fsprungroup) init(t *targetrunner) {
 	g.t = t
 	g.runners = make(map[int64]fs.PathRunner, 8)
-	g.nextid = time.Now().UTC().UnixNano() & 0xfff
+	g.nextid.Store(time.Now().UTC().UnixNano() & 0xfff)
 }
 
-func (g *fsprungroup) UID() int64 { return atomic.AddInt64(&g.nextid, 1) }
+func (g *fsprungroup) UID() int64 { return g.nextid.Add(1) }
 
 func (g *fsprungroup) Reg(r fs.PathRunner) {
 	g.Lock()

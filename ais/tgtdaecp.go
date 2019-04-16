@@ -15,7 +15,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -1014,7 +1013,7 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 			break
 		}
 	}
-	atomic.StoreInt32(&t.clusterStarted, 1)
+	t.clusterStarted.Store(true)
 }
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {

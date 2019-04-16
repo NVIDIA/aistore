@@ -10,9 +10,9 @@ import (
 	"io"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -36,7 +36,7 @@ type (
 		client     *http.Client
 		network    string
 		trname     string
-		streams    unsafe.Pointer // points to bundle (below)
+		streams    atomic.Pointer // points to bundle (below)
 		extra      Extra
 		rxNodeType int // receiving nodes: [Targets, ..., AllNodes ] enum above
 		multiplier int // optionally, greater than 1 number of streams per destination (with round-robin selection)
@@ -48,7 +48,7 @@ type (
 	stsdest []*Stream // STreams to the Same Destination (stsdest)
 	robin   struct {
 		stsdest stsdest
-		i       int64
+		i       atomic.Int64
 	}
 	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
@@ -132,7 +132,7 @@ func (sb *StreamBundle) SendV(hdr Header, reader cmn.ReadOpenCloser, cb SendCall
 
 func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback, nodes []*cluster.Snode) (err error) {
 	var (
-		prc     *int64 // completion refcount (optional)
+		prc     *atomic.Int64 // completion refcount (optional)
 		streams = sb.get()
 	)
 	if len(streams) == 0 {
@@ -144,8 +144,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 	}
 	if nodes == nil {
 		if cb != nil && len(streams) > 1 {
-			prc = new(int64)
-			*prc = int64(len(streams)) // only when there's a callback and more than 1 dest-s
+			prc = atomic.NewInt64(int64(len(streams))) // only when there's a callback and more than 1 dest-s
 		}
 		//
 		// Reader-reopening logic: since the streams in a bundle are mutually independent
@@ -170,8 +169,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 			}
 		}
 		if cb != nil && len(nodes) > 1 {
-			prc = new(int64)
-			*prc = int64(len(nodes)) // ditto
+			prc = atomic.NewInt64(int64(len(nodes)))
 		}
 		// second, do send. Same comment wrt reopening.
 		reopen := false
@@ -251,7 +249,7 @@ func (sb *StreamBundle) GetStats() BundleStats {
 //==========================================================================
 
 func (sb *StreamBundle) get() (bun bundle) {
-	optr := (*bundle)(atomic.LoadPointer(&sb.streams))
+	optr := (*bundle)(sb.streams.Load())
 	if optr != nil {
 		bun = *optr
 	}
@@ -259,7 +257,7 @@ func (sb *StreamBundle) get() (bun bundle) {
 }
 
 func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenCloser,
-	cb SendCallback, prc *int64, reopen bool) (err error) {
+	cb SendCallback, prc *atomic.Int64, reopen bool) (err error) {
 	var (
 		i       int
 		reader2 io.ReadCloser = reader
@@ -271,7 +269,7 @@ func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenClo
 		}
 	}
 	if sb.multiplier > 1 {
-		i = int(atomic.AddInt64(&robin.i, 1)) % len(robin.stsdest)
+		i = int(robin.i.Inc()) % len(robin.stsdest)
 	}
 	s := robin.stsdest[i]
 	err = s.Send(hdr, reader2, cb, prc)
@@ -343,6 +341,6 @@ func (sb *StreamBundle) Resync() {
 		}
 		delete(nbundle, id)
 	}
-	atomic.StorePointer(&sb.streams, unsafe.Pointer(&nbundle)) // put
+	sb.streams.Store(unsafe.Pointer(&nbundle))
 	sb.smap = smap
 }

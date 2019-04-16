@@ -167,14 +167,14 @@ func printstats(mem *memsys.Mem2) {
 	var (
 		prevStats, currStats memsys.Stats2
 		req                  = memsys.ReqStats2{Wg: &sync.WaitGroup{}, Stats: &currStats}
-		ravghits             = make([]float64, memsys.Numslabs)
+		ravghits             = make([]float64, memsys.NumSlabs)
 	)
 	for {
 		time.Sleep(mem.TimeIval)
 		req.Wg.Add(1)
 		mem.GetStats(req)
 		req.Wg.Wait()
-		for i := 0; i < memsys.Numslabs; i++ {
+		for i := 0; i < memsys.NumSlabs; i++ {
 			ftot := float64(currStats.Hits[i])
 			if ftot == 0 {
 				continue
@@ -187,7 +187,7 @@ func printstats(mem *memsys.Mem2) {
 			}
 		}
 		str := ""
-		for i := 0; i < memsys.Numslabs; i++ {
+		for i := 0; i < memsys.NumSlabs; i++ {
 			slab, err := mem.GetSlab2(int64(i+1) * cmn.KiB * 4)
 			if err != nil {
 				fmt.Println(err)

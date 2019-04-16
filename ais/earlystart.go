@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -206,7 +205,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
 	p.smapowner.Unlock()
-	p.startedup(1) // joined as non-primary and started up
+	p.startedUp.Store(true) // joined as non-primary and started up
 }
 
 // proxy/gateway that is, potentially, the leader of the cluster executes steps:
@@ -278,7 +277,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
 	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d", p.si.Name(), smap.version(), smap.CountTargets())
-	p.startedup(1) // started up as primary
+	p.startedUp.Store(true) // started up as primary
 }
 
 func (p *proxyrunner) startup(ntargets int) {
@@ -425,12 +424,4 @@ func (p *proxyrunner) registerWithRetry() error {
 		}
 	}
 	return nil
-}
-
-func (p *proxyrunner) startedup(val int64) int64 {
-	if val == 0 { // get
-		return atomic.LoadInt64(&p.startedUp)
-	}
-	atomic.StoreInt64(&p.startedUp, val)
-	return val
 }

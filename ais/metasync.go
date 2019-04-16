@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -101,8 +101,8 @@ type (
 	revsReq struct {
 		pairs     []revspair
 		wg        *sync.WaitGroup
-		failedCnt *int32 // TODO: add cluster.NodeMap to identify the failed ones
-		reqType   int    // enum: revsReqSync, etc.
+		failedCnt *atomic.Int32 // TODO: add cluster.NodeMap to identify the failed ones
+		reqType   int           // enum: revsReqSync, etc.
 	}
 	revsdaemon struct {
 		vermap map[string]int64 // by tag; used to track daemon => (versions) info
@@ -164,7 +164,7 @@ func (y *metasyncer) Run() error {
 			cnt := y.doSync(revsReq.pairs, revsReq.reqType)
 			if revsReq.wg != nil {
 				if revsReq.failedCnt != nil {
-					atomic.StoreInt32(revsReq.failedCnt, int32(cnt))
+					revsReq.failedCnt.Store(int32(cnt))
 				}
 				revsReq.wg.Done()
 			}
@@ -203,20 +203,20 @@ func (y *metasyncer) notify(wait bool, pair revspair) (failedCnt int) {
 		return
 	}
 	var (
-		failedCnt32 int32
-		revsReq     = revsReq{pairs: []revspair{pair}}
+		failedCntAtomic = atomic.NewInt32(0)
+		revsReq         = revsReq{pairs: []revspair{pair}}
 	)
 	if wait {
 		revsReq.wg = &sync.WaitGroup{}
 		revsReq.wg.Add(1)
-		revsReq.failedCnt = &failedCnt32
+		revsReq.failedCnt = failedCntAtomic
 		revsReq.reqType = revsReqNotify
 	}
 	y.workCh <- revsReq
 
 	if wait {
 		revsReq.wg.Wait()
-		failedCnt = int(failedCnt32)
+		failedCnt = int(failedCntAtomic.Load())
 	}
 	return
 }

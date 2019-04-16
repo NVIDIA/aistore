@@ -12,10 +12,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/transport"
@@ -80,7 +80,7 @@ func Test_OneStream10G(t *testing.T) {
 	stream.Fin()
 	stats := stream.GetStats()
 
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%\n", stream, stats.Offset, stats.Num, num, numhdr, stats.IdlePct)
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%\n", stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.IdlePct)
 
 	printNetworkStats(t, network)
 }
@@ -111,24 +111,25 @@ func Test_DryRunTB(t *testing.T) {
 	time.Sleep(time.Second * 3)
 	stats := stream.GetStats()
 
-	fmt.Printf("[dry]: offset=%d, num=%d(%d), idle=%.2f%%\n", stats.Offset, stats.Num, num, stats.IdlePct)
+	fmt.Printf("[dry]: offset=%d, num=%d(%d), idle=%.2f%%\n", stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct)
 }
 
 func Test_CompletionCount(t *testing.T) {
 	var (
-		numSent, numCompleted, numReceived int64
-		network                            = "n2"
-		mux                                = mux.NewServeMux()
+		numSent                   int64
+		numCompleted, numReceived atomic.Int64
+		network                   = "n2"
+		mux                       = mux.NewServeMux()
 	)
 
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
-		atomic.AddInt64(&numReceived, 1)
+		numReceived.Inc()
 	}
 	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
-		atomic.AddInt64(&numCompleted, 1)
+		numCompleted.Inc()
 	}
 
 	transport.SetMux(network, mux)
@@ -164,15 +165,15 @@ func Test_CompletionCount(t *testing.T) {
 	}
 	// collect all pending completions until timeout
 	started := time.Now()
-	for atomic.LoadInt64(&numCompleted) < numSent {
+	for numCompleted.Load() < numSent {
 		time.Sleep(time.Millisecond * 10)
 		if time.Since(started) > time.Second*10 {
 			break
 		}
 	}
-	if numSent == atomic.LoadInt64(&numCompleted) {
-		tutils.Logf("sent %d = %d completed, %d received\n", numSent, atomic.LoadInt64(&numCompleted), atomic.LoadInt64(&numReceived))
+	if numSent == numCompleted.Load() {
+		tutils.Logf("sent %d = %d completed, %d received\n", numSent, numCompleted.Load(), numReceived.Load())
 	} else {
-		t.Fatalf("sent %d != %d completed\n", numSent, atomic.LoadInt64(&numCompleted))
+		t.Fatalf("sent %d != %d completed\n", numSent, numCompleted.Load())
 	}
 }

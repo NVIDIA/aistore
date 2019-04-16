@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -80,7 +81,7 @@ type proxyrunner struct {
 	httprunner
 	starttime  time.Time
 	authn      *authManager
-	startedUp  int64
+	startedUp  atomic.Bool
 	metasyncer *metasyncer
 	rproxy     struct {
 		sync.Mutex
@@ -94,7 +95,7 @@ type proxyrunner struct {
 // start proxy runner
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
-	p.httprunner.init(getproxystatsrunner(), true)
+	p.httprunner.init(getproxystatsrunner())
 	p.httprunner.keepalive = getproxykeepalive()
 
 	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
@@ -644,7 +645,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	v := rr.Core.Tracker[stats.Uptime]
 	v.Lock()
 	v.Value = int64(time.Since(p.starttime) / time.Microsecond)
-	if p.startedup(0) == 0 {
+	if !p.startedUp.Load() {
 		rr.Core.Tracker[stats.Uptime].Value = 0
 	}
 	v.Unlock()
@@ -2008,7 +2009,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatSmap:
 		smap := p.smapowner.get()
 		for smap == nil || !smap.isValid() {
-			if p.startedup(0) != 0 { // must be starting up
+			if p.startedUp.Load() { // must be starting up
 				smap = p.smapowner.get()
 				cmn.Assert(smap.isValid())
 				break
@@ -2708,7 +2709,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if p.startedup(0) == 0 {
+	if !p.startedUp.Load() {
 		clone := p.smapowner.get().clone()
 		clone.putNode(&nsi, nonElectable)
 		p.smapowner.put(clone)
@@ -2788,7 +2789,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 		return false
 	}
 	if osi != nil {
-		if p.startedup(0) == 0 {
+		if !p.startedUp.Load() {
 			return true
 		}
 		if osi.Equals(nsi) {
@@ -2865,7 +2866,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", osi.Name(), res.err, res.errstr)
 		}
 	}
-	if p.startedup(0) == 0 {
+	if !p.startedUp.Load() {
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		return

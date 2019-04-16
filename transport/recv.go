@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"path"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -160,9 +159,9 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 			out := &Stats{}
 			sessID := key.(int64)
 			in := value.(*Stats)
-			out.Num = atomic.LoadInt64(&in.Num)
-			out.Offset = atomic.LoadInt64(&in.Offset)
-			out.Size = atomic.LoadInt64(&in.Size)
+			out.Num.Store(in.Num.Load())
+			out.Offset.Store(in.Offset.Load())
+			out.Size.Store(in.Size.Load())
 			eps[sessID] = out
 			return true
 		}
@@ -199,7 +198,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			stats = statsif.(*Stats)
 		}
 		if stats != nil && hl64 != 0 {
-			off := atomic.AddInt64(&stats.Offset, hl64)
+			off := stats.Offset.Add(hl64)
 			if glog.FastV(4, glog.SmoduleTransport) {
 				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessID, off, hl64)
 			}
@@ -207,14 +206,14 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		if objReader != nil {
 			hdr := objReader.hdr
 			h.callback(w, hdr, objReader, nil)
-			num := atomic.AddInt64(&stats.Num, 1)
+			num := stats.Num.Inc()
 			if hdr.ObjAttrs.Size != objReader.off {
 				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d, NAME: %s",
 					trname, sessID, objReader.off, hdr.ObjAttrs.Size, num, objReader.hdr.Objname)
 				glog.Errorln(err)
 			} else {
-				siz := atomic.AddInt64(&stats.Size, hdr.ObjAttrs.Size)
-				off := atomic.AddInt64(&stats.Offset, hdr.ObjAttrs.Size)
+				siz := stats.Size.Add(hdr.ObjAttrs.Size)
+				off := stats.Offset.Add(hdr.ObjAttrs.Size)
 				if glog.FastV(4, glog.SmoduleTransport) {
 					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
 				}

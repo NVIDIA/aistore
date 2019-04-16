@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/OneOfOne/xxhash"
-
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/OneOfOne/xxhash"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -492,7 +492,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	wg := sync.WaitGroup{}
 	ch := make(chan error, totalCnt)
-	mainObj := &slice{refCnt: int32(ecConf.DataSlices), obj: objReader}
+	mainObj := &slice{refCnt: *atomic.NewInt32(int32(ecConf.DataSlices)), obj: objReader}
 	sliceSize := SliceSize(req.LOM.Size(), ecConf.DataSlices)
 
 	// transfer a slice to remote target
@@ -508,7 +508,7 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 			data = mainObj
 		} else {
 			// the slice uses its own SGL, so the counter is 1
-			data = &slice{refCnt: 1, obj: slices[i].obj, workFQN: slices[i].workFQN}
+			data = &slice{refCnt: *atomic.NewInt32(1), obj: slices[i].obj, workFQN: slices[i].workFQN}
 		}
 
 		// In case of data slice, reopen its reader, because it was read

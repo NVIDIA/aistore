@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -210,17 +210,23 @@ func (m *smapX) pp() string {
 
 type smapowner struct {
 	sync.Mutex
-	smap      unsafe.Pointer
+	smap      atomic.Pointer
 	listeners *smaplisteners
 }
 
 // implements cluster.Sowner
 var _ cluster.Sowner = &smapowner{}
 
-func (r *smapowner) Get() *cluster.Smap {
-	smapx := (*smapX)(atomic.LoadPointer(&r.smap))
-	return &smapx.Smap
+func newSmapowner() *smapowner {
+	return &smapowner{
+		listeners: newSmapListeners(),
+	}
 }
+
+func (r *smapowner) Get() *cluster.Smap {
+	return &r.get().Smap
+}
+
 func (r *smapowner) Listeners() cluster.SmapListeners {
 	return r.listeners
 }
@@ -231,7 +237,7 @@ func (r *smapowner) Listeners() cluster.SmapListeners {
 
 func (r *smapowner) put(smap *smapX) {
 	smap.InitDigests()
-	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
+	r.smap.Store(unsafe.Pointer(smap))
 
 	if r.listeners != nil {
 		r.listeners.notify(smap.version()) // notify of Smap change all listeners (cluster.Slistener)
@@ -239,7 +245,7 @@ func (r *smapowner) put(smap *smapX) {
 }
 
 func (r *smapowner) get() (smap *smapX) {
-	return (*smapX)(atomic.LoadPointer(&r.smap))
+	return (*smapX)(r.smap.Load())
 }
 
 func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr bool) (errstr string) {

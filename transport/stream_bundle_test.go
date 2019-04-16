@@ -12,10 +12,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
@@ -41,7 +41,7 @@ func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 
 func Test_Bundle(t *testing.T) {
 	var (
-		numCompleted int64
+		numCompleted atomic.Int64
 		Mem2         = tutils.Mem2
 		network      = cmn.NetworkIntraData
 		trname       = "bundle"
@@ -67,7 +67,7 @@ func Test_Bundle(t *testing.T) {
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
 	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
-		atomic.AddInt64(&numCompleted, 1)
+		numCompleted.Inc()
 	}
 
 	_, err := transport.Register(network, trname, receive) // DirectURL = /v1/transport/10G
@@ -109,11 +109,11 @@ func Test_Bundle(t *testing.T) {
 	stats := sb.GetStats()
 
 	for id, tstat := range stats {
-		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%\n", id, trname, tstat.Offset, tstat.Num, num, tstat.IdlePct)
+		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%\n", id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.IdlePct)
 	}
 	// printNetworkStats(t, network)
 
-	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, atomic.LoadInt64(&numCompleted))
+	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 
 	glog.Flush()
 }

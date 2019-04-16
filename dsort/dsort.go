@@ -19,9 +19,9 @@ import (
 	"runtime/debug"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -115,7 +115,7 @@ func (m *Manager) start() (err error) {
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
 	var (
-		totalExtractedCount = uint64(0)
+		totalExtractedCount atomic.Uint64
 	)
 
 	// Metrics
@@ -241,7 +241,7 @@ ExtractAllShards:
 				}
 				metrics.Unlock()
 
-				atomic.AddUint64(&totalExtractedCount, uint64(extractedCount))
+				totalExtractedCount.Add(uint64(extractedCount))
 				return nil
 			}
 		}(i)
@@ -265,7 +265,7 @@ ExtractAllShards:
 		}
 	}
 
-	m.incrementRef(int64(totalExtractedCount))
+	m.incrementRef(int64(totalExtractedCount.Load()))
 	return nil
 }
 
@@ -527,7 +527,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
 				cmn.URLParamTotalCompressedSize, m.totalCompressedSize(),
 				cmn.URLParamTotalUncompressedSize, m.totalUncompressedSize(),
-				cmn.URLParamTotalInputShardsSeen, m.totalInputShardsSeen,
+				cmn.URLParamTotalInputShardsSeen, m.totalInputShardsSeen.Load(),
 			)
 			if _, e := m.doWithAbort(http.MethodPost, u, body, nil); e != nil {
 				err = fmt.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, e)
@@ -552,7 +552,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 			m.incrementReceived()
 		}
 
-		for atomic.LoadInt32(&m.received.count) < expectedReceived {
+		for m.received.count.Load() < expectedReceived {
 			select {
 			case <-m.listenReceived():
 			case <-m.listenAborted():

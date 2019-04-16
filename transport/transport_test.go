@@ -35,10 +35,10 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
@@ -281,7 +281,7 @@ func Test_CancelStream(t *testing.T) {
 	termReason, termErr := stream.TermInfo()
 	stats := stream.GetStats()
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
-		stream, stats.Offset, stats.Num, num, stats.IdlePct, termReason, termErr)
+		stream, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
 	stream.Fin() // vs. stream being term-ed
 }
 
@@ -312,7 +312,7 @@ func printNetworkStats(t *testing.T, network string) {
 	tutils.CheckFatal(err, t)
 	for trname, eps := range netstats {
 		for sessid, stats := range eps { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats.Offset, stats.Num)
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
 }
@@ -323,12 +323,12 @@ func compareNetworkStats(t *testing.T, network string, netstats1 map[string]tran
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
 		for sessid, stats2 := range eps2 { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats2.Offset, stats2.Num)
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
 				stats1, ok := eps1[sessid]
 				if ok {
 					fmt.Printf("send$ %s[%d]: offset=%d, num=%d, idle=%.2f%%\n",
-						trname, sessid, stats1.Offset, stats1.Num, stats1.IdlePct)
+						trname, sessid, stats1.Offset.Load(), stats1.Num.Load(), stats1.IdlePct)
 				} else {
 					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessid)
 				}
@@ -447,7 +447,7 @@ func Test_ObjAttrs(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	receivedCount := int64(0)
+	var receivedCount atomic.Int64
 	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 
@@ -459,7 +459,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 		cmn.AssertMsg(written == hdr.ObjAttrs.Size, fmt.Sprintf("written: %d, expected: %d", written, hdr.ObjAttrs.Size))
 
-		atomic.AddInt64(&receivedCount, 1)
+		receivedCount.Inc()
 	}
 	path, err := transport.Register("n1", "callback", recvFunc)
 	if err != nil {
@@ -487,8 +487,8 @@ func Test_ObjAttrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if receivedCount != int64(len(testAttrs)) {
-		t.Fatalf("invalid received count: %d, expected: %d", receivedCount, len(testAttrs))
+	if receivedCount.Load() != int64(len(testAttrs)) {
+		t.Fatalf("invalid received count: %d, expected: %d", receivedCount.Load(), len(testAttrs))
 	}
 }
 
@@ -538,7 +538,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if netstats == nil {
 		termReason, termErr := stream.TermInfo()
 		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
-			trname, sessid, stats.Offset, stats.Num, num, stats.IdlePct, termReason, termErr)
+			trname, sessid, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
 	} else {
 		lock.Lock()
 		eps := make(transport.EndpointStats)

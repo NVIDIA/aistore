@@ -271,7 +271,7 @@ func aisinit(version, build string) {
 			t.readahead = &dummyreadahead{}
 		}
 
-		lct := cluster.LomCacheRunner{}.Init(gmem2, t)
+		lct := cluster.NewLomCacheRunner(gmem2, t)
 		ctx.rg.add(lct, xlomcache)
 
 		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init

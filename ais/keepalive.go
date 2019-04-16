@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -67,7 +67,7 @@ type keepalive struct {
 	kt                         KeepaliveTracker
 	tt                         *timeoutTracker
 	controlCh                  chan controlSignal
-	primaryKeepaliveInProgress int64 // A toggle used only by the primary proxy.
+	primaryKeepaliveInProgress atomic.Int64 // A toggle used only by the primary proxy.
 	interval                   time.Duration
 	maxKeepaliveTime           float64
 }
@@ -198,11 +198,11 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 // All non-responding daemons are removed from the smap and the resulting smap is synced to all other daemons.
 func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	t := time.Now().Unix()
-	if !atomic.CompareAndSwapInt64(&pkr.primaryKeepaliveInProgress, 0, t) {
+	if !pkr.primaryKeepaliveInProgress.CAS(0, t) {
 		glog.Infof("primary keepalive is already in progress...")
 		return
 	}
-	defer atomic.CompareAndSwapInt64(&pkr.primaryKeepaliveInProgress, t, 0)
+	defer pkr.primaryKeepaliveInProgress.CAS(t, 0)
 
 	var (
 		smap       = pkr.p.smapowner.get()

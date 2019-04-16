@@ -7,14 +7,14 @@
 package dsort
 
 import (
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/transport"
 )
 
 type StreamPool struct {
-	roundRobinIdx int64
+	roundRobinIdx atomic.Int64
 	Streams       []*transport.Stream
 }
 
@@ -25,7 +25,7 @@ func NewStreamPool(streamCount int) *StreamPool {
 }
 
 func (sp *StreamPool) Get() *transport.Stream {
-	idx := atomic.AddInt64(&sp.roundRobinIdx, 1)
+	idx := sp.roundRobinIdx.Inc()
 	stream := sp.Streams[idx%int64(len(sp.Streams))]
 	return stream
 }

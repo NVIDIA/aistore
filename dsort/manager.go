@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -70,7 +70,7 @@ type dsortContext struct {
 type progressState struct {
 	inProgress bool
 	aborted    bool
-	cleaned    int32
+	cleaned    atomic.Int32
 	wg         *sync.WaitGroup
 	// doneCh is closed when the job is aborted so that goroutines know when
 	// they need to stop.
@@ -105,15 +105,15 @@ type Manager struct {
 	client        *http.Client
 	fileExtension string
 	compression   struct {
-		compressed   int64 // Total compressed size
-		uncompressed int64 // Total uncompressed size
+		compressed   atomic.Int64 // Total compressed size
+		uncompressed atomic.Int64 // Total uncompressed size
 	}
-	totalInputShardsSeen uint64 // Number of shards processed during extraction phase
+	totalInputShardsSeen atomic.Uint64 // Number of shards processed during extraction phase
 	received             struct {
-		count int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
+		count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
 		ch    chan int32
 	}
-	refCount    int64 // Reference counter used to determine if we can do cleanup
+	refCount    atomic.Int64 // Reference counter used to determine if we can do cleanup
 	state       progressState
 	extractSema struct {
 		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to ExtractShard
@@ -179,14 +179,11 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	})
 
 	m.fileExtension = rs.Extension
-	m.received.count = int32(0)
 	m.received.ch = make(chan int32, 10)
-	m.totalInputShardsSeen = 0
-	m.refCount = 0
 
 	// By default we want avg compression ratio to be equal to 1
-	m.compression.compressed = 1
-	m.compression.uncompressed = 1
+	m.compression.compressed = *atomic.NewInt64(1)
+	m.compression.uncompressed = *atomic.NewInt64(1)
 
 	// Concurrency
 	m.extractSema.funcCalls = make(chan struct{}, rs.ExtractConcLimit)
@@ -333,7 +330,7 @@ func (m *Manager) cleanupStreams() error {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
-	if !atomic.CompareAndSwapInt32(&m.state.cleaned, 0, 1) {
+	if !m.state.cleaned.CAS(0, 1) {
 		return // do not clean if already scheduled
 	}
 
@@ -368,7 +365,7 @@ func (m *Manager) cleanup() {
 // dSort operations. To ensure that finalCleanup is not invoked before regular
 // cleanup is finished, we also ack ourselves.
 func (m *Manager) finalCleanup() {
-	if !atomic.CompareAndSwapInt32(&m.state.cleaned, 1, 2) {
+	if !m.state.cleaned.CAS(1, 2) {
 		return // do not clean if already scheduled
 	}
 
@@ -462,8 +459,7 @@ func (m *Manager) updateFinishedAck(daemonID string) {
 // the information in the channel so other waiting goroutine can be informed
 // that the information has been updated.
 func (m *Manager) incrementReceived() {
-	atomic.AddInt32(&m.received.count, 1)
-	m.received.ch <- m.received.count
+	m.received.ch <- m.received.count.Inc()
 }
 
 // listenReceived returns channel on which waiting goroutine can hang and wait
@@ -473,16 +469,16 @@ func (m *Manager) listenReceived() chan int32 {
 }
 
 func (m *Manager) addCompressionSizes(compressed, uncompressed int64) {
-	atomic.AddInt64(&m.compression.compressed, compressed)
-	atomic.AddInt64(&m.compression.uncompressed, uncompressed)
+	m.compression.compressed.Add(compressed)
+	m.compression.uncompressed.Add(uncompressed)
 }
 
 func (m *Manager) totalCompressedSize() int64 {
-	return atomic.LoadInt64(&m.compression.compressed)
+	return m.compression.compressed.Load()
 }
 
 func (m *Manager) totalUncompressedSize() int64 {
-	return atomic.LoadInt64(&m.compression.uncompressed)
+	return m.compression.uncompressed.Load()
 }
 
 func (m *Manager) avgCompressionRatio() float64 {
@@ -495,13 +491,13 @@ func (m *Manager) avgCompressionRatio() float64 {
 // NOTE: Manager should increment ref everytime some data of it is used, otherwise
 // unexpected things can happen.
 func (m *Manager) incrementRef(by int64) {
-	atomic.AddInt64(&m.refCount, by)
+	m.refCount.Add(by)
 }
 
 // decrementRef decrements reference counter. If it is 0 or below and dsort has
 // already finished returns true. Otherwise, false is returned.
 func (m *Manager) decrementRef(by int64) {
-	newRefCount := atomic.AddInt64(&m.refCount, -by)
+	newRefCount := m.refCount.Sub(by)
 	if newRefCount <= 0 {
 		// When ref count is below zero or zero we should schedule cleanup
 		m.lock()
@@ -515,7 +511,7 @@ func (m *Manager) decrementRef(by int64) {
 }
 
 func (m *Manager) addToTotalInputShardsSeen(seen uint64) {
-	atomic.AddUint64(&m.totalInputShardsSeen, seen)
+	m.totalInputShardsSeen.Add(seen)
 }
 
 func (m *Manager) inProgress() bool {

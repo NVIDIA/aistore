@@ -7,9 +7,9 @@ package mirror
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,13 +25,14 @@ type (
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
 		// init
-		Mirror                 cmn.MirrorConf
-		Slab                   *memsys.Slab2
-		T                      cluster.Target
-		Namelocker             cluster.NameLocker
-		wg                     *sync.WaitGroup
-		total, dropped, copied int64
-		BckIsLocal             bool
+		Mirror         cmn.MirrorConf
+		Slab           *memsys.Slab2
+		T              cluster.Target
+		Namelocker     cluster.NameLocker
+		wg             *sync.WaitGroup
+		total, dropped int64
+		copied         atomic.Int64
+		BckIsLocal     bool
 	}
 	copier struct { // one per mountpath
 		parent    *XactCopy
@@ -220,7 +221,7 @@ func (j *copier) addCopy(lom *cluster.LOM) {
 		if glog.V(4) {
 			glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
 		}
-		if v := atomic.AddInt64(&j.parent.copied, 1); (v % logNumProcessed) == 0 {
+		if v := j.parent.copied.Add(1); (v % logNumProcessed) == 0 {
 			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)
 		}
 	}

@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -1200,7 +1200,7 @@ func TestECExtraStress(t *testing.T) {
 		waitAllTime = time.Minute * 4              // should be enough for all object to complete EC
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
 
-		totalSlices = int64(0)
+		totalSlices atomic.Int64
 	)
 
 	smap := getClusterMap(t, proxyURL)
@@ -1249,7 +1249,7 @@ func TestECExtraStress(t *testing.T) {
 				t.Errorf("PUT failed: %v", err)
 			}
 
-			atomic.AddInt64(&totalSlices, int64(totalCnt))
+			totalSlices.Add(int64(totalCnt))
 			cntCh <- sCnt{obj: objName, cnt: totalCnt}
 
 			<-semaphore
@@ -1265,14 +1265,14 @@ func TestECExtraStress(t *testing.T) {
 	deadLine := startedWaiting.Add(waitAllTime)
 	for time.Now().Before(deadLine) {
 		foundParts, _ = ecGetAllLocalSlices(objStart)
-		if len(foundParts) == int(totalSlices) {
+		if len(foundParts) == int(totalSlices.Load()) {
 			delta := time.Since(startedWaiting)
 			t.Logf("Waiting for EC completed after all object are PUT %v\n", delta)
 			break
 		}
 		time.Sleep(time.Millisecond * 30)
 	}
-	if len(foundParts) != int(totalSlices) {
+	if len(foundParts) != int(totalSlices.Load()) {
 		slices := make(map[string]int, objCount)
 		for sl := range cntCh {
 			slices[sl.obj] = sl.cnt
@@ -1281,7 +1281,7 @@ func TestECExtraStress(t *testing.T) {
 		compareSlicesCount(t, slices, fndSlices)
 
 		t.Fatalf("Expected total number of files: %d, found: %d\n",
-			totalSlices, len(foundParts))
+			totalSlices.Load(), len(foundParts))
 	}
 	delta := time.Since(started)
 	t.Logf("Total test time %v\n", delta)

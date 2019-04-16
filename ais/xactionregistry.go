@@ -8,13 +8,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"sync/atomic"
 
-	"github.com/NVIDIA/aistore/stats"
-
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -48,7 +46,7 @@ type (
 
 type xactionsRegistry struct {
 	sync.Mutex
-	nextid      int64
+	nextid      atomic.Int64
 	globalXacts sync.Map
 	buckets     sync.Map
 
@@ -112,10 +110,10 @@ func (r *xactionsRegistry) abortAllEntries(entriesMap *sync.Map) bool {
 }
 
 func (r *xactionsRegistry) abortAll() bool {
-	sleep := int32(0)
+	sleep := atomic.NewInt32(0)
 
 	if r.abortAllEntries(&r.globalXacts) {
-		sleep = 1
+		sleep.Store(1)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -124,7 +122,7 @@ func (r *xactionsRegistry) abortAll() bool {
 		go func() {
 			bucketsXact := val.(*sync.Map)
 			if r.abortAllEntries(bucketsXact) {
-				atomic.AddInt32(&sleep, 1)
+				sleep.Inc()
 			}
 			wg.Done()
 		}()
@@ -132,7 +130,7 @@ func (r *xactionsRegistry) abortAll() bool {
 	})
 
 	wg.Wait()
-	return sleep > 0
+	return sleep.Load() > 0
 }
 
 func (r *xactionsRegistry) localRebStatus() (aborted, running bool) {
@@ -175,7 +173,7 @@ func (r *xactionsRegistry) globalRebStatus() (aborted, running bool) {
 }
 
 func (r *xactionsRegistry) uniqueID() int64 {
-	return atomic.AddInt64(&r.nextid, 1)
+	return r.nextid.Inc()
 }
 
 func (r *xactionsRegistry) xactsRange(matches func(string) bool, doAction func(cmn.Xact)) {

@@ -16,9 +16,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -43,8 +43,8 @@ type (
 		xreb         *xactRebBase
 		mpath        string
 		wg           *sync.WaitGroup
-		objectsMoved int64
-		bytesMoved   int64
+		objectsMoved atomic.Int64
+		bytesMoved   atomic.Int64
 	}
 
 	globalRebJogger struct {
@@ -136,8 +136,8 @@ func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadC
 	if err != nil {
 		glog.Errorf("failed to send obj rebalance: %s/%s, err: %v", hdr.Bucket, hdr.Objname, err)
 	} else {
-		atomic.AddInt64(&rj.objectsMoved, 1)
-		atomic.AddInt64(&rj.bytesMoved, hdr.ObjAttrs.Size)
+		rj.objectsMoved.Inc()
+		rj.bytesMoved.Add(hdr.ObjAttrs.Size)
 	}
 
 	rj.wg.Done()
@@ -335,8 +335,8 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	}
 	dst.Load(true)
 	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
-	rj.objectsMoved++
-	rj.bytesMoved += fileInfo.Size()
+	rj.objectsMoved.Inc()
+	rj.bytesMoved.Add(fileInfo.Size())
 	return nil
 }
 
@@ -568,8 +568,8 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 			totalObjectsMoved, totalBytesMoved int64
 		)
 		for _, jogger := range joggers {
-			totalObjectsMoved += jogger.objectsMoved
-			totalBytesMoved += jogger.bytesMoved
+			totalObjectsMoved += jogger.objectsMoved.Load()
+			totalBytesMoved += jogger.bytesMoved.Load()
 		}
 		if !xreb.Aborted() {
 			if err := os.Remove(pmarker); err != nil {
@@ -650,8 +650,8 @@ func (reb *rebManager) runLocalReb() {
 	if pmarker != "" {
 		totalObjectsMoved, totalBytesMoved := int64(0), int64(0)
 		for _, jogger := range joggers {
-			totalObjectsMoved += jogger.objectsMoved
-			totalBytesMoved += jogger.bytesMoved
+			totalObjectsMoved += jogger.objectsMoved.Load()
+			totalBytesMoved += jogger.bytesMoved.Load()
 		}
 		if !xreb.Aborted() {
 			if err := os.Remove(pmarker); err != nil {

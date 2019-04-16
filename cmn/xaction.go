@@ -6,9 +6,9 @@ package cmn
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
@@ -30,12 +30,12 @@ type (
 	}
 	XactBase struct {
 		id      int64
-		sutime  int64
-		eutime  int64
+		sutime  atomic.Int64
+		eutime  atomic.Int64
 		kind    string
 		bucket  string
 		abrt    chan struct{}
-		aborted int32
+		aborted atomic.Bool
 	}
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -52,8 +52,8 @@ type (
 	XactDemandBase struct {
 		XactBase
 		ticker  *time.Ticker
-		renew   int64
-		pending int64
+		renew   atomic.Int64
+		pending atomic.Int64
 	}
 	ErrXpired struct { // return it if called (right) after self-termination
 		errstr string
@@ -75,17 +75,17 @@ func NewXactBase(id int64, kind string, bucket ...string) *XactBase {
 	if len(bucket) > 0 {
 		xact.bucket = bucket[0]
 	}
-	atomic.StoreInt64(&xact.sutime, stime.UnixNano())
+	xact.sutime.Store(stime.UnixNano())
 	return xact
 }
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
-func (xact *XactBase) Finished() bool             { return atomic.LoadInt64(&xact.eutime) != 0 }
+func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool {
-	return atomic.LoadInt32(&xact.aborted) != 0
+	return xact.aborted.Load()
 }
 
 func (xact *XactBase) String() string {
@@ -101,37 +101,37 @@ func (xact *XactBase) String() string {
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {
 	if len(s) == 0 {
-		u := atomic.LoadInt64(&xact.sutime)
+		u := xact.sutime.Load()
 		if u == 0 {
 			return time.Time{}
 		}
 		return time.Unix(0, u)
 	}
 	stime := s[0]
-	atomic.StoreInt64(&xact.sutime, stime.UnixNano())
+	xact.sutime.Store(stime.UnixNano())
 	return stime
 }
 
 func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 	if len(e) == 0 {
-		u := atomic.LoadInt64(&xact.eutime)
+		u := xact.eutime.Load()
 		if u == 0 {
 			return time.Time{}
 		}
 		return time.Unix(0, u)
 	}
 	etime := e[0]
-	atomic.StoreInt64(&xact.eutime, etime.UnixNano())
+	xact.eutime.Store(etime.UnixNano())
 	glog.Infoln(xact.String())
 	return etime
 }
 
 func (xact *XactBase) Abort() {
-	if !atomic.CompareAndSwapInt32(&xact.aborted, 0, 1) {
+	if xact.aborted.CAS(false, true) {
 		glog.Infof("ABORT: Already aborted, skipping: " + xact.String())
 		return
 	}
-	atomic.StoreInt64(&xact.eutime, time.Now().UnixNano())
+	xact.eutime.Store(time.Now().UnixNano())
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
 }
@@ -143,26 +143,28 @@ func (xact *XactBase) Abort() {
 var _ XactDemand = &XactDemandBase{}
 
 func NewXactDemandBase(id int64, kind string, bucket string, idleTime ...time.Duration) *XactDemandBase {
-	base := NewXactBase(id, kind, bucket)
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]
 	}
 	ticker := time.NewTicker(tickTime)
-	return &XactDemandBase{XactBase: *base, ticker: ticker}
+	return &XactDemandBase{
+		XactBase: *NewXactBase(id, kind, bucket),
+		ticker:   ticker,
+	}
 }
 
 func (r *XactDemandBase) ChanCheckTimeout() <-chan time.Time { return r.ticker.C }
-func (r *XactDemandBase) Renew()                             { atomic.StoreInt64(&r.renew, 1) } // see Timeout()
-func (r *XactDemandBase) IncPending()                        { atomic.AddInt64(&r.pending, 1) }
-func (r *XactDemandBase) DecPending()                        { atomic.AddInt64(&r.pending, -1) }
-func (r *XactDemandBase) Pending() int64                     { return atomic.LoadInt64(&r.pending) }
+func (r *XactDemandBase) Renew()                             { r.renew.Store(1) } // see Timeout()
+func (r *XactDemandBase) IncPending()                        { r.pending.Inc() }
+func (r *XactDemandBase) DecPending()                        { r.pending.Dec() }
+func (r *XactDemandBase) Pending() int64                     { return r.pending.Load() }
 
 func (r *XactDemandBase) Timeout() bool {
-	if atomic.LoadInt64(&r.pending) > 0 {
+	if r.pending.Load() > 0 {
 		return false
 	}
-	return atomic.AddInt64(&r.renew, -1) < 0
+	return r.renew.Dec() < 0
 }
 
 func (r *XactDemandBase) Stop() { r.ticker.Stop() }
