@@ -4,16 +4,35 @@
  */
 package tassert
 
-import "testing"
+import (
+	"runtime/debug"
+	"testing"
+)
 
-func Fatal(t *testing.T, cond bool, msg string, args ...interface{}) {
+func CheckFatal(t *testing.T, err error) {
+	if err != nil {
+		debug.PrintStack()
+		t.Fatalf(err.Error())
+	}
+}
+
+func CheckError(t *testing.T, err error) {
+	if err != nil {
+		debug.PrintStack()
+		t.Errorf(err.Error())
+	}
+}
+
+func Fatalf(t *testing.T, cond bool, msg string, args ...interface{}) {
 	if !cond {
+		debug.PrintStack()
 		t.Fatalf(msg, args...)
 	}
 }
 
-func Error(t *testing.T, cond bool, msg string, args ...interface{}) {
+func Errorf(t *testing.T, cond bool, msg string, args ...interface{}) {
 	if !cond {
+		debug.PrintStack()
 		t.Errorf(msg, args...)
 	}
 }

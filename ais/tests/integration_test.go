@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -84,7 +86,7 @@ func (m *metadata) assertClusterState() {
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 
 	proxyCount := len(smap.Pmap)
 	targetCount := len(smap.Tmap)
@@ -106,7 +108,7 @@ func (m *metadata) checkObjectDistribution(t *testing.T) {
 	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.SelectMsg{Props: cmn.GetTargetURL}, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL]++
 	}
@@ -200,7 +202,7 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 	tutils.Logf("Re-registering target %s...\n", target.DaemonID)
 	smap := getClusterMap(m.t, m.proxyURL)
 	err := tutils.RegisterTarget(m.proxyURL, target, smap)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
@@ -213,11 +215,11 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 		} else {
 			baseParams.URL = m.proxyURL
 			proxyLBNames, err := api.GetBucketNames(baseParams, cmn.LocalBs)
-			tutils.CheckFatal(err, m.t)
+			tassert.CheckFatal(m.t, err)
 
 			baseParams.URL = target.URL(cmn.NetworkPublic)
 			targetLBNames, err := api.GetBucketNames(baseParams, cmn.LocalBs)
-			tutils.CheckFatal(err, m.t)
+			tassert.CheckFatal(m.t, err)
 			// T3
 			if reflect.DeepEqual(proxyLBNames.Local, targetLBNames.Local) {
 				tutils.Logf("T3: re-registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
@@ -260,7 +262,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
@@ -325,7 +327,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -338,7 +340,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// it changes the primary proxy. Without the change tutils.PutRandObjs is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	m.wg.Add(1)
 	go func() {
@@ -412,11 +414,11 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	}
 	tutils.Logf("Killing target: %s - %s\n", targetURL, targetID)
 	tcmd, targs, err := kill(targetID, targetPort)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	primaryProxy := getPrimaryURL(m.t, proxyURLReadOnly)
 	m.smap, err = tutils.WaitForPrimaryProxy(primaryProxy, "to update smap", m.smap.Version, testing.Verbose(), m.originalProxyCount, m.originalTargetCount-1)
-	tutils.CheckError(err, t)
+	tassert.CheckError(t, err)
 
 	// Step 2
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -461,7 +463,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	// Unregister target
 	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -509,7 +511,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Unregister target 0
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -527,7 +529,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		tutils.Logf("Registering target: %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, targets[0], m.smap)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		m.wg.Done()
 		tutils.Logf("Registered target %s again\n", targets[0].URL(cmn.NetworkPublic))
 	}()
@@ -537,7 +539,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		tutils.Logf("Unregistering target: %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterTarget(m.proxyURL, targets[1].DaemonID)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		m.wg.Done()
 		tutils.Logf("Unregistered target %s\n", targets[1].URL(cmn.NetworkPublic))
 	}()
@@ -576,7 +578,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Unregister target 0
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -590,7 +592,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		tutils.Logf("trying to register target: %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, targets[0], m.smap)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		m.wg.Done()
 		tutils.Logf("registered target %s again\n", targets[0].URL(cmn.NetworkPublic))
 	}()
@@ -600,7 +602,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	go func() {
 		tutils.Logf("trying to unregister target: %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterTarget(m.proxyURL, targets[1].DaemonID)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		m.wg.Done()
 		tutils.Logf("unregistered target %s\n", targets[1].URL(cmn.NetworkPublic))
 	}()
@@ -650,7 +652,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Unregister a target
 	tutils.Logf("Trying to unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -663,7 +665,7 @@ func TestPutDuringRebalance(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		tutils.Logf("Trying to register target: %s\n", target.URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, target, m.smap)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		m.wg.Done()
 		tutils.Logf("Target %s is registered again.\n", target.URL(cmn.NetworkPublic))
 	}()
@@ -721,7 +723,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 	baseParams := tutils.BaseAPIParams(targetURL)
 	mpList, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -730,12 +732,12 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
 	err = api.DisableMountpath(baseParams, mpath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Unregister a target
 	tutils.Logf("Trying to unregister target: %s\n", killTarget.URL(cmn.NetworkPublic))
 	err = tutils.UnregisterTarget(m.proxyURL, killTarget.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err := tutils.WaitForPrimaryProxy(
 		m.proxyURL,
 		"target is gone",
@@ -743,7 +745,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount-1,
 	)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 
 	m.puts()
 
@@ -758,11 +760,11 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// register a new target
 	err = tutils.RegisterTarget(m.proxyURL, killTarget, m.smap)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// enable mountpath
 	err = api.EnableMountpath(baseParams, mpath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// wait until GETs are done while 2 rebalance are running
 	m.wg.Wait()
@@ -775,10 +777,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 
 	mpListAfter, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
 			len(mpList.Available), len(mpListAfter.Available))
@@ -814,7 +816,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 	baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
 	mpList, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -829,7 +831,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
 		err = api.DisableMountpath(baseParams, mp)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	m.puts()
@@ -842,13 +844,13 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		// sleep for a while before enabling another mountpath
 		time.Sleep(50 * time.Millisecond)
 		err = api.EnableMountpath(baseParams, mp)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	m.wg.Wait()
 
 	mpListAfter, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
 			len(mpList.Available), len(mpListAfter.Available))
@@ -890,7 +892,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Unregister a target
 	err := tutils.UnregisterTarget(md.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, md.proxyURL).Tmap)
 	if n != md.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
@@ -906,7 +908,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	tutils.Logf("Trying to register target: %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.RegisterTarget(md.proxyURL, target, md.smap)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// wait for everything to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
@@ -950,7 +952,7 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
 		err := tutils.UnregisterTarget(m.proxyURL, targets[i].DaemonID)
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 		n := len(getClusterMap(t, m.proxyURL).Tmap)
 		if n != m.originalTargetCount-(i+1) {
 			t.Errorf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
@@ -962,7 +964,7 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
 			err := tutils.RegisterTarget(m.proxyURL, targets[number], m.smap)
-			tutils.CheckError(err, t)
+			tassert.CheckError(t, err)
 			m.wg.Done()
 		}(i)
 	}
@@ -1003,7 +1005,7 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 
 	// Rename it
 	err := api.RenameLocalBucket(tutils.DefaultBaseAPIParams(t), m.bucket, newTestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Destroy renamed local bucket
 	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
@@ -1039,7 +1041,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	oldLocalBucketName := m.bucket
 	m.bucket = newTestLocalBucketName
 	err := api.RenameLocalBucket(tutils.DefaultBaseAPIParams(t), oldLocalBucketName, m.bucket)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Gets on renamed local bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1094,7 +1096,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 
 	// Rename local bucket
 	err := api.RenameLocalBucket(tutils.DefaultBaseAPIParams(m.t), m.bucket, newTestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not deleted")
 	}
@@ -1132,16 +1134,16 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	for _, mpath := range oldMountpaths.Available {
 		err = api.RemoveMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually removed
 	mountpaths, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("Target should not have any paths available")
@@ -1154,12 +1156,12 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
 		err = api.AddMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually added
 	mountpaths, err = api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
 		t.Fatalf("Target should have old mountpath available restored")
@@ -1199,14 +1201,14 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 	err := cmn.CreateDir(newMountpath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if tutils.DockerRunning() {
 		err := tutils.DockerCreateMpathDir(0, newMountpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	} else {
 		err := cmn.CreateDir(newMountpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	defer func() {
@@ -1222,7 +1224,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Add new mountpath to target
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	err = api.AddMountpath(baseParams, newMountpath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL))
 
@@ -1239,7 +1241,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 	} else {
 		err = api.RemoveMountpath(baseParams, newMountpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	m.ensureNoErrors()
@@ -1284,11 +1286,11 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	if tutils.DockerRunning() {
 		err := tutils.DockerCreateMpathDir(0, newMountpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 			err = api.AddMountpath(baseParams, newMountpath)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 		}
 	} else {
 		// Add new mountpath to all targets
@@ -1297,7 +1299,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 			cmn.CreateDir(mountpath)
 			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 			err := api.AddMountpath(baseParams, mountpath)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 		}
 	}
 
@@ -1311,7 +1313,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Remove new mountpath from all targets
 	if tutils.DockerRunning() {
 		err := tutils.DockerRemoveMpathDir(0, newMountpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 			if err := api.RemoveMountpath(baseParams, newMountpath); err != nil {
@@ -1354,16 +1356,16 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	// Remove all mountpaths for one target
 	oldMountpaths, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	for _, mpath := range oldMountpaths.Available {
 		err := api.DisableMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually disabled
 	mountpaths, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("Target should not have any paths available")
@@ -1380,12 +1382,12 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
 		err := api.EnableMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually enabled
 	mountpaths, err = api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
 		t.Fatalf("Target should have old mountpath available restored")
@@ -1397,7 +1399,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	tutils.Logf("Waiting for local bucket %s appears on all targets\n", m.bucket)
 	err = tutils.WaitForLocalBucket(m.proxyURL, m.bucket, true /*exists*/)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Put and read random files
 	m.puts()
@@ -1481,14 +1483,14 @@ func TestAtimeRebalance(t *testing.T) {
 	// Enable bucket level LRU properties
 	bucketProps.LRU.Enabled = true
 	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), m.bucket, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	// Unregister a target
 	tutils.Logf("Trying to unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err := tutils.WaitForPrimaryProxy(
 		m.proxyURL,
 		"target is gone",
@@ -1496,7 +1498,7 @@ func TestAtimeRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount-1,
 	)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Put random files
 	m.puts()
@@ -1506,7 +1508,7 @@ func TestAtimeRebalance(t *testing.T) {
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	bucketList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	objNames := make(cmn.SimpleKVs, 10)
 	for _, entry := range bucketList.Entries {
@@ -1515,7 +1517,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	// register a new target
 	err = tutils.RegisterTarget(m.proxyURL, target, m.smap)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// make sure that the cluster has all targets enabled
 	_, err = tutils.WaitForPrimaryProxy(
@@ -1525,13 +1527,13 @@ func TestAtimeRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, baseParams)
 
 	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	itemCount := 0
 	for _, entry := range bucketListReb.Entries {
@@ -1582,7 +1584,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	// Unregister target 0
 	targets := tutils.ExtractTargetNodes(m.smap)
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -1637,7 +1639,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Unregister target 0
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)

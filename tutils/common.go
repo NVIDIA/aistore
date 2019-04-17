@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"testing"
 	"time"
@@ -29,22 +28,6 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
-
-func CheckFatal(err error, t *testing.T) {
-	if err != nil {
-		Logf("FATAL: %v\n", err)
-		debug.PrintStack()
-		t.Fatalf("FATAL: %v", err)
-	}
-}
-
-func CheckError(err error, t *testing.T) {
-	if err != nil {
-		Logf("ERROR: %v\n", err)
-		debug.PrintStack()
-		t.Errorf("ERROR: %v", err)
-	}
-}
 
 func prependTime(msg string) string {
 	return fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000000"), msg)

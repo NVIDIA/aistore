@@ -20,6 +20,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -54,17 +56,17 @@ func TestSGLStressN(t *testing.T) {
 			// save buffer to SGL
 			br := bytes.NewReader(bufR)
 			_, err := io.Copy(sglR, br)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 
 			// copy SGL to SGL
 			rr := memsys.NewReader(sglR)
 			_, err = io.Copy(sglW, rr)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 
 			// read SGL from destination and compare with the original
 			var bufW []byte
 			bufW, err = ioutil.ReadAll(memsys.NewReader(sglW))
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {
 					tutils.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))

@@ -38,6 +38,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
@@ -242,7 +244,7 @@ func Test_CancelStream(t *testing.T) {
 	}
 	trname := "cancel-rx-88"
 	path, err := transport.Register(network, trname, recvFunc)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
@@ -309,7 +311,7 @@ func Test_MultiStream(t *testing.T) {
 
 func printNetworkStats(t *testing.T, network string) {
 	netstats, err := transport.GetNetworkStats(network)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	for trname, eps := range netstats {
 		for sessid, stats := range eps { // EndpointStats by session ID
 			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats.Offset.Load(), stats.Num.Load())
@@ -319,7 +321,7 @@ func printNetworkStats(t *testing.T, network string) {
 
 func compareNetworkStats(t *testing.T, network string, netstats1 map[string]transport.EndpointStats) {
 	netstats2, err := transport.GetNetworkStats(network)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
 		for sessid, stats2 := range eps2 { // EndpointStats by session ID
@@ -350,7 +352,7 @@ func Test_MultipleNetworks(t *testing.T) {
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
 		path, err := transport.Register(network, "endpoint", recvFunc)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		httpclient := &http.Client{Transport: &http.Transport{}}
 		url := ts.URL + path
@@ -502,7 +504,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
 	path, err := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// NOTE: prior to running traffic, give it some time for all other goroutines
 	//       to perform registration (see README for details)
@@ -561,7 +563,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != io.EOF {
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 		}
 		if written != hdr.ObjAttrs.Size {
 			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)

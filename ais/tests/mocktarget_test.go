@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -54,7 +56,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 
 	<-stopch
 	err = tutils.UnregisterTarget(proxyURL, mockDaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }
 

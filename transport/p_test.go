@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
@@ -44,7 +46,7 @@ func Test_OneStream10G(t *testing.T) {
 	defer ts.Close()
 
 	path, err := transport.Register(network, trname, receive10G)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 

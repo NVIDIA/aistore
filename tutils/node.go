@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,7 +35,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 	removeTarget := ExtractTargetNodes(smap)[0]
 	Logf("Removing a target: %s\n", removeTarget.DaemonID)
 	err := UnregisterTarget(proxyURL, removeTarget.DaemonID)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,
 		"target is gone",
@@ -41,7 +43,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 		len(smap.Pmap),
 		len(smap.Tmap)-1,
 	)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	return smap, removeTarget
 }
@@ -49,7 +51,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
 	Logf("Reregistering target...\n")
 	err := RegisterTarget(proxyURL, target, smap)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,
 		"to join target back",
@@ -57,7 +59,7 @@ func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *clu
 		len(smap.Pmap),
 		len(smap.Tmap)+1,
 	)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	return smap
 }

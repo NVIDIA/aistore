@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -123,7 +125,7 @@ func TestRProxyGCS(t *testing.T) {
 	cmdline := genCURLCmdLine(false, true, proxyURL)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
 	t.Log(string(out))
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	pathCached = pathForCached()
 	if pathCached == "" {
@@ -145,7 +147,7 @@ func TestRProxyGCS(t *testing.T) {
 	cmdline = genCURLCmdLine(true, true, proxyURL)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
 	t.Log(string(out))
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	lines = strings.Split(string(out), "\n")
 	speedHTTPS := extractSpeed(lines)
 	if speedHTTPS == 0 {
@@ -156,7 +158,7 @@ func TestRProxyGCS(t *testing.T) {
 	cmdline = genCURLCmdLine(false, false, proxyURL)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
 	t.Log(string(out))
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	lines = strings.Split(string(out), "\n")
 	speedCache := extractSpeed(lines)
 	if speedCache == 0 {

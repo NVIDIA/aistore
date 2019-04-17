@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
@@ -234,7 +236,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 
 	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
 	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"target is gone",
@@ -242,7 +244,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Pmap),
 		len(smap.Tmap)-1,
 	)
-	tutils.CheckError(err, t)
+	tassert.CheckError(t, err)
 
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.DaemonID, removeTarget.URL(cmn.NetworkPublic))
 
@@ -251,7 +253,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	smap, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to join target back",
@@ -259,7 +261,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Pmap),
 		len(smap.Tmap)+1,
 	)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	waitForRebalanceToComplete(t, baseParams)
 
 	tutils.Logf("Reading file versions...\n")

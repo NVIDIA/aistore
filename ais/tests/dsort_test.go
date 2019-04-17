@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -122,13 +124,13 @@ func (df *dsortFramework) createInputShards() {
 			} else {
 				df.m.t.Fail()
 			}
-			tutils.CheckFatal(err, df.m.t)
+			tassert.CheckFatal(df.m.t, err)
 
 			fqn := path + df.extension
 			defer os.Remove(fqn)
 
 			reader, err := tutils.NewFileReaderFromFile(fqn, false)
-			tutils.CheckFatal(err, df.m.t)
+			tassert.CheckFatal(df.m.t, err)
 
 			tutils.PutAsync(wg, df.m.proxyURL, df.m.bucket, filepath.Base(fqn), reader, errCh)
 		}(i)
@@ -136,7 +138,7 @@ func (df *dsortFramework) createInputShards() {
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
-		tutils.CheckFatal(err, df.m.t)
+		tassert.CheckFatal(df.m.t, err)
 	}
 	tutils.Logln("done creating tarballs")
 }
@@ -175,11 +177,11 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			// of the shards estimated (zip compression should be THAT good).
 			break
 		}
-		tutils.CheckFatal(err, df.m.t)
+		tassert.CheckFatal(df.m.t, err)
 
 		if df.algorithm.Kind == dsort.SortKindContent {
 			files, err := tutils.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
-			tutils.CheckFatal(err, df.m.t)
+			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
 				if file.Ext == df.algorithm.Extension {
 					if strings.TrimSuffix(file.Name, filepath.Ext(file.Name)) != strings.TrimSuffix(lastName, filepath.Ext(lastName)) {
@@ -190,14 +192,14 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 					switch df.algorithm.FormatType {
 					case extract.FormatTypeInt:
 						intValue, err := strconv.ParseInt(string(file.Content), 10, 64)
-						tutils.CheckFatal(err, df.m.t)
+						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && intValue < lastValue.(int64) {
 							df.m.t.Fatalf("int values are not in correct order (shard: %s, lastIntValue: %d, curIntValue: %d)", shardName, lastValue.(int64), intValue)
 						}
 						lastValue = intValue
 					case extract.FormatTypeFloat:
 						floatValue, err := strconv.ParseFloat(string(file.Content), 64)
-						tutils.CheckFatal(err, df.m.t)
+						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && floatValue < lastValue.(float64) {
 							df.m.t.Fatalf("string values are not in correct order (shard: %s, lastStringValue: %f, curStringValue: %f)", shardName, lastValue.(float64), floatValue)
 						}
@@ -226,7 +228,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				files, err = tutils.GetFileInfosFromZipBuffer(buffer)
 			}
 
-			tutils.CheckFatal(err, df.m.t)
+			tassert.CheckFatal(df.m.t, err)
 			if len(files) == 0 {
 				df.m.t.Fatal("number of files inside shard is 0")
 			}
@@ -260,18 +262,18 @@ func (df *dsortFramework) clearDSortList() {
 	for {
 		seenRunningDSort := false
 		listDSort, err := tutils.ListDSort(df.m.proxyURL, dsortDescAllRegex)
-		tutils.CheckFatal(err, df.m.t)
+		tassert.CheckFatal(df.m.t, err)
 		for k, v := range listDSort {
 			if v.Archived {
 				err = tutils.RemoveDSort(df.m.proxyURL, k)
-				tutils.CheckFatal(err, df.m.t)
+				tassert.CheckFatal(df.m.t, err)
 			} else {
 				// We get here when dsort is aborted because a target goes down
 				// but when it rejoins it thinks the dsort is not aborted and doesn't do cleanup
 				// this happens in TestDistributedSortKillTargetDuringPhases
 				tutils.Logf("Stopping: %v...\n", k)
 				err = tutils.AbortDSort(df.m.proxyURL, k)
-				tutils.CheckFatal(err, df.m.t)
+				tassert.CheckFatal(df.m.t, err)
 				seenRunningDSort = true
 			}
 		}
@@ -293,7 +295,7 @@ func (df *dsortFramework) checkDSortList(expNumEntries ...int) {
 	}
 
 	listDSort, err := tutils.ListDSort(df.m.proxyURL, dsortDescCurPrefix)
-	tutils.CheckFatal(err, df.m.t)
+	tassert.CheckFatal(df.m.t, err)
 	actEntries := len(listDSort)
 
 	if expNumEntriesVal != actEntries {
@@ -319,14 +321,14 @@ func dispatchDSortJob(m *metadata, i int) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, m.t)
+	tassert.CheckFatal(m.t, err)
 	if len(metrics) != m.originalTargetCount {
 		m.t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -405,14 +407,14 @@ func TestDistributedSort(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -515,14 +517,14 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -645,14 +647,14 @@ func TestDistributedSortShuffle(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -701,14 +703,14 @@ func TestDistributedSortWithDisk(t *testing.T) {
 	tutils.Logln("starting distributed sort with spilling to disk...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -762,14 +764,14 @@ func TestDistributedSortZip(t *testing.T) {
 	tutils.Logln("starting distributed sort with compression (.zip)...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -817,14 +819,14 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	tutils.Logln("starting distributed sort with compression (.tar.gz)...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -876,14 +878,14 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -934,14 +936,14 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -993,14 +995,14 @@ func TestDistributedSortWithContentString(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(metrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
 	}
@@ -1048,22 +1050,22 @@ func TestDistributedSortAbort(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logln("aborting distributed sort...")
 	err = tutils.AbortDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logln("waiting for distributed sort to finish up...")
 	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if !aborted {
 		t.Error("dsort was not aborted")
 	}
 
 	tutils.Logln("checking metrics...")
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -1116,24 +1118,24 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 		tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
 		rs := dsortFW.gen()
 		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		waitForDSortPhase(t, m.proxyURL, managerUUID, phase, func() {
 			tutils.Logln("aborting distributed sort...")
 			err = tutils.AbortDSort(m.proxyURL, managerUUID)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 		})
 
 		tutils.Logln("waiting for distributed sort to finish up...")
 		aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if !aborted {
 			t.Error("dsort was not aborted")
 		}
 
 		tutils.Logln("checking metrics...")
 		allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if len(allMetrics) != m.originalTargetCount {
 			t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 		}
@@ -1189,24 +1191,24 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 		tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
 		rs := dsortFW.gen()
 		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		waitForDSortPhase(t, m.proxyURL, managerUUID, phase, func() {
 			tutils.Logln("killing target...")
 			err = tutils.UnregisterTarget(m.proxyURL, targets[idx].DaemonID)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 		})
 
 		tutils.Logln("waiting for distributed sort to finish up...")
 		aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 		if !aborted {
 			t.Error("dsort was not aborted")
 		}
 
 		tutils.Logln("checking metrics...")
 		allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 		if len(allMetrics) == m.originalTargetCount {
 			t.Errorf("number of metrics %d is same as number of original targets %d", len(allMetrics), m.originalTargetCount)
 		}
@@ -1257,7 +1259,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 	tutils.Logln("killing target...")
 	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
@@ -1268,7 +1270,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckError(err, t)
+	tassert.CheckError(t, err)
 
 	waitForDSortPhase(t, m.proxyURL, managerUUID, "sorting", func() {
 		// Reregister target 0
@@ -1278,14 +1280,14 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 	tutils.Logln("waiting for distributed sort to finish up...")
 	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if aborted {
 		t.Error("dsort was aborted")
 	}
 
 	tutils.Logln("checking metrics...")
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount-1 {
 		t.Errorf("number of metrics %d is different than number of targets when dSort started %d", len(allMetrics), m.originalTargetCount-1)
 	}
@@ -1333,14 +1335,14 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -1352,7 +1354,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 
 	// Check if metrics can be fetched after some time
 	allMetrics, err = tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -1393,17 +1395,17 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 	tutils.Logln("starting distributed sort without any files generated...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	// Wait a while for all targets to abort
 	time.Sleep(2 * time.Second)
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
@@ -1437,7 +1439,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	)
 
 	err := mem.Get()
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Calculate number of shards to cause OOM and overestimate it to make sure
 	// that if dSort doesn't prevent it, it will happen. Notice that maxMemUsage
@@ -1463,14 +1465,14 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	tutils.Logln("finished distributed sort")
 
 	allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}

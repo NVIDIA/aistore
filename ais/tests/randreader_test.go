@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -27,7 +29,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	for i := 0; i < numworkers; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
 			putRR(t, reader, bucket, dir, numobjects)
@@ -51,6 +53,6 @@ func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, numobjects in
 			Reader:     reader,
 		}
 		err := api.PutObject(putArgs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 }

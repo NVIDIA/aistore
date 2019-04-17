@@ -148,7 +148,7 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	objFullPath string, objSize, sliceSize int64,
 	totalCnt int) (mainObjPath string) {
-	tassert.Error(t, len(sliceList) == totalCnt, "Expected number of objects for %q: %d, found: %d\n%+v",
+	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %q: %d, found: %d\n%+v",
 		objFullPath, totalCnt, len(sliceList), sliceList)
 
 	sliced := sliceSize < objSize
@@ -157,9 +157,9 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	for k, md := range sliceList {
 		if strings.Contains(k, ecMetaDir) {
 			metaCnt++
-			tassert.Error(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
+			tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
 		} else if strings.Contains(k, ecSliceDir) {
-			tassert.Error(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
+			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
 					t.Errorf("Duplicated slice hash(slice) %q: %s\n", objFullPath, md.hash)
@@ -167,8 +167,8 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 				hashes[md.hash] = true
 			}
 		} else {
-			tassert.Error(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
-			tassert.Error(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
+			tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
+			tassert.Errorf(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
 			mainObjPath = k
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
@@ -180,7 +180,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	}
 
 	metaCntMust := totalCnt / 2
-	tassert.Error(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, metaCntMust)
+	tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, metaCntMust)
 
 	return
 }
@@ -308,10 +308,10 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 				<-semaphore
 				wg.Done()
 			}()
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bckName, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 
 			fullPath := fmt.Sprintf("local/%s/%s", bckName, ecTestDir)
 			foundParts, _ := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, objName)
@@ -325,7 +325,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 			for k, md := range foundParts {
 				if strings.Contains(k, ecMetaDir) {
 					metaCnt++
-					tassert.Error(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
+					tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
 				} else if strings.Contains(k, ecSliceDir) {
 					sliceCnt++
 					if md.size != sliceSize && doEC {
@@ -336,8 +336,8 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 					}
 				} else {
 					objFullPath := fullPath + objName
-					tassert.Error(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '..%s']", k, objFullPath)
-					tassert.Error(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
+					tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '..%s']", k, objFullPath)
+					tassert.Errorf(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
 					mainObjPath = k
 					replCnt++
 				}
@@ -347,11 +347,11 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 			if doEC {
 				metaCntMust = ecParitySliceCnt + ecDataSliceCnt + 1
 			}
-			tassert.Error(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, ecParitySliceCnt+1)
+			tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, ecParitySliceCnt+1)
 			if doEC {
-				tassert.Error(t, sliceCnt == ecParitySliceCnt+ecDataSliceCnt, "Number of chunks mismatch: %d, expected %d", sliceCnt, ecParitySliceCnt+ecDataSliceCnt)
+				tassert.Errorf(t, sliceCnt == ecParitySliceCnt+ecDataSliceCnt, "Number of chunks mismatch: %d, expected %d", sliceCnt, ecParitySliceCnt+ecDataSliceCnt)
 			} else {
-				tassert.Error(t, replCnt == ecParitySliceCnt+1, "Number replicas mismatch: %d, expected %d", replCnt, ecParitySliceCnt)
+				tassert.Errorf(t, replCnt == ecParitySliceCnt+1, "Number replicas mismatch: %d, expected %d", replCnt, ecParitySliceCnt)
 			}
 
 			if mainObjPath == "" {
@@ -359,7 +359,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 				return
 			}
 
-			tutils.CheckFatal(os.Remove(mainObjPath), t)
+			tassert.CheckFatal(t, os.Remove(mainObjPath))
 			partsAfterRemove, _ := ecGetAllLocalSlices(objName)
 			_, ok := partsAfterRemove[mainObjPath]
 			if ok || len(partsAfterRemove) >= len(foundParts) {
@@ -368,7 +368,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 			}
 
 			_, err = api.GetObject(baseParams, bckName, objPath)
-			tutils.CheckFatal(err, t)
+			tassert.CheckFatal(t, err)
 
 			if doEC {
 				partsAfterRestore, _ := ecGetAllLocalSlices(objName)
@@ -401,13 +401,13 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 
 func assertBucketSize(t *testing.T, baseParams *api.BaseParams, bckName string, numFiles int) {
 	bckObjectsCnt := bucketSize(t, baseParams, bckName)
-	tassert.Fatal(t, bckObjectsCnt == numFiles, "Invalid number of objects: %d, expected %d", bckObjectsCnt, numFiles)
+	tassert.Fatalf(t, bckObjectsCnt == numFiles, "Invalid number of objects: %d, expected %d", bckObjectsCnt, numFiles)
 }
 
 func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bckName, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
 	return len(reslist.Entries)
@@ -415,12 +415,12 @@ func bucketSize(t *testing.T, baseParams *api.BaseParams, bckName string) int {
 
 func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, objPath string, size int) {
 	r, err := tutils.NewRandReader(int64(size), false)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer r.Close()
 
 	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bckName, Object: objPath, Reader: r}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 }
 
 func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, seed int64, concurr int, baseParams *api.BaseParams) {
@@ -433,7 +433,7 @@ func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, s
 	if err != nil {
 		tutils.DestroyLocalBucket(t, proxyURLReadOnly, name)
 	}
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 }
 
 func clearAllECObjects(t *testing.T, numFiles int, bucket, objPatt string, failOnDelErr bool) {
@@ -448,7 +448,7 @@ func clearAllECObjects(t *testing.T, numFiles int, bucket, objPatt string, failO
 			objPath := ecTestDir + objName
 			err := tutils.Del(proxyURLReadOnly, bucket, objPath, "", nil, nil, true)
 			if failOnDelErr {
-				tutils.CheckFatal(err, t)
+				tassert.CheckFatal(t, err)
 			} else if err != nil {
 				t.Log(err.Error())
 			}
@@ -476,7 +476,7 @@ func objectsExist(t *testing.T, baseParams *api.BaseParams, bckName, objPatt str
 		defer wg.Done()
 		objPath := ecTestDir + objName
 		_, err := api.GetObject(baseParams, bckName, objPath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	tutils.Logln("Reading all objects...")
@@ -511,47 +511,43 @@ func TestECChange(t *testing.T) {
 
 	tutils.Logln("Resetting bucket properties")
 	err := api.ResetBucketProps(baseParams, bucket)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set too many slices")
 	bucketProps.EC.DataSlices = 25
 	bucketProps.EC.ParitySlices = 25
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	tassert.Error(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
+	tassert.Errorf(t, err != nil, "Enabling EC must fail in case of the number of targets fewer than the number of slices")
 
 	tutils.Logln("Enabling EC")
 	bucketProps.EC.DataSlices = 1
 	bucketProps.EC.ParitySlices = 1
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to set EC options to the same values")
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logln("Trying to disable EC")
 	bucketProps.EC.Enabled = false
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	if err != nil {
-		t.Errorf("Disabling EC failed: %v", err)
-	}
+	tassert.Errorf(t, err == nil, "Disabling EC failed: %v", err)
 
 	tutils.Logln("Trying to re-enable EC")
 	bucketProps.EC.Enabled = true
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	if err != nil {
-		t.Errorf("Enabling EC failed: %v", err)
-	}
+	tassert.Errorf(t, err == nil, "Enabling EC failed: %v", err)
 
 	tutils.Logln("Trying to modify EC options when EC is enabled")
 	bucketProps.EC.Enabled = true
 	bucketProps.EC.ObjSizeLimit = 300000
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
-	tassert.Error(t, err != nil, "Modifiying EC properties must fail")
+	tassert.Errorf(t, err != nil, "Modifiying EC properties must fail")
 
 	tutils.Logln("Resetting bucket properties")
 	err = api.ResetBucketProps(baseParams, bucket)
-	tassert.Error(t, err != nil, "Resetting properties when EC is enabled must fail")
+	tassert.Errorf(t, err != nil, "Resetting properties when EC is enabled must fail")
 }
 
 func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName string, sema chan struct{}, rnd *rand.Rand, fullPath string) {
@@ -568,12 +564,12 @@ func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName 
 
 	tutils.Logf("Creating %s, size %8d\n", objPath, objSize)
 	r, err := tutils.NewRandReader(objSize, false)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer r.Close()
 
 	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, false, objName)
@@ -615,12 +611,12 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 	}
 	tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 	r, err := tutils.NewRandReader(objSize, false)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer r.Close()
 
 	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, objName)
@@ -632,10 +628,10 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 	}
 
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
-	tutils.CheckFatal(os.Remove(mainObjPath), t)
+	tassert.CheckFatal(t, os.Remove(mainObjPath))
 	metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
-	tutils.CheckFatal(os.Remove(metafile), t)
+	tassert.CheckFatal(t, os.Remove(metafile))
 	if delSlice {
 		sliceToDel := ""
 		for k := range foundParts {
@@ -652,15 +648,15 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 			return
 		}
 		tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
-		tutils.CheckFatal(os.Remove(sliceToDel), t)
+		tassert.CheckFatal(t, os.Remove(sliceToDel))
 		if doEC {
 			metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
 			tutils.Logf("Removing slice meta %s\n", metafile)
-			tutils.CheckFatal(os.Remove(metafile), t)
+			tassert.CheckFatal(t, os.Remove(metafile))
 		} else {
 			metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
 			tutils.Logf("Removing replica meta %s\n", metafile)
-			tutils.CheckFatal(os.Remove(metafile), t)
+			tassert.CheckFatal(t, os.Remove(metafile))
 		}
 	}
 
@@ -673,7 +669,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 
 	tutils.Logf("Restoring %s\n", objPath)
 	_, err = api.GetObject(baseParams, bucket, objPath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if doEC {
 		deadline := time.Now().Add(sleepRestoreTime)
@@ -714,9 +710,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	err := ecSliceNumInit(t, smap)
+	tassert.CheckFatal(t, err)
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -758,15 +753,15 @@ func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams *ap
 	objPath := ecTestDir + objName
 
 	r, err := tutils.NewRandReader(objSize, false)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer r.Close()
 
 	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, true, objName)
-	tassert.Fatal(t, mainObjPath != "", "Full copy %s was not found", mainObjPath)
+	tassert.Fatalf(t, mainObjPath != "", "Full copy %s was not found", mainObjPath)
 
 	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
 
@@ -795,7 +790,7 @@ func TestECChecksum(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	tutils.CheckFatal(ecSliceNumInit(t, smap), t)
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -816,34 +811,34 @@ func TestECChecksum(t *testing.T) {
 	foundParts2, mainObjPath2 := createECFile(t, bucket, objName2, fullPath, baseParams)
 
 	tutils.Logf("Removing main object %s\n", mainObjPath1)
-	tutils.CheckFatal(os.Remove(mainObjPath1), t)
+	tassert.CheckFatal(t, os.Remove(mainObjPath1))
 
 	// Corrupt just one slice, EC should be able to restore the original object
 	for k := range foundParts1 {
 		if k != mainObjPath1 && strings.Contains(k, ecSliceDir) {
 			errstr := fs.SetXattr(k, cmn.XattrXXHash, []byte("01234"))
-			tassert.Fatal(t, errstr == "", errstr)
+			tassert.Fatalf(t, errstr == "", errstr)
 
 			break
 		}
 	}
 
 	_, err := api.GetObject(baseParams, bucket, objPath1)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Removing main object %s\n", mainObjPath2)
-	tutils.CheckFatal(os.Remove(mainObjPath2), t)
+	tassert.CheckFatal(t, os.Remove(mainObjPath2))
 
 	// Corrupt all slices, EC should not be able to restore
 	for k := range foundParts2 {
 		if k != mainObjPath2 && strings.Contains(k, ecSliceDir) {
 			errstr := fs.SetXattr(k, cmn.XattrXXHash, []byte("01234"))
-			tassert.Fatal(t, errstr == "", errstr)
+			tassert.Fatalf(t, errstr == "", errstr)
 		}
 	}
 
 	_, err = api.GetObject(baseParams, bucket, objPath2)
-	tassert.Fatal(t, err != nil, "Object should not be restored when checksums are wrong")
+	tassert.Fatalf(t, err != nil, "Object should not be restored when checksums are wrong")
 }
 
 func TestECEnabledDisabledEnabled(t *testing.T) {
@@ -863,9 +858,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -900,7 +893,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	// Disable EC, put normal files, check if were created properly
 	err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
-	tutils.CheckError(err, t)
+	tassert.CheckError(t, err)
 
 	wg.Add(numFiles)
 	for i := numFiles; i < 2*numFiles; i++ {
@@ -921,7 +914,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 
 	// Enable EC again, check if EC was started properly and creates files with EC correctly
 	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
-	tutils.CheckError(err, t)
+	tassert.CheckError(t, err)
 
 	wg.Add(numFiles)
 	for i := 2 * numFiles; i < 3*numFiles; i++ {
@@ -957,9 +950,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1011,35 +1002,35 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	// Create different disable/enable actions to test if system persists behaving well
 	go func() {
 		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
 		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
 		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(5 * time.Millisecond)
 
 	go func() {
 		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 	}()
 
 	time.Sleep(300 * time.Millisecond)
 
 	go func() {
 		err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
-		tutils.CheckError(err, t)
+		tassert.CheckError(t, err)
 	}()
 
 	close(abortCh)
@@ -1094,9 +1085,7 @@ func TestECStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1111,10 +1100,10 @@ func TestECStress(t *testing.T) {
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
-	tassert.Fatal(t, len(reslist.Entries) == objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), objCount)
+	tassert.Fatalf(t, len(reslist.Entries) == objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), objCount)
 }
 
 // Stress 2 buckets at the same time
@@ -1133,7 +1122,7 @@ func TestECStressManyBuckets(t *testing.T) {
 	var proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 
 	smap := getClusterMap(t, proxyURL)
-	tutils.CheckFatal(ecSliceNumInit(t, smap), t)
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1162,17 +1151,17 @@ func TestECStressManyBuckets(t *testing.T) {
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bck1Name, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
-	tassert.Fatal(t, len(reslist.Entries) == objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1Name, len(reslist.Entries), objCount)
+	tassert.Fatalf(t, len(reslist.Entries) == objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck1Name, len(reslist.Entries), objCount)
 
 	msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err = api.ListBucket(baseParams, bck2Name, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
-	tassert.Fatal(t, len(reslist.Entries) == objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2Name, len(reslist.Entries), objCount)
+	tassert.Fatalf(t, len(reslist.Entries) == objCount, "Bucket %s: Invalid number of objects: %d, expected %d", bck2Name, len(reslist.Entries), objCount)
 }
 
 // ExtraStress test to check that EC works as expected
@@ -1204,9 +1193,7 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1240,14 +1227,10 @@ func TestECExtraStress(t *testing.T) {
 				tutils.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
 			}
 			r, err := tutils.NewRandReader(objSize, false)
-			if err != nil {
-				t.Errorf("Failed to create reader: %v", err)
-			}
+			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
 			putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 			err = api.PutObject(putArgs)
-			if err != nil {
-				t.Errorf("PUT failed: %v", err)
-			}
+			tassert.Errorf(t, err == nil, "PUT failed: %v", err)
 
 			totalSlices.Add(int64(totalCnt))
 			cntCh <- sCnt{obj: objName, cnt: totalCnt}
@@ -1288,10 +1271,10 @@ func TestECExtraStress(t *testing.T) {
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	reslist.Entries = filterObjListOK(reslist.Entries)
 
-	tassert.Fatal(t, len(reslist.Entries) == objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), objCount)
+	tassert.Fatalf(t, len(reslist.Entries) == objCount, "Invalid number of objects: %d, expected %d", len(reslist.Entries), objCount)
 }
 
 // Quick check that EC keeps xattrs:
@@ -1318,9 +1301,7 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	sgl := tutils.Mem2.NewSGL(0)
 	defer sgl.Free()
@@ -1356,11 +1337,11 @@ func TestECXattrs(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
 		r, err := tutils.NewRandReader(objSize, false)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 		err = api.PutObject(putArgs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		tutils.Logf("Waiting for %s\n", objPath)
 		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, objName)
@@ -1372,10 +1353,10 @@ func TestECXattrs(t *testing.T) {
 		}
 
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
-		tutils.CheckFatal(os.Remove(mainObjPath), t)
+		tassert.CheckFatal(t, os.Remove(mainObjPath))
 		metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
-		tutils.CheckFatal(os.Remove(metafile), t)
+		tassert.CheckFatal(t, os.Remove(metafile))
 		if delSlice {
 			sliceToDel := ""
 			for k := range foundParts {
@@ -1391,15 +1372,15 @@ func TestECXattrs(t *testing.T) {
 				t.Fatalf("Failed to select random slice for %s", objName)
 			}
 			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
-			tutils.CheckFatal(os.Remove(sliceToDel), t)
+			tassert.CheckFatal(t, os.Remove(sliceToDel))
 			if doEC {
 				metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
 				tutils.Logf("Removing slice meta %s\n", metafile)
-				tutils.CheckFatal(os.Remove(metafile), t)
+				tassert.CheckFatal(t, os.Remove(metafile))
 			} else {
 				metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
 				tutils.Logf("Removing replica meta %s\n", metafile)
-				tutils.CheckFatal(os.Remove(metafile), t)
+				tassert.CheckFatal(t, os.Remove(metafile))
 			}
 		}
 
@@ -1411,7 +1392,7 @@ func TestECXattrs(t *testing.T) {
 
 		tutils.Logf("Restoring %s\n", objPath)
 		_, err = api.GetObject(baseParams, bucket, objPath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		if doEC {
 			deadline := time.Now().Add(sleepRestoreTime)
@@ -1438,7 +1419,7 @@ func TestECXattrs(t *testing.T) {
 
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// check that all returned objects and their repicas have the same version
 	for _, e := range reslist.Entries {
@@ -1480,9 +1461,8 @@ func TestECEmergencyTarget(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
+
 	// Increase number of EC data slices, now there's just enough targets to handle EC requests
 	// Encoding will fail if even one is missing, restoring should still work
 	ecDataSliceCnt++
@@ -1518,11 +1498,11 @@ func TestECEmergencyTarget(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := tutils.NewRandReader(objSize, false)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 		err = api.PutObject(putArgs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		t.Logf("Object %s put in %v", objName, time.Since(start))
 		start = time.Now()
 
@@ -1563,14 +1543,10 @@ func TestECEmergencyTarget(t *testing.T) {
 	tutils.Logln("DONE\nReading bucket list...")
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
-	if err != nil {
-		t.Error(err)
-	}
+	tassert.CheckError(t, err)
 
 	reslist.Entries = filterObjListOK(reslist.Entries)
-	if len(reslist.Entries) != numFiles {
-		t.Errorf("Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
-	}
+	tassert.Errorf(t, len(reslist.Entries) == numFiles, "Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
@@ -1598,9 +1574,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		t.Skip("Test requires at most 10 targets")
 	}
 
-	if err := ecSliceNumInit(t, initialSmap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, initialSmap))
 
 	for _, target := range initialSmap.Tmap {
 		target.Digest()
@@ -1675,7 +1649,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 		// hack: calculate which targets stored a replica
 		targets, errstr := cluster.HrwTargetList(bucket, ecTestDir+objName, &initialSmap, ecParitySliceCnt+1)
-		tassert.Error(t, errstr == "", errstr)
+		tassert.Errorf(t, errstr == "", errstr)
 
 		mainTarget := targets[0]
 		targets = targets[1:]
@@ -1690,7 +1664,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 			if strings.Contains(p, path.Join(rootDir, string(targetDir))) {
 				// Delete the actual main object
 				// NOTE: this might fail if the targetDir is not calculated correctly
-				tutils.CheckFatal(os.Remove(p), t)
+				tassert.CheckFatal(t, os.Remove(p))
 				break
 			}
 		}
@@ -1700,7 +1674,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 				// there exists a target which was not killed and stores replica
 				objPath := ecTestDir + objName
 				_, err := api.GetObject(baseParams, bucket, objPath)
-				tutils.CheckFatal(err, t)
+				tassert.CheckFatal(t, err)
 				return
 			}
 		}
@@ -1745,15 +1719,13 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if err := ecSliceNumInit(t, smap); err != nil {
-		t.Fatal(err)
-	}
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
 	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
 
 	mpathList, err := api.GetMountpaths(tgtParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(mpathList.Available) < 2 {
 		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
 	}
@@ -1787,11 +1759,11 @@ func TestECEmergencyMpath(t *testing.T) {
 		}
 		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
 		r, err := tutils.NewRandReader(objSize, false)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		defer r.Close()
 		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
 		err = api.PutObject(putArgs)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, objName)
 
@@ -1819,12 +1791,12 @@ func TestECEmergencyMpath(t *testing.T) {
 	removeMpath := mpathList.Available[mpathID]
 	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
 	err = api.DisableMountpath(tgtParams, removeMpath)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer func() {
 		// Enable mountpah
 		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
 		err = api.EnableMountpath(tgtParams, removeMpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}()
 
 	// 3. Read objects
@@ -1834,7 +1806,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	tutils.Logf("DONE\nReading bucket list...\n")
 	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
 	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	reslist.Entries = filterObjListOK(reslist.Entries)
 	if len(reslist.Entries) != numFiles {

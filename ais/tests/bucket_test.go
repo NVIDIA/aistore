@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -52,18 +54,18 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.LRU = testBucketProps(t).LRU
 
 	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
 	err = api.ResetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)
@@ -94,7 +96,7 @@ func TestListObjects(t *testing.T) {
 			wg.Add(1)
 			go func(wid int) {
 				reader, err := tutils.NewRandReader(int64(objectSize), true)
-				tutils.CheckFatal(err, t)
+				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(random, dirLen, 5)
 				objectsToPut := objectCount / workerCount
 				if wid == workerCount-1 { // last worker puts leftovers
@@ -108,7 +110,7 @@ func TestListObjects(t *testing.T) {
 
 		// Confirm PUTs
 		bckObjs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		if len(bckObjs) != totalObjects {
 			t.Errorf("actual objects %d, expected: %d", len(bckObjs), totalObjects)
@@ -226,7 +228,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if !p.EC.Enabled {
 			t.Error("EC was not enabled")
 		}
@@ -243,7 +245,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if !p.Mirror.Enabled {
 			t.Error("Mirroring was not enabled")
 		}
@@ -272,7 +274,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if p.EC.DataSlices != dataSlices {
 			t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
 		}
@@ -289,7 +291,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if p.Mirror.UtilThresh != mirrorThreshold {
 			t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
 		}
@@ -300,7 +302,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if p.EC.Enabled {
 			t.Error("EC was not disabled")
 		}
@@ -311,7 +313,7 @@ func TestBucketSingleProp(t *testing.T) {
 		t.Error(err)
 	} else {
 		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if p.Mirror.Enabled {
 			t.Error("Mirroring was not disabled")
 		}
@@ -328,7 +330,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	query.Set(cmn.URLParamBckProvider, "cloud")
 
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}, query)
 
@@ -356,7 +358,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	query.Set(cmn.URLParamBckProvider, "cloud")
 
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps, query)
 
@@ -438,7 +440,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		targets := tutils.ExtractTargetNodes(m.smap)
 		baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
 		mpList, err := api.GetMountpaths(baseParams)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		l := len(mpList.Available)
 		max := cmn.Max(cmn.Max(2, num1), num2)
@@ -458,16 +460,16 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		)
 		baseParams := tutils.DefaultBaseAPIParams(t)
 		config, err = api.GetDaemonConfig(baseParams)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		// copy default config and change one field
 		bucketProps.Mirror = config.Mirror
 		bucketProps.Mirror.Enabled = true
 		err = api.SetBucketPropsMsg(baseParams, m.bucket, bucketProps)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		p, err := api.HeadBucket(baseParams, m.bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		if p.Mirror.Copies != 2 {
 			t.Fatalf("%d copies != 2", p.Mirror.Copies)
 		}
@@ -489,7 +491,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 	// List Bucket - primarily for the copies
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
 	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	m.wg.Wait()
 
@@ -523,9 +525,9 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 		time.Sleep(time.Second)
 
 		responseBytes, err := api.GetXactionResponse(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		err = json.Unmarshal(responseBytes, &allDetails)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		ok = true
 		for tid := range allDetails {
 			detail := allDetails[tid][0] // TODO
@@ -556,17 +558,17 @@ func TestCloudMirror(t *testing.T) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 	err := api.EvictCloudBucket(baseParams, clibucket, query)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// enable mirror
 	err = api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
 
 	// list
 	msg := &cmn.SelectMsg{}
 	objectList, err := api.ListBucket(baseParams, clibucket, msg, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	l := len(objectList.Entries)
 	if l < num {
@@ -579,7 +581,7 @@ func TestCloudMirror(t *testing.T) {
 	for i := 0; i < num; i++ {
 		e := objectList.Entries[(j+i)%l]
 		_, err := api.GetObject(baseParams, clibucket, e.Name)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	time.Sleep(time.Second * 10) // FIXME: better handle on when copying is done
@@ -588,7 +590,7 @@ func TestCloudMirror(t *testing.T) {
 	query = make(url.Values)
 	query.Set(cmn.URLParamCached, "true")
 	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	total, copies2, copies3, cached := countObjects(objectList)
 	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
@@ -601,7 +603,7 @@ func TestCloudMirror(t *testing.T) {
 		targets := tutils.ExtractTargetNodes(smap)
 		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
 		mpList, err := api.GetMountpaths(baseTgtParams)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 
 		numps := len(mpList.Available)
 		if numps < 3 {
@@ -611,7 +613,7 @@ func TestCloudMirror(t *testing.T) {
 
 	makeNCopies(t, 3, clibucket, baseParams)
 	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	total, copies2, copies3, cached = countObjects(objectList)
 	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)

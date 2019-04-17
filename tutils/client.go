@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -544,25 +546,25 @@ func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 	DestroyLocalBucket(t, proxyURL, bucketFQN)
 	baseParams := BaseAPIParams(proxyURL)
 	err := api.CreateLocalBucket(baseParams, bucketFQN)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 }
 
 func DestroyLocalBucket(t *testing.T, proxyURL, bucket string) {
 	exists, err := DoesLocalBucketExist(proxyURL, bucket)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if exists {
 		baseParams := BaseAPIParams(proxyURL)
 		err = api.DestroyLocalBucket(baseParams, bucket)
-		CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 }
 
 func CleanCloudBucket(t *testing.T, proxyURL, bucket, prefix string) {
 	toDelete, err := ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
 	err = api.DeleteList(baseParams, bucket, cmn.CloudBs, toDelete, true, 0)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 }
 
 func GetWhatRawQuery(getWhat string, getProps string) string {
@@ -859,7 +861,7 @@ func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, erro
 
 func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
 	primaryURL, err := GetPrimaryProxy(readProxyURL)
-	CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	return BaseAPIParams(primaryURL)
 }
 

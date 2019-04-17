@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -48,7 +50,7 @@ func Test_download(t *testing.T) {
 	}
 
 	err := tutils.PingURL(proxyURL)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
@@ -540,29 +542,29 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	// PUT
 	tutils.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
 	err = api.PutObject(putArgsLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	putArgsLocal.Object = fileName2
 	err = api.PutObject(putArgsLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	err = api.PutObject(putArgsCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	putArgsCloud.Object = fileName2
 	err = api.PutObject(putArgsCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Check Local bucket has 2 files
 	tutils.Logf("Validating local bucket have %s and %s ...\n", fileName1, fileName2)
 	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName2)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
 	err = api.PrefetchList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	err = api.EvictList(baseParams, bucketName, cmn.CloudBs, files, true, 0)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
@@ -640,10 +642,10 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		Reader:         tutils.NewBytesReader(dataLocal),
 	}
 	err := api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	resLocal, err := api.ListBucket(baseParams, bucketName, msg, 0, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bucketName)
 	putArgs = api.PutObjectArgs{
@@ -654,10 +656,10 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		Reader:         tutils.NewBytesReader(dataCloud),
 	}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	resCloud, err := api.ListBucket(baseParams, bucketName, msg, 0, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
 		t.Fatalf("Expected number of files in local bucket (%s) does not match: expected %v, got %v", bucketName, 1, len(resLocal.Entries))
@@ -676,9 +678,9 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 
 	// Get
 	lenLocal, err := api.GetObject(baseParams, bucketName, fileName, api.GetObjectInput{Query: queryLocal})
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	lenCloud, err := api.GetObject(baseParams, bucketName, fileName, api.GetObjectInput{Query: queryCloud})
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	if lenLocal == lenCloud {
 		t.Errorf("Local file and cloud file have same size, expected: local (%v) cloud (%v) got: local (%v) cloud (%v)",
@@ -687,10 +689,10 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 
 	// Delete
 	err = api.DeleteObject(baseParams, bucketName, fileName, cmn.CloudBs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	lenLocal, err = api.GetObject(baseParams, bucketName, fileName, api.GetObjectInput{Query: queryLocal})
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Check that local object still exists
 	if lenLocal != int64(len(dataLocal)) {
@@ -705,46 +707,46 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 
 	// Set Props Object
 	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsLocal, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsCloud, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	// Validate local bucket props are set
 	localProps, err := api.HeadBucket(baseParams, bucketName, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsLocal, *localProps)
 
 	// Validate cloud bucket props are set
 	cloudProps, err := api.HeadBucket(baseParams, bucketName, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsCloud, *cloudProps)
 
 	// Reset local bucket props and validate they are reset
 	globalProps.CloudProvider = cmn.ProviderAIS
 	err = api.ResetBucketProps(baseParams, bucketName, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, globalProps, *localProps)
 
 	// Check if cloud bucket props remain the same
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsCloud, *cloudProps)
 
 	// Reset cloud bucket props
 	globalProps.CloudProvider = cmn.ProviderAmazon
 	err = api.ResetBucketProps(baseParams, bucketName, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, globalProps, *cloudProps)
 
 	// Check if local bucket props remain the same
 	globalProps.CloudProvider = cmn.ProviderAIS
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, globalProps, *localProps)
 
 }
@@ -833,10 +835,10 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.LRU.Enabled = true
 
 	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(baseParams, TestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	validateBucketProps(t, bucketProps, *p)
 }
@@ -857,11 +859,11 @@ func TestHeadCloudBucket(t *testing.T) {
 	bucketProps.LRU.Enabled = true
 
 	err := api.SetBucketPropsMsg(baseParams, clibucket, bucketProps)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	p, err := api.HeadBucket(baseParams, clibucket)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketProps, *p)
 }
 
@@ -950,19 +952,19 @@ func TestHeadObjectCheckCached(t *testing.T) {
 		Reader:     r,
 	}
 	err = api.PutObject(putArgs)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	b, err := tutils.IsCached(proxyURL, clibucket, fileName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if !b {
 		t.Error("Expected object to be cached, got false from tutils.IsCached")
 	}
 
 	err = tutils.Del(proxyURL, clibucket, fileName, "", nil, nil, true)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	b, err = tutils.IsCached(proxyURL, clibucket, fileName)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if b {
 		t.Error("Expected object to NOT be cached after deleting object, got true from tutils.IsCached")
 	}
@@ -1202,7 +1204,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	// Test when the contents of the file are changed
 	tutils.Logf("\nChanging contents of the file [%s]: %s\n", fileName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
@@ -1311,15 +1313,15 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	//test property, mirror is disabled for cloud bucket that hasn't been accessed, even if system config says otherwise
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	for _, fname := range fileslist {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
@@ -1327,7 +1329,7 @@ func Test_evictCloudBucket(t *testing.T) {
 		}
 	}
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if bProps.Mirror.Enabled {
 		t.Fatalf("Test property not reset ")
 	}
@@ -1407,7 +1409,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bucketName, fileName, t)
 
 	// Test changing the file xattr

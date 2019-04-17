@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
@@ -190,7 +192,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		tutils.Logf("Target: %s\n", target)
 		baseParams = tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
 		lst, err := api.GetMountpaths(baseParams)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
@@ -335,7 +337,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		tutils.Logf("Target: %s\n", target)
 		baseParams := tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
 		lst, err := api.GetMountpaths(baseParams)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
@@ -389,7 +391,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	}
 	baseParams := tutils.BaseAPIParams(tgtURL)
 	oldMpaths, err := api.GetMountpaths(baseParams)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 	if len(oldMpaths.Available) == 0 {
 		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
 	}
@@ -397,18 +399,18 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	tutils.Logf("Removing all mountpaths from target: %s\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
 		err = api.DisableMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Restoring target %s mountpaths\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
 		err = api.EnableMountpath(baseParams, mpath)
-		tutils.CheckFatal(err, t)
+		tassert.CheckFatal(t, err)
 	}
 
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 }

@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
@@ -71,7 +73,7 @@ func Test_Bundle(t *testing.T) {
 	}
 
 	_, err := transport.Register(network, trname, receive) // DirectURL = /v1/transport/10G
-	tutils.CheckFatal(err, t)
+	tassert.CheckFatal(t, err)
 
 	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
