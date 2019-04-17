@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -49,8 +48,12 @@ type (
 	}
 )
 
-// session stats cleanup timeout
-const cleanupTimeout = time.Minute
+const (
+	// session stats cleanup timeout
+	cleanupTimeout = time.Minute
+
+	pkgName = "transport"
+)
 
 //====================
 //
@@ -61,17 +64,17 @@ var (
 	muxers   map[string]*mux.ServeMux // "mux" stands for HTTP request multiplexer
 	handlers map[string]map[string]*handler
 	mu       *sync.Mutex
-	debug    bool
 )
 
 func init() {
 	mu = &sync.Mutex{}
 	muxers = make(map[string]*mux.ServeMux)
 	handlers = make(map[string]map[string]*handler)
-	if os.Getenv("AIS_STREAM_DEBUG") != "" {
-		debug = true
-		glog.SetV(glog.SmoduleTransport, 10)
+	// No good way to check package name
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
+		glog.SetV(glog.SmoduleTransport, logLvl)
 	}
+
 }
 
 //
@@ -268,17 +271,13 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 		err = fmt.Errorf("%s: stream breakage type #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
 		return
 	}
-	if debug {
-		cmn.Assert(hlen < len(it.headerBuf))
-	}
+	cmn.Dassert(hlen < len(it.headerBuf), pkgName)
 	hl64 += int64(sizeofI64) * 2 // to account for hlen and its checksum
 	n, err = it.body.Read(it.headerBuf[:hlen])
 	if n == 0 {
 		return
 	}
-	if debug {
-		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
-	}
+	cmn.DassertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen), pkgName)
 	hdr, sessID = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
 		if glog.FastV(4, glog.SmoduleTransport) {
@@ -305,9 +304,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	case nil:
 		if obj.off >= obj.hdr.ObjAttrs.Size {
 			err = io.EOF
-			if debug {
-				cmn.Assert(obj.off == obj.hdr.ObjAttrs.Size)
-			}
+			cmn.Dassert(obj.off == obj.hdr.ObjAttrs.Size, pkgName)
 		}
 	case io.EOF:
 		if obj.off != obj.hdr.ObjAttrs.Size {
@@ -330,9 +327,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessID int64) {
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	off, sessID = extInt64(off, body)
-	if debug {
-		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
-	}
+	cmn.DassertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen), pkgName)
 	return
 }
 

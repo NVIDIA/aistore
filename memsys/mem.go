@@ -104,6 +104,7 @@ import (
 const Numslabs = 128 / 4 // [4K - 128K] at 4K increments
 const DEADBEEF = "DEADBEEF"
 const GlobalMem2Name = "GMem2"
+const pkgName = "memsys"
 
 // mem subsystem defaults (potentially, tunables)
 const (
@@ -585,8 +586,9 @@ func (r *Mem2) env() (err error) {
 			return fmt.Errorf("invalid AIS_MINMEM_PCT_FREE '%s'", a)
 		}
 	}
-	if a := os.Getenv("AIS_MEM_DEBUG"); a != "" {
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		r.Debug = true
+		glog.SetV(glog.SmoduleMemsys, logLvl)
 	}
 	return
 }
@@ -633,9 +635,7 @@ func (r *Mem2) work() {
 	} else { // 3. in-between hysteresis
 		x := uint64(maxdepth-mindepth) * (mem.ActualFree - r.MinFree)
 		depth = mindepth + int(x/(r.lowwm-r.MinFree)) // Heu #2
-		if r.Debug {
-			cmn.Assert(depth >= mindepth && depth <= maxdepth)
-		}
+		cmn.Dassert(depth >= mindepth && depth <= maxdepth, pkgName)
 		atomic.StoreInt64(&r.mindepth, int64(mindepth/4))
 	}
 	// idle first
@@ -773,10 +773,8 @@ func (r *Mem2) doStats() {
 }
 
 func (r *Mem2) assertReadyForUse() {
-	if r.Debug {
-		errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
-		cmn.AssertMsg(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr)
-	}
+	errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
+	cmn.DassertMsg(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr, pkgName)
 }
 
 func (s *Slab2) _alloc() (buf []byte) {
@@ -794,19 +792,19 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 	if curmindepth == 0 {
 		curmindepth = 1
 	}
-	if s.debug {
-		cmn.Assert(len(s.get) == s.pos)
-	}
+
+	cmn.Dassert(len(s.get) == s.pos, pkgName)
+
 	s.muput.Lock()
 	lput := len(s.put)
 	if cnt := int(curmindepth) - lput; cnt > 0 {
 		s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
-	if s.debug {
-		cmn.Assert(len(s.put) == s.pos)
-		cmn.Assert(len(s.get) >= int(curmindepth))
-	}
+
+	cmn.Dassert(len(s.put) == s.pos, pkgName)
+	cmn.Dassert(len(s.get) >= int(curmindepth), pkgName)
+
 	s.put = s.put[:0]
 	s.muput.Unlock()
 
@@ -890,9 +888,8 @@ func (s *Slab2) cleanup() (freed int64) {
 	s.get = s.get[:0]
 	s.put = s.put[:0]
 	s.pos = 0
-	if s.debug {
-		cmn.Assert(len(s.get) == 0 && len(s.put) == 0)
-	}
+
+	cmn.Dassert(len(s.get) == 0 && len(s.put) == 0, pkgName)
 	s.muput.Unlock()
 	s.muget.Unlock()
 	return

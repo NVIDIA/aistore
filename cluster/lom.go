@@ -26,7 +26,10 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const copyNameSepa = "\"\""
+const (
+	copyNameSepa = "\"\""
+	pkgName      = "cluster"
+)
 
 type (
 	lmeta struct {
@@ -59,6 +62,12 @@ type (
 		loaded      bool
 	}
 )
+
+func init() {
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
+		glog.SetV(glog.SmoduleCluster, logLvl)
+	}
+}
 
 //
 // LOM public methods
@@ -452,7 +461,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumstr, errstr string) 
 func (lom *LOM) clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
-	cmn.Assert(dst.md.uname == lom.md.uname) // DEBUG
+	cmn.Dassert(dst.md.uname == lom.md.uname, pkgName) // DEBUG
 	dst.FQN = fqn
 	dst.init("")
 	return dst
@@ -523,7 +532,7 @@ func (lom *LOM) initBckIsLocal(bckProvider string) error {
 // lom cache
 //
 func (lom *LOM) hkey() (string, int) {
-	cmn.Assert(lom.ParsedFQN.Digest != 0) // DEBUG
+	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName) // DEBUG
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
 }
 func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {

@@ -293,6 +293,22 @@ func AssertNoErr(err error) {
 	}
 }
 
+// DEBUG: Used for "short lifecycle" asserts
+// It should be used when debugging is enabled
+// for the package via `AIS_DEBUG` env variable
+func Dassert(cond bool, pkg string) {
+	if _, ok := CheckDebug(pkg); ok {
+		Assert(cond)
+	}
+}
+
+// Used for "short lifecycle" asserts (ie debugging)
+func DassertMsg(cond bool, msg, pkg string) {
+	if _, ok := CheckDebug(pkg); ok {
+		AssertMsg(cond, msg)
+	}
+}
+
 func StringInSlice(s string, arr []string) bool {
 	for _, el := range arr {
 		if el == s {

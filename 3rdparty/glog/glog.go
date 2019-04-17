@@ -117,6 +117,8 @@ var severityName = []string{
 const (
 	SmoduleTransport = iota
 	SmoduleAIS
+	SmoduleMemsys
+	SmoduleCluster
 	// NOTE: this guard is used to define size of 'smodules' array, make sure it is always last.
 	_smoduleLast
 )

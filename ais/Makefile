@@ -55,11 +55,13 @@ clean:
 
 deploy:
 	@./setup/deploy.sh
+
+deploy_binary:
 	@cd ../cli && go build -o ${GOPATH}/bin/ais
+	@./setup/deploy.sh
 
 deploy_next_tier:
 	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
-	@cd ../cli && go build -o ${GOPATH}/bin/ais
 
 
 # Target for local docker deployment

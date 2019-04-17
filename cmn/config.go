@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -133,6 +134,9 @@ var (
 	_ PropsValidator = &LRUConf{}
 	_ PropsValidator = &MirrorConf{}
 	_ PropsValidator = &ECConf{}
+
+	// Debugging
+	pkgDebug = make(map[string]glog.Level)
 )
 
 //
@@ -200,6 +204,7 @@ var (
 func init() {
 	config := &Config{}
 	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+	loadDebugMap()
 }
 
 func (gco *globalConfigOwner) Get() *Config {
@@ -522,6 +527,18 @@ type DownloaderConf struct {
 	Timeout    time.Duration `json:"-"`
 }
 
+func SetLogLevel(config *Config, loglevel string) (err error) {
+	v := flag.Lookup("v").Value
+	if v == nil {
+		return fmt.Errorf("nil -v Value")
+	}
+	err = v.Set(loglevel)
+	if err == nil {
+		config.Log.Level = loglevel
+	}
+	return
+}
+
 //==============================
 //
 // config functions
@@ -614,42 +631,6 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
-}
-
-func SetLogLevel(config *Config, loglevel string) (err error) {
-	v := flag.Lookup("v").Value
-	if v == nil {
-		return fmt.Errorf("nil -v Value")
-	}
-	err = v.Set(loglevel)
-	if err == nil {
-		config.Log.Level = loglevel
-	}
-	return
-}
-
-// setGLogVModule sets glog's vmodule flag
-// sets 'v' as is, no verificaton is done here
-// syntax for v: target=5,proxy=1, p*=3, etc
-func SetGLogVModule(v string) error {
-	f := flag.Lookup("vmodule")
-	if f == nil {
-		return nil
-	}
-
-	err := f.Value.Set(v)
-	if err == nil {
-		glog.Info("log level vmodule changed to ", v)
-	}
-
-	return err
-}
-
-// TestingEnv returns true if AIStore is running in a development environment
-// where a single local filesystem is partitioned between all (locally running)
-// targets and is used for both local and Cloud buckets
-func TestingEnv() bool {
-	return GCO.Get().TestFSP.Count > 0
 }
 
 // ipv4ListsOverlap checks if two comma-separated ipv4 address lists
@@ -908,6 +889,23 @@ func (c *DownloaderConf) Validate() (err error) {
 	return nil
 }
 
+// setGLogVModule sets glog's vmodule flag
+// sets 'v' as is, no verificaton is done here
+// syntax for v: target=5,proxy=1, p*=3, etc
+func SetGLogVModule(v string) error {
+	f := flag.Lookup("vmodule")
+	if f == nil {
+		return nil
+	}
+
+	err := f.Value.Set(v)
+	if err == nil {
+		glog.Info("log level vmodule changed to ", v)
+	}
+
+	return err
+}
+
 func (conf *Config) update(key, value string) (Validator, error) {
 	// updateValue sets `to` value (required to be pointer) and runs number of
 	// provided validators which would check if the value which was just set is
@@ -1092,4 +1090,42 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 		}
 	}
 	return
+}
+
+// ========== Cluster Wide Config =========
+
+// TestingEnv returns true if AIStore is running in a development environment
+// where a single local filesystem is partitioned between all (locally running)
+// targets and is used for both local and Cloud buckets
+func TestingEnv() bool {
+	return GCO.Get().TestFSP.Count > 0
+}
+
+func CheckDebug(pkgName string) (logLvl glog.Level, ok bool) {
+	logLvl, ok = pkgDebug[pkgName]
+	return
+}
+
+// loadDebugMap sets debug verbosity for different packages based on
+// environment variables. It is to help enable asserts that were originally
+// used for testing/initial development and to set the verbosity of glog
+func loadDebugMap() {
+	var opts []string
+	// Input will be in the format of AISDEBUG=transport=4,memsys=3 (same as GODEBUG)
+	if val := os.Getenv("AIS_DEBUG"); val != "" {
+		opts = strings.Split(val, ",")
+	}
+
+	for _, ele := range opts {
+		pair := strings.Split(ele, "=")
+		if len(pair) != 2 {
+			ExitLogf("Failed to get name=val element: %q", ele)
+		}
+		key := pair[0]
+		logLvl, err := strconv.Atoi(pair[1])
+		if err != nil {
+			ExitLogf("Failed to convert verbosity level = %s, err: %s", pair[1], err)
+		}
+		pkgDebug[key] = glog.Level(logLvl)
+	}
 }
