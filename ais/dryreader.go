@@ -30,8 +30,6 @@ var (
 	_ io.Seeker     = &dryReader{}
 )
 
-var rsrc = rand.New(rand.NewSource(1))
-
 // Read implements the io.Reader interface.
 func (r *dryReader) Read(buf []byte) (int, error) {
 	if r.offset >= r.size {
@@ -113,6 +111,10 @@ func newDryReader(size int64) *dryReader {
 		size: size,
 		buf:  make([]byte, randReaderBufferSize),
 	}
+	// It must be private. Having global rand source may result in runtime
+	// error: index out of range at
+	// math/rand.(*rngSource).Int63 -> /usr/local/go/src/math/rand/rng.go:234
+	rsrc := rand.New(rand.NewSource(1))
 	rsrc.Read(rr.buf)
 	return rr
 }

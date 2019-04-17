@@ -10,7 +10,7 @@ $ go run main.go worker.go [ARGS ...]
 
 ## Bytes Multiplicative Suffix
 
-Parameters in AISLoader that represent a number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes. 
+Parameters in AISLoader that represent a number of bytes can be specified with a multiplicative suffix. For example: `8M` would specify 8 MiB. The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
 
 ## Using AIS Loader
 
@@ -35,7 +35,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-statsdip` - IP for statsd server
  - `-statsdport` - UDP port number for statsd server
  - `-batchsize` - List and delete batch size
- - `-getconfig` - If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests. 
+ - `-getconfig` - If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.
  - `-seed` - Seed for random source, 0=use current time
 
 ### Examples
@@ -67,9 +67,9 @@ Run configuration:
 Actual run duration: 10.313689487s
 
 Time      OP    Count                 	Total Bytes           	Latency(min, avg, max)              	Throughput            	Error
-01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0    
-01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0    
-01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0    
+01:52:52  Put   26                    	11.19GB               	296.39ms   5.70s      14.91s        	639.73MB              	0
+01:52:52  Get   16                    	3.86GB                	58.89ms    220.20ms   616.72ms      	220.56MB              	0
+01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0
 01:52:52 Clean up ...
 01:52:54 Clean up done
 ```
@@ -78,7 +78,7 @@ Time      OP    Count                 	Total Bytes           	Latency(min, avg, 
 
 ## Dry-Run Performance Tests
 
-AIStore support two variations of "dry" deployment: AIS_NODISKIO and AIS_NOTNETIO.
+AIStore support two variations of "dry" deployment: AIS_NODISKIO.
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
@@ -91,7 +91,6 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 | CLI Argument | Environment Variable | Default Value | Behavior |
 | ------------ | ------ | ------ | ------------- |
 | nodiskio | AIS_NODISKIO | `false` | If `true` - disables disk IO. For GET requests, a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests, it reads the request's body to `/dev/null`. <br> Valid values are `true` or `1`, and `false` or `0`. |
-| nonetio | AIS_NOTNETIO | `false` | If `true` - disables HTTP read and write. For GET requests, a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, AIStore reads the data from in-memory object and saves the data to disks. <br> Valid values are `true` or `1`, and `false` or `0`. |
 | dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. <br> Default value is '8m' - the size of an object is 8 megabytes |
 
 ***Warning:*** The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.

@@ -635,14 +635,19 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// 2. under lock: lom init, restore from cluster
 	t.rtnamemap.Lock(lom.Uname(), false)
 do:
+	// all the next checks work with disks - skip all if dryRun.disk=true
+	coldGet := false
+	if dryRun.disk {
+		goto get
+	}
+
 	if errstr = lom.Load(true); errstr != "" {
 		t.rtnamemap.Unlock(lom.Uname(), false)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	coldGet := !lom.Exists()
-	// check if dryrun is enabled to stop from getting LOM
-	if coldGet && lom.BckIsLocal && !dryRun.disk {
+	coldGet = !lom.Exists()
+	if coldGet && lom.BckIsLocal {
 		// does not exist in the local bucket: restore from neighbors
 		if errstr, errcode = t.restoreObjLBNeigh(lom, r); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname(), false)
@@ -661,6 +666,7 @@ do:
 			}
 		}
 	}
+
 	// checksum validation, if requested
 	if !coldGet && lom.CksumConf().ValidateWarmGet {
 		if errstr = lom.ValidateChecksum(true); errstr != "" {
@@ -684,7 +690,7 @@ do:
 	}
 
 	// 3. coldget
-	if coldGet && !dryRun.disk {
+	if coldGet {
 		t.rtnamemap.Unlock(lom.Uname(), false)
 		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
@@ -837,7 +843,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	if dryRun.disk {
 		rd := newDryReader(dryRun.size)
 		if _, err = io.Copy(w, rd); err != nil {
-			// NOTE: Cannot return invalid handler because it will be double header write
+			// NOTE: Cannot call invalid handler because it would be double header write
 			errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
 			glog.Error(errstr)
 			t.statsif.Add(stats.ErrGetCount, 1)
@@ -847,6 +853,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
 		return
 	}
+
 	if lom.Size() == 0 {
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
@@ -2076,11 +2083,11 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 		}
 	}
 
-	if err = roi.writeToFile(); err != nil {
-		return err, http.StatusInternalServerError
-	}
 	if !dryRun.disk {
-		// commit
+		if err = roi.writeToFile(); err != nil {
+			return err, http.StatusInternalServerError
+		}
+
 		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
@@ -2160,7 +2167,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
 	mirrConf := lom.MirrorConf()
-	if !mirrConf.Enabled || dryRun.disk {
+	if !mirrConf.Enabled {
 		return
 	}
 	if nmp := fs.Mountpaths.NumAvail(); nmp < int(mirrConf.Copies) {
@@ -2375,26 +2382,24 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 func (roi *recvObjInfo) writeToFile() (err error) {
 	var (
 		file   *os.File
-		writer = ioutil.Discard
 		reader = roi.r
 	)
 
 	if dryRun.disk {
 		return
 	}
-	if !dryRun.disk {
-		if file, err = cmn.CreateFile(roi.workFQN); err != nil {
-			roi.t.fshc(err, roi.workFQN)
-			return fmt.Errorf("failed to create %s, err: %s", roi.workFQN, err)
-		}
-		writer = file
+
+	if file, err = cmn.CreateFile(roi.workFQN); err != nil {
+		roi.t.fshc(err, roi.workFQN)
+		return fmt.Errorf("failed to create %s, err: %s", roi.workFQN, err)
 	}
+
 	buf, slab := gmem2.AllocFromSlab2(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		reader.Close()
 
-		if err != nil && !dryRun.disk {
+		if err != nil {
 			if nestedErr := file.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, roi.workFQN, nestedErr)
 			}
@@ -2403,11 +2408,6 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 			}
 		}
 	}()
-
-	if dryRun.disk {
-		_, err = cmn.ReceiveAndChecksum(writer, reader, buf)
-		return err
-	}
 
 	// receive and checksum
 	var (
@@ -2462,7 +2462,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		}
 	}
 
-	if written, err = cmn.ReceiveAndChecksum(writer, reader, buf, hashes...); err != nil {
+	if written, err = cmn.ReceiveAndChecksum(file, reader, buf, hashes...); err != nil {
 		return
 	}
 
