@@ -1042,6 +1042,6 @@ func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
 // Common errors
 
 var (
-	ErrorBucketAlreadyExists      = errors.New("bucket already exists")
-	ErrorCloudBucketDoesNotExists = errors.New("cloud bucket does not exist")
+	ErrorBucketAlreadyExists     = errors.New("bucket already exists")
+	ErrorCloudBucketDoesNotExist = errors.New("cloud bucket does not exist")
 )

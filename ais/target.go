@@ -1225,7 +1225,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucketProps    cmn.SimpleKVs
 		errCode        int
-		errstr         string
 		bckIsLocal, ok bool
 		query          = r.URL.Query()
 		bucketmd       = t.bmdowner.get()
@@ -1246,9 +1245,10 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	config := cmn.GCO.Get()
 	if !bckIsLocal {
-		bucketProps, errstr, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errCode)
+		bucketProps, err, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
+		if err != nil {
+			errMsg := fmt.Sprintf("the bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
+			t.invalmsghdlr(w, r, errMsg, errCode)
 			return
 		}
 	} else {
@@ -1353,9 +1353,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
 	} else {
-		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), lom)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errcode)
+		objmeta, err, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), lom)
+		if err != nil {
+			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
+			t.invalmsghdlr(w, r, errMsg, errcode)
 			return
 		}
 	}
@@ -1449,7 +1450,9 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 // should be called only if the local copy exists
 func (t *targetrunner) checkCloudVersion(ct context.Context, lom *cluster.LOM) (vchanged bool, errstr string, errcode int) {
 	var objmeta cmn.SimpleKVs
-	if objmeta, errstr, errcode = t.cloudif.headobject(ct, lom); errstr != "" {
+	objmeta, err, errcode := t.cloudif.headobject(ct, lom)
+	if err != nil {
+		errstr = fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 		return
 	}
 	if cloudVersion, ok := objmeta[cmn.HeaderObjVersion]; ok {
@@ -1551,7 +1554,8 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		t.rtnamemap.Lock(lom.Uname(), true) // one cold-GET at a time
 	}
 	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfileColdget)
-	if errstr, errcode = getcloudif().getobj(ct, workFQN, lom); errstr != "" {
+	if err, errcode = getcloudif().getobj(ct, workFQN, lom); err != nil {
+		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
 		t.rtnamemap.Unlock(lom.Uname(), true)
 		return
 	}
@@ -1760,9 +1764,10 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 		}
 	}
 
-	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r.Header))
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
+	buckets, err, errcode := getcloudif().getbucketnames(t.contextWithAuth(r.Header))
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
+		t.invalmsghdlr(w, r, errMsg, errcode)
 		return
 	}
 	bucketNames.Cloud = buckets
@@ -1835,7 +1840,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		jsbytes, errstr = t.listCachedObjects(bucket, &msg)
 	} else {
 		tag = "cloud"
-		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
+		jsbytes, err, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
+		if err != nil {
+			errstr = fmt.Sprintf("error listing cloud bucket %s: %d(%v)", bucket, errcode, err)
+		}
 	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -2135,9 +2143,10 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 			return
 		}
 		cmn.Assert(lom.Cksum() != nil)
-		ver, errstr, errCode = getcloudif().putobj(roi.ctx, file, lom)
+		ver, err, errCode = getcloudif().putobj(roi.ctx, file, lom)
 		file.Close()
-		if errstr != "" {
+		if err != nil {
+			errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
 		lom.SetVersion(ver)
@@ -2197,22 +2206,24 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict bool) (err error) {
+func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict bool) error {
 	var (
-		errstr  string
-		errcode int
+		cloudErr error
+		errRet   error
 	)
+
 	t.rtnamemap.Lock(lom.Uname(), true)
 	defer t.rtnamemap.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
-	if errstr = lom.Load(false); errstr != "" {
+	if errstr := lom.Load(false); errstr != "" {
 		return errors.New(errstr)
 	}
 	delFromAIS := lom.Exists()
 
 	if delFromCloud {
-		if errstr, errcode = getcloudif().deleteobj(ct, lom); errstr == "" {
+		if err, _ := getcloudif().deleteobj(ct, lom); err != nil {
+			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
 			t.statsif.Add(stats.DeleteCount, 1)
 		}
 	}
@@ -2220,15 +2231,13 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		if errs := lom.DelAllCopies(); errs != "" {
 			glog.Errorf("%s: %s", lom, errs)
 		}
-		err = os.Remove(lom.FQN)
-		if err != nil {
-			if os.IsNotExist(err) {
-				err = nil
-			} else {
-				if errstr != "" {
-					glog.Errorf("%s: %s(%d)", lom.StringEx(), errstr, errcode)
+		errRet = os.Remove(lom.FQN)
+		if errRet != nil {
+			if !os.IsNotExist(errRet) {
+				if cloudErr != nil {
+					glog.Errorf("%s: failed to delete from cloud: %v", lom.StringEx(), cloudErr)
 				}
-				return
+				return errRet
 			}
 		}
 		if evict {
@@ -2238,10 +2247,10 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 				stats.NamedVal64{stats.LruEvictSize, lom.Size()})
 		}
 	}
-	if errstr != "" {
-		err = fmt.Errorf("%s: %s(%d)", lom.StringEx(), errstr, errcode)
+	if cloudErr != nil {
+		return fmt.Errorf("%s: failed to delete from cloud: %v", lom.StringEx(), cloudErr)
 	}
-	return
+	return errRet
 }
 
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {

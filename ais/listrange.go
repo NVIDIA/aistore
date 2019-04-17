@@ -43,9 +43,9 @@ type filesWithDeadline struct {
 type listf func(ct context.Context, objects []string, bucket, bckProvider string, deadline time.Duration, done chan struct{}) error
 
 func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error) {
-	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
-	if errstr != "" {
-		return nil, fmt.Errorf("error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
+	jsbytes, err, errcode := getcloudif().listbucket(ct, bucket, msg)
+	if err != nil {
+		return nil, fmt.Errorf("error listing cloud bucket %s: %d(%v)", bucket, errcode, err)
 	}
 	bucketList = &cmn.BucketList{}
 	if err := jsoniter.Unmarshal(jsbytes, bucketList); err != nil {

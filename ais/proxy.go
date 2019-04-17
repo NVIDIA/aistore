@@ -947,7 +947,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		}
 		if !existsInCloud {
 			p.bmdowner.Unlock()
-			return cmn.ErrorCloudBucketDoesNotExists
+			return cmn.ErrorCloudBucketDoesNotExist
 		}
 
 		bprops = cmn.DefaultBucketProps()
@@ -1073,7 +1073,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		kvs := cmn.NewSimpleKVsFromQuery(query)
 
 		err := p.updateBucketProps(bucket, bckIsLocal, kvs)
-		if err == cmn.ErrorCloudBucketDoesNotExists {
+		if err == cmn.ErrorCloudBucketDoesNotExist {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
