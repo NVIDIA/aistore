@@ -21,51 +21,56 @@ import (
 // RENEW FUNCTIONS
 
 func (r *xactionsRegistry) renewLRU() *xactLRU {
-	newEntry := &lruEntry{}
-	newEntry.Lock()
-	defer newEntry.Unlock()
+	entry := &lruEntry{}
+	entry.Lock()
+	defer entry.Unlock()
 
-	val, loaded := r.globalXacts.LoadOrStore(cmn.ActLRU, newEntry)
+	val, loaded := r.globalXacts.LoadOrStore(cmn.ActLRU, entry)
 
-	if !loaded {
-		// new lru
-		id := r.uniqueID()
-		newEntry.xact = &xactLRU{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
-		r.byID.Store(id, newEntry)
-		return newEntry.xact
+	if loaded {
+		entry = val.(*lruEntry)
+		entry.Lock()
+		defer entry.Unlock()
+
+		if !entry.xact.Finished() {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", entry.xact)
+			}
+			return nil
+		}
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		lruEntry := val.(*lruEntry)
-		lruEntry.RLock()
-		glog.Infof("%s already running, nothing to do", lruEntry.xact)
-		lruEntry.RUnlock()
-	}
 
-	return nil
+	// new lru
+	id := r.uniqueID()
+	entry.xact = &xactLRU{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
+	r.byID.Store(id, entry)
+	return entry.xact
 }
 
 func (r *xactionsRegistry) renewPrefetch() *xactPrefetch {
-	newEntry := &prefetchEntry{}
-	newEntry.Lock()
-	defer newEntry.Unlock()
+	entry := &prefetchEntry{}
+	entry.Lock()
+	defer entry.Unlock()
 
-	val, loaded := r.globalXacts.LoadOrStore(cmn.ActPrefetch, newEntry)
+	val, loaded := r.globalXacts.LoadOrStore(cmn.ActPrefetch, entry)
 
-	if !loaded {
-		// new lru
-		id := r.uniqueID()
-		newEntry.xact = &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
-		r.byID.Store(id, newEntry)
-		return newEntry.xact
+	if loaded {
+		entry = val.(*prefetchEntry)
+		entry.Lock()
+		defer entry.Unlock()
+
+		if !entry.xact.Finished() {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", entry.xact)
+			}
+			return nil
+		}
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		prefetchEntry := val.(*prefetchEntry)
-		prefetchEntry.RLock()
-		glog.Infof("%s already running, nothing to do", prefetchEntry.xact)
-		prefetchEntry.RUnlock()
-	}
 
-	return nil
+	id := r.uniqueID()
+	entry.xact = &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
+	r.byID.Store(id, entry)
+	return entry.xact
 }
 
 func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactRebBase {
@@ -136,7 +141,6 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 			}
 			close(xLocalReb.confirmCh)
 		}
-
 	}
 
 	// here we have possibly both locks
@@ -153,22 +157,24 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 }
 
 func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
-	newEntry := &electionEntry{}
-	newEntry.Lock()
-	defer newEntry.Unlock()
+	entry := &electionEntry{}
+	entry.Lock()
+	defer entry.Unlock()
 
-	val, loaded := r.globalXacts.LoadOrStore(cmn.ActElection, newEntry)
+	val, loaded := r.globalXacts.LoadOrStore(cmn.ActElection, entry)
 
 	if loaded {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			electionEntry := val.(*electionEntry)
-			electionEntry.RLock()
-			xElection := electionEntry.xact
-			glog.Infof("%s already running, nothing to do", xElection)
-			electionEntry.RUnlock()
-		}
+		entry := val.(*electionEntry)
+		entry.Lock()
+		defer entry.Unlock()
 
-		return nil
+		if !entry.xact.Finished() {
+			// election still in progress
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", entry.xact)
+			}
+			return nil
+		}
 	}
 
 	id := r.uniqueID()
@@ -177,8 +183,8 @@ func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactEl
 		proxyrunner: p,
 		vr:          vr,
 	}
-	newEntry.xact = xele
-	r.byID.Store(id, newEntry)
+	entry.xact = xele
+	r.byID.Store(id, entry)
 	return xele
 }
 
@@ -199,20 +205,22 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 }
 
 func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
-	newEntry := &downloaderEntry{}
-	newEntry.Lock()
-	defer newEntry.Unlock()
+	entry := &downloaderEntry{}
+	entry.Lock()
+	defer entry.Unlock()
 
-	val, loaded := r.globalXacts.LoadOrStore(cmn.Download, newEntry)
+	val, loaded := r.globalXacts.LoadOrStore(cmn.Download, entry)
 
 	if loaded {
-		entry := val.(*downloaderEntry)
-		entry.RLock()
-		defer entry.RUnlock()
+		entry = val.(*downloaderEntry)
+		entry.Lock()
+		defer entry.Unlock()
 
-		xdl := entry.xact
-		xdl.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
-		return xdl, nil
+		if !entry.xact.Finished() {
+			xdl := entry.xact
+			xdl.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+			return xdl, nil
+		}
 	}
 
 	id := r.uniqueID()
@@ -221,9 +229,9 @@ func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloa
 		return nil, err
 	}
 
-	newEntry.xact = xdl
+	entry.xact = xdl
 	go xdl.Run()
-	r.byID.Store(id, newEntry)
+	r.byID.Store(id, entry)
 	return xdl, nil
 }
 
@@ -242,19 +250,16 @@ func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
 
 	if loaded {
 		entry = val.(*getECEntry)
-		entry.RLock()
+		entry.Lock()
+		defer entry.Unlock()
 		if !entry.xact.Finished() {
 			xec := entry.xact
-			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s already running, nothing to do", xec)
 			}
 			return xec
 		}
-		entry.RUnlock()
-		entry.Lock()
-		defer entry.Unlock()
 	}
 
 	id := r.uniqueID()
@@ -277,19 +282,16 @@ func (r *xactionsRegistry) renewPutEC(bucket string) *ec.XactPut {
 
 	if loaded {
 		entry = val.(*putECEntry)
-		entry.RLock()
+		entry.Lock()
+		defer entry.Unlock()
 		if !entry.xact.Finished() {
 			xec := entry.xact
-			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s already running, nothing to do", xec)
 			}
 			return xec
 		}
-		entry.RUnlock()
-		entry.Lock()
-		defer entry.Unlock()
 	}
 
 	id := r.uniqueID()
@@ -312,19 +314,16 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 
 	if loaded {
 		entry = val.(*respondECEntry)
-		entry.RLock()
+		entry.Lock()
+		defer entry.Unlock()
 		if !entry.xact.Finished() {
 			xec := entry.xact
-			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s already running, nothing to do", xec)
 			}
 			return xec
 		}
-		entry.RUnlock()
-		entry.Lock()
-		defer entry.Unlock()
 	}
 
 	id := r.uniqueID()
