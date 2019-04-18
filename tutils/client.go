@@ -598,34 +598,6 @@ func UnregisterTarget(proxyURL, sid string) error {
 	return nil
 }
 
-// TODO: rename, and move to the api package
-func GetXactionResponse(proxyURL string, kind, action, bucket string) ([]byte, error) {
-	q := GetWhatRawQuery(cmn.GetWhatXaction, "")
-
-	actMsg := &cmn.ActionMsg{
-		Action: action,
-		Name:   kind,
-		Value: cmn.XactionExtMsg{
-			Bucket: bucket,
-		},
-	}
-
-	path := fmt.Sprintf("%s?%s", cmn.URLPath(cmn.Version, cmn.Cluster), q)
-	bs, err := jsoniter.Marshal(actMsg)
-	if err != nil {
-		return nil, err
-	}
-
-	apiParams := BaseAPIParams(proxyURL)
-
-	response, err := api.DoHTTPRequest(apiParams, path, bs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response, err: %v", err)
-	}
-
-	return response, nil
-}
-
 func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string, size uint64) (reader Reader, err error) {
 	if sgl != nil {
 		sgl.Reset()

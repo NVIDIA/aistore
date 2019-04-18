@@ -486,6 +486,7 @@ func TestRebalance(t *testing.T) {
 		wg           = &sync.WaitGroup{}
 		sgl          *memsys.SGL
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams   = tutils.BaseAPIParams(proxyURL)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
@@ -551,7 +552,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 5. wait for rebalance to run its course
 	//
-	waitForRebalanceToComplete(t, proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 	//
 	// step 6. statistics
 	//
@@ -1277,7 +1278,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 //
 //========
 
-func waitForRebalanceToComplete(t *testing.T, proxyURL string) {
+func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams) {
 	time.Sleep(ais.NeighborRebalanceStartDelay)
 OUTER:
 	for {
@@ -1285,7 +1286,7 @@ OUTER:
 		time.Sleep(time.Second * 3)
 		tutils.Logln("Waiting for rebalance to complete.")
 
-		rebalanceStats, err := getXactionRebalance(proxyURL)
+		rebalanceStats, err := getXactionRebalance(baseParams)
 		if err != nil {
 			t.Fatalf("Unable to get rebalance stats. Error: [%v]", err)
 		}
@@ -1308,9 +1309,9 @@ OUTER:
 	}
 }
 
-func getXactionRebalance(proxyURL string) (map[string][]stats.RebalanceTargetStats, error) {
+func getXactionRebalance(baseParams *api.BaseParams) (map[string][]stats.RebalanceTargetStats, error) {
 	var rebalanceStats map[string][]stats.RebalanceTargetStats
-	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.ActGlobalReb, cmn.ActXactStats, "")
+	responseBytes, err := api.GetXactionResponse(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
 	if err != nil {
 		return rebalanceStats, err
 	}

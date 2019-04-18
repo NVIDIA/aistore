@@ -31,12 +31,12 @@ Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) 
 There are different actions which may be taken upon xaction. Actions include stats, start and stop. 
 List of supported actions can be found in the [API](/cmn/api.go)
 
-Request query is generic for all of the actions. 
+Request query is generic for all of the actions.
 Responses to query are different for different actions and are described in sections of actions
 Query looks as follows:  
 1.Single target request:
 ```shell
-curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction' 
+curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
 ```    
 To simplify the logic, result is always an array, even if there's only one element in the result
 
@@ -44,7 +44,7 @@ To simplify the logic, result is always an array, even if there's only one eleme
 ```shell
 curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://G/v1/cluster?what=xaction'
 ```
-Response of a query to proxy is a map of deamonID -> target's response. If any of targets responded with error status code, proxy's response
+Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
 will result in the same error response.
 
 For both (target's and proxy's) requests the following apply:
@@ -107,7 +107,6 @@ If Start/Stop action was not successful, target's response contains error code a
 of targets responded with error code, proxy will respond with the same error code and error message.
 
 
->> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address 
-and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation)
+>> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation)
 
 The corresponding [RESTful API](/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.

@@ -612,7 +612,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	m.reregisterTarget(targets[1])
 	tutils.Logln("reregistering complete")
 
-	waitForRebalanceToComplete(t, m.proxyURL)
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
@@ -671,7 +672,8 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	// Wait for everything to finish
 	m.wg.Wait()
-	waitForRebalanceToComplete(t, m.proxyURL)
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 
 	// main check - try to read all objects
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -907,7 +909,8 @@ func TestGetDuringRebalance(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// wait for everything to finish
-	waitForRebalanceToComplete(t, md.proxyURL)
+	baseParams := tutils.BaseAPIParams(md.proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 	md.wg.Wait()
 
 	// read files once again
@@ -1221,7 +1224,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	err = api.AddMountpath(baseParams, newMountpath)
 	tutils.CheckFatal(err, t)
 
-	waitForRebalanceToComplete(t, m.proxyURL)
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL))
 
 	// Read files after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1298,7 +1301,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 	}
 
-	waitForRebalanceToComplete(t, m.proxyURL)
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL))
 
 	// Read after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1524,7 +1527,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tutils.CheckFatal(err, t)
 
-	waitForRebalanceToComplete(t, m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 
 	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
@@ -1651,7 +1654,8 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	tutils.Logln("reregistering complete")
 
 	// Wait for rebalance and do gets
-	waitForRebalanceToComplete(t, m.proxyURL)
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()

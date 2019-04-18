@@ -522,7 +522,7 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 		var allDetails = make(map[string][]stats.BaseXactStats) // TODO: missing API
 		time.Sleep(time.Second)
 
-		responseBytes, err := tutils.GetXactionResponse(baseParams.URL, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
+		responseBytes, err := api.GetXactionResponse(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
 		tutils.CheckFatal(err, t)
 		err = json.Unmarshal(responseBytes, &allDetails)
 		tutils.CheckFatal(err, t)

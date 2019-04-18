@@ -221,6 +221,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 }
 
 func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
 	smap := getClusterMap(t, proxyURL)
@@ -259,7 +260,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Tmap)+1,
 	)
 	tutils.CheckFatal(err, t)
-	waitForRebalanceToComplete(t, proxyURL)
+	waitForRebalanceToComplete(t, baseParams)
 
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)

@@ -451,20 +451,6 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 	return reslist, nil
 }
 
-// MakeNCopies API
-//
-// MakeNCopies starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies)
-func MakeNCopies(baseParams *BaseParams, bucket string, copies int) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMakeNCopies, Value: copies})
-	if err != nil {
-		return err
-	}
-	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = DoHTTPRequest(baseParams, path, b)
-	return err
-}
-
 // Handles the List/Range operations (delete, prefetch)
 func doListRangeRequest(baseParams *BaseParams, bucket, bckProvider, action, method string, listrangemsg interface{}) error {
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
