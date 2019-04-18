@@ -8,7 +8,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -30,7 +29,6 @@ type Target interface {
 	Prefetch()
 	GetBowner() Bowner
 	FSHC(err error, path string)
-	GetAtimeRunner() *atime.Runner
 	GetMem2() *memsys.Mem2
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer) error

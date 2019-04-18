@@ -1418,9 +1418,9 @@ func selectErr(errCh chan error, verb string, t *testing.T, errisfatal bool) {
 	select {
 	case err := <-errCh:
 		if errisfatal {
-			t.Fatalf("Failed to %s files: %v", verb, err)
+			t.Fatalf("Failed to %s objects: %v", verb, err)
 		} else {
-			t.Errorf("Failed to %s files: %v", verb, err)
+			t.Errorf("Failed to %s objects: %v", verb, err)
 		}
 	default:
 	}

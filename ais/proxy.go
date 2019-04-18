@@ -372,28 +372,29 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
+	bckIsLocal, ok := p.validateBucket(w, r, bucket, bckProvider)
+	if !ok {
 		return
 	}
-
 	smap := p.smapowner.get()
 	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-
 	config := cmn.GCO.Get()
 	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
-		if glog.V(4) {
-			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			bmd := p.bmdowner.get()
+			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 		}
 		p.reverseDP(w, r, si)
 		delta := time.Since(started)
 		p.statsif.Add(stats.GetLatency, int64(delta))
 	} else {
-		if glog.V(4) {
-			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			bmd := p.bmdowner.get()
+			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 		}
 		redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 		if config.Readahead.Enabled && config.Readahead.ByProxy {
@@ -428,7 +429,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
+	bckIsLocal, ok := p.validateBucket(w, r, bucket, bckProvider)
+	if !ok {
 		return
 	}
 	smap := p.smapowner.get()
@@ -437,8 +439,9 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if glog.V(4) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		bmd := p.bmdowner.get()
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 	}
 	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -541,7 +544,8 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := p.validateBucket(w, r, bucket, bckProvider); !ok {
+	bckIsLocal, ok := p.validateBucket(w, r, bucket, bckProvider)
+	if !ok {
 		return
 	}
 	smap := p.smapowner.get()
@@ -550,8 +554,9 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if glog.V(4) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		bmd := p.bmdowner.get()
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 	}
 	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -654,8 +659,8 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := cmn.DefaultBucketProps
-	if !clone.add(bucket, local, bucketProps()) {
+	bucketProps := cmn.DefaultBucketProps()
+	if !clone.add(bucket, local, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.ErrorBucketAlreadyExists
 	}
@@ -672,19 +677,21 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 
 func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local bool) (*bucketMD, error) {
 	p.bmdowner.Lock()
-	bucketmd := p.bmdowner.get()
-
-	if !bucketmd.Exists(bucket, 0 /*ID=any*/, local) {
-		var err error
-		if local {
-			err = fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
-		} else if glog.V(4) {
-			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bucket, cmn.DoesNotExist)
+	bmd := p.bmdowner.get()
+	if local {
+		if !bmd.IsLocal(bucket) {
+			err := fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
+			p.bmdowner.Unlock()
+			return bmd, err
+		}
+	} else if !bmd.IsCloud(bucket) {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bmd.Bstring(bucket, local), cmn.DoesNotExist)
 		}
 		p.bmdowner.Unlock()
-		return bucketmd, err
+		return bmd, nil
 	}
-	clone := bucketmd.clone()
+	clone := bmd.clone()
 	if !clone.del(bucket, local) {
 		p.bmdowner.Unlock()
 		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist)
@@ -858,12 +865,14 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		delta := time.Since(started)
 		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.FastV(4, glog.SmoduleAIS) {
-			lat := int64(delta / time.Microsecond)
+			var (
+				lat = int64(delta / time.Microsecond)
+				s   string
+			)
 			if pageMarker != "" {
-				glog.Infof("LIST: %s, page %s, %d µs", bucket, pageMarker, lat)
-			} else {
-				glog.Infof("LIST: %s, %d µs", bucket, lat)
+				s = ", page " + pageMarker
 			}
+			glog.Infof("LIST: %s%s, %d µs", bucket, s, lat)
 		}
 	}
 }
@@ -948,7 +957,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 	// - make sure to lowercase therefore
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Updating bucket %s property %s => %s", bucket, name, value)
 		}
 		// Disable ability to set EC properties once enabled
@@ -1175,7 +1184,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if errstr != "" {
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
 	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
@@ -2231,7 +2240,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if prepare {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
@@ -2400,7 +2409,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 
@@ -2417,10 +2426,9 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 		// remove redundant items from URL path to make it AIS-compatible
 		// original looks like:
 		//    http://www.googleapis.com/storage/v1/b/<bucket>/o/<object>
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("JSON GCP request for object: %v", s)
 		}
-
 		if len(s) < 4 {
 			p.invalmsghdlr(w, r, "Invalid object path", http.StatusBadRequest)
 			return
@@ -2436,10 +2444,10 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 		}
 
 		r.URL.Path = cmn.URLPath(s...)
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Updated JSON URL Path: %s", r.URL.Path)
 		}
-	} else if glog.V(4) {
+	} else if glog.FastV(4, glog.SmoduleAIS) {
 		// original url looks like - no cleanup required:
 		//    http://storage.googleapis.com/<bucket>/<object>
 		glog.Infof("XML GCP request for object: %v", s)

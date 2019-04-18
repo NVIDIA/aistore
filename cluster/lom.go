@@ -10,12 +10,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 //
@@ -32,13 +36,16 @@ const (
 )
 
 type (
+	// NOTE: sizeof(lmeta) = 72 as of 4/16
 	lmeta struct {
 		uname   string
 		size    int64
 		version string
 		cksum   cmn.Cksummer
 		atime   int64
+		atimefs int64
 		copyFQN []string
+		bckID   uint64
 	}
 	LOM struct {
 		// local meta
@@ -49,17 +56,22 @@ type (
 		BucketProvider  string
 		HrwFQN          string // misplaced?
 		// runtime context
-		T           Target
-		config      *cmn.Config
-		bucketMD    *BMD
-		AtimeRespCh chan *atime.Response
-		BckProps    *cmn.BucketProps
-		bckID       int64
-		ParsedFQN   fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
-		BckIsLocal  bool         // the bucket (that contains this object) is local
-		BadCksum    bool         // this object has a bad checksum
-		exists      bool         // determines if the object exists or not (initially set by fstat)
-		loaded      bool
+		T          Target
+		config     *cmn.Config
+		bucketMD   *BMD
+		BckProps   *cmn.BucketProps
+		ParsedFQN  fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
+		BckIsLocal bool         // the bucket (that contains this object) is local
+		BadCksum   bool         // this object has a bad checksum
+		exists     bool         // determines if the object exists or not (initially set by fstat)
+		loaded     bool
+	}
+	LomCacheRunner struct {
+		cmn.Named
+		mem2    *memsys.Mem2
+		T       Target
+		stopCh  chan struct{}
+		stopped int32
 	}
 )
 
@@ -74,6 +86,7 @@ func init() {
 //
 
 func (lom *LOM) Uname() string               { return lom.md.uname }
+func (lom *LOM) BMD() *BMD                   { return lom.bucketMD }
 func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
 func (lom *LOM) Size() int64                 { return lom.md.size }
 func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
@@ -89,6 +102,8 @@ func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
 func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
 func (lom *LOM) HasCopies() bool             { return !lom.IsCopy() && lom.NumCopies() > 1 }
 func (lom *LOM) NumCopies() int              { return len(lom.md.copyFQN) + 1 }
+func (lom *LOM) SetBMD(bmd *BMD)             { lom.bucketMD = bmd } // NOTE: internal use!
+func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid } // ditto
 func (lom *LOM) IsCopy() bool {
 	return len(lom.md.copyFQN) == 1 && lom.md.copyFQN[0] == lom.HrwFQN // is a local copy of an object
 }
@@ -210,11 +225,12 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	return
 }
 
-// format
-func (lom *LOM) String() string {
+func (lom *LOM) String() string { return lom._string(lom.Bucket) }
+
+func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("lom[%s/%s fs=%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
+		s = fmt.Sprintf("lom[%s/%s fs=%s", b, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
 	)
 	if glog.V(4) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
@@ -230,7 +246,7 @@ func (lom *LOM) String() string {
 	}
 	if !lom.loaded {
 		a = "(uninitialized)"
-	} else if !lom.Exists() {
+	} else if !lom.exists {
 		a = "(x)"
 	} else {
 		if lom.Misplaced() {
@@ -239,14 +255,21 @@ func (lom *LOM) String() string {
 		if lom.IsCopy() {
 			a += "(is-copy)"
 		}
-		if lom.HasCopies() {
-			a += "(has-copies)"
+		if n := lom.NumCopies(); n > 1 {
+			a += fmt.Sprintf("(%d-copies)", n)
 		}
 		if lom.BadCksum {
 			a += "(bad-checksum)"
 		}
 	}
 	return s + a + "]"
+}
+
+func (lom *LOM) StringEx() string {
+	if lom.bucketMD == nil {
+		return lom.String()
+	}
+	return lom._string(lom.bucketMD.Bstring(lom.Bucket, lom.BckIsLocal))
 }
 
 func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
@@ -259,9 +282,7 @@ func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
 }
 
 // xattrs: cmn.XattrXXHash and cmn.XattrVersion
-// NOTE:
-// - cmn.XattrCopies is updated separately by the 2-way mirroring code
-// - atime is also updated explicitly via UpdateAtime()
+// NOTE:   cmn.XattrCopies is updated separately by the 2-way mirroring code
 func (lom *LOM) PersistCksumVer() (errstr string) {
 	if lom.md.cksum != nil {
 		_, cksumValue := lom.md.cksum.Get()
@@ -273,17 +294,6 @@ func (lom *LOM) PersistCksumVer() (errstr string) {
 		errstr = fs.SetXattr(lom.FQN, cmn.XattrVersion, []byte(lom.md.version))
 	}
 	return
-}
-
-func (lom *LOM) UpdateAtimeUnix(at int64, migrated bool) {
-	lom.md.atime = at
-	if at == 0 {
-		return
-	}
-	if lom.LRUEnabled() || migrated {
-		ratime := lom.T.GetAtimeRunner()
-		ratime.Touch(lom.ParsedFQN.MpathInfo.Path, lom.FQN, lom.Atime())
-	}
 }
 
 // IncObjectVersion increments the current version xattrs and returns the new value.
@@ -339,12 +349,9 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
-// MAY compute and store a missing (xxhash) checksum
-//
+// MAY compute and store a missing (xxhash) checksum.
 // If xattr checksum is different than lom's metadata checksum, returns error
 // and do not recompute checksum even if recompute set to true.
-//
-// Checksums: brief theory of operations ========================================
 //
 // * objects are stored in the cluster with their content checksums and in accordance
 //   with their bucket configurations.
@@ -461,7 +468,6 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumstr, errstr string) 
 func (lom *LOM) clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
-	cmn.Dassert(dst.md.uname == lom.md.uname, pkgName) // DEBUG
 	dst.FQN = fqn
 	dst.init("")
 	return dst
@@ -477,6 +483,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 		}
 		lom.Bucket, lom.Objname = lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname
 		if lom.Bucket == "" || lom.Objname == "" {
+			cmn.Assert(false) // DEBUG
 			return
 		}
 		if bckProvider == "" {
@@ -484,7 +491,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 		}
 	}
 
-	lom.md.uname = Uname(lom.Bucket, lom.Objname)
+	lom.md.uname = Bo2Uname(lom.Bucket, lom.Objname)
 	// bucketmd, bckIsLocal, bprops
 	lom.bucketMD = bowner.Get()
 	if err := lom.initBckIsLocal(bckProvider); err != nil {
@@ -547,28 +554,28 @@ func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
 }
 
 func (lom *LOM) Load(add bool) (errstr string) {
-	lom.loaded = true
-	if lom.bckID == 0 {
-		lom.bckID = lom.BckProps.BID
-	}
 	// fast path
 	var (
 		hkey, idx = lom.hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
+	lom.loaded = true
 	if md, ok := cache.M.Load(hkey); ok {
+		lom.exists = true
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
 		if !add { // uncache
 			cache.M.Delete(hkey)
 		}
-		lom.exists = true
-		return
+		if lom.existsInBucket() {
+			return
+		}
 	}
 	// slow path
 	errstr = lom.FromFS()
-	if errstr == "" && lom.Exists() {
+	if errstr == "" && lom.exists {
 		md := &lmeta{}
+		lom.md.bckID = lom.BckProps.BID
 		*md = lom.md
 		if !add { // ditto
 			return
@@ -580,12 +587,13 @@ func (lom *LOM) Load(add bool) (errstr string) {
 
 func (lom *LOM) Exists() bool {
 	cmn.Assert(lom.loaded)
-	// TODO: remove lom.BckIsLocal - same check should work for CBmap
-	if lom.BckIsLocal && lom.exists {
-		if !lom.bucketMD.Exists(lom.Bucket, lom.bckID, lom.BckIsLocal) {
-			lom.Uncache()
-			return false
-		}
+	return lom.existsInBucket()
+}
+func (lom *LOM) existsInBucket() bool {
+	if lom.BckIsLocal && lom.exists && !lom.bucketMD.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
+		lom.Uncache()
+		lom.exists = false
+		return false
 	}
 	return lom.exists
 }
@@ -597,6 +605,7 @@ func (lom *LOM) ReCache() {
 		md        = &lmeta{}
 	)
 	*md = lom.md
+	md.bckID = lom.BckProps.BID
 	cache.M.Store(hkey, md)
 	lom.loaded = true
 }
@@ -607,14 +616,12 @@ func (lom *LOM) Uncache() {
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
 	cache.M.Delete(hkey)
-	lom.loaded = false
 }
 
 func (lom *LOM) FromFS() (errstr string) {
 	var (
 		finfo              os.FileInfo
 		err                error
-		timeunix           int64
 		version, b, cpyfqn []byte
 	)
 	// fstat
@@ -635,11 +642,9 @@ func (lom *LOM) FromFS() (errstr string) {
 	}
 	lom.md.version = string(version)
 	// atime
-	timeunix, err = lom.T.GetAtimeRunner().GetAtime(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUEnabled())
-	if err != nil {
-		return err.Error()
-	}
-	lom.SetAtimeUnix(timeunix)
+	atime := ios.GetATime(finfo)
+	lom.md.atime = atime.UnixNano()
+	lom.md.atimefs = lom.md.atime
 	// cksum
 	if cksumType := lom.CksumConf().Type; cksumType != cmn.ChecksumNone {
 		cmn.Assert(cksumType == cmn.ChecksumXXHash)
@@ -662,9 +667,179 @@ func (lom *LOM) FromFS() (errstr string) {
 // evict lom cache
 //
 func EvictCache(bucket string) {
+	var (
+		caches = lomCaches()
+		wg     = &sync.WaitGroup{}
+	)
+	for _, cache := range caches {
+		wg.Add(1)
+		go func(cache *fs.LomCache) {
+			fevict := func(hkey, _ interface{}) bool {
+				uname := hkey.(string)
+				b, _ := Uname2Bo(uname)
+				if bucket == b {
+					cache.M.Delete(hkey)
+				}
+				return true
+			}
+			cache.M.Range(fevict)
+			wg.Done()
+		}(cache)
+	}
+	wg.Wait()
+}
+
+//
+// lom cache runner
+//
+const (
+	oomEvictAtime = time.Minute      // OOM
+	oomTimeIntval = time.Second * 10 // ===/===
+	mpeEvictAtime = time.Minute * 5  // extreme
+	mpeTimeIntval = time.Minute      // ===/===
+	mphEvictAtime = time.Minute * 10 // high
+	mphTimeIntval = time.Minute * 2  // ===/===
+	mpnEvictAtime = time.Hour        // normal
+	mpnTimeIntval = time.Minute * 10 // ===/===
+	minSize2Evict = cmn.KiB * 256
+)
+
+func (r LomCacheRunner) Init(mem2 *memsys.Mem2, t Target) *LomCacheRunner {
+	r.mem2 = mem2
+	r.T = t
+	r.stopCh = make(chan struct{}, 1)
+	return &r
+}
+
+func (r *LomCacheRunner) Run() error {
+	var (
+		d     time.Duration
+		timer = time.NewTimer(time.Minute * 10)
+		md    = lmeta{}
+		minev = int(minSize2Evict / unsafe.Sizeof(md))
+	)
+	for {
+		select {
+		case <-timer.C:
+			switch p := r.mem2.MemPressure(); p { // TODO: heap-memory-arbiter (HMA) abstraction TBD
+			case memsys.OOM:
+				d = oomEvictAtime
+			case memsys.MemPressureExtreme:
+				d = mpeEvictAtime
+			case memsys.MemPressureHigh:
+				d = mphEvictAtime
+			default:
+				d = mpnEvictAtime
+			}
+			evicted, total := r.work(d)
+			if evicted < minev {
+				d = mpnTimeIntval
+			} else {
+				switch p := r.mem2.MemPressure(); p {
+				case memsys.OOM:
+					d = oomTimeIntval
+				case memsys.MemPressureExtreme:
+					d = mpeTimeIntval
+				case memsys.MemPressureHigh:
+					d = mphTimeIntval
+				default:
+					d = mpnTimeIntval
+				}
+				timer.Reset(d)
+			}
+			cmn.Assert(total >= evicted)
+			glog.Infof("total %d, evicted %d, timer %v", total-evicted, evicted, d)
+		case <-r.stopCh:
+			atomic.StoreInt32(&r.stopped, 2019)
+			timer.Stop()
+			return nil
+		}
+	}
+}
+func (r *LomCacheRunner) Stop(err error) {
+	r.stopCh <- struct{}{}
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
+}
+func (r *LomCacheRunner) isStopping() bool { return atomic.LoadInt32(&r.stopped) != 0 }
+
+func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
+	var (
+		caches         = lomCaches()
+		now            = time.Now()
+		wg             = &sync.WaitGroup{}
+		bmd            = r.T.GetBowner().Get()
+		evicted, total uint32
+	)
+	for _, cache := range caches {
+		wg.Add(1)
+		go func(cache *fs.LomCache) {
+			feviat := func(hkey, value interface{}) bool {
+				if r.isStopping() {
+					return false
+				}
+				var (
+					md    = value.(*lmeta)
+					atime = time.Unix(0, md.atime)
+				)
+				atomic.AddUint32(&total, 1)
+				if now.Sub(atime) < d {
+					return true
+				}
+				if md.atime != md.atimefs {
+					if lom, errstr := lomFromLmeta(md, bmd); errstr == "" {
+						lom.flushAtime(atime)
+					}
+					// TODO: throttle via mountpath.IsIdle(), etc.
+				}
+				cache.M.Delete(hkey)
+				atomic.AddUint32(&evicted, 1)
+				return true
+			}
+			cache.M.Range(feviat)
+			wg.Done()
+		}(cache)
+	}
+	wg.Wait()
+	numevicted, numtotal = int(atomic.LoadUint32(&evicted)), int(atomic.LoadUint32(&total))
+	return
+}
+
+func (lom *LOM) flushAtime(atime time.Time) {
+	finfo, err := os.Stat(lom.FQN)
+	if err != nil {
+		return
+	}
+	mtime := finfo.ModTime()
+	if err = os.Chtimes(lom.FQN, atime, mtime); err != nil {
+		glog.Errorf("%s: flush atime err: %v", lom, err)
+	}
+}
+
+//
+// static helpers
+//
+func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, errstr string) {
+	var (
+		bucket, objname = Uname2Bo(md.uname)
+		local, exists   bool
+	)
+	lom = &LOM{Bucket: bucket, Objname: objname}
+	if bmd.Exists(bucket, md.bckID, true) {
+		local, exists = true, true
+	} else if bmd.Exists(bucket, md.bckID, false) {
+		local, exists = false, true
+	}
+	lom.exists = exists
+	if exists {
+		lom.BckIsLocal = local
+		lom.FQN, _, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
+	}
+	return
+}
+
+func lomCaches() []*fs.LomCache {
 	availablePaths, _ := fs.Mountpaths.Get()
 	var (
-		b      = bucket + "/"
 		l      = len(availablePaths) * (fs.LomCacheMask + 1)
 		caches = make([]*fs.LomCache, l)
 	)
@@ -676,14 +851,5 @@ func EvictCache(bucket string) {
 			i++
 		}
 	}
-	for _, cache := range caches {
-		fevict := func(hkey, value interface{}) bool {
-			uname := hkey.(string)
-			if strings.HasPrefix(uname, b) {
-				cache.M.Delete(hkey)
-			}
-			return true
-		}
-		cache.M.Range(fevict)
-	}
+	return caches
 }

@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/atime"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
@@ -32,7 +32,7 @@ const (
 	xproxykeepalive  = "proxykeepalive"
 	xtargetkeepalive = "targetkeepalive"
 	xiostat          = "iostat"
-	xatime           = "atime"
+	xlomcache        = "lomcache"
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
@@ -271,9 +271,8 @@ func aisinit(version, build string) {
 			t.readahead = &dummyreadahead{}
 		}
 
-		atime := atime.NewRunner(fs.Mountpaths)
-		ctx.rg.add(atime, xatime)
-		t.fsprg.Reg(atime)
+		lct := cluster.LomCacheRunner{}.Init(gmem2, t)
+		ctx.rg.add(lct, xlomcache)
 
 		_ = ts.UpdateCapacityOOS() // goes after fs.Mountpaths.Init
 	}
@@ -347,13 +346,6 @@ func gettargetkeepalive() *targetKeepaliveRunner {
 func getstorstatsrunner() *stats.Trunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*stats.Trunner)
-	cmn.Assert(ok)
-	return rr
-}
-
-func getatimerunner() *atime.Runner {
-	r := ctx.rg.runmap[xatime]
-	rr, ok := r.(*atime.Runner)
 	cmn.Assert(ok)
 	return rr
 }

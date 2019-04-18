@@ -130,7 +130,7 @@ func (rj *globalRebJogger) jog() {
 }
 
 func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadCloser, err error) {
-	uname := cluster.Uname(hdr.Bucket, hdr.Objname)
+	uname := cluster.Bo2Uname(hdr.Bucket, hdr.Objname)
 	rj.m.t.rtnamemap.Unlock(uname, false)
 
 	if err != nil {
@@ -169,7 +169,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 	lom, errstr = cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
 	if errstr != "" {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
 		}
 		return nil
@@ -193,7 +193,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 
 	// LOCK & rebalance
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
 	}
 	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in rebalanceObjCallback()
@@ -234,8 +234,10 @@ rerr:
 	if errstr != "" {
 		err = errors.New(errstr)
 	}
-	if err != nil && bool(glog.V(4)) {
-		glog.Errorf("%s, err: %v", lom, err)
+	if err != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Errorf("%s, err: %v", lom, err)
+		}
 	}
 	return
 }
@@ -277,7 +279,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	}
 	lom, errstr := cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
 	if errstr != "" {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %v - skipping #1...", lom, errstr)
 		}
 		return nil
@@ -288,7 +290,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	}
 	errstr = lom.Load(false)
 	if errstr != "" {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %v - skipping #2...", lom, errstr)
 		}
 		return nil
@@ -301,7 +303,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if !lom.Misplaced() {
 		return nil
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s => %s", lom, lom.HrwFQN)
 	}
 	dir := filepath.Dir(lom.HrwFQN)
@@ -316,8 +318,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	// Note that global rebalance can run at the same time and by copying we
 	// allow local and global rebalance to work in parallel - global rebalance
 	// can still access the old object.
-
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 

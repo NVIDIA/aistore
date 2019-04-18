@@ -166,14 +166,14 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		glog.Error(errstr)
 		return
 	}
+	coldGet = !lom.Exists()
 	if lom.BckIsLocal { // must not come here
-		if !lom.Exists() {
+		if coldGet {
 			glog.Errorf("prefetch: %s", lom)
 		}
 		return
 	}
-	coldGet = !lom.Exists()
-	if lom.Exists() && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
+	if !coldGet && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
 		if coldGet, errstr, _ = t.checkCloudVersion(ct, lom); errstr != "" {
 			return
 		}
@@ -187,7 +187,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		}
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("prefetch: %s", lom)
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)

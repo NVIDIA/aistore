@@ -11,6 +11,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const (
+	BisLocalBit   = uint64(1 << 63)
+	bucketNameErr = "must contain lowercase letters, numbers, dashes (-), underscores (_), and dots (.)"
+)
+
 // interface to Get current bucket-metadata instance
 // (for implementation, see ais/bucketmeta.go)
 type Bowner interface {
@@ -28,12 +33,26 @@ type BMD struct {
 	Version int64                       `json:"version"` // version - gets incremented on every update
 }
 
-func (m *BMD) IsLocal(bucket string) bool {
-	_, ok := m.LBmap[bucket]
-	return ok
+func (m *BMD) GenBucketID(local bool) uint64 {
+	if !local {
+		return uint64(m.Version)
+	}
+	return uint64(m.Version) | BisLocalBit
 }
 
-func (m *BMD) Exists(b string, bckID int64, local bool) (exists bool) {
+func (m *BMD) Exists(b string, bckID uint64, local bool) (exists bool) {
+	if bckID == 0 {
+		if local {
+			exists = m.IsLocal(b)
+			cmn.Assert(!exists) // local bucket must have unique ID
+		} else {
+			exists = m.IsCloud(b)
+		}
+		return
+	}
+	if local != (bckID&BisLocalBit != 0) {
+		return
+	}
 	var (
 		p  *cmn.BucketProps
 		mm = m.LBmap
@@ -42,26 +61,41 @@ func (m *BMD) Exists(b string, bckID int64, local bool) (exists bool) {
 		mm = m.CBmap
 	}
 	p, exists = mm[b]
-	if exists && (bckID != 0 && p.BID != bckID) {
+	if exists && p.BID != bckID {
 		exists = false
 	}
 	return
 }
 
-func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
-	mm := m.LBmap
-	if !local {
-		mm = m.CBmap
+func (m *BMD) IsLocal(bucket string) bool { _, ok := m.LBmap[bucket]; return ok }
+func (m *BMD) IsCloud(bucket string) bool { _, ok := m.CBmap[bucket]; return ok }
+
+func (m *BMD) Bstring(b string, local bool) string {
+	var (
+		s    = cmn.BckProviderFromLocal(local)
+		p, e = m.Get(b, local)
+	)
+	if !e {
+		return fmt.Sprintf("%s(unknown, %s)", b, s)
 	}
-	if p, ok := mm[b]; ok {
-		return p, true
+	return fmt.Sprintf("%s(%x, %s)", b, p.BID, s)
+}
+
+func (m *BMD) Get(b string, local bool) (p *cmn.BucketProps, present bool) {
+	if local {
+		p, present = m.LBmap[b]
+		return
 	}
-	return cmn.DefaultBucketProps(), false
+	p, present = m.CBmap[b]
+	if !present {
+		p = cmn.DefaultBucketProps()
+	}
+	return
 }
 
 func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err error) {
 	if !validateBucketName(bucket) {
-		err = fmt.Errorf("invalid bucket names - it must contain only lowercase letters, numbers, dashes (-), underscores (_), and dots (.)")
+		err = fmt.Errorf("bucket name %s is invalid (%s)", bucket, bucketNameErr)
 		return
 	}
 	config := cmn.GCO.Get()

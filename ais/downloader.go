@@ -323,8 +323,9 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 			cmn.InvalidHandler(w, r)
 		}
 	}
-
-	glog.V(4).Infof("httpDownloadAdmin payload %v", payload)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("httpDownloadAdmin payload %v", payload)
+	}
 	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
@@ -554,7 +555,7 @@ func (p *proxyrunner) handleUnknownCB(bucket string) error {
 // NOTE: This request is internal so we can have asserts there.
 // [METHOD] /v1/download
 func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	if !t.verifyProxyRedirection(w, r, "", "", cmn.Download) {
+	if !t.verifyProxyRedirection(w, r, cmn.Download) {
 		return
 	}
 
@@ -578,7 +579,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cmn.AssertNoErr(payload.Validate())
 
-		glog.V(4).Infof("Downloading: %s", payload)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Downloading: %s", payload)
+		}
 		response, respErr, statusCode = downloader.Download(payload)
 	case http.MethodGet:
 		payload := &cmn.DlAdminBody{}
@@ -588,7 +591,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.AssertNoErr(payload.Validate(false /*requireID*/))
 
 		if payload.ID != "" {
-			glog.V(4).Infof("Getting status of download: %s", payload)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("Getting status of download: %s", payload)
+			}
 			response, respErr, statusCode = downloader.Status(payload.ID)
 		} else {
 			var regex *regexp.Regexp
@@ -598,7 +603,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
-			glog.V(4).Infof("Listing downloads")
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("Listing downloads")
+			}
 			response, respErr, statusCode = downloader.List(regex)
 		}
 
@@ -612,10 +619,14 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
 		cmn.AssertNoErr(err)
 		if len(items) == 1 && items[0] == cmn.Cancel {
-			glog.V(4).Infof("Cancelling download: %s", payload)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("Cancelling download: %s", payload)
+			}
 			response, respErr, statusCode = downloader.Cancel(payload.ID)
 		} else if len(items) == 0 {
-			glog.V(4).Infof("Removing download: %s", payload)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("Removing download: %s", payload)
+			}
 			response, respErr, statusCode = downloader.Remove(payload.ID)
 		} else {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("downloader: invalid handler for delete request: %s", r.URL.Path))

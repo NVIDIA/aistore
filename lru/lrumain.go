@@ -1,4 +1,4 @@
-// Package lru provides atime-based least recently used cache replacement policy for stored objects
+// Package lru provides least recently used cache replacement policy for stored objects
 // and serves as a generic garbage-collection mechanism for orhaned workfiles.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -45,7 +44,6 @@ const (
 
 type (
 	InitLRU struct {
-		Ratime              *atime.Runner
 		Xlru                cmn.Xact
 		Namelocker          cluster.NameLocker
 		Statsif             stats.Tracker
@@ -80,7 +78,6 @@ type (
 		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
-		atimeRespCh     chan *atime.Response
 		dontevictime    time.Time
 		bckIsLocal      bool
 		throttle        bool
@@ -100,7 +97,6 @@ func InitAndRun(ini *InitLRU) {
 	config := cmn.GCO.Get()
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, config.LRU.DontEvictTime)
 
-	ini.Ratime = ini.T.GetAtimeRunner()
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToEvict() {
@@ -157,7 +153,6 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, conte
 		contentType:     contentType,
 		contentResolver: contentResolver,
 		config:          config,
-		atimeRespCh:     make(chan *atime.Response, 1),
 		bckIsLocal:      bckIsLocal,
 	}
 	return lctx

@@ -1315,7 +1315,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
 	tutils.CheckFatal(err, t)
 	if !bProps.Mirror.Enabled {
-		t.Fatalf("Test property not changed")
+		t.Fatalf("Test property hasn't changed")
 	}
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
@@ -1323,7 +1323,7 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	for _, fname := range fileslist {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
-			t.Fatalf("Object still cached: %s", fname)
+			t.Fatalf("%s remains cached", fname)
 		}
 	}
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
@@ -1855,10 +1855,6 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 	if actual.LRU.HighWM != expected.LRU.HighWM {
 		t.Errorf("Expected HighWM setting: %d, received %d", expected.LRU.HighWM, actual.LRU.HighWM)
 	}
-	if actual.LRU.AtimeCacheMax != expected.LRU.AtimeCacheMax {
-		t.Errorf("Expected AtimeCacheMax setting: %d, received %d",
-			expected.LRU.AtimeCacheMax, actual.LRU.AtimeCacheMax)
-	}
 	if actual.LRU.DontEvictTimeStr != expected.LRU.DontEvictTimeStr {
 		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s",
 			expected.LRU.DontEvictTimeStr, actual.LRU.DontEvictTimeStr)
@@ -1889,7 +1885,6 @@ func defaultBucketProps() cmn.BucketProps {
 			LowWM:              int64(10),
 			HighWM:             int64(50),
 			OOS:                int64(90),
-			AtimeCacheMax:      int64(9999),
 			DontEvictTimeStr:   "1m",
 			CapacityUpdTimeStr: "2m",
 			Enabled:            false,

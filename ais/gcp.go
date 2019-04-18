@@ -185,7 +185,7 @@ func createClient(ctx context.Context) (*storage.Client, context.Context, string
 //
 //==================
 func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int) {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
 	gcpclient, gctx, _, errstr := createClient(ct)
@@ -244,7 +244,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
@@ -254,7 +254,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 }
 
 func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int) {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("headbucket %s", bucket)
 	}
 	bucketprops = make(cmn.SimpleKVs)
@@ -294,7 +294,7 @@ func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, er
 			return
 		}
 		buckets = append(buckets, battrs.Name)
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
 	}
@@ -321,7 +321,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, lom *cluster.LOM) (objmet
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
 	objmeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("HEAD %s", lom)
 	}
 	return
@@ -374,7 +374,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, lom *cluster.
 		errstr = err.Error()
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("GET %s", lom)
 	}
 	return
@@ -409,7 +409,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("PUT %s, size %d, version %s", lom, written, version)
 	}
 	return
@@ -427,7 +427,7 @@ func (gcpimpl *gcpimpl) deleteobj(ct context.Context, lom *cluster.LOM) (errstr 
 		errstr = fmt.Sprintf("%s: DELETE failed, err: %v", lom, err)
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("DELETE %s", lom)
 	}
 	return

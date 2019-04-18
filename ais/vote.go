@@ -149,7 +149,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Proxy voted '%v' for %s", vote, psi)
 	}
 
@@ -244,7 +244,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 	// only continue the election if this proxy is actually the next in line
 	if psi.DaemonID != p.si.DaemonID {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Warningf("This proxy is not next in line: %s. Received: %s",
 				p.si.DaemonID, psi.DaemonID)
 		}
@@ -344,7 +344,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 			errors[res.daemonID] = true
 			n++
 		} else {
-			if glog.V(4) {
+			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Proxy %s responded with %v", res.daemonID, res.yes)
 			}
 			if res.yes {
@@ -580,7 +580,7 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
 	if !h.keepalive.isTimeToPing(currPrimaryID) {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
 
@@ -593,7 +593,7 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	if errstr != "" {
 		return false, fmt.Errorf("error executing HRW: %v", errstr)
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Voting result for %s is %v. Expected primary: %s",
 			daemonID, hrwmax.DaemonID == daemonID, daemonID)
 	}

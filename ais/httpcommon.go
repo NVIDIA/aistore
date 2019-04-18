@@ -771,9 +771,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 }
 
 func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bckIsLocal, ok bool) {
-	var (
-		err error
-	)
+	var err error
 	if bckIsLocal, err = h.bmdowner.get().ValidateBucket(bucket, bckProvider); err != nil {
 		h.invalmsghdlr(w, r, err.Error())
 		return

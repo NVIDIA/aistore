@@ -296,7 +296,7 @@ func SliceSize(fileSize int64, slices int) int64 {
 // the same names, cluster.Uname is not enough to generate unique ID. Adding an
 // extra prefix - an identifier of the destination - solves the issue
 func unique(prefix, bucket, objname string) string {
-	return prefix + "/" + cluster.Uname(bucket, objname)
+	return prefix + "/" + cluster.Bo2Uname(bucket, objname)
 }
 
 // Reads local file to SGL

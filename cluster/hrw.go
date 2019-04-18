@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -19,13 +20,18 @@ const MLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
-func Uname(bucket, objname string) string { return path.Join(bucket, objname) }
+func Bo2Uname(bucket, objname string) string { return path.Join(bucket, objname) }
+func Uname2Bo(uname string) (bucket, objname string) {
+	i := strings.Index(uname, "/")
+	bucket, objname = uname[:i], uname[i+1:]
+	return
+}
 
 // Requires elements of smap.Tmap to have their idDigest initialized
 func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 	var (
 		max    uint64
-		name   = Uname(bucket, objname)
+		name   = Bo2Uname(bucket, objname)
 		digest = xxhash.ChecksumString64S(name, MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
@@ -60,7 +66,7 @@ func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, 
 	}
 	arr := make([]tsi, len(smap.Tmap))
 	si = make([]*Snode, count)
-	name := Uname(bucket, objname)
+	name := Bo2Uname(bucket, objname)
 	digest := xxhash.ChecksumString64S(name, MLCG32)
 
 	i := 0
@@ -115,7 +121,7 @@ func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, digest uint64, errs
 	}
 	var (
 		max  uint64
-		name = Uname(bucket, objname)
+		name = Bo2Uname(bucket, objname)
 	)
 	digest = xxhash.ChecksumString64S(name, MLCG32)
 	for _, mpathInfo := range availablePaths {

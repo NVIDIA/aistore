@@ -92,13 +92,12 @@ func (rtnamemap *rtnamemap) Lock(uname string, exclusive bool) {
 	for {
 		time.Sleep(pollInterval)
 		if rtnamemap.TryLock(uname, exclusive) {
-			if glog.V(4) {
+			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Lock %s(%t) - success", uname, exclusive)
 			}
 			return
 		}
-
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Lock %s(%t) - retrying...", uname, exclusive)
 		}
 	}

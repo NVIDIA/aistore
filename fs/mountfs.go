@@ -88,8 +88,7 @@ type (
 		lomcaches [LomCacheMask + 1]LomCache
 	}
 	LomCache struct {
-		Len int64
-		M   sync.Map
+		M sync.Map
 	}
 	iotracker struct {
 		prev cmn.PairU32

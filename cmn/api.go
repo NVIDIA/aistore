@@ -151,7 +151,6 @@ const (
 	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true
 	HeaderBucketLRULowWM        = "lru.lowwm"               // Capacity usage low water mark
 	HeaderBucketLRUHighWM       = "lru.highwm"              // Capacity usage high water mark
-	HeaderBucketAtimeCacheMax   = "lru.atime_cache_max"     // Maximum Number of Entires in the Cache
 	HeaderBucketDontEvictTime   = "lru.dont_evict_time"     // Enforces an eviction-free time period between [atime, atime+dontevicttime]
 	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"   // Minimum time to update the capacity
 	HeaderBucketMirrorEnabled   = "mirror.enabled"          // will only generate local copies when set to true
@@ -883,7 +882,7 @@ type BucketProps struct {
 	Rebalance RebalanceConf `json:"rebalance"`
 
 	// unique bucket ID
-	BID int64
+	BID uint64
 }
 
 // ECConfig - per-bucket erasure coding configuration

@@ -35,8 +35,7 @@ func (r *xactionsRegistry) renewLRU() *xactLRU {
 		r.byID.Store(id, newEntry)
 		return newEntry.xact
 	}
-
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		lruEntry := val.(*lruEntry)
 		lruEntry.RLock()
 		glog.Infof("%s already running, nothing to do", lruEntry.xact)
@@ -60,8 +59,7 @@ func (r *xactionsRegistry) renewPrefetch() *xactPrefetch {
 		r.byID.Store(id, newEntry)
 		return newEntry.xact
 	}
-
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		prefetchEntry := val.(*prefetchEntry)
 		prefetchEntry.RLock()
 		glog.Infof("%s already running, nothing to do", prefetchEntry.xact)
@@ -90,7 +88,9 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xac
 			return nil
 		}
 		if xGlobalReb.smapVersion == smapVersion {
-			glog.V(4).Infof("%s already running, nothing to do", xGlobalReb)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", xGlobalReb)
+			}
 			return nil
 		}
 
@@ -161,7 +161,7 @@ func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactEl
 	val, loaded := r.globalXacts.LoadOrStore(cmn.ActElection, newEntry)
 
 	if loaded {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			electionEntry := val.(*electionEntry)
 			electionEntry.RLock()
 			xElection := electionEntry.xact
@@ -248,7 +248,9 @@ func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
 			xec := entry.xact
 			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
-			glog.V(4).Infof("%s already running, nothing to do", xec)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", xec)
+			}
 			return xec
 		}
 		entry.RUnlock()
@@ -281,7 +283,9 @@ func (r *xactionsRegistry) renewPutEC(bucket string) *ec.XactPut {
 			xec := entry.xact
 			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
-			glog.V(4).Infof("%s already running, nothing to do", xec)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", xec)
+			}
 			return xec
 		}
 		entry.RUnlock()
@@ -314,7 +318,9 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 			xec := entry.xact
 			entry.RUnlock()
 			xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
-			glog.V(4).Infof("%s already running, nothing to do", xec)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s already running, nothing to do", xec)
+			}
 			return xec
 		}
 		entry.RUnlock()
@@ -348,7 +354,9 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 		defer entry.Unlock()
 
 		if !entry.xact.Finished() {
-			glog.V(4).Infof("nothing to do: %s", entry.xact)
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("nothing to do: %s", entry.xact)
+			}
 			return
 		}
 	} else {

@@ -385,9 +385,6 @@ type LRUConf struct {
 	// failing them until its local used-cap gets back below HighWM (see above)
 	OOS int64 `json:"out_of_space"`
 
-	// AtimeCacheMax represents the maximum number of entries
-	AtimeCacheMax int64 `json:"atime_cache_max"`
-
 	// DontEvictTimeStr denotes the period of time during which eviction of an object
 	// is forbidden [atime, atime + DontEvictTime]
 	DontEvictTimeStr string `json:"dont_evict_time"`
@@ -406,10 +403,6 @@ type LRUConf struct {
 
 	// Enabled: LRU will only run when set to true
 	Enabled bool `json:"enabled"`
-
-	// enable/disable atimer
-	// Warning: disabled atimer won't handle atime-setting for migrated/replicated objects
-	AtimerEnabled bool `json:"atimer_enabled"`
 }
 
 type XactionConf struct {
@@ -952,8 +945,6 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	// LRU
 	case "lru_enabled", "lru.enabled":
 		return &conf.LRU, updateValue(&conf.LRU.Enabled)
-	case "atimer_enabled", "lru.atimer_enabled":
-		return &conf.LRU, updateValue(&conf.LRU.AtimerEnabled)
 	case "lowwm", "lru.lowwm":
 		return &conf.LRU, updateValue(&conf.LRU.LowWM)
 	case "highwm", "lru.highwm":

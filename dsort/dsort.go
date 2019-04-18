@@ -172,7 +172,7 @@ ExtractAllShards:
 				if errStr != "" {
 					return errors.New(errStr)
 				}
-				uname := cluster.Uname(m.rs.Bucket, shardName)
+				uname := cluster.Bo2Uname(m.rs.Bucket, shardName)
 
 				//
 				m.acquireExtractSema()

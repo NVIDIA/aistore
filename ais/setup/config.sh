@@ -47,12 +47,10 @@ cat > $CONFFILE <<EOL
 		"lowwm":		75,
 		"highwm":		90,
 		"out_of_space":		95,
-		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
 		"local_buckets":	false,
-		"enabled":		true,
-		"atimer_enabled":	true
+		"enabled":		true
 	},
 	"xaction":{
 	    "disk_util_low_wm":  20,

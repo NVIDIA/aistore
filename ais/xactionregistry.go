@@ -196,14 +196,17 @@ func (r *xactionsRegistry) abortBucketXact(kind, bucket string) {
 	val, ok := r.buckets.Load(bucket)
 
 	if !ok {
-		glog.V(4).Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+		}
 		return
 	}
-
 	bucketsXacts := val.(*sync.Map)
 	val, ok = bucketsXacts.Load(kind)
 	if !ok {
-		glog.V(4).Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Can't abort nonexistent xaction for bucket %s", bucket)
+		}
 		return
 	}
 

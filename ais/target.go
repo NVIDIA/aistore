@@ -26,7 +26,6 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
@@ -80,7 +79,6 @@ type (
 		needVersion  bool
 		needStatus   bool
 		needCopies   bool
-		atimeRespCh  chan *atime.Response
 	}
 	uxprocess struct {
 		starttime time.Time
@@ -508,11 +506,10 @@ loop:
 	xpre.EndTime(time.Now())
 }
 
-func (t *targetrunner) GetBowner() cluster.Bowner     { return t.bmdowner }
-func (t *targetrunner) FSHC(err error, path string)   { t.fshc(err, path) }
-func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() }
-func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
-func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
+func (t *targetrunner) GetBowner() cluster.Bowner   { return t.bmdowner }
+func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
+func (t *targetrunner) GetMem2() *memsys.Mem2       { return gmem2 }
+func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
 
 //===========================================================================================
 //
@@ -579,7 +576,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 }
 
 // verifyProxyRedirection returns if the http request was redirected from a proxy
-func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, bucket, objname, action string) bool {
+func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, action string) bool {
 	query := r.URL.Query()
 	pid := query.Get(cmn.URLParamProxyID)
 	if pid == "" {
@@ -590,9 +587,6 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 		t.invalmsghdlr(w, r,
 			fmt.Sprintf("%s %s request from an unknown proxy/gateway ID '%s' - Smap out of sync?", r.Method, action, pid))
 		return false
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s %s/%s <= %s", r.Method, action, bucket, objname, pid)
 	}
 	return true
 }
@@ -900,7 +894,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 	// GFN: atime must be already set by the getFromNeighbor
 	if !coldGet && !isGFNRequest {
-		lom.UpdateAtimeUnix(started.UnixNano(), false /* migrated */)
+		lom.SetAtimeUnix(started.UnixNano())
 	}
 
 	// Update objects which were sent during GFN. Thanks to this we will not
@@ -991,7 +985,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
 	}
 	// PUT
-	if !t.verifyProxyRedirection(w, r, bucket, objname, cmn.Objects) {
+	if !t.verifyProxyRedirection(w, r, r.Method) {
 		return
 	}
 	if _, oos := t.AvgCapUsed(nil); oos {
@@ -1004,9 +998,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lom.BckIsLocal && lom.VerConf().Enabled {
-		// preload object info - if version is enabled for the bucket
-		// it needs to know the current object version beforehand
-		lom.Load(false)
+		lom.Load(true) // need to know the current version if versionig enabled
 	}
 	if err, errCode := t.doPut(r, lom); err != nil {
 		t.invalmsghdlr(w, r, err.Error(), errCode)
@@ -1026,10 +1018,10 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket = apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
+	bckIsLocal, ok := t.validateBucket(w, r, bucket, bckProvider)
+	if !ok {
 		return
 	}
-
 	b, err := ioutil.ReadAll(r.Body)
 
 	if err == nil && len(b) > 0 {
@@ -1056,9 +1048,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if len(b) > 0 { // must be a List/Range request
 			err := t.listRangeOperation(r, apitems, bckProvider, &msgInt)
 			if err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
+				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
+				bmd := t.bmdowner.get()
+				glog.Infof("DELETE list|range: %s, %d µs",
+					bmd.Bstring(bucket, bckIsLocal), int64(time.Since(started)/time.Microsecond))
 			}
 			return
 		}
@@ -1105,27 +1099,16 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if errstr := lom.Load(true); errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-	// evict non-existing lom from Cloud = no-op
-	if !lom.Exists() && evict {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s/%s %s, nothing to do", bucket, objname, cmn.DoesNotExist)
-		}
-		return
-	}
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
-		s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
+		s := fmt.Sprintf("Error deleting %s: %v", lom.StringEx(), err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 	// EC cleanup if EC is enabled
 	t.ecmanager.CleanupObject(lom)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("DELETE: %s/%s, %d µs", bucket, objname, int64(time.Since(started)/time.Microsecond))
+		glog.Infof("DELETE: %s, %d µs", lom.StringEx(), int64(time.Since(started)/time.Microsecond))
 	}
 }
 
@@ -1146,12 +1129,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if bckIsLocal, ok = t.validateBucket(w, r, bucket, bckProvider); !ok {
+	bckIsLocal, ok = t.validateBucket(w, r, bucket, bckProvider)
+	if !ok {
 		return
 	}
-
 	t.ensureLatestMD(msgInt)
-
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
 		// validation done in proxy.go
@@ -1164,15 +1146,15 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 		t.bmdowner.Lock() // lock#1 begin
 
-		bucketmd := t.bmdowner.get()
-		props, ok := bucketmd.Get(bucketFrom, true)
+		bmd := t.bmdowner.get()
+		props, ok := bmd.Get(bucketFrom, true)
 		if !ok {
 			t.bmdowner.Unlock()
-			s := fmt.Sprintf("Local bucket %s %s", bucketFrom, cmn.DoesNotExist)
+			s := fmt.Sprintf("bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-		clone := bucketmd.clone()
+		clone := bmd.clone()
 		clone.LBmap[bucketTo] = props
 		t.bmdowner.put(clone) // bmd updated with an added bucket, lock#1 end
 		t.bmdowner.Unlock()
@@ -1183,11 +1165,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		t.bmdowner.Lock() // lock#2 begin
-		bucketmd = t.bmdowner.get()
-		bucketmd.del(bucketFrom, true) // TODO: resolve conflicts
+		bmd = t.bmdowner.get()
+		bmd.del(bucketFrom, true) // TODO: resolve conflicts
 		t.bmdowner.Unlock()
 
-		glog.Infof("renamed local bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
+		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
 		tag, ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt)
@@ -1195,7 +1177,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("LIST %s: %s, %d µs", tag, bucket, int64(delta/time.Microsecond))
+				bmd := t.bmdowner.get()
+				glog.Infof("LIST %s: %s, %d µs", tag, bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
 			}
 		}
 	case cmn.ActMakeNCopies:
@@ -1253,7 +1236,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
-
 	config := cmn.GCO.Get()
 	if !bckIsLocal {
 		bucketProps, errstr, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
@@ -1298,7 +1280,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
-	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.LRU.AtimeCacheMax, 10))
 	hdr.Add(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
 	hdr.Add(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
 	hdr.Add(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
@@ -1347,7 +1328,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, lom, pid)
+		glog.Infof("%s %s <= %s", r.Method, lom.StringEx(), pid)
 	}
 	if lom.BckIsLocal || checkCached {
 		if !lom.Exists() {
@@ -1540,7 +1521,6 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 		err = errors.New(errstr)
 		return
 	}
-	lom.UpdateAtimeUnix(atime, true /* migrated */)
 	lom.ReCache()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Success: %s (%s, %s) from %s", lom, cmn.B2S(lom.Size(), 1), lom.Cksum(), neighsi)
@@ -1810,7 +1790,8 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
+		bmd := t.bmdowner.get()
+		glog.Infof("%s %s <= (%s)", r.Method, bmd.Bstring(bucket, bckIsLocal), pid)
 	}
 	useCache, errstr, errcode := t.checkCacheQueryParameter(r)
 	if errstr != "" {
@@ -1883,7 +1864,6 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos
 		needVersion:  strings.Contains(msg.Props, cmn.GetPropsVersion),
 		needStatus:   strings.Contains(msg.Props, cmn.GetPropsStatus),
 		needCopies:   strings.Contains(msg.Props, cmn.GetPropsCopies),
-		atimeRespCh:  make(chan *atime.Response, 1),
 	}
 
 	if msg.PageSize != 0 {
@@ -2174,9 +2154,6 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 	if errstr = lom.PersistCksumVer(); errstr != "" {
 		glog.Errorf("failed to persist %s: %s", lom, errstr)
 	}
-	if roi.migrated {
-		lom.UpdateAtimeUnix(lom.AtimeUnix(), true /* migrated */)
-	}
 	lom.ReCache()
 	return
 }
@@ -2235,12 +2212,18 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		if errs := lom.DelAllCopies(); errs != "" {
 			glog.Errorf("%s: %s", lom, errs)
 		}
-		if err = os.Remove(lom.FQN); err != nil {
-			if errstr != "" {
-				glog.Errorf("%s: failed to delete from cloud: %s(%d)", lom, errstr, errcode)
+		err = os.Remove(lom.FQN)
+		if err != nil {
+			if os.IsNotExist(err) {
+				err = nil
+			} else {
+				if errstr != "" {
+					glog.Errorf("%s: %s(%d)", lom.StringEx(), errstr, errcode)
+				}
+				return
 			}
-			return
-		} else if evict {
+		}
+		if evict {
 			cmn.Assert(!lom.BckIsLocal)
 			t.statsif.AddMany(
 				stats.NamedVal64{stats.LruEvictCount, 1},
@@ -2248,7 +2231,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		}
 	}
 	if errstr != "" {
-		err = fmt.Errorf("%s: failed to delete from cloud: %s(%d)", lom, errstr, errcode)
+		err = fmt.Errorf("%s: %s(%d)", lom.StringEx(), errstr, errcode)
 	}
 	return
 }
@@ -2265,7 +2248,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	objnameTo := msg.Name
-	uname := cluster.Uname(bucket, objnameFrom)
+	uname := cluster.Bo2Uname(bucket, objnameFrom)
 	t.rtnamemap.Lock(uname, true)
 
 	if errstr := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo); errstr != "" {

@@ -1,4 +1,4 @@
-// Package lru provides atime-based least recently used cache replacement policy for stored objects
+// Package lru provides least recently used cache replacement policy for stored objects
 // and serves as a generic garbage-collection mechanism for orhaned workfiles.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/atime"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -81,12 +80,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 		},
 	}}
 
-	runner := atime.NewRunner(fs.Mountpaths)
-	go runner.Run()
-
 	target := cluster.NewTargetMock(bo)
-	target.Atime = runner
-
 	return target
 }
 
@@ -162,7 +156,6 @@ var _ = Describe("LRU tests", func() {
 
 		AfterEach(func() {
 			os.RemoveAll(basePath)
-			t.Atime.Stop(nil)
 		})
 
 		Describe("evict files", func() {

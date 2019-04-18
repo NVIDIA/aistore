@@ -164,7 +164,7 @@ func awsIsVersionSet(version *string) bool {
 //
 //==================
 func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, errstr string, errcode int) {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
 	sess := createSession(ct)
@@ -239,7 +239,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		// TODO: other cmn.SelectMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
@@ -255,7 +255,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 }
 
 func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int) {
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("headbucket %s", bucket)
 	}
 	bucketprops = make(cmn.SimpleKVs)
@@ -295,7 +295,7 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 	}
 	buckets = make([]string, len(result.Buckets))
 	for idx, bkt := range result.Buckets {
-		if glog.V(4) {
+		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: created %v", aws.StringValue(bkt.Name), *bkt.CreationDate)
 		}
 		buckets[idx] = aws.StringValue(bkt.Name)
@@ -327,7 +327,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, lom *cluster.LOM) (objmet
 	}
 	size := strconv.FormatInt(*headOutput.ContentLength, 10)
 	objmeta[cmn.HeaderObjSize] = size
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("HEAD %s", lom)
 	}
 	return
@@ -382,7 +382,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		errstr = err.Error()
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("GET %s", lom)
 	}
 	return
@@ -411,7 +411,7 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 		errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		if uploadoutput.VersionID != nil {
 			version = *uploadoutput.VersionID
 			glog.Infof("PUT %s, version %s", lom, version)
@@ -431,7 +431,7 @@ func (awsimpl *awsimpl) deleteobj(ct context.Context, lom *cluster.LOM) (errstr 
 		errstr = fmt.Sprintf("%s: DELETE failed, err: %v", lom, err)
 		return
 	}
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("DELETE %s", lom)
 	}
 	return

@@ -54,7 +54,7 @@ func (m *bucketMD) add(b string, local bool, p *cmn.BucketProps) bool {
 		return false
 	}
 	m.Version++
-	p.BID = m.Version
+	p.BID = m.GenBucketID(local)
 	mm[b] = p
 	return true
 }

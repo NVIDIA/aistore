@@ -148,11 +148,6 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
-		lruProps.AtimeCacheMax = n
-	} else {
-		return
-	}
 	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
 		lruProps.Enabled = b
 	} else {
