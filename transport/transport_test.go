@@ -11,7 +11,7 @@ package transport_test
 // go test -v -logtostderr=true
 //
 // 2) run a given test (name matching "Multi") with debug enabled:
-// AIS_STREAM_DEBUG=1 go test -v -run=Multi
+// AIS_DEBUG=transport=1 go test -v -run=Multi
 //
 // 3) same, with no debug and for 2 minutes instead of (the default) 30s
 // go test -v -run=Multi -duration 2m

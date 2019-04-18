@@ -45,7 +45,7 @@ In addition, there are several environment variables that can be used
 	AIS_MINMEM_FREE
 	AIS_MINMEM_PCT_TOTAL
 	AIS_MINMEM_PCT_FREE
-	AIS_MEM_DEBUG
+	AIS_DEBUG
 ```
 These names must be self-explanatory.
 
@@ -96,7 +96,7 @@ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 * All tests for 2 minutes with verbose tracing and debug (i.e., assertions) enabled:
 
 ```
-AIS_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
+AIS_DEBUG=memsys=1 go test -v -logtostderr=true -duration=2m
 ```
 
 ## Global Memory Manager

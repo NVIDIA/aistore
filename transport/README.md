@@ -203,7 +203,7 @@ go test -v -logtostderr=true
 
 * To run a test with a name matching "Multi", verbose logging and enabled assertions:
 ```
-AIS_STREAM_DEBUG=1 go test -v -run=Multi
+AIS_DEBUG=transport=1 go test -v -run=Multi
 ```
 
 For more examples, please see tests in the package directory.
@@ -213,7 +213,7 @@ For more examples, please see tests in the package directory.
 
 | Environment Variable | Description |
 |--- | --- |
-| AIS_STREAM_DEBUG | Enable inline assertions and verbose tracing |
+| AIS_DEBUG | Enable inline assertions and verbose tracing (eg. `AIS_DEBUG=transport=1`) |
 | AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
 
 
