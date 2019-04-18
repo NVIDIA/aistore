@@ -1172,8 +1172,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		t.bmdowner.Lock() // lock#2 begin
-		bmd = t.bmdowner.get()
-		bmd.del(bucketFrom, true) // TODO: resolve conflicts
+		clone = t.bmdowner.get().clone()
+		clone.del(bucketFrom, true) // TODO: resolve conflicts
+		t.bmdowner.put(clone)
 		t.bmdowner.Unlock()
 
 		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
