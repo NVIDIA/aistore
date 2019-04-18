@@ -535,9 +535,32 @@ func (lom *LOM) initBckIsLocal(bckProvider string) error {
 	return nil
 }
 
+// Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
+// instance includes the following steps:
 //
-// lom cache
+// 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
 //
+// 2) load persistent state (aka lmeta) from one of the LOM caches or the underlying
+//    filesystem: lom.Load(true/false)
+//
+//    NOTE: Load(false) also entails removing this LOM from cache, if exists -
+//    useful when you are going delete the corresponding data object, for instance
+//
+// 3) use: via lom.Atime(), lom.Cksum(), lom.Exists() and numerous other accessors
+//
+//    NOTE: it is illegal to check LOM's existence and, generally, do almost anything
+//    with it prior to loading - see the previous step
+//
+// 4) update persistent state in memory: lom.Set*() methods
+//
+//    NOTE that updating (above) requires subsequent re-caching via lom.ReCache()
+//
+// 5) update persistent state on disk: lom.Persist()
+// 6) remove a given LOM instance from cache: lom.Uncache()
+// 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
+//
+// 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
+// =======================================================================================
 func (lom *LOM) hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName) // DEBUG
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
