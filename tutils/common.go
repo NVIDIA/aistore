@@ -46,15 +46,19 @@ func CheckError(err error, t *testing.T) {
 	}
 }
 
+func prependTime(msg string) string {
+	return fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000000"), msg)
+}
+
 func Logln(msg string) {
 	if testing.Verbose() {
-		fmt.Fprintln(os.Stdout, msg)
+		fmt.Fprintln(os.Stdout, prependTime(msg))
 	}
 }
 
 func Logf(msg string, args ...interface{}) {
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, msg, args...)
+		fmt.Fprintf(os.Stdout, prependTime(msg), args...)
 	}
 }
 
