@@ -85,8 +85,10 @@ func (ctx *IostatContext) ToString() string {
 	if elapsed < ioStatIntervalStale.Nanoseconds() {
 		return ""
 	}
-
 	cache := ctx.fetchIostatCache(timestamp)
+	if cache.cachedDiskUtil == 0 {
+		return ""
+	}
 	return fmt.Sprintf("util=%v", cache.cachedDiskUtil)
 }
 

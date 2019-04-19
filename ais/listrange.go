@@ -450,7 +450,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 	for {
 		if bckIsLocal {
-			bucketListPage, err = t.prepareLocalObjectList(bucket, msg)
+			bucketListPage, err = t.prepareLocalObjectList(bucket, msg, bckIsLocal)
 		} else {
 			bucketListPage, err = getCloudBucketPage(ct, bucket, msg)
 		}

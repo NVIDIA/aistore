@@ -148,7 +148,7 @@ type (
 		clusterStarted atomic.Bool
 		fsprg          fsprungroup
 		readahead      readaheader
-		xcopy          *mirror.XactCopy
+		xputlrep       *mirror.XactPutLRepl
 		ecmanager      *ecManager
 		rebManager     *rebManager
 		capUsed        capUsed
@@ -696,7 +696,7 @@ do:
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
-		t.localMirror(lom)
+		t.putMirror(lom)
 	}
 
 	// 4. get locally and stream back
@@ -1617,8 +1617,9 @@ func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Sn
 }
 
 // should not be called for local buckets
-func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg) (outbytes []byte, errstr string) {
-	reslist, err := t.prepareLocalObjectList(bucket, msg)
+func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg,
+	bckIsLocal bool) (outbytes []byte, errstr string) {
+	reslist, err := t.prepareLocalObjectList(bucket, msg, bckIsLocal)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -1630,8 +1631,8 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg) (out
 	return
 }
 
-// TODO: add support paging for fast object listing
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg) (*cmn.BucketList, error) {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg,
+	bckIsLocal bool) (*cmn.BucketList, error) {
 	type mresp struct {
 		infos      *allfinfos
 		failedPath string
@@ -1646,8 +1647,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg)
 	walkMpath := func(dir string) {
 		r := &mresp{t.newFileWalk(bucket, msg), "", nil}
 		if msg.Fast {
-			// for "quick" request return all objects in one response
-			r.infos.limit = 1<<63 - 1
+			r.infos.limit = 1<<63 - 1 // return all objects in one response
 		}
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
@@ -1660,10 +1660,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg)
 		}
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
 		if msg.Fast {
-			// Special path for "quick" response: no object properties check,
-			// msg.Props is skipped: only object name and size returned.
-			// All other msg props do not work except msg.Prefix
-			// Always returns all objects
+			// return all object names and sizes (and only names and sizes)
 			err := godirwalk.Walk(dir, &godirwalk.Options{
 				Callback: r.infos.listwalkfFast,
 				Unsorted: false,
@@ -1672,6 +1669,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg)
 				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 				r.failedPath = dir
 				r.err = err
+			} else {
+				t.xactions.renewBckLoadLomCache(bucket, t, bckIsLocal)
 			}
 		} else if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
@@ -1686,7 +1685,6 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg)
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	bckIsLocal := t.bmdowner.get().IsLocal(bucket)
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToProcess() {
 			continue
@@ -1777,8 +1775,9 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.SelectMsg) (errstr string, ok bool) {
-	reslist, err := t.prepareLocalObjectList(bucket, msg)
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
+	bucket string, msg *cmn.SelectMsg) (errstr string, ok bool) {
+	reslist, err := t.prepareLocalObjectList(bucket, msg, true)
 	if err != nil {
 		errstr = fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
 		return
@@ -1834,10 +1833,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return // ======================================>
 	}
 	// cloud bucket
-	msg.Fast = false // fast mode does not make sense for Cloud buckets
+	msg.Fast = false // fast mode does not apply to Cloud buckets
 	if useCache {
 		tag = "cloud cached"
-		jsbytes, errstr = t.listCachedObjects(bucket, &msg)
+		jsbytes, errstr = t.listCachedObjects(bucket, &msg, false /* local */)
 	} else {
 		tag = "cloud"
 		jsbytes, err, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
@@ -2127,7 +2126,7 @@ func (roi *recvObjInfo) commit() (errstr string, errCode int) {
 	if err := roi.t.ecmanager.EncodeObject(roi.lom); err != nil && err != ec.ErrorECDisabled {
 		errstr = err.Error()
 	}
-	roi.t.localMirror(roi.lom)
+	roi.t.putMirror(roi.lom)
 	return
 }
 
@@ -2175,7 +2174,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 	return
 }
 
-func (t *targetrunner) localMirror(lom *cluster.LOM) {
+func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	mirrConf := lom.MirrorConf()
 	if !mirrConf.Enabled {
 		return
@@ -2187,22 +2186,22 @@ func (t *targetrunner) localMirror(lom *cluster.LOM) {
 		}
 		return
 	}
-	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.BckIsLocal != lom.BckIsLocal {
-		t.xcopy = t.xactions.renewPutCopies(lom, t)
+	if t.xputlrep == nil || t.xputlrep.Finished() || !t.xputlrep.SameBucket(lom) {
+		t.xputlrep = t.xactions.renewPutLocReplicas(lom, t.rtnamemap)
 	}
-	if t.xcopy == nil {
+	if t.xputlrep == nil {
 		return
 	}
-	err := t.xcopy.Copy(lom)
-	// retry in the (unlikely) case of simultaneous xcopy-timeout
+	err := t.xputlrep.Repl(lom)
+	// retry upon race vs (just finished/timedout)
 	if _, ok := err.(*cmn.ErrXpired); ok {
-		t.xcopy = t.xactions.renewPutCopies(lom, t)
-		if t.xcopy != nil {
-			err = t.xcopy.Copy(lom)
+		t.xputlrep = t.xactions.renewPutLocReplicas(lom, t.rtnamemap)
+		if t.xputlrep != nil {
+			err = t.xputlrep.Repl(lom)
 		}
 	}
 	if err != nil {
-		glog.Errorf("%s: unexpected failure to post for copying, err: %v", lom, err)
+		glog.Errorf("%s: unexpected failure to post for copying, err: %v", lom.StringEx(), err)
 	}
 }
 
@@ -2274,13 +2273,15 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	t.rtnamemap.Unlock(uname, true)
 }
 
-func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
+func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo,
+	objnameTo string) (errstr string) {
 	var (
-		fi     os.FileInfo
-		file   *cmn.FileHandle
-		si     *cluster.Snode
-		newFQN string
-		err    error
+		fi                    os.FileInfo
+		file                  *cmn.FileHandle
+		si                    *cluster.Snode
+		newFQN                string
+		cksumType, cksumValue string
+		err                   error
 	)
 	if si, errstr = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
@@ -2292,10 +2293,9 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		return
 	}
 	if fi, err = os.Stat(fqn); err != nil {
-		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
+		errstr = fmt.Sprintf("failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
 		return
 	}
-
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		bckIsLocalTo := bucketmd.IsLocal(bucketTo)
@@ -2333,7 +2333,9 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if errstr := lom.Load(false); errstr != "" {
 		return errstr
 	}
-	cksumType, cksumValue := lom.Cksum().Get()
+	if lom.Cksum() != nil {
+		cksumType, cksumValue = lom.Cksum().Get()
+	}
 	hdr := transport.Header{
 		Bucket:  bucketTo,
 		Objname: objnameTo,

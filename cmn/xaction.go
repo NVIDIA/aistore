@@ -29,13 +29,14 @@ type (
 		Finished() bool
 	}
 	XactBase struct {
-		id      int64
-		sutime  atomic.Int64
-		eutime  atomic.Int64
-		kind    string
-		bucket  string
-		abrt    chan struct{}
-		aborted atomic.Bool
+		id         int64
+		sutime     atomic.Int64
+		eutime     atomic.Int64
+		kind       string
+		bucket     string
+		abrt       chan struct{}
+		aborted    atomic.Bool
+		bckIsLocal bool
 	}
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -69,34 +70,35 @@ func NewErrXpired(s string) *ErrXpired { return &ErrXpired{errstr: s} }
 
 var _ Xact = &XactBase{}
 
-func NewXactBase(id int64, kind string, bucket ...string) *XactBase {
+func NewXactBase(id int64, kind string) *XactBase {
 	stime := time.Now()
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{})}
-	if len(bucket) > 0 {
-		xact.bucket = bucket[0]
-	}
 	xact.sutime.Store(stime.UnixNano())
+	return xact
+}
+func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsLocal bool) *XactBase {
+	xact := NewXactBase(id, kind)
+	xact.bucket, xact.bckIsLocal = bucket, bckIsLocal
 	return xact
 }
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bucket() string             { return xact.bucket }
+func (xact *XactBase) Bucket() string             { Assert(xact.bucket != ""); return xact.bucket }
+func (xact *XactBase) BckIsLocal() bool           { return xact.bckIsLocal }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
-func (xact *XactBase) Aborted() bool {
-	return xact.aborted.Load()
-}
+func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 
 func (xact *XactBase) String() string {
 	stime := xact.StartTime()
 	stimestr := stime.Format(timeStampFormat)
 	if !xact.Finished() {
-		return fmt.Sprintf("xaction %s:%d started %s", xact.Kind(), xact.ID(), stimestr)
+		return fmt.Sprintf("%s:%d started %s", xact.Kind(), xact.ID(), stimestr)
 	}
 	etime := xact.EndTime()
 	d := etime.Sub(stime)
-	return fmt.Sprintf("xaction %s:%d started %s ended %s (duration %v)", xact.Kind(), xact.ID(), stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s:%d started %s ended %s (%v)", xact.Kind(), xact.ID(), stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {
@@ -128,7 +130,7 @@ func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 
 func (xact *XactBase) Abort() {
 	if !xact.aborted.CAS(false, true) {
-		glog.Infof("ABORT: Already aborted, skipping: " + xact.String())
+		glog.Infof("already aborted: " + xact.String())
 		return
 	}
 	xact.eutime.Store(time.Now().UnixNano())
@@ -142,14 +144,14 @@ func (xact *XactBase) Abort() {
 
 var _ XactDemand = &XactDemandBase{}
 
-func NewXactDemandBase(id int64, kind string, bucket string, idleTime ...time.Duration) *XactDemandBase {
+func NewXactDemandBase(id int64, kind string, bucket string, bckIsLocal bool, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]
 	}
 	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{
-		XactBase: *NewXactBase(id, kind, bucket),
+		XactBase: *NewXactBaseWithBucket(id, kind, bucket, bckIsLocal),
 		ticker:   ticker,
 	}
 }

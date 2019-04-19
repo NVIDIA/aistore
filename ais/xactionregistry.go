@@ -49,8 +49,7 @@ type xactionsRegistry struct {
 	nextid      atomic.Int64
 	globalXacts sync.Map
 	buckets     sync.Map
-
-	byID sync.Map
+	byID        sync.Map
 }
 
 func newXactions() *xactionsRegistry {

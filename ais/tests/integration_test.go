@@ -694,7 +694,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	var (
 		m = metadata{
 			t:               t,
-			num:             20000,
+			num:             10000,
 			numGetsEachFile: 10,
 		}
 		targetURL  string

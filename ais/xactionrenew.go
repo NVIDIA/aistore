@@ -264,7 +264,7 @@ func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
 
 	id := r.uniqueID()
 	xec := ECM.newGetXact(bucket)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECGet, bucket, true /* local*/) // TODO: EC support for Cloud
 	go xec.Run()
 	entry.xact = xec
 	entry.bucket = bucket
@@ -296,7 +296,7 @@ func (r *xactionsRegistry) renewPutEC(bucket string) *ec.XactPut {
 
 	id := r.uniqueID()
 	xec := ECM.newPutXact(bucket)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECPut, bucket, true /* local */) // TODO: EC support for Cloud
 	go xec.Run()
 	entry.xact = xec
 	entry.bucket = bucket
@@ -328,7 +328,7 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 
 	id := r.uniqueID()
 	xec := ECM.newRespondXact(bucket)
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bucket)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, cmn.ActECRespond, bucket, true /* local */) // TODO: EC support for Cloud
 	go xec.Run()
 	entry.xact = xec
 	entry.bucket = bucket
@@ -365,22 +365,53 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 	// entry variable is one which is actually present in bucketXacts under makeNCopies
 	id := r.uniqueID()
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-	xmnc := &mirror.XactBckMakeNCopies{
-		XactBase:   *cmn.NewXactBase(id, cmn.ActMakeNCopies, bucket),
-		T:          t,
-		Namelocker: t.rtnamemap,
-		Slab:       slab,
-		Copies:     copies,
-		BckIsLocal: bckIsLocal,
-	}
-
+	xmnc := mirror.NewXactMNC(id, bucket, t, t.rtnamemap, slab, copies, bckIsLocal)
 	go xmnc.Run()
 	entry.xact = xmnc
 	entry.bucket = bucket
 	r.byID.Store(id, entry)
 }
 
-func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mirror.XactCopy {
+//
+// FIXME: copy-paste
+//
+
+func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target, bckIsLocal bool) {
+	if true {
+		return
+	}
+	bckXacts := r.bucketsXacts(bucket)
+
+	newEntry := &loadLomCacheEntry{}
+	newEntry.Lock()
+	defer newEntry.Unlock()
+	val, loaded := bckXacts.LoadOrStore(cmn.ActLoadLomCache, newEntry)
+
+	var entry *loadLomCacheEntry
+
+	if loaded {
+		entry = val.(*loadLomCacheEntry)
+		entry.Lock()
+		defer entry.Unlock()
+
+		if !entry.xact.Finished() {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("nothing to do: %s", entry.xact)
+			}
+			return
+		}
+	} else {
+		entry = newEntry
+	}
+	id := r.uniqueID()
+	x := mirror.NewXactLLC(id, bucket, t, bckIsLocal)
+	go x.Run()
+	entry.xact = x
+	entry.bucket = bucket
+	r.byID.Store(id, entry)
+}
+
+func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM, nl cluster.NameLocker) *mirror.XactPutLRepl {
 	bckXacts := r.bucketsXacts(lom.Bucket)
 
 	newEntry := &putCopiesEntry{}
@@ -388,7 +419,6 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 	defer newEntry.Unlock()
 
 	val, loaded := bckXacts.LoadOrStore(cmn.ActPutCopies, newEntry)
-
 	if loaded {
 		entry := val.(*putCopiesEntry)
 		entry.RLock()
@@ -398,9 +428,7 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 			return entry.xact
 		}
 	}
-
 	val, ok := bckXacts.Load(cmn.ActMakeNCopies)
-
 	if ok {
 		copiesEntry := val.(*makeNCopiesEntry)
 		copiesEntry.RLock()
@@ -411,28 +439,19 @@ func (r *xactionsRegistry) renewPutCopies(lom *cluster.LOM, t *targetrunner) *mi
 			return nil
 		}
 	}
-
-	// construct new
 	id := r.uniqueID()
-	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-	xcopy := &mirror.XactCopy{
-		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket),
-		Slab:           slab,
-		Mirror:         *lom.MirrorConf(),
-		T:              t,
-		Namelocker:     t.rtnamemap,
-		BckIsLocal:     lom.BckIsLocal,
-	}
-
-	if err := xcopy.InitAndRun(); err != nil {
+	slab := gmem2.SelectSlab2(cmn.MiB) // TODO: estimate
+	// construct and RUN
+	x, err := mirror.RunXactPutLRepl(id, lom, nl, slab)
+	if err != nil {
 		glog.Errorln(err)
-		xcopy = nil
+		x = nil
 	} else {
-		newEntry.xact = xcopy
+		newEntry.xact = x
 		newEntry.bucket = lom.Bucket
 		r.byID.Store(id, newEntry)
 	}
-	return xcopy
+	return x
 }
 
 // HELPERS
@@ -509,13 +528,17 @@ type (
 	}
 	putCopiesEntry struct {
 		baseXactEntry
-		xact   *mirror.XactCopy
+		xact   *mirror.XactPutLRepl
 		bucket string
 	}
-
 	makeNCopiesEntry struct {
 		baseXactEntry
 		xact   *mirror.XactBckMakeNCopies
+		bucket string
+	}
+	loadLomCacheEntry struct {
+		baseXactEntry
+		xact   *mirror.XactBckLoadLomCache
 		bucket string
 	}
 )
@@ -531,6 +554,10 @@ type xactEntry interface {
 }
 
 func (e *lruEntry) Get() cmn.Xact { return e.xact }
+
+//
+// FIXME: copy-paste L562 - eof
+//
 
 func (e *lruEntry) Stats() stats.XactStats {
 	e.RLock()
@@ -694,6 +721,19 @@ func (e *putCopiesEntry) Stats() stats.XactStats {
 	return s
 }
 func (e *putCopiesEntry) Abort() {
+	if e.xact != nil && !e.xact.Finished() {
+		e.xact.Abort()
+	}
+}
+
+func (e *loadLomCacheEntry) Get() cmn.Xact { return e.xact }
+func (e *loadLomCacheEntry) Stats() stats.XactStats {
+	e.RLock()
+	s := e.stats.FromXact(e.xact, e.bucket)
+	e.RUnlock()
+	return s
+}
+func (e *loadLomCacheEntry) Abort() {
 	if e.xact != nil && !e.xact.Finished() {
 		e.xact.Abort()
 	}

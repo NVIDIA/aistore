@@ -46,18 +46,15 @@ type (
 		objectsMoved atomic.Int64
 		bytesMoved   atomic.Int64
 	}
-
 	globalRebJogger struct {
 		rebJoggerBase
 		smap *smapX // cluster.Smap?
 	}
-
 	localRebJogger struct {
 		rebJoggerBase
 		slab *memsys.Slab2
 		buf  []byte
 	}
-
 	rebManager struct {
 		t           *targetrunner
 		streams     *transport.StreamBundle
@@ -117,9 +114,8 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 
 func (rj *globalRebJogger) jog() {
 	if err := filepath.Walk(rj.mpath, rj.walk); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %s traversal due to: %s", rj.mpath, s)
+		if rj.xreb.Aborted() {
+			glog.Infof("Aborting %s traversal", rj.mpath)
 		} else {
 			glog.Errorf("Failed to traverse %s, err: %v", rj.mpath, err)
 		}
@@ -447,18 +443,16 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.PublicNet.DirectURL, res.err)
 			break
 		}
-
 		status := &thealthstatus{}
 		err := jsoniter.Unmarshal(res.outjson, status)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.PublicNet.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
+				si.PublicNet.DirectURL, err, string(res.outjson))
 			break
 		}
-
 		if !status.IsRebalancing {
 			break
 		}
-
 		glog.Infof("waiting for rebalance: %v", si.PublicNet.DirectURL)
 		time.Sleep(keepaliveRetryDuration(config))
 	}
@@ -473,7 +467,6 @@ func (reb *rebManager) abortGlobalReb() {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Error("Global rebalance is aborting...")
 	}
-
 	reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb)
 
 	pmarker := persistentMarker(globalRebType)

@@ -18,24 +18,22 @@ import (
 )
 
 type (
-	XactCopy struct {
+	XactPutLRepl struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactDemandBase
 		// runtime
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
 		// init
-		Mirror         cmn.MirrorConf
-		Slab           *memsys.Slab2
-		T              cluster.Target
-		Namelocker     cluster.NameLocker
+		mirror         cmn.MirrorConf
+		slab           *memsys.Slab2
+		namelocker     cluster.NameLocker
 		wg             *sync.WaitGroup
 		total, dropped int64
 		copied         atomic.Int64
-		BckIsLocal     bool
 	}
-	copier struct { // one per mountpath
-		parent    *XactCopy
+	xputJogger struct { // one per mountpath
+		parent    *XactPutLRepl
 		mpathInfo *fs.MountpathInfo
 		workCh    chan *cluster.LOM
 		stopCh    chan struct{}
@@ -47,32 +45,40 @@ type (
 // public methods
 //
 
-// - runs on a per-mirrored bucket basis
-// - dispatches replication requests to a dedicated mountpath copier
-// - ref-counts pending requests and self-terminates when idle for a while
-func (r *XactCopy) InitAndRun() error {
+func RunXactPutLRepl(id int64,
+	lom *cluster.LOM, nl cluster.NameLocker, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
+	r = &XactPutLRepl{
+		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket, lom.BckIsLocal),
+		slab:           slab,
+		mirror:         *lom.MirrorConf(),
+		namelocker:     nl,
+	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	l := len(availablePaths)
-	if err := checkErrNumMp(r, l); err != nil {
-		return err
+	if err = checkErrNumMp(r, l); err != nil {
+		r = nil
+		return
 	}
-	r.workCh = make(chan *cluster.LOM, r.Mirror.Burst)
+	r.workCh = make(chan *cluster.LOM, r.mirror.Burst)
 	r.mpathers = make(map[string]mpather, l)
+	//
+	// RUN
+	//
 	r.wg = &sync.WaitGroup{}
 	r.wg.Add(1)
 	go r.Run()
 	for _, mpathInfo := range availablePaths {
-		copier := &copier{parent: r, mpathInfo: mpathInfo}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal)
-		r.mpathers[mpathLC] = copier
+		xputJogger := &xputJogger{parent: r, mpathInfo: mpathInfo}
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
+		r.mpathers[mpathLC] = xputJogger
 		r.wg.Add(1)
-		go copier.jog()
+		go xputJogger.jog()
 	}
 	r.wg.Wait() // wait for all to start
-	return nil
+	return
 }
 
-func (r *XactCopy) Run() error {
+func (r *XactPutLRepl) Run() error {
 	glog.Infoln(r.String())
 	r.wg.Done()
 	for {
@@ -82,11 +88,11 @@ func (r *XactCopy) Run() error {
 				glog.Errorln(errstr)
 				break
 			}
-			cmn.Assert(r.BckIsLocal == lom.BckIsLocal)
+			cmn.Assert(r.BckIsLocal() == lom.BckIsLocal)
 			if mpather := findLeastUtilized(lom, r.mpathers); mpather != nil {
 				mpather.post(lom)
 			} else {
-				glog.Errorf("%s: cannot find dst mountpath", lom)
+				glog.Errorf("%s: cannot find destination mountpath", lom)
 			}
 		case <-r.ChanCheckTimeout():
 			if r.Timeout() {
@@ -100,8 +106,13 @@ func (r *XactCopy) Run() error {
 	}
 }
 
+// TODO: move elsewhere and use bucket ID
+func (r *XactPutLRepl) SameBucket(lom *cluster.LOM) bool {
+	return r.BckIsLocal() == lom.BckIsLocal && r.Bucket() == lom.Bucket
+}
+
 // main method: replicate a given locally stored object
-func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
+func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 	if r.Finished() {
 		err = cmn.NewErrXpired("Cannot replicate: " + r.String())
 		return
@@ -110,8 +121,8 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	// [throttle]
 	// when the optimization objective is write perf,
 	// we start dropping requests to make sure callers don't block
-	pending, max := r.Pending(), r.Mirror.Burst
-	if r.Mirror.OptimizePUT {
+	pending, max := r.Pending(), r.mirror.Burst
+	if r.mirror.OptimizePUT {
 		if pending > 1 && pending >= max {
 			r.dropped++
 			if (r.dropped % logNumProcessed) == 0 {
@@ -126,7 +137,7 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	// [throttle]
 	// a bit of back-pressure when approaching the fixed boundary
 	if pending > 1 && max > 10 {
-		if pending >= max-max/8 && !r.Mirror.OptimizePUT {
+		if pending >= max-max/8 && !r.mirror.OptimizePUT {
 			time.Sleep(cmn.ThrottleSleepMax)
 		} else if pending > max-max/4 {
 			time.Sleep((cmn.ThrottleSleepAvg + cmn.ThrottleSleepMax) / 2)
@@ -137,11 +148,12 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 	return
 }
 
-func (r *XactCopy) Stop(error) { r.Abort() } // call base method
+func (r *XactPutLRepl) Stop(error) { r.Abort() } // call base method
 
 //
 // private methods
 //
+
 // =================== load balancing and self-throttling ========================
 // Generally,
 // load balancing decision must (... TODO ...) be configurable and a function of:
@@ -157,7 +169,7 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 // serve GETs are even less available for other extended actions than otherwise, etc.
 // =================== load balancing and self-throttling ========================
 
-func (r *XactCopy) stop() {
+func (r *XactPutLRepl) stop() {
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
@@ -174,13 +186,13 @@ func (r *XactCopy) stop() {
 }
 
 //
-// copier - as mpather
+// xputJogger - as mpather
 //
 
-func (j *copier) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
-func (j *copier) post(lom *cluster.LOM)            { j.workCh <- lom }
+func (j *xputJogger) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
+func (j *xputJogger) post(lom *cluster.LOM)            { j.workCh <- lom }
 
-func (j *copier) stop() {
+func (j *xputJogger) stop() {
 	for lom := range j.workCh {
 		glog.Infof("Stopping, not copying %s", lom)
 		j.parent.DecPending()
@@ -190,14 +202,14 @@ func (j *copier) stop() {
 }
 
 //
-// copier - main
+// xputJogger - main
 //
-func (j *copier) jog() {
-	glog.Infof("copier[%s] started", j.mpathInfo)
+func (j *xputJogger) jog() {
+	glog.Infof("xputJogger[%s] started", j.mpathInfo)
 	j.parent.wg.Done()
-	j.workCh = make(chan *cluster.LOM, j.parent.Mirror.Burst)
+	j.workCh = make(chan *cluster.LOM, j.parent.mirror.Burst)
 	j.stopCh = make(chan struct{}, 1)
-	j.buf = j.parent.Slab.Alloc()
+	j.buf = j.parent.slab.Alloc()
 loop:
 	for {
 		select {
@@ -208,12 +220,12 @@ loop:
 			break loop
 		}
 	}
-	j.parent.Slab.Free(j.buf)
+	j.parent.slab.Free(j.buf)
 }
 
-func (j *copier) addCopy(lom *cluster.LOM) {
-	j.parent.Namelocker.Lock(lom.Uname(), false)
-	defer j.parent.Namelocker.Unlock(lom.Uname(), false)
+func (j *xputJogger) addCopy(lom *cluster.LOM) {
+	j.parent.namelocker.Lock(lom.Uname(), false)
+	defer j.parent.namelocker.Unlock(lom.Uname(), false)
 
 	if err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)

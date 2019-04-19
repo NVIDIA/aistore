@@ -317,12 +317,14 @@ func (sb *StreamBundle) Resync() {
 		toURL := si.URL(sb.network) + cmn.URLPath(cmn.Version, cmn.Transport, sb.trname) // NOTE: destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {
-			ns := NewStream(sb.client, toURL, &sb.extra)
+			var (
+				s  string
+				ns = NewStream(sb.client, toURL, &sb.extra)
+			)
 			if sb.multiplier > 1 {
-				glog.Infof("%s: added new stream %s(%d) => %s://%s", sb, ns, k, id, toURL)
-			} else {
-				glog.Infof("%s: added new stream %s => %s://%s", sb, ns, id, toURL)
+				s = fmt.Sprintf("(%d)", k)
 			}
+			glog.Infof("%s: [+] %s%s => %s via %s", sb, ns, s, id, toURL)
 			nrobin.stsdest[k] = ns
 		}
 		nbundle[id] = nrobin
@@ -337,7 +339,7 @@ func (sb *StreamBundle) Resync() {
 			if !os.Terminated() {
 				os.Stop() // the node is gone but the stream appears to be still active - stop it
 			}
-			glog.Infof("%s: removed stream %s => %s://%s", sb, os, id, os.URL())
+			glog.Infof("%s: [-] %s => %s via %s", sb, os, id, os.URL())
 		}
 		delete(nbundle, id)
 	}

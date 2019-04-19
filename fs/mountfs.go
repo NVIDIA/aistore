@@ -447,15 +447,13 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string
 		availablePaths, _ = mfs.Get()
 		wg                = &sync.WaitGroup{}
 	)
-
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		go func(mi *MountpathInfo) {
-			ff := cmn.CreateDir
+			ff, num := cmn.CreateDir, 0
 			if !create {
 				ff = mi.FastRemoveDir
 			}
-
 			for _, bucket := range buckets {
 				for contentType := range contentTypes {
 					dir := mi.MakePathBucket(contentType, bucket, loc /*whether buckets are local*/)
@@ -464,14 +462,15 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string
 							continue
 						}
 					}
-
 					// TODO: on error abort and rollback
 					if err := ff(dir); err != nil {
 						glog.Errorf("%q (dir: %q, err: %q)", failMsg, dir, err)
 					} else {
-						glog.Infof("%q (dir %q, bucket: %q)", passMsg, dir, bucket)
+						num++
 					}
 				}
+				glog.Infof("%q (bucket %s, num dirs %d)", passMsg, bucket, num)
+				num = 0
 			}
 			wg.Done()
 		}(mpathInfo)

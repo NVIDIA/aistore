@@ -317,9 +317,8 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 	if err != nil {
 		return nil, err
 	}
-
 	return &Downloader{
-		XactDemandBase: *cmn.NewXactDemandBase(id, kind, ""),
+		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, false),
 		t:              t,
 		stats:          stats,
 		mountpaths:     f,

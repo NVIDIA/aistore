@@ -98,6 +98,7 @@ const (
 	ActElection     = "election"
 	ActPutCopies    = "putcopies"
 	ActMakeNCopies  = "makencopies"
+	ActLoadLomCache = "loadlomcache"
 	ActECGet        = "ecget"  // erasure decode objects
 	ActECPut        = "ecput"  // erasure encode objects
 	ActECRespond    = "ecresp" // respond to other targets' EC requests
