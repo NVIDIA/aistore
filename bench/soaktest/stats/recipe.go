@@ -51,8 +51,8 @@ func (rs *RecipeStats) HasData() bool {
 
 func (rs RecipeStats) getHeadingsText() map[string]string {
 	return map[string]string{
-		"beginTime": "Begin Time",
-		"endTime":   "End Time",
+		"beginTime": "Begin (excel timestamp)",
+		"endTime":   "End (excel timestamp)",
 		"recName":   "Recipe Name",
 		"recNum":    "Recipe Num",
 		"opType":    "Operation Type",
@@ -89,8 +89,8 @@ func (rs RecipeStats) getContents() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"beginTime": rs.BeginTime.Format(csvTimeFormat),
-		"endTime":   rs.EndTime.Format(csvTimeFormat),
+		"beginTime": getTimestamp(rs.BeginTime),
+		"endTime":   getTimestamp(rs.EndTime),
 		"recName":   rs.RecipeName,
 		"recNum":    rs.RecipeNum,
 		"opType":    rs.OpType,

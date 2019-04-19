@@ -39,7 +39,7 @@ func ParseClusterSysInfo(csi *cmn.ClusterSysInfo, timestamp time.Time) []*SysInf
 
 func (sis SysInfoStat) getHeadingsText() map[string]string {
 	return map[string]string{
-		"timestamp": "Timestamp",
+		"timestamp": "Time (excel timestamp)",
 		"daemonID":  "DaemonID",
 		"role":      "Role",
 
@@ -64,7 +64,7 @@ func (sis SysInfoStat) getHeadingsOrder() []string {
 
 func (sis SysInfoStat) getContents() map[string]interface{} {
 	contents := map[string]interface{}{
-		"timestamp": sis.Timestamp.Format(csvTimeFormat),
+		"timestamp": getTimestamp(sis.Timestamp),
 		"daemonID":  sis.DaemonID,
 		"role":      sis.Type,
 

@@ -33,8 +33,8 @@ type AISLoaderStat struct {
 
 func (rs PrimitiveStat) getHeadingsText() map[string]string {
 	return map[string]string{
-		"startTime": "Start Time",
-		"endTime":   "End Time",
+		"startTime": "Start (excel timestamp)",
+		"endTime":   "End (excel timestamp)",
 		"recName":   "Recipe Name",
 		"recNum":    "Recipe Num",
 		"primID":    "Primitive ID",
@@ -65,7 +65,7 @@ func (rs PrimitiveStat) getHeadingsOrder() []string {
 func (ps PrimitiveStat) getContents() map[string]interface{} {
 	if ps.Fatal {
 		return map[string]interface{}{
-			"startTime": ps.StartTime.Format(csvTimeFormat),
+			"startTime": getTimestamp(ps.StartTime),
 			"recName":   ps.RecipeName,
 			"recNum":    ps.RecipeNum,
 			"primID":    ps.ID,
@@ -75,8 +75,8 @@ func (ps PrimitiveStat) getContents() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"startTime": ps.StartTime.Format(csvTimeFormat),
-		"endTime":   ps.StartTime.Add(ps.Duration).Format(csvTimeFormat),
+		"startTime": getTimestamp(ps.StartTime),
+		"endTime":   getTimestamp(ps.StartTime.Add(ps.Duration)),
 		"recName":   ps.RecipeName,
 		"recNum":    ps.RecipeNum,
 		"primID":    ps.ID,

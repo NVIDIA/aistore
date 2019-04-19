@@ -12,8 +12,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const (
-	csvTimeFormat = time.RFC3339Nano
+var (
+	excelEpochOffsetDays = float64(25569)
+	nanoPerDay           = float64(86400 * time.Second.Nanoseconds())
 )
 
 type Stat interface {
@@ -28,8 +29,16 @@ type StatWriter struct {
 	file *os.File
 }
 
+func getTimestamp(t time.Time) float64 {
+	_, tzOffset := t.Zone() // used to convert UTC timestamp to local timezone
+	tzOffsetNano := int64(tzOffset) * time.Second.Nanoseconds()
+
+	return float64(t.UnixNano()+tzOffsetNano)/nanoPerDay + excelEpochOffsetDays
+}
+
+// FIXME: replace usages with time.Milliseconds() when implemented
 func getMilliseconds(d time.Duration) float64 {
-	return float64(d.Nanoseconds()) / float64(1e6)
+	return float64(d.Nanoseconds()) / float64(time.Millisecond)
 }
 
 func (w *StatWriter) writeHeadings(st Stat) {
