@@ -6,7 +6,6 @@
 package stats
 
 import (
-	"fmt"
 	"strings"
 	"syscall"
 	"time"
@@ -152,12 +151,9 @@ func (r *Trunner) log() (runlru bool) {
 	}
 
 	// 3. io stats
-	for mpath, mpathInfo := range availableMountpaths {
-		ioStr := mpathInfo.Iostat.ToString()
-		if ioStr != "" {
-			ioStr = fmt.Sprintf("%s: %s", mpath, ioStr)
-			r.lines = append(r.lines, ioStr)
-		}
+	ioStr := fs.Mountpaths.Iostats.ToString()
+	if ioStr != "" {
+		r.lines = append(r.lines, ioStr)
 	}
 
 	// 4. log

@@ -17,6 +17,7 @@ const (
 
 type DiskStat struct {
 	// based on https://www.kernel.org/doc/Documentation/iostats.txt
+	//   and https://www.kernel.org/doc/Documentation/block/stat.txt
 	ReadComplete  int64 // 1 - # of reads completed
 	ReadMerged    int64 // 2 - # of reads merged
 	ReadSectors   int64 // 3 - # of sectors read
@@ -48,7 +49,8 @@ func (ds *DiskStat) ToString() string {
 	}, " ")
 }
 
-func GetDiskStats(disks cmn.StringSet) DiskStats {
+// GetDiskStats returns the stats of the keys in disks
+func GetDiskStats(disks cmn.SimpleKVs) DiskStats {
 	if len(disks) < largeNumDisks {
 		output := make(DiskStats, len(disks))
 
@@ -83,7 +85,7 @@ func readSingleDiskStat(disk string) (DiskStat, bool) {
 	return extractDiskStat(fields, 0), true
 }
 
-func readMultipleDiskStats(disks cmn.StringSet) DiskStats {
+func readMultipleDiskStats(disks cmn.SimpleKVs) DiskStats {
 	output := make(DiskStats, len(disks))
 
 	file, err := os.Open("/proc/diskstats")
@@ -109,7 +111,8 @@ func readMultipleDiskStats(disks cmn.StringSet) DiskStats {
 			continue
 		}
 
-		output[deviceName] = extractDiskStat(fields, 3)
+		ds := extractDiskStat(fields, 3)
+		output[deviceName] = ds
 	}
 
 	return output

@@ -39,7 +39,7 @@ loop:
 				}
 			}
 		}
-		if u := mpathInfo.Iostat.GetDiskUtil(); u < util {
+		if u := fs.Mountpaths.Iostats.GetDiskUtil(mpathInfo.Path); u < util {
 			out = j
 			util = u
 		}

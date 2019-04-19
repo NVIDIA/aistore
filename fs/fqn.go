@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ios"
 )
 
 const (
@@ -22,6 +23,9 @@ const (
 	WorkfileFSHC        = "fshc"   // FSHC test file
 )
 
+// MountedFS should be able to resolve FQNs
+var _ ios.FQNResolver = &MountedFS{}
+
 type ParsedFQN struct {
 	MpathInfo   *MountpathInfo
 	ContentType string
@@ -29,6 +33,23 @@ type ParsedFQN struct {
 	Objname     string
 	Digest      uint64
 	IsLocal     bool
+}
+
+// FQN2mountpath fetches the mountpath of the fqn
+//  similar to Path2MpathInfo except optimized for datapath
+// FIXME: unify with Path2MpathInfo and make sure that filepath.Clean(path) is not called in the datapath
+func (mfs *MountedFS) FQN2mountpath(fqn string) (mpath string) {
+	available := (*map[string]*MountpathInfo)(mfs.available.Load())
+	max := 0
+	for curMpath := range *available {
+		// assume fqn is already clean
+		if strings.HasPrefix(fqn, curMpath) && len(curMpath) > max {
+			mpath = curMpath
+			max = len(curMpath)
+		}
+	}
+
+	return
 }
 
 // mpathInfo, bucket, objname, isLocal, err

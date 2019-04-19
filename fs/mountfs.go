@@ -68,7 +68,6 @@ type (
 		Fsid       syscall.Fsid
 		FileSystem string
 		PathDigest uint64
-		Iostat     *ios.IostatContext
 
 		// atomic, only increasing counter to prevent name conflicts
 		// see: FastRemoveDir method
@@ -98,6 +97,8 @@ type (
 		disabled atomic.Pointer
 		// Cached pointer to mountpathInfo used to store BMD
 		xattrMpath atomic.Pointer
+		// Iostats for the available mountpaths
+		Iostats *ios.IostatContext
 	}
 	ChangeReq struct {
 		Action string // MountPath action enum (above)
@@ -122,7 +123,6 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
-		Iostat:     ios.NewIostatContext(fs),
 	}
 	return mi
 }
@@ -161,12 +161,12 @@ func (mi *MountpathInfo) IsIdle(config *cmn.Config, timestamp time.Time) bool {
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	curr := mi.Iostat.GetDiskUtil(timestamp)
+	curr := Mountpaths.Iostats.GetDiskUtil(mi.Path, timestamp)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
 func (mi *MountpathInfo) String() string {
-	return fmt.Sprintf("mp[%s, fs=%s, iostat=(%v)]", mi.Path, mi.FileSystem, mi.Iostat)
+	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.FileSystem)
 }
 
 // returns fqn for a given content-type
@@ -192,10 +192,13 @@ func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname strin
 
 // NewMountedFS returns initialized instance of MountedFS struct.
 func NewMountedFS() *MountedFS {
-	return &MountedFS{
+	mfs := &MountedFS{
 		fsIDs:     make(map[syscall.Fsid]string, 10),
 		checkFsID: true,
 	}
+	mfs.Iostats = ios.NewIostatContext(mfs)
+
+	return mfs
 }
 
 // Init prepares and adds provided mountpaths. Also validates the mountpaths
@@ -251,6 +254,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	if _, exists := availablePaths[mp.Path]; exists {
 		return fmt.Errorf("tried to add already registered mountpath: %v", mp.Path)
 	}
+	mfs.Iostats.AddMpath(mp.Path, mp.FileSystem)
 
 	if existingPath, exists := mfs.fsIDs[mp.Fsid]; exists && mfs.checkFsID {
 		return fmt.Errorf("tried to add path %v but same fsid was already registered by %v", mpath, existingPath)
@@ -288,6 +292,7 @@ func (mfs *MountedFS) Remove(mpath string) error {
 	}
 
 	delete(availablePaths, mpath)
+	mfs.Iostats.RemoveMpath(mpath)
 	delete(mfs.fsIDs, mp.Fsid)
 	if l := len(availablePaths); l == 0 {
 		glog.Errorf("removed the last available mountpath %s", mp)
@@ -312,8 +317,9 @@ func (mfs *MountedFS) Enable(mpath string) (enabled, exists bool) {
 		return false, true
 	}
 
-	if _, ok := disabledPaths[mpath]; ok {
-		availablePaths[mpath] = disabledPaths[mpath]
+	if mp, ok := disabledPaths[mpath]; ok {
+		availablePaths[mpath] = mp
+		mfs.Iostats.AddMpath(mpath, mp.FileSystem)
 		delete(disabledPaths, mpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		return true, true
@@ -333,6 +339,7 @@ func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
 	if mpathInfo, ok := availablePaths[mpath]; ok {
 		disabledPaths[mpath] = mpathInfo
+		mfs.Iostats.RemoveMpath(mpath)
 		delete(availablePaths, mpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		if l := len(availablePaths); l == 0 {

@@ -287,27 +287,16 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 
 // best-effort GET load balancing (see also `mirror` for loadBalancePUT)
 func (lom *LOM) LoadBalanceGET() (fqn string) {
-	fqn = lom.FQN
 	if len(lom.md.copyFQN) == 0 {
-		return
+		// FIXME: increment the mpathRRCounter in Iostats for lom.FQN when code is more mature
+		return lom.FQN
 	}
-	utilMin := lom.ParsedFQN.MpathInfo.Iostat.GetDiskUtil()
-	for _, cpyfqn := range lom.md.copyFQN {
-		if utilMin < lom.MirrorConf().UtilThresh {
-			break
-		}
+	fqn = fs.Mountpaths.Iostats.GetRoundRobin(lom.FQN, lom.md.copyFQN)
 
-		parsedCpyFQN, err := fs.Mountpaths.FQN2Info(cpyfqn)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		utilCur := parsedCpyFQN.MpathInfo.Iostat.GetDiskUtil()
-		if utilCur < utilMin {
-			fqn = cpyfqn
-			utilMin = utilCur
-		}
+	if bool(glog.FastV(4, glog.SmoduleAIS)) && fqn != lom.FQN {
+		glog.Infof("GET %s from a mirror %s", lom.FQN, fqn)
 	}
+
 	return
 }
 
