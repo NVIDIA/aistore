@@ -127,7 +127,7 @@ func (xact *XactBase) EndTime(e ...time.Time) time.Time {
 }
 
 func (xact *XactBase) Abort() {
-	if xact.aborted.CAS(false, true) {
+	if !xact.aborted.CAS(false, true) {
 		glog.Infof("ABORT: Already aborted, skipping: " + xact.String())
 		return
 	}
