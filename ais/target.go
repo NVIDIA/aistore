@@ -45,8 +45,9 @@ import (
 )
 
 const (
-	maxPageSize   = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
-	maxBytesInMem = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
+	maxPageSize     = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
+	maxBytesInMem   = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
+	maxBMDXattrSize = 128 * 1024
 
 	// GET-from-neighbors tunables
 	getFromNeighRetries   = 10
@@ -568,7 +569,13 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	// list bucket names
 	if bucket == cmn.ListAll {
-		t.getbucketnames(w, r, normalizedBckProvider)
+		query := r.URL.Query()
+		what := query.Get(cmn.URLParamWhat)
+		if what == cmn.GetWhatBucketMetaX {
+			t.bucketsFromXattr(w, r)
+		} else {
+			t.getbucketnames(w, r, normalizedBckProvider)
+		}
 		return
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
@@ -1786,6 +1793,27 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg,
 	}
 
 	return bucketList, nil
+}
+
+func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) {
+	bmdXattr := &bucketMD{}
+	slab, err := gmem2.GetSlab2(maxBMDXattrSize)
+	if err != nil {
+		t.invalmsghdlr(w, r, "Failed to read BMD from xattrs: "+err.Error())
+		return
+	}
+
+	buf := slab.Alloc()
+	if err := bmdXattr.Load(buf); err != nil {
+		slab.Free(buf)
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	slab.Free(buf)
+
+	jsbytes, err := jsoniter.Marshal(bmdXattr)
+	cmn.AssertNoErr(err)
+	t.writeJSON(w, r, jsbytes, "getbucketsxattr")
 }
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {

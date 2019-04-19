@@ -15,7 +15,7 @@ const (
 	maxAttrSize = 1024
 )
 
-// GetXattr gets xattr by name
+// GetXattr gets xattr by name - xattr size is limited(maxAttrSize)
 func GetXattr(fqn, attrname string) ([]byte, string) {
 	data := make([]byte, maxAttrSize)
 	read, err := syscall.Getxattr(fqn, attrname, data)
@@ -29,9 +29,19 @@ func GetXattr(fqn, attrname string) ([]byte, string) {
 	return nil, ""
 }
 
+// GetXattr gets xattr by name - with external buffer to load big chunks
+func GetXattrBuf(fqn, attrname string, data []byte) (int, string) {
+	cmn.AssertMsg(data != nil, "GetXattrBuf - buffer is nil")
+	read, err := syscall.Getxattr(fqn, attrname, data)
+	cmn.Assert(read < len(data))
+	if err != nil && err != syscall.ENODATA {
+		return 0, fmt.Sprintf("Failed to get xattr %s: %s, err [%v]", attrname, fqn, err)
+	}
+	return read, ""
+}
+
 // SetXattr sets xattr name = value
 func SetXattr(fqn, attrname string, data []byte) (errstr string) {
-	cmn.Assert(len(data) < maxAttrSize)
 	err := syscall.Setxattr(fqn, attrname, data, 0)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to set xattr %s: %s, err [%v]", attrname, fqn, err)

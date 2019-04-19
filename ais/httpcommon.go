@@ -1013,7 +1013,26 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
-	info, err := jsoniter.Marshal(h.si)
+
+	req := targetRegMeta{SI: h.si}
+	if !isproxy && !keepalive {
+		xBMD := &bucketMD{}
+		slab, err := gmem2.GetSlab2(maxBMDXattrSize)
+		if err == nil {
+			buf := slab.Alloc()
+			errBMD := xBMD.Load(buf)
+			if errBMD == nil && xBMD.Version != 0 {
+				glog.Infof("Target %s is joining cluster and sending xattr %s version %d", h.si.DaemonID, bmdTermName, xBMD.Version)
+				req.BMD = xBMD
+			}
+			slab.Free(buf)
+		} else {
+			// not critical - do not fail the registration process, only log it
+			glog.Errorf("Failed to allocate memory to read %s from xattrs", bmdTermName)
+		}
+	}
+
+	info, err := jsoniter.Marshal(req)
 	cmn.AssertNoErr(err)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)

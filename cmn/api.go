@@ -18,9 +18,10 @@ import (
 
 // string enum: http header, checksum, versioning
 const (
-	// http header
-
+	// FS extended attributes
 	XattrLOM = "user.ais.lom"
+	XattrBMD = "user.ais.bmd"
+
 	// checksum hash function
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
@@ -102,6 +103,7 @@ const (
 	ActECPut        = "ecput"  // erasure encode objects
 	ActECRespond    = "ecresp" // respond to other targets' EC requests
 	ActStartGFN     = "metasync-start-gfn"
+	ActRecoverBck   = "recoverbck"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -284,6 +286,7 @@ const (
 	GetWhatSnode        = "snode"
 	GetWhatSysInfo      = "sysinfo"
 	GetWhatDaemonStatus = "status"
+	GetWhatBucketMetaX  = "bucketmdxattr"
 )
 
 // SelectMsg.TimeFormat enum

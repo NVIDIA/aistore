@@ -10,6 +10,8 @@
     - [properties-and-options](#properties-and-options)
     - [Example: listing local and Cloud buckets](#example-listing-local-and-cloud-buckets)
     - [Example: Listing all pages](#example-listing-all-pages)
+- [Recover Buckets](#recover-buckets)
+    - [Example: Recovering buckets](#example-recovering-buckets)
 
 ## Bucket
 
@@ -188,3 +190,23 @@ for {
 ```
 
 >> PageMarker returned as part of the pagelist *points* to the *next* page.
+
+## Recover Buckets
+
+After rebuilding a cluster and redeploying proxies, the primary proxy does not have information about buckets used in a previous session. But targets still contain the old data. The primary proxy can retrieve bucket metadata from all targets and then recreate the buckets.
+
+Bucket recovering comes in two flavours: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with highest version and proceeds with it.
+
+### Example: Recovering buckets
+
+To recover buckets in safe mode, run:
+
+```shell
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets
+```
+
+To force recovering buckets, run:
+
+```shell
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets?force=true
+```

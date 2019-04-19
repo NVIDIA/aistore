@@ -55,8 +55,8 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	t.gfn.global.activate(meta.Smap)
 
 	// bmd
-	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.Bmd)
-	if errstr := t.receiveBucketMD(meta.Bmd, msgInt, bucketMDRegister); errstr != "" {
+	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
+	if errstr := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister); errstr != "" {
 		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
 		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
@@ -927,6 +927,20 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
+
+		go func() {
+			t.bmdowner.Lock()
+			bmd := t.bmdowner.get()
+			if bmd.Version == 1 && len(bmd.LBmap) == 0 && len(bmd.CBmap) == 0 {
+				// do not overwrite xattrs if a cluster sends initial bmd
+				t.bmdowner.Unlock()
+				return
+			}
+			if err := bmd.Persist(); err != nil {
+				glog.Errorf("Error while saving new BMD: %v", err)
+			}
+			t.bmdowner.Unlock()
+		}()
 	}
 
 	revokedTokens, errstr := t.extractRevokedTokenList(payload)

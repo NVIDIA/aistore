@@ -5,13 +5,20 @@
 package ais
 
 import (
+	"encoding/binary"
+	"fmt"
 	"strconv"
 	"sync"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+
+	"github.com/OneOfOne/xxhash"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: to access bucket metadata and related structures, external
@@ -36,6 +43,10 @@ type bucketMD struct {
 	cluster.BMD
 	vstr string // itoa(Version), to have it handy for http redirects
 }
+
+var (
+	cksumSize = binary.Size(uint64(0))
+)
 
 // c-tor
 func newBucketMD() *bucketMD {
@@ -133,6 +144,97 @@ func (m *bucketMD) version() int64 { return m.Version }
 
 func (m *bucketMD) marshal() ([]byte, error) {
 	return jsonCompat.Marshal(m) // jsoniter + sorting
+}
+
+// Extracts JSON payload and its checksum from []byte.
+// Checksum is the first line, the other lines are JSON payload
+// that represents marshaled bucketMD structure
+func (m *bucketMD) UnmarshalXattr(b []byte) error {
+	const emptyPayloadLen = len("\n{}")
+	cmn.AssertMsg(len(b) >= cksumSize+emptyPayloadLen, "Incomplete bucketMD payload")
+
+	expectedCksm, mdJSON := binary.BigEndian.Uint64(b[:cksumSize]), b[cksumSize+1:]
+	actualCksum := xxhash.Checksum64S(mdJSON, 0)
+	if actualCksum != expectedCksm {
+		return fmt.Errorf("checksum %v mismatches, expected %v", actualCksum, expectedCksm)
+	}
+	err := jsoniter.Unmarshal(mdJSON, m)
+	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Restored BMD copy version %d", m.Version)
+	}
+	return err
+}
+
+// Marshals bucketMD into JSON, calculates JSON checksum and generates
+// a payload as [checksum] + "\n" + JSON
+func (m *bucketMD) MarshalXattr() []byte {
+	payload, err := jsoniter.Marshal(m)
+	cmn.Assert(err == nil)
+	cksum := xxhash.Checksum64S(payload, 0)
+
+	bufLen := cksumSize + 1 + len(payload)
+	body := make([]byte, bufLen)
+	binary.BigEndian.PutUint64(body, cksum)
+	body[cksumSize] = '\n'
+	copy(body[cksumSize+1:], payload)
+
+	return body
+}
+
+// Selects a mountpath with highest weight and reads xattr of the
+// directory where mountpath is mounted
+func (m *bucketMD) Load(buf []byte) error {
+	mpath, err := fs.Mountpaths.MpathForXattr()
+	if err != nil {
+		return err
+	}
+
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Reading %s copy from %s of %s", bmdTermName, cmn.XattrBMD, mpath.Path)
+	}
+	read, errstr := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
+	if errstr != "" {
+		return fmt.Errorf("failed to read xattr from %q: %s", mpath.Path, errstr)
+	}
+
+	if read > 0 {
+		return m.UnmarshalXattr(buf[:read])
+	}
+	return nil
+}
+
+// Selects a mountpath with highest weight and saves BMD to its xattr
+func (m *bucketMD) Persist() error {
+	mpath, err := fs.Mountpaths.MpathForXattr()
+	if err != nil {
+		return err
+	}
+
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Saving %s v%d copy to %s of %s", bmdTermName, m.Version, cmn.XattrBMD, mpath.Path)
+	}
+	b := m.MarshalXattr()
+	errstr := fs.SetXattr(mpath.Path, cmn.XattrBMD, b)
+	if errstr != "" {
+		return fmt.Errorf("failed to save xattr to %q: %s", mpath.Path, errstr)
+	}
+
+	return nil
+}
+
+func (m *bucketMD) Dump() string {
+	s := fmt.Sprintf("BMD Version %d\nLocal buckets: [", m.Version)
+	for name := range m.LBmap {
+		s += name + ", "
+	}
+
+	s += "]\nCloud buckets: ["
+	for name := range m.CBmap {
+		s += name + ", "
+	}
+	s += "]"
+
+	return s
 }
 
 //=====================================================================

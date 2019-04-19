@@ -96,6 +96,8 @@ type (
 		// Disabled mountpaths - mountpaths which for some reason did not pass
 		// the health check and cannot be used for a moment.
 		disabled atomic.Pointer
+		// Cached pointer to mountpathInfo used to store BMD
+		xattrMpath atomic.Pointer
 	}
 	ChangeReq struct {
 		Action string // MountPath action enum (above)
@@ -440,6 +442,7 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
 	mfs.available.Store(unsafe.Pointer(&available))
 	mfs.disabled.Store(unsafe.Pointer(&disabled))
+	mfs.xattrMpath.Store(unsafe.Pointer(nil))
 }
 
 func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string, failMsg string, buckets ...string) {
@@ -503,4 +506,36 @@ func (mfs *MountedFS) String() string {
 		s += mpathInfo.String() + "\n"
 	}
 	return strings.TrimSuffix(s, "\n")
+}
+
+// Select a "random" mountpath using HRW algorithm to store/load bucket metadata
+func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
+	// fast path
+	mp := mfs.xattrMpath.Load()
+	if mp != nil {
+		return (*MountpathInfo)(mp), nil
+	}
+
+	// slow path
+	avail := (*map[string]*MountpathInfo)(mfs.available.Load())
+	if len(*avail) == 0 {
+		return nil, fmt.Errorf("no mountpath available")
+	}
+
+	maxVal := uint64(0)
+	for _, m := range *avail {
+		if m.PathDigest > maxVal {
+			maxVal = m.PathDigest
+			mpath = m
+		}
+	}
+	if mpath == nil {
+		return nil, fmt.Errorf("failed to choose a mountpath")
+	}
+
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Mountpath %q selected for storing BMD in xattrs", mpath.Path)
+	}
+	mfs.xattrMpath.Store(unsafe.Pointer(mpath))
+	return mpath, nil
 }

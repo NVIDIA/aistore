@@ -30,6 +30,10 @@ type targetMocker interface {
 	votehdlr(w http.ResponseWriter, r *http.Request)
 }
 
+type MockRegRequest struct {
+	SI *cluster.Snode `json:"si"`
+}
+
 func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
 	mux := http.NewServeMux()
 
@@ -76,7 +80,8 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 		}
 		v.IntraControlNet = v.PublicNet
 		v.IntraDataNet = v.PublicNet
-		jsonDaemonInfo, err = jsoniter.Marshal(v)
+		regReq := MockRegRequest{SI: v}
+		jsonDaemonInfo, err = jsoniter.Marshal(regReq)
 		if err != nil {
 			return err
 		}

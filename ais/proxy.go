@@ -59,8 +59,9 @@ type (
 	}
 	// two pieces of metadata a self-registering (joining) target wants to know right away
 	targetRegMeta struct {
-		Smap *smapX    `json:"smap"`
-		Bmd  *bucketMD `json:"bmd"`
+		Smap *smapX         `json:"smap"`
+		BMD  *bucketMD      `json:"bmd"`
+		SI   *cluster.Snode `json:"si"`
 	}
 )
 
@@ -714,19 +715,25 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var (
-		msg            cmn.ActionMsg
-		bckIsLocal, ok bool
+		msg                 cmn.ActionMsg
+		bckIsLocal, ok      bool
+		bucket, bckProvider string
 	)
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if bckIsLocal, ok = p.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
+
+	// detect bucket name if it is single-bucket request
+	if len(apitems) != 0 {
+		bucket = apitems[0]
+		bckProvider = r.URL.Query().Get(cmn.URLParamBckProvider)
+		if bckIsLocal, ok = p.validateBucket(w, r, bucket, bckProvider); !ok {
+			return
+		}
 	}
 
+	// bucket name + action
 	if len(apitems) > 1 {
 		switch apitems[1] {
 		case cmn.ActListObjects:
@@ -741,6 +748,16 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
+	// bucketMD-wide action
+	if len(apitems) == 0 {
+		if msg.Action == cmn.ActRecoverBck {
+			p.recoverBuckets(w, r, &msg)
+		} else {
+			p.invalmsghdlr(w, r, "path is too short: bucket name expected")
+		}
+		return
+	}
+
 	config := cmn.GCO.Get()
 	switch msg.Action {
 	case cmn.ActCreateLB:
@@ -2626,7 +2643,8 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 // register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		nsi                 cluster.Snode
+		regReq              targetRegMeta
+		nsi                 *cluster.Snode
 		msg                 *cmn.ActionMsg
 		s                   string
 		keepalive, register bool
@@ -2636,14 +2654,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if cmn.ReadJSON(w, r, &nsi) != nil {
+	if cmn.ReadJSON(w, r, &regReq) != nil {
 		return
 	}
+	nsi = regReq.SI
 	if err := nsi.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	isProxy := nsi.DaemonType == cmn.Proxy
+	if regReq.BMD != nil && glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Received %s from %s(%s) on registering:\n%s]",
+			bmdTermName, nsi.DaemonID, nsi.DaemonType, regReq.BMD.Dump())
+	}
 	if len(apitems) > 0 {
 		keepalive = apitems[0] == cmn.Keepalive
 		register = apitems[0] == cmn.Register // user via REST API
@@ -2657,7 +2680,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s = fmt.Sprintf("register %s (keepalive=%t)", &nsi, keepalive)
+	s = fmt.Sprintf("register %s (keepalive=%t)", nsi, keepalive)
 	msg = &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
@@ -2668,7 +2691,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("register %s: invalid IP address %v", (&nsi).Name(), nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("register %s: invalid IP address %v", nsi.Name(), nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2679,7 +2702,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	smap := p.smapowner.get()
 	if isProxy {
 		osi := smap.GetProxy(nsi.DaemonID)
-		if !p.addOrUpdateNode(&nsi, osi, keepalive) {
+		if !p.addOrUpdateNode(nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
@@ -2689,16 +2712,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		// FIXME: If not keepalive then update smap anyway - either: new target,
 		// updated target or target has powercycled. Except 'updated target' case,
 		// rebalance needs to be triggered and updating smap is the easiest way.
-		if keepalive && !p.addOrUpdateNode(&nsi, osi, keepalive) {
+		if keepalive && !p.addOrUpdateNode(nsi, osi, keepalive) {
 			p.smapowner.Unlock()
 			return
 		}
 		if register {
 			if glog.V(3) {
-				glog.Infof("register %s (num targets before %d)", (&nsi).Name(), smap.CountTargets())
+				glog.Infof("register %s (num targets before %d)", nsi.Name(), smap.CountTargets())
 			}
 			args := callArgs{
-				si: &nsi,
+				si: nsi,
 				req: reqArgs{
 					method: http.MethodPost,
 					path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
@@ -2708,7 +2731,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				errstr := fmt.Sprintf("Failed to register %s: %v, %s", (&nsi).Name(), res.err, res.errstr)
+				errstr := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.errstr)
 				p.invalmsghdlr(w, r, errstr, res.status)
 				return
 			}
@@ -2716,7 +2739,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	if !p.startedUp.Load() {
 		clone := p.smapowner.get().clone()
-		clone.putNode(&nsi, nonElectable)
+		clone.putNode(nsi, nonElectable)
 		p.smapowner.put(clone)
 		p.smapowner.Unlock()
 		return
@@ -2724,7 +2747,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.smapowner.Unlock()
 	if !isProxy && !register { // case: self-registering target
 		bmd := p.bmdowner.get()
-		meta := targetRegMeta{smap, bmd}
+		meta := targetRegMeta{smap, bmd, p.si}
 		jsbytes, err := jsoniter.Marshal(&meta)
 		cmn.AssertNoErr(err)
 		p.writeJSON(w, r, jsbytes, path.Join(cmn.ActRegTarget, nsi.DaemonID) /* tag */)
@@ -2771,7 +2794,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			pairs = append(pairs, revspair{tokens, msgInt})
 		}
 		p.metasyncer.sync(false, pairs...)
-	}(&nsi)
+	}(nsi)
 }
 
 func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool) bool {
@@ -3084,4 +3107,85 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 	err := jsoniter.Unmarshal(res.outjson, si)
 	cmn.AssertNoErr(err)
 	return !nsi.Equals(si)
+}
+
+// User request to recover buckets found on all targets. On primary size:
+// 1. Broadcasts request to get all bucket lists stored in xattrs
+// 2. Sorts results by BMD version in descending order
+// 3. Force=true: use BMD with highest version number as new BMD
+//    Force=false: use targets' BMD only if they are of the same version
+// 4. Set primary's BMD version to be greater than any target's one
+// 4. Metasync the merged BMD
+func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg) {
+	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
+	query := url.Values{}
+	query.Add(cmn.URLParamWhat, cmn.GetWhatBucketMetaX)
+	smapX := p.smapowner.get()
+
+	// request all targets for their BMD saved to xattrs
+	results := p.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
+		query,
+		http.MethodGet,
+		nil, // message
+		smapX,
+		cmn.GCO.Get().Timeout.Default,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+
+	bmdList := make([]*bucketMD, 0, len(results))
+	for result := range results {
+		if result.err != nil || result.status >= http.StatusBadRequest {
+			glog.Errorf(
+				"failed to execute list buckets request: %v (%d: %s)",
+				result.err,
+				result.status,
+				result.errstr,
+			)
+			continue
+		}
+
+		bmd := &bucketMD{}
+		err := jsoniter.Unmarshal(result.outjson, bmd)
+		if err != nil {
+			glog.Errorf("Failed to unmarshal bmd from %s: %v", result.si.DaemonID, err)
+			continue
+		}
+
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Received BMD from %s (version %d):\n%s",
+				result.si.DaemonID, bmd.Version, string(result.outjson))
+		}
+
+		bmdList = append(bmdList, bmd)
+	}
+
+	bmdLen := len(bmdList)
+	if bmdLen == 0 {
+		p.invalmsghdlr(w, r, "No bucket metadata found on targets")
+		return
+	}
+
+	// sort in descending order by BMD.Version
+	sort.Slice(bmdList, func(i, j int) bool {
+		return bmdList[i].Version > bmdList[j].Version
+	})
+
+	// without force all targets must have BMD of the same version
+	if !force && bmdLen > 1 && bmdList[0].Version != bmdList[bmdLen-1].Version {
+		p.invalmsghdlr(w, r, "Targets have different bucket metadata versions")
+		return
+	}
+
+	// now take the bucket metadata with highest version
+	clone := bmdList[0]
+	// set BMD version greater than the highest target's BMD
+	clone.Version += 100
+	p.bmdowner.Lock()
+	p.bmdowner.put(clone)
+	p.bmdowner.Unlock()
+
+	msgInt := p.newActionMsgInternal(actionMsg, nil, clone)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
