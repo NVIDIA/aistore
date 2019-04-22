@@ -597,13 +597,14 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		lom     *cluster.LOM
-		started time.Time
-		config  = cmn.GCO.Get()
-		ct      = t.contextWithAuth(r.Header)
-		query   = r.URL.Query()
-		errcode int
-		retried bool
+		lom             *cluster.LOM
+		started         time.Time
+		config          = cmn.GCO.Get()
+		ct              = t.contextWithAuth(r.Header)
+		query           = r.URL.Query()
+		errcode         int
+		retried         bool
+		loadedFromCache bool
 	)
 	//
 	// 1. start, init lom, ...readahead
@@ -641,11 +642,13 @@ do:
 		goto get
 	}
 
-	if errstr = lom.Load(true); errstr != "" {
+	loadedFromCache, errstr = lom.LoadCheck(true)
+	if errstr != "" {
 		t.rtnamemap.Unlock(lom.Uname(), false)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
+
 	coldGet = !lom.Exists()
 	if coldGet && lom.BckIsLocal {
 		// does not exist in the local bucket: restore from neighbors
@@ -669,7 +672,13 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && lom.CksumConf().ValidateWarmGet {
-		if errstr = lom.ValidateChecksum(true); errstr != "" {
+		if loadedFromCache {
+			errstr = lom.ValidateChecksum(true)
+		} else {
+			errstr = lom.ValidateDiskChecksum()
+		}
+
+		if errstr != "" {
 			if lom.BadCksum {
 				glog.Errorln(errstr)
 				if lom.BckIsLocal {

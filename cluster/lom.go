@@ -84,6 +84,7 @@ func (lom *LOM) Uname() string               { return lom.md.uname }
 func (lom *LOM) BMD() *BMD                   { return lom.bucketMD }
 func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
 func (lom *LOM) SetCopyFQN(cpyFQN []string)  { lom.md.copyFQN = cpyFQN }
+func (lom *LOM) AddXcopy(cpyfqn string)      { lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn) }
 func (lom *LOM) Size() int64                 { return lom.md.size }
 func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
 func (lom *LOM) Version() string             { return lom.md.version }
@@ -132,32 +133,6 @@ func (lom *LOM) GenFQN(ty, prefix string) string {
 //
 // local copy management
 //
-func (lom *LOM) SetXcopy(cpyfqn string) string { // cross-ref
-	var (
-		copyLOM *LOM
-		errstr  string
-		err     error
-	)
-
-	lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn)
-
-	if err = lom.Persist(); err == nil {
-		copyLOM = lom.clone(cpyfqn)
-		copyLOM.md.copyFQN = []string{lom.FQN}
-		if err = copyLOM.Persist(); err == nil {
-			// ok
-			return ""
-		}
-	}
-	errstr = err.Error()
-
-	// on error
-	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
-		lom.T.FSHC(err, lom.FQN)
-	}
-	return errstr
-}
-
 func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
 	cmn.Assert(!lom.IsCopy())
 	var (
@@ -174,23 +149,13 @@ func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
 		return fmt.Sprintf("lom %s(%d): copy %s %s", lom, l, cpyfqn, cmn.DoesNotExist)
 	}
 	if l == 1 {
-		errstr = lom.DelAllCopies()
-
-		if err := lom.Persist(); errstr == "" && err != nil {
-			errstr = err.Error()
-		}
-
-		return errstr
+		return lom.DelAllCopies()
 	}
 	if cpyidx < l-1 {
 		copy(lom.md.copyFQN[cpyidx:], lom.md.copyFQN[cpyidx+1:])
 	}
 	lom.md.copyFQN = lom.md.copyFQN[:l-1]
 	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
-		return err.Error()
-	}
-
-	if err := lom.Persist(); err != nil {
 		return err.Error()
 	}
 
@@ -217,7 +182,6 @@ func (lom *LOM) DelAllCopies() (errstr string) {
 	}
 
 	lom.md.copyFQN = []string{}
-
 	return
 }
 
@@ -226,13 +190,8 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		err = fmt.Errorf("%s is a copy", lom)
 		return
 	}
-	dst = lom.clone(dstFQN)
-	if err = cmn.CopyFile(lom.FQN, dst.FQN, buf); err != nil {
-		return
-	}
-	if err := dst.Persist(); err != nil {
-		return nil, err
-	}
+	dst = lom.Clone(dstFQN)
+	err = cmn.CopyFile(lom.FQN, dst.FQN, buf)
 	return
 }
 
@@ -370,8 +329,8 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 // ==============================================================================
 func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 	var (
-		storedCksum, computedCksum string
-		cksumType                  = lom.CksumConf().Type
+		storedCksum string
+		cksumType   = lom.CksumConf().Type
 	)
 	if cksumType == cmn.ChecksumNone {
 		return
@@ -407,6 +366,29 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 	if storedCksum != "" && !recompute {
 		return
 	}
+
+	return lom.ValidateDiskChecksum()
+}
+
+// ValidateDiskChecksum validates if checksum stored in lom's metadata matches checksum
+// of object's content stored on a disk. It does not check if lom's metadata checksum matches with
+// checksum in lom's xattributes. This function is supposed to be called only when we know that
+// xattr and meta checksums match, and we want to save one FS read
+func (lom *LOM) ValidateDiskChecksum() (errstr string) {
+	var (
+		storedCksum, computedCksum string
+		cksumType                  = lom.CksumConf().Type
+	)
+
+	if cksumType == cmn.ChecksumNone {
+		return
+	}
+
+	if lom.md.cksum != nil {
+		_, storedCksum = lom.md.cksum.Get()
+		cmn.Assert(storedCksum != "")
+	}
+
 	// compute
 	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
 	if computedCksum, errstr = lom.computeXXHash(lom.FQN, lom.md.size); errstr != "" {
@@ -429,6 +411,7 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 		errstr = lom.BadCksumErr(v)
 		lom.Uncache()
 	}
+
 	return
 }
 
@@ -468,7 +451,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumstr, errstr string) 
 //
 // private methods
 //
-func (lom *LOM) clone(fqn string) *LOM {
+func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
 	dst.FQN = fqn
@@ -579,7 +562,8 @@ func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
 	return
 }
 
-func (lom *LOM) Load(add bool) (errstr string) {
+// The same as Load, but returns additionally if lom was loaded from cache (or read from FS otherwise)
+func (lom *LOM) LoadCheck(add bool) (loaded bool, errstr string) {
 	// fast path
 	var (
 		hkey, idx = lom.hkey()
@@ -587,6 +571,7 @@ func (lom *LOM) Load(add bool) (errstr string) {
 	)
 	lom.loaded = true
 	if md, ok := cache.M.Load(hkey); ok {
+		loaded = true
 		lom.exists = true
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
@@ -608,6 +593,11 @@ func (lom *LOM) Load(add bool) (errstr string) {
 		}
 		cache.M.Store(hkey, md)
 	}
+	return
+}
+
+func (lom *LOM) Load(add bool) (errstr string) {
+	_, errstr = lom.LoadCheck(add)
 	return
 }
 

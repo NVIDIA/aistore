@@ -5,7 +5,6 @@
 package mirror
 
 import (
-	"errors"
 	"os"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -54,19 +53,38 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err erro
 	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
 	lom.ParsedFQN.MpathInfo = mp
 
-	if _, err = lom.CopyObject(workFQN, buf); err != nil {
+	_, err = lom.CopyObject(workFQN, buf)
+	if err != nil {
 		return
 	}
+
 	cpyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+
 	if err = cmn.MvFile(workFQN, cpyFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
 			glog.Errorf("Failed to remove %s, err: %v", workFQN, errRemove)
 		}
 		return
 	}
-	if errstr := lom.SetXcopy(cpyFQN); errstr != "" {
-		err = errors.New(errstr)
+
+	// Append copyFQN to FQNs of existing copies
+	lom.AddXcopy(cpyFQN)
+
+	if err = lom.Persist(); err == nil {
+		copyLOM := lom.Clone(cpyFQN)
+		copyLOM.SetCopyFQN([]string{lom.FQN})
+		if err = copyLOM.Persist(); err == nil {
+			lom.ReCache()
+			return
+		}
 	}
+
+	// on error
+	// FIXME: add rollback which restores lom's metadata in case of failure
+	if err := os.Remove(cpyFQN); err != nil && !os.IsNotExist(err) {
+		lom.T.FSHC(err, lom.FQN)
+	}
+
 	lom.ReCache()
 	return
 }

@@ -166,6 +166,11 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 				err = errors.New(errstr)
 				break
 			}
+
+			if err = lom.Persist(); err != nil {
+				break
+			}
+
 			size += lom.Size()
 		}
 	}

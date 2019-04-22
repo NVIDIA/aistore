@@ -320,6 +320,10 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 
 	rj.m.t.rtnamemap.Lock(lom.Uname(), false)
 	dst, erc := lom.CopyObject(lom.HrwFQN, rj.buf)
+	if erc == nil {
+		erc = dst.Persist()
+	}
+
 	if erc != nil {
 		rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
 		if !os.IsNotExist(erc) {

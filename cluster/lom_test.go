@@ -448,6 +448,66 @@ var _ = Describe("LOM", func() {
 				})
 			})
 
+			// copy-paste of some of ValidateChecksum tests, however if there's no
+			// mocking solution, it's needed to have the same tests for both methods
+			Describe("ValidateDiskChecksum", func() {
+				It("should ignore if bucket checksum is none", func() {
+					testObject := "foldr/test-obj.ext"
+					noneFQN := filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, bucketLocalA, testObject)
+
+					lom := NewBasicLom(noneFQN, tMock)
+					err := lom.ValidateDiskChecksum()
+					Expect(err).To(BeEmpty())
+					Expect(lom.Cksum()).To(BeNil())
+					Expect(lom.BadCksum).To(BeFalse())
+				})
+
+				It("should fill object with checksum if was not present", func() {
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN, tMock)
+					Expect(lom.Persist()).NotTo(HaveOccurred())
+					expectedChecksum := getTestFileHash(localFQN)
+					fsLOM, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(fsLOM.Cksum()).To(BeNil())
+
+					Expect(lom.ValidateDiskChecksum()).To(BeEmpty())
+
+					Expect(lom.Cksum()).ToNot(BeNil())
+					_, cksmVal := lom.Cksum().Get()
+					fsLOM, err = tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
+					Expect(err).NotTo(HaveOccurred())
+					_, fsCksmVal := fsLOM.Cksum().Get()
+					Expect(fsCksmVal).To(BeEquivalentTo(expectedChecksum))
+					Expect(cksmVal).To(BeEquivalentTo(expectedChecksum))
+				})
+
+				It("should accept when filesystem and memory checksums match", func() {
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN, tMock)
+					Expect(lom.ValidateDiskChecksum()).To(BeEmpty())
+				})
+
+				It("should accept when both filesystem and memory checksums are nil", func() {
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN, tMock)
+
+					Expect(lom.ValidateDiskChecksum()).To(BeEmpty())
+				})
+
+				It("should not accept when object content has changed", func() {
+					createTestFile(localFQN, testFileSize)
+					lom := NewBasicLom(localFQN, tMock)
+					Expect(lom.ValidateDiskChecksum()).To(BeEmpty())
+
+					err := ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)
+					Expect(err).ShouldNot(HaveOccurred())
+
+					Expect(lom.ValidateDiskChecksum()).ToNot(BeEmpty())
+					Expect(lom.BadCksum).To(BeTrue())
+				})
+			})
+
 			Describe("FromFS", func() {
 				It("should not error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
@@ -535,14 +595,18 @@ var _ = Describe("LOM", func() {
 			Expect(lom.Load(false)).To(BeEmpty())
 			Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
-			_, err := lom.CopyObject(copyFQN, make([]byte, testFileSize))
+			dst, err := lom.CopyObject(copyFQN, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
 			_, err = os.Stat(copyFQN)
 			Expect(os.IsNotExist(err)).To(BeFalse())
 
 			if setXCopy {
-				Expect(lom.SetXcopy(copyFQN)).Should(BeEmpty())
+				lom.SetCopyFQN([]string{copyFQN})
+				Expect(lom.Persist()).ShouldNot(HaveOccurred())
+				dst.SetCopyFQN([]string{lom.FQN})
+				Expect(dst.Persist()).ShouldNot(HaveOccurred())
 			}
+
 			return
 		}
 
@@ -560,39 +624,6 @@ var _ = Describe("LOM", func() {
 
 				//Check copy contents are corrrect
 				Expect(getTestFileHash(copyFQN)).To(BeEquivalentTo(expectedHash))
-			})
-		})
-
-		Describe("SetXcopy", func() {
-			It("Should corectly set Xattributes", func() {
-				lom := prepareLomWithCopy(true)
-
-				// Check copy set
-				newCopyLom, err := tutils.GetXattrLom(copyFQN, cmn.LocalBs, tMock)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(newCopyLom.CopyFQN())).To(BeEquivalentTo(1))
-				Expect(newCopyLom.CopyFQN()[0]).To(BeEquivalentTo(localFQN))
-
-				newLom, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(newLom.CopyFQN())).To(BeEquivalentTo(1))
-				Expect(newLom.CopyFQN()[0]).To(BeEquivalentTo(copyFQN))
-
-				// Check msic copy data
-				lomCopy, errstr := cluster.LOM{T: tMock, FQN: copyFQN}.Init()
-				Expect(errstr).To(BeEmpty())
-				Expect(lomCopy.Load(false)).To(BeEmpty())
-				copyCksm, errstr := lomCopy.CksumComputeIfMissing()
-				Expect(errstr).To(BeEmpty())
-				copyCksmVal, _ := copyCksm.Get()
-				orgCksmVal, _ := lom.Cksum().Get()
-				Expect(copyCksmVal).To(BeEquivalentTo(orgCksmVal))
-
-				Expect(lomCopy.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
-				Expect(lom.IsCopy()).To(BeFalse())
-				Expect(lom.HasCopies()).To(BeTrue())
-				Expect(lomCopy.IsCopy()).To(BeTrue())
-				Expect(lomCopy.HasCopies()).To(BeFalse())
 			})
 		})
 
