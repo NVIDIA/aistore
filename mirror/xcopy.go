@@ -177,6 +177,7 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 func (j *xcopyJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
+			j.parent.namelocker.Lock(lom.Uname(), false)
 			if err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
 				j.parent.namelocker.Unlock(lom.Uname(), false)
