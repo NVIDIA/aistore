@@ -57,7 +57,7 @@ deploy:
 	@./setup/deploy.sh
 
 deploy_binary:
-	@cd ../cli && go build -o ${GOPATH}/bin/ais
+	@cd ../cli && ./deploy_cli.sh
 	@./setup/deploy.sh
 
 deploy_next_tier:

@@ -14,12 +14,17 @@ import (
 	"github.com/urfave/cli"
 )
 
+var (
+	build   string
+	version string
+)
+
 func main() {
 	if err := commands.TestAISURL(commands.ClusterURL); err != nil {
 		cmn.ExitInfof("Could not connect to AIS cluster: %s", err)
 	}
 
-	aisCLI := commands.New()
+	aisCLI := commands.New(build, version)
 	aisCLI.Commands = append(aisCLI.Commands, commands.DownloaderCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.ObjectCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.BucketCmds...)

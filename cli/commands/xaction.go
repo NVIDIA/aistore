@@ -90,11 +90,7 @@ func xactHandler(c *cli.Context) (err error) {
 
 	switch command {
 	case xactStart:
-		if xaction == "" {
-			fmt.Println("started all xactions")
-		} else {
-			fmt.Printf("started %q xaction\n", xaction)
-		}
+		fmt.Printf("started %q xaction\n", xaction)
 	case xactStop:
 		if xaction == "" {
 			fmt.Println("stopped all xactions")
@@ -102,6 +98,17 @@ func xactHandler(c *cli.Context) (err error) {
 			fmt.Printf("stopped %q xaction\n", xaction)
 		}
 	case xactStats:
+		isEmpty := true
+		for _, val := range xactStatsMap {
+			if len(val) != 0 {
+				isEmpty = false
+				break
+			}
+		}
+		if isEmpty {
+			fmt.Println("no xaction stats to show")
+			return
+		}
 		err = templates.DisplayOutput(xactStatsMap, templates.XactStatsTmpl, flagIsSet(c, jsonFlag.Name))
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)

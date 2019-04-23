@@ -63,16 +63,16 @@ func init() {
 	}
 }
 
-func New() AISCLI {
+func New(build, version string) AISCLI {
 	aisCLI := AISCLI{cli.NewApp()}
-	aisCLI.Init()
+	aisCLI.Init(build, version)
 	return aisCLI
 }
 
-func (aisCLI AISCLI) Init() {
+func (aisCLI AISCLI) Init(build, version string) {
 	aisCLI.Name = cliName
 	aisCLI.Usage = "CLI tool for AIStore"
-	aisCLI.Version = "0.1"
+	aisCLI.Version = fmt.Sprintf("%s (build %s)", version, build)
 	aisCLI.EnableBashCompletion = true
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",

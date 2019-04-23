@@ -4,7 +4,7 @@ AIS CLI is a tool used to interact with resources of AIStore. Users are able to 
 
 ## Getting Started
 
-By default, the CLI tool is automatically installed as a binary in the system's `GOPATH` when AIStore is deployed.
+By default, the CLI tool is automatically installed as a binary in the system's `GOPATH` when AIStore is deployed with `make deploy_binary`. Alternatively, users can also create the AIS CLI binary manually by running the `deploy_cli.sh` script.
 
 ## Using AIS CLI
 
@@ -21,13 +21,13 @@ The CLI tool supports bash and zsh auto-complete functionality. To enable shell 
 * Sourcing
 
  ```sh
- $ source aiscli_autocomplete
+ $ source ais_autocomplete
  ```
 
 * Installing to `/etc/bash_autocomplete.d`
 
  ```sh
- $ sudo cp aiscli_autocomplete /etc/bash_completion.d/ais
+ $ sudo cp ais_autocomplete /etc/bash_completion.d/ais
  $ source /etc/bash_completion.d/ais
  ```
 Doing `ais <tab><tab>` should return the list of available commands.

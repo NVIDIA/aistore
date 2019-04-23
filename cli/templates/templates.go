@@ -10,6 +10,7 @@ import (
 	"os"
 	"text/tabwriter"
 	"text/template"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -215,11 +216,12 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
-	XactionBaseStatsHeader = "\nDaemonID\t ID\t Kind\t Bucket\t StartTime\t EndTime\t \t Status\t Count\n"
-	XactionBaseBody        = "{{$key}}\t {{$xact.IDX}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t" +
-		" {{$xact.StartTimeX}}\t {{$xact.EndTimeX}}\t \t {{$xact.StatusX}}\t {{$xact.XactCountX}}\n"
+	XactionBaseStatsHeader = "\nDaemonID\t Kind\t Bucket\t \t Status\t StartTime\t EndTime\n"
+	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t \t " +
+		"{{$xact.StatusX}}\t {{FormatTime $xact.StartTimeX}}\t " +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}---{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\n"
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
-		"ID: {{$xact.IDX}} Kind: {{$xact.KindX}}\n" +
+		"Kind: {{$xact.KindX}}\n" +
 		"{{range $name, $val := $xact.Ext}}" +
 		"{{$name}}: {{$val | printf `%0.0f`}}\t " +
 		"{{end}}" +
@@ -254,19 +256,21 @@ var (
 	}
 
 	funcMap = template.FuncMap{
-		"ExtractStat":         ExtractStat,
+		"ExtractStat":         extractStat,
 		"FormatBytesSigned":   cmn.B2S,
 		"FormatBytesUnsigned": cmn.UnsignedB2S,
-		"CalcAvg":             CalcAvg,
+		"CalcAvg":             calcAvg,
+		"IsUnsetTime":         isUnsetTime,
+		"FormatTime":          fmtTime,
 	}
 )
 
 // Gets the associated value from CoreStats
-func ExtractStat(daemon *stats.CoreStats, statName string) int64 {
+func extractStat(daemon *stats.CoreStats, statName string) int64 {
 	return daemon.Tracker[statName].Value
 }
 
-func CalcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
+func calcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
 	for _, fs := range daemon.Capacity {
 		switch option {
 		case "capacity":
@@ -276,6 +280,14 @@ func CalcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
 		}
 	}
 	return total / uint64(len(daemon.Capacity))
+}
+
+func isUnsetTime(t time.Time) bool {
+	return t.IsZero()
+}
+
+func fmtTime(t time.Time) string {
+	return t.Format("01-02 15:04:05.000")
 }
 
 // Displays the output in either JSON or tabular form
