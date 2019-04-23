@@ -16,13 +16,13 @@ git reset --hard origin/master
 git status
 git log | head -5
 
-setup/deploy.sh -loglevel=3 -statstime=10s <<< $'4\n3\n2\n1'
+setup/deploy.sh -loglevel=3 -statstime=10s <<< $'4\n4\n3\n1'
 
 echo sleep 10 seconds before checking AIStore process
 sleep 10
 aisprocs=$(ps -C aisnode -o pid= | wc -l)
 echo number of aisprocs $aisprocs
-if [ $aisprocs -lt 7 ]; then
+if [ $aisprocs -lt 8 ]; then
     echo aisnode did not start properly
     exit 1
 fi
@@ -35,6 +35,7 @@ cdir=$(pwd)
 echo Run go tests from $cdir
 
 echo run AIStore tests with cloud bucket devtestcloud
+
 BUCKET=devtestcloud go test -v -p 1 -count 1 -timeout 120m ./...
 
 cloudExitStatus=$?
