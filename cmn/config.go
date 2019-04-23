@@ -216,8 +216,8 @@ func (gco *globalConfigOwner) Clone() *Config {
 
 	// FIXME: CopyStruct is actually shallow copy but because Config
 	// has only values (no pointers or slices, except FSPaths) it is
-	// deepcopy. This may break in the future, so we need solution
-	// to make sure that we do *proper* deepcopy with good performance.
+	// deep copy. This may break in the future, so we need solution
+	// to make sure that we do *proper* deep copy with good performance.
 	CopyStruct(config, gco.Get())
 	return config
 }

@@ -162,11 +162,11 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 
 func (m *smapX) clone() *smapX {
 	dst := &smapX{}
-	m.deepcopy(dst)
+	m.deepCopy(dst)
 	return dst
 }
 
-func (m *smapX) deepcopy(dst *smapX) {
+func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
 	dst.init(len(m.Tmap), len(m.Pmap), len(m.NonElects))
 	for id, v := range m.Tmap {

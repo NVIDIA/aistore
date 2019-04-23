@@ -161,9 +161,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 	if stopped = tkr.register(tkr.t, tkr.t.statsif, smap.ProxySI.DaemonID); stopped {
-		if smap = tkr.t.smapowner.get(); smap != nil && smap.isValid() {
-			tkr.t.onPrimaryProxyFailure()
-		}
+		tkr.t.onPrimaryProxyFailure()
 	}
 	return
 }

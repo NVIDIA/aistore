@@ -2263,7 +2263,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	p.smapowner.Unlock()
 }
 
-func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
+func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (errstr string) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
@@ -2271,9 +2271,9 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	}
 	clone := smap.clone()
 	// FIXME: may be premature at this point
-	if proxyidToRemove != "" {
-		glog.Infof("Removing failed primary proxy %s", proxyidToRemove)
-		clone.delProxy(proxyidToRemove)
+	if proxyIDToRemove != "" {
+		glog.Infof("Removing failed primary proxy %s", proxyIDToRemove)
+		clone.delProxy(proxyIDToRemove)
 	}
 
 	clone.ProxySI = p.si
@@ -2888,7 +2888,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgInt := p.newActionMsgInternal(msg, smap, nil)
+	msgInt := p.newActionMsgInternal(msg, clone, nil)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 

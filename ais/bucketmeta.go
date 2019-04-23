@@ -105,11 +105,11 @@ func (m *bucketMD) ecEnabled(bucket string) bool {
 
 func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
-	m.deepcopy(dst)
+	m.deepCopy(dst)
 	return dst
 }
 
-func (m *bucketMD) deepcopy(dst *bucketMD) {
+func (m *bucketMD) deepCopy(dst *bucketMD) {
 	cmn.CopyStruct(dst, m)
 	dst.LBmap = make(map[string]*cmn.BucketProps, len(m.LBmap))
 	dst.CBmap = make(map[string]*cmn.BucketProps, len(m.CBmap))
