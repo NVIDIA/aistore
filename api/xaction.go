@@ -5,10 +5,13 @@
 package api
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -17,10 +20,11 @@ import (
 // GetXactionResponse gets the response of the Xaction Query
 // Action can be one of: start, stop, stats
 // Kind will be one of the xactions
-// 1. if kind is empty and bucket is empty, request will be executed on all xactions
-// 2. if kind is empty and bucket is not empty, request will be executed on all bucket's xactions
-// 3. if kind is name of global xaction, bucket is disregarded
-func GetXactionResponse(baseParams *BaseParams, kind, action, bucket string) (b []byte, err error) {
+func GetXactionResponse(baseParams *BaseParams, kind, action, bucket string) (map[string][]stats.BaseXactStatsExt, error) {
+	var (
+		resp      *http.Response
+		xactStats = make(map[string][]stats.BaseXactStatsExt)
+	)
 	optParams := OptionalParams{}
 	actMsg := &cmn.ActionMsg{
 		Action: action,
@@ -37,11 +41,23 @@ func GetXactionResponse(baseParams *BaseParams, kind, action, bucket string) (b 
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	optParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXaction}}
-	if b, err = DoHTTPRequest(baseParams, path, msg, optParams); err != nil {
+	if resp, err = doHTTPRequestGetResp(baseParams, path, msg, optParams); err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
-	return b, nil
+	if action == cmn.ActXactStats {
+		bod, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal(bod, &xactStats); err != nil {
+			return nil, err
+		}
+		return xactStats, nil
+	}
+
+	return nil, nil
 }
 
 // MakeNCopies API

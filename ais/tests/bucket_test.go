@@ -5,7 +5,6 @@
 package ais_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -521,12 +519,9 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 	timedout := 60 // seconds
 	ok := false
 	for i := 0; i < timedout+1; i++ {
-		var allDetails = make(map[string][]stats.BaseXactStats) // TODO: missing API
 		time.Sleep(time.Second)
 
-		responseBytes, err := api.GetXactionResponse(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
-		tassert.CheckFatal(t, err)
-		err = json.Unmarshal(responseBytes, &allDetails)
+		allDetails, err := api.GetXactionResponse(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
 		tassert.CheckFatal(t, err)
 		ok = true
 		for tid := range allDetails {

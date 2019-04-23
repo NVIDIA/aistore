@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -26,5 +27,12 @@ func daemonList(_ *cli.Context) {
 func flagList(c *cli.Context) {
 	for _, flag := range c.Command.Flags {
 		fmt.Printf("--%s\n", cleanFlag(flag.GetName()))
+	}
+}
+
+// Xaction list
+func xactList(_ *cli.Context) {
+	for key := range cmn.XactKind {
+		fmt.Println(key)
 	}
 }

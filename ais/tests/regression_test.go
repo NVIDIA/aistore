@@ -1311,19 +1311,11 @@ OUTER:
 	}
 }
 
-func getXactionRebalance(baseParams *api.BaseParams) (map[string][]stats.RebalanceTargetStats, error) {
-	var rebalanceStats map[string][]stats.RebalanceTargetStats
-	responseBytes, err := api.GetXactionResponse(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
+func getXactionRebalance(baseParams *api.BaseParams) (map[string][]stats.BaseXactStatsExt, error) {
+	rebalanceStats, err := api.GetXactionResponse(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
 	if err != nil {
-		return rebalanceStats, err
+		return nil, err
 	}
-
-	err = json.Unmarshal(responseBytes, &rebalanceStats)
-	if err != nil {
-		return rebalanceStats,
-			fmt.Errorf("failed to unmarshal rebalance stats: %v", err)
-	}
-
 	return rebalanceStats, nil
 }
 

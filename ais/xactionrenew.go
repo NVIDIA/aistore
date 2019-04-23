@@ -105,6 +105,8 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xac
 			}
 			close(xGlobalReb.confirmCh)
 		}
+		// TODO: Preserve history; this overwrites previous rebalances
+		r.byID.Delete(xGlobalReb.ID())
 	}
 
 	// here we have possibly both locks
@@ -132,8 +134,8 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 		entry.Lock()
 		defer entry.Unlock()
 
+		xLocalReb := entry.xact
 		if !entry.xact.Finished() {
-			xLocalReb := entry.xact
 			xLocalReb.Abort()
 
 			for i := 0; i < xLocalReb.runnerCnt; i++ {
@@ -141,6 +143,8 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 			}
 			close(xLocalReb.confirmCh)
 		}
+		// TODO: Preserve history; this overwrites previous local rebalances
+		r.byID.Delete(xLocalReb.ID())
 	}
 
 	// here we have possibly both locks

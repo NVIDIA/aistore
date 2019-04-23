@@ -101,7 +101,7 @@ func (s *PrefetchTargetStats) FillFromTrunner(r *Trunner) {
 	v := r.Core.Tracker[PrefetchCount]
 	v.RLock()
 
-	s.Ext.NumBytesPrefetched = r.Core.Tracker[PrefetchCount].Value
-	s.Ext.NumFilesPrefetched = r.Core.Tracker[PrefetchSize].Value
+	s.Ext.NumBytesPrefetched = r.Core.Tracker[PrefetchSize].Value
+	s.Ext.NumFilesPrefetched = r.Core.Tracker[PrefetchCount].Value
 	v.RUnlock()
 }

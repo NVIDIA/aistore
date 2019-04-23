@@ -1,6 +1,6 @@
 ## Object 
 
-The CLI allows for users to interact with objects in the AIS cluster.
+The CLI allows users to interact with objects in the AIS cluster.
 
 ## Command List
 

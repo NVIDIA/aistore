@@ -357,6 +357,8 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 			return fmt.Errorf("%s xaction start not supported", kind)
 		case cmn.ActElection:
 			return fmt.Errorf("%s not supported by target node", kind)
+		case cmn.ActECPut, cmn.ActECGet, cmn.ActECRespond:
+			return fmt.Errorf("%s requires a bucket to start", kind)
 		default:
 			return fmt.Errorf("unknown %s xaction", kind)
 		}

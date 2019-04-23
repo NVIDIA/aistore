@@ -33,6 +33,12 @@ const (
 )
 
 var (
+	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
+	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
+	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
+	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
+
 	baseDownloadFlags = []cli.Flag{
 		bckProviderFlag,
 		timeoutFlag,

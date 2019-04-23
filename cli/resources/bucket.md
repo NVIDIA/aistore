@@ -1,6 +1,6 @@
 ## Bucket
 
-The CLI allows for users to interact with [buckets](../../docs/bucket.md) in the AIS cluster.
+The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS cluster.
 
 ## Command List
 

@@ -227,9 +227,14 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 
 //nolint:unused
 func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, error) {
+
+	if _, ok := cmn.ValidXact(kind); !ok {
+		return nil, fmt.Errorf("unrecognized xaction %s", kind)
+	}
+
 	val, ok := r.globalXacts.Load(kind)
 	if !ok {
-		return nil, fmt.Errorf("xact %s does not exist", kind)
+		return nil, fmt.Errorf("xaction %s has not started", kind)
 	}
 
 	entry := val.(xactEntry)

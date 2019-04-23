@@ -209,7 +209,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if changed {
 		t.Errorf("Credentials were updated for %s", userID+userID)
 	}
-	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+	if err == nil || !strings.Contains(err.Error(), cmn.DoesNotExist) {
 		t.Errorf("Invalid error: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if changed {
 		t.Errorf("Credentials were deleted for %s", userID+userID)
 	}
-	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+	if err == nil || !strings.Contains(err.Error(), cmn.DoesNotExist) {
 		t.Errorf("Invalid error: %v", err)
 	}
 

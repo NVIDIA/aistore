@@ -28,16 +28,15 @@ Supported extended actions are enumerated in the [user-facing API](/cmn/api.go) 
 * Reducing number of object replicas in a given locally-mirrored bucket (see [Storage Services](/docs/storage_svcs.md));
 * and more.
 
-There are different actions which may be taken upon xaction. Actions include stats, start and stop. 
+There are different actions which may be taken upon xaction. Actions include stats, start and stop.
 List of supported actions can be found in the [API](/cmn/api.go)
 
-Request query is generic for all of the actions.
-Responses to query are different for different actions and are described in sections of actions
-Query looks as follows:  
+Xaction requests are generic for all xactions, but responses from each xaction are different. See [below](#start-&-stop).
+The request looks as follows:  
 1.Single target request:
 ```shell
 curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype", "name": "xactionname", "value":{"bucket":"bucketname"}}' 'http://T/v1/daemon?what=xaction'
-```    
+```
 To simplify the logic, result is always an array, even if there's only one element in the result
 
 2.Proxy request, which executes a request on all targets within the cluster, and responds with list of targets' responses:
@@ -47,14 +46,22 @@ curl -i -X GET  -H 'Content-Type: application/json' -d '{"action": "actiontype",
 Response of a query to proxy is a map of daemonID -> target's response. If any of targets responded with error status code, the proxy's response
 will result in the same error response.
 
-For both (target's and proxy's) requests the following apply:
-- actiontype has to be always specified
-- if xactionname is empty and bucketname is empty, request will be executed on all xactions
-- if xactionname is empty and bucketname is not empty, request will be executed on all bucket's xactions
-- if xactionname is name of global xaction, bucketname is disregarded
 
-#### Stats
-Stats request results in list of requested xactions. Statistics of each xaction share base format which looks as follow:
+### Start & Stop
+For a successful request, the response only contains the HTTP status code. If the request was sent to the proxy and all targets
+responded with a successful HTTP code, the proxy would respond with the successful HTTP code. Response body should be omitted.
+
+For an unsuccessful request, the target's response contains the error code and error message. If the request was sent to proxy and at least one
+of targets responded with an error code, the proxy will respond with the same error code and error message.
+
+>> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation).
+
+The corresponding [RESTful API](/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.
+
+### Stats
+
+Stats request results in list of requested xactions. Statistics of each xaction share a common base format which looks as follow:
+
 ```json
 [  
    {  
@@ -97,16 +104,3 @@ Example rebalance stats response:
     }
 ]
 ```
-
-#### Start & Stop
-
-If Start/Stop action was successful, target's response contains only successful http code. If Start/Stop request was send to proxy and all targets
-responded with successful http code, proxy will respond with successful http code. Response body should be omitted.
-
-If Start/Stop action was not successful, target's response contains error code and error message. If Start/Stop request was send to proxy and at least one
-of targets responded with error code, proxy will respond with the same error code and error message.
-
-
->> As always, `G` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address and `T` serves for placeholder for target's hostname/IP address. More information in [notation section](/docs/http_api.md#notation)
-
-The corresponding [RESTful API](/docs/http_api.md) includes support for querying all xactions including global-rebalancing and prefetch operations.

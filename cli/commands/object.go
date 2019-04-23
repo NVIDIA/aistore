@@ -28,6 +28,18 @@ const (
 )
 
 var (
+	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object"}
+	outFileFlag  = cli.StringFlag{Name: "outfile", Usage: "name of the file where the contents will be saved"}
+	bodyFlag     = cli.StringFlag{Name: "body", Usage: "filename for content of the object"}
+	newKeyFlag   = cli.StringFlag{Name: "newkey", Usage: "new name of object"}
+	offsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset"}
+	lengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length"}
+	prefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for string matching"}
+	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
+	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
+	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
+	cachedFlag   = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
+
 	baseObjectFlags = []cli.Flag{
 		bucketFlag,
 		keyFlag,

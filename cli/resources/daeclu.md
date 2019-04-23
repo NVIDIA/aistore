@@ -1,6 +1,6 @@
 ## Daemon/Cluster 
 
-The CLI allows for users to interact with AIS daemons or cluster.
+The CLI allows users to interact with AIS daemons or cluster.
 
 ## Command List
 

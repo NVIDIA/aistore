@@ -24,6 +24,7 @@ func main() {
 	aisCLI.Commands = append(aisCLI.Commands, commands.ObjectCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.BucketCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.DaeCluCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, commands.XactCmds...)
 	sort.Sort(cli.CommandsByName(aisCLI.Commands))
 
 	stopCh := make(chan os.Signal, 1)

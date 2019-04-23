@@ -46,33 +46,6 @@ var (
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
 	regexFlag = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
 
-	// Downloader
-	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
-	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
-	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
-	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
-
-	// Object
-	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object"}
-	outFileFlag  = cli.StringFlag{Name: "outfile", Usage: "name of the file where the contents will be saved"}
-	bodyFlag     = cli.StringFlag{Name: "body", Usage: "filename for content of the object"}
-	newKeyFlag   = cli.StringFlag{Name: "newkey", Usage: "new name of object"}
-	offsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset"}
-	lengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length"}
-	prefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for string matching"}
-	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
-	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
-	cachedFlag   = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
-
-	// Bucket
-	newBucketFlag = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
-	pageSizeFlag  = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
-	objPropsFlag  = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
-	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
-	copiesFlag    = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
-
 	clear map[string]func()
 )
 

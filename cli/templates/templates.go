@@ -214,6 +214,26 @@ const (
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
+
+	XactionBaseStatsHeader = "\nDaemonID\t ID\t Kind\t Bucket\t StartTime\t EndTime\t \t Status\t Count\n"
+	XactionBaseBody        = "{{$key}}\t {{$xact.IDX}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t" +
+		" {{$xact.StartTimeX}}\t {{$xact.EndTimeX}}\t \t {{$xact.StatusX}}\t {{$xact.XactCountX}}\n"
+	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
+		"ID: {{$xact.IDX}} Kind: {{$xact.KindX}}\n" +
+		"{{range $name, $val := $xact.Ext}}" +
+		"{{$name}}: {{$val | printf `%0.0f`}}\t " +
+		"{{end}}" +
+		"{{end}}{{if $xact.Ext}}\n{{end}}"
+	XactStatsTmpl = "{{range $key, $daemon := .}}" + //iterate through the entire map
+		XactionBaseStatsHeader +
+		"{{range $xact := $daemon}}" + //for each daemon's xactions, print BaseXactStats
+		XactionBaseBody +
+		"{{end}}\n" +
+
+		"{{range $xact := $daemon}}" + //for each daemon's xactions, print BaseXactExtStats
+		XactionExtBody +
+		"{{end}}" +
+		"{{end}}"
 )
 
 var (

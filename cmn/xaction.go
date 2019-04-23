@@ -170,3 +170,8 @@ func (r *XactDemandBase) Timeout() bool {
 }
 
 func (r *XactDemandBase) Stop() { r.ticker.Stop() }
+
+func ValidXact(xact string) (bool, bool) {
+	meta, ok := XactKind[xact]
+	return meta.IsGlobal, ok
+}

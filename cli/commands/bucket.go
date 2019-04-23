@@ -31,6 +31,12 @@ const (
 )
 
 var (
+	newBucketFlag = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
+	pageSizeFlag  = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
+	objPropsFlag  = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
+	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
+	copiesFlag    = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
+
 	baseBucketFlags = []cli.Flag{
 		bucketFlag,
 		bckProviderFlag,
