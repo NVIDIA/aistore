@@ -1060,6 +1060,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// This request has to be handled by primary proxy
+	if p.forwardCP(w, r, &cmn.ActionMsg{}, "httpbckput", nil) {
+		return
+	}
+
 	// Setting bucket props using URL query strings
 	if len(apitems) > 1 {
 		if apitems[1] != cmn.ActSetProps {
