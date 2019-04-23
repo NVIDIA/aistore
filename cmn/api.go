@@ -209,6 +209,7 @@ const (
 	URLParamObjName     = "objname"
 	URLParamSuffix      = "suffix"
 	URLParamTemplate    = "template"
+	URLParamSubdir      = "subdir"
 	URLParamTimeout     = "timeout"
 	URLParamDescription = "description"
 )
@@ -689,16 +690,21 @@ func (b *DlSingleBody) String() string {
 type DlRangeBody struct {
 	DlBase
 	Template string `json:"template"`
+	Subdir   string `json:"subdir"`
 }
 
 func (b *DlRangeBody) InitWithQuery(query url.Values) {
 	b.DlBase.InitWithQuery(query)
 	b.Template = query.Get(URLParamTemplate)
+	b.Subdir = query.Get(URLParamSubdir)
 }
 
 func (b *DlRangeBody) AsQuery() url.Values {
 	query := b.DlBase.AsQuery()
 	query.Add(URLParamTemplate, b.Template)
+	if b.Subdir != "" {
+		query.Add(URLParamSubdir, b.Subdir)
+	}
 	return query
 }
 
@@ -721,7 +727,7 @@ func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
 	objects := make(SimpleKVs, (end-start+1)/step)
 	for i := start; i <= end; i += step {
 		link := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
-		objName := path.Base(link)
+		objName := path.Join(b.Subdir, path.Base(link))
 		objects[objName] = link
 	}
 	return objects, nil

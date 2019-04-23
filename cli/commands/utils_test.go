@@ -56,11 +56,12 @@ func TestParseDestValidURIs(t *testing.T) {
 	}{
 		{"ais://bucket/objname", "bucket", "objname"},
 		{"ais://bucket//subfolder/objname.tar", "bucket", "subfolder/objname.tar"},
+		{"ais://bucket/subfolder/objname.tar", "bucket", "subfolder/objname.tar"},
 		{"ais://bucket", "bucket", ""},
 	}
 
 	for _, test := range parseDestTests {
-		bucket, objName, err := parseDest(test.url)
+		bucket, pathSuffix, err := parseDest(test.url)
 
 		if err != nil {
 			t.Errorf("unexpected error while parsing dest URI %s: %v", test.url, err)
@@ -69,8 +70,8 @@ func TestParseDestValidURIs(t *testing.T) {
 		if bucket != test.bucket {
 			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.bucket, bucket)
 		}
-		if objName != test.objName {
-			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.objName, objName)
+		if pathSuffix != test.objName {
+			t.Errorf("parseSource(%s) expected bucket: %s, got: %s", test.url, test.objName, pathSuffix)
 		}
 	}
 }

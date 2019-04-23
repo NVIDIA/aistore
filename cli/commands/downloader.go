@@ -143,7 +143,7 @@ func downloadHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bucket, objName, err := parseDest(dest)
+	bucket, pathSuffix, err := parseDest(dest)
 	if err != nil {
 		return err
 	}
@@ -153,6 +153,7 @@ func downloadHandler(c *cli.Context) error {
 		// Range
 		payload := cmn.DlRangeBody{
 			DlBase:   basePayload,
+			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: link,
 		}
 		id, err = api.DownloadRangeWithParam(baseParams, payload)
@@ -165,7 +166,7 @@ func downloadHandler(c *cli.Context) error {
 			DlBase: basePayload,
 			DlObj: cmn.DlObj{
 				Link:    link,
-				Objname: objName,
+				Objname: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
 		id, err = api.DownloadSingleWithParam(baseParams, payload)

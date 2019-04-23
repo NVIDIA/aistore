@@ -100,6 +100,7 @@ To populate AIStore with objects in the range from `object200log.txt` to `object
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
+**subdir** | **string** | Subdirectory in the **bucket** where the downloaded objects are saved to. | Yes
 **bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
@@ -111,6 +112,7 @@ Name | Type | Description | Optional?
 | Operation | HTTP action | Example |
 |--|--|--|
 | Download a (range) list of objects | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
+| Download a (range) list of objects into a subdirectory inside a bucket | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&subdir=some/subdir/&template=randomwebsite.com/some_dir/object{200..300}log.txt'` |
 | Download a (range) list of objects, selecting every tenth | POST /v1/download | `curl -Livg -X POST 'http://localhost:8080/v1/download?bucket=test321&template=randomwebsite.com/some_dir/object{1..1000..10}log.txt'` |
 
 **Tip:** use `-g` option in curl to turn of URL globbing parser - it will allow to use `{` and `}` without escaping them.

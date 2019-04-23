@@ -52,7 +52,7 @@ Examples:
 The same result can be obtained with  `ais download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/` - note the lack of object name in the destination.
 * `ais download gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads object `imagenet/imagenet_train-000000.tgz` from Google Cloud Storage from bucket `lpr-vision` and saves it in `local-lpr` bucket, named as `imagenet_train-000000.tgz`
 * `ais download --description "imagenet" gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
-* `ais download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr` will download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and save them in `local-lpr` bucket
+* `ais download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/` will download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and save them in `local-lpr` bucket, inside `imagenet` subdirectory
 * `ais download --desc "subset-imagenet" "gs://lpr-vision/imagenet/imagenet_train-{000022..000140..2}.tgz" ais://local-lpr` same as above while skipping every other object in the specified range
 
 

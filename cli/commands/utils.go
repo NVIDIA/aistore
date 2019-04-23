@@ -252,8 +252,8 @@ func parseSource(rawURL string) (link string, err error) {
 	return url.QueryUnescape(normalizedURL.String())
 }
 
-func parseDest(rawURL string) (bucket, objName string, err error) {
-	destScheme, destBucket, destObjName, err := parseURI(rawURL)
+func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
+	destScheme, destBucket, destPathSuffix, err := parseURI(rawURL)
 	if err != nil {
 		return
 	}
@@ -265,8 +265,8 @@ func parseDest(rawURL string) (bucket, objName string, err error) {
 		err = fmt.Errorf("destination bucket cannot be empty")
 		return
 	}
-	destObjName = strings.Trim(destObjName, "/")
-	return destBucket, destObjName, nil
+	destPathSuffix = strings.Trim(destPathSuffix, "/")
+	return destBucket, destPathSuffix, nil
 }
 
 // Formats the error message from HTTPErrors (see http.go)
