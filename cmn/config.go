@@ -91,6 +91,12 @@ const (
 )
 
 const (
+	IgnoreReaction = "ignore"
+	WarnReaction   = "warn"
+	AbortReaction  = "abort"
+)
+
+const (
 	// L4
 	tcpProto = "tcp"
 
@@ -114,8 +120,9 @@ type (
 )
 
 var (
-	supportedL4Protos = []string{tcpProto}
-	supportedL7Protos = []string{httpProto, httpsProto}
+	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
+	supportedL4Protos  = []string{tcpProto}
+	supportedL7Protos  = []string{httpProto, httpsProto}
 
 	_ Validator = &Config{}
 	_ Validator = &CksumConf{}
@@ -129,6 +136,7 @@ var (
 	_ Validator = &RebalanceConf{}
 	_ Validator = &NetConf{}
 	_ Validator = &DownloaderConf{}
+	_ Validator = &DSortConf{}
 
 	_ PropsValidator = &CksumConf{}
 	_ PropsValidator = &LRUConf{}
@@ -308,6 +316,7 @@ type Config struct {
 	Auth             AuthConf        `json:"auth"`
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
 	Downloader       DownloaderConf  `json:"downloader"`
+	DSort            DSortConf       `json:"distributed_sort"`
 }
 
 type MirrorConf struct {
@@ -521,6 +530,11 @@ type KeepaliveConf struct {
 type DownloaderConf struct {
 	TimeoutStr string        `json:"timeout"`
 	Timeout    time.Duration `json:"-"`
+}
+
+type DSortConf struct {
+	DuplicatedRecords string `json:"duplicated_records"`
+	MissingShards     string `json:"missing_shards"`
 }
 
 func SetLogLevel(config *Config, loglevel string) (err error) {
@@ -899,6 +913,16 @@ func (c *DownloaderConf) Validate() (err error) {
 	return nil
 }
 
+func (c *DSortConf) Validate() (err error) {
+	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
+		return fmt.Errorf("bad c.duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
+	}
+	if !StringInSlice(c.MissingShards, SupportedReactions) {
+		return fmt.Errorf("bad c.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+	}
+	return nil
+}
+
 // setGLogVModule sets glog's vmodule flag
 // sets 'v' as is, no verificaton is done here
 // syntax for v: target=5,proxy=1, p*=3, etc
@@ -1038,6 +1062,12 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.IntervalStr)
 	case "keepalivetracker.target.factor":
 		return &conf.KeepaliveTracker, updateValue(&conf.KeepaliveTracker.Target.Factor)
+
+	// DISTRIBUTED SORT
+	case "distributed_sort.duplicated_records":
+		return &conf.DSort, updateValue(&conf.DSort.DuplicatedRecords)
+	case "distributed_sort.missing_shards":
+		return &conf.DSort, updateValue(&conf.DSort.MissingShards)
 
 	default:
 		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)

@@ -135,11 +135,16 @@ type Metrics struct {
 
 	// Aborted specifies if the DSort has been aborted or not.
 	Aborted bool `json:"aborted"`
-	// Archived specifies if the DSort has been archived to persistent storage
-	Archived bool `json:"archived"`
+	// Archived specifies if the DSort has been archived to persistent storage.
+	Archived bool `json:"archived,omitempty"`
 
-	// Describes the DSort run
-	Description string `json:"description"`
+	// Description of the job.
+	Description string `json:"description,omitempty"`
+
+	// Warnings which were produced during the job.
+	Warnings []string `json:"warnings,omitempty"`
+	// Errors which happened during the job.
+	Errors []string `json:"errors,omitempty"`
 
 	// extended determines if we should calculate and send extended metrics like
 	// request/response times.

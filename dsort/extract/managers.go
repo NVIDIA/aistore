@@ -6,6 +6,7 @@ package extract
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -48,8 +49,9 @@ type (
 	RecordManager struct {
 		Records *Records
 
-		daemonID  string
-		extension string
+		daemonID            string
+		extension           string
+		onDuplicatedRecords func(string) error
 
 		keyExtractor    KeyExtractor
 		contents        *sync.Map
@@ -85,12 +87,13 @@ func FreeMemory() {
 	})
 }
 
-func NewRecordManager(daemonID, extension string, keyExtractor KeyExtractor) *RecordManager {
+func NewRecordManager(daemonID, extension string, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records: NewRecords(1000),
 
-		daemonID:  daemonID,
-		extension: extension,
+		daemonID:            daemonID,
+		extension:           extension,
+		onDuplicatedRecords: onDuplicatedRecords,
 
 		keyExtractor:    keyExtractor,
 		contents:        &sync.Map{},
@@ -106,10 +109,10 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 	ext := filepath.Ext(name)
 	recordPath, fullPath := rm.paths(fqn, name, ext)
 
-	// If the content already exists we should skip it.
+	// If the content already exists we should skip it but set error (caller
+	// needs to handle it properly).
 	if rm.Records.Exists(recordPath, ext) {
-		// TODO: depending on settings we should decide if duplicates should be
-		// silently skipped, produce warning or result in abort.
+		msg := fmt.Sprintf("record %q has been duplicated", recordPath)
 		rm.Records.DeleteDup(recordPath, ext)
 		copyMetadataAndData(ioutil.Discard, r, metadata, buf)
 
@@ -117,7 +120,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 		// or `rm.contents` since it will be removed anyway in cleanup.
 		// Assumption is that there will be not much duplicates and we can live
 		// with a little bit more files/memory.
-		return
+		return 0, rm.onDuplicatedRecords(msg)
 	}
 
 	r, ske := rm.keyExtractor.PrepareExtractor(name, r, ext)

@@ -20,7 +20,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-
 	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
@@ -84,8 +83,8 @@ func addFileToZip(tw *zip.Writer, path string, fileSize int) error {
 }
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar
-// is also gziped if necessary.
-func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSize int) error {
+// is also gzipped if necessary.
+func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSize int, duplication bool) error {
 	var (
 		gzw *gzip.Writer
 		tw  *tar.Writer
@@ -114,11 +113,19 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSiz
 	}
 	defer tw.Close()
 
+	prevFileName := ""
+	dupIndex := rand.Intn(fileCnt-1) + 1
+
 	for i := 0; i < fileCnt; i++ {
 		fileName := fmt.Sprintf("%d.txt", rand.Int()) // generate random names
+		if dupIndex == i && duplication {
+			fileName = prevFileName
+		}
+
 		if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
 			return err
 		}
+		prevFileName = fileName
 	}
 
 	return nil

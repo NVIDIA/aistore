@@ -415,7 +415,11 @@ func (m *Manager) abort() {
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setExtractCreator() (err error) {
-	var keyExtractor extract.KeyExtractor
+	var (
+		cfg          = cmn.GCO.Get().DSort
+		keyExtractor extract.KeyExtractor
+	)
+
 	switch m.rs.Algorithm.Kind {
 	case SortKindContent:
 		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.FormatType, m.rs.Algorithm.Extension)
@@ -429,7 +433,11 @@ func (m *Manager) setExtractCreator() (err error) {
 		return err
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.node.DaemonID, m.rs.Extension, keyExtractor)
+	onDuplicatedRecords := func(msg string) error {
+		return m.react(cfg.DuplicatedRecords, msg)
+	}
+
+	m.recManager = extract.NewRecordManager(m.ctx.node.DaemonID, m.rs.Extension, keyExtractor, onDuplicatedRecords)
 	m.shardManager = extract.NewShardManager()
 
 	switch m.rs.Extension {
@@ -988,6 +996,26 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 
 func (m *Manager) String() string {
 	return m.ManagerUUID
+}
+
+func (m *Manager) react(reaction, msg string) error {
+	switch reaction {
+	case cmn.IgnoreReaction:
+		return nil
+	case cmn.WarnReaction:
+		m.Metrics.lock()
+		m.Metrics.Warnings = append(m.Metrics.Warnings, msg)
+		m.Metrics.unlock()
+		return nil
+	case cmn.AbortReaction:
+		m.Metrics.lock()
+		m.Metrics.Errors = append(m.Metrics.Errors, msg)
+		m.Metrics.unlock()
+		return errors.New(msg)
+	default:
+		cmn.AssertMsg(false, reaction)
+		return nil
+	}
 }
 
 func calcMaxMemoryUsage(maxUsage *parsedMemUsage, mem sigar.Mem) uint64 {

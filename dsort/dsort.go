@@ -115,6 +115,7 @@ func (m *Manager) start() (err error) {
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
 	var (
+		cfg                 = cmn.GCO.Get().DSort
 		totalExtractedCount atomic.Uint64
 	)
 
@@ -157,24 +158,26 @@ ExtractAllShards:
 				defer m.releaseExtractGoroutineSema()
 
 				shardName := m.rs.InputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.InputFormat.DigitCount, i) + m.rs.InputFormat.Suffix + m.rs.Extension
-				si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
-				if errStr != "" {
-					return errors.New(errStr)
+				si, errMsg := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
+				if errMsg != "" {
+					return errors.New(errMsg)
 				}
 				if si.DaemonID != m.ctx.node.DaemonID {
 					return nil
 				}
-				//
-				// FIXME: replace the following 5 lines with lom.Init()
-				//
-				bckIsLocal := m.rs.BckProvider == cmn.LocalBs
-				fqn, _, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, bckIsLocal)
-				if errStr != "" {
-					return errors.New(errStr)
-				}
-				uname := cluster.Bo2Uname(m.rs.Bucket, shardName)
 
-				//
+				lom, errMsg := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket, BucketProvider: m.rs.BckProvider}.Init()
+				if errMsg != "" {
+					return errors.New(errMsg)
+				}
+				_, errMsg = lom.Load(true)
+				if errMsg != "" {
+					return errors.New(errMsg)
+				} else if !lom.Exists() {
+					msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
+					return m.react(cfg.MissingShards, msg)
+				}
+
 				m.acquireExtractSema()
 				if m.aborted() {
 					m.releaseExtractSema()
@@ -185,31 +188,24 @@ ExtractAllShards:
 					return errors.New("out of space")
 				}
 
-				m.ctx.nameLocker.Lock(uname, false)
-				f, err := os.Open(fqn)
+				m.ctx.nameLocker.Lock(lom.Uname(), false)
+				f, err := os.Open(lom.FQN)
 				if err != nil {
 					m.releaseExtractSema()
-					m.ctx.nameLocker.Unlock(uname, false)
+					m.ctx.nameLocker.Unlock(lom.Uname(), false)
 					return fmt.Errorf("unable to open local file, err: %v", err)
 				}
+
 				var compressedSize int64
-				fi, err := f.Stat()
-				if err != nil {
-					f.Close()
-					m.releaseExtractSema()
-					m.ctx.nameLocker.Unlock(uname, false)
-					return err
-				}
-
 				if m.extractCreator.UsingCompression() {
-					compressedSize = fi.Size()
+					compressedSize = lom.Size()
 				}
 
-				expectedUncompressedSize := uint64(float64(fi.Size()) / m.avgCompressionRatio())
+				expectedUncompressedSize := uint64(float64(lom.Size()) / m.avgCompressionRatio())
 				toDisk := m.mw.reserveMem(expectedUncompressedSize)
 
-				reader := io.NewSectionReader(f, 0, fi.Size())
-				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(fqn, reader, m.recManager, toDisk)
+				reader := io.NewSectionReader(f, 0, lom.Size())
+				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom.FQN, reader, m.recManager, toDisk)
 
 				// Make sure that compression rate is updated before releasing
 				// next extractor goroutine.
@@ -218,7 +214,7 @@ ExtractAllShards:
 				}
 
 				m.releaseExtractSema()
-				m.ctx.nameLocker.Unlock(uname, false)
+				m.ctx.nameLocker.Unlock(lom.Uname(), false)
 
 				m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 				if err != nil {

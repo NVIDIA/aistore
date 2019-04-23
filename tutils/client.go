@@ -25,12 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 

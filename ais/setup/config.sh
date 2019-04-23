@@ -126,6 +126,10 @@ cat > $CONFFILE <<EOL
 	},
 	"downloader": {
 		"timeout": "1h"
+	},
+	"distributed_sort": {
+		"duplicated_records": "warn",
+		"missing_shards":     "abort"
 	}
 }
 EOL

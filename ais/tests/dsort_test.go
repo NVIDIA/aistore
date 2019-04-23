@@ -15,13 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	sigar "github.com/cloudfoundry/gosigar"
 )
 
@@ -41,13 +40,15 @@ type dsortFramework struct {
 	inputPrefix  string
 	outputPrefix string
 
-	inputTempl        string
-	outputTempl       string
-	tarballCnt        int
-	fileInTarballCnt  int
-	fileInTarballSize int
-	tarballSize       int
-	outputShardCnt    int
+	inputTempl            string
+	outputTempl           string
+	tarballCnt            int
+	tarballCntToSkip      int
+	fileInTarballCnt      int
+	fileInTarballSize     int
+	tarballSize           int
+	outputShardCnt        int
+	recordDuplicationsCnt int
 
 	extension       string
 	algorithm       *dsort.SortAlgorithm
@@ -109,16 +110,18 @@ func (df *dsortFramework) createInputShards() {
 	tutils.Logf("creating %d tarballs...\n", df.tarballCnt)
 	wg := &sync.WaitGroup{}
 	errCh := make(chan error, df.tarballCnt)
-	for i := 0; i < df.tarballCnt; i++ {
+	for i := df.tarballCntToSkip; i < df.tarballCnt; i++ {
 		wg.Add(1)
 		go func(i int) {
+			duplication := i < df.recordDuplicationsCnt
+
 			path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension)
 			} else if df.extension == ".tar" {
-				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize)
+				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication)
 			} else if df.extension == ".tar.gz" {
-				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize)
+				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication)
 			} else if df.extension == ".zip" {
 				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
@@ -254,6 +257,45 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	if df.algorithm.Kind == dsort.SortKindShuffle {
 		if inversions == 0 {
 			df.m.t.Fatal("shuffle sorting did not create any inversions")
+		}
+	}
+}
+
+func (df *dsortFramework) checkReactionResult(reaction string, allMetrics map[string]*dsort.Metrics, expectedProblemsCnt int) {
+	switch reaction {
+	case cmn.IgnoreReaction:
+		for target, metrics := range allMetrics {
+			if len(metrics.Warnings) != 0 {
+				df.m.t.Errorf("target %q has dSort warnings: %s", target, metrics.Warnings)
+			}
+			if len(metrics.Errors) != 0 {
+				df.m.t.Errorf("target %q has dSort errors: %s", target, metrics.Errors)
+			}
+		}
+	case cmn.WarnReaction:
+		totalWarnings := 0
+		for target, metrics := range allMetrics {
+			totalWarnings += len(metrics.Warnings)
+
+			if len(metrics.Errors) != 0 {
+				df.m.t.Errorf("target %q has dSort errors: %s", target, metrics.Errors)
+			}
+		}
+
+		if totalWarnings != expectedProblemsCnt {
+			df.m.t.Errorf("number of total warnings %d is different than number of deleted shards: %d", totalWarnings, expectedProblemsCnt)
+		}
+	case cmn.AbortReaction:
+		totalErrors := 0
+		for target, metrics := range allMetrics {
+			if !metrics.Aborted {
+				df.m.t.Errorf("dsort was not aborted by target: %s", target)
+			}
+			totalErrors += len(metrics.Errors)
+		}
+
+		if totalErrors == 0 {
+			df.m.t.Error("expected errors on abort, got nothing")
 		}
 	}
 }
@@ -909,8 +951,9 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 				FormatType: extract.FormatTypeFloat,
 			},
 			tarballCnt:       1000,
-			fileInTarballCnt: 50, extension: ".tar",
-			maxMemUsage: "90%",
+			fileInTarballCnt: 50,
+			extension:        ".tar",
+			maxMemUsage:      "90%",
 		}
 	)
 	if testing.Short() {
@@ -1478,5 +1521,129 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	}
 
 	dsortFW.checkOutputShards(5)
+	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortMissingShards(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                m,
+			outputTempl:      "output-{0..100000}",
+			tarballCnt:       1000,
+			tarballCntToSkip: 50,
+			fileInTarballCnt: 200,
+			extension:        ".tar",
+			maxMemUsage:      "40%",
+		}
+	)
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
+
+	for _, reaction := range cmn.SupportedReactions {
+		dsortFW.clearDSortList()
+
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
+
+		dsortFW.createInputShards()
+
+		tutils.Logln("starting distributed sort...")
+		rs := dsortFW.gen()
+		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+		tassert.CheckFatal(t, err)
+
+		_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+		tassert.CheckFatal(t, err)
+		tutils.Logln("finished distributed sort")
+
+		allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+		tassert.CheckFatal(t, err)
+		if len(allMetrics) != m.originalTargetCount {
+			t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+		}
+
+		dsortFW.checkReactionResult(reaction, allMetrics, dsortFW.tarballCntToSkip)
+	}
+
+	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortDuplications(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                     m,
+			outputTempl:           "output-{0..100000}",
+			tarballCnt:            1000,
+			fileInTarballCnt:      200,
+			recordDuplicationsCnt: 50,
+			extension:             ".tar",
+			maxMemUsage:           "40%",
+		}
+	)
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+
+	for _, reaction := range cmn.SupportedReactions {
+		dsortFW.clearDSortList()
+
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+
+		dsortFW.createInputShards()
+
+		tutils.Logln("starting distributed sort...")
+		rs := dsortFW.gen()
+		managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+		tassert.CheckFatal(t, err)
+
+		_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+		tassert.CheckFatal(t, err)
+		tutils.Logln("finished distributed sort")
+
+		allMetrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+		tassert.CheckFatal(t, err)
+		if len(allMetrics) != m.originalTargetCount {
+			t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+		}
+
+		dsortFW.checkReactionResult(reaction, allMetrics, dsortFW.recordDuplicationsCnt)
+	}
+
 	dsortFW.checkDSortList()
 }
