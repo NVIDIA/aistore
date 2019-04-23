@@ -97,7 +97,7 @@ type ExtPrefetchStats struct {
 	NumBytesPrefetched int64 `json:"num_bytes_prefetched"`
 }
 
-func (s *PrefetchTargetStats) FillFromTrunner(r *Trunner) {
+func (s *PrefetchTargetStats) FillFromStatsRunner(r *Trunner) {
 	v := r.Core.Tracker[PrefetchCount]
 	v.RLock()
 

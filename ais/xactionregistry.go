@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
+
+	"github.com/NVIDIA/aistore/downloader"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -48,61 +51,103 @@ type (
 		proxyrunner *proxyrunner
 		vr          *VoteRecord
 	}
+
+	xactionEntry interface {
+		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
+		Kind() string
+		Get() cmn.Xact
+		Stats() stats.XactStats
+		IsGlobal() bool
+	}
 )
 
+// how often cleanup is called
+const cleanupInterval = 10 * time.Minute
+
+// how long xaction had to finish to be considered to be removed
+const entryOldAge = 30 * time.Second
+
+// watermarks for entries size
+const entriesSizeHW = 200
+const entriesSizeLW = 100
+
 type xactionsRegistry struct {
-	sync.Mutex
+	sync.RWMutex
 	nextid      atomic.Int64
-	globalXacts sync.Map
-	buckets     sync.Map
-	byID        sync.Map
+	globalXacts map[string]xactionGlobalEntry
+	bucketXacts sync.Map // map[string]*bucketXactions
+	byID        sync.Map // map[int64]xactionEntry
+	byIDSize    *atomic.Int64
+	lastCleanup *atomic.Int64
 }
 
 func newXactions() *xactionsRegistry {
-	return &xactionsRegistry{}
+	return &xactionsRegistry{
+		globalXacts: make(map[string]xactionGlobalEntry),
+		lastCleanup: atomic.NewInt64(time.Now().UnixNano()),
+		byIDSize:    atomic.NewInt64(0),
+	}
 }
 
-func (r *xactionsRegistry) abortBuckets(buckets ...string) {
+func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...string) {
 	wg := &sync.WaitGroup{}
 	for _, b := range buckets {
 		wg.Add(1)
 		go func(b string) {
 			defer wg.Done()
-			val, ok := r.buckets.Load(b)
+			val, ok := r.bucketXacts.Load(b)
 
 			if !ok {
 				glog.Warningf("Can't abort nonexistent xactions for bucket %s", b)
 				return
 			}
 
-			bucketsXacts := val.(*sync.Map)
-			r.abortAllEntries(bucketsXacts)
-			// TODO: cleanup bucket from r.buckets
+			bXacts := val.(*bucketXactions)
+			bXacts.AbortAll()
+			if removeFromRegistry {
+				r.bucketXacts.Delete(b)
+			}
 		}(b)
 	}
 
 	wg.Wait()
 }
 
-func (r *xactionsRegistry) abortAllEntries(entriesMap *sync.Map) bool {
+//nolint:unused
+func (r *xactionsRegistry) abortAllGlobal() bool {
 	sleep := false
 	wg := &sync.WaitGroup{}
 
-	entriesMap.Range(func(_, val interface{}) bool {
-		entry := val.(xactEntry)
-		entry.RLock()
-
-		if entry.Get().Finished() {
-			entry.RUnlock()
-		} else {
-			// sync.Map.Range is sequential, safe to wg.Add inside the loop
+	for _, entry := range r.globalXacts {
+		if !entry.Get().Finished() {
 			wg.Add(1)
+			sleep = true
 			go func() {
-				entry.Abort()
-				entry.RUnlock()
+				entry.Get().Abort()
 				wg.Done()
 			}()
+		}
+	}
+
+	wg.Wait()
+	return sleep
+}
+
+// AbortAll waits until abort of all xactions is finished
+// Every abort is done asynchronously
+func (r *xactionsRegistry) abortAll() bool {
+	sleep := false
+	wg := &sync.WaitGroup{}
+
+	r.byID.Range(func(_, val interface{}) bool {
+		entry := val.(xactionEntry)
+		if !entry.Get().Finished() {
 			sleep = true
+			wg.Add(1)
+			go func() {
+				entry.Get().Abort()
+				wg.Done()
+			}()
 		}
 
 		return true
@@ -112,66 +157,26 @@ func (r *xactionsRegistry) abortAllEntries(entriesMap *sync.Map) bool {
 	return sleep
 }
 
-func (r *xactionsRegistry) abortAll() bool {
-	sleep := atomic.NewInt32(0)
-
-	if r.abortAllEntries(&r.globalXacts) {
-		sleep.Store(1)
+func (r *xactionsRegistry) rebStatus(global bool) (aborted, running bool) {
+	rebType := localRebType
+	xactKind := cmn.ActLocalReb
+	if global {
+		rebType = globalRebType
+		xactKind = cmn.ActGlobalReb
 	}
 
-	wg := &sync.WaitGroup{}
-	r.buckets.Range(func(_, val interface{}) bool {
-		wg.Add(1)
-		go func() {
-			bucketsXact := val.(*sync.Map)
-			if r.abortAllEntries(bucketsXact) {
-				sleep.Inc()
-			}
-			wg.Done()
-		}()
-		return true
-	})
-
-	wg.Wait()
-	return sleep.Load() > 0
-}
-
-func (r *xactionsRegistry) localRebStatus() (aborted, running bool) {
-	pmarker := persistentMarker(localRebType)
+	pmarker := persistentMarker(rebType)
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
 	}
 
-	val, ok := r.globalXacts.Load(cmn.ActLocalReb)
-	if !ok {
+	entry := r.GetL(xactKind)
+	if entry == nil {
 		return
 	}
 
-	entry := val.(*localRebEntry)
-	entry.RLock()
-	running = entry.xact != nil && !entry.xact.Finished()
-	entry.RUnlock()
-
-	return
-}
-
-func (r *xactionsRegistry) globalRebStatus() (aborted, running bool) {
-	pmarker := persistentMarker(globalRebType)
-	_, err := os.Stat(pmarker)
-	if err == nil {
-		aborted = true
-	}
-
-	val, ok := r.globalXacts.Load(cmn.ActGlobalReb)
-	if !ok {
-		return
-	}
-
-	entry := val.(*globalRebEntry)
-	entry.RLock()
-	running = entry.xact != nil && !entry.xact.Finished()
-	entry.RUnlock()
+	running = !entry.Get().Finished()
 	return
 }
 
@@ -181,20 +186,20 @@ func (r *xactionsRegistry) uniqueID() int64 {
 
 func (r *xactionsRegistry) stopMountpathXactions() {
 	r.byID.Range(func(_, value interface{}) bool {
-		entry := value.(xactEntry)
-		entry.RLock()
+		entry := value.(xactionEntry)
 
 		if entry.Get().IsMountpathXact() {
-			entry.Abort()
+			if !entry.Get().Finished() {
+				entry.Get().Abort()
+			}
 		}
 
-		entry.RUnlock()
 		return true
 	})
 }
 
 func (r *xactionsRegistry) abortBucketXact(kind, bucket string) {
-	val, ok := r.buckets.Load(bucket)
+	val, ok := r.bucketXacts.Load(bucket)
 
 	if !ok {
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -202,61 +207,50 @@ func (r *xactionsRegistry) abortBucketXact(kind, bucket string) {
 		}
 		return
 	}
-	bucketsXacts := val.(*sync.Map)
-	val, ok = bucketsXacts.Load(kind)
-	if !ok {
+	bucketsXacts := val.(*bucketXactions)
+	entry := bucketsXacts.GetL(kind)
+	if entry == nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Can't abort nonexistent xaction for bucket %s", bucket)
 		}
 		return
 	}
 
-	entry := val.(xactEntry)
-	entry.RLock()
-	entry.Abort()
-	entry.RUnlock()
+	if !entry.Get().Finished() {
+		entry.Get().Abort()
+	}
 }
 
 func (r *xactionsRegistry) globalXactRunning(kind string) bool {
-	val, ok := r.globalXacts.Load(kind)
-	if !ok {
+	entry := r.GetL(kind)
+	if entry == nil {
 		return false
 	}
-
-	entry := val.(xactEntry)
-	entry.RLock()
-	defer entry.RUnlock()
 	return !entry.Get().Finished()
 }
 
-//nolint:unused
 func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, error) {
-
 	if _, ok := cmn.ValidXact(kind); !ok {
 		return nil, fmt.Errorf("unrecognized xaction %s", kind)
 	}
 
-	val, ok := r.globalXacts.Load(kind)
-	if !ok {
+	entry := r.GetL(kind)
+	if entry == nil {
 		return nil, fmt.Errorf("xaction %s has not started", kind)
 	}
 
-	entry := val.(xactEntry)
-	entry.RLock()
-	defer entry.RUnlock()
 	return []stats.XactStats{entry.Stats()}, nil
 }
 
 func (r *xactionsRegistry) abortGlobalXact(kind string) {
-	val, ok := r.globalXacts.Load(kind)
-	if !ok {
+	entry := r.GetL(kind)
+	if entry == nil {
 		return
 	}
 
-	entry := val.(xactEntry)
-	entry.RLock()
-	entry.Abort()
-	entry.RUnlock()
+	if !entry.Get().Finished() {
+		entry.Get().Abort()
+	}
 }
 
 // Returns stats of xaction with given 'kind' on a given bucket
@@ -266,20 +260,25 @@ func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string) ([]stats.X
 		return nil, fmt.Errorf("no bucket %s for xact %s", bucket, kind)
 	}
 
-	val, ok := bucketXats.Load(kind)
-	if !ok {
+	entry := bucketXats.GetL(kind)
+	if entry == nil {
 		return nil, fmt.Errorf("xact %s for bucket %s does not exist", kind, bucket)
 	}
 
-	entry := val.(xactEntry)
-	entry.RLock()
-	defer entry.RUnlock()
 	return []stats.XactStats{entry.Stats()}, nil
 }
 
 // Returns stats of all present xactions
 func (r *xactionsRegistry) allXactsStats() []stats.XactStats {
-	return statsFromXactionsMap(&r.byID)
+	sts := make([]stats.XactStats, 0, 20)
+
+	r.byID.Range(func(_, value interface{}) bool {
+		entry := value.(xactionEntry)
+		sts = append(sts, entry.Stats())
+		return true
+	})
+
+	return sts
 }
 
 func (r *xactionsRegistry) getNonBucketSpecificStats(kind string) ([]stats.XactStats, error) {
@@ -309,7 +308,7 @@ func (r *xactionsRegistry) bucketAllXactsStats(bucket string) ([]stats.XactStats
 		return nil, fmt.Errorf("xactions for %s bucket not found", bucket)
 	}
 
-	return statsFromXactionsMap(bucketsXacts), nil
+	return bucketsXacts.Stats(), nil
 }
 
 func (r *xactionsRegistry) getStats(kind, bucket string) ([]stats.XactStats, error) {
@@ -334,7 +333,7 @@ func (r *xactionsRegistry) doAbort(kind, bucket string) {
 	}
 	// bucket present and no kind - request for all available bucket's xactions
 	if bucket != "" && kind == "" {
-		r.abortBuckets(bucket)
+		r.abortAllBuckets(false, bucket)
 	}
 	// both bucket and kind present - request for specific bucket's xaction
 	if bucket != "" && kind != "" {
@@ -346,25 +345,210 @@ func (r *xactionsRegistry) doAbort(kind, bucket string) {
 	}
 }
 
-func (r *xactionsRegistry) getBucketsXacts(bucket string) (m *sync.Map, ok bool) {
-	val, ok := r.buckets.Load(bucket)
+func (r *xactionsRegistry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok bool) {
+	val, ok := r.bucketXacts.Load(bucket)
 	if !ok {
 		return nil, false
 	}
-	return val.(*sync.Map), true
+	return val.(*bucketXactions), true
 }
 
-func statsFromXactionsMap(m *sync.Map) []stats.XactStats {
-	const expectedXactionsSize = 10
-	statsList := make([]stats.XactStats, 0, expectedXactionsSize)
+func (r *xactionsRegistry) bucketsXacts(bucket string) *bucketXactions {
+	// NOTE: Load and then LoadOrStore saves us creating new object with
+	// newBucketXactions every time this function is called, putting additional,
+	// unnecessary stress on GC
+	val, loaded := r.bucketXacts.Load(bucket)
 
-	m.Range(func(_, val interface{}) bool {
-		entry := val.(xactEntry)
-		entry.RLock()
-		statsList = append(statsList, entry.Stats())
-		entry.RUnlock()
-		return true
-	})
+	if loaded {
+		return val.(*bucketXactions)
+	}
 
-	return statsList
+	val, _ = r.bucketXacts.LoadOrStore(bucket, newBucketXactions(r))
+	return val.(*bucketXactions)
+}
+
+// GLOBAL RENEW METHODS
+
+func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
+	r.RLock()
+	res := r.globalXacts[kind]
+	r.RUnlock()
+	return res
+}
+
+func (r *xactionsRegistry) Update(e xactionGlobalEntry) (stored bool, err error) {
+	r.Lock()
+	defer r.Unlock()
+
+	previousEntry := r.globalXacts[e.Kind()]
+	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
+		e.ActOnPrevious(previousEntry)
+		return false, nil
+	}
+
+	if err := e.Start(r.uniqueID()); err != nil {
+		return false, err
+	}
+
+	r.globalXacts[e.Kind()] = e
+	r.storeByID(e.Get().ID(), e)
+	e.CleanupPrevious(previousEntry)
+	return true, nil
+}
+
+func (r *xactionsRegistry) RenewGlobalXact(e xactionGlobalEntry) (stored bool, err error) {
+	r.RLock()
+	previousEntry := r.globalXacts[e.Kind()]
+
+	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
+		e.ActOnPrevious(previousEntry)
+		r.RUnlock()
+		return false, nil
+	}
+
+	r.RUnlock()
+	return r.Update(e)
+}
+
+func (r *xactionsRegistry) renewPrefetch() *xactPrefetch {
+	e := &prefetchEntry{}
+	stored, _ := r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*prefetchEntry)
+
+	if !stored && !entry.xact.Finished() {
+		// previous prefetch is still running
+		return nil
+	}
+
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewLRU() *xactLRU {
+	e := &lruEntry{}
+	stored, _ := r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*lruEntry)
+
+	if !stored && !entry.xact.Finished() {
+		// previous LRU is still running
+		return nil
+	}
+
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactRebBase {
+	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
+	stored, _ := r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*globalRebEntry)
+
+	if !stored {
+		// previous global rebalance is still running
+		return nil
+	}
+
+	return &entry.xact.xactRebBase
+}
+
+func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
+	e := &localRebEntry{runnerCnt: runnerCnt}
+	stored, _ := r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*localRebEntry)
+
+	if !stored {
+		// previous local rebalance is still running
+		return nil
+	}
+
+	return &entry.xact.xactRebBase
+}
+
+func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
+	e := &electionEntry{p: p, vr: vr}
+	stored, _ := r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*electionEntry)
+
+	if !stored && !entry.xact.Finished() {
+		// previous election is still running
+		return nil
+	}
+
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
+	e := &downloaderEntry{t: t}
+	_, err := r.RenewGlobalXact(e)
+
+	if err != nil {
+		return nil, err
+	}
+
+	entry := r.GetL(e.Kind()).(*downloaderEntry)
+	return entry.xact, nil
+}
+
+func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
+	e := &evictDeleteEntry{evict: evict}
+	_, _ = r.RenewGlobalXact(e)
+	entry := r.GetL(e.Kind()).(*evictDeleteEntry)
+	return entry.xact
+}
+
+func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
+	r.byID.Store(id, entry)
+	r.byIDSize.Inc()
+	r.cleanUpFinished()
+}
+
+// FIXME: cleanup might not remove the most old entries for each kind
+// creating 'holes' in xactions history. Fix should probably use heap
+// or change in structure of byID
+// cleanup is made when size of r.byID is bigger then entriesSizeHW
+// but not more often than cleanupInterval
+func (r *xactionsRegistry) cleanUpFinished() {
+	if r.byIDSize.Load() < entriesSizeHW {
+		return
+	}
+
+	last := r.lastCleanup.Load()
+	startTime := time.Now()
+	// last cleanup was earlier than cleanupInterval
+	if time.Unix(0, last).Add(cleanupInterval).After(startTime) {
+		return
+	}
+
+	if !r.lastCleanup.CAS(last, startTime.UnixNano()) {
+		return
+	}
+
+	go func(startTime time.Time) {
+		r.byID.Range(func(k, v interface{}) bool {
+			entry := v.(xactionEntry)
+			if !entry.Get().Finished() {
+				return true
+			}
+
+			if entry.IsGlobal() {
+				currentEntry := r.GetL(entry.Get().Kind())
+				if currentEntry.Get().ID() == entry.Get().ID() {
+					return true
+				}
+			} else {
+				bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
+				currentEntry := bXact.GetL(entry.Get().Kind())
+				if currentEntry.Get().ID() == entry.Get().ID() {
+					return true
+				}
+			}
+
+			if entry.Get().EndTime().Add(entryOldAge).Before(startTime) {
+				// xaction has finished more then cleanupInterval ago
+				r.byID.Delete(k)
+				r.byIDSize.Dec()
+				// stop loop if we reached LW
+				return r.byIDSize.Load() < entriesSizeLW
+			}
+			return true
+		})
+	}(startTime)
 }

@@ -315,7 +315,7 @@ func (t *targetrunner) Run() error {
 	ec.Init()
 	t.ecmanager = newECM(t)
 
-	aborted, _ := t.xactions.localRebStatus()
+	aborted, _ := t.xactions.rebStatus(false)
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")
@@ -442,8 +442,8 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed
 }
 
 func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactions.globalRebStatus()
-	_, runningLocal := t.xactions.localRebStatus()
+	_, running := t.xactions.rebStatus(true)
+	_, runningLocal := t.xactions.rebStatus(false)
 	return running || runningLocal
 }
 
@@ -738,7 +738,7 @@ get:
 //
 func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
 	// check FS-wide if local rebalance is running
-	aborted, running := t.xactions.localRebStatus()
+	aborted, running := t.xactions.rebStatus(false)
 	gfnActive := t.gfn.local.active()
 	if aborted || running || gfnActive {
 		// FIXME: move this part to lom
@@ -760,7 +760,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= t.smapowner.Get().CountTargets()
 
 	// check cluster-wide ("ask neighbors")
-	aborted, running = t.xactions.globalRebStatus()
+	aborted, running = t.xactions.rebStatus(true)
 	gfnActive, smap := t.gfn.global.active()
 	if aborted || running || gfnActive || !enoughECRestoreTargets {
 		if !gfnActive {

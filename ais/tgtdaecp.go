@@ -631,7 +631,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 
 	// TODO: add a separate API to stop ActPut and ActMakeNCopies xactions and/or
 	//       disable mirroring (needed in part for cloud buckets)
-	t.xactions.abortBuckets(bucketsToDelete...)
+	t.xactions.abortAllBuckets(true, bucketsToDelete...)
 
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
 
@@ -968,9 +968,9 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 
 // GET /v1/health
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	aborted, running := t.xactions.globalRebStatus()
+	aborted, running := t.xactions.rebStatus(true)
 	if !aborted && !running {
-		aborted, running = t.xactions.localRebStatus()
+		aborted, running = t.xactions.rebStatus(false)
 	}
 	status := &thealthstatus{IsRebalancing: aborted || running}
 

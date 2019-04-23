@@ -567,7 +567,7 @@ func TestCloudMirror(t *testing.T) {
 
 	l := len(objectList.Entries)
 	if l < num {
-		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s", t.Name(), clibucket)
+		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), clibucket, num)
 	}
 
 	// cold GET - causes local mirroring
