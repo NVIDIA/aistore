@@ -53,7 +53,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				b, errstr := fs.GetXattr(localFQN, cmn.XattrMeta)
+				b, errstr := fs.GetXattr(localFQN, cmn.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(errstr).To(BeEmpty())
 
@@ -79,7 +79,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				b, errstr := fs.GetXattr(localFQN, cmn.XattrMeta)
+				b, errstr := fs.GetXattr(localFQN, cmn.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(errstr).To(BeEmpty())
 
@@ -117,10 +117,10 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				b, errstr := fs.GetXattr(localFQN, cmn.XattrMeta)
+				b, errstr := fs.GetXattr(localFQN, cmn.XattrLOM)
 				Expect(errstr).To(BeEmpty())
 				b[0] = b[0] + 1 // changing first byte of meta checksum
-				Expect(fs.SetXattr(localFQN, cmn.XattrMeta, b)).To(BeEmpty())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, b)).To(BeEmpty())
 
 				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
 			})
@@ -136,13 +136,22 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				Expect(fs.SetXattr(localFQN, cmn.XattrMeta, []byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).To(BeEmpty())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).To(BeEmpty())
 				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
-				Expect(fs.SetXattr(localFQN, cmn.XattrMeta, []byte("nochecksumnumber\n\n"))).To(BeEmpty())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("nochecksumnumber\n\n"))).To(BeEmpty())
 				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
-				Expect(fs.SetXattr(localFQN, cmn.XattrMeta, []byte("123\n;;;\n;;;\n;da;dsa;\n"))).To(BeEmpty())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("123\n;;;\n;;;\n;da;dsa;\n"))).To(BeEmpty())
 				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
-				Expect(fs.SetXattr(localFQN, cmn.XattrMeta, []byte("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"))).To(BeEmpty())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"))).To(BeEmpty())
+				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
+
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("1321\xc5\xdfwr\xae\xbdas\xc5\xdf\xae\xbd, \xae\xbd\xc5\xdf\xc5\xdf\xae\xbd\xae\xbd,,dadsa\xae\xbdaa\xc5\xdf"))).To(BeEmpty())
+				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("nochecksumnumber\xc5\xdf\xc5\xdf"))).To(BeEmpty())
+				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("123\xc5\xdf\xae\xbd\xae\xbd\xae\xbd\xc5\xdf\xae\xbd\xae\xbd\xae\xbd\xc5\xdf\xae\xbdda\xae\xbddsa\xae\xbd\xc5\xdf"))).To(BeEmpty())
+				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
+				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf\xc5\xdf"))).To(BeEmpty())
 				Expect(lom.LoadMetaFromFS()).To(HaveOccurred())
 			})
 		})

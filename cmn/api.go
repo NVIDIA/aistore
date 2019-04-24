@@ -20,7 +20,7 @@ import (
 const (
 	// http header
 
-	XattrMeta = "user.obj.ais-meta"
+	XattrLOM = "user.ais.lom"
 	// checksum hash function
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"

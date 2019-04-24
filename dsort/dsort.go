@@ -729,7 +729,7 @@ func randomTargetOrder(salt uint64, tmap map[string]*cluster.Snode) []*cluster.S
 	targets := make(map[uint64]*cluster.Snode, len(tmap))
 	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {
-		c := xxhash.Checksum64S([]byte(i), salt)
+		c := xxhash.ChecksumString64S(i, salt)
 		targets[c] = d
 		keys = append(keys, c)
 	}

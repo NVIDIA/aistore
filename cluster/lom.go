@@ -210,7 +210,7 @@ func (lom *LOM) _string(b string) string {
 		a string
 		s = fmt.Sprintf("lom[%s/%s fs=%s", b, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
 	)
-	if glog.V(4) {
+	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
 		if lom.md.size != 0 {
 			s += " size=" + cmn.B2S(lom.md.size, 1)
@@ -291,7 +291,6 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 	if len(lom.md.copyFQN) == 0 {
 		return
 	}
-	var mp *fs.MountpathInfo
 	utilMin := lom.ParsedFQN.MpathInfo.Iostat.GetDiskUtil()
 	for _, cpyfqn := range lom.md.copyFQN {
 		if utilMin < lom.MirrorConf().UtilThresh {
@@ -307,11 +306,7 @@ func (lom *LOM) LoadBalanceGET() (fqn string) {
 		if utilCur < utilMin {
 			fqn = cpyfqn
 			utilMin = utilCur
-			mp = parsedCpyFQN.MpathInfo
 		}
-	}
-	if mp != nil && bool(glog.V(4)) {
-		glog.Infof("GET %s from a mirror %s", lom, mp)
 	}
 	return
 }

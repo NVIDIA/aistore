@@ -17,49 +17,40 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-// xattributes
-// All of lom's metadata xattributes (currently checksum, version and copies)
-// are stored as a single xattribute, so it's one read to fetch them all
-//
-
+// on-disk LOM attribute names
+// NOTE: changing any of this will break compatibility
 const (
-	// FIXME: this should be deployment/data specific, not project-wide, development specific
+	cksumKindXattr = iota
+	cksumValXattr
+	versionXattr
+	copiesXattr
+	deletedXattr
+	deletedExprXattr // nanoseconds
+	//
+	// NOTE: new and/or redefined attributes are to be added after this line
+)
 
-	// these keys are tightly bounded with persistent lom's meta, stored on a disk
-	// the values should not be changed, unless change in the underlying structure of data
-	// is intended and done with being aware of consequences
-	cksumKindXattr   = 0
-	cksumValXattr    = 1
-	versionXattr     = 2
-	copiesXattr      = 3
-	deletedXattr     = 4
-	deletedExprXattr = 5 // in nanoseconds
-
-	// nextAvailable is next available number(key) of new xattribute
-	// If one wishes to add new xattribute, its key should be current value of
-	// nextAvailable, and then nextAvailable should be incremented
-	// nextAvailable = 7
+// delimiters
+const (
+	cpyfqnSepa = "\xa1\xb2"
+	namvalSepa = "\xae\xbd"
+	recordSepa = "\xc5\xdf"
 )
 
 const (
-	copyNameSepa = "\"\""
-	metaSepa     = ";"
-
 	emptyDeletedXattr     = "0"
 	emptyDeletedExprXattr = "0"
 )
 
 // reads LOM's metadata from disk without storing it in LOM object
 func readMetaFromFS(fqn string) (*lmeta, error) {
-	metaBytes, errstr := fs.GetXattr(fqn, cmn.XattrMeta)
+	metaBytes, errstr := fs.GetXattr(fqn, cmn.XattrLOM)
 	if errstr != "" {
 		return nil, errors.New(errstr)
 	}
-
 	if len(metaBytes) == 0 {
 		return nil, nil
 	}
-
 	return unmarshalMeta(string(metaBytes))
 }
 
@@ -85,60 +76,44 @@ func (lom *LOM) LoadMetaFromFS() error {
 }
 
 // converts string to LOM.md object
-// NOTE: does not call json.Unmarshal function
 func unmarshalMeta(stringMd string) (*lmeta, error) {
-	r := strings.SplitN(stringMd, "\n", 2)
-
-	if len(r) != 2 {
-		return nil, fmt.Errorf("expected meta to be `checksum payload`, got %s", stringMd)
+	r := strings.SplitN(stringMd, recordSepa, 2)
+	if len(r) != 2 || r[1] == "" {
+		return nil, fmt.Errorf("expected (checksum, payload), got [%s]", stringMd)
 	}
-
 	cksmStr, payloadStr := r[0], r[1]
-
-	if payloadStr == "" {
-		return nil, fmt.Errorf("unexpected empty meta payload")
-	}
-
 	expectedCksm, err := strconv.ParseUint(cksmStr, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	actualCksm := xxhash.Checksum64S([]byte(payloadStr), 0)
-
+	actualCksm := xxhash.ChecksumString64S(payloadStr, MLCG32)
 	if expectedCksm != actualCksm {
-		return nil, fmt.Errorf("lom meta checksums don't match; expected %d, got %d", expectedCksm, actualCksm)
+		return nil, fmt.Errorf("BAD CHECKSUM: expected %x, got %x", expectedCksm, actualCksm)
 	}
-
-	lines := strings.Split(payloadStr, "\n")
+	records := strings.Split(payloadStr, recordSepa)
 	md := &lmeta{}
-	err = md.setMDFromXattrLines(lines)
+	err = md.setMDFromXattr(records)
 
 	return md, err
 }
 
-func (md *lmeta) setMDFromXattrLines(lines []string) error {
+func (md *lmeta) setMDFromXattr(records []string) error {
 	var lomCksumKind, lomCksumVal string
 
-	for _, line := range lines {
-		if line == "" {
-			return fmt.Errorf("empty xattr entry")
+	for _, record := range records {
+		if record == "" {
+			return errors.New("empty xattr record")
 		}
-
-		// split line into 2 strings, if line was abc;def;ghi
-		// key is supposed to be 'abc' and value 'def;ghi'
-		r := strings.SplitN(line, metaSepa, 2)
-
+		// split record into name and value
+		r := strings.SplitN(record, namvalSepa, 2)
 		if len(r) != 2 {
-			return fmt.Errorf("expected key;value format; got %s", line)
+			return fmt.Errorf("expected (name, value) got [%s]", record)
 		}
-
 		key, val := r[0], r[1]
-
 		keyN, err := strconv.Atoi(key)
 		if err != nil {
-			return fmt.Errorf("couldn't parse key %s to a number", key)
+			return fmt.Errorf("couldn't parse name [%s]", key)
 		}
-
 		switch keyN {
 		case cksumValXattr:
 			lomCksumVal = val
@@ -148,18 +123,17 @@ func (md *lmeta) setMDFromXattrLines(lines []string) error {
 			md.version = val
 		case copiesXattr:
 			if val != "" {
-				md.copyFQN = strings.Split(val, copyNameSepa)
+				md.copyFQN = strings.Split(val, cpyfqnSepa)
 			}
 		case deletedXattr:
 			cmn.Assert(val == emptyDeletedXattr)
 		case deletedExprXattr:
 			cmn.Assert(val == emptyDeletedExprXattr)
 		default:
-			glog.Warningf("unexpected key %d in lom's meta", keyN)
+			glog.Errorf("invalid name [%d]", keyN)
 		}
 	}
 	md.cksum = cmn.NewCksum(lomCksumKind, lomCksumVal)
-
 	return nil
 }
 
@@ -167,7 +141,7 @@ func (md *lmeta) setMDFromXattrLines(lines []string) error {
 func (lom *LOM) Persist() error {
 	fsMeta := marshalMeta(&lom.md)
 
-	if errstr := fs.SetXattr(lom.FQN, cmn.XattrMeta, fsMeta); errstr != "" {
+	if errstr := fs.SetXattr(lom.FQN, cmn.XattrLOM, fsMeta); errstr != "" {
 		lom.T.FSHC(errors.New(errstr), lom.FQN)
 		return errors.New(errstr)
 	}
@@ -183,19 +157,18 @@ func marshalMeta(md *lmeta) []byte {
 	if md.cksum != nil {
 		cksmKind, cksmVal = md.cksum.Get()
 	}
-
 	payload := []string{
 		xattrLine(cksumKindXattr, cksmKind),
 		xattrLine(cksumValXattr, cksmVal),
 		xattrLine(versionXattr, md.version),
-		xattrLine(copiesXattr, strings.Join(md.copyFQN, copyNameSepa)),
+		xattrLine(copiesXattr, strings.Join(md.copyFQN, cpyfqnSepa)),
 		xattrLine(deletedXattr, emptyDeletedXattr),
 		xattrLine(deletedExprXattr, emptyDeletedExprXattr),
 	}
-	payloadStr := strings.Join(payload, "\n")
+	payloadStr := strings.Join(payload, recordSepa)
+	metaCksm := xxhash.ChecksumString64S(payloadStr, MLCG32)
 
-	metaCksm := xxhash.Checksum64S([]byte(payloadStr), 0)
-	return []byte(strings.Join([]string{strconv.FormatUint(metaCksm, 10), payloadStr}, "\n"))
+	return []byte(strings.Join([]string{strconv.FormatUint(metaCksm, 10), payloadStr}, recordSepa))
 }
 
-func xattrLine(key int, value string) string { return strconv.Itoa(key) + metaSepa + value }
+func xattrLine(key int, value string) string { return strconv.Itoa(key) + namvalSepa + value }

@@ -57,8 +57,9 @@ func (d *Snode) Digest() uint64 {
 const snodefmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
 
 func (d *Snode) String() string {
-	if glog.V(4) {
-		return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
+	if glog.FastV(4, glog.SmoduleCluster) {
+		return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
+			d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
 	}
 	return d.DaemonID
 }
