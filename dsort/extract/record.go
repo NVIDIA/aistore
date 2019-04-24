@@ -138,8 +138,8 @@ func (r *Records) Insert(records ...*Record) {
 }
 
 func (r *Records) DeleteDup(contentPath, ext string) {
-	r.mu.Lock()
 	cmn.Assert(r.Exists(contentPath, ext))
+	r.mu.Lock()
 	if record, ok := r.m[contentPath]; ok {
 		record.delete(ext)
 	}
