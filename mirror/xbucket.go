@@ -134,7 +134,7 @@ func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 	if errstr != "" {
 		return nil
 	}
-	if errstr := lom.Load(true); errstr != "" || !lom.Exists() {
+	if _, errstr := lom.Load(true); errstr != "" || !lom.Exists() {
 		return nil
 	}
 	if lom.IsCopy() {
@@ -153,8 +153,6 @@ func (j *joggerBckBase) yieldTerm() error {
 	default:
 		curr := j.mpathInfo.Iostat.GetDiskUtil()
 		if curr >= diskConf.DiskUtilHighWM {
-			time.Sleep(cmn.ThrottleSleepAvg)
-		} else {
 			time.Sleep(cmn.ThrottleSleepMin)
 		}
 		break

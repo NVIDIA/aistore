@@ -83,7 +83,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if errstr != "" {
 		return nil
 	}
-	errstr = lom.Load(false)
+	_, errstr = lom.Load(false)
 	if errstr != "" {
 		return nil
 	}

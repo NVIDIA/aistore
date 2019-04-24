@@ -523,7 +523,7 @@ func (d *Downloader) dispatchDownload(t *task) {
 	)
 	lom, errstr := cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.obj.Objname, BucketProvider: t.bckProvider}.Init()
 	if errstr == "" {
-		errstr = lom.Load(true)
+		_, errstr = lom.Load(true)
 	}
 	if errstr != "" {
 		resp.err, resp.statusCode = errors.New(errstr), http.StatusInternalServerError
@@ -604,7 +604,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 
 			lom, errstr := cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.obj.Objname}.Init()
 			if errstr == "" {
-				errstr = lom.Load(false)
+				_, errstr = lom.Load(false)
 			}
 			if errstr != "" {
 				errs = append(errs, response{
@@ -656,7 +656,7 @@ func (d *Downloader) dispatchStatus(req *request) {
 	for _, obj := range body.Objs {
 		lom, errstr := cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname, BucketProvider: body.BckProvider}.Init()
 		if errstr == "" {
-			errstr = lom.Load(true)
+			_, errstr = lom.Load(true)
 		}
 		if errstr != "" {
 			errs = append(errs, response{
@@ -862,7 +862,7 @@ func (t *task) download() {
 	)
 	lom, errstr := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init()
 	if errstr == "" {
-		errstr = lom.Load(true)
+		_, errstr = lom.Load(true)
 	}
 	if errstr != "" {
 		t.abort(internalErrorMessage(), errors.New(errstr))

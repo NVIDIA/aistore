@@ -194,7 +194,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in rebalanceObjCallback()
 
-	errstr = lom.Load(false)
+	_, errstr = lom.Load(false)
 	if errstr != "" || !lom.Exists() || lom.IsCopy() {
 		goto rerr
 	}
@@ -284,7 +284,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if !lom.RebalanceConf().Enabled {
 		return filepath.SkipDir
 	}
-	errstr = lom.Load(false)
+	_, errstr = lom.Load(false)
 	if errstr != "" {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %v - skipping #2...", lom, errstr)

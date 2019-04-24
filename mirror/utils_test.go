@@ -84,7 +84,9 @@ var _ = Describe("Mirror", func() {
 			// Check msic copy data
 			lomCopy, errstr := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init()
 			Expect(errstr).To(BeEmpty())
-			Expect(lomCopy.Load(false)).To(BeEmpty())
+
+			_, errstr = lomCopy.Load(false)
+			Expect(errstr).To(BeEmpty())
 			copyCksm, errstr := lomCopy.CksumComputeIfMissing()
 			Expect(errstr).To(BeEmpty())
 			_, copyCksmVal := copyCksm.Get()

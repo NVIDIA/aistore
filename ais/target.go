@@ -597,14 +597,14 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		lom             *cluster.LOM
-		started         time.Time
-		config          = cmn.GCO.Get()
-		ct              = t.contextWithAuth(r.Header)
-		query           = r.URL.Query()
-		errcode         int
-		retried         bool
-		loadedFromCache bool
+		lom       *cluster.LOM
+		started   time.Time
+		config    = cmn.GCO.Get()
+		ct        = t.contextWithAuth(r.Header)
+		query     = r.URL.Query()
+		errcode   int
+		retried   bool
+		fromCache bool
 	)
 	//
 	// 1. start, init lom, ...readahead
@@ -642,7 +642,7 @@ do:
 		goto get
 	}
 
-	loadedFromCache, errstr = lom.LoadCheck(true)
+	fromCache, errstr = lom.Load(true)
 	if errstr != "" {
 		t.rtnamemap.Unlock(lom.Uname(), false)
 		t.invalmsghdlr(w, r, errstr)
@@ -672,7 +672,7 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && lom.CksumConf().ValidateWarmGet {
-		if loadedFromCache {
+		if fromCache {
 			errstr = lom.ValidateChecksum(true)
 		} else {
 			errstr = lom.ValidateDiskChecksum()
@@ -1339,7 +1339,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
+	if _, errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1672,14 +1672,12 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg,
 			// return all object names and sizes (and only names and sizes)
 			err := godirwalk.Walk(dir, &godirwalk.Options{
 				Callback: r.infos.listwalkfFast,
-				Unsorted: false,
+				Unsorted: true,
 			})
 			if err != nil {
 				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 				r.failedPath = dir
 				r.err = err
-			} else {
-				t.xactions.renewBckLoadLomCache(bucket, t, bckIsLocal)
 			}
 		} else if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
@@ -1726,9 +1724,43 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.SelectMsg,
 		fileCount += r.infos.fileCount
 	}
 
-	// sort the result and return only first `pageSize` entries
+	// determine whether the fast-listed bucket is /cold/, and load lom cache if it is
+	if msg.Fast {
+		const minloaded = 10 // check that many randomly-selected
+		if fileCount > minloaded {
+			go func(bckEntries []*cmn.BucketEntry) {
+				var (
+					bckProvider = cmn.BckProviderFromLocal(bckIsLocal)
+					l           = len(bckEntries)
+					m           = l / minloaded
+					loaded      int
+				)
+				if l < minloaded {
+					return
+				}
+				for i := 0; i < l; i += m {
+					lom, errstr := cluster.LOM{T: t, Bucket: bucket,
+						Objname: bckEntries[i].Name, BucketProvider: bckProvider}.Init()
+					if errstr == "" && lom.IsLoaded() { // loaded?
+						loaded++
+					}
+				}
+				renew := loaded < minloaded/2
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minloaded, renew)
+				}
+				if renew {
+					t.xactions.renewBckLoadLomCache(bucket, t, bckIsLocal)
+				}
+			}(bckEntries)
+		}
+	}
+
 	marker := ""
-	if fileCount > pageSize {
+	// - sort the result but only if the set is greater than page size;
+	// - return the page size
+	// - do not sort fast list (see Unsorted above)
+	if !msg.Fast && fileCount > pageSize {
 		ifLess := func(i, j int) bool {
 			return bckEntries[i].Name < bckEntries[j].Name
 		}
@@ -1946,7 +1978,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 		Status:   objStatus,
 		Copies:   1,
 	}
-	_ = lom.Load(true) // FIXME: handle errors
+	_, _ = lom.Load(true) // FIXME: handle errors
 	if ci.needAtime {
 		fileInfo.Atime = cmn.FormatTime(lom.Atime(), ci.msg.TimeFormat)
 	}
@@ -2013,7 +2045,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if errstr != "" {
 		glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
 	}
-	errstr = lom.Load(true)
+	_, errstr = lom.Load(true)
 	if !lom.Exists() {
 		return nil
 	}
@@ -2226,7 +2258,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 	defer t.rtnamemap.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
-	if errstr := lom.Load(false); errstr != "" {
+	if _, errstr := lom.Load(false); errstr != "" {
 		return errors.New(errstr)
 	}
 	delFromAIS := lom.Exists()
@@ -2342,7 +2374,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if errstr != "" {
 		return errstr
 	}
-	if errstr := lom.Load(false); errstr != "" {
+	if _, errstr := lom.Load(false); errstr != "" {
 		return errstr
 	}
 	if lom.Cksum() != nil {

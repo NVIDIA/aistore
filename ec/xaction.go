@@ -274,11 +274,10 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		return fmt.Errorf("timed out waiting for %s is read", uname)
 	}
 	r.unregWriter(uname)
-	_ = lom.Load(true) // FIXME: handle errors
+	_, _ = lom.Load(true) // FIXME: handle errors
 	if glog.V(4) {
 		glog.Infof("Received object %s/%s from %s", lom.Bucket, lom.Objname, daemonID)
 	}
-
 	return nil
 }
 

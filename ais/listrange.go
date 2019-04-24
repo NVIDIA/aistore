@@ -162,7 +162,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		glog.Error(errstr)
 		return
 	}
-	if errstr = lom.Load(true); errstr != "" {
+	if _, errstr = lom.Load(true); errstr != "" {
 		glog.Error(errstr)
 		return
 	}

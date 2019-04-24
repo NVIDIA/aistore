@@ -56,7 +56,7 @@ func newXactions() *xactionsRegistry {
 	return &xactionsRegistry{}
 }
 
-var mountpathXactions = []string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActMakeNCopies, cmn.ActECGet, cmn.ActECPut, cmn.ActECRespond, cmn.ActLocalReb}
+var mountpathXactions = []string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActMakeNCopies, cmn.ActECGet, cmn.ActECPut, cmn.ActECRespond, cmn.ActLocalReb, cmn.ActLoadLomCache}
 
 func (r *xactionsRegistry) abortBuckets(buckets ...string) {
 	wg := &sync.WaitGroup{}

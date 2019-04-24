@@ -741,7 +741,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		bckProvider := cmn.BckProviderFromLocal(hdr.IsLocal)
 		lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname, BucketProvider: bckProvider}.Init()
 		if errStr == "" {
-			errStr = lom.Load(true)
+			_, errStr = lom.Load(true)
 		}
 		if errStr != "" {
 			glog.Error(errStr)

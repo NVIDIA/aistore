@@ -134,7 +134,11 @@ func (lom *LOM) GenFQN(ty, prefix string) string {
 // local copy management
 //
 func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
-	cmn.Assert(!lom.IsCopy())
+	if lom.IsCopy() { // NOTE: must never happen
+		errstr = fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copyFQN)
+		glog.Errorln(errstr)
+		return
+	}
 	var (
 		cpyidx = -1
 		l      = len(lom.md.copyFQN)
@@ -163,7 +167,11 @@ func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
 }
 
 func (lom *LOM) DelAllCopies() (errstr string) {
-	cmn.Assert(!lom.IsCopy())
+	if lom.IsCopy() { // NOTE: must never happen
+		errstr = fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copyFQN)
+		glog.Errorln(errstr)
+		return
+	}
 	if !lom.HasCopies() {
 		return
 	}
@@ -562,8 +570,16 @@ func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
 	return
 }
 
-// The same as Load, but returns additionally if lom was loaded from cache (or read from FS otherwise)
-func (lom *LOM) LoadCheck(add bool) (loaded bool, errstr string) {
+func (lom *LOM) IsLoaded() (ok bool) {
+	var (
+		hkey, idx = lom.hkey()
+		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+	)
+	_, ok = cache.M.Load(hkey)
+	return
+}
+
+func (lom *LOM) Load(add bool) (fromCache bool, errstr string) {
 	// fast path
 	var (
 		hkey, idx = lom.hkey()
@@ -571,7 +587,7 @@ func (lom *LOM) LoadCheck(add bool) (loaded bool, errstr string) {
 	)
 	lom.loaded = true
 	if md, ok := cache.M.Load(hkey); ok {
-		loaded = true
+		fromCache = true
 		lom.exists = true
 		lmeta := md.(*lmeta)
 		lom.md = *lmeta
@@ -593,11 +609,6 @@ func (lom *LOM) LoadCheck(add bool) (loaded bool, errstr string) {
 		}
 		cache.M.Store(hkey, md)
 	}
-	return
-}
-
-func (lom *LOM) Load(add bool) (errstr string) {
-	_, errstr = lom.LoadCheck(add)
 	return
 }
 
