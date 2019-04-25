@@ -32,9 +32,9 @@ const (
 )
 
 var (
-	showUnmatchedFlag = cli.BoolTFlag{Name: "showunmatched", Usage: "also print files that were not matched by regex, template or extension"}
-	newBucketFlag     = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
-	pageSizeFlag      = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
+	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also print files that were not matched by regex, template or extension"}
+	newBucketFlag     = cli.StringFlag{Name: "new-bucket", Usage: "new name of bucket"}
+	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
@@ -86,7 +86,7 @@ var (
 	bucketGetPropsText   = fmt.Sprintf(bucketGeneric, cliName, bucketGetProps)
 	bucketEvictText      = fmt.Sprintf(bucketGeneric, cliName, bucketEvict)
 	bucketNamesText      = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
-	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --newbucket <value>", cliName, commandRename)
+	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --new-bucket <value>", cliName, commandRename)
 	bucketSetPropsText   = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
 	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s --bucket <value> --copies <value>", cliName, bucketNWayMirror)
 

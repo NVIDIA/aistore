@@ -4,16 +4,6 @@ The CLI allows users to interact with AIS daemons or cluster.
 
 ## Command List
 
-### config
-
-`ais config [DAEMON_ID]`
-
-Returns the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the configuration of the daemon that the `AIS_URL` is pointed at.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-
 ### list
 
 `ais list`
@@ -23,6 +13,28 @@ Lists all of the Daemons in the AIS cluster
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--verbose, -v` | `bool` | verbose option | `false` |
+
+### status
+
+`ais status [DAEMON_TYPE]`
+
+Returns the status of the `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy`, `target`, or `DAEMON_ID`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | output in JSON format | `false` |
+| `--watch` | `bool` | watch the progress of metric | `false` |
+| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |
+
+### config
+
+`ais config [DAEMON_ID]`
+
+Returns the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the configuration of the daemon that the `AIS_URL` is pointed at.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | output in JSON format | `false` |
 
 ### setconfig
 
@@ -49,18 +61,6 @@ Returns the cluster map (smap) of the `DAEMON_ID`. If `DAEMON_ID` is not set, it
 
 `ais stats [DAEMON_ID]`
 Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the stats of the daemon that the `AIS_URL` is pointed at.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-| `--watch` | `bool` | watch the progress of metric | `false` |
-| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |
-
-### status
-
-`ais status [OPTION]`
-
-Returns the status of the `OPTION`. `OPTION` is either `proxy`, `target`, or `DAEMON_ID`. If `OPTION` is not set, it will return the status all the daemons in the AIS cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

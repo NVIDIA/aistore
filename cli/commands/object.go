@@ -28,10 +28,10 @@ const (
 )
 
 var (
-	keyFlag      = cli.StringFlag{Name: "key", Usage: "name of object"}
-	outFileFlag  = cli.StringFlag{Name: "outfile", Usage: "name of the file where the contents will be saved"}
-	bodyFlag     = cli.StringFlag{Name: "body", Usage: "filename for content of the object"}
-	newKeyFlag   = cli.StringFlag{Name: "newkey", Usage: "new name of object"}
+	nameFlag     = cli.StringFlag{Name: "name", Usage: "name of object"}
+	outFileFlag  = cli.StringFlag{Name: "out-file", Usage: "name of the file where the contents will be saved"}
+	fileFlag     = cli.StringFlag{Name: "file", Usage: "filepath for content of the object"}
+	newNameFlag  = cli.StringFlag{Name: "new-name", Usage: "new name of object"}
 	offsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset"}
 	lengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length"}
 	prefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for string matching"}
@@ -42,7 +42,7 @@ var (
 
 	baseObjectFlags = []cli.Flag{
 		bucketFlag,
-		keyFlag,
+		nameFlag,
 		bckProviderFlag,
 	}
 
@@ -57,7 +57,7 @@ var (
 
 	objectFlags = map[string][]cli.Flag{
 		objPut: append(
-			[]cli.Flag{bodyFlag},
+			[]cli.Flag{fileFlag},
 			baseObjectFlags...),
 		objGet: append(
 			[]cli.Flag{
@@ -71,8 +71,8 @@ var (
 			baseObjectFlags...),
 		commandRename: []cli.Flag{
 			bucketFlag,
-			newKeyFlag,
-			keyFlag,
+			newNameFlag,
+			nameFlag,
 		},
 		objDel: append(
 			baseLstRngFlags,
@@ -81,15 +81,15 @@ var (
 			[]cli.Flag{bucketFlag},
 			baseLstRngFlags...),
 		objEvict: append(
-			[]cli.Flag{bucketFlag, keyFlag},
+			[]cli.Flag{bucketFlag, nameFlag},
 			baseLstRngFlags...),
 	}
 
-	objectDelGetText    = "%s object %s --bucket <value> --key <value>"
+	objectDelGetText    = "%s object %s --bucket <value> --name <value>"
 	objectGetUsage      = fmt.Sprintf(objectDelGetText, cliName, objGet)
 	objectDelUsage      = fmt.Sprintf(objectDelGetText, cliName, objDel)
-	objectPutUsage      = fmt.Sprintf("%s object %s --bucket <value> --key <value> --body <value>", cliName, objPut)
-	objectRenameUsage   = fmt.Sprintf("%s object %s --bucket <value> --key <value> --newkey <value> ", cliName, commandRename)
+	objectPutUsage      = fmt.Sprintf("%s object %s --bucket <value> --name <value> --file <value>", cliName, objPut)
+	objectRenameUsage   = fmt.Sprintf("%s object %s --bucket <value> --name <value> --new-name <value> ", cliName, commandRename)
 	objectPrefetchUsage = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objPrefetch)
 	objectEvictUsage    = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objEvict)
 
@@ -189,10 +189,10 @@ func objectHandler(c *cli.Context) (err error) {
 
 // Get object from bucket
 func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
-	if err = checkFlags(c, keyFlag); err != nil {
+	if err = checkFlags(c, nameFlag); err != nil {
 		return
 	}
-	obj := parseFlag(c, keyFlag)
+	obj := parseFlag(c, nameFlag)
 	var objLen int64
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)
@@ -217,9 +217,10 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	}
 
 	// Object Props and isCached
-	if flagIsSet(c, propsFlag) || flagIsSet(c, cachedFlag) {
-		objProps, err := api.HeadObject(baseParams, bucket, bckProvider, obj, flagIsSet(c, cachedFlag))
-		if flagIsSet(c, cachedFlag) {
+	checkIsCached := flagIsSet(c, cachedFlag)
+	if flagIsSet(c, propsFlag) || checkIsCached {
+		objProps, err := api.HeadObject(baseParams, bucket, bckProvider, obj, checkIsCached)
+		if checkIsCached {
 			if err != nil {
 				if err.(*cmn.HTTPError).Status == http.StatusNotFound {
 					fmt.Printf("Cached: %v\n", false)
@@ -256,27 +257,35 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 }
 
 // Put object into bucket
-func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
-	if err = checkFlags(c, bodyFlag, keyFlag); err != nil {
-		return
+func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
+	if err := checkFlags(c, fileFlag); err != nil {
+		return err
 	}
-	source := parseFlag(c, bodyFlag)
-	obj := parseFlag(c, keyFlag)
+
+	source := parseFlag(c, fileFlag)
+
+	objName := parseFlag(c, nameFlag)
+	if objName == "" {
+		// If name was not provided use the last element of the object's path as object's name
+		objName = filepath.Base(source)
+	}
+
 	path, err := filepath.Abs(source)
 	if err != nil {
-		return
+		return err
 	}
 	reader, err := cmn.NewFileHandle(path)
 	if err != nil {
-		return
+		return err
 	}
 
-	putArgs := api.PutObjectArgs{baseParams, bucket, bckProvider, obj, "", reader}
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, BucketProvider: bckProvider, Object: objName, Reader: reader}
 	if err = api.PutObject(putArgs); err != nil {
 		return errorHandler(err)
 	}
-	fmt.Printf("%s put into %s bucket\n", obj, bucket)
-	return
+
+	fmt.Printf("%s put into %s bucket\n", objName, bucket)
+	return nil
 }
 
 // Deletes object from bucket
@@ -286,8 +295,8 @@ func deleteObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvide
 	}
 
 	// Normal usage
-	if flagIsSet(c, keyFlag) {
-		obj := parseFlag(c, keyFlag)
+	if flagIsSet(c, nameFlag) {
+		obj := parseFlag(c, nameFlag)
 		if err = api.DeleteObject(baseParams, bucket, obj, bckProvider); err != nil {
 			return
 		}
@@ -319,13 +328,13 @@ func prefetchObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 
 // Evict operations
 func evictObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
-	if flagIsSet(c, keyFlag) {
-		// Key evict
-		key := parseFlag(c, keyFlag)
-		if err = api.EvictObject(baseParams, bucket, key); err != nil {
+	if flagIsSet(c, nameFlag) {
+		// Name evict
+		name := parseFlag(c, nameFlag)
+		if err = api.EvictObject(baseParams, bucket, name); err != nil {
 			return err
 		}
-		fmt.Printf("%s evicted from %s bucket\n", key, bucket)
+		fmt.Printf("%s evicted from %s bucket\n", name, bucket)
 		return
 	} else if flagIsSet(c, listFlag) {
 		// List evict
@@ -340,11 +349,11 @@ func evictObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider
 
 // Renames object
 func renameObject(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = checkFlags(c, keyFlag, newKeyFlag); err != nil {
+	if err = checkFlags(c, nameFlag, newNameFlag); err != nil {
 		return
 	}
-	obj := parseFlag(c, keyFlag)
-	newName := parseFlag(c, newKeyFlag)
+	obj := parseFlag(c, nameFlag)
+	newName := parseFlag(c, newNameFlag)
 	if err = api.RenameObject(baseParams, bucket, obj, newName); err != nil {
 		return
 	}

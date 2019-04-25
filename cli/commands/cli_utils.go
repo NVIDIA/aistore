@@ -20,11 +20,12 @@ type AISCLI struct {
 }
 
 const (
-	cliName       = "ais"
-	commandList   = "list"
-	commandRename = "rename"
-	commandProps  = "props"
-	commandEvict  = "evict"
+	cliName          = "ais"
+	commandList      = "list"
+	commandRename    = "rename"
+	commandProps     = "props"
+	commandEvict     = "evict"
+	paramBckProvider = "bucket-provider"
 
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
@@ -42,7 +43,7 @@ var (
 	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are saved to, eg. 'imagenet'"}
-	bckProviderFlag = cli.StringFlag{Name: cmn.URLParamBckProvider,
+	bckProviderFlag = cli.StringFlag{Name: paramBckProvider,
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
 	regexFlag = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
 
@@ -159,7 +160,7 @@ func parseFlag(c *cli.Context, flag cli.Flag) string {
 func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 	for _, f := range flag {
 		if !flagIsSet(c, f) {
-			return fmt.Errorf("%q flag is not set", f)
+			return fmt.Errorf("`%s` flag is not set", f.GetName())
 		}
 	}
 	return nil

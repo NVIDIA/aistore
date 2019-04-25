@@ -56,21 +56,6 @@ Cancels download job given its id.
 Examples:
 * `ais download cancel --id "5JjIuGemR"` cancels the download job
 
-### ls
-
-`ais download ls --regex <value>`
-
-Lists downloads which descriptions match given `regex`.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--regex` | string | regex for the description of download requests | `""` |
-
-Examples:
-* `ais download ls` lists all downloads
-* `ais download ls --regex "^downloads-(.*)"` lists all downloads which description starts with `downloads-` prefix
-
-
 ### rm
 
 `ais download rm --id <value>`
@@ -99,3 +84,17 @@ Retrieves status of the download with provided `id` which is returned upon creat
 Examples:
 * `ais download status --id "5JjIuGemR"` returns the condensed status of the download
 * `ais download status --id "5JjIuGemR" --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
+
+### ls
+
+`ais download ls --regex <value>`
+
+Lists downloads which descriptions match given `regex`.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--regex` | string | regex for the description of download requests | `""` |
+
+Examples:
+* `ais download ls` lists all downloads
+* `ais download ls --regex "^downloads-(.*)"` lists all downloads which description starts with `downloads-` prefix
