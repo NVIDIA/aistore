@@ -24,6 +24,9 @@ var (
 	inputTemplate     string
 	outputTemplate    string
 	outputShardSize   int64
+	algoKind          string
+	algoDesc          bool
+	algoSeed          string
 	extractConcLimit  int
 	createConcLimit   int
 	memUsage          string
@@ -43,6 +46,9 @@ func init() {
 	flag.StringVar(&inputTemplate, "input", "shard-{0..9}", "name template for input shard")
 	flag.StringVar(&outputTemplate, "output", "new-shard-{0000..1000}", "name template for output shard")
 	flag.Int64Var(&outputShardSize, "size", 1024*1024*10, "size of output of shard")
+	flag.StringVar(&algoKind, "akind", "alphanumeric", "kind of algorithm used to sort data")
+	flag.BoolVar(&algoDesc, "adesc", false, "determines whether data should be sorted by algorithm in descending or ascending")
+	flag.StringVar(&algoSeed, "aseed", "", "seed used for random shuffling algorithm")
 	flag.IntVar(&extractConcLimit, "elimit", 20, "limits number of concurrent shards extracted")
 	flag.IntVar(&createConcLimit, "climit", 20, "limits number of concurrent shards created")
 	flag.StringVar(&memUsage, "mem", "60%", "limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: 60% or 10GB")
@@ -62,14 +68,19 @@ func main() {
 	go handleKillSignal()
 
 	rs := dsort.RequestSpec{
-		ProcDescription:  description,
-		Bucket:           bucket,
-		OutputBucket:     outputBucket,
-		Extension:        ext,
-		IntputFormat:     inputTemplate,
-		OutputFormat:     outputTemplate,
-		OutputShardSize:  outputShardSize,
-		BckProvider:      cmn.LocalBs,
+		ProcDescription: description,
+		Bucket:          bucket,
+		OutputBucket:    outputBucket,
+		Extension:       ext,
+		IntputFormat:    inputTemplate,
+		OutputFormat:    outputTemplate,
+		OutputShardSize: outputShardSize,
+		BckProvider:     cmn.LocalBs,
+		Algorithm: dsort.SortAlgorithm{
+			Kind:       algoKind,
+			Decreasing: algoDesc,
+			Seed:       algoSeed,
+		},
 		ExtractConcLimit: extractConcLimit,
 		CreateConcLimit:  createConcLimit,
 		MaxMemUsage:      memUsage,

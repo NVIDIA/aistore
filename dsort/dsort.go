@@ -597,7 +597,6 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		shardCount      = m.rs.OutputFormat.Template.Count()
 		start           int
 		curShardSize    int64
-		baseURL         string
 		wg              = &sync.WaitGroup{}
 		errCh           = make(chan error, m.smap.CountTargets())
 		shardsToTarget  = make(map[string][]*extract.Shard, m.smap.CountTargets())
@@ -630,21 +629,30 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			Name: name + m.rs.Extension,
 		}
 
-		if m.extractCreator.UsingCompression() {
-			daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
-			baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
-		} else {
-			// If output shards are not compressed, there will always be less
-			// data sent over the network if the shard is constructed on the
-			// correct HRW target as opposed to constructing it on the target
-			// with optimal file content locality and then sent to the correct
-			// target.
-			si, errStr := cluster.HrwTarget(m.rs.OutputBucket, shard.Name, m.smap)
-			if errStr != "" {
-				return errors.New(errStr)
-			}
-			baseURL = si.URL(cmn.NetworkIntraData)
+		// TODO: Following heuristic doesn't seem to be working correctly in
+		// all cases. When there is not much shards at each disk (like 1-5)
+		// then it may happen that some target will have more shards than other
+		// targets and will "win" all output shards what will result in enormous
+		// skew and result in slow creation phase (single target will be
+		// responsible for creating all shards).
+		//
+		// if m.extractCreator.UsingCompression() {
+		// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
+		// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
+		// } else {
+		// 	// If output shards are not compressed, there will always be less
+		// 	// data sent over the network if the shard is constructed on the
+		// 	// correct HRW target as opposed to constructing it on the target
+		// 	// with optimal file content locality and then sent to the correct
+		// 	// target.
+		// }
+
+		si, errStr := cluster.HrwTarget(m.rs.OutputBucket, shard.Name, m.smap)
+		if errStr != "" {
+			return errors.New(errStr)
 		}
+		baseURL := si.URL(cmn.NetworkIntraData)
+
 		shard.Size = curShardSize
 		shard.Records = m.recManager.Records.Slice(start, i+1)
 		shardsToTarget[baseURL] = append(shardsToTarget[baseURL], shard)
@@ -692,6 +700,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 // creation request. The target chosen is determined based on:
 //  1) Locality of shard source files, and in a tie situation,
 //  2) Number of shard creation requests previously sent to the target.
+//nolint:unused, deadcode
 func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRecords map[string]int) string {
 	var max int
 	var id string

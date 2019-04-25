@@ -61,7 +61,8 @@ all possible settings, for more advanced usage please refer to API).
 | --output | `new-shard-{0000..1000}` | Name template for output shard |
 | --size | `1024*1024*10` | Size output of shard; note that the actual size will be rounded |
 | --akind | `alphanumeric` | Kind of algorithm used to sort data |
-| --adesc | `false` | Determines whether data should be sorted descending or ascending |
+| --adesc | `false` | Determines whether data should be sorted by algorithm in descending or ascending |
+| --aseed | | Seed used for random shuffling algorithm |
 | --elimit | `20` | Limits number of concurrent shards extracted |
 | --climit | `20` | Limits number of concurrent shards created |
 | --mem | `60%` | Limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: `60%` or `10GB` |
@@ -152,6 +153,9 @@ all possible settings, for more advanced usage please refer to API).
 | -input | `shard-{0..9}` | Name template for input shard |
 | -output | `new-shard-{0000..1000}` | Name template for output shard |
 | -size | `1024*1024*10` | Size output of shard; note that the actual size will be rounded |
+| -akind | `alphanumeric` | Kind of algorithm used to sort data |
+| -adesc | `false` | Determines whether data should be sorted by algorithm in descending or ascending |
+| -aseed | | Seed used for random shuffling algorithm |
 | -elimit | `20` | Limits number of concurrent shards extracted |
 | -climit | `20` | Limits number of concurrent shards created |
 | -mem | `60%` | Limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: `60%` or `10GB` |

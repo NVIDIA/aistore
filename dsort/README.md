@@ -118,3 +118,77 @@ will help user to understand dSort a little bit better and to showcase some uses
 dSort.
 
 All scripts can be found [here](playground/README.md). Have fun :)
+
+## Metrics
+
+DSort allows users to fetch the statistics of a given job (either
+started/running or already finished). Each phase has different, specific metrics
+which can be monitored. Description of metrics returned for *single node*:
+
+* `local_extraction`
+  * `started_time` - timestamp when the local extraction has started.
+  * `end_time` - timestamp when the local extraction has finished.
+  * `elapsed` - duration (in seconds) of the local extraction phase.
+  * `running` - informs if the phase is currently running.
+  * `finished` - informs if the phase has finished.
+  * `seen_count` - number of shards which were scanned during local extraction phase. Some of the shards may not be located at the given node and they are skipped.
+  * `to_seen_count` - static number of shards which needs to be scanned - informs what is the expected number of input shards.
+  * `extracted_count` - number of shards extracted/processed by given node. This number can differ from node to node since shards may not be equally distributed.
+  * `extracted_size` - size of extracted/processed shards by given node.
+  * `extracted_record_count` - number of records extracted (in total) from all processed shards.
+  * `extracted_to_disk_count` - number of records extracted (in total) and saved to the disk (there was not enough space to save them in memory).
+  * `extracted_to_disk_size` - size of extracted records which were saved to the disk.
+  * `single_shard_stats` - statistics about single shard processing.
+    * `total_ms` - total number of milliseconds spent extracting all shards.
+    * `count` - number of extracted shards.
+    * `min_ms` - shortest duration of extracting a shard (in milliseconds).
+    * `max_ms` - longest duration of extracting a shard (in milliseconds).
+    * `avg_ms` - average duration of extracting a shard (in milliseconds).
+* `meta_sorting`
+  * `started_time` - timestamp when the meta sorting has started.
+  * `end_time` - timestamp when the meta sorting has finished.
+  * `elapsed` - duration (in seconds) of the meta sorting phase.
+  * `running` - informs if the phase is currently running.
+  * `finished` - informs if the phase has finished.
+  * `sent_stats` - statistics about sending records to other nodes.
+    * `total_ms` - total number of milliseconds spent on sending the records.
+    * `count` - number of records sent to other targets.
+    * `min_ms` - shortest duration of sending the records (in milliseconds).
+    * `max_ms` - longest duration of sending the records (in milliseconds).
+    * `avg_ms` - average duration of sending the records (in milliseconds).
+  * `recv_stats` - statistics about receiving records from other nodes.
+    * `total_ms` - total number of milliseconds spent on receiving the records from nodes.
+    * `count` - number of records received from other targets.
+    * `min_ms` - shortest duration of receiving the records (in milliseconds).
+    * `max_ms` - longest duration of receiving the records (in milliseconds).
+    * `avg_ms` - average duration of receiving the records (in milliseconds).
+* `shard_creation`
+  * `started_time` - timestamp when the shard creation has started.
+  * `end_time` - timestamp when the shard creation has finished.
+  * `elapsed` - duration (in seconds) of the shard creation phase.
+  * `running` - informs if the phase is currently running.
+  * `finished` - informs if the phase has finished.
+  * `to_create` - number of shards which needs to be created on given node.
+  * `created_count` - number of shards already created.
+  * `moved_shard_count` - number of shards moved from the node to another one (it sometimes makes sense to create shards locally and send it via network).
+  * `req_stats` - statistics about sending requests for records.
+    * `total_ms` - total number of milliseconds spent on sending requests for records from other nodes.
+    * `count` - number of requested records.
+    * `min_ms` - shortest duration of sending a request (in milliseconds).
+    * `max_ms` - longest duration of sending a request (in milliseconds).
+    * `avg_ms` - average duration of sending a request (in milliseconds).
+  * `resp_stats` - statistics about waiting for the records.
+    * `total_ms` - total number of milliseconds spent on waiting for the records from other nodes.
+    * `count` - number of records received from other nodes.
+    * `min_ms` - shortest duration of waiting for a record (in milliseconds).
+    * `max_ms` - longest duration of waiting for a record (in milliseconds).
+    * `avg_ms` - average duration of waiting for a record (in milliseconds).
+  * `single_shard_stats` - statistics about single shard creation.
+    * `total_ms` - total number of milliseconds spent creating all shards.
+    * `count` - number of created shards.
+    * `min_ms` - shortest duration of creating a shard (in milliseconds).
+    * `max_ms` - longest duration of creating a shard (in milliseconds).
+    * `avg_ms` - average duration of creating a shard (in milliseconds).
+* `aborted` - informs if the job has been aborted.
+* `archived` - informs if the job has finished and was archived to journal.
+* `description` - description of the job.
