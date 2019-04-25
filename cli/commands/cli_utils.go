@@ -112,22 +112,22 @@ func (aisCLI AISCLI) RunLong(input []string) error {
 	return nil
 }
 
-func flagIsSet(c *cli.Context, flag string) bool {
+func flagIsSet(c *cli.Context, flag cli.Flag) bool {
 	// If the flag name has multiple values, take first one
-	flag = cleanFlag(flag)
-	return c.GlobalIsSet(flag) || c.IsSet(flag)
+	flagName := cleanFlag(flag.GetName())
+	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
 }
 
 // Returns the value of flag (either parent or local scope)
-func parseFlag(c *cli.Context, flag string) string {
-	flag = cleanFlag(flag)
-	if c.GlobalIsSet(flag) {
-		return c.GlobalString(flag)
+func parseFlag(c *cli.Context, flag cli.Flag) string {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalString(flagName)
 	}
-	return c.String(flag)
+	return c.String(flagName)
 }
 
-func checkFlags(c *cli.Context, flag ...string) error {
+func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 	for _, f := range flag {
 		if !flagIsSet(c, f) {
 			return fmt.Errorf("%q flag is not set", f)

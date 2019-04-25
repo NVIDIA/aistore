@@ -179,11 +179,11 @@ var (
 func bucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	command := c.Command.Name
-	if err = checkFlags(c, bucketFlag.Name); err != nil && command != bucketNames {
+	if err = checkFlags(c, bucketFlag); err != nil && command != bucketNames {
 		return err
 	}
 
-	bucket := parseFlag(c, bucketFlag.Name)
+	bucket := parseFlag(c, bucketFlag)
 
 	switch command {
 	case bucketCreate:
@@ -232,10 +232,10 @@ func destroyBucket(baseParams *api.BaseParams, bucket string) (err error) {
 
 // Rename local bucket
 func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = checkFlags(c, newBucketFlag.Name); err != nil {
+	if err = checkFlags(c, newBucketFlag); err != nil {
 		return
 	}
-	newBucket := parseFlag(c, newBucketFlag.Name)
+	newBucket := parseFlag(c, newBucketFlag)
 	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -255,7 +255,7 @@ func evictBucket(baseParams *api.BaseParams, bucket string) (err error) {
 
 // Lists bucket names
 func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -263,31 +263,31 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err != nil {
 		return
 	}
-	printBucketNames(bucketNames, parseFlag(c, regexFlag.Name), bckProvider)
+	printBucketNames(bucketNames, parseFlag(c, regexFlag), bckProvider)
 	return
 }
 
 // Lists objects in bucket
 func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	regex := parseFlag(c, regexFlag.Name)
+	regex := parseFlag(c, regexFlag)
 	r, err := regexp.Compile(regex)
 	if err != nil {
 		return
 	}
 
-	prefix := parseFlag(c, prefixFlag.Name)
-	props := "name," + parseFlag(c, objPropsFlag.Name)
-	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag.Name))
+	prefix := parseFlag(c, prefixFlag)
+	props := "name," + parseFlag(c, objPropsFlag)
+	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag))
 	if err != nil {
 		return
 	}
-	limit, err := strconv.Atoi(parseFlag(c, objLimitFlag.Name))
+	limit, err := strconv.Atoi(parseFlag(c, objLimitFlag))
 	if err != nil {
 		return
 	}
 
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, parseFlag(c, bckProviderFlag.Name))
+	query.Add(cmn.URLParamBckProvider, parseFlag(c, bckProviderFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
 
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: props}
@@ -305,7 +305,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return errors.New("expected at least one argument")
 	}
 
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -316,7 +316,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	}
 
 	// For setting bucket props via action message
-	if flagIsSet(c, jsonFlag.Name) {
+	if flagIsSet(c, jsonFlag) {
 		props := cmn.BucketProps{}
 		inputProps := []byte(c.Args().First())
 		if err = json.Unmarshal(inputProps, &props); err != nil {
@@ -344,7 +344,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -363,7 +363,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string)
 
 // Get bucket props
 func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -373,16 +373,16 @@ func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 		return
 	}
 
-	return templates.DisplayOutput(bckProps, templates.BucketPropsTmpl, flagIsSet(c, jsonFlag.Name))
+	return templates.DisplayOutput(bckProps, templates.BucketPropsTmpl, flagIsSet(c, jsonFlag))
 }
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
-	if err = checkFlags(c, copiesFlag.Name); err != nil {
+	if err = checkFlags(c, copiesFlag); err != nil {
 		return
 	}
 	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
@@ -424,7 +424,7 @@ func printObjectProps(entries []*cmn.BucketEntry, r *regexp.Regexp, props string
 	bodyStr := "{{range $obj := .}}"
 	for _, field := range propsList {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
-			return fmt.Errorf("'%s' is not a valid property", field)
+			return fmt.Errorf("%q is not a valid property", field)
 		}
 		headStr += field + "\t"
 		bodyStr += templates.ObjectPropsMap[field]

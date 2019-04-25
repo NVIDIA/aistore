@@ -118,13 +118,13 @@ var (
 func downloadHandler(c *cli.Context) error {
 	var (
 		baseParams  = cliAPIParams(ClusterURL)
-		description = parseFlag(c, descriptionFlag.Name)
-		timeout     = parseFlag(c, timeoutFlag.Name)
+		description = parseFlag(c, descriptionFlag)
+		timeout     = parseFlag(c, timeoutFlag)
 
 		id string
 	)
 
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag.Name))
+	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func downloadHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadRangeWithParam(baseParams, payload)
 		if err != nil {
-			return err
+			return errorHandler(err)
 		}
 	} else {
 		// Single
@@ -171,7 +171,7 @@ func downloadHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadSingleWithParam(baseParams, payload)
 		if err != nil {
-			return err
+			return errorHandler(err)
 		}
 	}
 	fmt.Println(id)
@@ -181,18 +181,18 @@ func downloadHandler(c *cli.Context) error {
 func downloadAdminHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		id         = parseFlag(c, idFlag.Name)
-		regex      = parseFlag(c, regexFlag.Name)
+		id         = parseFlag(c, idFlag)
+		regex      = parseFlag(c, regexFlag)
 	)
 
 	commandName := c.Command.Name
 	switch commandName {
 	case downloadStatus:
-		if err := checkFlags(c, idFlag.Name); err != nil {
+		if err := checkFlags(c, idFlag); err != nil {
 			return err
 		}
 
-		showProgressBar := c.Bool(progressBarFlag.Name)
+		showProgressBar := flagIsSet(c, progressBarFlag)
 
 		if showProgressBar {
 			downloadingResult, err := newProgressBar(baseParams, id, progressBarRefreshRate(c)).run()
@@ -204,34 +204,34 @@ func downloadAdminHandler(c *cli.Context) error {
 		} else {
 			resp, err := api.DownloadStatus(baseParams, id)
 			if err != nil {
-				return err
+				return errorHandler(err)
 			}
 
-			verbose := flagIsSet(c, verboseFlag.Name)
+			verbose := flagIsSet(c, verboseFlag)
 			fmt.Println(resp.Print(verbose))
 		}
 	case downloadCancel:
-		if err := checkFlags(c, idFlag.Name); err != nil {
+		if err := checkFlags(c, idFlag); err != nil {
 			return err
 		}
 
 		if err := api.DownloadCancel(baseParams, id); err != nil {
-			return err
+			return errorHandler(err)
 		}
 		fmt.Printf("download canceled: %s\n", id)
 	case downloadRemove:
-		if err := checkFlags(c, idFlag.Name); err != nil {
+		if err := checkFlags(c, idFlag); err != nil {
 			return err
 		}
 
 		if err := api.DownloadRemove(baseParams, id); err != nil {
-			return err
+			return errorHandler(err)
 		}
 		fmt.Printf("download removed: %s\n", id)
 	case downloadList:
 		list, err := api.DownloadGetList(baseParams, regex)
 		if err != nil {
-			return err
+			return errorHandler(err)
 		}
 
 		err = templates.DisplayOutput(list, templates.DownloadListTmpl)
@@ -247,7 +247,7 @@ func downloadAdminHandler(c *cli.Context) error {
 func progressBarRefreshRate(c *cli.Context) time.Duration {
 	refreshRate := progressBarRefreshRateDefault
 
-	if flagIsSet(c, refreshRateFlag.Name) {
+	if flagIsSet(c, refreshRateFlag) {
 		if flagVal := c.Int(refreshRateFlag.Name); flagVal > 0 {
 			refreshRate = cmn.Max(flagVal, progressBarRefreshRateMin)
 		}

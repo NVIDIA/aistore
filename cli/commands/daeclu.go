@@ -87,10 +87,11 @@ func queryHandler(c *cli.Context) (err error) {
 	if err = fillMap(ClusterURL); err != nil {
 		return errorHandler(err)
 	}
-	watch = flagIsSet(c, watchFlag.Name)
-	if flagIsSet(c, refreshFlag.Name) {
-		refreshRate = parseFlag(c, refreshFlag.Name)
+	watch = flagIsSet(c, watchFlag)
+	if flagIsSet(c, refreshFlag) {
+		refreshRate = parseFlag(c, refreshFlag)
 	}
+	useJSON := flagIsSet(c, jsonFlag)
 
 	baseParams := cliAPIParams(ClusterURL)
 	daemonID := c.Args().First()
@@ -98,13 +99,13 @@ func queryHandler(c *cli.Context) (err error) {
 
 	switch req {
 	case cmn.GetWhatSmap:
-		err = daecluSmap(c, baseParams, daemonID)
+		err = daecluSmap(baseParams, daemonID, useJSON)
 	case cmn.GetWhatConfig:
-		err = daecluConfig(c, baseParams, daemonID)
+		err = daecluConfig(baseParams, daemonID, useJSON)
 	case cmn.GetWhatStats:
-		err = daecluStats(c, baseParams, daemonID)
+		err = daecluStats(baseParams, daemonID, useJSON)
 	case cmn.GetWhatDaemonStatus:
-		err = daecluStatus(c, daemonID)
+		err = daecluStatus(daemonID, useJSON)
 	case commandList:
 		err = listAIS(c, daemonID)
 	case cmn.ActSetConfig:
@@ -116,7 +117,7 @@ func queryHandler(c *cli.Context) (err error) {
 }
 
 // Displays smap of single daemon
-func daecluSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+func daecluSmap(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	newURL, err := daemonDirectURL(daemonID)
 	if err != nil {
 		return err
@@ -127,11 +128,11 @@ func daecluSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string) err
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(body, templates.SmapTmpl, flagIsSet(c, jsonFlag.Name))
+	return templates.DisplayOutput(body, templates.SmapTmpl, useJSON)
 }
 
 // Displays the config of a daemon
-func daecluConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+func daecluConfig(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	newURL, err := daemonDirectURL(daemonID)
 	if err != nil {
 		return err
@@ -141,40 +142,40 @@ func daecluConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) e
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(body, templates.ConfigTmpl, flagIsSet(c, jsonFlag.Name))
+	return templates.DisplayOutput(body, templates.ConfigTmpl, useJSON)
 }
 
 // Displays the stats of a daemon
-func daecluStats(c *cli.Context, baseParams *api.BaseParams, daemonID string) error {
+func daecluStats(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	if res, ok := proxy[daemonID]; ok {
-		return templates.DisplayOutput(res, templates.ProxyStatsTmpl, flagIsSet(c, jsonFlag.Name))
+		return templates.DisplayOutput(res, templates.ProxyStatsTmpl, useJSON)
 	} else if res, ok := target[daemonID]; ok {
-		return templates.DisplayOutput(res, templates.TargetStatsTmpl, flagIsSet(c, jsonFlag.Name))
+		return templates.DisplayOutput(res, templates.TargetStatsTmpl, useJSON)
 	} else if daemonID == "" {
 		body, err := api.GetClusterStats(baseParams)
 		if err != nil {
 			return err
 		}
-		return templates.DisplayOutput(body, templates.StatsTmpl, flagIsSet(c, jsonFlag.Name))
+		return templates.DisplayOutput(body, templates.StatsTmpl, useJSON)
 	}
 	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
 // Displays the status of the cluster or daemon
-func daecluStatus(c *cli.Context, daemonID string) (err error) {
+func daecluStatus(daemonID string, useJSON bool) (err error) {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
-		err = templates.DisplayOutput(res, templates.ProxyInfoSingleTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(res, templates.ProxyInfoSingleTmpl, useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
-		err = templates.DisplayOutput(res, templates.TargetInfoSingleTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(res, templates.TargetInfoSingleTmpl, useJSON)
 	} else if daemonID == cmn.Proxy {
-		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON)
 	} else if daemonID == cmn.Target {
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
 	} else if daemonID == "" {
-		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, flagIsSet(c, jsonFlag.Name)); err != nil {
+		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
 	} else {
 		return fmt.Errorf(invalidDaemonMsg, daemonID)
 	}
@@ -185,7 +186,7 @@ func daecluStatus(c *cli.Context, daemonID string) (err error) {
 // Display smap-like information of each individual daemon in the entire cluster
 func listAIS(c *cli.Context, whichDaemon string) (err error) {
 	outputTemplate := templates.ListTmpl
-	if flagIsSet(c, verboseFlag.Name) {
+	if flagIsSet(c, verboseFlag) {
 		outputTemplate = templates.ListTmplVerbose
 	}
 
@@ -218,7 +219,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err
 	}
 	if daemonID == cmn.Cluster {
 		if err = api.SetClusterConfig(baseParams, nvs); err != nil {
-			return
+			return err
 		}
 		fmt.Printf("%d properties set for %s\n", c.NArg()-1, cmn.Cluster)
 		return
@@ -231,8 +232,8 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err
 
 	baseParams.URL = daemonURL
 	if err = api.SetDaemonConfig(baseParams, nvs); err != nil {
-		return
+		return err
 	}
-	fmt.Printf("%d properties set for '%s' daemon\n", c.NArg()-1, daemonID)
+	fmt.Printf("%d properties set for %q daemon\n", c.NArg()-1, daemonID)
 	return err
 }

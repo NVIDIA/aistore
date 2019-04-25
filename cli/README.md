@@ -17,7 +17,7 @@ Before using the CLI, we need to export the `AIS_URL` environment variable (eg. 
 
 ## AIS CLI Shell Auto-Complete
 
-The CLI tool supports bash and zsh auto-complete functionality. To enable shell auto-complete, source the auto-complete script or install it into your `/etc/bash_completion.d` directory
+The CLI tool supports bash and zsh auto-complete functionality. To enable shell auto-complete, source the auto-complete script or, for a more permanent option, install it into your `/etc/bash_completion.d` directory
 * Sourcing
 
  ```sh
@@ -43,6 +43,26 @@ List of available CLI resources
 * [Downloader](./resources/downloader.md)
 
 * [Object](./resources/object.md)
+
+* [Xaction](./resources/xaction.md)
+
+## Info For Developers
+
+The framework that the CLI uses is [urfave](https://github.com/urfave/cli). It is a simple framework that enables developers to create custom CLI commands quickly.
+
+### Adding New Commands
+
+Currently, the CLI has the format of '`ais <resource> <command>`'.
+
+To add a new command to an existing resource,
+
+1. Create an entry in the resource's flag map and add the entry to the commands object
+2. Register the new command in the corresponding resource handler (it should be named something similar to `XXXHandler`)
+
+To add a new command to a new resource,
+
+1. Create a new `.go` file with the name of the new resource and follow the format of the existing files
+2. Once the new resource and commands are implemented, make sure to add the new command set to the main function located in `ais.go`.
 
 ## Enums
 

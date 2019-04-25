@@ -51,7 +51,7 @@ clean:
 
 
 # Target for local deployment
-.PHONY: deploy deploy_next_tier
+.PHONY: deploy deploy_binary deploy_next_tier
 
 deploy:
 	@./setup/deploy.sh

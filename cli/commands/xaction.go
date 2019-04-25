@@ -73,7 +73,7 @@ func xactHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
 		command    = c.Command.Name
-		bucket     = parseFlag(c, bucketFlag.Name)
+		bucket     = parseFlag(c, bucketFlag)
 		xaction    = c.Args().First()
 	)
 
@@ -109,7 +109,7 @@ func xactHandler(c *cli.Context) (err error) {
 			fmt.Println("no xaction stats to show")
 			return
 		}
-		err = templates.DisplayOutput(xactStatsMap, templates.XactStatsTmpl, flagIsSet(c, jsonFlag.Name))
+		err = templates.DisplayOutput(xactStatsMap, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}

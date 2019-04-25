@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -46,6 +47,8 @@ var (
 		Timeout:   300 * time.Second,
 		Transport: transport,
 	}
+
+	mu sync.Mutex
 )
 
 // Checks if URL is valid by trying to get Smap
@@ -65,14 +68,25 @@ func cliAPIParams(proxyURL string) *api.BaseParams {
 	}
 }
 
-func retrieveStatus(url string, errCh chan error, dataCh chan *stats.DaemonStatus) {
-	baseParams := cliAPIParams(url)
+func fill(dae *cluster.Snode, daeMap map[string]*stats.DaemonStatus) error {
+	baseParams := cliAPIParams(dae.URL(cmn.NetworkPublic))
 	obj, err := api.GetDaemonStatus(baseParams)
 	if err != nil {
-		errCh <- err
-		return
+		return err
 	}
-	dataCh <- obj
+	mu.Lock()
+	daeMap[dae.DaemonID] = obj
+	mu.Unlock()
+	return nil
+}
+
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
+	for _, dae := range nodeMap {
+		go func(d *cluster.Snode) {
+			errCh <- fill(d, daeMap)
+			wg.Done()
+		}(dae)
+	}
 }
 
 // Populates the proxy and target maps
@@ -97,42 +111,16 @@ func fillMap(url string) error {
 	targetCount := len(smapPrimary.Tmap)
 	errCh := make(chan error, proxyCount+targetCount)
 
-	// Call API to get proxy information
-	dataCh := make(chan *stats.DaemonStatus, proxyCount)
-	wg.Add(proxyCount)
-	for _, dae := range smapPrimary.Pmap {
-		go func(url string) {
-			retrieveStatus(url, errCh, dataCh)
-			wg.Done()
-		}(dae.URL(cmn.NetworkPublic))
-	}
-
+	wg.Add(proxyCount + targetCount)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg, errCh)
+	retrieveStatus(smapPrimary.Tmap, target, wg, errCh)
 	wg.Wait()
-	close(dataCh)
-
-	for datum := range dataCh {
-		proxy[datum.Snode.DaemonID] = datum
-	}
-
-	dataCh = make(chan *stats.DaemonStatus, targetCount)
-	wg.Add(targetCount)
-	// Call API to get target information
-	for _, dae := range smapPrimary.Tmap {
-		go func(url string) {
-			retrieveStatus(url, errCh, dataCh)
-			wg.Done()
-		}(dae.URL(cmn.NetworkPublic))
-	}
-	wg.Wait()
-	close(dataCh)
-
-	for datum := range dataCh {
-		target[datum.Snode.DaemonID] = datum
-	}
-
 	close(errCh)
-	if err, ok := <-errCh; ok {
-		return err
+
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

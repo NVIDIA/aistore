@@ -1,5 +1,6 @@
-# Modified bash autocomplete script from github.com/urfave/cli
 #!/bin/bash
+# Modified bash autocomplete script from github.com/urfave/cli
+
 
 PROG=ais
 

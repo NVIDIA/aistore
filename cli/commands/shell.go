@@ -8,17 +8,20 @@ package commands
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
 // Bash Completion
 func daemonList(_ *cli.Context) {
-	fillMap(ClusterURL)
-	for dae := range proxy {
+	baseParams := cliAPIParams(ClusterURL)
+	smap, _ := api.GetClusterMap(baseParams)
+
+	for dae := range smap.Pmap {
 		fmt.Println(dae)
 	}
-	for dae := range target {
+	for dae := range smap.Tmap {
 		fmt.Println(dae)
 	}
 }
