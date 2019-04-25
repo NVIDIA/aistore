@@ -515,10 +515,14 @@ var _ = Describe("Distributed Sort", func() {
 					BckProvider:       cmn.LocalBs,
 					OutputBckProvider: cmn.LocalBs,
 					OutputFormat: &parsedOutputTemplate{
-						Prefix: "superprefix",
-						Suffix: "supersuffix",
-						Step:   1,
-						End:    10000000,
+						Template: cmn.ParsedTemplate{
+							Prefix: "superprefix",
+							Ranges: []cmn.TemplateRange{{
+								Step: 1,
+								End:  10000000,
+								Gap:  "supersuffix",
+							}},
+						},
 					},
 					Algorithm: &SortAlgorithm{
 						FormatType: extract.FormatTypeString,
@@ -574,15 +578,16 @@ var _ = Describe("Distributed Sort", func() {
 			}
 
 			testDistributeShardCreation := func(args dsrArgs) {
-				rs.OutputFormat.End = args.expectedShardCnt
+				rs.OutputFormat.Template.Ranges[0].End = args.expectedShardCnt
 
 				finalTarget := tctx.targets[0]
 				manager, exists := finalTarget.managers.Get(globalManagerUUID)
 				Expect(exists).To(BeTrue())
 				manager.recManager.Records = extract.NewRecords(args.recordCnt)
 				keys := make([]string, args.recordCnt)
+
 				for i := 0; i < args.recordCnt; i++ {
-					key := fmt.Sprintf("%s%d%s%s", rs.OutputFormat.Prefix, i, rs.OutputFormat.Suffix, rs.Extension)
+					key := fmt.Sprintf("record-%d.txt", i)
 					keys[i] = key
 
 					f, err := cmn.CreateFile(filepath.Join(testDir, fs.ObjectType, cmn.LocalBs, testBucket, key))
@@ -631,9 +636,9 @@ var _ = Describe("Distributed Sort", func() {
 					} else {
 						Expect(shard.Size).To(Equal(args.expectedShardSize))
 					}
-					shardName := manager.genShardName(shard)
-					Expect(shardName).To(HavePrefix(rs.OutputFormat.Prefix))
-					Expect(shardName).To(HaveSuffix("%s%s", rs.OutputFormat.Suffix, rs.Extension))
+					shardName := shard.Name
+					Expect(shardName).To(HavePrefix(rs.OutputFormat.Template.Prefix))
+					Expect(shardName).To(HaveSuffix("%s%s", rs.OutputFormat.Template.Ranges[0].Gap, rs.Extension))
 
 					// Ensure that all shards records have good key (there is duplicates)
 					for _, shardRecord := range shard.Records.All() {

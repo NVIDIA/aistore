@@ -191,6 +191,31 @@ func TestDownloadRange(t *testing.T) {
 	checkDownloadList(t)
 }
 
+func TestDownloadMultiRange(t *testing.T) {
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+
+		template = "storage.googleapis.com/lpr-imagenet-augmented/imagenet_train-{0000..0007}-{001..009}.tgz"
+	)
+
+	clearDownloadList(t)
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
+	tassert.CheckFatal(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	tassert.CheckFatal(t, err)
+
+	checkDownloadList(t)
+}
+
 func TestDownloadMultiMap(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)

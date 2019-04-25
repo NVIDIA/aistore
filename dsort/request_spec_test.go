@@ -33,22 +33,27 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.OutputBckProvider).To(Equal(cmn.LocalBs))
 			Expect(parsed.Extension).To(Equal(extTar))
 
-			Expect(parsed.InputFormat.Type).To(Equal(templBash))
-			Expect(parsed.InputFormat.Prefix).To(Equal("prefix-"))
-			Expect(parsed.InputFormat.Suffix).To(Equal("-suffix"))
-			Expect(parsed.InputFormat.Start).To(Equal(10))
-			Expect(parsed.InputFormat.End).To(Equal(111))
-			Expect(parsed.InputFormat.Step).To(Equal(2))
-			Expect(parsed.InputFormat.RangeCount).To(Equal(51))
-			Expect(parsed.InputFormat.DigitCount).To(Equal(4))
+			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      10,
+					End:        111,
+					Step:       2,
+					DigitCount: 4,
+					Gap:        "-suffix",
+				}},
+			}))
 
-			Expect(parsed.OutputFormat.Prefix).To(Equal("prefix-"))
-			Expect(parsed.OutputFormat.Suffix).To(Equal("-suffix"))
-			Expect(parsed.OutputFormat.Start).To(Equal(10))
-			Expect(parsed.OutputFormat.End).To(Equal(111))
-			Expect(parsed.OutputFormat.Step).To(Equal(1))
-			Expect(parsed.OutputFormat.RangeCount).To(Equal(102))
-			Expect(parsed.OutputFormat.DigitCount).To(Equal(2))
+			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      10,
+					End:        111,
+					Step:       1,
+					DigitCount: 2,
+					Gap:        "-suffix",
+				}},
+			}))
 
 			Expect(parsed.OutputShardSize).To(BeEquivalentTo(100000))
 
@@ -153,17 +158,28 @@ var _ = Describe("RequestSpec", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.InputFormat.Type).To(Equal(templAt))
-			Expect(parsed.InputFormat.Prefix).To(Equal("prefix"))
-			Expect(parsed.InputFormat.Suffix).To(Equal("-suffix"))
-			Expect(parsed.InputFormat.Start).To(Equal(0))
-			Expect(parsed.InputFormat.End).To(Equal(111))
-			Expect(parsed.InputFormat.Step).To(Equal(1))
+			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
+				Prefix: "prefix",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        111,
+					Step:       1,
+					DigitCount: 4,
+					Gap:        "-suffix",
+				}},
+			}))
 
-			Expect(parsed.OutputFormat.Prefix).To(Equal("prefix-"))
-			Expect(parsed.OutputFormat.Suffix).To(Equal("-suffix"))
-			Expect(parsed.OutputFormat.Start).To(Equal(0))
-			Expect(parsed.OutputFormat.End).To(Equal(111))
-			Expect(parsed.OutputFormat.Step).To(Equal(1))
+			Expect(parsed.OutputFormat.Template).To(Equal(cmn.ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []cmn.TemplateRange{{
+					Start:      0,
+					End:        111,
+					Step:       1,
+					DigitCount: 6,
+					Gap:        "-suffix",
+				}},
+			}))
+
 		})
 
 		It("should parse spec and set default conc limits", func() {

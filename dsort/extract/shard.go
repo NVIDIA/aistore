@@ -10,6 +10,6 @@ type Shard struct {
 	Size int64 `json:"s"`
 	// Records contains all metadata to construct the shard.
 	Records *Records `json:"r"`
-	// Index determines the number of shard.
-	Index int `json:"i"`
+	// Name determines the output name of the shard.
+	Name string `json:"n"`
 }

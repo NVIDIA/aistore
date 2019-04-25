@@ -657,6 +657,20 @@ func RatioPct(high, low, curr int64) int64 {
 // TEMPLATES/PARSING
 //
 
+type (
+	TemplateRange struct {
+		Start      int
+		End        int
+		Step       int
+		DigitCount int
+		Gap        string // characters after range (either to next range or end of string)
+	}
+	ParsedTemplate struct {
+		Prefix string
+		Ranges []TemplateRange
+	}
+)
+
 var (
 	ErrInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010..1}suffix'")
 	ErrInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix'")
@@ -666,14 +680,54 @@ var (
 	ErrNonPositiveStep = errors.New("'step' is non positive number")
 )
 
-func ParseBashTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
-	// "prefix-{00001..00010..2}-suffix"
+func (pt *ParsedTemplate) Count() int {
+	count := 1
+	for _, tr := range pt.Ranges {
+		count *= (tr.End-tr.Start)/tr.Step + 1
+	}
+	return count
+}
+
+func (pt *ParsedTemplate) Iter() func() (string, bool) {
+	rangesCount := len(pt.Ranges)
+	at := make([]int, rangesCount)
+
+	for i, tr := range pt.Ranges {
+		at[i] = tr.Start
+	}
+
+	var buf bytes.Buffer
+	return func() (string, bool) {
+		for i := rangesCount - 1; i >= 0; i-- {
+			if at[i] > pt.Ranges[i].End {
+				if i == 0 {
+					return "", false
+				}
+				at[i] = pt.Ranges[i].Start
+				at[i-1] += pt.Ranges[i-1].Step
+			}
+		}
+
+		buf.Reset()
+		buf.WriteString(pt.Prefix)
+		for i, tr := range pt.Ranges {
+			buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, at[i], tr.Gap))
+		}
+
+		at[rangesCount-1] += pt.Ranges[rangesCount-1].Step
+		return buf.String(), true
+	}
+}
+
+func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
+	// "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
+
 	left := strings.Index(template, "{")
 	if left == -1 {
 		err = ErrInvalidBashFormat
 		return
 	}
-	right := strings.Index(template, "}")
+	right := strings.LastIndex(template, "}")
 	if right == -1 {
 		err = ErrInvalidBashFormat
 		return
@@ -682,68 +736,113 @@ func ParseBashTemplate(template string) (prefix, suffix string, start, end, step
 		err = ErrInvalidBashFormat
 		return
 	}
-	prefix = template[:left]
-	if len(template) > right+1 {
-		suffix = template[right+1:]
-	}
-	inside := template[left+1 : right]
-	numbers := strings.Split(inside, "..")
-	if len(numbers) < 2 || len(numbers) > 3 {
-		err = ErrInvalidBashFormat
-		return
-	} else if len(numbers) == 2 { // {0001..0999} case
-		if start, err = strconv.Atoi(numbers[0]); err != nil {
+	pt.Prefix = template[:left]
+
+	for {
+		tr := TemplateRange{}
+
+		left := strings.Index(template, "{")
+		if left == -1 {
+			break
+		}
+
+		right := strings.Index(template, "}")
+		if right == -1 {
+			err = ErrInvalidBashFormat
 			return
 		}
-		if end, err = strconv.Atoi(numbers[1]); err != nil {
+		if right < left {
+			err = ErrInvalidBashFormat
 			return
 		}
-		step = 1
-		digitCount = Min(len(numbers[0]), len(numbers[1]))
-	} else if len(numbers) == 3 { // {0001..0999..2} case
-		if start, err = strconv.Atoi(numbers[0]); err != nil {
+		inside := template[left+1 : right]
+
+		numbers := strings.Split(inside, "..")
+		if len(numbers) < 2 || len(numbers) > 3 {
+			err = ErrInvalidBashFormat
+			return
+		} else if len(numbers) == 2 { // {0001..0999} case
+			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
+				return
+			}
+			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
+				return
+			}
+			tr.Step = 1
+			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
+		} else if len(numbers) == 3 { // {0001..0999..2} case
+			if tr.Start, err = strconv.Atoi(numbers[0]); err != nil {
+				return
+			}
+			if tr.End, err = strconv.Atoi(numbers[1]); err != nil {
+				return
+			}
+			if tr.Step, err = strconv.Atoi(numbers[2]); err != nil {
+				return
+			}
+			tr.DigitCount = Min(len(numbers[0]), len(numbers[1]))
+		}
+		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
 			return
 		}
-		if end, err = strconv.Atoi(numbers[1]); err != nil {
-			return
+
+		// apply gap (either to next range or end of the template)
+		template = template[right+1:]
+		right = strings.Index(template, "{")
+		if right >= 0 {
+			tr.Gap = template[:right]
+		} else {
+			tr.Gap = template
 		}
-		if step, err = strconv.Atoi(numbers[2]); err != nil {
-			return
-		}
-		digitCount = Min(len(numbers[0]), len(numbers[1]))
-	}
-	if err = validateBoundaries(start, end, step); err != nil {
-		return
+
+		pt.Ranges = append(pt.Ranges, tr)
 	}
 	return
 }
 
-func ParseAtTemplate(template string) (prefix, suffix string, start, end, step, digitCount int, err error) {
-	// "prefix-@00001-suffix"
+func ParseAtTemplate(template string) (pt ParsedTemplate, err error) {
+	// "prefix-@00001-gap-@100-suffix"
 	left := strings.Index(template, "@")
 	if left == -1 {
 		err = ErrInvalidAtFormat
 		return
 	}
-	prefix = template[:left]
-	number := ""
-	for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
-		number += string(template[left])
-	}
+	pt.Prefix = template[:left]
 
-	if len(template) > left {
-		suffix = template[left:]
-	}
+	for {
+		tr := TemplateRange{}
 
-	start = 0
-	if end, err = strconv.Atoi(number); err != nil {
-		return
-	}
-	step = 1
-	digitCount = len(number)
+		left := strings.Index(template, "@")
+		if left == -1 {
+			break
+		}
 
-	if err = validateBoundaries(start, end, step); err != nil {
-		return
+		number := ""
+		for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
+			number += string(template[left])
+		}
+
+		tr.Start = 0
+		if tr.End, err = strconv.Atoi(number); err != nil {
+			return
+		}
+		tr.Step = 1
+		tr.DigitCount = len(number)
+
+		if err = validateBoundaries(tr.Start, tr.End, tr.Step); err != nil {
+			return
+		}
+
+		// apply gap (either to next range or end of the template)
+		template = template[left:]
+		right := strings.Index(template, "@")
+		if right >= 0 {
+			tr.Gap = template[:right]
+		} else {
+			tr.Gap = template
+		}
+
+		pt.Ranges = append(pt.Ranges, tr)
 	}
 	return
 }

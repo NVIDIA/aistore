@@ -125,12 +125,13 @@ func (m *Manager) extractLocalShards() (err error) {
 	defer metrics.finish()
 
 	metrics.Lock()
-	metrics.ToSeenCnt = m.rs.InputFormat.RangeCount
+	metrics.ToSeenCnt = m.rs.InputFormat.Template.Count()
 	metrics.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())
+	namesIt := m.rs.InputFormat.Template.Iter()
 ExtractAllShards:
-	for i := m.rs.InputFormat.Start; i <= m.rs.InputFormat.End; i += m.rs.InputFormat.Step {
+	for name, hasNext := namesIt(); hasNext; name, hasNext = namesIt() {
 		select {
 		case <-m.listenAborted():
 			group.Wait()
@@ -141,7 +142,7 @@ ExtractAllShards:
 		}
 
 		m.acquireExtractGoroutineSema()
-		extractShard := func(i int) func() error {
+		extractShard := func(name string) func() error {
 			return func() error {
 				var (
 					beforeExtraction time.Time
@@ -157,10 +158,10 @@ ExtractAllShards:
 
 				defer m.releaseExtractGoroutineSema()
 
-				shardName := m.rs.InputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.InputFormat.DigitCount, i) + m.rs.InputFormat.Suffix + m.rs.Extension
-				si, errMsg := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
-				if errMsg != "" {
-					return errors.New(errMsg)
+				shardName := name + m.rs.Extension
+				si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
+				if errStr != "" {
+					return errors.New(errStr)
 				}
 				if si.DaemonID != m.ctx.node.DaemonID {
 					return nil
@@ -195,7 +196,6 @@ ExtractAllShards:
 					m.ctx.nameLocker.Unlock(lom.Uname(), false)
 					return fmt.Errorf("unable to open local file, err: %v", err)
 				}
-
 				var compressedSize int64
 				if m.extractCreator.UsingCompression() {
 					compressedSize = lom.Size()
@@ -240,7 +240,7 @@ ExtractAllShards:
 				totalExtractedCount.Add(uint64(extractedCount))
 				return nil
 			}
-		}(i)
+		}(name)
 
 		group.Go(extractShard)
 	}
@@ -265,10 +265,6 @@ ExtractAllShards:
 	return nil
 }
 
-func (m *Manager) genShardName(s *extract.Shard) string {
-	return m.rs.OutputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.OutputFormat.DigitCount, s.Index) + m.rs.OutputFormat.Suffix + m.fileExtension
-}
-
 func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
 		beforeCreation time.Time
@@ -276,7 +272,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		metrics        = m.Metrics.Creation
 
 		// object related variables
-		shardName   = m.genShardName(s)
+		shardName   = s.Name
 		bucket      = m.rs.OutputBucket
 		bckProvider = m.rs.OutputBckProvider
 
@@ -597,8 +593,8 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 func (m *Manager) distributeShardRecords(maxSize int64) error {
 	var (
 		n               = m.recManager.Records.Len()
-		shardNum        = m.rs.OutputFormat.Start
-		shardCount      = m.rs.OutputFormat.RangeCount
+		names           = m.rs.OutputFormat.Template.Iter()
+		shardCount      = m.rs.OutputFormat.Template.Count()
 		start           int
 		curShardSize    int64
 		baseURL         string
@@ -625,9 +621,15 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			continue
 		}
 
-		shard := &extract.Shard{
-			Index: shardNum,
+		name, hasNext := names()
+		if !hasNext {
+			// no more shard names are available
+			return fmt.Errorf("number of shards to be created exceeds number of expected shards (%d)", shardCount)
 		}
+		shard := &extract.Shard{
+			Name: name + m.rs.Extension,
+		}
+
 		if m.extractCreator.UsingCompression() {
 			daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
 			baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
@@ -637,7 +639,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			// correct HRW target as opposed to constructing it on the target
 			// with optimal file content locality and then sent to the correct
 			// target.
-			si, errStr := cluster.HrwTarget(m.rs.OutputBucket, m.genShardName(shard), m.smap)
+			si, errStr := cluster.HrwTarget(m.rs.OutputBucket, shard.Name, m.smap)
 			if errStr != "" {
 				return errors.New(errStr)
 			}
@@ -648,7 +650,6 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		shardsToTarget[baseURL] = append(shardsToTarget[baseURL], shard)
 
 		start = i + 1
-		shardNum += m.rs.OutputFormat.Step
 		curShardSize = 0
 		for k := range numLocalRecords {
 			numLocalRecords[k] = 0
@@ -656,12 +657,6 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	}
 
 	m.recManager.Records.Drain()
-
-	if shardNum > m.rs.OutputFormat.End {
-		createdCount := shardNum / m.rs.OutputFormat.Step
-		expectedCount := m.rs.OutputFormat.RangeCount
-		return fmt.Errorf("number of shards to be created (%d) exceeds number of expected shards (%d)", createdCount, expectedCount)
-	}
 
 	for u, s := range shardsToTarget {
 		wg.Add(1)
@@ -689,7 +684,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	for err := range errCh {
 		return fmt.Errorf("error while sending shards, err: %v", err)
 	}
-	glog.Infof("finished sending all %d shards", shardNum)
+	glog.Infof("finished sending all shards")
 	return nil
 }
 

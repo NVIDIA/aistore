@@ -68,13 +68,7 @@ type parsedInputTemplate struct {
 	Type string `json:"type"`
 
 	// Used by 'bash' and 'at' template
-	Prefix     string `json:"prefix"`
-	Start      int    `json:"start"`
-	End        int    `json:"end"`
-	Step       int    `json:"step"`
-	RangeCount int    `json:"range_count"`
-	Suffix     string `json:"suffix"`
-	DigitCount int    `json:"digit_count"`
+	Template cmn.ParsedTemplate
 
 	// Used by 'regex' template
 	Regex string `json:"regex"`
@@ -85,13 +79,7 @@ type parsedInputTemplate struct {
 
 type parsedOutputTemplate struct {
 	// Used by 'bash' and 'at' template
-	Prefix     string `json:"prefix"`
-	Start      int    `json:"start"`
-	End        int    `json:"end"`
-	Step       int    `json:"step"`
-	RangeCount int    `json:"range_count"`
-	Suffix     string `json:"suffix"`
-	DigitCount int    `json:"digit_count"`
+	Template cmn.ParsedTemplate
 }
 
 type parsedMemUsage struct {
@@ -241,15 +229,14 @@ func validateExtension(ext string) bool {
 func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
 	template := strings.TrimSpace(inputFormat)
 	pt := &parsedInputTemplate{}
-	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseBashTemplate(template); err == nil {
+	if pt.Template, err = cmn.ParseBashTemplate(template); err == nil {
 		pt.Type = templBash
-	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseAtTemplate(template); err == nil {
+	} else if pt.Template, err = cmn.ParseAtTemplate(template); err == nil {
 		pt.Type = templAt
 	} else {
 		return nil, errInvalidInputFormat
 	}
 
-	pt.RangeCount = ((pt.End - pt.Start) / pt.Step) + 1
 	return pt, nil
 }
 
@@ -257,15 +244,14 @@ func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) 
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
 	template := strings.TrimSpace(outputFormat)
 	pt := &parsedOutputTemplate{}
-	if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseBashTemplate(template); err == nil {
+	if pt.Template, err = cmn.ParseBashTemplate(template); err == nil {
 		// Pass
-	} else if pt.Prefix, pt.Suffix, pt.Start, pt.End, pt.Step, pt.DigitCount, err = cmn.ParseAtTemplate(template); err == nil {
+	} else if pt.Template, err = cmn.ParseAtTemplate(template); err == nil {
 		// Pass
 	} else {
 		return nil, errInvalidOutputFormat
 	}
 
-	pt.RangeCount = ((pt.End - pt.Start) / pt.Step) + 1
 	return pt, nil
 }
 

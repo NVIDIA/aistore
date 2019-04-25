@@ -239,27 +239,102 @@ func TestMvFile(t *testing.T) {
 var _ = Describe("Common file", func() {
 	Context("ParseBashTemplate", func() {
 		DescribeTable("parse bash template without error",
-			func(template, expectedPrefix, expectedSuffix string, expectedStart, expectedEnd, expectedStep, expectedDigitCount int) {
-				prefix, suffix, start, end, step, digitCount, err := ParseBashTemplate(template)
+			func(template string, expectedPt ParsedTemplate) {
+				pt, err := ParseBashTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(prefix).To(Equal(expectedPrefix))
-				Expect(suffix).To(Equal(expectedSuffix))
-				Expect(start).To(Equal(expectedStart))
-				Expect(end).To(Equal(expectedEnd))
-				Expect(step).To(Equal(expectedStep))
-				Expect(digitCount).To(Equal(expectedDigitCount))
+				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("with step", "prefix-{0010..0111..2}-suffix", "prefix-", "-suffix", 10, 111, 2, 4),
-			Entry("without step and suffix", "prefix-{0010..0111}", "prefix-", "", 10, 111, 1, 4),
-			Entry("minimal", "{1..2}", "", "", 1, 2, 1, 1),
-			Entry("minimal multiple digits", "{110..220..10}", "", "", 110, 220, 10, 3),
-			Entry("minimal with digit count", "{1..02}", "", "", 1, 2, 1, 1),
-			Entry("minimal with special suffix", "{1..02}}", "", "}", 1, 2, 1, 1),
+			Entry("with step", "prefix-{0010..0111..2}-suffix", ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []TemplateRange{{
+					Start:      10,
+					End:        111,
+					Step:       2,
+					DigitCount: 4,
+					Gap:        "-suffix",
+				}},
+			}),
+			Entry("without step and suffix", "prefix-{0010..0111}", ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []TemplateRange{{
+					Start:      10,
+					End:        111,
+					Step:       1,
+					DigitCount: 4,
+					Gap:        "",
+				}},
+			}),
+			Entry("minimal", "{1..2}", ParsedTemplate{
+				Prefix: "",
+				Ranges: []TemplateRange{{
+					Start:      1,
+					End:        2,
+					Step:       1,
+					DigitCount: 1,
+					Gap:        "",
+				}},
+			}),
+			Entry("minimal multiple digits", "{110..220..10}", ParsedTemplate{
+				Prefix: "",
+				Ranges: []TemplateRange{{
+					Start:      110,
+					End:        220,
+					Step:       10,
+					DigitCount: 3,
+					Gap:        "",
+				}},
+			}),
+			Entry("minimal with digit count", "{1..02}", ParsedTemplate{
+				Prefix: "",
+				Ranges: []TemplateRange{{
+					Start:      1,
+					End:        2,
+					Step:       1,
+					DigitCount: 1,
+					Gap:        "",
+				}},
+			}),
+			Entry("minimal with special suffix", "{1..02}}", ParsedTemplate{
+				Prefix: "",
+				Ranges: []TemplateRange{{
+					Start:      1,
+					End:        2,
+					Step:       1,
+					DigitCount: 1,
+					Gap:        "}",
+				}},
+			}),
+			Entry("multi-range", "prefix-{0010..0111..2}-gap-{10..12}-gap2-{0040..0099..4}-suffix", ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []TemplateRange{
+					{
+						Start:      10,
+						End:        111,
+						Step:       2,
+						DigitCount: 4,
+						Gap:        "-gap-",
+					},
+					{
+						Start:      10,
+						End:        12,
+						Step:       1,
+						DigitCount: 2,
+						Gap:        "-gap2-",
+					},
+					{
+						Start:      40,
+						End:        99,
+						Step:       4,
+						DigitCount: 4,
+						Gap:        "-suffix",
+					},
+				},
+			}),
 		)
 
 		DescribeTable("parse bash template with error",
 			func(template string) {
-				_, _, _, _, _, _, err := ParseBashTemplate(template)
+				_, err := ParseBashTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing {", "prefix-0010..0111..2}-suffix"),
@@ -276,34 +351,111 @@ var _ = Describe("Common file", func() {
 			Entry("missing start and end", "prefix-{..}-suffix"),
 			Entry("empty template with prefix and suffix", "prefix-{}-suffix"),
 			Entry("empty template", "{}"),
+			Entry("nested templates", "{{}}"),
+			Entry("nested templates with numbers", "{{1..2}}"),
+			Entry("interleaving templates", "{1..2{3..4}}"),
 		)
 	})
 
 	Context("ParseAtTemplate", func() {
 		DescribeTable("parse at template without error",
-			func(template, expectedPrefix, expectedSuffix string, expectedStart, expectedEnd, expectedDigitCount int) {
-				prefix, suffix, start, end, step, digitCount, err := ParseAtTemplate(template)
+			func(template string, expectedPt ParsedTemplate) {
+				pt, err := ParseAtTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(prefix).To(Equal(expectedPrefix))
-				Expect(suffix).To(Equal(expectedSuffix))
-				Expect(start).To(Equal(expectedStart))
-				Expect(end).To(Equal(expectedEnd))
-				Expect(step).To(Equal(1))
-				Expect(digitCount).To(Equal(expectedDigitCount))
+				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("full featured template", "prefix-@010-suffix", "prefix-", "-suffix", 0, 10, 3),
-			Entry("minimal with prefix", "pref@9", "pref", "", 0, 9, 1),
-			Entry("minimal", "@0010", "", "", 0, 10, 4),
+			Entry("full featured template", "prefix-@010-suffix", ParsedTemplate{
+				Prefix: "prefix-",
+				Ranges: []TemplateRange{{
+					Start:      0,
+					End:        10,
+					Step:       1,
+					DigitCount: 3,
+					Gap:        "-suffix",
+				}},
+			}),
+			Entry("minimal with prefix", "pref@9", ParsedTemplate{
+				Prefix: "pref",
+				Ranges: []TemplateRange{{
+					Start:      0,
+					End:        9,
+					Step:       1,
+					DigitCount: 1,
+					Gap:        "",
+				}},
+			}),
+			Entry("minimal", "@0010", ParsedTemplate{
+				Prefix: "",
+				Ranges: []TemplateRange{{
+					Start:      0,
+					End:        10,
+					Step:       1,
+					DigitCount: 4,
+					Gap:        "",
+				}},
+			}),
+			Entry("multi-range", "pref@9-gap-@0100-suffix", ParsedTemplate{
+				Prefix: "pref",
+				Ranges: []TemplateRange{
+					{
+						Start:      0,
+						End:        9,
+						Step:       1,
+						DigitCount: 1,
+						Gap:        "-gap-",
+					},
+					{
+						Start:      0,
+						End:        100,
+						Step:       1,
+						DigitCount: 4,
+						Gap:        "-suffix",
+					},
+				},
+			}),
 		)
 
 		DescribeTable("parse at template with error",
 			func(template string) {
-				_, _, _, _, _, _, err := ParseAtTemplate(template)
+				_, err := ParseAtTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing @", "prefix-01-suffix"),
 			Entry("negative end", "prefix-@-0001-suffix"),
-			Entry("additional @", "prefix-@@0010-suffix"),
+			Entry("repetitive @", "prefix-@@0010-suffix"),
+			Entry("non-digit range", "prefix-@d@0010-suffix"),
+		)
+	})
+
+	Context("ParsedTemplate", func() {
+		DescribeTable("iter method",
+			func(template string, expectedStrs ...string) {
+				pt, err := ParseBashTemplate(template)
+				Expect(err).NotTo(HaveOccurred())
+
+				var (
+					i  int
+					it = pt.Iter()
+				)
+				for str, hasNext := it(); hasNext; str, hasNext = it() {
+					Expect(str).To(Equal(expectedStrs[i]))
+					i++
+				}
+				Expect(i).To(Equal(len(expectedStrs)))
+				Expect(i).To(Equal(pt.Count()))
+			},
+			Entry(
+				"simple template", "prefix-{0010..0013..2}-suffix",
+				"prefix-0010-suffix", "prefix-0012-suffix",
+			),
+			Entry(
+				"multi-range template", "prefix-{0010..0013..2}-gap-{1..2}-suffix",
+				"prefix-0010-gap-1-suffix", "prefix-0010-gap-2-suffix", "prefix-0012-gap-1-suffix", "prefix-0012-gap-2-suffix",
+			),
+			Entry(
+				"large step", "prefix-{0010..0013..2}-gap-{1..2..3}-suffix",
+				"prefix-0010-gap-1-suffix", "prefix-0012-gap-1-suffix",
+			),
 		)
 	})
 })

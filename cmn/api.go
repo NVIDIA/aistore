@@ -719,14 +719,14 @@ func (b *DlRangeBody) Validate() error {
 }
 
 func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
-	prefix, suffix, start, end, step, digitCount, err := ParseBashTemplate(b.Template)
+	pt, err := ParseBashTemplate(b.Template)
 	if err != nil {
 		return nil, err
 	}
 
-	objects := make(SimpleKVs, (end-start+1)/step)
-	for i := start; i <= end; i += step {
-		link := fmt.Sprintf("%s%0*d%s", prefix, digitCount, i, suffix)
+	objects := make(SimpleKVs, pt.Count())
+	linksIt := pt.Iter()
+	for link, hasNext := linksIt(); hasNext; link, hasNext = linksIt() {
 		objName := path.Join(b.Subdir, path.Base(link))
 		objects[objName] = link
 	}
