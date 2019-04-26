@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -31,11 +32,13 @@ const (
 )
 
 var (
-	newBucketFlag = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
-	pageSizeFlag  = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
-	objPropsFlag  = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
-	objLimitFlag  = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
-	copiesFlag    = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
+	showUnmatchedFlag = cli.BoolTFlag{Name: "showunmatched", Usage: "also print files that were not matched by regex, template or extension"}
+	newBucketFlag     = cli.StringFlag{Name: "newbucket", Usage: "new name of bucket"}
+	pageSizeFlag      = cli.StringFlag{Name: "pagesize", Usage: "maximum number of entries by list bucket call", Value: "1000"}
+	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
+	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
+	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
+	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 
 	baseBucketFlags = []cli.Flag{
 		bucketFlag,
@@ -54,10 +57,12 @@ var (
 		commandList: append(
 			[]cli.Flag{
 				regexFlag,
+				templateFlag,
 				prefixFlag,
 				pageSizeFlag,
 				objPropsFlag,
 				objLimitFlag,
+				showUnmatchedFlag,
 			},
 			baseBucketFlags...),
 		bucketSetProps: append(
@@ -268,22 +273,21 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
 }
 
 // Lists objects in bucket
-func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	regex := parseFlag(c, regexFlag)
-	r, err := regexp.Compile(regex)
+func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
-		return
+		return err
 	}
 
 	prefix := parseFlag(c, prefixFlag)
 	props := "name," + parseFlag(c, objPropsFlag)
 	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag))
 	if err != nil {
-		return
+		return err
 	}
 	limit, err := strconv.Atoi(parseFlag(c, objLimitFlag))
 	if err != nil {
-		return
+		return err
 	}
 
 	query := url.Values{}
@@ -293,10 +297,12 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) (e
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: props}
 	objList, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
-		return
+		return err
 	}
-	return printObjectProps(objList.Entries, r, props)
 
+	showUnmatched := flagIsSet(c, showUnmatchedFlag)
+
+	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched)
 }
 
 // Sets bucket properties
@@ -417,24 +423,104 @@ func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string) {
 	}
 }
 
-func printObjectProps(entries []*cmn.BucketEntry, r *regexp.Regexp, props string) error {
-	filteredEntries := []cmn.BucketEntry{}
-	propsList := makeList(props, ",")
-	headStr := ""
-	bodyStr := "{{range $obj := .}}"
+func buildOutputTemplate(props string) (string, error) {
+	var (
+		headSb strings.Builder
+		bodySb strings.Builder
+
+		propsList = makeList(props, ",")
+	)
+	bodySb.WriteString("{{range $obj := .}}")
+
 	for _, field := range propsList {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
-			return fmt.Errorf("%q is not a valid property", field)
+			return "", fmt.Errorf("%q is not a valid property", field)
 		}
-		headStr += field + "\t"
-		bodyStr += templates.ObjectPropsMap[field]
+		headSb.WriteString(field + "\t")
+		bodySb.WriteString(templates.ObjectPropsMap[field])
 	}
-	headStr += "\n"
-	bodyStr += "\n{{end}}\n"
+	headSb.WriteString("\n")
+	bodySb.WriteString("\n{{end}}\n")
+
+	return headSb.String() + bodySb.String(), nil
+}
+
+func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched bool) error {
+	outputTemplate, err := buildOutputTemplate(props)
+	if err != nil {
+		return err
+	}
+
+	matchingEntries, rest := objectFilter.filter(entries)
+
+	err = templates.DisplayOutput(matchingEntries, outputTemplate)
+	if err != nil {
+		return err
+	}
+
+	if showUnmatched {
+		outputTemplate = "Unmatched files:\n" + outputTemplate
+		err = templates.DisplayOutput(rest, outputTemplate)
+	}
+
+	return err
+}
+
+type objectListFilter struct {
+	predicates []cmn.StringPredicate
+}
+
+func (o *objectListFilter) addFilter(f cmn.StringPredicate) {
+	o.predicates = append(o.predicates, f)
+}
+
+func (o *objectListFilter) matchesAll(objName string) bool {
+	// Check if object name matches *all* specified predicates
+	for _, predicate := range o.predicates {
+		if !predicate(objName) {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching []cmn.BucketEntry, rest []cmn.BucketEntry) {
 	for _, obj := range entries {
-		if r.MatchString(obj.Name) {
-			filteredEntries = append(filteredEntries, *obj)
+		if o.matchesAll(obj.Name) {
+			matching = append(matching, *obj)
+		} else {
+			rest = append(rest, *obj)
 		}
 	}
-	return templates.DisplayOutput(filteredEntries, headStr+bodyStr)
+	return
+}
+
+func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
+	objFilter := &objectListFilter{}
+
+	if regexStr := parseFlag(c, regexFlag); regexStr != "" {
+		regex, err := regexp.Compile(regexStr)
+		if err != nil {
+			return nil, err
+		}
+
+		objFilter.addFilter(regex.MatchString)
+	}
+
+	if bashTemplate := parseFlag(c, templateFlag); bashTemplate != "" {
+		pt, err := cmn.ParseBashTemplate(bashTemplate)
+		if err != nil {
+			return nil, err
+		}
+
+		matchingObjectNames := make(cmn.StringSet)
+
+		linksIt := pt.Iter()
+		for objName, hasNext := linksIt(); hasNext; objName, hasNext = linksIt() {
+			matchingObjectNames[objName] = struct{}{}
+		}
+		objFilter.addFilter(func(objName string) bool { _, ok := matchingObjectNames[objName]; return ok })
+	}
+
+	return objFilter, nil
 }
