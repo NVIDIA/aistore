@@ -24,7 +24,7 @@ func recECTargDown(rctx *soakprim.RecipeContext) {
 
 	conds.ExpBuckets = []string{"ec1", "b2"}
 	rctx.Pre(conds)
-	rctx.SetBucketPropsMsg("ec1", cmn.BucketProps{EC: cmn.ECConf{Enabled: true, ObjSizeLimit: 1, DataSlices: 2, ParitySlices: 1}})
+	rctx.SetBucketProps("ec1", cmn.BucketProps{EC: cmn.ECConf{Enabled: true, ObjSizeLimit: 1, DataSlices: 2, ParitySlices: 1}})
 	rctx.Post(nil)
 
 	rctx.Pre(conds)

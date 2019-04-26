@@ -62,8 +62,8 @@ func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	}()
 }
 
-func (rctx *RecipeContext) SetBucketPropsMsg(bucketname string, bckprops cmn.BucketProps) {
-	tag := rctx.startPrim("SetBucketPropsMsg")
+func (rctx *RecipeContext) SetBucketProps(bucketname string, bckprops cmn.BucketProps) {
+	tag := rctx.startPrim("SetBucketProps")
 	go func() {
 		defer rctx.finishPrim(tag)
 		err := api.SetBucketPropsMsg(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), bckprops)
