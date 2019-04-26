@@ -10,22 +10,9 @@
 
 ## Command List
 
-### cancel
+### begin
 
-`ais download cancel --id <value>`
-
-Cancels download job given its id.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--id` | string | unique identifier of download job returned upon job creation | `""` |
-
-Examples:
-* `ais download cancel --id "5JjIuGemR"` cancels the download job
-
-### download
-
-`ais download <source> <dest>`
+`ais download begin <source> <dest>`
 
 Downloads the object(s) from `source` location and saves it as specified in `dest` location.
 `source` location can be link to single or range download:
@@ -48,13 +35,26 @@ As for `dest` location, the only supported schema is `ais://` and the link shoul
 | `--timeout` | string | timeout for request to external resource | `""` |
 
 Examples:
-* `ais download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso` downloads object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP location and saves it in `ubuntu` bucket, named as `ubuntu-18.04.1.iso`.  
-The same result can be obtained with  `ais download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/` - note the lack of object name in the destination.
-* `ais download gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads object `imagenet/imagenet_train-000000.tgz` from Google Cloud Storage from bucket `lpr-vision` and saves it in `local-lpr` bucket, named as `imagenet_train-000000.tgz`
-* `ais download --description "imagenet" gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
-* `ais download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/` will download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and save them in `local-lpr` bucket, inside `imagenet` subdirectory
-* `ais download --desc "subset-imagenet" "gs://lpr-vision/imagenet/imagenet_train-{000022..000140..2}.tgz" ais://local-lpr` same as above while skipping every other object in the specified range
+* `ais download begin http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso` downloads object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP location and saves it in `ubuntu` bucket, named as `ubuntu-18.04.1.iso`.  
+The same result can be obtained with  `ais download begin http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/` - note the lack of object name in the destination.
+* `ais download begin gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads object `imagenet/imagenet_train-000000.tgz` from Google Cloud Storage from bucket `lpr-vision` and saves it in `local-lpr` bucket, named as `imagenet_train-000000.tgz`
+* `ais download begin --description "imagenet" gs://lpr-vision/imagenet/imagenet_train-000000.tgz ais://local-lpr/imagenet_train-000000.tgz` downloads an object and sets `imagenet` as description for the job (can be useful when listing downloads)
+* `ais download begin "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/` will download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and save them in `local-lpr` bucket, inside `imagenet` subdirectory
+* `ais download begin --desc "subset-imagenet" "gs://lpr-vision/imagenet/imagenet_train-{000022..000140..2}.tgz" ais://local-lpr` same as above while skipping every other object in the specified range
 
+
+### cancel
+
+`ais download cancel --id <value>`
+
+Cancels download job given its id.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--id` | string | unique identifier of download job returned upon job creation | `""` |
+
+Examples:
+* `ais download cancel --id "5JjIuGemR"` cancels the download job
 
 ### ls
 

@@ -19,6 +19,7 @@ import (
 )
 
 const (
+	downloadBegin  = "begin"
 	downloadStatus = "status"
 	downloadCancel = "cancel"
 	downloadRemove = "rm"
@@ -71,13 +72,17 @@ var (
 
 	DownloaderCmds = []cli.Command{
 		{
-			Name:         "download",
-			Usage:        "download objects from external source",
-			Flags:        baseDownloadFlags,
-			Action:       downloadHandler,
-			UsageText:    downloadUsage,
-			BashComplete: flagList,
+			Name:  "download",
+			Usage: "command that manages downloading files from external sources",
 			Subcommands: []cli.Command{
+				{
+					Name:         downloadBegin,
+					Usage:        "download objects from external source",
+					Flags:        baseDownloadFlags,
+					Action:       downloadHandler,
+					UsageText:    downloadUsage,
+					BashComplete: flagList,
+				},
 				{
 					Name:         downloadStatus,
 					Usage:        "fetch status of download job with given id",
