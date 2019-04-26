@@ -49,6 +49,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [Fast Tier](#fast-tier)
     - [Other Services](#other-services)
     - [dSort](#dsort)
+    - [CLI](#cli)
     - [Python Client](#python-client)
     - [AIS Limitations](#ais-limitations)
 - [Prerequisites](#prerequisites)
@@ -165,6 +166,32 @@ Most notably, AIStore provides **[dSort](dsort/README.md)** - a MapReduce layer 
 DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tf-records)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
 
 By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. Which ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
+
+### CLI
+
+AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](cli/README.md). To start using it, simply execute:
+
+ ```sh
+ $ export AIS_URL=http://G
+ $ ais --help
+ ```
+
+where `G` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
+
+One salient feature of AIS CLI is its Bash style **auto-completions** that allow users to easily navigate supported operations and options by simply pressing TAB key. For instance, when you type:
+
+ ```sh
+ $ ais s[TAB-TAB]
+ ```
+
+the tool will suggest the following "expansion" from which you can further choose by typing one or more letters and pressing the TAB key, etc.
+
+ ```sh
+$ ais s
+setconfig  smap       stats      status
+ ```
+
+AIS CLI is still at its early stage and will keep quickly developing. For more information, please see the project's own [README](cli/README.md).
 
 ### Python Client
 
