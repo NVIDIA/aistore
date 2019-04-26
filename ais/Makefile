@@ -51,18 +51,13 @@ clean:
 
 
 # Target for local deployment
-.PHONY: deploy deploy_binary deploy_next_tier
+.PHONY: deploy deploy_cli
 
 deploy:
 	@./setup/deploy.sh
 
-deploy_binary:
+deploy_cli:
 	@cd ../cli && ./deploy_cli.sh
-	@./setup/deploy.sh
-
-deploy_next_tier:
-	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
-
 
 # Target for local docker deployment
 .PHONY: deploy_docker stop_docker

@@ -5,7 +5,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -31,10 +30,12 @@ const (
 
 	gsHost = "storage.googleapis.com"
 	s3Host = "s3.amazonaws.com"
+
+	AutoCompDir = "/etc/bash_completion.d/ais"
 )
 
 var (
-	ClusterURL  = os.Getenv("AIS_URL") // The URL that points to the AIS cluster
+	ClusterURL  = os.Getenv("AIS_URL")
 	watch       = false
 	refreshRate = "5s"
 
@@ -52,13 +53,18 @@ var (
 )
 
 // Checks if URL is valid by trying to get Smap
-func TestAISURL(clusterURL string) error {
+func SetNTestAISURL(url string) (err error) {
 	if ClusterURL == "" {
-		return errors.New("env variable 'AIS_URL' is not set")
+		ClusterURL = url
 	}
-	baseParams := cliAPIParams(clusterURL)
-	_, err := api.GetClusterMap(baseParams)
+	baseParams := cliAPIParams(ClusterURL)
+	_, err = api.GetClusterMap(baseParams)
 	return err
+}
+
+func IsAutoCompConfigured() bool {
+	_, err := os.Stat(AutoCompDir)
+	return !os.IsNotExist(err)
 }
 
 func cliAPIParams(proxyURL string) *api.BaseParams {

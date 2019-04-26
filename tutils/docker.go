@@ -17,7 +17,7 @@ const (
 	prefixStr = "ais"
 	proxyStr  = "_proxy_"
 	targetStr = "_target_"
-	pattern   = "^\"" + prefixStr + "[0-9]+" + proxyStr + "[1-9]+\"$" //Checking '_proxy_' should suffice
+	pattern   = "^\"" + prefixStr + "[0-9]+" + proxyStr + "[1-9]+\"$" // Checking '_proxy_' should suffice
 )
 
 var (
@@ -36,8 +36,6 @@ func init() {
 	lines := strings.Split(string(bytes), "\n")
 
 	// Checks to see if there is any container P_proxy_{jj}" running
-	// Note: ./deploy_docker.sh will only let yPonce
-	// ie. running ./deploy_docker.sh again wilPvious instance first
 	for _, line := range lines {
 		match := r.MatchString(line)
 		if match {

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sort"
@@ -17,11 +18,16 @@ import (
 var (
 	build   string
 	version string
+	url     string
 )
 
 func main() {
-	if err := commands.TestAISURL(commands.ClusterURL); err != nil {
+	if err := commands.SetNTestAISURL(url); err != nil {
 		cmn.ExitInfof("Could not connect to AIS cluster: %s", err)
+	}
+
+	if !commands.IsAutoCompConfigured() {
+		fmt.Printf("Auto complete script not installed in %q\n", commands.AutoCompDir)
 	}
 
 	aisCLI := commands.New(build, version)

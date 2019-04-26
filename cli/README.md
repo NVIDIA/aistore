@@ -15,6 +15,8 @@ Before using the CLI, we need to export the `AIS_URL` environment variable (eg. 
  ```
  This should return the list of commands for the CLI.
 
+> By default, the CLI is configured to point to `http://172.50.0.2:8080` and `http:/127.0.0.1:8080` for local containerized and non-containerized deployments respectively.
+
 ## AIS CLI Shell Auto-Complete
 
 The CLI tool supports bash and zsh auto-complete functionality. To enable shell auto-complete, source the auto-complete script or, for a more permanent option, install it into your `/etc/bash_completion.d` directory

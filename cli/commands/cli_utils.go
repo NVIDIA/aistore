@@ -49,6 +49,30 @@ var (
 	clear map[string]func()
 )
 
+var AISHelpTemplate = `DESCRIPTION:
+  {{.Name}}{{if .Usage}} - {{.Usage}}{{end}} 
+  Ver. {{if .Version}}{{if not .HideVersion}}{{.Version}}{{end}}{{end}}
+  {{if .Description}}{{.Description}}{{end}}{{if len .Authors}}
+
+USAGE:
+{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}
+
+AUTHOR{{with $length := len .Authors}}{{if ne 1 $length}}S{{end}}{{end}}:
+{{range $index, $author := .Authors}}{{if $index}}
+{{end}}{{$author}}{{end}}{{end}}{{if .VisibleCommands}}
+
+COMMANDS:{{range .VisibleCategories}}{{if .Name}}
+{{.Name}}:{{end}}{{range .VisibleCommands}}
+  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
+
+GLOBAL OPTIONS:
+{{range $index, $option := .VisibleFlags}}{{if $index}}
+{{end}}{{$option}}{{end}}{{end}}{{if .Copyright}}
+
+COPYRIGHT:
+{{.Copyright}}{{end}}
+`
+
 func init() {
 	clear = make(map[string]func())
 	clear["linux"] = func() {
@@ -71,13 +95,18 @@ func New(build, version string) AISCLI {
 
 func (aisCLI AISCLI) Init(build, version string) {
 	aisCLI.Name = cliName
-	aisCLI.Usage = "CLI tool for AIStore"
+	aisCLI.Usage = "CLI for AIStore"
 	aisCLI.Version = fmt.Sprintf("%s (build %s)", version, build)
 	aisCLI.EnableBashCompletion = true
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
+	cli.AppHelpTemplate = AISHelpTemplate
+	aisCLI.Description = `
+	The CLI has shell autocomplete functionality. To enable this feature, either source
+	the 'ais_autocomplete' file in the project's 'cli/' directory or, for a permanent option, copy 
+	the 'ais_autocomplete' file to the '/etc/bash_completion.d/ais' directory.`
 }
 
 func clearScreen() error {

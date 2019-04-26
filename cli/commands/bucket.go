@@ -88,7 +88,7 @@ var (
 	BucketCmds = []cli.Command{
 		{
 			Name:  cmn.URLParamBucket,
-			Usage: "commands that interact with buckets",
+			Usage: "interact with buckets",
 			Flags: baseBucketFlags,
 			Subcommands: []cli.Command{
 				{

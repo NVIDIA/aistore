@@ -21,7 +21,8 @@ import (
 const (
 	// List output
 	ListHeader = "\nDaemonID\t Type\t SmapVersion\t Uptime(µs)\t "
-	ListBody   = "{{$value.Snode.DaemonID}}\t {{$value.Snode.DaemonType}}\t {{$value.SmapVersion}}\t {{ExtractStat $value.Stats `up.µs.time`}}\t "
+	ListBody   = "{{$value.Snode.DaemonID}}\t {{$value.Snode.DaemonType}}\t {{$value.SmapVersion}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t "
 
 	ListTmpl        = ListHeader + "\n{{ range $key, $value := . }}" + ListBody + "\n{{end}}\n"
 	ListTmplVerbose = ListHeader + "PublicURL\t IntraControlURL\t IntraDataURL\n" +
@@ -43,20 +44,20 @@ const (
 		"PrimaryProxy: {{.ProxySI.DaemonID}}\t Proxies: {{len .Pmap}}\t Targets: {{len .Tmap}}\t Smap Version: {{.Version}}\n"
 
 	// Proxy Info
-	ProxyInfoHeader = "\nDaemonID\t Type\t MemUsed(%)\t CpuUsed(%)\t MemAvail\t Uptime(µs)\n"
-	ProxyInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.Snode.DaemonType}}\t {{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t " +
-		"{{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 5}}\t " +
-		"{{ExtractStat $value.Stats `up.µs.time`}}\n"
+	ProxyInfoHeader = "\nType: Proxy\nID\t MemUsed(%)\t MemAvail\t CpuUsed(%)\t Uptime(µs)\n"
+	ProxyInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 3}}\t {{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 
 	ProxyInfoTmpl       = ProxyInfoHeader + "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}\n"
 	ProxyInfoSingleTmpl = ProxyInfoHeader + "{{$value := . }}" + ProxyInfoBody
 
 	// Target Info
-	TargetInfoHeader = "\nDaemonID\t Type\t MemUsed(%)\t CpuUsed(%)\t CapacityUsed(%)\t MemAvail\t CapacityAvail\t Throughput\n"
-	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.Snode.DaemonType}}\t " +
-		"{{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t {{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t " +
-		"{{CalcAvg $value `percent` | printf `%d`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 5}}\t " +
-		"{{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 5}}\t " +
+	TargetInfoHeader = "\nType: Target\nID\t MemUsed(%)\t MemAvail\t CapUsed(%)\t CapAvail\t CpuUsed(%)\t Throughput\n"
+	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
+		"{{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 3}}\t " +
+		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
+		"{{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t " +
 		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2}}\n"
 
 	TargetInfoTmpl       = TargetInfoHeader + "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
@@ -262,6 +263,7 @@ var (
 		"CalcAvg":             calcAvg,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
+		"FormatDur":           fmtDuration,
 	}
 )
 
@@ -288,6 +290,12 @@ func isUnsetTime(t time.Time) bool {
 
 func fmtTime(t time.Time) string {
 	return t.Format("01-02 15:04:05.000")
+}
+
+func fmtDuration(d int64) string {
+	// Convert to nanoseconds
+	dNano := time.Duration(d * 1000)
+	return dNano.String()
 }
 
 // Displays the output in either JSON or tabular form

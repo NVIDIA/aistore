@@ -38,28 +38,28 @@ var (
 	DaeCluCmds = []cli.Command{
 		{
 			Name:         cmn.GetWhatSmap,
-			Usage:        "returns cluster map (Smap)",
+			Usage:        "returns cluster map",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatSmap],
 			BashComplete: daemonList,
 		},
 		{
 			Name:         cmn.GetWhatDaemonStatus,
-			Usage:        "returns status of AIS Daemon",
+			Usage:        "returns status of daemon",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatDaemonStatus],
 			BashComplete: daemonList,
 		},
 		{
 			Name:         cmn.GetWhatConfig,
-			Usage:        "returns config of AIS daemon",
+			Usage:        "returns config of daemon",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatConfig],
 			BashComplete: daemonList,
 		},
 		{
 			Name:         cmn.GetWhatStats,
-			Usage:        "returns stats of AIS daemon",
+			Usage:        "returns stats of daemon",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatStats],
 			BashComplete: daemonList,
@@ -67,7 +67,7 @@ var (
 		{
 			Name:    commandList,
 			Aliases: []string{"ls"},
-			Usage:   "returns list of AIS Daemons",
+			Usage:   "returns list of daemons",
 			Action:  queryHandler,
 			Flags:   daecluFlags[commandList],
 		},

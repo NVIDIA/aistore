@@ -37,7 +37,7 @@ var (
 	XactCmds = []cli.Command{
 		{
 			Name:  cmn.GetWhatXaction,
-			Usage: "command that interacts with extended actions (xactions)",
+			Usage: "interacts with extended actions (xactions)",
 			Flags: baseXactFlag,
 			Subcommands: []cli.Command{
 				{

@@ -96,7 +96,7 @@ var (
 	ObjectCmds = []cli.Command{
 		{
 			Name:  "object",
-			Usage: "commands that interact with objects",
+			Usage: "interact with objects",
 			Flags: baseObjectFlags,
 			Subcommands: []cli.Command{
 				{
