@@ -144,7 +144,7 @@ ais_cpufreq_governor: performance
 blkdevtune:
   queue/scheduler: deadline
   queue/nr_requests: 4096
-  queue/read_ahead_kb: 4096
+  queue/read_ahead_kb: 1024
   queue/rq_affinity: 2
   queue/max_sectors_kb: 8192
 

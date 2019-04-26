@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo "---------------------------------------------------"
+echo "aisnode $ROLE container startup at $(date)"
+echo "---------------------------------------------------"
+
 cp -fv $CONFFILE /etc/ais || exit 1 
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
 
@@ -57,10 +61,10 @@ fi
 echo "Our ais daemon id will be $AIS_DAEMONID"
 
 #
-# There's no assured sequencing of the relative startup of proxy & target pods
-# on a node, not to mention across multiple nodes. So target pods can start before
-# any proxy pods - and, even if all proxies started before targets, the proxies
-# need some time to get their house in order. If a newly-minted target pod
+# During initial cluster deployment (helm install), there's no assured sequencing of the
+# relative startup order of proxy & target pods on a node, not to mention across multiple nodes.
+# So target pods can start before any proxy pods - and, even if all proxies started before targets,
+# the proxies need some time to get their house in order. If a newly-minted target pod
 # tries way too early then we might not yet have published the DNS entry for
 # the ais-initial-primary-proxy service (that pod may still be starting, it may
 # even still be in the process of downloading the appropriate container image) and
@@ -70,70 +74,103 @@ echo "Our ais daemon id will be $AIS_DAEMONID"
 # but if it happens too quickly k8s will apply a backoff time and can eventually
 # place us in error state.
 #
-# So if we're a target pod we'll insert a brief snooze to allow proxies to
-# get ahead of the game and to avoid triggering the backoff/error mechanism
-# too lightly. To avoid delay for the case of a new target joining a long-
-# established cluster, we'll use the presence of a cached smap to imply that
-# this is not initial deployment time. We'll also perform the sleep *after*
-# AIS exits non-zero, and before start we'll loop for a limited time awaiting
-# resolvability of the primary proxy service.
+# A helm preinstall hook removes smap.json and helminstall.timestamp. We use the
+# latter file to record the approximate time of initial cluster deployment - approximate
+# because we only create it below and our execution may have been delayed by image download
+# etc. Really, it is a measure of the first time this proxy or target container has
+# ever started up up on this node since helm install.
 #
-# But wait! There's more. If we are a non-primary proxy starting up at initial cluster
-# deployment time (no cached smap) then we'll also try to contact the initial primary
-# proxy URL, and so require a resolvable DNS name. So we perform this dance for
-# everyone *except* the initial primary proxy.
+
+tsf=/etc/ais/helminstall.timestamp
+if [[ -f $tsf ]]; then
+    install_age=$(( $(date +%s) - $(stat --format=%Y $tsf) ))
+    early_startup=false
+    [[ $install_age -lt 90 ]] && early_startup=true
+    echo "Deployment age is ~${install_age}s, early_startup=$early_startup"
+else
+    touch $tsf
+    early_startup=true
+    echo "This is the first startup of this container for the current deployment"
+    rm -f /etc/ais/*.agg
+fi
+
 #
-ping_result="failure"
+# Decide the cases in which we must wait for the initial primary proxy to become pingable.
+# 
+# Once early startup is past, we never wait for the initial primary proxy - it's only
+# required for initial startup and thereafter its absence must not be a barrier to nodes
+# joining the cluster (some other proxy should have become primary).
+#
+# During early startup, all target and non-primary proxy nodes must wait for the initial primary
+# to be resolvable and pingable.
+#
+must_wait=false
+if $early_startup; then
+    if [[ "$ROLE" == "target" ]]; then
+        must_wait=true
+    elif ! $is_primary; then
+        must_wait=true
+    fi
+fi
+
+#
+# The following is informational. Since smap.json is removed by the preinstall hook, seeing
+# an smap.json usually means this is an aisnode restart in an established cluster. But if
+# an aisnode exits and we restart during early startup it may already have created an smap.json
+# which will change the startup logic for the new instance - perhaps there's a case for
+# removing the cached smap.json in the early start case, but we'll just log the existence
+# or absence of the file.
+#
+if [[ -f /etc/ais/smap.json ]]; then
+    echo "A cached smap.json is present"
+else
+    echo "No cached smap.json"
+fi
+
 total_wait=0
-if [[  -f /etc/ais/smap.json ]]; then
+if $must_wait; then
+    echo "Waiting for initial primary proxy to be resolvable and pingable"
+    ping_result="failure"
+    # k8s liveness will likely fail and restart us before the 120s period is over, anyway
+    while [[ $total_wait -lt 120 ]]; do
+        # Single success will end, otherwise wait at most 10s
+        ping -c 1 -w 10 $PRIMARY_PROXY_SERVICE_HOSTNAME
+        if [[ $? -eq 0 ]]; then
+            ping_result="success"
+            break
+        fi
+
+        if [[ $? -eq 1 ]]; then
+            # could resolve but not ping, nearly there! the -w timeout means we
+            # waited 10s during the ping.
+            total_wait=$((total_wait + 10))
+        else
+            sleep 5                     # code 2 means resolve failure, treat any others the same
+            total_wait=$((total_wait + 5))
+        fi
+
+        echo "Ping total wait time so far: $total_wait"
+    done
+
+    echo "Ping $ping_result; waited a total of around $total_wait seconds"
+
     #
-    # On helm install, a pre-install hook cleans up /etc/ais/smap.json (which is only ever
-    # created on proxy nodes). Thus an existing smap.json *should* imply this is a pod restart
-    # in a past helm release. This is not ironclad - for example if we label a new node
-    # some time after initial helm install and the node previously ran a proxy then the
-    # old smap may still be present.
+    # Can resolve and ping, or gave up; regardless, introduce a brief snooze before proceeding
+    # to give the initial primary a few moments to establish before further aisnode instances
+    # start trying to register.
     #
-    # A contactable/resolvable initial primary is expressly not a requirement after initial deployment!
+    # XXX Should also consider the pingability of the proxy clusterIP service?
     #
-    echo "Past smap.json exists - assuming not initial AIS cluster deployment"
-elif [[ "$ROLE" == "target" || $is_primary == "false" ]]; then
-        echo "No past smap.json and this pod is a target or non-primary proxy - waiting for primary to be pingable"
-        # k8s liveness will likely fail and restart us before the 120s period is over, anyway
-        while [[ $total_wait -lt 120 ]]; do
-            # Single success will end, otherwise wait at most 10s
-            ping -c 1 -w 10 $PRIMARY_PROXY_SERVICE_HOSTNAME
-            if [[ $? -eq 0 ]]; then
-                ping_result="success"
-                break
-            fi
-
-            if [[ $? -eq 1 ]]; then
-                # could resolve but not ping, nearly there! the -w timeout means we
-                # waited 10s during the ping.
-                total_wait=$((total_wait + 10))
-            else
-                sleep 5                     # code 2 means resolve failure, treat any others the same
-                total_wait=$((total_wait + 5))
-            fi
-
-            echo "Ping total wait time so far: $total_wait"
-        done
-
-        echo "Ping $ping_result; waited a total of around $total_wait seconds"
-
-        #
-        # Can resolve and ping, or gave up; regardless, introduce a brief snooze before proceeding
-        # in the case of initial cluster deployment. The intention here is to give the initial
-        # primary a few moments to establish before ais starts trying to register.
-        #
-        # XXX Should also consider the pingability of the proxy clusterIP service.
-        [[ -f /etc/ais/smap.json ]] || sleep 5
+    sleep 5
 fi
 
 # token effort to allow statsd to set up shop before ais tries to connect
 [[ $total_wait -le 2 ]] && sleep 2
 
 ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true"
+
+# See https://github.com/golang/go/issues/28466
+export GODEBUG="madvdontneed=1"
 
 while :
 do
@@ -144,7 +181,8 @@ do
         # debug/source image with a built binary, use that
         /go/bin/aisnode $ARGS
     elif [[ -d /go/src/github.com/NVIDIA/aistore/ais ]]; then
-        (cd /go/src/github.com/NVIDIA/aistore/ais && GODEBUG=madvdontneed=1 go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
+        # if running from source tree then add flags to assist the debugger
+        (cd /go/src/github.com/NVIDIA/aistore/ais && go run -gcflags="all=-N -l" setup/aisnode.go $ARGS)
     else
         echo "Cannot find an ais binary or source tree"
     fi
@@ -169,4 +207,14 @@ done
 # volume.
 #
 
-
+#
+# If/when aisnode exits, aggregate aisnode logs in a persistent location so that we
+# can see all logs across container restarts (kubectl logs only has the current and
+# previous container instances available).
+#
+# XXX Needs some log rotation etc in time, just a quick fix for now. These files are
+# removed on helm install - see earlier in this file.
+#
+cat /var/log/ais/aisnode.INFO >> /etc/ais/INFO.agg
+cat /var/log/ais/aisnode.ERROR >> /etc/ais/ERROR.agg
+cat /var/log/ais/aisnode.WARNING >> /etc/ais/WARNING.agg

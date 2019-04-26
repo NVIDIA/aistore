@@ -12,6 +12,13 @@
 # once all pods have completed one scheduling trip, and then proceeds to delete
 # the resource.
 #
+# XXX Actually, the interaction between Helm and a DaemonSet preinstall hook is unclear. Helm
+# does not block on this type, and it *seemed* to consider the hook complete when each
+# pod container has been started on all nodes matching the node selector criteria.
+# But some experience shows that if a node is delayed in scheduling and executing
+# one of the dameonset containers (as was the case on one node with a runaway kworker process)
+# then Helm is still quite happy to consider the preinstall hook complete.
+#
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -42,7 +49,7 @@ spec:
       - name: pre-install-job
         image: "alpine:3.3"
         command: ["/bin/sh"]
-        args: ["-c","rm -f /etc/ais/proxy/smap.json /etc/ais/target/smap.json"]
+        args: [ "-c", "rm -f /etc/ais/*/smap.json /etc/ais/*/helminstall.timestamp; touch /etc/ais/rmhookdone.timestamp" ]
         volumeMounts:
            - name: etc-mount
              mountPath: "{{ .Values.common_config.dir }}"

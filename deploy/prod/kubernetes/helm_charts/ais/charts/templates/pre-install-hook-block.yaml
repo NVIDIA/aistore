@@ -2,7 +2,7 @@
 # Pre-install hook with the highest weight, therefore run as the final pre-install
 # hook. Since some other pre-install hooks are non-blocking (and may race with
 # subsequent AIS pods in completing their work) this final hook is a synchronization
-# opportunity. It is implemented via a Job (Helm treat this as blocking) which sleeps
+# opportunity. It is implemented via a Job (Helm treats this as blocking) which sleeps
 # for a few seconds - pride be damned! Note that the delay here will be observed
 # in the 'helm install' cmdline.
 #

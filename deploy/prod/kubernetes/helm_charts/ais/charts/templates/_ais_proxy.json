@@ -1,13 +1,13 @@
 {{- define "proxy.config" -}}
 {
-	"confdir":                	"{{ .Values.common_config.dir }}",
-	"cloudprovider":		"{{ .Values.common_config.cloudprovider }}",
+	"confdir":			"{{ .Values.common_config.dir }}",
+	"cloudprovider":	"{{ .Values.common_config.cloudprovider }}",
 	"mirror": {
 		"copies":		2,
 		"burst_buffer":	512,
 		"util_thresh":	{{ .Values.common_config.mirror.util_tresh }},
 		"optimize_put":	false,
-		"enabled": 	{{ .Values.common_config.mirror.enabled }}
+		"enabled":		{{ .Values.common_config.mirror.enabled }}
 	},
 	"readahead": {
 		"object_mem":		1048576,
@@ -17,14 +17,14 @@
 		"enabled":		false
 	},
 	"log": {
-		"dir":       "{{ .Values.common_config.log.dir }}",
-		"level":     "{{ .Values.common_config.log.level }}",
-		"max_size":  4194304,
-		"max_total": 67108864
+		"dir":			"{{ .Values.common_config.log.dir }}",
+		"level":		"{{ .Values.common_config.log.level }}",
+		"max_size":		4194304,
+		"max_total":	67108864
 	},
 	"periodic": {
-		"stats_time":        "10s",
-		"retry_sync_time":   "2s"
+		"stats_time":		"10s",
+		"retry_sync_time":	"2s"
 	},
 	"timeout": {
 		"default_timeout":	"10s",
@@ -39,49 +39,49 @@
 	"proxy": {
 		"non_electable":	{{ .Values.proxy.config.proxy.non_electable }},
 		"primary_url":		"http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4_port }}",
-		"original_url": 	"http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4_port }}",
-		"discovery_url": 	"{{ .Values.proxy.config.proxy.discovery_url }}"
+		"original_url":		"http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4_port }}",
+		"discovery_url":	"{{ .Values.proxy.config.proxy.discovery_url }}"
 	},
 	"lru": {
-		"lowwm":		75,
-		"highwm":		90,
-		"out_of_space":		95,
-		"atime_cache_max":	65536,
-		"dont_evict_time":	"120m",
+		"lowwm":				75,
+		"highwm":				90,
+		"out_of_space":			95,
+		"atime_cache_max":		65536,
+		"dont_evict_time":		"120m",
 		"capacity_upd_time":	"10m",
-		"local_buckets": false,
-		"enabled":  	true
+		"local_buckets":		false,
+		"enabled":				true
 	},
-	"disk":{
-	    "disk_util_low_wm":      20,
-		"disk_util_high_wm":     80,
-		"iostat_time_long":  "{{ .Values.common_config.disk.iostat_time_long }}",
-		"iostat_time_short": "{{ .Values.common_config.disk.iostat_time_short }}"
+	"disk": {
+		"disk_util_low_wm":		20,
+		"disk_util_high_wm":	80,
+		"iostat_time_long":		"{{ .Values.common_config.disk.iostat_time_long }}",
+		"iostat_time_short":	"{{ .Values.common_config.disk.iostat_time_short }}"
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",
-		"enabled": 	true
+		"enabled":			true
 	},
 	"cksum": {
-		"type":                       "xxhash",
-		"validate_cold_get":          true,
-		"validate_warm_get":          false,
-		"validate_cluster_migration": false,
-		"enable_read_range":          false
+		"type":							"xxhash",
+		"validate_cold_get":			true,
+		"validate_warm_get":			false,
+		"validate_cluster_migration":	false,
+		"enable_read_range":			false
 	},
 	"version": {
-		"versioning":        "all",
-		"validate_warm_get": false
+		"versioning":			"all",
+		"validate_warm_get":	false
 	},
 	"fspaths": {
-		{{- $last_mount := last .Values.target.mountPaths -}} 
-        {{- range .Values.target.mountPaths -}}
-        {{- if eq . $last_mount }}
-        "{{ . }}": ""
-        {{ else }}
-        "{{ . }}": "",
-        {{- end -}}
-        {{- end -}}
+		{{- $last_mount := last .Values.target.mountPaths -}}
+		{{- range .Values.target.mountPaths -}}
+		{{- if eq . $last_mount }}
+		"{{ . }}":	""
+		{{ else }}
+		"{{ . }}":	"",
+		{{- end -}}
+		{{- end -}}
 	},
 	"test_fspaths": {
 		"root":			"/tmp/ais/",
@@ -89,14 +89,14 @@
 		"instance":		{{ .Values.proxy.config.test_fspaths.instance }}
 	},
 	"net": {
-		"ipv4":               "{{ .Values.proxy.config.net.ipv4 }}",
-		"ipv4_intra_control": "{{ .Values.proxy.config.net.ipv4_intra_control }}",
-		"ipv4_intra_data":     "{{ .Values.proxy.config.net.ipv4_intra_data }}",
+		"ipv4":					"{{ .Values.proxy.config.net.ipv4 }}",
+		"ipv4_intra_control":	"{{ .Values.proxy.config.net.ipv4_intra_control }}",
+		"ipv4_intra_data":		"{{ .Values.proxy.config.net.ipv4_intra_data }}",
 		"l4": {
-			"proto":              "tcp",
-			"port":	              "{{ .Values.proxy.config.net.l4_port }}",
-			"port_intra_control": "{{ .Values.proxy.config.net.l4_port_intra_control }}",
-			"port_intra_data":    "{{ .Values.proxy.config.net.l4_port_intra_data }}"
+			"proto":				"tcp",
+			"port":					"{{ .Values.proxy.config.net.l4_port }}",
+			"port_intra_control":	"{{ .Values.proxy.config.net.l4_port_intra_control }}",
+			"port_intra_data":		"{{ .Values.proxy.config.net.l4_port_intra_data }}"
 		},
 		"http": {
 			"proto":		"http",
@@ -109,31 +109,31 @@
 		}
 	},
 	"fshc": {
-		"enabled":     true,
-		"test_files":  4,
-		"error_limit": 2
+		"enabled":		true,
+		"test_files":	4,
+		"error_limit":	2
 	},
 	"auth": {
-		"secret": "{{ .Values.common_config.auth.secret }}",
-		"enabled": {{ .Values.common_config.auth.enabled }},
-		"creddir": "{{ .Values.common_config.auth.creddir }}"
+		"secret":	"{{ .Values.common_config.auth.secret }}",
+		"enabled":	{{ .Values.common_config.auth.enabled }},
+		"creddir":	"{{ .Values.common_config.auth.creddir }}"
 	},
 	"keepalivetracker": {
 		"proxy": {
-			"interval": "10s",
-			"name":     "heartbeat",
-			"factor":   3
+			"interval":	"10s",
+			"name":		"heartbeat",
+			"factor":	3
 		},
 		"target": {
-			"interval": "10s",
-			"name":     "heartbeat",
-			"factor":   3
+			"interval":	"10s",
+			"name":		"heartbeat",
+			"factor":	3
 		},
-		"retry_factor":   5,
-		"timeout_factor": 3
+		"retry_factor":		5,
+		"timeout_factor":	3
 	},
 	"downloader": {
-		"timeout": "1h"
+		"timeout":	"1h"
 	},
 	"distributed_sort": {
 		"duplicated_records":    "ignore",
