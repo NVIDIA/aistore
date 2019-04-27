@@ -344,11 +344,15 @@ func freeObject(r interface{}) {
 		return
 	}
 	if sgl, ok := r.(*memsys.SGL); ok {
-		sgl.Free()
+		if sgl != nil {
+			sgl.Free()
+		}
 		return
 	}
 	if f, ok := r.(*cmn.FileHandle); ok {
-		f.Close()
+		if f != nil {
+			f.Close()
+		}
 		return
 	}
 	cmn.AssertFmt(false, "Invalid object type", r)
