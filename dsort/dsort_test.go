@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -27,7 +26,7 @@ import (
 
 const (
 	testIP            = "127.0.0.1"
-	testDir           = "/tmp"
+	testDir           = "/tmp/dsort_tests"
 	testBucket        = "dsort_tests"
 	globalManagerUUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 )
@@ -84,7 +83,6 @@ func newTestSmap(targets ...string) *testSmap {
 	for _, target := range targets {
 		smap.Tmap[target] = &cluster.Snode{}
 	}
-
 	return smap
 }
 
@@ -211,7 +209,10 @@ func (tctx *testContext) setup() {
 	tctx.wg = &sync.WaitGroup{}
 
 	fs.Mountpaths = fs.NewMountedFS()
-	fs.Mountpaths.Add(testDir)
+	err := cmn.CreateDir(testDir)
+	Expect(err).NotTo(HaveOccurred())
+	err = fs.Mountpaths.Add(testDir)
+	Expect(err).NotTo(HaveOccurred())
 
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 
@@ -243,6 +244,7 @@ func (tctx *testContext) setup() {
 		}
 		smap.addTarget(di)
 	}
+	smap.InitDigests()
 
 	// Create and setup target mocks
 	targets := make([]*targetNodeMock, tctx.targetCnt)
@@ -271,7 +273,7 @@ func (tctx *testContext) teardown() {
 		target.teardown()
 	}
 
-	os.RemoveAll(filepath.Join(testDir, testBucket))
+	os.RemoveAll(testDir)
 	fs.Mountpaths = nil
 }
 
@@ -590,7 +592,9 @@ var _ = Describe("Distributed Sort", func() {
 					key := fmt.Sprintf("record-%d.txt", i)
 					keys[i] = key
 
-					f, err := cmn.CreateFile(filepath.Join(testDir, fs.ObjectType, cmn.LocalBs, testBucket, key))
+					fqn, _, errstr := cluster.FQN(fs.ObjectType, testBucket, key, true)
+					Expect(errstr).To(BeEmpty())
+					f, err := cmn.CreateFile(fqn)
 					Expect(err).ShouldNot(HaveOccurred())
 					err = f.Close()
 					Expect(err).ShouldNot(HaveOccurred())

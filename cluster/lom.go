@@ -480,7 +480,9 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 		lom.FQN, lom.ParsedFQN.Digest, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
 	}
 	if lom.ParsedFQN.Bucket == "" || lom.ParsedFQN.Objname == "" {
-		errstr = lom.resolveFQN(nil, lom.BckIsLocal)
+		if errstr = lom.resolveFQN(nil, lom.BckIsLocal); errstr != "" {
+			return
+		}
 	}
 	cmn.Assert(lom.ParsedFQN.Digest != 0)
 	return
