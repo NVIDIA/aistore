@@ -301,6 +301,10 @@ func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
 	return
 }
 
+//
+// FIXME: the following two functions are obsolete and must be removed -- TODO
+//
+
 func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
 	lom := cluster.LOM{FQN: fqn, T: t}
 
@@ -308,26 +312,11 @@ func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
 	return lom.Persist()
 }
 
-func SetXattrVersion(fqn string, value string, t cluster.Target) error {
-	lom := cluster.LOM{FQN: fqn, T: t}
-
-	lom.SetVersion(value)
-	return lom.Persist()
-}
-
-func SetXattrCopy(fqn string, value []string, t cluster.Target) error {
-	lom := cluster.LOM{FQN: fqn, T: t}
-
-	lom.SetCopyFQN(value)
-	return lom.Persist()
-}
-
 func GetXattrLom(fqn, bckProvider string, t cluster.Target) (*cluster.LOM, error) {
 	lom, errstr := cluster.LOM{T: t, FQN: fqn, BucketProvider: bckProvider}.Init()
-
 	if errstr != "" {
 		return nil, errors.New(errstr)
 	}
-
-	return lom, lom.LoadMetaFromFS()
+	_, err := lom.LoadMetaFromFS(true)
+	return lom, err
 }

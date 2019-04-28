@@ -28,7 +28,10 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const pkgName = "cluster"
+const (
+	pkgName = "cluster"
+	badCsum = "BAD CHECKSUM:"
+)
 
 type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
@@ -252,9 +255,9 @@ func (lom *LOM) StringEx() string {
 
 func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
 	if lom.md.cksum != nil {
-		errstr = fmt.Sprintf("BAD CHECKSUM: %s (%s != %s)", lom, cksum, lom.md.cksum)
+		errstr = fmt.Sprintf("%s %s (%s != %s)", badCsum, lom, cksum, lom.md.cksum)
 	} else {
-		errstr = fmt.Sprintf("BAD CHECKSUM: %s (%s != nil)", lom, cksum)
+		errstr = fmt.Sprintf("%s %s (%s != nil)", badCsum, lom, cksum)
 	}
 	return
 }
@@ -268,20 +271,17 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 		newVersion = initialVersion
 		return
 	}
-
-	md, err := readMetaFromFS(lom.FQN)
+	md, err := lom.LoadMetaFromFS(false)
 	if err != nil {
 		return "", err.Error()
 	}
 	if md.version == "" {
 		return initialVersion, ""
 	}
-
 	numVersion, err := strconv.Atoi(md.version)
 	if err != nil {
 		return "", err.Error()
 	}
-
 	return fmt.Sprintf("%d", numVersion+1), ""
 }
 
@@ -333,15 +333,13 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 	}
 	{ // FIXME: single xattr-meta
 		var v cmn.Cksummer
-		fsMD, err := readMetaFromFS(lom.FQN)
-
+		md, err := lom.LoadMetaFromFS(false)
 		if err != nil {
 			return err.Error()
 		}
-		if fsMD != nil {
-			v = fsMD.cksum
+		if md != nil {
+			v = md.cksum
 		}
-
 		if !recompute && lom.md.cksum == nil && v == nil {
 			return
 		}
@@ -632,28 +630,29 @@ func (lom *LOM) Uncache() {
 }
 
 func (lom *LOM) FromFS() (errstr string) {
-	var (
-		finfo os.FileInfo
-		err   error
-	)
-	// fstat
 	lom.exists = true
-	finfo, err = os.Stat(lom.FQN)
-	if err != nil {
+	if _, err := lom.LoadMetaFromFS(true); err != nil {
 		lom.exists = false
 		if !os.IsNotExist(err) {
-			errstr = fmt.Sprintf("%s: fstat err: %v", lom, err)
+			errstr = fmt.Sprintf("%s[%s]: errmeta %v", lom, lom.FQN, err)
 			lom.T.FSHC(err, lom.FQN)
 		}
 		return
 	}
-	lom.md.size = finfo.Size()
-
-	if err := lom.LoadMetaFromFS(); err != nil {
-		return err.Error()
+	// fstat & atime
+	finfo, err := os.Stat(lom.FQN)
+	if err != nil {
+		lom.exists = false
+		if !os.IsNotExist(err) {
+			errstr = fmt.Sprintf("%s[%s]: err %v", lom, lom.FQN, err)
+			lom.T.FSHC(err, lom.FQN)
+		}
+		return
 	}
-
-	// atime
+	if lom.md.size != finfo.Size() { // corruption or tampering
+		errstr = fmt.Sprintf("%s[%s]: invalid size (%d != %d)", lom, lom.FQN, lom.md.size, finfo.Size())
+		return
+	}
 	atime := ios.GetATime(finfo)
 	lom.md.atime = atime.UnixNano()
 	lom.md.atimefs = lom.md.atime

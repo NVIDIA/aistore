@@ -5,10 +5,11 @@
 package cluster
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 
@@ -17,158 +18,151 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-// on-disk LOM attribute names
-// NOTE: changing any of this will break compatibility
+// on-disk LOM attribute names (NOTE: changing any of this might break compatibility)
 const (
-	cksumKindXattr = iota
-	cksumValXattr
-	versionXattr
-	copiesXattr
-	deletedXattr
-	deletedExprXattr // nanoseconds
-	//
-	// NOTE: new and/or redefined attributes are to be added after this line
+	lomCsmKnd = iota
+	lomCsmVal
+	lomObjVer
+	lomObjSiz
+	lomObjCps
+
+	// NOTE: must be the last field
+	numXattrs
 )
 
 // delimiters
 const (
-	cpyfqnSepa = "\xa1\xb2"
-	namvalSepa = "\xae\xbd"
-	recordSepa = "\xc5\xdf"
+	cpyfqnSepa = "\xa6/\xc5"
+	recordSepa = "\xe3/\xbd"
 )
 
-const (
-	emptyDeletedXattr     = "0"
-	emptyDeletedExprXattr = "0"
-)
-
-// reads LOM's metadata from disk without storing it in LOM object
-func readMetaFromFS(fqn string) (*lmeta, error) {
-	metaBytes, errstr := fs.GetXattr(fqn, cmn.XattrLOM)
-	if errstr != "" {
-		return nil, errors.New(errstr)
+func (lom *LOM) LoadMetaFromFS(populate bool) (md *lmeta, err error) {
+	var b []byte
+	b, err = fs.GetXattr(lom.FQN, cmn.XattrLOM)
+	if err != nil {
+		return
 	}
-	if len(metaBytes) == 0 {
-		return nil, nil
+	if len(b) == 0 {
+		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
+		err = syscall.ENOENT
+		return
 	}
-	return unmarshalMeta(string(metaBytes))
+	md = &lom.md
+	if !populate {
+		md = &lmeta{}
+	}
+	err = md.unmarshal(string(b))
+	return
 }
 
-// reads LOM's metadata from disk and stores it in LOM object
-func (lom *LOM) LoadMetaFromFS() error {
-	fsMD, err := readMetaFromFS(lom.FQN)
-	if err != nil {
-		return err
+func (lom *LOM) Persist() (err error) {
+	meta := lom.md.marshal()
+	if err = fs.SetXattr(lom.FQN, cmn.XattrLOM, []byte(meta)); err != nil {
+		lom.T.FSHC(err, lom.FQN)
 	}
-
-	if fsMD == nil {
-		return nil
-	}
-
-	lom.SetVersion(fsMD.version)
-	lom.md.copyFQN = fsMD.copyFQN
-	if cksumType := lom.CksumConf().Type; cksumType != cmn.ChecksumNone {
-		cmn.Assert(cksumType == cmn.ChecksumXXHash)
-		lom.SetCksum(fsMD.cksum)
-	}
-
-	return nil
+	return
 }
 
-// converts string to LOM.md object
-func unmarshalMeta(stringMd string) (*lmeta, error) {
-	r := strings.SplitN(stringMd, recordSepa, 2)
-	if len(r) != 2 || r[1] == "" {
-		return nil, fmt.Errorf("expected (checksum, payload), got [%s]", stringMd)
-	}
-	cksmStr, payloadStr := r[0], r[1]
-	expectedCksm, err := strconv.ParseUint(cksmStr, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	actualCksm := xxhash.ChecksumString64S(payloadStr, MLCG32)
+//
+// lmeta
+//
+
+func (md *lmeta) unmarshal(mdstr string) (err error) {
+	const invalid = "invalid lmeta "
+	var (
+		records                                           []string
+		payload                                           string
+		expectedCksm, actualCksm                          uint64
+		lomCksumKind, lomCksumVal                         string
+		haveSiz, haveCsmKnd, haveCsmVal, haveVer, haveCps bool
+	)
+	expectedCksm = binary.BigEndian.Uint64([]byte(mdstr))
+	payload = mdstr[cmn.SizeofI64:]
+	actualCksm = xxhash.ChecksumString64S(payload, MLCG32)
 	if expectedCksm != actualCksm {
-		return nil, fmt.Errorf("BAD CHECKSUM: expected %x, got %x", expectedCksm, actualCksm)
+		return fmt.Errorf("%s (%x != %x)", badCsum, expectedCksm, actualCksm)
 	}
-	records := strings.Split(payloadStr, recordSepa)
-	md := &lmeta{}
-	err = md.setMDFromXattr(records)
-
-	return md, err
-}
-
-func (md *lmeta) setMDFromXattr(records []string) error {
-	var lomCksumKind, lomCksumVal string
-
+	records = strings.Split(payload, recordSepa)
 	for _, record := range records {
-		if record == "" {
-			return errors.New("empty xattr record")
-		}
-		// split record into name and value
-		r := strings.SplitN(record, namvalSepa, 2)
-		if len(r) != 2 {
-			return fmt.Errorf("expected (name, value) got [%s]", record)
-		}
-		key, val := r[0], r[1]
-		keyN, err := strconv.Atoi(key)
-		if err != nil {
-			return fmt.Errorf("couldn't parse name [%s]", key)
-		}
-		switch keyN {
-		case cksumValXattr:
-			lomCksumVal = val
-		case cksumKindXattr:
-			lomCksumKind = val
-		case versionXattr:
-			md.version = val
-		case copiesXattr:
-			if val != "" {
-				md.copyFQN = strings.Split(val, cpyfqnSepa)
+		key := int(binary.BigEndian.Uint16([]byte(record)))
+		val := record[cmn.SizeofI16:]
+		switch key {
+		case lomCsmVal:
+			if haveCsmVal {
+				return errors.New(invalid + "#1")
 			}
-		case deletedXattr:
-			cmn.Assert(val == emptyDeletedXattr)
-		case deletedExprXattr:
-			cmn.Assert(val == emptyDeletedExprXattr)
+			lomCksumVal = val
+			haveCsmVal = true
+		case lomCsmKnd:
+			if haveCsmKnd {
+				return errors.New(invalid + "#2")
+			}
+			lomCksumKind = val
+			haveCsmKnd = true
+		case lomObjVer:
+			if haveVer {
+				return errors.New(invalid + "#3")
+			}
+			md.version = val
+			haveVer = true
+		case lomObjSiz:
+			if haveSiz {
+				return errors.New(invalid + "#4")
+			}
+			md.size = int64(binary.BigEndian.Uint64([]byte(val)))
+			haveSiz = true
+		case lomObjCps:
+			if val != "" {
+				if haveCps {
+					return errors.New(invalid + "#5")
+				}
+				md.copyFQN = strings.Split(val, cpyfqnSepa)
+				haveCps = true
+			}
 		default:
-			glog.Errorf("invalid name [%d]", keyN)
+			return errors.New(invalid + "#6")
 		}
+	}
+	if haveCsmKnd != haveCsmVal {
+		return errors.New(invalid + "#7")
 	}
 	md.cksum = cmn.NewCksum(lomCksumKind, lomCksumVal)
-	return nil
-}
-
-// stores on disk attributes of LOM.md
-func (lom *LOM) Persist() error {
-	fsMeta := marshalMeta(&lom.md)
-
-	if errstr := fs.SetXattr(lom.FQN, cmn.XattrLOM, fsMeta); errstr != "" {
-		lom.T.FSHC(errors.New(errstr), lom.FQN)
-		return errors.New(errstr)
+	if !haveSiz {
+		return errors.New(invalid + "#8")
 	}
-
-	return nil
+	return
 }
 
-// converts LOM.md to string representation
-// NOTE: does not call json.Marshal function
-func marshalMeta(md *lmeta) []byte {
-	var cksmKind, cksmVal string
-
+func (md *lmeta) marshal() (payload string) {
+	var (
+		cksmKind, cksmVal string
+		records           [numXattrs]string
+		b8                [cmn.SizeofI64]byte
+		bkey              [cmn.SizeofI16]byte
+		bb                []byte
+	)
 	if md.cksum != nil {
 		cksmKind, cksmVal = md.cksum.Get()
 	}
-	payload := []string{
-		xattrLine(cksumKindXattr, cksmKind),
-		xattrLine(cksumValXattr, cksmVal),
-		xattrLine(versionXattr, md.version),
-		xattrLine(copiesXattr, strings.Join(md.copyFQN, cpyfqnSepa)),
-		xattrLine(deletedXattr, emptyDeletedXattr),
-		xattrLine(deletedExprXattr, emptyDeletedExprXattr),
-	}
-	payloadStr := strings.Join(payload, recordSepa)
-	metaCksm := xxhash.ChecksumString64S(payloadStr, MLCG32)
-
-	return []byte(strings.Join([]string{strconv.FormatUint(metaCksm, 10), payloadStr}, recordSepa))
+	bb = b8[0:]
+	binary.BigEndian.PutUint64(bb, uint64(md.size))
+	records[lomCsmKnd] = xattrRec(lomCsmKnd, cksmKind, bkey)
+	records[lomCsmVal] = xattrRec(lomCsmVal, cksmVal, bkey)
+	records[lomObjVer] = xattrRec(lomObjVer, md.version, bkey)
+	records[lomObjSiz] = xattrRec(lomObjSiz, string(bb), bkey)
+	records[lomObjCps] = xattrRec(lomObjCps, strings.Join(md.copyFQN, cpyfqnSepa), bkey)
+	payload = strings.Join(records[0:], recordSepa)
+	//
+	// checksum, append, and return
+	//
+	metaCksm := xxhash.ChecksumString64S(payload, MLCG32)
+	bb = b8[0:]
+	binary.BigEndian.PutUint64(bb, metaCksm)
+	return string(bb) + payload
 }
 
-func xattrLine(key int, value string) string { return strconv.Itoa(key) + namvalSepa + value }
+func xattrRec(key int, value string, b [cmn.SizeofI16]byte) string {
+	bb := b[0:]
+	binary.BigEndian.PutUint16(bb, uint16(key))
+	return string(bb) + value
+}

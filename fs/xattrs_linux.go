@@ -5,46 +5,40 @@
 package fs
 
 import (
-	"fmt"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const (
-	maxAttrSize = 1024
-)
+const maxAttrSize = 4096
 
-// GetXattr gets xattr by name - xattr size is limited(maxAttrSize)
-func GetXattr(fqn, attrname string) ([]byte, string) {
+// GetXattr gets xattr by name (NOTE: the size is limited by maxAttrSize - see the buffered version below)
+func GetXattr(fqn, attrname string) ([]byte, error) {
 	data := make([]byte, maxAttrSize)
 	read, err := syscall.Getxattr(fqn, attrname, data)
 	cmn.Assert(read < maxAttrSize)
-	if err != nil && err != syscall.ENODATA {
-		return nil, fmt.Sprintf("Failed to get xattr %s: %s, err [%v]", attrname, fqn, err)
+	if err != nil {
+		return nil, err
 	}
 	if read > 0 {
-		return data[:read], ""
+		return data[:read], nil
 	}
-	return nil, ""
+	return nil, nil
 }
 
-// GetXattr gets xattr by name - with external buffer to load big chunks
-func GetXattrBuf(fqn, attrname string, data []byte) (int, string) {
-	cmn.AssertMsg(data != nil, "GetXattrBuf - buffer is nil")
+// GetXattr gets xattr by name with external buffer to load big chunks
+// FIXME: return error not string
+func GetXattrBuf(fqn, attrname string, data []byte) (int, error) {
+	cmn.Assert(data != nil)
 	read, err := syscall.Getxattr(fqn, attrname, data)
 	cmn.Assert(read < len(data))
-	if err != nil && err != syscall.ENODATA {
-		return 0, fmt.Sprintf("Failed to get xattr %s: %s, err [%v]", attrname, fqn, err)
+	if err != nil {
+		return 0, err
 	}
-	return read, ""
+	return read, nil
 }
 
 // SetXattr sets xattr name = value
-func SetXattr(fqn, attrname string, data []byte) (errstr string) {
-	err := syscall.Setxattr(fqn, attrname, data, 0)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to set xattr %s: %s, err [%v]", attrname, fqn, err)
-	}
-	return
+func SetXattr(fqn, attrname string, data []byte) (err error) {
+	return syscall.Setxattr(fqn, attrname, data, 0)
 }

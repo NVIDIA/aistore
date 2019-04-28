@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -42,6 +43,11 @@ const (
 	// shortid.DEFAULT_ABC with the difference that is more random and hopefully
 	// `-` and `_` are not so frequently picked.
 	uuidABC = "5nZJDft6LuzsjGNpPwY7r_Qa3-9vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk"
+
+	// misc
+	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
+	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
+	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
 )
 
 var toBiBytes = map[string]int64{

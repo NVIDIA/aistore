@@ -249,8 +249,8 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 		n   int
 		hdr Header
 	)
-	n, err = it.body.Read(it.headerBuf[:sizeofI64*2])
-	if n < sizeofI64*2 {
+	n, err = it.body.Read(it.headerBuf[:cmn.SizeofI64*2])
+	if n < cmn.SizeofI64*2 {
 		cmn.AssertMsg(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
@@ -264,14 +264,14 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 		err = fmt.Errorf("%s: stream breakage type #1: header length %d", it.trname, hlen)
 		return
 	}
-	_, checksum := extUint64(0, it.headerBuf[sizeofI64:])
+	_, checksum := extUint64(0, it.headerBuf[cmn.SizeofI64:])
 	chc := xoshiro256.Hash(uint64(hl64))
 	if checksum != chc {
 		err = fmt.Errorf("%s: stream breakage type #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
 		return
 	}
 	cmn.Dassert(hlen < len(it.headerBuf), pkgName)
-	hl64 += int64(sizeofI64) * 2 // to account for hlen and its checksum
+	hl64 += int64(cmn.SizeofI64) * 2 // to account for hlen and its checksum
 	n, err = it.body.Read(it.headerBuf[:hlen])
 	if n == 0 {
 		return
@@ -342,7 +342,7 @@ func extBool(off int, from []byte) (int, bool) {
 
 func extByte(off int, from []byte) (int, []byte) {
 	l := int(binary.BigEndian.Uint64(from[off:]))
-	off += sizeofI64
+	off += cmn.SizeofI64
 	return off + l, from[off : off+l]
 }
 
@@ -353,7 +353,7 @@ func extInt64(off int, from []byte) (int, int64) {
 
 func extUint64(off int, from []byte) (int, uint64) {
 	size := binary.BigEndian.Uint64(from[off:])
-	off += sizeofI64
+	off += cmn.SizeofI64
 	return off, size
 }
 

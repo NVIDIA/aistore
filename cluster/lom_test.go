@@ -265,6 +265,7 @@ var _ = Describe("LOM", func() {
 			It("should be able to mark object as Existent", func() {
 				createTestFile(localFQN, testFileSize)
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init()
+				lom.SetSize(int64(testFileSize))
 				Expect(err).To(BeEmpty())
 				lom.SetBMD(&bmd)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -442,8 +443,7 @@ var _ = Describe("LOM", func() {
 					lom := NewBasicLom(localFQN, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
-					Expect(tutils.SetXattrCksm(localFQN, cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"), tMock)).To(BeNil())
-
+					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
 					Expect(lom.ValidateChecksum(false)).ToNot(BeEmpty())
 					Expect(lom.BadCksum).To(BeTrue())
 				})
@@ -544,10 +544,10 @@ var _ = Describe("LOM", func() {
 
 			It("should be able to get version", func() {
 				createTestFile(localFQN, 0)
-				Expect(tutils.SetXattrVersion(localFQN, desiredVersion, tMock)).To(BeNil())
 
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init()
 				Expect(err).To(BeEmpty())
+				lom.SetVersion(desiredVersion)
 
 				_, err = lom.Load(false)
 				Expect(err).To(BeEmpty())
@@ -563,10 +563,12 @@ var _ = Describe("LOM", func() {
 
 			It("should be able to get copy", func() {
 				createTestFile(localFQN, testFileSize)
-				Expect(tutils.SetXattrCopy(localFQN, []string{copyFQN}, tMock)).To(BeNil())
-
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init()
 				Expect(err).To(BeEmpty())
+				lom.SetCopyFQN([]string{copyFQN})
+				lom.SetSize(int64(testFileSize))
+				addLocalBucket(lom)
+				lom.Persist()
 
 				_, err = lom.Load(false)
 				Expect(err).To(BeEmpty())
@@ -591,8 +593,10 @@ var _ = Describe("LOM", func() {
 			var errstr string
 			//Prepares a basic lom with a copy
 			createTestFile(localFQN, testFileSize)
-			Expect(tutils.SetXattrVersion(localFQN, desiredVersion, tMock)).To(BeNil())
 			lom, errstr = cluster.LOM{T: tMock, FQN: localFQN}.Init()
+			lom.SetSize(int64(testFileSize))
+			lom.SetVersion(desiredVersion)
+			lom.Persist()
 			lom.Uncache()
 			Expect(errstr).To(BeEmpty())
 			_, errstr = lom.Load(false)

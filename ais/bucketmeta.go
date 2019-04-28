@@ -44,10 +44,6 @@ type bucketMD struct {
 	vstr string // itoa(Version), to have it handy for http redirects
 }
 
-var (
-	cksumSize = binary.Size(uint64(0))
-)
-
 // c-tor
 func newBucketMD() *bucketMD {
 	lbmap := make(map[string]*cmn.BucketProps)
@@ -151,9 +147,9 @@ func (m *bucketMD) marshal() ([]byte, error) {
 // that represents marshaled bucketMD structure
 func (m *bucketMD) UnmarshalXattr(b []byte) error {
 	const emptyPayloadLen = len("\n{}")
-	cmn.AssertMsg(len(b) >= cksumSize+emptyPayloadLen, "Incomplete bucketMD payload")
+	cmn.AssertMsg(len(b) >= cmn.SizeofI64+emptyPayloadLen, "Incomplete bucketMD payload")
 
-	expectedCksm, mdJSON := binary.BigEndian.Uint64(b[:cksumSize]), b[cksumSize+1:]
+	expectedCksm, mdJSON := binary.BigEndian.Uint64(b[:cmn.SizeofI64]), b[cmn.SizeofI64+1:]
 	actualCksum := xxhash.Checksum64S(mdJSON, 0)
 	if actualCksum != expectedCksm {
 		return fmt.Errorf("checksum %v mismatches, expected %v", actualCksum, expectedCksm)
@@ -172,11 +168,11 @@ func (m *bucketMD) MarshalXattr() []byte {
 	cmn.Assert(err == nil)
 	cksum := xxhash.Checksum64S(payload, 0)
 
-	bufLen := cksumSize + 1 + len(payload)
+	bufLen := cmn.SizeofI64 + 1 + len(payload)
 	body := make([]byte, bufLen)
 	binary.BigEndian.PutUint64(body, cksum)
-	body[cksumSize] = '\n'
-	copy(body[cksumSize+1:], payload)
+	body[cmn.SizeofI64] = '\n'
+	copy(body[cmn.SizeofI64+1:], payload)
 
 	return body
 }
@@ -192,9 +188,9 @@ func (m *bucketMD) Load(buf []byte) error {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Reading %s copy from %s of %s", bmdTermName, cmn.XattrBMD, mpath.Path)
 	}
-	read, errstr := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
-	if errstr != "" {
-		return fmt.Errorf("failed to read xattr from %q: %s", mpath.Path, errstr)
+	read, err := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
+	if err != nil {
+		return fmt.Errorf("failed to read xattr from %q: %v", mpath.Path, err)
 	}
 
 	if read > 0 {
@@ -209,16 +205,14 @@ func (m *bucketMD) Persist() error {
 	if err != nil {
 		return err
 	}
-
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Saving %s v%d copy to %s of %s", bmdTermName, m.Version, cmn.XattrBMD, mpath.Path)
 	}
 	b := m.MarshalXattr()
-	errstr := fs.SetXattr(mpath.Path, cmn.XattrBMD, b)
-	if errstr != "" {
-		return fmt.Errorf("failed to save xattr to %q: %s", mpath.Path, errstr)
+	err = fs.SetXattr(mpath.Path, cmn.XattrBMD, b)
+	if err != nil {
+		return fmt.Errorf("failed to save xattr to %q: %v", mpath.Path, err)
 	}
-
 	return nil
 }
 

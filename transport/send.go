@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -34,7 +33,6 @@ const (
 	tickMarker     = cmn.MaxInt64 ^ 0xa5a5a5a5
 	tickUnit       = time.Second
 	defaultIdleOut = time.Second * 2
-	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
 	burstNum       = 32 // default max num objects that can be posted for sending without any back-pressure
 )
 
@@ -769,17 +767,17 @@ exit:
 // stream helpers
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
-	l = sizeofI64 * 2
+	l = cmn.SizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
 	l = insBool(l, s.maxheader, hdr.IsLocal)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	l = insInt64(l, s.maxheader, s.sessID)
-	hlen := l - sizeofI64*2
+	hlen := l - cmn.SizeofI64*2
 	insInt64(0, s.maxheader, int64(hlen))
 	checksum := xoshiro256.Hash(uint64(hlen))
-	insUint64(sizeofI64, s.maxheader, checksum)
+	insUint64(cmn.SizeofI64, s.maxheader, checksum)
 	return
 }
 
@@ -798,7 +796,7 @@ func insBool(off int, to []byte, b bool) int {
 func insByte(off int, to []byte, b []byte) int {
 	var l = len(b)
 	binary.BigEndian.PutUint64(to[off:], uint64(l))
-	off += sizeofI64
+	off += cmn.SizeofI64
 	n := copy(to[off:], b)
 	cmn.Assert(n == l)
 	return off + l
@@ -810,7 +808,7 @@ func insInt64(off int, to []byte, i int64) int {
 
 func insUint64(off int, to []byte, i uint64) int {
 	binary.BigEndian.PutUint64(to[off:], i)
-	return off + sizeofI64
+	return off + cmn.SizeofI64
 }
 
 func insAttrs(off int, to []byte, attr ObjectAttrs) int {
