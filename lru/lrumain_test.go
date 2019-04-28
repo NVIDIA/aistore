@@ -73,7 +73,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 	// Bucket owner mock, required for LOM
 	bo := cluster.BownerMock{BMD: cluster.BMD{
 		LBmap: map[string]*cmn.BucketProps{
-			bucketName: &cmn.BucketProps{
+			bucketName: {
 				Cksum: cmn.CksumConf{Type: cmn.ChecksumNone},
 				LRU:   cmn.LRUConf{Enabled: true},
 			},
@@ -120,23 +120,28 @@ func getRandomFileName(fileCounter int) string {
 	return fmt.Sprintf("%v-%v.txt", tutils.FastRandomFilename(randomGen, 13), fileCounter)
 }
 
-func saveRandomFile(filename string, size int64) {
+func saveRandomFile(t cluster.Target, filename string, size int64) {
 	buff := make([]byte, size)
 	_, err := cmn.SaveReader(filename, rand.Reader, buff, false, size)
 	Expect(err).NotTo(HaveOccurred())
+	lom, errstr := cluster.LOM{T: t, FQN: filename}.Init()
+	Expect(errstr).To(BeEmpty())
+	lom.SetSize(size)
+	lom.IncObjectVersion()
+	Expect(lom.Persist()).NotTo(HaveOccurred())
 }
 
-func saveRandomFilesWithMetadata(files []fileMetadata) {
+func saveRandomFilesWithMetadata(t cluster.Target, files []fileMetadata) {
 	for _, file := range files {
-		saveRandomFile(path.Join(filesPath, file.name), file.size)
+		saveRandomFile(t, path.Join(filesPath, file.name), file.size)
 	}
 }
 
 // Saves random bytes to a file with random name.
 // timestamps and names are not increasing in the same manner
-func saveRandomFiles(filesNumber int) {
+func saveRandomFiles(t cluster.Target, filesNumber int) {
 	for i := 0; i < filesNumber; i++ {
-		saveRandomFile(path.Join(filesPath, getRandomFileName(i)), fileSize)
+		saveRandomFile(t, path.Join(filesPath, getRandomFileName(i)), fileSize)
 	}
 }
 
@@ -164,7 +169,7 @@ var _ = Describe("LRU tests", func() {
 			})
 
 			It("should evict correct number of files", func() {
-				saveRandomFiles(numberOfCreatedFiles)
+				saveRandomFiles(t, numberOfCreatedFiles)
 
 				InitAndRun(ini)
 
@@ -184,13 +189,13 @@ var _ = Describe("LRU tests", func() {
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
 				oldFiles := []fileMetadata{
-					fileMetadata{getRandomFileName(3), fileSize},
-					fileMetadata{getRandomFileName(4), fileSize},
-					fileMetadata{getRandomFileName(5), fileSize},
+					{getRandomFileName(3), fileSize},
+					{getRandomFileName(4), fileSize},
+					{getRandomFileName(5), fileSize},
 				}
-				saveRandomFilesWithMetadata(oldFiles)
+				saveRandomFilesWithMetadata(t, oldFiles)
 				time.Sleep(1 * time.Second)
-				saveRandomFiles(3)
+				saveRandomFiles(t, 3)
 
 				InitAndRun(ini)
 
@@ -215,14 +220,14 @@ var _ = Describe("LRU tests", func() {
 					return
 				}
 
-				// files sum up to 16Mb
+				// files sum up to 32Mb
 				files := []fileMetadata{
 					{getRandomFileName(0), int64(4 * cmn.MiB)},
 					{getRandomFileName(1), int64(16 * cmn.MiB)},
 					{getRandomFileName(2), int64(4 * cmn.MiB)},
 					{getRandomFileName(3), int64(8 * cmn.MiB)},
 				}
-				saveRandomFilesWithMetadata(files)
+				saveRandomFilesWithMetadata(t, files)
 
 				// To go under lwm (50%), LRU should evict the oldest files until <=50% reached
 				// Those files are 4Mb file and 16Mb file
@@ -249,7 +254,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(numberOfFiles)
+				saveRandomFiles(t, numberOfFiles)
 
 				InitAndRun(ini)
 
@@ -266,7 +271,7 @@ var _ = Describe("LRU tests", func() {
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
 
-				saveRandomFiles(numberOfFiles)
+				saveRandomFiles(t, numberOfFiles)
 
 				InitAndRun(ini)
 

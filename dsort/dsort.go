@@ -284,9 +284,6 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName, BucketProvider: bckProvider}.Init()
-	if errStr == "" {
-		_, errStr = lom.Load(true)
-	}
 	if errStr != "" {
 		return errors.New(errStr)
 	}

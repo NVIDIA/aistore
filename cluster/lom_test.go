@@ -34,14 +34,6 @@ const (
 	sameBucketName = "LOM_TEST_Local_and_Cloud"
 )
 
-// needs to be called inside of gomega scope like Describe/It
-func NewBasicLom(fqn string, t cluster.Target) *cluster.LOM {
-	lom, err := cluster.LOM{T: t, FQN: fqn}.Init()
-	Expect(err).To(BeEmpty())
-	lom.Uncache()
-	return lom
-}
-
 var bmd = cluster.BMD{}
 
 var _ = Describe("LOM", func() {
@@ -341,10 +333,8 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should recompute checksum and not store anywhere", func() {
-					createTestFile(localFQN, testFileSize)
+					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
-					lom := NewBasicLom(localFQN, tMock)
-					Expect(lom.Persist()).NotTo(HaveOccurred())
 
 					cksm, errstr := lom.CksumComputeIfMissing()
 					Expect(errstr).To(BeEmpty())
@@ -372,10 +362,9 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should fill object with checksum if was not present", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
-					Expect(lom.Persist()).NotTo(HaveOccurred())
+					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
+
 					fsLOM, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(fsLOM.Cksum()).To(BeNil())
@@ -392,24 +381,21 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should accept when filesystem and memory checksums match", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
 					Expect(lom.ValidateChecksum(false)).To(BeEmpty())
 				})
 
 				It("should accept when both filesystem and memory checksums are nil", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 
 					Expect(lom.ValidateChecksum(false)).To(BeEmpty())
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 				})
 
 				It("should not accept when memory has wrong checksum", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
@@ -418,8 +404,7 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should not accept when object content has changed", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
 					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)).To(BeNil())
@@ -429,8 +414,7 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should not check object content when recompute false", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
 					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)).To(BeNil())
@@ -439,8 +423,7 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should not accept when xattr has wrong checksum", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
+					lom := filePut(localFQN, testFileSize, tMock)
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
@@ -464,9 +447,7 @@ var _ = Describe("LOM", func() {
 				})
 
 				It("should fill object with checksum if was not present", func() {
-					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN, tMock)
-					Expect(lom.Persist()).NotTo(HaveOccurred())
+					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
 					fsLOM, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
 					Expect(err).NotTo(HaveOccurred())
@@ -521,12 +502,12 @@ var _ = Describe("LOM", func() {
 				It("should fill object with correct meta", func() {
 					startTime := time.Now()
 					time.Sleep(50 * time.Millisecond)
-					createTestFile(localFQN, testFileSize)
-					lom1 := NewBasicLom(localFQN, tMock)
+					lom1 := filePut(localFQN, testFileSize, tMock)
 					lom2 := NewBasicLom(localFQN, tMock)
+					Expect(lom1.Persist()).NotTo(HaveOccurred())
 
 					Expect(lom1.ValidateChecksum(true)).To(BeEmpty())
-					Expect(lom1.Persist()).To(BeNil())
+					Expect(lom1.Persist()).ToNot(HaveOccurred())
 
 					Expect(lom2.FromFS()).To(BeEmpty())
 					Expect(lom2.Cksum()).To(BeEquivalentTo(lom1.Cksum()))
@@ -543,14 +524,12 @@ var _ = Describe("LOM", func() {
 			localFQN := filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, bucketLocalA, testObject)
 
 			It("should be able to get version", func() {
-				createTestFile(localFQN, 0)
-
-				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init()
-				Expect(err).To(BeEmpty())
+				lom := filePut(localFQN, 0, tMock)
 				lom.SetVersion(desiredVersion)
+				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				_, err = lom.Load(false)
-				Expect(err).To(BeEmpty())
+				_, errstr := lom.Load(false)
+				Expect(errstr).To(BeEmpty())
 				Expect(lom.Version()).To(BeEquivalentTo(desiredVersion))
 			})
 		})
@@ -562,16 +541,14 @@ var _ = Describe("LOM", func() {
 			copyFQN := filepath.Join(mpath2, fs.ObjectType, cmn.LocalBs, bucketLocalA, testObject)
 
 			It("should be able to get copy", func() {
-				createTestFile(localFQN, testFileSize)
-				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init()
-				Expect(err).To(BeEmpty())
+				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCopyFQN([]string{copyFQN})
 				lom.SetSize(int64(testFileSize))
 				addLocalBucket(lom)
-				lom.Persist()
+				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				_, err = lom.Load(false)
-				Expect(err).To(BeEmpty())
+				_, errstr := lom.Load(false)
+				Expect(errstr).To(BeEmpty())
 				Expect(lom.CopyFQN()[0]).To(BeEquivalentTo(copyFQN))
 			})
 		})
@@ -596,7 +573,7 @@ var _ = Describe("LOM", func() {
 			lom, errstr = cluster.LOM{T: tMock, FQN: localFQN}.Init()
 			lom.SetSize(int64(testFileSize))
 			lom.SetVersion(desiredVersion)
-			lom.Persist()
+			Expect(lom.Persist()).NotTo(HaveOccurred())
 			lom.Uncache()
 			Expect(errstr).To(BeEmpty())
 			_, errstr = lom.Load(false)
@@ -702,6 +679,23 @@ var _ = Describe("LOM", func() {
 //
 // HELPERS
 //
+
+// needs to be called inside of gomega scope like Describe/It
+func NewBasicLom(fqn string, t cluster.Target) *cluster.LOM {
+	lom, err := cluster.LOM{T: t, FQN: fqn}.Init()
+	Expect(err).To(BeEmpty())
+	lom.Uncache()
+	return lom
+}
+
+func filePut(fqn string, size int, t cluster.Target) *cluster.LOM {
+	createTestFile(fqn, size)
+	lom := NewBasicLom(fqn, t)
+	lom.SetSize(int64(size))
+	lom.IncObjectVersion()
+	Expect(lom.Persist()).NotTo(HaveOccurred())
+	return lom
+}
 
 func createTestFile(fqn string, size int) {
 	_ = os.Remove(fqn)

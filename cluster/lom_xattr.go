@@ -36,7 +36,9 @@ const (
 	recordSepa = "\xe3/\xbd"
 )
 
-func (lom *LOM) LoadMetaFromFS(populate bool) (md *lmeta, err error) {
+func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
+
+func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var b []byte
 	b, err = fs.GetXattr(lom.FQN, cmn.XattrLOM)
 	if err != nil {

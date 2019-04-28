@@ -271,7 +271,7 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 		newVersion = initialVersion
 		return
 	}
-	md, err := lom.LoadMetaFromFS(false)
+	md, err := lom.lmfs(false)
 	if err != nil {
 		return "", err.Error()
 	}
@@ -333,7 +333,7 @@ func (lom *LOM) ValidateChecksum(recompute bool) (errstr string) {
 	}
 	{ // FIXME: single xattr-meta
 		var v cmn.Cksummer
-		md, err := lom.LoadMetaFromFS(false)
+		md, err := lom.lmfs(false)
 		if err != nil {
 			return err.Error()
 		}
@@ -631,7 +631,7 @@ func (lom *LOM) Uncache() {
 
 func (lom *LOM) FromFS() (errstr string) {
 	lom.exists = true
-	if _, err := lom.LoadMetaFromFS(true); err != nil {
+	if _, err := lom.lmfs(true); err != nil {
 		lom.exists = false
 		if !os.IsNotExist(err) {
 			errstr = fmt.Sprintf("%s[%s]: errmeta %v", lom, lom.FQN, err)

@@ -620,6 +620,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	mainMeta := *meta
 	mainMeta.SliceID = 0
 	metaBuf, err := mainMeta.marshal()
+	metaSize := len(metaBuf)
 	if err != nil {
 		return restored, err
 	}
@@ -627,7 +628,19 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	if glog.V(4) {
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, metaFQN)
 	}
+
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buffer, false); err != nil {
+		return restored, err
+	}
+
+	// FIXME: slice meta file should be a different kind of LOM
+	metaLom, errstr := cluster.LOM{FQN: metaFQN, T: c.parent.t}.Init()
+	if errstr != "" {
+		return restored, errors.New(errstr)
+	}
+
+	metaLom.SetSize(int64(metaSize))
+	if err := metaLom.Persist(); err != nil {
 		return restored, err
 	}
 

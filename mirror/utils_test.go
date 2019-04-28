@@ -63,6 +63,8 @@ var _ = Describe("Mirror", func() {
 			expectedCopyFQN := filepath.Join(mpath2, fs.ObjectType, cmn.LocalBs, TestLocalBucketName, testObjectName)
 			createTestFile(testDir, testObjectName, testObjectSize)
 			lom := newBasicLom(testFQN, tMock)
+			lom.SetSize(testObjectSize)
+			Expect(lom.Persist()).NotTo(HaveOccurred())
 
 			Expect(lom.ValidateChecksum(true)).To(BeEmpty())
 			Expect(copyTo(lom, mpathInfo2, copyBuf)).ShouldNot(HaveOccurred())
@@ -71,6 +73,7 @@ var _ = Describe("Mirror", func() {
 			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
+			//newCopyLom := newBasicLom(expectedCopyFQN)
 			newCopyLom, err := tutils.GetXattrLom(expectedCopyFQN, cmn.LocalBs, tMock)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(newCopyLom.CopyFQN()).To(HaveLen(1))

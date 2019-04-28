@@ -26,8 +26,7 @@ func GetXattr(fqn, attrname string) ([]byte, error) {
 	return nil, nil
 }
 
-// GetXattr gets xattr by name with external buffer to load big chunks
-// FIXME: return error not string
+// GetXattr gets xattr by name via provided buffer
 func GetXattrBuf(fqn, attrname string, data []byte) (int, error) {
 	cmn.Assert(data != nil)
 	read, err := syscall.Getxattr(fqn, attrname, data)

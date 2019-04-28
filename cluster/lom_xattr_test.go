@@ -101,7 +101,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom1.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
 
 				Expect(lom1.Persist()).NotTo(HaveOccurred())
-				_, err := lom2.LoadMetaFromFS(true)
+				err := lom2.LoadMetaFromFS()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(lom1.Cksum()).To(BeEquivalentTo(lom2.Cksum()))
@@ -123,7 +123,7 @@ var _ = Describe("LOM Xattributes", func() {
 				b[0] = b[0] + 1 // changing first byte of meta checksum
 				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, b)).NotTo(HaveOccurred())
 
-				_, err = lom.LoadMetaFromFS(true)
+				err = lom.LoadMetaFromFS()
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -139,7 +139,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				Expect(fs.SetXattr(localFQN, cmn.XattrLOM, []byte("1321\nwr;as\n;, ;\n\n;;,,dadsa;aa\n"))).NotTo(HaveOccurred())
-				_, err := lom.LoadMetaFromFS(true)
+				err := lom.LoadMetaFromFS()
 				Expect(err).To(HaveOccurred())
 			})
 		})

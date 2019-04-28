@@ -194,6 +194,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 		tw  *tar.Writer
 		n   int64
 	)
+
 	if t.gzipped {
 		gzw = gzip.NewWriter(tarball)
 		tw = tar.NewWriter(gzw)

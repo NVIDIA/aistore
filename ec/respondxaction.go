@@ -136,6 +136,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			glog.Errorf(errstr)
 			return
 		}
+
 		if err := r.dataResponse(iReq.Act, fqn, bucket, objName, daemonID); err != nil {
 			glog.Errorf("Failed to send back [META req] %q: %v", fqn, err)
 		}
@@ -206,6 +207,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 			}
 			lom.SetVersion(objAttrs.Version)
 			lom.SetAtimeUnix(objAttrs.Atime)
+			lom.SetSize(objAttrs.Size)
 
 			// LOM checksum is filled with checksum of a slice. Source object's checksum is stored in metadata
 			if objAttrs.CksumType != "" {
@@ -226,7 +228,18 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 		metaBuf, err := meta.marshal()
 		if err == nil {
+			metaLen := len(metaBuf)
 			_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
+
+			if err == nil {
+				lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init()
+				if errstr != "" {
+					err = errors.New(errstr)
+				} else {
+					lom.SetSize(int64(metaLen))
+					err = lom.Persist()
+				}
+			}
 		}
 
 		slab.Free(buf)
