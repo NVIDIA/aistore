@@ -2685,7 +2685,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
 	}
-	body, err := jsoniter.Marshal(nsi)
+	body, err := jsoniter.Marshal(regReq)
 	cmn.AssertNoErr(err)
 	if p.forwardCP(w, r, msg, s, body) {
 		return
