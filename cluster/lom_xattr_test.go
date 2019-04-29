@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/tutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -45,32 +44,30 @@ var _ = Describe("LOM Xattributes", func() {
 
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {
-				createTestFile(localFQN, testFileSize)
-				lom := NewBasicLom(localFQN, tMock)
+				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
 				lom.SetVersion("dummyversion")
 				lom.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
-
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
-				newLom, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-				Expect(err).NotTo(HaveOccurred())
+				lom.Uncache()
+				newLom := NewBasicLom(localFQN, tMock)
+				_, errstr := newLom.Load(false)
+				Expect(errstr).To(BeEmpty())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.CopyFQN()).To(BeEquivalentTo(newLom.CopyFQN()))
 			})
 
 			It("should override old values", func() {
-				createTestFile(localFQN, testFileSize)
-				lom := NewBasicLom(localFQN, tMock)
+				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum1"))
 				lom.SetVersion("dummyversion1")
 				lom.SetCopyFQN([]string{"some/copy/fqn/1", "some/other/copy/fqn/1"})
-
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum2"))
@@ -83,8 +80,10 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(b).ToNot(BeEmpty())
 				Expect(err).NotTo(HaveOccurred())
 
-				newLom, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-				Expect(err).NotTo(HaveOccurred())
+				lom.Uncache()
+				newLom := NewBasicLom(localFQN, tMock)
+				_, errstr := newLom.Load(false)
+				Expect(errstr).To(BeEmpty())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
 				Expect(lom.CopyFQN()).To(BeEquivalentTo(newLom.CopyFQN()))

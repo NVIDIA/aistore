@@ -73,14 +73,15 @@ var _ = Describe("Mirror", func() {
 			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
-			//newCopyLom := newBasicLom(expectedCopyFQN)
-			newCopyLom, err := tutils.GetXattrLom(expectedCopyFQN, cmn.LocalBs, tMock)
-			Expect(err).NotTo(HaveOccurred())
+			newCopyLom := newBasicLom(expectedCopyFQN, tMock)
+			_, errstr := newCopyLom.Load(false)
+			Expect(errstr).To(BeEmpty())
 			Expect(newCopyLom.CopyFQN()).To(HaveLen(1))
 			Expect(newCopyLom.CopyFQN()[0]).To(BeEquivalentTo(testFQN))
 
-			newLom, err := tutils.GetXattrLom(testFQN, cmn.LocalBs, tMock)
-			Expect(err).NotTo(HaveOccurred())
+			newLom := newBasicLom(testFQN, tMock)
+			_, errstr = newLom.Load(false)
+			Expect(errstr).To(BeEmpty())
 			Expect(newLom.CopyFQN()).To(HaveLen(1))
 			Expect(newLom.CopyFQN()[0]).To(BeEquivalentTo(expectedCopyFQN))
 
@@ -103,7 +104,6 @@ var _ = Describe("Mirror", func() {
 			Expect(lomCopy.HasCopies()).To(BeFalse())
 		})
 	})
-
 })
 
 func createTestFile(filepath, objname string, size int64) {

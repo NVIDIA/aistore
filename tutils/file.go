@@ -9,7 +9,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -301,10 +300,6 @@ func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
 	return
 }
 
-//
-// FIXME: the following two functions are obsolete and must be removed -- TODO
-//
-
 func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
 	lom := cluster.LOM{FQN: fqn, T: t}
 	lom.Init()
@@ -312,13 +307,4 @@ func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
 
 	lom.SetCksum(value)
 	return lom.Persist()
-}
-
-func GetXattrLom(fqn, bckProvider string, t cluster.Target) (*cluster.LOM, error) {
-	lom, errstr := cluster.LOM{T: t, FQN: fqn, BucketProvider: bckProvider}.Init()
-	if errstr != "" {
-		return nil, errors.New(errstr)
-	}
-	err := lom.LoadMetaFromFS()
-	return lom, err
 }

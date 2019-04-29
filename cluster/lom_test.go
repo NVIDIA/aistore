@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -343,8 +341,9 @@ var _ = Describe("LOM", func() {
 					Expect(cksmval).To(BeEquivalentTo(expectedChecksum))
 
 					Expect(lom.Cksum()).To(BeNil())
-					newLom, err := tutils.GetXattrLom(lom.FQN, cmn.LocalBs, tMock)
-					Expect(err).NotTo(HaveOccurred())
+					newLom := NewBasicLom(lom.FQN, tMock)
+					_, errstr = newLom.Load(false)
+					Expect(errstr).To(BeEmpty())
 					Expect(newLom.Cksum()).To(BeNil())
 				})
 			})
@@ -365,16 +364,19 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					fsLOM, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-					Expect(err).NotTo(HaveOccurred())
+					fsLOM := NewBasicLom(localFQN, tMock)
+					_, errstr := fsLOM.Load(false)
+					Expect(errstr).To(BeEmpty())
 					Expect(fsLOM.Cksum()).To(BeNil())
 
 					Expect(lom.ValidateChecksum(true)).To(BeEmpty())
+					lom.Uncache()
 
 					Expect(lom.Cksum()).ToNot(BeNil())
 					_, val := lom.Cksum().Get()
-					fsLOM, err = tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-					Expect(err).NotTo(HaveOccurred())
+					fsLOM = NewBasicLom(localFQN, tMock)
+					_, errstr = fsLOM.Load(false)
+					Expect(errstr).To(BeEmpty())
 					_, fsVal := fsLOM.Cksum().Get()
 					Expect(fsVal).To(BeEquivalentTo(expectedChecksum))
 					Expect(val).To(BeEquivalentTo(expectedChecksum))
@@ -449,16 +451,22 @@ var _ = Describe("LOM", func() {
 				It("should fill object with checksum if was not present", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
 					expectedChecksum := getTestFileHash(localFQN)
-					fsLOM, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-					Expect(err).NotTo(HaveOccurred())
+
+					fsLOM := NewBasicLom(localFQN, tMock)
+					_, errstr := fsLOM.Load(false)
+					Expect(errstr).To(BeEmpty())
 					Expect(fsLOM.Cksum()).To(BeNil())
 
 					Expect(lom.ValidateDiskChecksum()).To(BeEmpty())
+					lom.Uncache()
 
 					Expect(lom.Cksum()).ToNot(BeNil())
 					_, cksmVal := lom.Cksum().Get()
-					fsLOM, err = tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-					Expect(err).NotTo(HaveOccurred())
+
+					fsLOM = NewBasicLom(localFQN, tMock)
+					_, errstr = fsLOM.Load(false)
+					Expect(errstr).To(BeEmpty())
+
 					_, fsCksmVal := fsLOM.Cksum().Get()
 					Expect(fsCksmVal).To(BeEquivalentTo(expectedChecksum))
 					Expect(cksmVal).To(BeEquivalentTo(expectedChecksum))
@@ -592,6 +600,9 @@ var _ = Describe("LOM", func() {
 				Expect(dst.Persist()).ShouldNot(HaveOccurred())
 			}
 
+			lom.Uncache()
+			dst.Uncache()
+
 			return
 		}
 
@@ -601,8 +612,9 @@ var _ = Describe("LOM", func() {
 				expectedHash := getTestFileHash(localFQN)
 
 				//Check copy created
-				newLom, err := tutils.GetXattrLom(localFQN, cmn.LocalBs, tMock)
-				Expect(err).NotTo(HaveOccurred())
+				newLom := NewBasicLom(localFQN, tMock)
+				_, errstr := newLom.Load(false)
+				Expect(errstr).To(BeEmpty())
 				_, val := newLom.Cksum().Get()
 				Expect(val).To(BeEquivalentTo(expectedHash))
 				Expect(newLom.Version()).To(BeEquivalentTo(desiredVersion))
@@ -684,7 +696,6 @@ var _ = Describe("LOM", func() {
 func NewBasicLom(fqn string, t cluster.Target) *cluster.LOM {
 	lom, err := cluster.LOM{T: t, FQN: fqn}.Init()
 	Expect(err).To(BeEmpty())
-	lom.Uncache()
 	return lom
 }
 
@@ -694,6 +705,7 @@ func filePut(fqn string, size int, t cluster.Target) *cluster.LOM {
 	lom.SetSize(int64(size))
 	lom.IncObjectVersion()
 	Expect(lom.Persist()).NotTo(HaveOccurred())
+	lom.Uncache()
 	return lom
 }
 
