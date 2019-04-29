@@ -34,26 +34,33 @@ const (
 const (
 	cpyfqnSepa = "\xa6/\xc5"
 	recordSepa = "\xe3/\xbd"
+
+	xattrBufSize = 4 * cmn.KiB
 )
 
 func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
-	var b []byte
-	b, err = fs.GetXattr(lom.FQN, cmn.XattrLOM)
+	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
+	cmn.Assert(err == nil)
+	b := slab.Alloc()
+	n, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
 	if err != nil {
+		slab.Free(b)
 		return
 	}
-	if len(b) == 0 {
+	if n == 0 {
 		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		err = syscall.ENOENT
+		slab.Free(b)
 		return
 	}
 	md = &lom.md
 	if !populate {
 		md = &lmeta{}
 	}
-	err = md.unmarshal(string(b))
+	err = md.unmarshal(string(b[:n]))
+	slab.Free(b)
 	return
 }
 
