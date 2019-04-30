@@ -160,6 +160,7 @@ all possible settings, for more advanced usage please refer to API).
 | -climit | `20` | Limits number of concurrent shards created |
 | -mem | `60%` | Limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: `60%` or `10GB` |
 | -refresh | `5` | Metric refresh time (in seconds) |
+| -log | | Path to file where the metrics will be stored |
 
 Example:
 

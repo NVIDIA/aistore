@@ -220,10 +220,12 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	targets := ctx.smap.Get().Tmap
 	responses := broadcast(http.MethodGet, path, nil, nil, targets)
 
+	notFound := 0
 	allMetrics := make(map[string]*Metrics, len(targets))
 	for _, resp := range responses {
 		if resp.statusCode == http.StatusNotFound {
 			// Probably new target which does not know anything about this dsort op.
+			notFound++
 			continue
 		}
 		if resp.err != nil {
@@ -236,6 +238,11 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		allMetrics[resp.si.DaemonID] = metrics
+	}
+
+	if notFound == len(responses) && notFound > 0 {
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("dSort job with id %q has not been found", managerUUID), http.StatusNotFound)
+		return
 	}
 
 	body, err := js.Marshal(allMetrics)

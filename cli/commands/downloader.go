@@ -25,28 +25,24 @@ const (
 	downloadRemove = "rm"
 	downloadList   = "ls"
 
-	progressBarRefreshRateUnit    = time.Millisecond
-	progressBarRefreshRateDefault = 1000
-	progressBarRefreshRateMin     = 500
-	totalBarText                  = "Files downloaded:"
-	unknownTotalIncrement         = 2048
-	progressBarWidth              = 64
+	totalBarText          = "Files downloaded:"
+	unknownTotalIncrement = 2048
+	progressBarWidth      = 64
 )
 
 var (
 	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
 	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
-	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '76794751-b81f-4ec6-839d-a512a7ce5612'"}
+	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '5JjIuGemR'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
 
-	baseDownloadFlags = []cli.Flag{
-		bckProviderFlag,
-		timeoutFlag,
-		descriptionFlag,
-	}
-
 	downloadFlags = map[string][]cli.Flag{
+		downloadBegin: {
+			bckProviderFlag,
+			timeoutFlag,
+			descriptionFlag,
+		},
 		downloadStatus: {
 			idFlag,
 			progressBarFlag,
@@ -68,7 +64,7 @@ var (
 	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
 	downloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadCancel)
 	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
-	downloadListUsage   = fmt.Sprintf("%s download %s --id <value> --regex <value>", cliName, downloadList)
+	downloadListUsage   = fmt.Sprintf("%s download %s --regex <value>", cliName, downloadList)
 
 	DownloaderCmds = []cli.Command{
 		{
@@ -78,9 +74,9 @@ var (
 				{
 					Name:         downloadBegin,
 					Usage:        "download objects from external source",
-					Flags:        baseDownloadFlags,
-					Action:       downloadHandler,
 					UsageText:    downloadUsage,
+					Flags:        downloadFlags[downloadBegin],
+					Action:       downloadHandler,
 					BashComplete: flagList,
 				},
 				{
@@ -198,9 +194,8 @@ func downloadAdminHandler(c *cli.Context) error {
 		}
 
 		showProgressBar := flagIsSet(c, progressBarFlag)
-
 		if showProgressBar {
-			downloadingResult, err := newProgressBar(baseParams, id, progressBarRefreshRate(c)).run()
+			downloadingResult, err := newProgressBar(baseParams, id, calcRefreshRate(c)).run()
 			if err != nil {
 				return err
 			}
@@ -247,18 +242,6 @@ func downloadAdminHandler(c *cli.Context) error {
 		return fmt.Errorf("invalid command name '%s'", commandName)
 	}
 	return nil
-}
-
-func progressBarRefreshRate(c *cli.Context) time.Duration {
-	refreshRate := progressBarRefreshRateDefault
-
-	if flagIsSet(c, refreshRateFlag) {
-		if flagVal := c.Int(refreshRateFlag.Name); flagVal > 0 {
-			refreshRate = cmn.Max(flagVal, progressBarRefreshRateMin)
-		}
-	}
-
-	return time.Duration(refreshRate) * progressBarRefreshRateUnit
 }
 
 type downloadingResult struct {
@@ -373,7 +356,7 @@ func (b *progressBar) start() (bool, error) {
 		int64(b.totalFiles),
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
-			decor.Name(totalBarText, decor.WC{W: len(totalBarText) + 1, C: decor.DSyncWidthR}),
+			decor.Name(totalBarText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
 			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
 		),
 		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),

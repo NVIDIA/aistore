@@ -9,7 +9,6 @@
 package tutils
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,10 +26,8 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -759,46 +756,10 @@ func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSi
 	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl)
 }
 
-func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
-	msg, err := json.Marshal(rs)
-	if err != nil {
-		return "", err
-	}
-
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	body, err := api.DoHTTPRequest(baseParams, path, msg)
-	if err != nil {
-		return "", err
-	}
-
-	return string(body), err
-}
-
-func AbortDSort(proxyURL, managerUUID string) error {
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := api.OptionalParams{Query: query}
-	_, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
-}
-
-func RemoveDSort(proxyURL, managerUUID string) error {
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := api.OptionalParams{Query: query}
-	_, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
-	return err
-}
-
 func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
+	baseParams := BaseAPIParams(proxyURL)
 	for {
-		allMetrics, err := MetricsDSort(proxyURL, managerUUID)
+		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil {
 			return false, err
 		}
@@ -816,46 +777,10 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 			break
 		}
 
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	return false, nil
-}
-
-func ListDSort(proxyURL, regex string) (map[string]*dsort.JobInfo, error) {
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{}
-	query.Add(cmn.URLParamRegex, regex)
-	optParams := api.OptionalParams{
-		Query: query,
-	}
-
-	body, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var metrics map[string]*dsort.JobInfo
-	err = jsoniter.Unmarshal(body, &metrics)
-	return metrics, err
-}
-
-func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, error) {
-	baseParams := BaseAPIParams(proxyURL)
-	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Sort)
-	query := url.Values{cmn.URLParamID: []string{managerUUID}}
-	optParams := api.OptionalParams{Query: query}
-	body, err := api.DoHTTPRequest(baseParams, path, nil, optParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var metrics map[string]*dsort.Metrics
-	err = jsoniter.Unmarshal(body, &metrics)
-	return metrics, err
 }
 
 func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {

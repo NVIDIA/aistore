@@ -80,3 +80,4 @@ venv.bak/
 
 # Bench
 bench/aisloader/aisloader.exe
+aisnode

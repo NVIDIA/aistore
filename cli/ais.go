@@ -32,6 +32,7 @@ func main() {
 
 	aisCLI := commands.New(build, version)
 	aisCLI.Commands = append(aisCLI.Commands, commands.DownloaderCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, commands.DSortCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.ObjectCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.BucketCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, commands.DaeCluCmds...)

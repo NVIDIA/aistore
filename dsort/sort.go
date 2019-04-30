@@ -14,15 +14,16 @@ import (
 )
 
 const (
-	sortKindEmpty   = ""     // default one (sort decreasing)
-	SortKindNone    = "none" // none, used for resharding
-	SortKindMD5     = "md5"
-	SortKindShuffle = "shuffle" // shuffle randomly, can be used with seed to get reproducible results
-	SortKindContent = "content" // sort by content of given file
+	sortKindEmpty        = ""             // default one - alphanumeric (sort decreasing)
+	SortKindAlphanumeric = "alphanumeric" // sort the records (decreasing or increasing)
+	SortKindNone         = "none"         // none, used for resharding
+	SortKindMD5          = "md5"
+	SortKindShuffle      = "shuffle" // shuffle randomly, can be used with seed to get reproducible results
+	SortKindContent      = "content" // sort by content of given file
 )
 
 var (
-	supportedAlgorithms = []string{sortKindEmpty, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
+	supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
 )
 
 type (

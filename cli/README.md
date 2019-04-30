@@ -51,6 +51,8 @@ List of available CLI resources
 
 * [Xaction](./resources/xaction.md)
 
+* [DSort](./resources/dsort.md)
+
 ## Info For Developers
 
 The framework that the CLI uses is [urfave](https://github.com/urfave/cli). It is a simple framework that enables developers to create custom CLI commands quickly.

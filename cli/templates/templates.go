@@ -197,15 +197,18 @@ const (
 		" Parity Slice:{{$obj.ParitySlices}}\t Enabled:{{$obj.Enabled}}\n"
 	BucketVerConfTmpl = "\n{{$obj := .Versioning}}Bucket Versioning\n" +
 		" Type:{{$obj.Type}}\n Validate Warm Get:{{$obj.ValidateWarmGet}}\t Enabled:{{$obj.Enabled}}\n"
-
-	DownloaderTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
+	DownloaderConfTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
 		" Timeout: {{$obj.TimeoutStr}}\n"
+	DSortConfTmpl = "\n{{$obj := .DSort}}Distributed Sort Config\n" +
+		" Duplicated Records: {{$obj.DuplicatedRecords}}\n" +
+		" Missing Shards: {{$obj.MissingShards}}\n"
 
 	ConfigTmpl = "\nConfig Directory: {{.Confdir}}\t Cloud Provider: {{.CloudProvider}}\n" +
 		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
-		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl + DownloaderTmpl
+		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
+		DownloaderConfTmpl + DSortConfTmpl
 
 	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
 		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
@@ -216,6 +219,14 @@ const (
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
+
+	DSortListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
+	DSortListBody   = "{{$value.ID}}\t " +
+		"{{if (eq $value.Aborted true) }}Aborted" +
+		"{{else if (eq $value.Archived true) }}Finished" +
+		"{{else}}Running" +
+		"{{end}} \t {{$value.Description}}\n"
+	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
 
 	XactionBaseStatsHeader = "\nDaemonID\t Kind\t Bucket\t \t Status\t StartTime\t EndTime\n"
 	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t \t " +

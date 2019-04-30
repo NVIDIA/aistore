@@ -192,3 +192,9 @@ which can be monitored. Description of metrics returned for *single node*:
 * `aborted` - informs if the job has been aborted.
 * `archived` - informs if the job has finished and was archived to journal.
 * `description` - description of the job.
+
+
+## API
+
+You can use the [AIS's CLI](/cli/README.md) to start, abort, retrieve metrics or
+list dSort jobs.

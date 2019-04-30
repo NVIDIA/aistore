@@ -525,11 +525,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 
 			m.recManager.Records.Drain() // we do not need it anymore
 
-			if m.Metrics.extended {
-				metrics.Lock()
-				metrics.SentStats.update(time.Since(beforeSend))
-				metrics.Unlock()
-			}
+			metrics.Lock()
+			metrics.SentStats.update(time.Since(beforeSend))
+			metrics.Unlock()
 			return
 		}
 
@@ -551,11 +549,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 		expectedReceived++
 
-		if m.Metrics.extended {
-			metrics.Lock()
-			metrics.RecvStats.update(time.Since(beforeRecv))
-			metrics.Unlock()
-		}
+		metrics.Lock()
+		metrics.RecvStats.update(time.Since(beforeRecv))
+		metrics.Unlock()
 
 		t := targetOrder[:0]
 		for i, d = range targetOrder {

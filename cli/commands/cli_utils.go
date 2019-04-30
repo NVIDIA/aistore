@@ -29,6 +29,10 @@ const (
 
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
+
+	refreshRateUnit    = time.Millisecond
+	refreshRateDefault = 1000
+	refreshRateMin     = 500
 )
 
 var (
@@ -164,4 +168,16 @@ func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 		}
 	}
 	return nil
+}
+
+func calcRefreshRate(c *cli.Context) time.Duration {
+	refreshRate := refreshRateDefault
+
+	if flagIsSet(c, refreshRateFlag) {
+		if flagVal := c.Int(refreshRateFlag.Name); flagVal > 0 {
+			refreshRate = cmn.Max(flagVal, refreshRateMin)
+		}
+	}
+
+	return time.Duration(refreshRate) * refreshRateUnit
 }

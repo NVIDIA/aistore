@@ -8,6 +8,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const (
+	ExtractionPhase = "extraction"
+	SortingPhase    = "sorting"
+	CreationPhase   = "creation"
+)
+
 // TimeStats contains statistics about time spent on specific task. It calculates
 // min, max and avg times.
 type TimeStats struct {
@@ -156,16 +162,17 @@ func newMetrics(extended bool) *Metrics {
 	extraction := &LocalExtraction{}
 	sorting := &MetaSorting{}
 	creation := &ShardCreation{}
+
 	if extended {
 		extraction.ShardExtractionStats = newTimeStats()
-
-		sorting.SentStats = newTimeStats()
-		sorting.RecvStats = newTimeStats()
 
 		creation.RequestStats = newTimeStats()
 		creation.ResponseStats = newTimeStats()
 		creation.ShardCreationStats = newTimeStats()
 	}
+
+	sorting.SentStats = newTimeStats()
+	sorting.RecvStats = newTimeStats()
 
 	return &Metrics{
 		extended: extended,
@@ -215,6 +222,8 @@ func (m *Metrics) update() {
 
 // JobInfo is a struct that contains stats that represent the DSort run in a list
 type JobInfo struct {
+	ID string `json:"id"`
+
 	StartedTime time.Time `json:"started_time,omitempty"`
 	FinishTime  time.Time `json:"finish_time,omitempty"`
 
@@ -228,8 +237,10 @@ type JobInfo struct {
 	Description string `json:"description"`
 }
 
-func (m *Metrics) ToJobInfo() JobInfo {
+func (m *Metrics) ToJobInfo(id string) JobInfo {
 	return JobInfo{
+		ID: id,
+
 		StartedTime: m.Extraction.Start,
 		FinishTime:  m.Creation.End,
 

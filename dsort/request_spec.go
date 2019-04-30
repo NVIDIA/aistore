@@ -35,6 +35,8 @@ const (
 
 	// defaultConcLimit determines default concurrency limit when it is not set.
 	defaultConcLimit = 100
+	// defaultMemUsage determines default memory usage limit when it is not set.
+	defaultMemUsage = "80%"
 )
 
 var (
@@ -90,42 +92,40 @@ type parsedMemUsage struct {
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
 type RequestSpec struct {
 	// Required
-	Bucket       string `json:"bucket"`
-	Extension    string `json:"extension"`
-	IntputFormat string `json:"input_format"`
-	OutputFormat string `json:"output_format"`
+	Bucket          string `json:"bucket"`
+	Extension       string `json:"extension"`
+	IntputFormat    string `json:"input_format"`
+	OutputFormat    string `json:"output_format"`
+	OutputShardSize int64  `json:"shard_size"`
 
 	// Optional
-	ProcDescription    string        `json:"description"`
-	OutputBucket       string        `json:"output_bucket"` // Default: same as `bucket` field
-	OutputShardSize    int64         `json:"shard_size"`
-	IgnoreMissingFiles bool          `json:"ignore_missing_files"`      // Default: false
-	Algorithm          SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
-	MaxMemUsage        string        `json:"max_mem_usage"`             // Default: "80%"
-	BckProvider        string        `json:"bprovider"`                 // Default: "local"
-	OutputBckProvider  string        `json:"output_bprovider"`          // Default: "local"
-	ExtractConcLimit   int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
-	CreateConcLimit    int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
-	ExtendedMetrics    bool          `json:"extended_metrics"`          // Default: false
+	ProcDescription   string        `json:"description"`
+	OutputBucket      string        `json:"output_bucket"`             // Default: same as `bucket` field
+	Algorithm         SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
+	MaxMemUsage       string        `json:"max_mem_usage"`             // Default: "80%"
+	BckProvider       string        `json:"bprovider"`                 // Default: "local"
+	OutputBckProvider string        `json:"output_bprovider"`          // Default: "local"
+	ExtractConcLimit  int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
+	CreateConcLimit   int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
+	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
 }
 
 type ParsedRequestSpec struct {
-	Bucket             string                `json:"bucket"`
-	ProcDescription    string                `json:"description"`
-	OutputBucket       string                `json:"output_bucket"`
-	BckProvider        string                `json:"bprovider"`
-	OutputBckProvider  string                `json:"output_bprovider"`
-	Extension          string                `json:"extension"`
-	OutputShardSize    int64                 `json:"shard_size"`
-	InputFormat        *parsedInputTemplate  `json:"input_format"`
-	OutputFormat       *parsedOutputTemplate `json:"output_format"`
-	IgnoreMissingFiles bool                  `json:"ignore_missing_files"`
-	Algorithm          *SortAlgorithm        `json:"algorithm"`
-	MaxMemUsage        *parsedMemUsage       `json:"max_mem_usage"`
-	TargetOrderSalt    []byte                `json:"target_order_salt"`
-	ExtractConcLimit   int                   `json:"extract_concurrency_limit"`
-	CreateConcLimit    int                   `json:"create_concurrency_limit"`
-	ExtendedMetrics    bool                  `json:"extended_metrics"`
+	Bucket            string                `json:"bucket"`
+	ProcDescription   string                `json:"description"`
+	OutputBucket      string                `json:"output_bucket"`
+	BckProvider       string                `json:"bprovider"`
+	OutputBckProvider string                `json:"output_bprovider"`
+	Extension         string                `json:"extension"`
+	OutputShardSize   int64                 `json:"shard_size"`
+	InputFormat       *parsedInputTemplate  `json:"input_format"`
+	OutputFormat      *parsedOutputTemplate `json:"output_format"`
+	Algorithm         *SortAlgorithm        `json:"algorithm"`
+	MaxMemUsage       *parsedMemUsage       `json:"max_mem_usage"`
+	TargetOrderSalt   []byte                `json:"target_order_salt"`
+	ExtractConcLimit  int                   `json:"extract_concurrency_limit"`
+	CreateConcLimit   int                   `json:"create_concurrency_limit"`
+	ExtendedMetrics   bool                  `json:"extended_metrics"`
 }
 
 type SortAlgorithm struct {
@@ -170,8 +170,6 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, err
 	}
 
-	parsedRS.IgnoreMissingFiles = rs.IgnoreMissingFiles
-
 	if !validateExtension(rs.Extension) {
 		return nil, errInvalidExtension
 	}
@@ -193,7 +191,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 
 	if rs.MaxMemUsage == "" {
-		rs.MaxMemUsage = "80%" // default value
+		rs.MaxMemUsage = defaultMemUsage
 	}
 
 	parsedRS.MaxMemUsage, err = parseMemUsage(rs.MaxMemUsage)

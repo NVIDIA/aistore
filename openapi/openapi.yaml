@@ -1086,6 +1086,7 @@ components:
             seed:
               type: string
               default: ""
+              description: Seed provided to random generator, used for `kind=shuffle`
             extension:
               type: string
               default: ""
@@ -1098,16 +1099,19 @@ components:
         max_mem_usage:
           type: string
           example: "10%"
+          description: Limits maximum of total memory until extraction starts spilling data to the disk, can be 60% or 10GB
         extract_concurrency_limit:
           type: integer
           minimum: 0
           default: 10
           example: 50
+          description: Limits number of concurrent shards extracted
         create_concurrency_limit:
           type: integer
           minimum: 0
           default: 10
           example: 50
+          description: Limits number of concurrent shards created
         extended_metrics:
           type: boolean
           description: Determines if metrics should include extened statistics

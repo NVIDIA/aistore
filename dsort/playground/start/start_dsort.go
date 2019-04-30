@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/tutils"
@@ -31,6 +32,7 @@ var (
 	createConcLimit   int
 	memUsage          string
 	metricRefreshTime int
+	logPath           string
 
 	err       error
 	dsortUUID string
@@ -38,9 +40,9 @@ var (
 )
 
 func init() {
-	flag.StringVar(&ext, "ext", ".tar", "extension for output shards (either `.tar`, `.tgz` or `.zip`)")
+	flag.StringVar(&ext, "ext", ".tar", "extension for input and output shards (either `.tar`, `.tgz` or `.zip`)")
 	flag.StringVar(&bucket, "bucket", "dsort-testing", "bucket where shards objects are stored")
-	flag.StringVar(&description, "description", "", "description for dsort process")
+	flag.StringVar(&description, "description", "", "description of dsort job")
 	flag.StringVar(&outputBucket, "obucket", "", "bucket where new output shards will be saved")
 	flag.StringVar(&proxyURL, "url", "http://localhost:8080", "proxy url to which requests will be made")
 	flag.StringVar(&inputTemplate, "input", "shard-{0..9}", "name template for input shard")
@@ -53,19 +55,34 @@ func init() {
 	flag.IntVar(&createConcLimit, "climit", 20, "limits number of concurrent shards created")
 	flag.StringVar(&memUsage, "mem", "60%", "limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: 60% or 10GB")
 	flag.IntVar(&metricRefreshTime, "refresh", 5, "metric refresh time (in seconds)")
+	flag.StringVar(&logPath, "log", "", "path to file where the metrics will be stored")
 	flag.Parse()
 }
 
-func handleKillSignal() {
+func handleKillSignal(bp *api.BaseParams) {
 	_, ok := <-sigCh
 	if ok {
-		tutils.AbortDSort(proxyURL, dsortUUID)
+		api.AbortDSort(bp, dsortUUID)
 	}
 }
 
 func main() {
+	var (
+		w = os.Stdout
+	)
+
+	if logPath != "" {
+		file, err := cmn.CreateFile(logPath)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		defer file.Close()
+		w = file
+	}
+
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go handleKillSignal()
+	go handleKillSignal(baseParams)
 
 	rs := dsort.RequestSpec{
 		ProcDescription: description,
@@ -86,17 +103,15 @@ func main() {
 		MaxMemUsage:      memUsage,
 		ExtendedMetrics:  true,
 	}
-	dsortUUID, err = tutils.StartDSort(proxyURL, rs)
+	dsortUUID, err = api.StartDSort(baseParams, rs)
 	if err != nil {
 		glog.Fatal(err)
 	}
 
-	for {
-		fmt.Print("\n---------------------------------------------------------\n")
-		fmt.Print("---------------------------------------------------------\n")
-		fmt.Print("---------------------------------------------------------\n")
+	fmt.Printf("DSort job id: %s\n", dsortUUID)
 
-		allMetrics, err := tutils.MetricsDSort(proxyURL, dsortUUID)
+	for {
+		allMetrics, err := api.MetricsDSort(baseParams, dsortUUID)
 		if err != nil {
 			glog.Fatal(err)
 		}
@@ -114,7 +129,7 @@ func main() {
 		if err != nil {
 			glog.Fatal(err)
 		}
-		fmt.Printf("%s", string(b))
+		fmt.Fprintf(w, "%s\n", string(b))
 		if allFinished {
 			break
 		}

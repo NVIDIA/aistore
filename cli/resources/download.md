@@ -1,11 +1,11 @@
 ## Downloader
 
-[AIS Downloader](../../downloader/README.md) supports following types of download requests:
+[AIS Downloader](/downloader/README.md) supports following types of download requests:
 
-* **download** - download the object(s) from external source
+* **begin** - download the object(s) from external source
 * **status** - display status of a given download job
 * **cancel** - cancel given download job
-* **rm** - remove finished download job from the list
+* **rm** - remove finished download job from the download list
 * **ls** - list current download jobs and their states
 
 ## Command List
@@ -60,7 +60,7 @@ Examples:
 
 `ais download rm --id <value>`
 
-Remove finished download job from the list given its id.
+Removes finished download job from the list given its id.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -89,7 +89,7 @@ Examples:
 
 `ais download ls --regex <value>`
 
-Lists downloads which descriptions match given `regex`.
+Lists downloads whose descriptions match given `regex`.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
