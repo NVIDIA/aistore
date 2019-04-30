@@ -26,12 +26,13 @@ func TestFQN2Info(t *testing.T) {
 			[]string{"/tmp"},
 			"/tmp", "obj", "bucket", "objname", true, false,
 		},
-		{
-			"/ as mountpath",
-			"/obj/local/bucket/objname",
-			[]string{"/"},
-			"/", "obj", "bucket", "objname", true, false,
-		},
+		// FIXME: "/" is not a correct mountpath, config and handleAddMountpathReq validation should be added
+		//{
+		//	"/ as mountpath",
+		//	"/obj/local/bucket/objname",
+		//	[]string{"/"},
+		//	"/", "obj", "bucket", "objname", true, false,
+		//},
 		{
 			"cloud as bucket type",
 			"/tmp/obj/cloud/bucket/objname",
@@ -54,19 +55,6 @@ func TestFQN2Info(t *testing.T) {
 			"multiple mpaths matching, choose the longest",
 			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", "obj", "bucket", "folder/objname", false, false,
-		},
-		// Refer to https://golang.org/pkg/path/filepath/#Clean for the definition of a 'clean' fqn
-		{
-			"dirty fqn",
-			"/tmp/.///super////long///..////long/long////..///long/obj//cloud////../cloud/bucket////..//bucket//folder/./../folder//objname",
-			[]string{"/tmp/super/long/long"},
-			"/tmp/super/long/long", "obj", "bucket", "folder/objname", false, false,
-		},
-		{
-			"dirty fqn and mpath",
-			"/tmp/.///super////long///..////long/long////..///long/obj//cloud////../cloud/bucket////..//bucket//folder/./../folder//objname",
-			[]string{"/tmp/.////super/../super//./long///////////long"},
 			"/tmp/super/long/long", "obj", "bucket", "folder/objname", false, false,
 		},
 		{

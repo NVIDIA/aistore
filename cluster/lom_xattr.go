@@ -42,14 +42,14 @@ func (lom *LOM) LoadMetaFromFS() error { _, err := lom.lmfs(true); return err }
 
 func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
-	cmn.Assert(err == nil)
+	cmn.AssertNoErr(err)
 	b := slab.Alloc()
-	n, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
+	read, err := fs.GetXattrBuf(lom.FQN, cmn.XattrLOM, b)
 	if err != nil {
 		slab.Free(b)
 		return
 	}
-	if n == 0 {
+	if len(read) == 0 {
 		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		err = syscall.ENOENT
 		slab.Free(b)
@@ -59,7 +59,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if !populate {
 		md = &lmeta{}
 	}
-	err = md.unmarshal(string(b[:n]))
+	err = md.unmarshal(string(read))
 	slab.Free(b)
 	return
 }
