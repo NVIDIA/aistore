@@ -112,8 +112,11 @@ func (z *zipExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 		return extractedSize, extractedCount, err
 	}
 
-	buf, slab := mem.AllocFromSlab2(cmn.MiB)
+	slab, err := mem.GetSlab2(128 * cmn.KiB)
+	cmn.AssertNoErr(err)
+	buf := slab.Alloc()
 	defer slab.Free(buf)
+
 	for _, f := range zr.File {
 		header := f.FileHeader
 		metadata := zipFileHeader{

@@ -723,7 +723,10 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		buf, slab := mem.AllocFromSlab2(cmn.MiB)
+		slab, err := mem.GetSlab2(128 * cmn.KiB)
+		cmn.AssertNoErr(err)
+		buf := slab.Alloc()
+
 		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 		writer.wg.Done()
 		slab.Free(buf)
@@ -743,9 +746,6 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		}
 
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-		buf, slab := mem.AllocFromSlab2(cmn.MiB)
-		defer slab.Free(buf)
-
 		bckProvider := cmn.BckProviderFromLocal(hdr.IsLocal)
 		lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname, BucketProvider: bckProvider}.Init()
 		if errStr == "" {
@@ -777,7 +777,10 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 func (m *Manager) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		loadLocal := func(w io.Writer, pathToContent string) (written int64, err error) {
-			buf, slab := mem.AllocFromSlab2(cmn.MiB)
+			slab, err := mem.GetSlab2(128 * cmn.KiB)
+			cmn.AssertNoErr(err)
+			buf := slab.Alloc()
+
 			defer func() {
 				slab.Free(buf)
 				m.decrementRef(1)

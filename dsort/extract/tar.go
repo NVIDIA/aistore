@@ -134,8 +134,11 @@ func (t *tarExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 		tr = tar.NewReader(r)
 	}
 
-	buf, slab := mem.AllocFromSlab2(cmn.MiB)
+	slab, err := mem.GetSlab2(128 * cmn.KiB)
+	cmn.AssertNoErr(err)
+	buf := slab.Alloc()
 	defer slab.Free(buf)
+
 	for {
 		header, err = tr.Next()
 		if err == io.EOF {

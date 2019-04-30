@@ -128,7 +128,7 @@ cat > $CONFFILE <<EOL
 		"timeout": "1h"
 	},
 	"distributed_sort": {
-		"duplicated_records": "warn",
+		"duplicated_records": "ignore",
 		"missing_shards":     "abort"
 	}
 }
