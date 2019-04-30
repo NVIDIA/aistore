@@ -1449,9 +1449,9 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	// FIXME: ignoring "misplaced" (non-error) and errors that ResolveFQN may return
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
+	parsedFQN, _, errstr := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
 	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
-	if err == nil {
+	if errstr == "" {
 		if bucket != renctx.bucketFrom {
 			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
@@ -1518,7 +1518,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 		cksumType  = response.Header.Get(cmn.HeaderObjCksumType)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 		version    = response.Header.Get(cmn.HeaderObjVersion)
-		workFQN    = lom.GenFQN(fs.WorkfileType, fs.WorkfileRemote)
+		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 		atimeStr   = response.Header.Get(cmn.HeaderObjAtime)
 	)
 
@@ -1556,10 +1556,6 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
 func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
-	var (
-		err             error
-		vchanged, crace bool
-	)
 	if prefetch {
 		if !t.rtnamemap.TryLock(lom.Uname(), true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
@@ -1568,7 +1564,11 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	} else {
 		t.rtnamemap.Lock(lom.Uname(), true) // one cold-GET at a time
 	}
-	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfileColdget)
+	var (
+		err             error
+		vchanged, crace bool
+		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
+	)
 	if err, errcode = getcloudif().getobj(ct, workFQN, lom); err != nil {
 		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
 		t.rtnamemap.Unlock(lom.Uname(), true)
@@ -2141,7 +2141,7 @@ func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluste
 
 func (roi *recvObjInfo) init() {
 	roi.started = time.Now()
-	roi.workFQN = roi.lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
+	roi.workFQN = fs.CSM.GenContentParsedFQN(roi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	cmn.Assert(roi.lom != nil)
 	cmn.Assert(!roi.migrated || roi.cksumToCheck != nil)
 }
@@ -2360,7 +2360,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	bucketmd := t.bmdowner.get()
 	bckIsLocalFrom := bucketmd.IsLocal(bucketFrom)
-	fqn, _, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
+	fqn, _, errstr := cluster.HrwFQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
 	if errstr != "" {
 		return
 	}
@@ -2371,7 +2371,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		bckIsLocalTo := bucketmd.IsLocal(bucketTo)
-		newFQN, _, errstr = cluster.FQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
+		newFQN, _, errstr = cluster.HrwFQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
 		if errstr != "" {
 			return
 		}

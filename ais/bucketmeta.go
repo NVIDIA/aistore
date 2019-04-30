@@ -184,17 +184,12 @@ func (m *bucketMD) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Reading %s copy from %s of %s", bmdTermName, cmn.XattrBMD, mpath.Path)
-	}
-	read, err := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
+	b, err := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
 	if err != nil {
-		return fmt.Errorf("failed to read xattr from %q: %v", mpath.Path, err)
+		return fmt.Errorf("%s: %v", mpath, err)
 	}
-
-	if read > 0 {
-		return m.UnmarshalXattr(buf[:read])
+	if len(b) > 0 {
+		return m.UnmarshalXattr(b)
 	}
 	return nil
 }

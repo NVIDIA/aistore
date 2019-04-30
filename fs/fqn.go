@@ -22,6 +22,7 @@ const (
 	WorkfileRebalance   = "reb"    // rebalance
 	WorkfileFSHC        = "fshc"   // FSHC test file
 )
+const sep = string(filepath.Separator)
 
 // MountedFS should be able to resolve FQNs
 var _ ios.FQNResolver = &MountedFS{}
@@ -35,36 +36,16 @@ type ParsedFQN struct {
 	IsLocal     bool
 }
 
-// FQN2mountpath fetches the mountpath of the fqn
-//  similar to Path2MpathInfo except optimized for datapath
-// FIXME: unify with Path2MpathInfo and make sure that filepath.Clean(path) is not called in the datapath
-func (mfs *MountedFS) FQN2mountpath(fqn string) (mpath string) {
-	available := (*map[string]*MountpathInfo)(mfs.available.Load())
-	max := 0
-	for curMpath := range *available {
-		// assume fqn is already clean
-		if strings.HasPrefix(fqn, curMpath) && len(curMpath) > max {
-			mpath = curMpath
-			max = len(curMpath)
-		}
-	}
-
-	return
-}
-
 // mpathInfo, bucket, objname, isLocal, err
 func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	var rel string
 
-	parsed.MpathInfo, rel = mfs.Path2MpathInfo(fqn)
+	parsed.MpathInfo, rel = mfs.FQN2MpathInfo(fqn)
 	if parsed.MpathInfo == nil {
 		err = fmt.Errorf("fqn %s is invalid", fqn)
 		return
 	}
-
-	sep := string(filepath.Separator)
 	items := strings.SplitN(rel, sep, 4)
-
 	if len(items) < 4 {
 		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
 	} else if _, ok := CSM.RegisteredContentTypes[items[0]]; !ok {
@@ -81,13 +62,42 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	return
 }
 
-// path2mpathInfo takes in a path (fqn or mpath) and returns the mpathInfo of the mpath with the longest
-// common prefix to path. It also returns the relative path to this mpath.
+// FQN2mountpath returns the mountpath of the fqn
+func (mfs *MountedFS) FQN2mountpath(fqn string) (mpath string) {
+	if mpathInfo, _ := mfs.FQN2MpathInfo(fqn); mpathInfo != nil {
+		mpath = mpathInfo.Path
+	}
+	return
+}
+
+func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePath string) {
+	var (
+		available = (*map[string]*MountpathInfo)(mfs.available.Load())
+		max       = 0
+		ll        = len(fqn)
+	)
+	if available == nil {
+		return
+	}
+	availablePaths := *available
+	for mpath, mpathInfo := range availablePaths {
+		l := len(mpath)
+		if ll > l && l > max && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
+			info = mpathInfo
+			relativePath = fqn[l+1:]
+			max = l
+		}
+	}
+	return
+}
+
+// Path2MpathInfo takes in any path (fqn or mpath) and returns the mpathInfo of the mpath
+// with the longest common prefix and the relative path to this mpath
 func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
 	var (
-		max               int
 		availablePaths, _ = mfs.Get()
 		cleanedPath       = filepath.Clean(path)
+		max               int
 	)
 	for mpath, mpathInfo := range availablePaths {
 		rel, ok := pathPrefixMatch(mpath, cleanedPath)

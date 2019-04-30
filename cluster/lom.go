@@ -129,9 +129,6 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 	return conf
 }
 func (lom *LOM) RebalanceConf() *cmn.RebalanceConf { return &lom.BckProps.Rebalance }
-func (lom *LOM) GenFQN(ty, prefix string) string {
-	return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, ty, prefix)
-}
 
 //
 // local copy management
@@ -445,72 +442,60 @@ func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
 	dst.FQN = fqn
-	dst.init("")
 	return dst
 }
 
 func (lom *LOM) init(bckProvider string) (errstr string) {
+	var bckPresent, fromFQN bool
 	bowner := lom.T.GetBowner()
-	// resolve fqn
+	if bckProvider != "" {
+		val, err := cmn.BckProviderFromStr(bckProvider)
+		if err != nil {
+			return err.Error()
+		}
+		lom.BckIsLocal = val == cmn.LocalBs
+		bckProvider = cmn.BckProviderFromLocal(lom.BckIsLocal)
+	}
 	if lom.Bucket == "" || lom.Objname == "" {
-		cmn.Assert(lom.FQN != "")
-		if errstr = lom.resolveFQN(bowner); errstr != "" {
+		if bckProvider != "" {
+			lom.ParsedFQN, lom.HrwFQN, errstr = ResolveFQN(lom.FQN, nil, lom.BckIsLocal)
+		} else {
+			lom.ParsedFQN, lom.HrwFQN, errstr = ResolveFQN(lom.FQN, bowner)
+			bckProvider = cmn.BckProviderFromLocal(lom.ParsedFQN.IsLocal)
+		}
+		if errstr != "" {
 			return
 		}
 		lom.Bucket, lom.Objname = lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname
-		if lom.Bucket == "" || lom.Objname == "" {
-			cmn.Assert(false) // DEBUG
-			return
-		}
-		if bckProvider == "" {
-			bckProvider = cmn.BckProviderFromLocal(lom.ParsedFQN.IsLocal)
-		}
+		lom.BckIsLocal = lom.ParsedFQN.IsLocal
+		fromFQN = true
 	}
-
 	lom.md.uname = Bo2Uname(lom.Bucket, lom.Objname)
-	// bucketmd, bckIsLocal, bprops
+	// bucketmd, local, bprops
 	lom.bucketMD = bowner.Get()
-	if err := lom.initBckIsLocal(bckProvider); err != nil {
-		return err.Error()
+	if bckProvider == "" {
+		lom.BckIsLocal = lom.bucketMD.IsLocal(lom.Bucket)
+		bckProvider = cmn.BckProviderFromLocal(lom.BckIsLocal)
 	}
-	lom.BckProps, _ = lom.bucketMD.Get(lom.Bucket, lom.BckIsLocal)
-	if lom.FQN == "" {
-		lom.FQN, lom.ParsedFQN.Digest, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
+	lom.BckProps, bckPresent = lom.bucketMD.Get(lom.Bucket, lom.BckIsLocal)
+	if lom.BckIsLocal && !bckPresent {
+		return fmt.Sprintf("%s local bucket %s", lom.Bucket, cmn.DoesNotExist)
 	}
-	if lom.ParsedFQN.Bucket == "" || lom.ParsedFQN.Objname == "" {
-		if errstr = lom.resolveFQN(nil, lom.BckIsLocal); errstr != "" {
+	if !fromFQN {
+		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, errstr = hrwMpath(lom.Bucket, lom.Objname)
+		if errstr != "" {
 			return
 		}
+		lom.ParsedFQN.ContentType = fs.ObjectType
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+		lom.HrwFQN = lom.FQN
+		lom.ParsedFQN.IsLocal = lom.BckIsLocal
+		lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname = lom.Bucket, lom.Objname
 	}
-	cmn.Assert(lom.ParsedFQN.Digest != 0)
-	return
-}
-
-func (lom *LOM) resolveFQN(bowner Bowner, bckIsLocal ...bool) (errstr string) {
-	var err error
-	if len(bckIsLocal) == 0 {
-		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN, bowner)
-	} else {
-		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN, nil, lom.BckIsLocal)
-	}
-	if err != nil {
-		errstr = err.Error()
+	if lom.BucketProvider == "" {
+		lom.BucketProvider = bckProvider
 	}
 	return
-}
-
-func (lom *LOM) initBckIsLocal(bckProvider string) error {
-	if bckProvider == cmn.CloudBs {
-		lom.BckIsLocal = false
-	} else if bckProvider == cmn.LocalBs {
-		if !lom.bucketMD.IsLocal(lom.Bucket) {
-			return fmt.Errorf("%s local bucket %s for local provider", lom.Bucket, cmn.DoesNotExist)
-		}
-		lom.BckIsLocal = true
-	} else {
-		lom.BckIsLocal = lom.bucketMD.IsLocal(lom.Bucket)
-	}
-	return nil
 }
 
 // Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
@@ -829,7 +814,7 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, errstr string) {
 	lom.exists = exists
 	if exists {
 		lom.BckIsLocal = local
-		lom.FQN, _, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
+		lom.FQN, _, errstr = HrwFQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
 	}
 	return
 }

@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -115,10 +114,7 @@ func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
 }
 
 func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN ParsedFQN, contentType, prefix string) (fqn string) {
-	spec, ok := f.RegisteredContentTypes[contentType]
-	if !ok {
-		cmn.AssertMsg(false, fmt.Sprintf("Invalid content type '%s'", contentType))
-	}
+	spec := f.RegisteredContentTypes[contentType]
 	fqn = f.FQN(
 		parsedFQN.MpathInfo,
 		contentType,
@@ -141,8 +137,7 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	}
 	spec, found := f.RegisteredContentTypes[parsedFQN.ContentType]
 	if !found {
-		// Quite weird, seemed like workfile but in the end it isn't
-		glog.Warningf("fqn: %q has not registered file type %s", fqn, parsedFQN.ContentType)
+		glog.Errorf("%q: unknown content type %s", fqn, parsedFQN.ContentType)
 		return
 	}
 	origBase, old, ok := spec.ParseUniqueFQN(base)
@@ -156,7 +151,7 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 
 func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, bckIsLocal bool, bucket, objName string) (fqn string) {
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
-		cmn.AssertMsg(false, fmt.Sprintf("contentType %s was not registered", contentType))
+		cmn.AssertMsg(false, contentType)
 	}
 	return mi.MakePathBucketObject(contentType, bucket, objName, bckIsLocal)
 }
@@ -199,7 +194,7 @@ func (wf *ObjectContentResolver) PermToMove() bool    { return true }
 func (wf *ObjectContentResolver) PermToEvict() bool   { return true }
 func (wf *ObjectContentResolver) PermToProcess() bool { return true }
 
-func (wf *ObjectContentResolver) GenUniqueFQN(base, prefix string) string {
+func (wf *ObjectContentResolver) GenUniqueFQN(base, _ string) string {
 	return base
 }
 
@@ -212,13 +207,13 @@ func (wf *WorkfileContentResolver) PermToEvict() bool   { return true }
 func (wf *WorkfileContentResolver) PermToProcess() bool { return false }
 
 func (wf *WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
-	// append prefix to mark what created the workfile
-	dir, fname := filepath.Split(base)
+	var (
+		dir, fname = filepath.Split(base)
+		tieBreaker = cmn.GenTie()
+	)
 	fname = prefix + "." + fname
 	base = filepath.Join(dir, fname)
-
-	tieBreaker := strconv.FormatInt(time.Now().UnixNano(), 16)
-	return base + "." + tieBreaker[5:] + "." + spid
+	return base + "." + tieBreaker + "." + spid
 }
 
 func (wf *WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old bool, ok bool) {

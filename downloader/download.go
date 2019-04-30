@@ -898,7 +898,7 @@ func (t *task) download() {
 }
 
 func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
-	postFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
+	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 	// create request
 	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)

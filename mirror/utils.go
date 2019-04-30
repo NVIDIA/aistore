@@ -48,10 +48,9 @@ loop:
 }
 
 func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err error) {
-	mp := lom.ParsedFQN.MpathInfo
-	lom.ParsedFQN.MpathInfo = mpathInfo // to generate work fname
-	workFQN := lom.GenFQN(fs.WorkfileType, fs.WorkfilePut)
-	lom.ParsedFQN.MpathInfo = mp
+	parsedFQN := lom.ParsedFQN
+	parsedFQN.MpathInfo = mpathInfo
+	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 	_, err = lom.CopyObject(workFQN, buf)
 	if err != nil {

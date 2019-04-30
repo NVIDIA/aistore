@@ -32,7 +32,7 @@ const (
 
 type (
 	FQNResolver interface {
-		FQN2mountpath(string) string
+		FQN2mountpath(fqn string) (mpath string)
 	}
 	IostatContext struct {
 		fqnr        FQNResolver

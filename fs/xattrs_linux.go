@@ -6,35 +6,26 @@ package fs
 
 import (
 	"syscall"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 const maxAttrSize = 4096
 
-// GetXattr gets xattr by name (NOTE: the size is limited by maxAttrSize - see the buffered version below)
+// GetXattr gets xattr by name - see also the buffered version below
 func GetXattr(fqn, attrname string) ([]byte, error) {
-	data := make([]byte, maxAttrSize)
-	read, err := syscall.Getxattr(fqn, attrname, data)
-	cmn.Assert(read < maxAttrSize)
-	if err != nil {
-		return nil, err
-	}
-	if read > 0 {
-		return data[:read], nil
-	}
-	return nil, nil
+	buf := make([]byte, maxAttrSize)
+	return GetXattrBuf(fqn, attrname, buf)
 }
 
 // GetXattr gets xattr by name via provided buffer
-func GetXattrBuf(fqn, attrname string, data []byte) (int, error) {
-	cmn.Assert(data != nil)
-	read, err := syscall.Getxattr(fqn, attrname, data)
-	cmn.Assert(read < len(data))
-	if err != nil {
-		return 0, err
+func GetXattrBuf(fqn, attrname string, buf []byte) ([]byte, error) {
+	n, err := syscall.Getxattr(fqn, attrname, buf)
+	if err != nil { // returns ERANGE if len(data) is not enough
+		return nil, err
 	}
-	return read, nil
+	if n < 0 {
+		return nil, syscall.ENOENT
+	}
+	return buf[:n], nil
 }
 
 // SetXattr sets xattr name = value

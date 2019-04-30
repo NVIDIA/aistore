@@ -82,7 +82,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, errstr := cluster.FQN(tp, bucket, objname, bckIsLocal)
+		fqnMeta, _, errstr := cluster.HrwFQN(tp, bucket, objname, bckIsLocal)
 		if errstr != "" {
 			return errors.New(errstr)
 		}
@@ -112,14 +112,14 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
+			fqn, _, errstr = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			fqn, _, errstr = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
 		}
 		if errstr != "" {
 			glog.Errorf(errstr)
@@ -131,7 +131,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, _, errstr := cluster.FQN(MetaType, bucket, objName, bckIsLocal)
+		fqn, _, errstr := cluster.HrwFQN(MetaType, bucket, objName, bckIsLocal)
 		if errstr != "" {
 			glog.Errorf(errstr)
 			return
@@ -176,7 +176,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
 			}
-			objFQN, _, errstr = cluster.FQN(SliceType, bucket, objName, bckIsLocal)
+			objFQN, _, errstr = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return
@@ -187,7 +187,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 					iReq.Sender, bucket, objName)
 			}
 			// FIXME: vs. lom.Fill() a few lines below
-			objFQN, _, errstr = cluster.FQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			objFQN, _, errstr = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
 			if errstr != "" {
 				glog.Error(errstr)
 				return

@@ -24,10 +24,10 @@ var (
 
 type DSortFile struct{}
 
-func (df *DSortFile) PermToEvict() bool                       { return false }
-func (df *DSortFile) PermToMove() bool                        { return false }
-func (df *DSortFile) PermToProcess() bool                     { return false }
-func (df *DSortFile) GenUniqueFQN(base, prefix string) string { return base }
+func (df *DSortFile) PermToEvict() bool                  { return false }
+func (df *DSortFile) PermToMove() bool                   { return false }
+func (df *DSortFile) PermToProcess() bool                { return false }
+func (df *DSortFile) GenUniqueFQN(base, _ string) string { return base }
 func (df *DSortFile) ParseUniqueFQN(base string) (orig string, old bool, ok bool) {
 	return base, false, true
 }
