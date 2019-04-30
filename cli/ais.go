@@ -23,11 +23,11 @@ var (
 
 func main() {
 	if err := commands.SetNTestAISURL(url); err != nil {
-		cmn.ExitInfof("Could not connect to AIS cluster: %s", err)
+		cmn.ExitInfof("Could not connect to AIS cluster: %s.", err)
 	}
 
 	if !commands.IsAutoCompConfigured() {
-		fmt.Printf("Auto complete script not installed in %q\n", commands.AutoCompDir)
+		fmt.Printf("Auto complete script not installed in %q.\n", commands.AutoCompDir)
 	}
 
 	aisCLI := commands.New(build, version)

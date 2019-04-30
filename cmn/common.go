@@ -74,10 +74,9 @@ const (
 )
 
 type (
-	StringPredicate func(string) bool
-	StringSet       map[string]struct{}
-	SimpleKVs       map[string]string
-	SimpleKVsEntry  struct {
+	StringSet      map[string]struct{}
+	SimpleKVs      map[string]string
+	SimpleKVsEntry struct {
 		Key   string
 		Value string
 	}

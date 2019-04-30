@@ -243,7 +243,4 @@ if [[ $AUTHENABLED = "true" ]]; then
 fi
 sleep 0.1
 
-# enable auto-completion
-source $DIR/../../cli/ais_autocomplete
-
 echo done

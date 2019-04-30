@@ -32,7 +32,8 @@ const (
 )
 
 var (
-	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also print files that were not matched by regex, template or extension"}
+	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list files that were not matched by regex and template"}
+	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all files in bucket (including EC replicas) and print their status"}
 	newBucketFlag     = cli.StringFlag{Name: "new-bucket", Usage: "new name of bucket"}
 	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
@@ -63,6 +64,7 @@ var (
 				objPropsFlag,
 				objLimitFlag,
 				showUnmatchedFlag,
+				allFlag,
 			},
 			baseBucketFlags...),
 		bucketSetProps: append(
@@ -281,6 +283,11 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 
 	prefix := parseFlag(c, prefixFlag)
 	props := "name," + parseFlag(c, objPropsFlag)
+	if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
+		// If `all` flag is set print status of the file so that the output is easier to understand -
+		// there might be multiple files with the same name listed (e.g EC replicas)
+		props = fmt.Sprintf("%s,%s", props, "status")
+	}
 	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag))
 	if err != nil {
 		return err
@@ -466,18 +473,22 @@ func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 	return err
 }
 
-type objectListFilter struct {
-	predicates []cmn.StringPredicate
-}
+type (
+	entryFilter func(*cmn.BucketEntry) bool
 
-func (o *objectListFilter) addFilter(f cmn.StringPredicate) {
+	objectListFilter struct {
+		predicates []entryFilter
+	}
+)
+
+func (o *objectListFilter) addFilter(f entryFilter) {
 	o.predicates = append(o.predicates, f)
 }
 
-func (o *objectListFilter) matchesAll(objName string) bool {
+func (o *objectListFilter) matchesAll(obj *cmn.BucketEntry) bool {
 	// Check if object name matches *all* specified predicates
 	for _, predicate := range o.predicates {
-		if !predicate(objName) {
+		if !predicate(obj) {
 			return false
 		}
 	}
@@ -486,7 +497,7 @@ func (o *objectListFilter) matchesAll(objName string) bool {
 
 func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching []cmn.BucketEntry, rest []cmn.BucketEntry) {
 	for _, obj := range entries {
-		if o.matchesAll(obj.Name) {
+		if o.matchesAll(obj) {
 			matching = append(matching, *obj)
 		} else {
 			rest = append(rest, *obj)
@@ -498,13 +509,18 @@ func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching []cmn.Bu
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
+	if !flagIsSet(c, allFlag) {
+		// Filter out files with status different than OK
+		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.Status == cmn.ObjStatusOK })
+	}
+
 	if regexStr := parseFlag(c, regexFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
 			return nil, err
 		}
 
-		objFilter.addFilter(regex.MatchString)
+		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return regex.MatchString(obj.Name) })
 	}
 
 	if bashTemplate := parseFlag(c, templateFlag); bashTemplate != "" {
@@ -519,7 +535,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 		for objName, hasNext := linksIt(); hasNext; objName, hasNext = linksIt() {
 			matchingObjectNames[objName] = struct{}{}
 		}
-		objFilter.addFilter(func(objName string) bool { _, ok := matchingObjectNames[objName]; return ok })
+		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 	}
 
 	return objFilter, nil
