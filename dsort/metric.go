@@ -17,29 +17,66 @@ const (
 // TimeStats contains statistics about time spent on specific task. It calculates
 // min, max and avg times.
 type TimeStats struct {
-	// total contains total number of milliseconds spend on
+	// Total contains total number of milliseconds spend on
 	// specific task.
 	Total int64 `json:"total_ms"`
 	// Count contains number of time specific task was triggered.
 	Count int64 `json:"count"`
-	Min   int64 `json:"min_ms"`
-	Max   int64 `json:"max_ms"`
-	Avg   int64 `json:"avg_ms"`
+	MinMs int64 `json:"min_ms"`
+	MaxMs int64 `json:"max_ms"`
+	AvgMs int64 `json:"avg_ms"`
+}
+
+// ThroughputStats contains statistics about throughput of specific task.
+type ThroughputStats struct {
+	total int64
+	count int64
+
+	MinTp int64 `json:"min_throughput"`
+	MaxTp int64 `json:"max_throughput"`
+	AvgTp int64 `json:"avg_throughput"`
+}
+
+// ShardStats contains statistics about single shard processing.
+type ShardStats struct {
+	*TimeStats
+	*ThroughputStats
 }
 
 func newTimeStats() *TimeStats {
 	return &TimeStats{
-		Min: math.MaxInt64,
+		MinMs: math.MaxInt64,
 	}
 }
 
-func (ts *TimeStats) update(newTime time.Duration) {
+func (ts *TimeStats) updateTime(newTime time.Duration) {
 	t := newTime.Nanoseconds() / int64(time.Millisecond)
 	ts.Total += t
 	ts.Count++
-	ts.Min = cmn.MinI64(ts.Min, t)
-	ts.Max = cmn.MaxI64(ts.Max, t)
-	ts.Avg = ts.Total / ts.Count
+	ts.MinMs = cmn.MinI64(ts.MinMs, t)
+	ts.MaxMs = cmn.MaxI64(ts.MaxMs, t)
+	ts.MaxMs = ts.Total / ts.Count
+}
+
+func newThroughputStats() *ThroughputStats {
+	return &ThroughputStats{
+		MinTp: math.MaxInt64,
+	}
+}
+
+func (tps *ThroughputStats) updateThroughput(throughput int64) {
+	tps.total += throughput
+	tps.count++
+	tps.MinTp = cmn.MinI64(tps.MinTp, throughput)
+	tps.MaxTp = cmn.MaxI64(tps.MaxTp, throughput)
+	tps.AvgTp = tps.total / tps.count
+}
+
+func newShardStats() *ShardStats {
+	return &ShardStats{
+		newTimeStats(),
+		newThroughputStats(),
+	}
 }
 
 // PhaseInfo contains general stats and state for given phase. It is base struct
@@ -100,7 +137,7 @@ type LocalExtraction struct {
 	// to given moment.
 	ExtractedToDiskSize int64 `json:"extracted_to_disk_size"`
 	// ShardExtractionStats describes time statistics about single shard extraction.
-	ShardExtractionStats *TimeStats `json:"single_shard_stats,omitempty"`
+	ShardExtractionStats *ShardStats `json:"single_shard_stats,omitempty"`
 }
 
 // MetaSorting contains metrics for second phase of DSort.
@@ -130,7 +167,7 @@ type ShardCreation struct {
 	// ResponseStats describes time statistics about response to other target.
 	ResponseStats *TimeStats `json:"resp_stats,omitempty"`
 	// ShardCreationStats describes time statistics about single shard creation.
-	ShardCreationStats *TimeStats `json:"single_shard_stats,omitempty"`
+	ShardCreationStats *ShardStats `json:"single_shard_stats,omitempty"`
 }
 
 // Metrics is general struct which contains all stats about DSort run.
@@ -164,11 +201,11 @@ func newMetrics(extended bool) *Metrics {
 	creation := &ShardCreation{}
 
 	if extended {
-		extraction.ShardExtractionStats = newTimeStats()
+		extraction.ShardExtractionStats = newShardStats()
 
 		creation.RequestStats = newTimeStats()
 		creation.ResponseStats = newTimeStats()
-		creation.ShardCreationStats = newTimeStats()
+		creation.ShardCreationStats = newShardStats()
 	}
 
 	sorting.SentStats = newTimeStats()

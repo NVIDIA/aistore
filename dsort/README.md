@@ -144,6 +144,9 @@ which can be monitored. Description of metrics returned for *single node*:
     * `min_ms` - shortest duration of extracting a shard (in milliseconds).
     * `max_ms` - longest duration of extracting a shard (in milliseconds).
     * `avg_ms` - average duration of extracting a shard (in milliseconds).
+    * `min_throughput` - minimum throughput of extracting a shard (in bytes per second).
+    * `max_throughput` - maximum throughput of extracting a shard (in bytes per second).
+    * `avg_throughput` - average throughput of extracting a shard (in bytes per second).
 * `meta_sorting`
   * `started_time` - timestamp when the meta sorting has started.
   * `end_time` - timestamp when the meta sorting has finished.
@@ -189,10 +192,99 @@ which can be monitored. Description of metrics returned for *single node*:
     * `min_ms` - shortest duration of creating a shard (in milliseconds).
     * `max_ms` - longest duration of creating a shard (in milliseconds).
     * `avg_ms` - average duration of creating a shard (in milliseconds).
+    * `min_throughput` - minimum throughput of creating a shard (in bytes per second).
+    * `max_throughput` - maximum throughput of creating a shard (in bytes per second).
+    * `avg_throughput` - average throughput of creating a shard (in bytes per second).
 * `aborted` - informs if the job has been aborted.
 * `archived` - informs if the job has finished and was archived to journal.
 * `description` - description of the job.
 
+Example output for single node:
+```
+{
+  "local_extraction": {
+    "started_time": "2019-04-30T15:48:27.38988387-07:00",
+    "end_time": "2019-04-30T15:48:28.597245399-07:00",
+    "elapsed": 1,
+    "running": false,
+    "finished": true,
+    "seen_count": 1000,
+    "to_seen_count": 1000,
+    "extracted_count": 176,
+    "extracted_size": 2306867200,
+    "extracted_record_count": 7040,
+    "extracted_to_disk_count": 0,
+    "extracted_to_disk_size": 0,
+    "single_shard_stats": {
+      "total_ms": 114285,
+      "count": 176,
+      "min_ms": 34,
+      "max_ms": 649,
+      "avg_ms": 0,
+      "min_throughput": 11488655,
+      "max_throughput": 383883950,
+      "avg_throughput": 32929392
+    }
+  },
+  "meta_sorting": {
+    "started_time": "2019-04-30T15:48:28.597259201-07:00",
+    "end_time": "2019-04-30T15:48:29.202754728-07:00",
+    "elapsed": 0,
+    "running": false,
+    "finished": true,
+    "sent_stats": {
+      "total_ms": 0,
+      "count": 0,
+      "min_ms": 9223372036854775807,
+      "max_ms": 0,
+      "avg_ms": 0
+    },
+    "recv_stats": {
+      "total_ms": 573,
+      "count": 3,
+      "min_ms": 0,
+      "max_ms": 191,
+      "avg_ms": 0
+    }
+  },
+  "shard_creation": {
+    "started_time": "2019-04-30T15:48:29.547443298-07:00",
+    "end_time": "2019-04-30T15:48:50.042338138-07:00",
+    "elapsed": 20,
+    "running": false,
+    "finished": true,
+    "to_create": 265,
+    "created_count": 265,
+    "moved_shard_count": 0,
+    "req_stats": {
+      "total_ms": 539,
+      "count": 7006,
+      "min_ms": 0,
+      "max_ms": 0,
+      "avg_ms": 0
+    },
+    "resp_stats": {
+      "total_ms": 349701,
+      "count": 7006,
+      "min_ms": 0,
+      "max_ms": 49,
+      "avg_ms": 0
+    },
+    "single_shard_stats": {
+      "total_ms": 1053756,
+      "count": 265,
+      "min_ms": 336,
+      "max_ms": 3976,
+      "avg_ms": 0,
+      "min_throughput": 1220900,
+      "max_throughput": 31229390,
+      "avg_throughput": 5780856
+    }
+  },
+  "aborted": false,
+  "archived": true
+}
+```
 
 ## API
 

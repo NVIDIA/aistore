@@ -233,7 +233,11 @@ ExtractAllShards:
 					metrics.ExtractedToDiskSize += extractedSize
 				}
 				if m.Metrics.extended {
-					metrics.ShardExtractionStats.update(time.Since(beforeExtraction))
+					dur := time.Since(beforeExtraction)
+					throughput := extractedSize / int64(dur.Seconds())
+
+					metrics.ShardExtractionStats.updateTime(dur)
+					metrics.ShardExtractionStats.updateThroughput(throughput)
 				}
 				metrics.Unlock()
 
@@ -401,8 +405,12 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 exit:
 	if m.Metrics.extended {
 		metrics.Lock()
+		dur := time.Since(beforeCreation)
+		throughput := lom.Size() / int64(dur.Seconds())
+
 		metrics.CreatedCnt++
-		metrics.ShardCreationStats.update(time.Since(beforeCreation))
+		metrics.ShardCreationStats.updateTime(dur)
+		metrics.ShardCreationStats.updateThroughput(throughput)
 		if si.DaemonID != m.ctx.node.DaemonID {
 			metrics.MovedShardCnt++
 		}
@@ -526,7 +534,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 			m.recManager.Records.Drain() // we do not need it anymore
 
 			metrics.Lock()
-			metrics.SentStats.update(time.Since(beforeSend))
+			metrics.SentStats.updateTime(time.Since(beforeSend))
 			metrics.Unlock()
 			return
 		}
@@ -550,7 +558,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		expectedReceived++
 
 		metrics.Lock()
-		metrics.RecvStats.update(time.Since(beforeRecv))
+		metrics.RecvStats.updateTime(time.Since(beforeRecv))
 		metrics.Unlock()
 
 		t := targetOrder[:0]

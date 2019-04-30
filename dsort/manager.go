@@ -831,7 +831,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				}
 				if m.Metrics.extended {
 					metrics.Lock()
-					metrics.RequestStats.update(time.Since(beforeSend))
+					metrics.RequestStats.updateTime(time.Since(beforeSend))
 					metrics.Unlock()
 				}
 				wg.Done()
@@ -868,7 +868,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 
 			if m.Metrics.extended {
 				metrics.Lock()
-				metrics.ResponseStats.update(time.Since(beforeRecv))
+				metrics.ResponseStats.updateTime(time.Since(beforeRecv))
 				metrics.Unlock()
 			}
 
