@@ -537,30 +537,41 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	t.gfn.local.activate()
-	enabled, exists := t.fsprg.enableMountpath(mountpath)
-	if !enabled && exists {
+	enabled, err := t.fsprg.enableMountpath(mountpath)
+
+	if err != nil {
+		if _, ok := err.(cmn.NoMountpathError); ok {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		} else {
+			// cmn.InvalidMountpathError
+			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		}
+		t.gfn.local.deactivate()
+		return
+	}
+	if !enabled {
 		w.WriteHeader(http.StatusNoContent)
 		t.gfn.local.deactivate()
 		return
 	}
 
-	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
-		t.gfn.local.deactivate()
-		return
-	}
 	t.xactions.stopMountpathXactions()
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := t.fsprg.disableMountpath(mountpath)
-	if !enabled && exists {
-		w.WriteHeader(http.StatusNoContent)
+	disabled, err := t.fsprg.disableMountpath(mountpath)
+	if err != nil {
+		if _, ok := err.(*cmn.NoMountpathError); ok {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+		} else {
+			// cmn.InvalidMountpathError
+			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
-	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
+	if !disabled {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -571,7 +582,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	t.gfn.local.activate()
 	err := t.fsprg.addMountpath(mountpath)
 	if err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
+		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %s", err.Error()))
 		t.gfn.local.deactivate()
 		return
 	}
@@ -579,9 +590,8 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := t.fsprg.removeMountpath(mountpath)
-	if err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
+	if err := t.fsprg.removeMountpath(mountpath); err != nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %s", err.Error()))
 		return
 	}
 	t.xactions.stopMountpathXactions()
@@ -1111,7 +1121,7 @@ func (t *targetrunner) enable() error {
 }
 
 // Disable implements fspathDispatcher interface
-func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
+func (t *targetrunner) Disable(mountpath string, why string) (disabled bool, err error) {
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	t.xactions.stopMountpathXactions()

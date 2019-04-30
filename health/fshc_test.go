@@ -54,9 +54,12 @@ func newMockFSDispatcher(mpathToFail string) *MockFSDispatcher {
 	}
 }
 
-func (d *MockFSDispatcher) Disable(path, why string) (disabled, exists bool) {
+func (d *MockFSDispatcher) Disable(path, why string) (disabled bool, err error) {
 	d.faultDetected = path == d.faultyPath
-	return d.faultDetected, true
+	if d.faultDetected {
+		return false, fmt.Errorf("fault detected")
+	}
+	return true, nil
 }
 
 func testCheckerCleanup() {

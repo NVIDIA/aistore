@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -112,7 +113,7 @@ type (
 	}
 
 	Validator interface {
-		Validate() error
+		Validate(c *Config) error
 	}
 	PropsValidator interface {
 		ValidateAsProps(args *ValidationArgs) error
@@ -124,7 +125,6 @@ var (
 	supportedL4Protos  = []string{tcpProto}
 	supportedL7Protos  = []string{httpProto, httpsProto}
 
-	_ Validator = &Config{}
 	_ Validator = &CksumConf{}
 	_ Validator = &LRUConf{}
 	_ Validator = &MirrorConf{}
@@ -137,6 +137,8 @@ var (
 	_ Validator = &NetConf{}
 	_ Validator = &DownloaderConf{}
 	_ Validator = &DSortConf{}
+	_ Validator = &FSPathsConf{}
+	_ Validator = &TestfspathConf{}
 
 	_ PropsValidator = &CksumConf{}
 	_ PropsValidator = &LRUConf{}
@@ -309,7 +311,7 @@ type Config struct {
 	Replication      ReplicationConf `json:"replication"`
 	Cksum            CksumConf       `json:"cksum"`
 	Ver              VersionConf     `json:"version"`
-	FSpaths          SimpleKVs       `json:"fspaths"`
+	FSpaths          FSPathsConf     `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`
 	Net              NetConf         `json:"net"`
 	FSHC             FSHCConf        `json:"fshc"`
@@ -540,6 +542,10 @@ type DSortConf struct {
 	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
 }
 
+type FSPathsConf struct {
+	SimpleKVs
+}
+
 func SetLogLevel(config *Config, loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
@@ -636,14 +642,21 @@ func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
-		&c.Downloader, &c.DSort,
+		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths,
 	}
 	for _, validator := range validators {
-		if err := validator.Validate(); err != nil {
+		if err := validator.Validate(c); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// TestingEnv returns true if config is set to a development environment
+// where a single local filesystem is partitioned between all (locally running)
+// targets and is used for both local and Cloud buckets
+func (c *Config) TestingEnv() bool {
+	return c.TestFSP.Count > 0
 }
 
 // ipv4ListsOverlap checks if two comma-separated ipv4 address lists
@@ -670,7 +683,7 @@ func validKeepaliveType(t string) bool {
 	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }
 
-func (c *DiskConf) Validate() (err error) {
+func (c *DiskConf) Validate(_ *Config) (err error) {
 	lwm, hwm := c.DiskUtilLowWM, c.DiskUtilHighWM
 	if lwm <= 0 || hwm <= lwm || hwm > 100 {
 		return fmt.Errorf("invalid disk (disk_util_lwm, disk_util_hwm) configuration %+v", c)
@@ -695,7 +708,7 @@ func (c *DiskConf) Validate() (err error) {
 	return nil
 }
 
-func (c *LRUConf) Validate() (err error) {
+func (c *LRUConf) Validate(_ *Config) (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
 		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration %+v", c)
@@ -713,10 +726,10 @@ func (c *LRUConf) ValidateAsProps(args *ValidationArgs) (err error) {
 	if !c.Enabled {
 		return nil
 	}
-	return c.Validate()
+	return c.Validate(nil)
 }
 
-func (c *CksumConf) Validate() error {
+func (c *CksumConf) Validate(_ *Config) error {
 	if c.Type != ChecksumXXHash && c.Type != ChecksumNone {
 		return fmt.Errorf("invalid checksum.type: %s (expected one of [%s, %s])", c.Type, ChecksumXXHash, ChecksumNone)
 	}
@@ -731,15 +744,15 @@ func (c *CksumConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (c *VersionConf) Validate() error {
+func (c *VersionConf) Validate(_ *Config) error {
 	if c.ValidateWarmGet && !c.Enabled {
 		return errors.New("validate-warm-get requires versioning to be enabled")
 	}
 	return nil
 }
-func (c *VersionConf) ValidateAsProps() error { return c.Validate() }
+func (c *VersionConf) ValidateAsProps() error { return c.Validate(nil) }
 
-func (c *MirrorConf) Validate() error {
+func (c *MirrorConf) Validate(_ *Config) error {
 	if c.UtilThresh < 0 || c.UtilThresh > 100 {
 		return fmt.Errorf("bad mirror.util_thresh: %v (expected value in range [0, 100])", c.UtilThresh)
 	}
@@ -756,10 +769,10 @@ func (c *MirrorConf) ValidateAsProps(args *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
-	return c.Validate()
+	return c.Validate(nil)
 }
 
-func (c *ECConf) Validate() error {
+func (c *ECConf) Validate(_ *Config) error {
 	if c.ObjSizeLimit < 0 {
 		return fmt.Errorf("bad ec.obj_size_limit: %d (expected >=0)", c.ObjSizeLimit)
 	}
@@ -780,7 +793,7 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	if !args.BckIsLocal {
 		return fmt.Errorf("erasure coding does not support cloud buckets")
 	}
-	if err := c.Validate(); err != nil {
+	if err := c.Validate(nil); err != nil {
 		return err
 	}
 	if required := c.RequiredEncodeTargets(); args.TargetCnt < required {
@@ -793,7 +806,7 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	return nil
 }
 
-func (c *TimeoutConf) Validate() (err error) {
+func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	if c.Default, err = time.ParseDuration(c.DefaultStr); err != nil {
 		return fmt.Errorf("bad timeout.default format %s, err %v", c.DefaultStr, err)
 	}
@@ -821,14 +834,14 @@ func (c *TimeoutConf) Validate() (err error) {
 	return nil
 }
 
-func (c *RebalanceConf) Validate() (err error) {
+func (c *RebalanceConf) Validate(_ *Config) (err error) {
 	if c.DestRetryTime, err = time.ParseDuration(c.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("bad rebalance.dest_retry_time format %s, err %v", c.DestRetryTimeStr, err)
 	}
 	return nil
 }
 
-func (c *PeriodConf) Validate() (err error) {
+func (c *PeriodConf) Validate(_ *Config) (err error) {
 	if c.StatsTime, err = time.ParseDuration(c.StatsTimeStr); err != nil {
 		return fmt.Errorf("bad periodic.stats_time format %s, err %v", c.StatsTimeStr, err)
 	}
@@ -838,7 +851,7 @@ func (c *PeriodConf) Validate() (err error) {
 	return nil
 }
 
-func (c *KeepaliveConf) Validate() (err error) {
+func (c *KeepaliveConf) Validate(_ *Config) (err error) {
 	if c.Proxy.Interval, err = time.ParseDuration(c.Proxy.IntervalStr); err != nil {
 		return fmt.Errorf("bad keepalivetracker.proxy.interval %s", c.Proxy.IntervalStr)
 	}
@@ -854,7 +867,7 @@ func (c *KeepaliveConf) Validate() (err error) {
 	return nil
 }
 
-func (c *NetConf) Validate() (err error) {
+func (c *NetConf) Validate(_ *Config) (err error) {
 	if !StringInSlice(c.L4.Proto, supportedL4Protos) {
 		return fmt.Errorf("l4 proto is not recognized %s, expected one of: %s", c.L4.Proto, supportedL4Protos)
 	}
@@ -909,14 +922,14 @@ func (c *NetConf) Validate() (err error) {
 	return nil
 }
 
-func (c *DownloaderConf) Validate() (err error) {
+func (c *DownloaderConf) Validate(_ *Config) (err error) {
 	if c.Timeout, err = time.ParseDuration(c.TimeoutStr); err != nil {
 		return fmt.Errorf("bad downloader.timeout %s", c.TimeoutStr)
 	}
 	return nil
 }
 
-func (c *DSortConf) Validate() (err error) {
+func (c *DSortConf) Validate(_ *Config) (err error) {
 	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
 		return fmt.Errorf("bad distributed_sort.duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
 	}
@@ -930,6 +943,54 @@ func (c *DSortConf) Validate() (err error) {
 		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 	}
 	return nil
+}
+
+func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
+	// Don't validate if testing environment
+	if contextConfig.TestingEnv() {
+		return nil
+	}
+
+	if len(c.SimpleKVs) == 0 {
+		return fmt.Errorf("expected at least one mountpath in fspaths config")
+	}
+
+	for k, mpath := range c.SimpleKVs {
+		cleanMpath, err := ValidateMpath(mpath)
+		if err != nil {
+			return err
+		}
+		c.SimpleKVs[k] = cleanMpath
+	}
+
+	return nil
+}
+
+func (c *TestfspathConf) Validate(contextConfig *Config) (err error) {
+	// Don't validate rest when count is not > 0
+	if !contextConfig.TestingEnv() {
+		return nil
+	}
+
+	cleanMpath, err := ValidateMpath(c.Root)
+	if err != nil {
+		return err
+	}
+	c.Root = cleanMpath
+
+	return nil
+}
+
+func ValidateMpath(mpath string) (string, error) {
+	cleanMpath := filepath.Clean(mpath)
+
+	if cleanMpath[0] != filepath.Separator {
+		return mpath, NewInvalidaMountpathError(mpath, "mountpath must be an absolute path")
+	}
+	if cleanMpath == string(filepath.Separator) {
+		return "", NewInvalidaMountpathError(mpath, "root directory is not a valid mountpath")
+	}
+	return cleanMpath, nil
 }
 
 // setGLogVModule sets glog's vmodule flag
@@ -1125,7 +1186,7 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 
 	// validate after everything is set
 	for val := range validators {
-		err := val.Validate()
+		err := val.Validate(conf)
 		if err != nil {
 			GCO.DiscardUpdate()
 			return err
@@ -1146,13 +1207,6 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 }
 
 // ========== Cluster Wide Config =========
-
-// TestingEnv returns true if AIStore is running in a development environment
-// where a single local filesystem is partitioned between all (locally running)
-// targets and is used for both local and Cloud buckets
-func TestingEnv() bool {
-	return GCO.Get().TestFSP.Count > 0
-}
 
 func CheckDebug(pkgName string) (logLvl glog.Level, ok bool) {
 	logLvl, ok = pkgDebug[pkgName]

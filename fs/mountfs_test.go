@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -79,6 +81,16 @@ func TestAddExistingMountpath(t *testing.T) {
 	assertMountpathCount(t, mfs, 1, 0)
 }
 
+func TestAddIncorrectMountpath(t *testing.T) {
+	mfs := NewMountedFS()
+	err := mfs.Add("tmp/not/absolute/path")
+	if err == nil {
+		t.Error("expected adding incorrect mountpath to fail")
+	}
+
+	assertMountpathCount(t, mfs, 0, 0)
+}
+
 func TestAddAlreadyAddedMountpath(t *testing.T) {
 	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
@@ -141,9 +153,10 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 
 func TestDisableNonExistingMountpath(t *testing.T) {
 	mfs := NewMountedFS()
-	disabled, exists := mfs.Disable("/tmp")
-	if disabled || exists {
-		t.Error("disabling was successful or mountpath exists")
+	_, err := mfs.Disable("/tmp")
+
+	if err == nil {
+		t.Error("disabling non existing mountpath should not be successful")
 	}
 
 	assertMountpathCount(t, mfs, 0, 0)
@@ -156,9 +169,10 @@ func TestDisableExistingMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	disabled, exists := mfs.Disable("/tmp")
-	if !disabled || !exists {
-		t.Error("disabling was not successful or mountpath does not exists")
+	disabled, err := mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !disabled {
+		t.Error("disabling was not successful")
 	}
 
 	assertMountpathCount(t, mfs, 0, 1)
@@ -171,14 +185,16 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	disabled, exists := mfs.Disable("/tmp")
-	if !disabled || !exists {
-		t.Error("disabling was not successful or mountpath does not exists")
+	disabled, err := mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !disabled {
+		t.Error("disabling was not successful")
 	}
 
-	disabled, exists = mfs.Disable("/tmp")
-	if disabled || !exists {
-		t.Error("disabling was successful or mountpath does not exists")
+	disabled, err = mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if disabled {
+		t.Error("already disabled mountpath should not be disabled again")
 	}
 
 	assertMountpathCount(t, mfs, 0, 1)
@@ -186,9 +202,10 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 
 func TestEnableNonExistingMountpath(t *testing.T) {
 	mfs := NewMountedFS()
-	enabled, exists := mfs.Enable("/tmp")
-	if enabled || exists {
-		t.Error("enabling was successful or mountpath exists")
+	_, err := mfs.Enable("/tmp")
+
+	if err == nil {
+		t.Error("enabling nonexisting mountpath should not end with error")
 	}
 
 	assertMountpathCount(t, mfs, 0, 0)
@@ -201,9 +218,10 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	enabled, exists := mfs.Enable("/tmp")
-	if enabled || !exists {
-		t.Error("enabling was successful or mountpath does not exists")
+	enabled, err := mfs.Enable("/tmp")
+	tassert.CheckFatal(t, err)
+	if enabled {
+		t.Error("already enabled mountpath should not be enabled again")
 	}
 
 	assertMountpathCount(t, mfs, 1, 0)
@@ -216,14 +234,16 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	disabled, exists := mfs.Disable("/tmp")
-	if !disabled || !exists {
-		t.Error("disabling was not successful or mountpath does not exists")
+	disabled, err := mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !disabled {
+		t.Error("disabling was not successful")
 	}
 
-	enabled, exists := mfs.Enable("/tmp")
-	if !enabled || !exists {
-		t.Error("enabling was not successful or mountpath does not exists")
+	enabled, err := mfs.Enable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !enabled {
+		t.Error("enabling was not successful")
 	}
 
 	assertMountpathCount(t, mfs, 1, 0)
@@ -236,21 +256,24 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 		t.Error("adding existing mountpath failed")
 	}
 
-	disabled, exists := mfs.Disable("/tmp")
-	if !disabled || !exists {
-		t.Error("disabling was not successful or mountpath does not exists")
+	disabled, err := mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !disabled {
+		t.Error("disabling was not successful")
 	}
 
 	assertMountpathCount(t, mfs, 0, 1)
 
-	enabled, exists := mfs.Enable("/tmp")
-	if !enabled || !exists {
-		t.Error("enabling was not successful or mountpath does not exists")
+	enabled, err := mfs.Enable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !enabled {
+		t.Error("enabling was not successful")
 	}
 
-	enabled, exists = mfs.Enable("/tmp")
-	if enabled || !exists {
-		t.Error("enabling was successful or mountpath does not exists")
+	enabled, err = mfs.Enable("/tmp")
+	tassert.CheckFatal(t, err)
+	if enabled {
+		t.Error("enabling already enabled mountpath should not be successful")
 	}
 
 	assertMountpathCount(t, mfs, 1, 0)
@@ -285,9 +308,10 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 
 	assertMountpathCount(t, mfs, 2, 0)
 
-	disabled, exists := mfs.Disable("/tmp")
-	if !disabled || !exists {
-		t.Error("disabling was not successful or mountpath does not exists")
+	disabled, err := mfs.Disable("/tmp")
+	tassert.CheckFatal(t, err)
+	if !disabled {
+		t.Error("disabling was not successful")
 	}
 
 	assertMountpathCount(t, mfs, 1, 1)

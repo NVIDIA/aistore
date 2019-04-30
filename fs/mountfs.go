@@ -115,11 +115,10 @@ func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: 
 // MountpathInfo
 //
 
-func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
-	cleanPath := filepath.Clean(path)
+func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	mi := &MountpathInfo{
 		Path:       cleanPath,
-		OrigPath:   path,
+		OrigPath:   origPath,
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
@@ -219,33 +218,39 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 }
 
 // Add adds new mountpath to the target's mountpaths.
+// FIXME: unify error messages for original and clean mountpath
 func (mfs *MountedFS) Add(mpath string) error {
+	cleanMpath, err := cmn.ValidateMpath(mpath)
+	if err != nil {
+		return err
+	}
+
 	separator := string(filepath.Separator)
 	for _, bucket := range []string{cmn.LocalBs, cmn.CloudBs} {
 		invalidMpath := separator + bucket
-		if strings.HasSuffix(mpath, invalidMpath) {
+		if strings.HasSuffix(cleanMpath, invalidMpath) {
 			return fmt.Errorf("cannot add fspath %q with suffix %q", mpath, invalidMpath)
 		}
 		invalidMpath += separator
-		if strings.Contains(mpath, invalidMpath) {
+		if strings.Contains(cleanMpath, invalidMpath) {
 			return fmt.Errorf("fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
 		}
 	}
 
-	if _, err := os.Stat(mpath); err != nil {
+	if _, err := os.Stat(cleanMpath); err != nil {
 		return fmt.Errorf("fspath %q %s, err: %v", mpath, cmn.DoesNotExist, err)
 	}
 	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(mpath, &statfs); err != nil {
+	if err := syscall.Statfs(cleanMpath, &statfs); err != nil {
 		return fmt.Errorf("cannot statfs fspath %q, err: %v", mpath, err)
 	}
 
-	fs, err := Fqn2fsAtStartup(mpath)
+	fs, err := Fqn2fsAtStartup(cleanMpath)
 	if err != nil {
 		return fmt.Errorf("cannot get filesystem: %v", err)
 	}
 
-	mp := newMountpath(mpath, statfs.Fsid, fs)
+	mp := newMountpath(cleanMpath, mpath, statfs.Fsid, fs)
 
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
@@ -261,7 +266,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	}
 
 	availablePaths[mp.Path] = mp
-	mfs.fsIDs[mp.Fsid] = mpath
+	mfs.fsIDs[mp.Fsid] = cleanMpath
 	mfs.updatePaths(availablePaths, disabledPaths)
 	return nil
 }
@@ -278,21 +283,25 @@ func (mfs *MountedFS) Remove(mpath string) error {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	mpath = filepath.Clean(mpath)
+	cleanMpath, err := cmn.ValidateMpath(mpath)
+	if err != nil {
+		return err
+	}
+
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
-	if mp, exists = availablePaths[mpath]; !exists {
-		if mp, exists = disabledPaths[mpath]; !exists {
+	if mp, exists = availablePaths[cleanMpath]; !exists {
+		if mp, exists = disabledPaths[cleanMpath]; !exists {
 			return fmt.Errorf("tried to remove non-existing mountpath: %v", mpath)
 		}
 
-		delete(disabledPaths, mpath)
+		delete(disabledPaths, cleanMpath)
 		delete(mfs.fsIDs, mp.Fsid)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		return nil
 	}
 
-	delete(availablePaths, mpath)
-	mfs.Iostats.RemoveMpath(mpath)
+	delete(availablePaths, cleanMpath)
+	mfs.Iostats.RemoveMpath(cleanMpath)
 	delete(mfs.fsIDs, mp.Fsid)
 	if l := len(availablePaths); l == 0 {
 		glog.Errorf("removed the last available mountpath %s", mp)
@@ -307,52 +316,59 @@ func (mfs *MountedFS) Remove(mpath string) error {
 // Enable enables previously disabled mountpath. enabled is set to
 // true if mountpath has been moved from disabled to available and exists is
 // set to true if such mountpath even exists.
-func (mfs *MountedFS) Enable(mpath string) (enabled, exists bool) {
+func (mfs *MountedFS) Enable(mpath string) (enabled bool, err error) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	mpath = filepath.Clean(mpath)
+	cleanMpath, err := cmn.ValidateMpath(mpath)
+	if err != nil {
+		return false, err
+	}
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
-	if _, ok := availablePaths[mpath]; ok {
-		return false, true
+	if _, ok := availablePaths[cleanMpath]; ok {
+		return false, nil
 	}
 
-	if mp, ok := disabledPaths[mpath]; ok {
-		availablePaths[mpath] = mp
-		mfs.Iostats.AddMpath(mpath, mp.FileSystem)
-		delete(disabledPaths, mpath)
+	if mp, ok := disabledPaths[cleanMpath]; ok {
+		availablePaths[cleanMpath] = mp
+		mfs.Iostats.AddMpath(cleanMpath, mp.FileSystem)
+		delete(disabledPaths, cleanMpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
-		return true, true
+		return true, nil
 	}
 
-	return
+	return false, cmn.NewNoMountpathError(mpath)
 }
 
 // Disable disables an available mountpath. disabled is set to true if
 // mountpath has been moved from available to disabled and exists is set to
 // true if such mountpath even exists.
-func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
+func (mfs *MountedFS) Disable(mpath string) (disabled bool, err error) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	mpath = filepath.Clean(mpath)
+	cleanMpath, err := cmn.ValidateMpath(mpath)
+	if err != nil {
+		return false, err
+	}
+
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
-	if mpathInfo, ok := availablePaths[mpath]; ok {
-		disabledPaths[mpath] = mpathInfo
-		mfs.Iostats.RemoveMpath(mpath)
-		delete(availablePaths, mpath)
+	if mpathInfo, ok := availablePaths[cleanMpath]; ok {
+		disabledPaths[cleanMpath] = mpathInfo
+		mfs.Iostats.RemoveMpath(cleanMpath)
+		delete(availablePaths, cleanMpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		if l := len(availablePaths); l == 0 {
 			glog.Errorf("disabled the last available mountpath %s", mpathInfo)
 		} else {
 			glog.Infof("disabled mountpath %s (%d remain(s) active)", mpathInfo, l)
 		}
-		return true, true
+		return true, nil
 	}
-	if _, ok := disabledPaths[mpath]; ok {
-		return false, true
+	if _, ok := disabledPaths[cleanMpath]; ok {
+		return false, nil
 	}
-	return
+	return false, cmn.NewNoMountpathError(mpath)
 }
 
 // Returns number of available mountpaths

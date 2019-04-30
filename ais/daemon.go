@@ -231,13 +231,13 @@ func aisinit(version, build string) {
 
 		// fs.Mountpaths must be inited prior to all runners that utilize them
 		// for mountpath definition, see fs/mountfs.go
-		if cmn.TestingEnv() {
+		if cmn.GCO.Get().TestingEnv() {
 			glog.Infof("Warning: configuring %d fspaths for testing", config.TestFSP.Count)
 			fs.Mountpaths.DisableFsIDCheck()
 			t.testCachepathMounts()
 		} else {
-			fsPaths := make([]string, 0, len(config.FSpaths))
-			for path := range config.FSpaths {
+			fsPaths := make([]string, 0, len(config.FSpaths.SimpleKVs))
+			for path := range config.FSpaths.SimpleKVs {
 				fsPaths = append(fsPaths, path)
 			}
 

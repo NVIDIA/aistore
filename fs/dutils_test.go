@@ -91,16 +91,16 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 
 func TestSearchValidMountPath(t *testing.T) {
 	Mountpaths = NewMountedFS()
-	oldMPs := setAvailableMountPaths("/")
-	mpathInfo, _ := Mountpaths.Path2MpathInfo("/abc")
+	oldMPs := setAvailableMountPaths("/tmp")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("/tmp/abc")
 	longestPrefix := mpathInfo.Path
-	tassert.Errorf(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
+	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
 	Mountpaths = NewMountedFS()
-	oldMPs := setAvailableMountPaths("/")
+	oldMPs := setAvailableMountPaths("/tmp")
 	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
@@ -157,20 +157,12 @@ func TestSimilarCases(t *testing.T) {
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
+	// root is an invalid mountpath
 	Mountpaths = NewMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
-	mpathInfo, _ := Mountpaths.Path2MpathInfo("/tmp")
-	longestPrefix := mpathInfo.Path
-	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
-
-	mpathInfo, _ = Mountpaths.Path2MpathInfo("/tmp/")
-	longestPrefix = mpathInfo.Path
-	tassert.Errorf(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
-
-	mpathInfo, _ = Mountpaths.Path2MpathInfo("/abx")
-	longestPrefix = mpathInfo.Path
-	tassert.Errorf(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
+	mpathInfo, _ := Mountpaths.Path2MpathInfo("/abx")
+	tassert.Errorf(t, mpathInfo == nil, "Expected mpathInfo to be nil when no valid matching mountpath")
 	setAvailableMountPaths(oldMPs...)
 }
 

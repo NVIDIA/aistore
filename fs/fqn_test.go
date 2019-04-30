@@ -26,13 +26,6 @@ func TestFQN2Info(t *testing.T) {
 			[]string{"/tmp"},
 			"/tmp", "obj", "bucket", "objname", true, false,
 		},
-		// FIXME: "/" is not a correct mountpath, config and handleAddMountpathReq validation should be added
-		//{
-		//	"/ as mountpath",
-		//	"/obj/local/bucket/objname",
-		//	[]string{"/"},
-		//	"/", "obj", "bucket", "objname", true, false,
-		//},
 		{
 			"cloud as bucket type",
 			"/tmp/obj/cloud/bucket/objname",
@@ -67,26 +60,26 @@ func TestFQN2Info(t *testing.T) {
 		// bad
 		{
 			"too short name",
-			"/bucket/objname",
-			[]string{"/"},
+			"/tmp/bucket/objname",
+			[]string{"/tmp"},
 			"", "", "", "", false, true,
 		},
 		{
 			"empty bucket name",
-			"/local//objname",
-			[]string{"/"},
+			"/tmp/local//objname",
+			[]string{"/tmp"},
 			"", "", "", "", false, true,
 		},
 		{
 			"empty object name",
-			"/local//objname",
-			[]string{"/"},
+			"/tmp/local//objname",
+			[]string{"/tmp"},
 			"", "", "", "", false, true,
 		},
 		{
 			"empty bucket type",
-			"//bucket/objname",
-			[]string{"/"},
+			"/tmp/bucket/objname",
+			[]string{"/tmp"},
 			"", "", "", "", false, true,
 		},
 		{

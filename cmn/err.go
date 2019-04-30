@@ -108,6 +108,34 @@ func NewInvalidCksumError(eHash string, aHash string) InvalidCksumError {
 	}
 }
 
+type (
+	NoMountpathError struct {
+		mpath string
+	}
+
+	InvalidMountpathError struct {
+		mpath string
+		cause string
+	}
+)
+
+func (e NoMountpathError) Error() string {
+	return "mountpath [" + e.mpath + "] doesn't exist"
+}
+
+func NewNoMountpathError(mpath string) NoMountpathError { return NoMountpathError{mpath} }
+
+func (e InvalidMountpathError) Error() string {
+	return "invalid mountpath [" + e.mpath + "]; " + e.cause
+}
+
+func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
+	return InvalidMountpathError{
+		mpath: mpath,
+		cause: cause,
+	}
+}
+
 // ErrorOnce should be used to collect possible consecutive errors
 // NOTE: presence of earlier error should not affect following calls
 // Example: err := Check(obj.field1); errC.PutErr(err); err = Check(obj.field2); errC.PutErr(err) is alright

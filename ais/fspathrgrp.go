@@ -51,9 +51,9 @@ func (g *fsprungroup) Unreg(r fs.PathRunner) {
 
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
-	enabled, exists = fs.Mountpaths.Enable(mpath)
-	if !enabled || !exists {
+func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
+	enabled, err = fs.Mountpaths.Enable(mpath)
+	if err != nil || !enabled {
 		return
 	}
 
@@ -74,16 +74,17 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
-	disabled, exists = fs.Mountpaths.Disable(mpath)
-	if !disabled || !exists {
-		return
+func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
+	disabled, err = fs.Mountpaths.Disable(mpath)
+	if !disabled || err != nil {
+		return disabled, err
 	}
+
 	for _, r := range g.runners {
 		r.ReqDisableMountpath(mpath)
 	}
 	g.checkNoMountpaths("Disabled")
-	return
+	return true, nil
 }
 
 // addMountpath adds mountpath and notifies necessary runners about the change
