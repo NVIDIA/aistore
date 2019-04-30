@@ -78,7 +78,7 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager but not return by default", func() {
 			m, err := mgrp.Add("uuid")
-			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: &parsedMemUsage{Type: memPercent, Value: 0}}
+			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}}
 			m.init(rs)
 			m.unlock()
 			m.setInProgressTo(false)
@@ -92,7 +92,7 @@ var _ = Describe("ManagerGroup", func() {
 
 		It("should persist manager and return it when requested", func() {
 			m, err := mgrp.Add("uuid")
-			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: &parsedMemUsage{Type: memPercent, Value: 0}}
+			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0}}
 			m.init(rs)
 			m.unlock()
 			m.setInProgressTo(false)

@@ -358,7 +358,7 @@ type (
 	}
 
 	// FileSectionHandle is a slice of already opened file with optional padding
-	// that implements cmn.ReadOpenCloser interface
+	// that implements ReadOpenCloser interface
 	FileSectionHandle struct {
 		s         *io.SectionReader
 		padding   int64 // padding size
@@ -874,6 +874,64 @@ func validateBoundaries(start, end, step int) error {
 		return ErrNonPositiveStep
 	}
 	return nil
+}
+
+type (
+	ParsedQuantity struct {
+		Type  string
+		Value uint64
+	}
+)
+
+const (
+	QuantityPercent = "percent"
+	QuantityBytes   = "bytes"
+)
+
+var (
+	ErrInvalidQuantityUsage       = errors.New("invalid quantity, format should be '81%' or '1GB'")
+	errInvalidQuantityNonNegative = errors.New("quantity should not be negative")
+	ErrInvalidQuantityPercent     = errors.New("percent must be in the range (0, 100)")
+	ErrInvalidQuantityBytes       = errors.New("value (bytes) must be non-negative")
+)
+
+func ParseQuantity(quantity string) (ParsedQuantity, error) {
+	quantity = strings.Replace(quantity, " ", "", -1)
+	idx := 0
+	number := ""
+	for ; idx < len(quantity) && unicode.IsDigit(rune(quantity[idx])); idx++ {
+		number += string(quantity[idx])
+	}
+
+	parsedQ := ParsedQuantity{}
+	if value, err := strconv.Atoi(number); err != nil {
+		return parsedQ, ErrInvalidQuantityUsage
+	} else if value < 0 {
+		return parsedQ, errInvalidQuantityNonNegative
+	} else {
+		parsedQ.Value = uint64(value)
+	}
+
+	if len(quantity) <= idx {
+		return parsedQ, ErrInvalidQuantityUsage
+	}
+
+	suffix := quantity[idx:]
+	if suffix == "%" {
+		parsedQ.Type = QuantityPercent
+		if parsedQ.Value == 0 || parsedQ.Value >= 100 {
+			return parsedQ, ErrInvalidQuantityPercent
+		}
+	} else if value, err := S2B(quantity); err != nil {
+		return parsedQ, err
+	} else if value < 0 {
+		return parsedQ, ErrInvalidQuantityBytes
+	} else {
+		parsedQ.Type = QuantityBytes
+		parsedQ.Value = uint64(value)
+	}
+
+	return parsedQ, nil
 }
 
 //

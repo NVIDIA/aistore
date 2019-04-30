@@ -63,8 +63,8 @@ all possible settings, for more advanced usage please refer to API).
 | --akind | `alphanumeric` | Kind of algorithm used to sort data |
 | --adesc | `false` | Determines whether data should be sorted by algorithm in descending or ascending |
 | --aseed | | Seed used for random shuffling algorithm |
-| --elimit | `20` | Limits number of concurrent shards extracted |
-| --climit | `20` | Limits number of concurrent shards created |
+| --elimit | `0` | Limits number of concurrent shards extracted (default: `0` concurrency will be calculated automatically) |
+| --climit | `0` | Limits number of concurrent shards created (default: `0` concurrency will be calculated automatically) |
 | --mem | `60%` | Limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: `60%` or `10GB` |
 | --refresh | `5` | Metric refresh time (in seconds) |
 
@@ -156,8 +156,8 @@ all possible settings, for more advanced usage please refer to API).
 | -akind | `alphanumeric` | Kind of algorithm used to sort data |
 | -adesc | `false` | Determines whether data should be sorted by algorithm in descending or ascending |
 | -aseed | | Seed used for random shuffling algorithm |
-| -elimit | `20` | Limits number of concurrent shards extracted |
-| -climit | `20` | Limits number of concurrent shards created |
+| -elimit | `0` | Limits number of concurrent shards extracted (default: `0` concurrency will be calculated automatically) |
+| -climit | `0` | Limits number of concurrent shards created (default: `0` concurrency will be calculated automatically) |
 | -mem | `60%` | Limits maximum of total memory until extraction starts spilling data to the disk, can be expressed in format: `60%` or `10GB` |
 | -refresh | `5` | Metric refresh time (in seconds) |
 | -log | | Path to file where the metrics will be stored |

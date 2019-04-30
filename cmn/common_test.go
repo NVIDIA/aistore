@@ -458,6 +458,34 @@ var _ = Describe("Common file", func() {
 			),
 		)
 	})
+
+	Context("ParseQuantity", func() {
+		DescribeTable("parse quantity without error",
+			func(quantity, ty string, value int) {
+				pq, err := ParseQuantity(quantity)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(pq).To(Equal(ParsedQuantity{Type: ty, Value: uint64(value)}))
+			},
+			Entry("simple number", "80B", QuantityBytes, 80),
+			Entry("simple percent", "80%", QuantityPercent, 80),
+			Entry("number with spaces", "  8 0 KB  ", QuantityBytes, 80*KiB),
+			Entry("percent with spaces", "80 %", QuantityPercent, 80),
+		)
+
+		DescribeTable("parse quantity with error",
+			func(template string) {
+				_, err := ParseQuantity(template)
+				Expect(err).Should(HaveOccurred())
+			},
+			Entry("contains alphabet", "a80B"),
+			Entry("multiple percent signs", "80%%"),
+			Entry("empty percent sign", "%"),
+			Entry("negative number", "-1000"),
+			Entry("101 percent", "101%"),
+			Entry("-1 percent", "-1%"),
+		)
+	})
 })
 
 func ensurePathExists(t *testing.T, path string, dir bool) {

@@ -26,14 +26,6 @@ import (
 	sigar "github.com/cloudfoundry/gosigar"
 )
 
-const (
-	// defaultCallTimeout determines how long we should wait for the other target to respond.
-	//
-	// FIXME(januszm): maybe it should be something that is configurable by the user
-	// and this would be default value.
-	defaultCallTimeout = time.Minute * 10
-)
-
 var (
 	ctx dsortContext
 
@@ -213,7 +205,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.setAbortedTo(false)
 
 	m.streamWriters.writers = make(map[string]*streamWriter, 10000)
-	m.callTimeout = defaultCallTimeout
+	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
 
 	// Memory watcher
 	mem := sigar.Mem{}
@@ -1020,11 +1012,11 @@ func (m *Manager) react(reaction, msg string) error {
 	}
 }
 
-func calcMaxMemoryUsage(maxUsage *parsedMemUsage, mem sigar.Mem) uint64 {
+func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sigar.Mem) uint64 {
 	switch maxUsage.Type {
-	case memPercent:
+	case cmn.QuantityPercent:
 		return maxUsage.Value * (mem.Total / 100)
-	case memNumber:
+	case cmn.QuantityBytes:
 		return cmn.MinU64(maxUsage.Value, mem.Total)
 	default:
 		cmn.AssertMsg(false, fmt.Sprintf("mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type))

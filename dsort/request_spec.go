@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
@@ -29,28 +29,16 @@ const (
 
 	templBash = "bash"
 	templAt   = "@"
-
-	memPercent = "percent"
-	memNumber  = "number"
-
-	// defaultConcLimit determines default concurrency limit when it is not set.
-	defaultConcLimit = 100
-	// defaultMemUsage determines default memory usage limit when it is not set.
-	defaultMemUsage = "80%"
 )
 
 var (
 	errMissingBucket            = errors.New("missing field 'bucket'")
 	errInvalidExtension         = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
 	errNegOutputShardSize       = errors.New("output shard size must be > 0")
-	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (default: %d) or > 0", defaultConcLimit)
+	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (limits will be calculated) or > 0")
 
 	errInvalidInputFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
 	errInvalidOutputFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-
-	errInvalidMemUsage      = errors.New("invalid memory usage specified, format should be '81%' or '1GB'")
-	errInvalidMaxMemPercent = errors.New("max memory usage percent must be 0 (defaults to 80%) or in the range [1, 99]")
-	errInvalidMaxMemNumber  = errors.New("max memory usage value must be non-negative")
 
 	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
 	errInvalidAlgorithmKind      = fmt.Errorf("invalid algorithm kind, should be one of: %+v", supportedAlgorithms)
@@ -82,11 +70,6 @@ type parsedInputTemplate struct {
 type parsedOutputTemplate struct {
 	// Used by 'bash' and 'at' template
 	Template cmn.ParsedTemplate
-}
-
-type parsedMemUsage struct {
-	Type  string `json:"type"`
-	Value uint64 `json:"value"`
 }
 
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
@@ -121,7 +104,7 @@ type ParsedRequestSpec struct {
 	InputFormat       *parsedInputTemplate  `json:"input_format"`
 	OutputFormat      *parsedOutputTemplate `json:"output_format"`
 	Algorithm         *SortAlgorithm        `json:"algorithm"`
-	MaxMemUsage       *parsedMemUsage       `json:"max_mem_usage"`
+	MaxMemUsage       cmn.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt   []byte                `json:"target_order_salt"`
 	ExtractConcLimit  int                   `json:"extract_concurrency_limit"`
 	CreateConcLimit   int                   `json:"create_concurrency_limit"`
@@ -191,10 +174,10 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 
 	if rs.MaxMemUsage == "" {
-		rs.MaxMemUsage = defaultMemUsage
+		rs.MaxMemUsage = cmn.GCO.Get().DSort.DefaultMaxMemUsage
 	}
 
-	parsedRS.MaxMemUsage, err = parseMemUsage(rs.MaxMemUsage)
+	parsedRS.MaxMemUsage, err = cmn.ParseQuantity(rs.MaxMemUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -206,11 +189,16 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, errNegativeConcurrencyLimit
 	}
 
+	// TODO: By default these values should change dynamically.
+	availablePaths, _ := fs.Mountpaths.Get()
 	if rs.ExtractConcLimit == 0 {
-		rs.ExtractConcLimit = defaultConcLimit
+		rs.ExtractConcLimit = 4 * len(availablePaths) // extract 4 shards per disk in parallel
 	}
 	if rs.CreateConcLimit == 0 {
-		rs.CreateConcLimit = defaultConcLimit
+		// Create concurrency should be a little bit more because due to network
+		// usage disks may not be used to the fullest even with a lot shards
+		// created in parallel.
+		rs.CreateConcLimit = 6 * len(availablePaths)
 	}
 	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
@@ -251,45 +239,6 @@ func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err erro
 	}
 
 	return pt, nil
-}
-
-func parseMemUsage(memUsage string) (*parsedMemUsage, error) {
-	memUsage = strings.Replace(memUsage, " ", "", -1)
-	idx := 0
-	number := ""
-	for ; idx < len(memUsage) && unicode.IsDigit(rune(memUsage[idx])); idx++ {
-		number += string(memUsage[idx])
-	}
-
-	parsedMU := &parsedMemUsage{}
-	if value, err := strconv.Atoi(number); err != nil {
-		return nil, errInvalidMemUsage
-	} else if value < 0 {
-		return nil, errInvalidMemUsage
-	} else {
-		parsedMU.Value = uint64(value)
-	}
-
-	if len(memUsage) <= idx {
-		return nil, errInvalidMemUsage
-	}
-
-	suffix := memUsage[idx:]
-	if suffix == "%" {
-		parsedMU.Type = memPercent
-		if parsedMU.Value == 0 || parsedMU.Value >= 100 {
-			return nil, errInvalidMaxMemPercent
-		}
-	} else if value, err := cmn.S2B(memUsage); err != nil {
-		return nil, err
-	} else if value < 0 {
-		return nil, errInvalidMaxMemNumber
-	} else {
-		parsedMU.Type = memNumber
-		parsedMU.Value = uint64(value)
-	}
-
-	return parsedMU, nil
 }
 
 func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {

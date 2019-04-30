@@ -266,7 +266,7 @@ func (lhs *JobInfo) Aggregate(rhs JobInfo) {
 	lhs.Archived = lhs.Archived && rhs.Archived
 }
 
-//startTime returns the start time of a,b. If either is zero, the other takes precedence.
+// startTime returns the start time of a,b. If either is zero, the other takes precedence.
 func startTime(a, b time.Time) time.Time {
 	if (a.Before(b) && !a.IsZero()) || b.IsZero() {
 		return a
@@ -274,7 +274,7 @@ func startTime(a, b time.Time) time.Time {
 	return b
 }
 
-//stopTime returns the stop time of a,b. If either is zero it's unknown and returns 0.
+// stopTime returns the stop time of a,b. If either is zero it's unknown and returns 0.
 func stopTime(a, b time.Time) time.Time {
 	if (a.After(b) && !b.IsZero()) || a.IsZero() {
 		return a

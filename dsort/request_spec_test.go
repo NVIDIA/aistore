@@ -8,11 +8,20 @@ package dsort
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("RequestSpec", func() {
+	BeforeEach(func() {
+		fs.Mountpaths = fs.NewMountedFS()
+
+		config := cmn.GCO.BeginUpdate()
+		config.DSort.DefaultMaxMemUsage = "90%"
+		cmn.GCO.CommitUpdate(config)
+	})
+
 	Context("requests specs which should pass", func() {
 		It("should parse minimal spec", func() {
 			rs := RequestSpec{
@@ -57,7 +66,7 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.OutputShardSize).To(BeEquivalentTo(100000))
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(memPercent))
+			Expect(parsed.MaxMemUsage.Type).To(Equal(cmn.QuantityPercent))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80))
 		})
 
@@ -96,7 +105,7 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(memNumber))
+			Expect(parsed.MaxMemUsage.Type).To(Equal(cmn.QuantityBytes))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80 * 1024 * 1024 * 1024))
 		})
 
@@ -196,8 +205,8 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.CreateConcLimit).To(Equal(defaultConcLimit))
-			Expect(parsed.ExtractConcLimit).To(Equal(defaultConcLimit))
+			Expect(parsed.CreateConcLimit).To(Equal(0))
+			Expect(parsed.ExtractConcLimit).To(Equal(0))
 		})
 	})
 
@@ -281,7 +290,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidMemUsage))
+			Expect(err).To(Equal(cmn.ErrInvalidQuantityUsage))
 		})
 
 		It("should fail due to invalid mem usage percent specified", func() {
@@ -296,7 +305,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidMaxMemPercent))
+			Expect(err).To(Equal(cmn.ErrInvalidQuantityPercent))
 		})
 
 		It("should fail due to invalid mem usage bytes specified", func() {
@@ -311,7 +320,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidMemUsage))
+			Expect(err).To(Equal(cmn.ErrInvalidQuantityUsage))
 		})
 
 		It("should fail due to invalid extract concurrency specified", func() {

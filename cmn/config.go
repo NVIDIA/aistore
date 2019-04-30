@@ -533,8 +533,11 @@ type DownloaderConf struct {
 }
 
 type DSortConf struct {
-	DuplicatedRecords string `json:"duplicated_records"`
-	MissingShards     string `json:"missing_shards"`
+	DuplicatedRecords  string        `json:"duplicated_records"`
+	MissingShards      string        `json:"missing_shards"`
+	DefaultMaxMemUsage string        `json:"default_max_mem_usage"`
+	CallTimeoutStr     string        `json:"call_timeout"`
+	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
 }
 
 func SetLogLevel(config *Config, loglevel string) (err error) {
@@ -633,7 +636,7 @@ func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
-		&c.Downloader,
+		&c.Downloader, &c.DSort,
 	}
 	for _, validator := range validators {
 		if err := validator.Validate(); err != nil {
@@ -915,10 +918,16 @@ func (c *DownloaderConf) Validate() (err error) {
 
 func (c *DSortConf) Validate() (err error) {
 	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
-		return fmt.Errorf("bad c.duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
+		return fmt.Errorf("bad distributed_sort.duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
 	}
 	if !StringInSlice(c.MissingShards, SupportedReactions) {
-		return fmt.Errorf("bad c.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+		return fmt.Errorf("bad distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+	}
+	if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
+		return fmt.Errorf("bad distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
+	}
+	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
+		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 	}
 	return nil
 }
@@ -1068,6 +1077,10 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.DSort, updateValue(&conf.DSort.DuplicatedRecords)
 	case "distributed_sort.missing_shards":
 		return &conf.DSort, updateValue(&conf.DSort.MissingShards)
+	case "distributed_sort.default_max_mem_usage":
+		return &conf.DSort, updateValue(&conf.DSort.DefaultMaxMemUsage)
+	case "distributed_sort.call_timeout":
+		return &conf.DSort, updateValue(&conf.DSort.CallTimeoutStr)
 
 	default:
 		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)

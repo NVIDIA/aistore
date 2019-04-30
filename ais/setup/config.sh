@@ -128,8 +128,10 @@ cat > $CONFFILE <<EOL
 		"timeout": "1h"
 	},
 	"distributed_sort": {
-		"duplicated_records": "ignore",
-		"missing_shards":     "abort"
+		"duplicated_records":    "ignore",
+		"missing_shards":        "abort",
+		"default_max_mem_usage": "80%",
+		"call_timeout":          "10m"
 	}
 }
 EOL
