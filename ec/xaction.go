@@ -25,6 +25,7 @@ type (
 	xactECBase struct {
 		cmn.XactDemandBase
 		cmn.Named
+		cmn.MountpathXact
 		t cluster.Target
 
 		bmd     cluster.Bowner // bucket manager
@@ -58,12 +59,6 @@ type (
 		mtx    sync.Mutex
 		slices map[string]*slice
 	}
-)
-
-const (
-	XactGetType = "xactecget"
-	XactPutType = "xactecput"
-	XactResType = "xactecreq"
 )
 
 func newXactReqECBase() xactReqBase {

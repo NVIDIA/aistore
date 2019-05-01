@@ -28,6 +28,7 @@ type (
 	xactBckBase struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactBase
+		cmn.MountpathXact
 		// runtime
 		doneCh   chan struct{}
 		mpathers map[string]mpather

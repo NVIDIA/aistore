@@ -132,6 +132,7 @@ type (
 	Downloader struct {
 		cmn.NamedID
 		cmn.XactDemandBase
+		cmn.NonmountpathXact
 
 		t          cluster.Target
 		mountpaths *fs.MountedFS

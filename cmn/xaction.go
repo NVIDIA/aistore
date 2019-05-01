@@ -27,6 +27,7 @@ type (
 		Abort()
 		ChanAbort() <-chan struct{}
 		Finished() bool
+		IsMountpathXact() bool
 	}
 	XactBase struct {
 		id         int64
@@ -59,16 +60,17 @@ type (
 	ErrXpired struct { // return it if called (right) after self-termination
 		errstr string
 	}
+
+	MountpathXact    struct{}
+	NonmountpathXact struct{}
 )
 
 func (e *ErrXpired) Error() string     { return e.errstr }
 func NewErrXpired(s string) *ErrXpired { return &ErrXpired{errstr: s} }
 
 //
-// XactBase - implements Xact interface
+// XactBase - partially implements Xact interface
 //
-
-var _ Xact = &XactBase{}
 
 func NewXactBase(id int64, kind string) *XactBase {
 	stime := time.Now()
@@ -139,10 +141,8 @@ func (xact *XactBase) Abort() {
 }
 
 //
-// XactDemandBase - implements XactDemand interface
+// XactDemandBase - partially implements XactDemand interface
 //
-
-var _ XactDemand = &XactDemandBase{}
 
 func NewXactDemandBase(id int64, kind string, bucket string, bckIsLocal bool, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
@@ -175,3 +175,6 @@ func ValidXact(xact string) (bool, bool) {
 	meta, ok := XactKind[xact]
 	return meta.IsGlobal, ok
 }
+
+func (*MountpathXact) IsMountpathXact() bool    { return true }
+func (*NonmountpathXact) IsMountpathXact() bool { return false }

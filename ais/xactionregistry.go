@@ -23,22 +23,28 @@ type (
 	}
 	xactGlobalReb struct {
 		xactRebBase
+		cmn.NonmountpathXact
 		smapVersion int64 // smap version on which this rebalance has started
 	}
 	xactLocalReb struct {
 		xactRebBase
+		cmn.MountpathXact
 	}
 	xactLRU struct {
 		cmn.XactBase
+		cmn.MountpathXact
 	}
 	xactPrefetch struct {
 		cmn.XactBase
+		cmn.NonmountpathXact
 	}
 	xactEvictDelete struct {
 		cmn.XactBase
+		cmn.NonmountpathXact
 	}
 	xactElection struct {
 		cmn.XactBase
+		cmn.NonmountpathXact
 		proxyrunner *proxyrunner
 		vr          *VoteRecord
 	}
@@ -55,8 +61,6 @@ type xactionsRegistry struct {
 func newXactions() *xactionsRegistry {
 	return &xactionsRegistry{}
 }
-
-var mountpathXactions = []string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActMakeNCopies, cmn.ActECGet, cmn.ActECPut, cmn.ActECRespond, cmn.ActLocalReb, cmn.ActLoadLomCache}
 
 func (r *xactionsRegistry) abortBuckets(buckets ...string) {
 	wg := &sync.WaitGroup{}
@@ -175,13 +179,13 @@ func (r *xactionsRegistry) uniqueID() int64 {
 	return r.nextid.Inc()
 }
 
-func (r *xactionsRegistry) xactsRange(matches func(string) bool, doAction func(cmn.Xact)) {
+func (r *xactionsRegistry) stopMountpathXactions() {
 	r.byID.Range(func(_, value interface{}) bool {
 		entry := value.(xactEntry)
 		entry.RLock()
 
-		if matches(entry.Get().Kind()) {
-			doAction(entry.Get())
+		if entry.Get().IsMountpathXact() {
+			entry.Abort()
 		}
 
 		entry.RUnlock()

@@ -535,18 +535,6 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (t *targetrunner) stopXactions(xacts []string) {
-	sliceHas := func(name string) bool {
-		return cmn.StringInSlice(name, xacts)
-	}
-
-	t.xactions.xactsRange(sliceHas, func(xact cmn.Xact) {
-		if !xact.Finished() {
-			xact.Abort()
-		}
-	})
-}
-
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	t.gfn.local.activate()
 	enabled, exists := t.fsprg.enableMountpath(mountpath)
@@ -561,7 +549,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		t.gfn.local.deactivate()
 		return
 	}
-	t.stopXactions(mountpathXactions)
+	t.xactions.stopMountpathXactions()
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -576,7 +564,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		return
 	}
 
-	t.stopXactions(mountpathXactions)
+	t.xactions.stopMountpathXactions()
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -587,7 +575,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		t.gfn.local.deactivate()
 		return
 	}
-	t.stopXactions(mountpathXactions)
+	t.xactions.stopMountpathXactions()
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -596,8 +584,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
 		return
 	}
-
-	t.stopXactions(mountpathXactions)
+	t.xactions.stopMountpathXactions()
 }
 
 // FIXME: use the message
@@ -1127,6 +1114,6 @@ func (t *targetrunner) enable() error {
 func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	t.stopXactions(mountpathXactions)
+	t.xactions.stopMountpathXactions()
 	return t.fsprg.disableMountpath(mountpath)
 }

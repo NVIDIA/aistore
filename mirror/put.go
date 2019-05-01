@@ -21,6 +21,7 @@ type (
 	XactPutLRepl struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactDemandBase
+		cmn.MountpathXact
 		// runtime
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
@@ -149,7 +150,6 @@ func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 }
 
 func (r *XactPutLRepl) Stop(error) { r.Abort() } // call base method
-
 //
 // private methods
 //

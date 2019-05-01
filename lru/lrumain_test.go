@@ -312,3 +312,4 @@ func (x *xactMock) String() string                     { return "" }
 func (x *xactMock) Abort()                             {}
 func (x *xactMock) ChanAbort() <-chan struct{}         { return nil }
 func (x *xactMock) Finished() bool                     { return false }
+func (*xactMock) IsMountpathXact() bool                { return true }
