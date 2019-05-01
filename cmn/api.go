@@ -284,6 +284,7 @@ const (
 	GetWhatMountpaths   = "mountpaths"
 	GetWhatSnode        = "snode"
 	GetWhatSysInfo      = "sysinfo"
+	GetWhatDiskStats    = "diskstats"
 	GetWhatDaemonStatus = "status"
 	GetWhatBucketMetaX  = "bucketmdxattr"
 )
@@ -642,6 +643,20 @@ func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
 
 	return kindMeta.IsGlobal, nil
 }
+
+// Target disk IO stats
+type DiskStat struct {
+	ReadMilliseconds    int64
+	ReadSectors         int64
+	ReadBytesPerSecond  int64
+	WriteMilliseconds   int64
+	WriteSectors        int64
+	WriteBytesPerSecond int64
+	IOMilliseconds      int64
+	IOsPending          int64
+}
+
+type DiskStats map[string]DiskStat
 
 // Common errors
 var (

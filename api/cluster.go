@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/NVIDIA/aistore/ios"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -107,6 +109,31 @@ func GetClusterStats(baseParams *BaseParams) (clusterStats stats.ClusterStats, e
 		return stats.ClusterStats{}, fmt.Errorf("failed to unmarshal cluster stats, err: %v", err)
 	}
 	return clusterStats, nil
+}
+
+func GetTargetDiskStats(baseParams *BaseParams) (map[string]*ios.SelectedDiskStats, error) {
+	baseParams.Method = http.MethodGet
+	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}}
+	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	params := OptionalParams{Query: query}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var diskStats map[string]*ios.SelectedDiskStats
+	err = json.Unmarshal(body, &diskStats)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal target disk stats, err: %v", err)
+	}
+	return diskStats, nil
 }
 
 // RegisterTarget API

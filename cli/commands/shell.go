@@ -26,6 +26,15 @@ func daemonList(_ *cli.Context) {
 	}
 }
 
+func targetList(_ *cli.Context) {
+	baseParams := cliAPIParams(ClusterURL)
+	smap, _ := api.GetClusterMap(baseParams)
+
+	for dae := range smap.Tmap {
+		fmt.Println(dae)
+	}
+}
+
 // Returns flags for command
 func flagList(c *cli.Context) {
 	for _, flag := range c.Command.Flags {

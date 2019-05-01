@@ -327,6 +327,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err := jsoniter.Marshal(msg)
 		cmn.AssertNoErr(err)
 		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+	case cmn.GetWhatDiskStats:
+		diskStats := fs.Mountpaths.Iostats.GetSelectedDiskStats()
+		jsbytes, err := jsoniter.Marshal(diskStats)
+		cmn.AssertNoErr(err)
+		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}

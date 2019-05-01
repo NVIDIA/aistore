@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NVIDIA/aistore/ios"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -93,6 +95,22 @@ const (
 		"{{$mount}}\t {{$capa.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $capa.Avail 5}}\n" +
 		"{{end}}\n\n" +
 		"{{end}}"
+
+	// Disk Stats
+	DiskStatsHeader = "TargetID\t" +
+		"DiskName\t" +
+		"ReadThroughput\t" +
+		"WriteThroughput\t" +
+		"DiskUtilization\n"
+
+	DiskStatsBody = "{{ $value.TargetID }}\t" +
+		"{{ $value.DiskName }}\t" +
+		"{{ $stat := $value.Stat }}" +
+		"{{ BToKB $stat.RBps }} kB/s\t" +
+		"{{ BToKB $stat.WBps }} kB/s\t" +
+		"{{ $stat.Util }} %\n"
+
+	DiskStatsTmpl = DiskStatsHeader + "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 
 	// Config
 	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +
@@ -277,8 +295,15 @@ var (
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatDur":           fmtDuration,
+		"BToKB":               b2kB,
 	}
 )
+
+type DiskStatsTemplateHelper struct {
+	TargetID string
+	DiskName string
+	Stat     *ios.SelectedDiskStats
+}
 
 // Gets the associated value from CoreStats
 func extractStat(daemon *stats.CoreStats, statName string) int64 {
@@ -311,6 +336,10 @@ func fmtDuration(d int64) string {
 	return dNano.String()
 }
 
+func b2kB(b int64) string {
+	return fmt.Sprintf("%0.2f", float64(b)/cmn.KiB)
+}
+
 // Displays the output in either JSON or tabular form
 func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool) error {
 	useJSON := false
@@ -332,7 +361,7 @@ func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool
 	if err != nil {
 		return err
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, '\t', 0)
+	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', 0)
 	if err := tmpl.Execute(w, object); err != nil {
 		return err
 	}

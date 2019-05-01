@@ -6,13 +6,17 @@
 package commands
 
 import (
+	"context"
 	"fmt"
+
+	"github.com/NVIDIA/aistore/ios"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -26,30 +30,38 @@ var (
 		cmn.GetWhatSmap:         daecluBaseFlags,
 		cmn.GetWhatDaemonStatus: append(daecluBaseFlags, longRunFlags...),
 		cmn.GetWhatStats:        append(daecluBaseFlags, longRunFlags...),
+		cmn.GetWhatDiskStats:    append(daecluBaseFlags, longRunFlags...),
 	}
 
 	// DaeCluCmds tracks available AIS API Information/Query Commands
 	daeCluCmds = []cli.Command{
 		{
 			Name:         cmn.GetWhatSmap,
-			Usage:        "returns cluster map",
+			Usage:        "displays cluster map",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatSmap],
 			BashComplete: daemonList,
 		},
 		{
 			Name:         cmn.GetWhatDaemonStatus,
-			Usage:        "returns status of daemon",
+			Usage:        "displays status of daemon",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatDaemonStatus],
 			BashComplete: daemonList,
 		},
 		{
 			Name:         cmn.GetWhatStats,
-			Usage:        "returns stats of daemon",
+			Usage:        "displays stats of daemon",
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatStats],
 			BashComplete: daemonList,
+		},
+		{
+			Name:         cmn.GetWhatDiskStats,
+			Usage:        "displays disk stats of targets",
+			Action:       queryHandler,
+			Flags:        daecluFlags[cmn.GetWhatDiskStats],
+			BashComplete: targetList,
 		},
 	}
 )
@@ -90,6 +102,8 @@ func queryHandler(c *cli.Context) (err error) {
 		err = daecluSmap(baseParams, daemonID, useJSON)
 	case cmn.GetWhatStats:
 		err = daecluStats(baseParams, daemonID, useJSON)
+	case cmn.GetWhatDiskStats:
+		err = daecluDiskStats(baseParams, daemonID, useJSON)
 	case cmn.GetWhatDaemonStatus:
 		err = daecluStatus(daemonID, useJSON)
 	default:
@@ -129,6 +143,33 @@ func daecluStats(baseParams *api.BaseParams, daemonID string, useJSON bool) erro
 	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
+// Displays the disk stats of a target
+func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+	if _, ok := proxy[daemonID]; ok {
+		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but diskstats works only for targets", daemonID)
+	}
+	if _, ok := target[daemonID]; daemonID != "" && !ok {
+		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)
+	}
+
+	targets := map[string]*stats.DaemonStatus{daemonID: {}}
+	if daemonID == "" {
+		targets = target
+	}
+
+	diskStats, err := getDiskStats(targets, baseParams)
+	if err != nil {
+		return err
+	}
+
+	err = templates.DisplayOutput(diskStats, templates.DiskStatsTmpl, useJSON)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Displays the status of the cluster or daemon
 func daecluStatus(daemonID string, useJSON bool) (err error) {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
@@ -149,4 +190,51 @@ func daecluStatus(daemonID string, useJSON bool) (err error) {
 	}
 
 	return err
+}
+
+type targetDiskStats struct {
+	stats    map[string]*ios.SelectedDiskStats
+	targetID string
+}
+
+func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BaseParams) ([]templates.DiskStatsTemplateHelper, error) {
+	var (
+		allStats = make([]templates.DiskStatsTemplateHelper, 0, len(targets))
+		wg, _    = errgroup.WithContext(context.Background())
+		statsCh  = make(chan targetDiskStats, len(targets))
+	)
+
+	for targetID := range targets {
+		wg.Go(func(targetID string) func() error {
+			return func() (err error) {
+				baseParams.URL, err = daemonDirectURL(targetID)
+				if err != nil {
+					return err
+				}
+
+				diskStats, err := api.GetTargetDiskStats(baseParams)
+				if err != nil {
+					return err
+				}
+
+				statsCh <- targetDiskStats{stats: diskStats, targetID: targetID}
+				return nil
+			}
+		}(targetID))
+	}
+
+	err := wg.Wait()
+	close(statsCh)
+	if err != nil {
+		return nil, err
+	}
+
+	for diskStats := range statsCh {
+		targetID := diskStats.targetID
+		for diskName, diskStat := range diskStats.stats {
+			allStats = append(allStats, templates.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
+		}
+	}
+
+	return allStats, nil
 }
