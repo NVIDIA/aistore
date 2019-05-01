@@ -39,7 +39,7 @@ func clearDownloadList(t *testing.T) {
 	for k, v := range listDownload {
 		if v.NumPending > 0 {
 			tutils.Logf("Cancelling: %v...\n", k)
-			err := api.DownloadCancel(tutils.DefaultBaseAPIParams(t), k)
+			err := api.DownloadAbort(tutils.DefaultBaseAPIParams(t), k)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -121,24 +121,24 @@ func TestDownloadSingle(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Cancel second object
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), idSecond)
+	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), idSecond)
 	tassert.CheckError(t, err)
 
 	resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id)
 	tassert.CheckError(t, err)
 
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id)
 	tassert.CheckError(t, err)
 
 	time.Sleep(time.Second)
 
 	if resp, err = api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err != nil {
 		t.Errorf("got error when getting status for link that is not being downloaded: %v", err)
-	} else if !resp.Cancelled {
+	} else if !resp.Aborted {
 		t.Errorf("canceled link not marked: %v", resp)
 	}
 
-	if err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id); err != nil {
+	if err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id); err != nil {
 		t.Errorf("got error when cancelling second time: %v", err)
 	}
 
@@ -185,7 +185,7 @@ func TestDownloadRange(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id)
 	tassert.CheckFatal(t, err)
 
 	checkDownloadList(t)
@@ -210,7 +210,7 @@ func TestDownloadMultiRange(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	err = api.DownloadCancel(tutils.DefaultBaseAPIParams(t), id)
+	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id)
 	tassert.CheckFatal(t, err)
 
 	checkDownloadList(t)
@@ -389,12 +389,12 @@ func TestDownloadCloud(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	err = api.DownloadCancel(baseParams, id)
+	err = api.DownloadAbort(baseParams, id)
 	tassert.CheckFatal(t, err)
 
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
-	if !resp.Cancelled {
+	if !resp.Aborted {
 		t.Errorf("cancelled cloud download %v not marked", id)
 	}
 

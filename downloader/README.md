@@ -26,7 +26,7 @@ The rest of this document is structured around all supported types of downloads:
 - [Multi (object) download](#multi-download)
 - [Range (object) download](#range-download)
 - [Cloud download](#cloud-download)
-- [Cancellation](#cancellation)
+- [Aborting](#aborting)
 - [Status (of the download)](#status)
 - [List of downloads](#list-of-downloads)
 - [Remove from list](#remove-from-list)
@@ -34,7 +34,7 @@ The rest of this document is structured around all supported types of downloads:
 ## Single Download
 
 The request (described below) downloads a *single* object and is considered the most basic.
-This request returns *id* on successful request which can then be used to check the status or cancel the download job.
+This request returns *id* on successful request which can then be used to check the status or abort the download job.
 
 ### Request Query Parameters
 
@@ -59,7 +59,7 @@ A *multi* object download requires either a map or a list in JSON body:
 * **Map** - in map, each entry should contain `custom_object_name` (key) -> `external_link` (value). This format allows to name objects to not depend on automatic naming as it is done in *list* format.
 * **List** - in list, each entry should contain `external_link` to resource. Objects names are created from the base of the link (query parameters are stripped).
 
-This request returns *id* on successful request which can then be used to check the status or cancel the download job.
+This request returns *id* on successful request which can then be used to check the status or abort the download job.
 
 ### Request Query Parameters
 
@@ -80,7 +80,7 @@ Name | Type | Description | Optional?
 ## Range Download
 
 A *range* download retrieves (in one shot) multiple objects while expecting (and relying upon) a certain naming convention which happens to be often used.
-This request returns *id* on successful request which can then be used to check the status or cancel the download job.
+This request returns *id* on successful request which can then be used to check the status or abort the download job.
 
 Namely, the *range* download expects the object name to consist of prefix + index + suffix, as described below:
 
@@ -136,9 +136,9 @@ Name | Type | Description | Optional?
 |--|--|--|
 | Download a list of objects from cloud bucket | POST /v1/download | `curl -L -X POST 'http://localhost:8080/v1/download?bucket=lpr-vision&prefix=imagenet/imagenet_train-&suffix=.tgz'`|
 
-## Cancellation
+## Aborting
 
-Any download request can be canceled at any time by making a `DELETE` request to `/v1/download/cancel` with provided `id` (which is returned upon job creation).
+Any download request can be aborted at any time by making a `DELETE` request to `/v1/download/abort` with provided `id` (which is returned upon job creation).
 
 ### Request Query Parameters
 
@@ -150,7 +150,7 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Cancel download | DELETE /v1/download/cancel | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/cancel?id=5JjIuGemR'`|
+| Abort download | DELETE /v1/download/abort | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/abort?id=5JjIuGemR'`|
 
 ## Status
 
@@ -188,7 +188,7 @@ Name | Type | Description | Optional?
 
 ## Remove from List
 
-Any cancelled or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request with provided `id` (which is returned upon job creation).
+Any aborted or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request with provided `id` (which is returned upon job creation).
 
 ### Request Query Parameters
 

@@ -389,7 +389,7 @@ const (
 	Mountpaths = "mountpaths"
 	ListAll    = "*"
 
-	// dSort
+	// dSort and downloader
 	Init        = "init"
 	Sort        = "sort"
 	Start       = "start"
@@ -399,10 +399,7 @@ const (
 	Shards      = "shards"
 	FinishedAck = "finished-ack"
 	List        = "list"   // lists running dsort processes
-	Remove      = "remove" // removes a dsort process from history
-
-	// downloader
-	Cancel = "cancel"
+	Remove      = "remove" // removes a dsort process from history or downloader job form download list
 
 	// CLI
 	Target = "target"
@@ -418,7 +415,7 @@ type DlStatusResp struct {
 	Total      int     `json:"total"`
 	Percentage float64 `json:"percentage"`
 
-	Cancelled  bool `json:"cancelled"`
+	Aborted    bool `json:"aborted"`
 	NumPending int  `json:"num_pending"`
 
 	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
@@ -427,8 +424,8 @@ type DlStatusResp struct {
 }
 
 func (d *DlStatusResp) Print(verbose bool) string {
-	if d.Cancelled {
-		return "Download was cancelled."
+	if d.Aborted {
+		return "Download was aborted."
 	}
 
 	var sb strings.Builder
@@ -455,7 +452,7 @@ type DlJobInfo struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
 	NumPending  int    `json:"num_pending"`
-	Cancelled   bool   `json:"cancelled"`
+	Aborted     bool   `json:"aborted"`
 }
 
 func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
@@ -591,7 +588,7 @@ type DlBody struct {
 	ID   string  `json:"id"`
 	Objs []DlObj `json:"objs"`
 
-	Cancelled bool `json:"cancelled"`
+	Aborted bool `json:"aborted"`
 }
 
 func (b *DlBody) Validate() error {
@@ -601,9 +598,9 @@ func (b *DlBody) Validate() error {
 	if b.ID == "" {
 		return fmt.Errorf("missing %q, something went wrong", URLParamID)
 	}
-	if b.Cancelled {
-		// used to store cancel status in db, should be unset
-		return fmt.Errorf("invalid flag 'cancelled'")
+	if b.Aborted {
+		// used to store abort status in db, should be unset
+		return fmt.Errorf("invalid flag 'aborteded'")
 	}
 	for _, obj := range b.Objs {
 		if err := obj.Validate(); err != nil {

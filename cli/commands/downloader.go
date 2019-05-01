@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	downloadBegin  = "begin"
+	downloadStart  = "start"
 	downloadStatus = "status"
-	downloadCancel = "cancel"
+	downloadAbort  = "abort"
 	downloadRemove = "rm"
 	downloadList   = "ls"
 
@@ -38,7 +38,7 @@ var (
 	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
 
 	downloadFlags = map[string][]cli.Flag{
-		downloadBegin: {
+		downloadStart: {
 			bckProviderFlag,
 			timeoutFlag,
 			descriptionFlag,
@@ -49,7 +49,7 @@ var (
 			refreshRateFlag,
 			verboseFlag,
 		},
-		downloadCancel: {
+		downloadAbort: {
 			idFlag,
 		},
 		downloadRemove: {
@@ -60,9 +60,9 @@ var (
 		},
 	}
 
-	downloadUsage       = fmt.Sprintf("%s download <source> <dest>", cliName)
+	downloadStartUsage  = fmt.Sprintf("%s download %s <source> <dest>", cliName, downloadStart)
 	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
-	downloadCancelUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadCancel)
+	downloadAbortUsage  = fmt.Sprintf("%s download %s --id <value>", cliName, downloadAbort)
 	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
 	downloadListUsage   = fmt.Sprintf("%s download %s --regex <value>", cliName, downloadList)
 
@@ -72,11 +72,11 @@ var (
 			Usage: "command that manages downloading files from external sources",
 			Subcommands: []cli.Command{
 				{
-					Name:         downloadBegin,
+					Name:         downloadStart,
 					Usage:        "download objects from external source",
-					UsageText:    downloadUsage,
-					Flags:        downloadFlags[downloadBegin],
-					Action:       downloadHandler,
+					UsageText:    downloadStartUsage,
+					Flags:        downloadFlags[downloadStart],
+					Action:       downloadStartHandler,
 					BashComplete: flagList,
 				},
 				{
@@ -88,10 +88,10 @@ var (
 					BashComplete: flagList,
 				},
 				{
-					Name:         downloadCancel,
-					Usage:        "cancel download job with given id",
-					UsageText:    downloadCancelUsage,
-					Flags:        downloadFlags[downloadCancel],
+					Name:         downloadAbort,
+					Usage:        "abort download job with given id",
+					UsageText:    downloadAbortUsage,
+					Flags:        downloadFlags[downloadAbort],
 					Action:       downloadAdminHandler,
 					BashComplete: flagList,
 				},
@@ -116,7 +116,7 @@ var (
 	}
 )
 
-func downloadHandler(c *cli.Context) error {
+func downloadStartHandler(c *cli.Context) error {
 	var (
 		baseParams  = cliAPIParams(ClusterURL)
 		description = parseFlag(c, descriptionFlag)
@@ -210,15 +210,15 @@ func downloadAdminHandler(c *cli.Context) error {
 			verbose := flagIsSet(c, verboseFlag)
 			fmt.Println(resp.Print(verbose))
 		}
-	case downloadCancel:
+	case downloadAbort:
 		if err := checkFlags(c, idFlag); err != nil {
 			return err
 		}
 
-		if err := api.DownloadCancel(baseParams, id); err != nil {
+		if err := api.DownloadAbort(baseParams, id); err != nil {
 			return errorHandler(err)
 		}
-		fmt.Printf("download canceled: %s\n", id)
+		fmt.Printf("download aborted: %s\n", id)
 	case downloadRemove:
 		if err := checkFlags(c, idFlag); err != nil {
 			return err
@@ -248,12 +248,12 @@ type downloadingResult struct {
 	totalFiles        int
 	finishedFiles     int
 	downloadingErrors map[string]string
-	cancelled         bool
+	aborted           bool
 }
 
 func (d downloadingResult) String() string {
-	if d.cancelled {
-		return "Download was cancelled."
+	if d.aborted {
+		return "Download was aborted."
 	}
 
 	if d.finishedFiles == d.totalFiles {
@@ -290,7 +290,7 @@ type progressBar struct {
 	totalFiles    int
 	finishedFiles int
 
-	cancelled bool
+	aborted bool
 
 	errors map[string]string
 }
@@ -324,8 +324,8 @@ func (b *progressBar) run() (downloadingResult, error) {
 			b.cleanBars()
 			return downloadingResult{}, err
 		}
-		if resp.Cancelled {
-			b.cancelled = true
+		if resp.Aborted {
+			b.aborted = true
 			break
 		}
 
@@ -346,9 +346,9 @@ func (b *progressBar) start() (bool, error) {
 	b.updateDownloadingErrors(resp.Errs)
 	b.finishedFiles = resp.Finished
 	b.totalFiles = resp.Total
-	b.cancelled = resp.Cancelled
+	b.aborted = resp.Aborted
 
-	if b.finishedFiles+len(b.errors) == b.totalFiles || b.cancelled {
+	if b.finishedFiles+len(b.errors) == b.totalFiles || b.aborted {
 		return true, err
 	}
 
@@ -474,5 +474,5 @@ func (b *progressBar) cleanBars() {
 }
 
 func (b *progressBar) result() downloadingResult {
-	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, cancelled: b.cancelled}
+	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, aborted: b.aborted}
 }

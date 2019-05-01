@@ -215,7 +215,7 @@ const (
 
 	DownloadListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
-		"{{if (eq $value.Cancelled true) }}Cancelled" +
+		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"

@@ -99,7 +99,7 @@ func (db *downloaderDB) setJob(id string, body *cmn.DlBody) error {
 	return nil
 }
 
-func (db *downloaderDB) setCancelled(id string) error {
+func (db *downloaderDB) setAborted(id string) error {
 	var body cmn.DlBody
 
 	db.mtx.Lock()
@@ -112,10 +112,10 @@ func (db *downloaderDB) setCancelled(id string) error {
 		}
 		return errJobNotFound
 	}
-	if body.Cancelled {
+	if body.Aborted {
 		return nil
 	}
-	body.Cancelled = true
+	body.Aborted = true
 	if err := db.driver.Write(downloaderCollection, id, body); err != nil {
 		glog.Error(err)
 		return err

@@ -152,7 +152,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 		}
 
 		finished, total, numPending := 0, 0, 0
-		cancelled := false
+		aborted := false
 		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		finishedTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		downloadErrs := make([]cmn.TaskErrInfo, 0)
@@ -160,7 +160,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 			finished += stat.Finished
 			total += stat.Total
 			numPending += stat.NumPending
-			cancelled = cancelled || stat.Cancelled
+			aborted = aborted || stat.Aborted
 			currTasks = append(currTasks, stat.CurrentTasks...)
 			finishedTasks = append(finishedTasks, stat.FinishedTasks...)
 			downloadErrs = append(downloadErrs, stat.Errs...)
@@ -173,7 +173,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 			Percentage:    pct,
 			CurrentTasks:  currTasks,
 			FinishedTasks: finishedTasks,
-			Cancelled:     cancelled,
+			Aborted:       aborted,
 			NumPending:    numPending,
 			Errs:          downloadErrs,
 		}
@@ -279,8 +279,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// httpDownloadAdmin is meant for cancelling and getting status updates for
-// downloads.
+// httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
 // GET /v1/download?id=...
 // DELETE /v1/download?id=...
 func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
@@ -301,11 +300,11 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		if len(items) == 1 && items[0] == cmn.Cancel {
-			path = cmn.Cancel
+		if len(items) == 1 && items[0] == cmn.Abort {
+			path = cmn.Abort
 		} else if len(items) == 0 { // remove from list
 			resp, statusCode, err := p.broadcastDownloadRequest(http.MethodGet, "", payload)
-			// err 404 if not exists on any target
+			// Err 404 if not exists on any target
 			if err != nil {
 				p.invalmsghdlr(w, r, err.Error(), statusCode)
 				return
@@ -321,6 +320,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 			}
 		} else {
 			cmn.InvalidHandler(w, r)
+			return
 		}
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -594,7 +594,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Getting status of download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.Status(payload.ID)
+			response, respErr, statusCode = downloader.JobStatus(payload.ID)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -606,7 +606,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Listing downloads")
 			}
-			response, respErr, statusCode = downloader.List(regex)
+			response, respErr, statusCode = downloader.ListJobs(regex)
 		}
 
 	case http.MethodDelete:
@@ -618,16 +618,16 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
 		cmn.AssertNoErr(err)
-		if len(items) == 1 && items[0] == cmn.Cancel {
+		if len(items) == 1 && items[0] == cmn.Abort {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Cancelling download: %s", payload)
+				glog.Infof("Aborting download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.Cancel(payload.ID)
+			response, respErr, statusCode = downloader.AbortJob(payload.ID)
 		} else if len(items) == 0 {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Removing download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.Remove(payload.ID)
+			response, respErr, statusCode = downloader.RemoveJob(payload.ID)
 		} else {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("downloader: invalid handler for delete request: %s", r.URL.Path))
 			return

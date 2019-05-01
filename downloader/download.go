@@ -42,9 +42,9 @@ import (
 //   * Run      - to run
 //   * Stop     - to stop
 //   * Download    - to download a new object from a URL
-//   * Cancel      - to cancel a previously requested download (currently queued or currently downloading)
+//   * Abort       - to abort a previously requested download (currently queued or currently downloading)
 //   * Status      - to request the status of a previously requested download
-// The Download, Cancel and Status requests are encapsulated into an internal
+// The Download, Abort and Status requests are encapsulated into an internal
 // request object and added to a request queue and then are dispatched to the
 // correct jogger. The remaining operations are private to the Downloader and
 // are used only internally.
@@ -56,21 +56,21 @@ import (
 //
 // ====== Downloading ======
 //
-// After Downloader receives a download request, adds it to the correct jogger's queue.
-// Downloads are represented as extended actions (xactDownload), and there is at
-// most one active xactDownload assigned to any jogger at any given time. The
-// xactDownload are created when the jogger dequeues a download request from its
-// downloadCh and are destroyed when the download is cancelled, finished or
+// After Downloader receives a download request, it adds it to the correct jogger's queue.
+// Downloads are represented as object of `task` type, and there is at
+// most one active task assigned to any jogger at any given time. The
+// tasks are created when the jogger dequeues a download request from its
+// downloadCh and are destroyed when the download is aborted, finished or
 // fails.
 //
-// After a xactDownload is created, a separate goroutine is spun up to make the
+// After a task is created, a separate goroutine is spun up to make the
 // actual GET request (jogger's download method). The goroutine for the jogger
-// sits idle awaiting an abort(failed or cancelled) or finish message from the
+// sits idle awaiting an abort(failed or aborted by user) or finish message from the
 // goroutine responsible for the actual download.
 //
-// ====== Cancelling ======
+// ====== Aborting ======
 //
-// When Downloader receives a cancel request, it cancels running task or
+// When Downloader receives an abort request, it aborts running task or
 // if the task is scheduled but is not yet processed, then it is removed
 // from queue (see: put, get). If the task is running, cancelFunc is
 // invoked to cancel task's request.
@@ -91,11 +91,11 @@ import (
 // never queued to the downloadCh.
 //
 // Status updates are either reported in terms of size or size and percentage.
-// Before downloading an object from a server, we attempt to make a HEAD request
-// to obtain the object size using the "Content-Length" field returned in the
-// Header. Note: not all servers implement a HEAD request handler. For these
-// cases, a progress percentage is not returned, just the current number of
-// bytes that have been downloaded.
+// When downloading an object from a server, we attempt to obtain the object size
+// using the "Content-Length" field returned in the Header.
+// Note: not all servers respond with a "Content-Length" request header.
+// For these cases, a progress percentage is not returned, just the current
+// number of bytes that have been downloaded.
 //
 // ====== Notes ======
 //
@@ -109,7 +109,7 @@ import (
 
 const (
 	adminRemove  = "REMOVE"
-	adminCancel  = "CANCEL"
+	adminAbort   = "ABORT"
 	adminStatus  = "STATUS"
 	adminList    = "LIST"
 	taskDownload = "DOWNLOAD"
@@ -149,7 +149,7 @@ type (
 
 // private types
 type (
-	// The result of calling one of Downloader's exposed methos is encapsulated
+	// The result of calling one of Downloader's exposed methods is encapsulated
 	// in a response object, which is used to communicate the outcome of the
 	// request.
 	response struct {
@@ -158,12 +158,12 @@ type (
 		statusCode int
 	}
 
-	// Calling Downloader's exposed methods results in the creation of a request
-	// for admin related tasks (i.e. cancelling and status updates) and a dlTask
-	// for a downlad request. These objects are used by Downloader to process
+	// Calling Downloader's exposed methods results in creation of a request
+	// for admin related tasks (i.e. aborting and status updates) and a dlTask
+	// for a download request. These objects are used by Downloader to process
 	// the request, and are then dispatched to the correct jogger to be handled.
 	request struct {
-		action      string         // one of: adminCancel, adminList, adminStatus, taskDownload
+		action      string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
 		id          string         // id of the job task
 		regex       *regexp.Regexp // regex of descriptions to return if id is empty
 		obj         cmn.DlObj
@@ -174,8 +174,6 @@ type (
 		responseCh  chan *response // where the outcome of the request is written
 	}
 
-	// task embeds cmn.XactBase, but it is not part of the targetrunner's xactions member
-	// variable. Instead, Downloader manages the lifecycle of the extended action.
 	task struct {
 		parent *Downloader
 		*request
@@ -197,7 +195,7 @@ type (
 		m  map[string]struct{}
 	}
 
-	// Each jogger corresponds to a mpath. All types of download requests
+	// Each jogger corresponds to an mpath. All types of download requests
 	// corresponding to the jogger's mpath are forwarded to the jogger. Joggers
 	// exist in the Downloader's jogger member variable, and run only when there
 	// are dlTasks.
@@ -361,8 +359,8 @@ Loop:
 			switch req.action {
 			case adminStatus:
 				d.dispatchStatus(req)
-			case adminCancel:
-				d.dispatchCancel(req)
+			case adminAbort:
+				d.dispatchAbort(req)
 			case adminRemove:
 				d.dispatchRemove(req)
 			case adminList:
@@ -419,7 +417,7 @@ func (d *Downloader) Download(body *cmn.DlBody) (resp interface{}, err error, st
 	responses := make([]chan *response, 0, len(body.Objs))
 	for _, obj := range body.Objs {
 		// Invariant: either there was an error before adding to queue, or file
-		// was deleted from queue (on cancel or successful run). In both cases
+		// was deleted from queue (on abort or successful run). In both cases
 		// we decrease pending.
 		d.IncPending()
 
@@ -442,20 +440,20 @@ func (d *Downloader) Download(body *cmn.DlBody) (resp interface{}, err error, st
 	}
 
 	for _, response := range responses {
-		// await the response
+		// Await the response
 		r := <-response
 		if r.err != nil {
-			d.Cancel(body.ID) // cancel whole job
+			d.AbortJob(body.ID) // Abort whole job
 			return r.resp, r.err, r.statusCode
 		}
 	}
 	return nil, nil, http.StatusOK
 }
 
-func (d *Downloader) Cancel(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
-		action:     adminCancel,
+		action:     adminAbort,
 		id:         id,
 		responseCh: make(chan *response, 1),
 	}
@@ -467,7 +465,7 @@ func (d *Downloader) Cancel(id string) (resp interface{}, err error, statusCode 
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) Remove(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) RemoveJob(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     adminRemove,
@@ -482,7 +480,7 @@ func (d *Downloader) Remove(id string) (resp interface{}, err error, statusCode 
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) Status(id string) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) JobStatus(id string) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     adminStatus,
@@ -497,7 +495,7 @@ func (d *Downloader) Status(id string) (resp interface{}, err error, statusCode 
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) List(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	req := &request{
 		action:     adminList,
@@ -555,8 +553,7 @@ finalize:
 	//  * object already exists
 	//  * object already in queue
 	//
-	// In all of these cases we need to decrease pending since it was not added
-	// to the queue.
+	// In all of these cases we need to decrease pending since it was not added to the queue.
 	if !added {
 		d.DecPending()
 	}
@@ -585,11 +582,11 @@ func (d *Downloader) dispatchRemove(req *request) {
 	cmn.Assert(d.getNumPending(body) == 0)
 
 	err = d.db.delJob(req.id)
-	cmn.AssertNoErr(err) // everything should be okay since getReqFromDB
+	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
 	req.writeResp(nil)
 }
 
-func (d *Downloader) dispatchCancel(req *request) {
+func (d *Downloader) dispatchAbort(req *request) {
 	body, err := d.checkJob(req)
 	if err != nil {
 		return
@@ -618,7 +615,7 @@ func (d *Downloader) dispatchCancel(req *request) {
 				continue
 			}
 
-			// Cancel currently running task
+			// Abort currently running task
 			if j.task != nil && j.task.request.equals(req) {
 				// Task is running
 				j.task.cancel()
@@ -639,8 +636,8 @@ func (d *Downloader) dispatchCancel(req *request) {
 		return
 	}
 
-	err = d.db.setCancelled(req.id)
-	cmn.AssertNoErr(err) // everything should be okay since getReqFromDB
+	err = d.db.setAborted(req.id)
+	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
 	req.writeResp(nil)
 }
 
@@ -716,7 +713,7 @@ func (d *Downloader) dispatchStatus(req *request) {
 		Errs:          dlErrors,
 
 		NumPending: numPending,
-		Cancelled:  body.Cancelled,
+		Aborted:    body.Aborted,
 	})
 }
 
@@ -748,7 +745,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 	return currentTasks
 }
 
-// gets the number of pending files of reqId
+// Gets the number of pending files of reqId
 func (d *Downloader) getNumPending(body *cmn.DlBody) int {
 	numPending := 0
 
@@ -782,7 +779,7 @@ func (d *Downloader) dispatchList(req *request) {
 			ID:          r.ID,
 			Description: r.Description,
 			NumPending:  d.getNumPending(&r),
-			Cancelled:   r.Cancelled,
+			Aborted:     r.Aborted,
 		}
 	}
 	req.writeResp(respMap)
@@ -822,10 +819,10 @@ Loop:
 		j.task = t
 		j.Unlock()
 
-		// start download
+		// Start download
 		go t.download()
 
-		// await abort or completion
+		// Await abort or completion
 		<-t.waitForFinish()
 
 		j.Lock()
@@ -901,7 +898,7 @@ func (t *task) download() {
 func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
-	// create request
+	// Create request
 	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)
 	if err != nil {
 		return "", err
@@ -910,7 +907,7 @@ func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 	requestWithContext := httpReq.WithContext(t.downloadCtx)
 	response, err := httpClient.Do(requestWithContext)
 	if err != nil {
-		return httpClientErrorMessage(err.(*url.Error)), err // error returned by httpClient.Do() is a *url.Error
+		return httpClientErrorMessage(err.(*url.Error)), err // Error returned by httpClient.Do() is a *url.Error
 	}
 	if response.StatusCode >= http.StatusBadRequest {
 		return httpRequestErrorMessage(t.obj.Link, response), fmt.Errorf("status code: %d", response.StatusCode)
@@ -1026,7 +1023,7 @@ func (q *queue) put(t *task) (added bool, err error, errCode int) {
 	return true, nil, 0
 }
 
-// get try to find first task which was not yet canceled
+// Get tries to find first task which was not yet aborted
 func (q *queue) get() (foundTask *task) {
 	for foundTask == nil {
 		t, ok := <-q.ch
@@ -1049,7 +1046,7 @@ func (q *queue) get() (foundTask *task) {
 	if foundTask.timeout != "" {
 		var err error
 		timeout, err = time.ParseDuration(foundTask.timeout)
-		cmn.AssertNoErr(err) // this should be checked beforehand
+		cmn.AssertNoErr(err) // This should be checked beforehand
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

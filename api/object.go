@@ -407,14 +407,14 @@ func DownloadGetList(baseParams *BaseParams, regex string) (map[string]cmn.DlJob
 	return parsedResp, nil
 }
 
-func DownloadCancel(baseParams *BaseParams, id string) error {
+func DownloadAbort(baseParams *BaseParams, id string) error {
 	dlBody := cmn.DlAdminBody{
 		ID: id,
 	}
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.Cancel)
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.Abort)
 	optParams := OptionalParams{
 		Query: query,
 	}
