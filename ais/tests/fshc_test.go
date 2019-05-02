@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -322,10 +321,6 @@ func TestFSCheckerDetection(t *testing.T) {
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 
 	smap := getClusterMap(t, proxyURL)
@@ -370,8 +365,13 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	err = api.EnableMountpath(baseParams, failedMpath+"some_text")
-	if err == nil || !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Enabling non-existing mountpath should return not-found error, got: %v", err)
+	if err == nil {
+		t.Errorf("Enabling non-existing mountpath should return error")
+	} else {
+		httpErr := err.(*cmn.HTTPError)
+		if httpErr.Status != http.StatusNotFound {
+			t.Errorf("Expected status: %d, got: %d. Error: %s", http.StatusNotFound, httpErr.Status, err.Error())
+		}
 	}
 }
 
