@@ -70,10 +70,12 @@ import (
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator
 // (Mem2, for shortness) can be exercised via its public API that includes
-// GetSlab2(), SelectSlab2() and AllocFromSlab2(). Notice the difference between
-// the first and the second: GetSlab2(128KB) will return the Slab that contains
-// size=128KB reusable buffers, while SelectSlab2(128KB) - the Slab that is
-// considered optimal for the (estimated) total size 128KB.
+// GetSlab2(), SelectSlab2() and AllocFromSlab2().
+//
+// NOTE the difference between the first and the second:
+// - GetSlab2(memsys.MaxSlabSize) returns the Slab of 256KB buffers
+// - SelectSlab2(memsys.MaxSlabSize) - the Slab that is considered optimal
+//   for the estimated *total* size 256KB.
 //
 // Once selected, each Slab2 instance can be used via its own public API that
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
@@ -101,10 +103,14 @@ import (
 //
 // ========================== end of TOO ========================================
 
-const NumSlabs = 128 / 4 // [4K - 128K] at 4K increments
-const DEADBEEF = "DEADBEEF"
-const GlobalMem2Name = "GMem2"
-const pkgName = "memsys"
+const (
+	MaxSlabSize = 256 * cmn.KiB
+	NumSlabs    = MaxSlabSize / cmn.KiB / 4 // [4K - 256K] at 4K increments
+
+	deadBEEF       = "DEADBEEF"
+	globalMem2Name = "GMem2"
+	pkgName        = "memsys"
+)
 
 // mem subsystem defaults (potentially, tunables)
 const (
@@ -217,7 +223,7 @@ type sortpair struct {
 var (
 	// gMem2 is the global memory manager used in various packages outside ais.
 	// Its runtime params are set below and is intended to remain so.
-	gMem2 = &Mem2{Name: GlobalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
+	gMem2 = &Mem2{Name: globalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
 	// Mapping of usageLvl values to corresponding strings for log messages
 	usageLvls = map[int64]string{Mem2Initialized: "Initialized", Mem2Running: "Running", Mem2Stopped: "Stopped"}
 )
@@ -233,11 +239,23 @@ func Init() *Mem2 {
 // API methods
 //
 
-func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction time */) *SGL {
+func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ...int64 /* slab buffer size */) *SGL {
+	var (
+		slab *Slab2
+		n    int64
+		sgl  [][]byte
+	)
 	r.assertReadyForUse()
-	slab := r.SelectSlab2(immediateSize)
-	n := cmn.DivCeil(immediateSize, slab.Size())
-	sgl := make([][]byte, n)
+	if len(sbufSize) > 0 {
+		var err error
+		slab, err = r.GetSlab2(sbufSize[0])
+		cmn.AssertNoErr(err)
+	} else {
+		slab = r.SelectSlab2(immediateSize)
+	}
+	n = cmn.DivCeil(immediateSize, slab.Size())
+	sgl = make([][]byte, n)
+
 	slab.muget.Lock()
 	for i := 0; i < int(n); i++ {
 		sgl[i] = slab._alloc()
@@ -246,8 +264,8 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction ti
 	return &SGL{sgl: sgl, slab: slab}
 }
 
-func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64) *SGL {
-	sgl := r.NewSGL(immediateSize)
+func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64, sbufSize ...int64) *SGL {
+	sgl := r.NewSGL(immediateSize, sbufSize...)
 	sgl.hash = hash
 	return sgl
 }
@@ -541,8 +559,8 @@ func (s *Slab2) Free(bufs ...[]byte) {
 		for _, buf := range bufs {
 			if s.debug {
 				cmn.Assert(int64(len(buf)) == s.Size())
-				for i := 0; i < len(buf); i += len(DEADBEEF) {
-					copy(buf[i:], []byte(DEADBEEF))
+				for i := 0; i < len(buf); i += len(deadBEEF) {
+					copy(buf[i:], []byte(deadBEEF))
 				}
 			}
 			s.put = append(s.put, buf)
@@ -773,9 +791,11 @@ func (r *Mem2) doStats() {
 }
 
 func (r *Mem2) assertReadyForUse() {
-	errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
 	curLvl := r.usageLvl.Load()
-	cmn.DassertMsg(curLvl == Mem2Initialized || curLvl == Mem2Running, errstr, pkgName)
+	if curLvl == Mem2Initialized || curLvl == Mem2Running {
+		return
+	}
+	cmn.DassertMsg(false, r.Name+" is not initialized nor running", pkgName)
 }
 
 func (s *Slab2) _alloc() (buf []byte) {
