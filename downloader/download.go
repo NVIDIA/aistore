@@ -807,16 +807,15 @@ func (j *jogger) putIntoDownloadQueue(task *task) (response, bool) {
 
 func (j *jogger) jog() {
 	glog.Infof("Starting jogger for mpath %q.", j.mpath)
-Loop:
 	for {
 		t := j.q.get()
 		if t == nil {
-			break Loop
+			break
 		}
 		j.Lock()
 		if j.stopAgent {
 			j.Unlock()
-			break Loop
+			break
 		}
 
 		j.task = t

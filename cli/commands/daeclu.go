@@ -172,7 +172,7 @@ func daecluStatus(daemonID string, useJSON bool) (err error) {
 	} else if daemonID == cmn.Target {
 		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
 	} else if daemonID == "" {
-		if err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON); err != nil {
+		if err := templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
 		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
@@ -218,7 +218,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err
 		return
 	}
 	if daemonID == cmn.Cluster {
-		if err = api.SetClusterConfig(baseParams, nvs); err != nil {
+		if err := api.SetClusterConfig(baseParams, nvs); err != nil {
 			return err
 		}
 		fmt.Printf("%d properties set for %s\n", c.NArg()-1, cmn.Cluster)
@@ -231,7 +231,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err
 	}
 
 	baseParams.URL = daemonURL
-	if err = api.SetDaemonConfig(baseParams, nvs); err != nil {
+	if err := api.SetDaemonConfig(baseParams, nvs); err != nil {
 		return err
 	}
 	fmt.Printf("%d properties set for %q daemon\n", c.NArg()-1, daemonID)

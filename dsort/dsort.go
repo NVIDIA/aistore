@@ -89,7 +89,7 @@ func (m *Manager) start() (err error) {
 		}
 
 		// Phase 3.
-		if err = m.distributeShardRecords(shardSize); err != nil {
+		if err := m.distributeShardRecords(shardSize); err != nil {
 			return err
 		}
 	}
@@ -397,7 +397,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			return err
 		}
 		streamWg.Wait()
-		if err = <-errCh; err != nil {
+		if err := <-errCh; err != nil {
 			return err
 		}
 	}

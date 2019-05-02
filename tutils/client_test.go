@@ -236,8 +236,9 @@ func TestMain(m *testing.M) {
 			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", headerCksum, cksum))
 		}
 	}))
-	defer server.Close()
 	baseParams = tutils.BaseAPIParams(server.URL)
 
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	server.Close()
+	os.Exit(exitCode)
 }

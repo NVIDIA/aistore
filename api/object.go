@@ -150,7 +150,7 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 
 // GetObjectWithValidation API
 //
-// Same behaviour as GetObject, but performs checksum validation of the object
+// Same behavior as GetObject, but performs checksum validation of the object
 // by comparing the checksum in the response header with the calculated checksum
 // value derived from the returned object.
 //

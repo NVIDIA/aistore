@@ -377,7 +377,7 @@ func TestFS(t *testing.T) {
 	}
 	proxyURL := tutils.DefaultBaseAPIParams(t).URL
 	cliAISURL := os.Getenv("AISURL")
-	if len(cliAISURL) != 0 {
+	if cliAISURL != "" {
 		proxyURL = "http://" + cliAISURL
 	}
 	leader, err := tutils.GetPrimaryProxy(proxyURL)
@@ -869,15 +869,13 @@ func TestFS(t *testing.T) {
 		})
 	}
 
-	{
-		// same prefix
-		put(t, fs, file7Path, 0, content1)
-		readDir(t, fs, bucketFullName)
+	// same prefix
+	put(t, fs, file7Path, 0, content1)
+	readDir(t, fs, bucketFullName)
 
-		fs.Mkdir(context.Background(), dirTestPath, os.ModePerm)
-		put(t, fs, file8Path, 0, content1)
-		readDir(t, fs, bucketFullName)
-	}
+	fs.Mkdir(context.Background(), dirTestPath, os.ModePerm)
+	put(t, fs, file8Path, 0, content1)
+	readDir(t, fs, bucketFullName)
 
 	{
 		// check existing 'on disk' objects

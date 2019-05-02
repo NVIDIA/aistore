@@ -174,7 +174,8 @@ func Test_matchdelete(t *testing.T) {
 			continue
 		}
 		keynameChans[num%numworkers] <- name
-		if num++; num >= numfiles {
+		num++
+		if num >= numfiles {
 			break
 		}
 	}
@@ -1117,7 +1118,8 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 		if outputChan != nil {
 			outputChan <- name
 		}
-		if num++; num >= numfiles {
+		num++
+		if num >= numfiles {
 			break
 		}
 	}

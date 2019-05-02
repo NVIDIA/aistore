@@ -584,7 +584,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if ok {
 		idsToIgnore = []string{target.DaemonID}
 	}
-	if err = api.UnregisterTarget(baseParams, sid); err != nil {
+	if err := api.UnregisterTarget(baseParams, sid); err != nil {
 		return err
 	}
 
@@ -830,7 +830,6 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 	}
 	to := time.Now().Add(bucketTimeout)
 	for _, s := range smap.Tmap {
-	loop_bucket:
 		for {
 			pubURL := s.URL(cmn.NetworkPublic)
 			bucketExists, err := DoesLocalBucketExist(pubURL, name)
@@ -838,7 +837,7 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 				return err
 			}
 			if bucketExists == exists {
-				break loop_bucket
+				break
 			}
 			if time.Now().After(to) {
 				return fmt.Errorf("wait for local bucket timed out, target = %s", pubURL)

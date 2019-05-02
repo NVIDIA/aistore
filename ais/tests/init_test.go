@@ -113,14 +113,14 @@ func init() {
 
 func TestMain(m *testing.M) {
 	clibucket = os.Getenv("BUCKET")
-	if len(clibucket) == 0 {
+	if clibucket == "" {
 		cmn.ExitInfof("Bucket name is empty")
 	}
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
 	// Many of the other packages do not accept the 'url' flag
 	cliAISURL := os.Getenv("AISURL")
-	if len(cliAISURL) != 0 {
+	if cliAISURL != "" {
 		proxyURLReadOnly = "http://" + cliAISURL
 	}
 	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test.

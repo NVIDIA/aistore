@@ -519,13 +519,14 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 		)
 		if slices[i].reader != nil {
 			reader = slices[i].reader
-			if sgl, ok := reader.(*memsys.SliceReader); ok {
-				_, err = sgl.Seek(0, io.SeekStart)
-			} else if sgl, ok := reader.(*memsys.Reader); ok {
-				_, err = sgl.Seek(0, io.SeekStart)
-			} else if f, ok := reader.(*cmn.FileSectionHandle); ok {
-				_, err = f.Open()
-			} else {
+			switch r := reader.(type) {
+			case *memsys.SliceReader:
+				_, err = r.Seek(0, io.SeekStart)
+			case *memsys.Reader:
+				_, err = r.Seek(0, io.SeekStart)
+			case *cmn.FileSectionHandle:
+				_, err = r.Open()
+			default:
 				cmn.AssertFmt(false, "unsupported reader type", reader)
 			}
 		} else {

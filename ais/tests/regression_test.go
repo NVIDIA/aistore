@@ -1282,7 +1282,6 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 
 func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams) {
 	time.Sleep(ais.NeighborRebalanceStartDelay)
-OUTER:
 	for {
 		// Wait before querying so the rebalance statistics are populated.
 		time.Sleep(time.Second * 3)
@@ -1294,11 +1293,13 @@ OUTER:
 		}
 
 		targetsCompleted := 0
+	STATS:
 		for _, targetStats := range rebalanceStats {
 			if len(targetStats) > 0 {
-				for _, xaction := range targetStats {
+				for idx := range targetStats {
+					xaction := &targetStats[idx]
 					if xaction.Status() != cmn.XactionStatusCompleted {
-						continue OUTER
+						break STATS
 					}
 				}
 			}
@@ -1325,13 +1326,13 @@ func waitProgressBar(prefix string, wait time.Duration) {
 	ticker := time.NewTicker(tickerStep)
 	tutils.Logf(prefix)
 	idx := 1
-waitloop:
+
 	for range ticker.C {
 		elapsed := tickerStep * time.Duration(idx)
 		tutils.Logf("----%d%%", (elapsed * 100 / wait))
 		if elapsed >= wait {
 			tutils.Logln("")
-			break waitloop
+			break
 		}
 		idx++
 	}

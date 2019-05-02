@@ -72,7 +72,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if err = lctx.yieldTerm(); err != nil {
+	if err := lctx.yieldTerm(); err != nil {
 		return err
 	}
 	var (

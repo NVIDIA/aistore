@@ -331,7 +331,7 @@ func evictObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider
 	if flagIsSet(c, nameFlag) {
 		// Name evict
 		name := parseFlag(c, nameFlag)
-		if err = api.EvictObject(baseParams, bucket, name); err != nil {
+		if err := api.EvictObject(baseParams, bucket, name); err != nil {
 			return err
 		}
 		fmt.Printf("%s evicted from %s bucket\n", name, bucket)

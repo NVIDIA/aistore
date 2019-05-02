@@ -847,7 +847,7 @@ const (
 )
 
 // BucketProps defines the configuration of the bucket with regard to
-// its type, checksum, and LRU. These characteristics determine its behaviour
+// its type, checksum, and LRU. These characteristics determine its behavior
 // in response to operations on the bucket itself or the objects inside the bucket.
 type BucketProps struct {
 	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
@@ -1028,7 +1028,7 @@ func ReadXactionRequestMessage(actionMsg *ActionMsg) (*XactionExtMsg, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal action message: %v. error: %v", actionMsg, err)
 	}
-	if err = jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
+	if err := jsoniter.Unmarshal(xactMsgJSON, xactMsg); err != nil {
 		return nil, err
 	}
 

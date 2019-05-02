@@ -241,7 +241,7 @@ func (m *Metrics) unlock() {
 
 // update updates elapsed time for all the metrics.
 //
-// NOTE: This should be done every time Metrics are about to be marshalled and
+// NOTE: This should be done every time Metrics are about to be marshaled and
 // sent through the network.
 func (m *Metrics) update() {
 	m.lock()

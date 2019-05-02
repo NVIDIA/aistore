@@ -51,7 +51,7 @@ func GetXactionResponse(baseParams *BaseParams, kind, action, bucket string) (ma
 		if err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(bod, &xactStats); err != nil {
+		if err := json.Unmarshal(bod, &xactStats); err != nil {
 			return nil, err
 		}
 		return xactStats, nil

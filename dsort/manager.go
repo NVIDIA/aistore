@@ -906,7 +906,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 }
 
 // doWithAbort sends requests through client. If manager aborts during the call
-// request is cancelled.
+// request is canceled.
 func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64, error) {
 	req, _, cancel, err := cmn.ReqWithContext(method, u, body)
 	if err != nil {

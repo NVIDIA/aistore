@@ -2161,7 +2161,7 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	}
 
 	if !dryRun.disk {
-		if err = roi.writeToFile(); err != nil {
+		if err := roi.writeToFile(); err != nil {
 			return err, http.StatusInternalServerError
 		}
 

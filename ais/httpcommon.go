@@ -778,11 +778,12 @@ func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, buck
 }
 
 func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err error) {
-	if valstr, ok := value.(string); ok {
-		copies, err = strconv.Atoi(valstr)
-	} else if fcopies, ok := value.(float64); ok {
-		copies = int(fcopies)
-	} else {
+	switch v := value.(type) {
+	case string:
+		copies, err = strconv.Atoi(v)
+	case float64:
+		copies = int(v)
+	default:
 		err = fmt.Errorf("failed to parse 'copies' (%v, %T) - unexpected type", value, value)
 	}
 	return

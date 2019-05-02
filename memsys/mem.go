@@ -377,7 +377,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	r.statCh = make(chan ReqStats2, 1)
 
 	// init slabs
-	for i := range r.rings {
+	for i := range &r.rings {
 		slab := &Slab2{
 			m:       r,
 			bufSize: int64(cmn.KiB * 4 * (i + 1)),
@@ -401,7 +401,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 	r.assertReadyForUse()
 	var freed int64
 	if spec.Totally {
-		for _, s := range r.rings {
+		for _, s := range &r.rings {
 			freed += s.cleanup()
 		}
 	} else {
@@ -414,7 +414,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 		r.GetStats(req)
 		req.Wg.Wait()
 
-		for i, idle := range currStats.Idle {
+		for i, idle := range &currStats.Idle {
 			if idle.IsZero() {
 				continue
 			}
@@ -492,7 +492,7 @@ func (r *Mem2) Stop(err error) {
 }
 
 func (r *Mem2) stop() {
-	for _, s := range r.rings {
+	for _, s := range &r.rings {
 		_ = s.cleanup()
 	}
 }
@@ -517,7 +517,7 @@ func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
 		estimatedSize = minSizeUnknown
 	}
 	size := cmn.DivCeil(estimatedSize, countThreshold)
-	for _, slab := range r.rings {
+	for _, slab := range &r.rings {
 		if slab.Size() >= size {
 			return slab
 		}
@@ -525,9 +525,10 @@ func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
 	return r.rings[len(r.rings)-1]
 }
 
-func (r *Mem2) AllocFromSlab2(estimSize int64) ([]byte, *Slab2) {
-	slab := r.SelectSlab2(estimSize)
-	return slab.Alloc(), slab
+func (r *Mem2) AllocFromSlab2(estimSize int64) (buf []byte, slab *Slab2) {
+	slab = r.SelectSlab2(estimSize)
+	buf = slab.Alloc()
+	return
 }
 
 func (r *Mem2) GetStats(req ReqStats2) {
@@ -560,7 +561,7 @@ func (s *Slab2) Free(bufs ...[]byte) {
 			if s.debug {
 				cmn.Assert(int64(len(buf)) == s.Size())
 				for i := 0; i < len(buf); i += len(deadBEEF) {
-					copy(buf[i:], []byte(deadBEEF))
+					copy(buf[i:], deadBEEF)
 				}
 			}
 			s.put = append(s.put, buf)
@@ -657,7 +658,7 @@ func (r *Mem2) work() {
 		r.minDepth.Store(minDepth / 4)
 	}
 	// idle first
-	for i, s := range r.rings {
+	for i, s := range &r.rings {
 		r.sorted[i] = sortpair{s, r.stats.Adeltas[i]}
 	}
 	sort.Slice(r.sorted, r.fsort)
@@ -712,7 +713,7 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 // freeIdle traverses and deallocates idle slabs- those that were not used for at
 // least the specified duration; returns freed size
 func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
-	for i, idle := range r.stats.Idle {
+	for i, idle := range &r.stats.Idle {
 		if idle.IsZero() {
 			continue
 		}
@@ -777,7 +778,7 @@ func (r *Mem2) fsort(i, j int) bool {
 
 func (r *Mem2) doStats() {
 	now := time.Now()
-	for i, s := range r.rings {
+	for i, s := range &r.rings {
 		prev := r.stats.Hits[i]
 		r.stats.Hits[i] = s.stats.Hits.Load()
 		r.stats.Adeltas[i] = r.stats.Hits[i] - prev

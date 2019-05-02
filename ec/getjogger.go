@@ -149,11 +149,12 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 		err       error
 	)
 
-	if sgl, ok := reader.(*memsys.SGL); ok {
-		srcReader = memsys.NewReader(sgl)
-	} else if _, ok := reader.(*cmn.FileHandle); ok {
+	switch r := reader.(type) {
+	case *memsys.SGL:
+		srcReader = memsys.NewReader(r)
+	case *cmn.FileHandle:
 		srcReader, err = cmn.NewFileHandle(lom.FQN)
-	} else {
+	default:
 		cmn.AssertFmt(false, "unsupported reader type", reader)
 	}
 
@@ -545,7 +546,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 		readers[i] = nil
 	}
 
-	if err = stream.Reconstruct(readers, writers); err != nil {
+	if err := stream.Reconstruct(readers, writers); err != nil {
 		return restored, err
 	}
 

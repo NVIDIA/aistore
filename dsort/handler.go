@@ -107,16 +107,18 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	checkResponses := func(responses []response) error {
 		for _, resp := range responses {
-			if resp.err != nil {
-				glog.Errorf("[%s] start sort request failed to be broadcast, err: %s", managerUUID, resp.err.Error())
-
-				path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-				broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap)
-
-				s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
-				cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
-				return resp.err
+			if resp.err == nil {
+				continue
 			}
+
+			glog.Errorf("[%s] start sort request failed to be broadcast, err: %s", managerUUID, resp.err.Error())
+
+			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+			broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap)
+
+			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
+			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
+			return resp.err
 		}
 
 		return nil

@@ -228,48 +228,42 @@ func TestFSCheckerDetection(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	// Checking detection on object PUT
-	{
-		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
+	wg.Add(1)
+	go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
+	time.Sleep(time.Second * 2)
+	chfail <- struct{}{}
+	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
 		time.Sleep(time.Second * 2)
-		chfail <- struct{}{}
-		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
-			time.Sleep(time.Second * 2)
-		}
-		chstop <- struct{}{}
-		wg.Wait()
-
-		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 	}
+	chstop <- struct{}{}
+	wg.Wait()
+
+	repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 
 	// Checking detection on object GET
-	{
-		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
-		time.Sleep(time.Second * 2)
-		chfail <- struct{}{}
-		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
-			time.Sleep(time.Second * 1)
-		}
-		chstop <- struct{}{}
-		wg.Wait()
-
-		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
+	wg.Add(1)
+	go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
+	time.Sleep(time.Second * 2)
+	chfail <- struct{}{}
+	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
+		time.Sleep(time.Second * 1)
 	}
+	chstop <- struct{}{}
+	wg.Wait()
+
+	repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 
 	// reading non-existing objects should not disable mountpath
-	{
-		tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
-		baseParams = tutils.BaseAPIParams(proxyURL)
-		for n := 1; n < 10; n++ {
-			if _, err := api.GetObject(baseParams, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
-				t.Error("Should not be able to GET non-existing objects")
-			}
+	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
+	baseParams = tutils.BaseAPIParams(proxyURL)
+	for n := 1; n < 10; n++ {
+		if _, err := api.GetObject(baseParams, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
+			t.Error("Should not be able to GET non-existing objects")
 		}
-		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
-			t.Error("GETting non-existing objects should not disable mountpath")
-			repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
-		}
+	}
+	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
+		t.Error("GETting non-existing objects should not disable mountpath")
+		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 	}
 
 	// try PUT and GET with disabled FSChecker

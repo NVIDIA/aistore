@@ -21,6 +21,7 @@ linters:
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint
+    # - maligned
     # not using structcheck since it doesn't handle embedded structs
 
 linters-settings:
@@ -32,8 +33,22 @@ linters-settings:
     check-blank: false
     check-type-assertions: false
   gocritic:
+    enabled-tags:
+      - performance
+      # - style
+      - experimental
     disabled-checks:
       - ifElseChain
+      - hugeParam # produces a lot of false positives (TODO: see if some errors are possible improvements)
+      - commentFormatting
+      - commentedOutCode
+      - wrapperFunc # suggest using strings.ReplaceAll, which was added in 1.12
+      - unnamedResult
+  misspell:
+    # Correct spellings using locale preferences for US or UK.
+    # Default is to use a neutral variety of English.
+    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
+    locale: US
 
 issues:
   # use default exclude rules 
