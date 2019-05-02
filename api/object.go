@@ -429,7 +429,7 @@ func DownloadRemove(baseParams *BaseParams, id string) error {
 	query := dlBody.AsQuery()
 
 	baseParams.Method = http.MethodDelete
-	path := cmn.URLPath(cmn.Version, cmn.Download)
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.Remove)
 	optParams := OptionalParams{
 		Query: query,
 	}

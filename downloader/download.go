@@ -579,7 +579,10 @@ func (d *Downloader) dispatchRemove(req *request) {
 	}
 
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	cmn.Assert(d.getNumPending(body) == 0)
+	if d.getNumPending(body) != 0 {
+		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", body.ID), http.StatusBadRequest)
+		return
+	}
 
 	err = d.db.delJob(req.id)
 	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB

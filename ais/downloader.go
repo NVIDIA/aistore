@@ -281,7 +281,7 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 // httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
 // GET /v1/download?id=...
-// DELETE /v1/download?id=...
+// DELETE /v1/download/{abort, remove}?id=...
 func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) {
 	var (
 		payload = &cmn.DlAdminBody{}
@@ -295,37 +295,23 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 
 	path := ""
 	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
+		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
 		if err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error())
 			return
 		}
-		if len(items) == 1 && items[0] == cmn.Abort {
-			path = cmn.Abort
-		} else if len(items) == 0 { // remove from list
-			resp, statusCode, err := p.broadcastDownloadRequest(http.MethodGet, "", payload)
-			// Err 404 if not exists on any target
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error(), statusCode)
-				return
-			}
 
-			// Check for not running
-			var parsedResp cmn.DlStatusResp
-			err = jsoniter.Unmarshal(resp, &parsedResp)
-			cmn.AssertNoErr(err)
-			if parsedResp.NumPending > 0 {
-				p.invalmsghdlr(w, r, fmt.Sprintf("download job with id %s still running", payload.ID))
-				return
-			}
-		} else {
-			cmn.InvalidHandler(w, r)
+		path = items[0]
+		if path != cmn.Abort && path != cmn.Remove {
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).", items[0], cmn.Abort, cmn.Remove))
 			return
 		}
 	}
+
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("httpDownloadAdmin payload %v", payload)
 	}
+
 	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
@@ -560,9 +546,10 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		response   interface{}
-		respErr    error
-		statusCode int
+		response interface{}
+		respErr  error
+
+		statusCode = http.StatusBadRequest
 	)
 
 	downloader, err := t.xactions.renewDownloader(t)
@@ -583,6 +570,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Downloading: %s", payload)
 		}
 		response, respErr, statusCode = downloader.Download(payload)
+
 	case http.MethodGet:
 		payload := &cmn.DlAdminBody{}
 		if err := cmn.ReadJSON(w, r, payload); err != nil {
@@ -616,22 +604,25 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cmn.AssertNoErr(payload.Validate(true))
 
-		items, err := cmn.MatchRESTItems(r.URL.Path, 0, true, cmn.Version, cmn.Download)
+		items, err := cmn.MatchRESTItems(r.URL.Path, 1, false, cmn.Version, cmn.Download)
 		cmn.AssertNoErr(err)
-		if len(items) == 1 && items[0] == cmn.Abort {
+
+		switch items[0] {
+		case cmn.Abort:
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Aborting download: %s", payload)
 			}
 			response, respErr, statusCode = downloader.AbortJob(payload.ID)
-		} else if len(items) == 0 {
+		case cmn.Remove:
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Removing download: %s", payload)
 			}
 			response, respErr, statusCode = downloader.RemoveJob(payload.ID)
-		} else {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("downloader: invalid handler for delete request: %s", r.URL.Path))
+		default:
+			cmn.AssertMsg(false, fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).", items[0], cmn.Abort, cmn.Remove))
 			return
 		}
+
 	default:
 		cmn.AssertMsg(false, r.Method)
 		return

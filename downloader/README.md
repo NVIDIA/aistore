@@ -188,7 +188,7 @@ Name | Type | Description | Optional?
 
 ## Remove from List
 
-Any aborted or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request with provided `id` (which is returned upon job creation).
+Any aborted or finished download request can be removed from the [list of downloads](#list-of-downloads) by making a `DELETE` request to `/v1/download/remove` with provided `id` (which is returned upon job creation).
 
 ### Request Query Parameters
 
@@ -200,4 +200,4 @@ Name | Type | Description | Optional?
 
 | Operation | HTTP action | Example |
 |--|--|--|
-| Remove from list | DELETE /v1/download | `curl -Liv -X DELETE 'http://localhost:8080/v1/download?id=5JjIuGemR'`|
+| Remove from list | DELETE /v1/download/remove | `curl -Liv -X DELETE 'http://localhost:8080/v1/download/remove?id=5JjIuGemR'`|
