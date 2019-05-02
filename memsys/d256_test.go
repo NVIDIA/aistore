@@ -7,6 +7,9 @@
 package memsys_test
 
 import (
+	"io"
+	"io/ioutil"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"testing"
@@ -23,10 +26,13 @@ import (
 // or, to run a single selected benchmark for 30s:
 //
 // $ GODEBUG=madvdontneed=1 go test -bench=BenchmarkLargeWRF256K -benchtime=30s -benchmem ./d256_test.go
+//
+// NOTE: running these benchmarks for less than 40s will likely generate non-reproducible (unstable) results
 
 const (
 	largeobj = cmn.MiB * 8
 	smallobj = cmn.KiB * 512
+	largefil = cmn.GiB
 )
 
 // largobj alloc
@@ -195,4 +201,65 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 		default:
 		}
 	}
+	b.StopTimer() // wo/ defers
+}
+
+// file read to sgl
+func BenchmarkLargeFile256K(b *testing.B) {
+	benchFile(b, cmn.KiB*256)
+}
+func BenchmarkLargeFile128K(b *testing.B) {
+	benchFile(b, cmn.KiB*128)
+}
+func BenchmarkLargeFile64K(b *testing.B) {
+	benchFile(b, cmn.KiB*64)
+}
+func BenchmarkLargeFile32K(b *testing.B) {
+	benchFile(b, cmn.KiB*32)
+}
+
+func benchFile(b *testing.B, sbufSize int64) {
+	mem := &memsys.Mem2{MinPctFree: 50, Name: "dmem"}
+	err := mem.Init(true /* ignore errors */)
+	defer mem.Stop(nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// reset initial conditions
+	runtime.GC()
+	debug.FreeOSMemory()
+
+	file, err := ioutil.TempFile("/tmp", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+	n, _ := file.Write(make([]byte, largefil))
+	if int64(n) != largefil {
+		b.Fatal(n, largefil)
+	}
+
+	defer func() {
+		file.Close()
+		os.Remove(file.Name())
+	}()
+
+	slab, err := mem.GetSlab2(sbufSize)
+	cmn.AssertNoErr(err)
+	buf := slab.Alloc()
+	defer slab.Free(buf)
+
+	if int64(len(buf)) != sbufSize {
+		b.Fatal(len(buf), sbufSize)
+	}
+
+	b.ResetTimer() // start timing it
+	for i := 0; i < b.N; i++ {
+		file.Seek(0, io.SeekStart)
+		n, _ := io.CopyBuffer(ioutil.Discard, file, buf)
+		if n != largefil {
+			b.Fatal(n, largefil)
+		}
+	}
+	b.StopTimer() // wo/ defers
 }

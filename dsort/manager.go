@@ -715,7 +715,7 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
-		slab, err := mem.GetSlab2(128 * cmn.KiB)
+		slab, err := mem.GetSlab2(memsys.MaxSlabSize)
 		cmn.AssertNoErr(err)
 		buf := slab.Alloc()
 
@@ -769,7 +769,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 func (m *Manager) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		loadLocal := func(w io.Writer, pathToContent string) (written int64, err error) {
-			slab, err := mem.GetSlab2(128 * cmn.KiB)
+			slab, err := mem.GetSlab2(memsys.MaxSlabSize)
 			cmn.AssertNoErr(err)
 			buf := slab.Alloc()
 

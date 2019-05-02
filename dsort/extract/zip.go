@@ -112,7 +112,12 @@ func (z *zipExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 		return extractedSize, extractedCount, err
 	}
 
-	slab, err := mem.GetSlab2(128 * cmn.KiB)
+	var slabSize int64 = memsys.MaxSlabSize
+	if r.Size() < cmn.MiB {
+		slabSize = 128 * cmn.KiB
+	}
+
+	slab, err := mem.GetSlab2(slabSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
