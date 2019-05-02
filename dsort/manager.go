@@ -651,6 +651,11 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		fromNode := m.smap.GetTarget(string(hdr.Opaque))
+		if fromNode == nil {
+			glog.Errorf("received request from node %q which is not present in the smap", hdr.Opaque)
+			return
+		}
+
 		if err != nil {
 			errHandler(err, hdr, fromNode)
 			return
@@ -822,6 +827,10 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				}
 				toNode = m.smap.GetTarget(daemonID)
 			)
+
+			if toNode == nil {
+				return 0, fmt.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
+			}
 
 			if m.Metrics.extended {
 				beforeSend = time.Now()
