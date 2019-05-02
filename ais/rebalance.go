@@ -35,7 +35,15 @@ const (
 	globalRebType
 )
 
-const NeighborRebalanceStartDelay = 10 * time.Second
+const (
+	NeighborRebalanceStartDelay = 10 * time.Second
+	// time to wait until all objects sent via transport are created on
+	// the destination after global rebalance finishes
+	objTransferTimeout = 2 * time.Minute
+	// time between requests to targets to check if they received and saved
+	// transferred via transport objects
+	objTransferInterval = 500 * time.Millisecond
+)
 
 type (
 	rebJoggerBase struct {
@@ -46,9 +54,22 @@ type (
 		objectsMoved atomic.Int64
 		bytesMoved   atomic.Int64
 	}
+	// structure to track the last object transferred to the other target
+	movedObj struct {
+		bucket  string
+		objname string
+		// when transport.SendV was called
+		tm time.Time
+		// determines if the other target has the object received.
+		// Used only in final phase of global rebalance.
+		// Why separate field for this: instead of deleting from the map - that
+		// needs synchronization - every goroutine works with its own struct safely
+		found bool
+	}
 	globalRebJogger struct {
 		rebJoggerBase
-		smap *smapX // cluster.Smap?
+		smap      *smapX   // cluster.Smap?
+		lastMoved sync.Map // last transferred object: daemonID <-> info about moved object
 	}
 	localRebJogger struct {
 		rebJoggerBase
@@ -134,6 +155,9 @@ func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadC
 	} else {
 		rj.objectsMoved.Inc()
 		rj.bytesMoved.Add(hdr.ObjAttrs.Size)
+		// when sending an object via transport, Opaque contains DaemonID of
+		// a sender (see globalRebJogger.walk -> SendV)
+		rj.lastMoved.Store(string(hdr.Opaque), &movedObj{hdr.Bucket, hdr.Objname, time.Now(), false})
 	}
 
 	rj.wg.Done()
@@ -521,10 +545,6 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		return
 	}
 
-	// Rebalance has started so we can disable custom GFN lookup - GFN will still
-	// happen but because of running rebalance.
-	reb.t.gfn.global.deactivate()
-
 	// Establish connections with nodes, as they are not created on change of smap
 	reb.streams.Resync()
 
@@ -560,6 +580,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	}
 	wg.Wait()
 
+	lastObjs := make(map[*cluster.Snode]*movedObj, len(smap.Tmap))
 	if pmarker != "" {
 		var (
 			totalObjectsMoved, totalBytesMoved int64
@@ -567,6 +588,19 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		for _, jogger := range joggers {
 			totalObjectsMoved += jogger.objectsMoved.Load()
 			totalBytesMoved += jogger.bytesMoved.Load()
+
+			// detect which object was the last transferred one to each target
+			jogger.lastMoved.Range(func(k, v interface{}) bool {
+				id := k.(string)
+				mv := v.(*movedObj)
+				si := smap.GetTarget(id)
+				cmn.Assert(si != nil)
+				lastMV, ok := lastObjs[si]
+				if !ok || lastMV.tm.Before(mv.tm) {
+					lastObjs[si] = mv
+				}
+				return true
+			})
 		}
 		if !xreb.Aborted() {
 			if err := os.Remove(pmarker); err != nil {
@@ -582,7 +616,65 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		glog.Infof("rebalance %s(self)", reb.t.si.Name())
 		reb.pollRebalancingDone(smap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
+
+	// wait until all objects appear on the correct targets
+	if len(lastObjs) != 0 {
+		glog.Info("Wait for all objects are transferred to correct targets...")
+		deadLine := time.Now().Add(objTransferTimeout)
+		wg := &sync.WaitGroup{}
+
+		for time.Now().Before(deadLine) {
+			for si, mv := range lastObjs {
+				wg.Add(1)
+				reqTgt := func(snode *cluster.Snode, moved *movedObj) {
+					query := make(url.Values)
+					query.Add(cmn.URLParamCached, "true")
+					args := callArgs{
+						req: reqArgs{
+							method: http.MethodHead,
+							query:  query,
+							base:   snode.URL(cmn.NetworkIntraData),
+							path:   cmn.URLPath(cmn.Version, cmn.Objects, moved.bucket, moved.objname),
+						},
+						si: snode,
+					}
+
+					// HEAD object request with param cached=true checks only if a
+					// file corresponding to a object exists on the destination
+					res := reb.t.call(args)
+					if res.err == nil && res.status < http.StatusBadRequest {
+						moved.found = true
+					} else if glog.FastV(4, glog.SmoduleAIS) {
+						glog.Infof("%s/%s is still not transferred", moved.bucket, moved.objname)
+					}
+					wg.Done()
+				}
+
+				go reqTgt(si, mv)
+			}
+			wg.Wait()
+
+			// clean up transferred objects
+			for si, mv := range lastObjs {
+				if mv.found {
+					delete(lastObjs, si)
+				}
+			}
+			// check length and break here instead of in "for" declaration to avoid redundant sleep
+			if len(lastObjs) == 0 {
+				break
+			}
+			time.Sleep(objTransferInterval)
+		}
+		glog.Info("Waiting for all objects are transferred to correct targets ended")
+	}
+
 	xreb.EndTime(time.Now())
+
+	// if we deactivate GFN in the beginning, there is a very tiny 0.1-0.2s gap
+	// between GFN is off and rebalance logs that it has started
+	// So, move deactivating GFN to the point after rebalance is done
+	reb.t.gfn.global.deactivate()
 }
 
 func (reb *rebManager) pollRebalancingDone(newSmap *smapX) {
