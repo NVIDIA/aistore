@@ -49,7 +49,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 }
 
 func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
-	Logf("Reregistering target...\n")
+	Logf("Reregistering target %s...\n", target)
 	err := RegisterTarget(proxyURL, target, smap)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(

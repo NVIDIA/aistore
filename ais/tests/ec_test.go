@@ -329,11 +329,15 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 			sizes <- objSize
 			objName := fmt.Sprintf(objPatt, bckName, i)
 			objPath := ecTestDir + objName
-			if doEC {
-				tutils.Logf("Object %s, size %9d[%9d]\n", objName, objSize, sliceSize)
-			} else {
-				tutils.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
+
+			if i%10 == 0 {
+				if doEC {
+					tutils.Logf("Object %s, size %9d[%9d]\n", objName, objSize, sliceSize)
+				} else {
+					tutils.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
+				}
 			}
+
 			r, err := tutils.NewRandReader(objSize, false)
 			defer func() {
 				r.Close()
@@ -775,19 +779,27 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	clearAllECObjects(t, numFiles, bucket, objPatt, true)
 }
 
+func putECFile(baseParams *api.BaseParams, bucket, objName string) error {
+	objSize := int64(ecMinBigSize * 2)
+	objPath := ecTestDir + objName
+
+	r, err := tutils.NewRandReader(objSize, false)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
+	return api.PutObject(putArgs)
+}
+
 // Returns path to main object and map of all object's slices and metadata
 func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams *api.BaseParams) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (ecDataSliceCnt+ecParitySliceCnt)*2
 	objSize := int64(ecMinBigSize * 2)
 	sliceSize := ec.SliceSize(objSize, ecDataSliceCnt)
-	objPath := ecTestDir + objName
 
-	r, err := tutils.NewRandReader(objSize, false)
-	tassert.CheckFatal(t, err)
-	defer r.Close()
-
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
-	err = api.PutObject(putArgs)
+	err := putECFile(baseParams, bucket, objName)
 	tassert.CheckFatal(t, err)
 
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, true, objName, bucket)
@@ -1466,13 +1478,97 @@ func TestECXattrs(t *testing.T) {
 	clearAllECObjects(t, numFiles, bucket, objPatt, true)
 }
 
+// 1. start putting EC files into the cluster
+// 2. in the middle of puts destroy bucket
+// 3. wait for puts to finish
+// 4. create bucket with the same name
+// 5. check that EC is working properly for this bucket
+func TestECDestroyBucket(t *testing.T) {
+	const (
+		objPatt  = "obj-destroy-bck-%04d"
+		numFiles = 1000
+		concurr  = 50
+	)
+
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		bucket    = TestLocalBucketName + "-DESTROY"
+		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
+		semaphore = make(chan struct{}, concurr) // concurrent EC jobs at a time
+	)
+
+	smap := getClusterMap(t, proxyURL)
+	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
+
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
+
+	seed := time.Now().UnixNano()
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	bckProps := defaultECBckProps()
+	bckProps.Rebalance.Enabled = false
+	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(numFiles)
+	errCnt := atomic.NewInt64(0)
+	sucCnt := atomic.NewInt64(0)
+
+	for i := 0; i < numFiles; i++ {
+		objName := fmt.Sprintf(objPatt, i)
+		go func(i int) {
+			semaphore <- struct{}{}
+			if i%10 == 0 {
+				tutils.Logf("ec file %s into bucket %s\n", objName, bucket)
+			}
+			if putECFile(baseParams, bucket, objName) != nil {
+				errCnt.Inc()
+			} else {
+				sucCnt.Inc()
+			}
+			<-semaphore
+			wg.Done()
+		}(i)
+
+		if i == 4*numFiles/5 {
+			// DestroyLocalBucket when put requests are still executing
+			go func() {
+				semaphore <- struct{}{}
+				tutils.Logf("Destroying bucket %s\n", bucket)
+				tutils.DestroyLocalBucket(t, proxyURL, bucket)
+				<-semaphore
+			}()
+		}
+	}
+
+	wg.Wait()
+	tutils.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), numFiles)
+
+	// create bucket with the same name and check if puts are successful
+	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	doECPutsAndCheck(t, bucket, seed, baseParams, concurr, numFiles)
+
+	// check if get requests are successful
+	var msg = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status,version"}
+	reslist, err := api.ListBucket(baseParams, bucket, msg, 0)
+	tassert.CheckError(t, err)
+
+	reslist.Entries = filterObjListOK(reslist.Entries)
+	tassert.Errorf(t, len(reslist.Entries) == numFiles, "Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
+}
+
 // Lost target test:
 // - puts some objects
 // - kills a random target
 // - gets all objects
 // - nothing must fail
 // - register the target back
-func TestECEmergencyTarget(t *testing.T) {
+func TestECEmergencyTargetForSlices(t *testing.T) {
 	const (
 		objPatt    = "obj-emt-%04d"
 		numFiles   = 100
@@ -1564,6 +1660,7 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	defer func() {
 		smap = tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
+		waitForRebalanceToComplete(t, baseParams)
 	}()
 
 	// 3. Read objects
@@ -1663,6 +1760,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		for _, target := range removedTargets {
 			smap = tutils.RestoreTarget(t, proxyURL, smap, target)
 		}
+		waitForRebalanceToComplete(t, baseParams)
 	}()
 
 	hasTarget := func(targets []*cluster.Snode, target *cluster.Snode) bool {
@@ -1731,7 +1829,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 // - enable the mountpath back
 func TestECEmergencyMpath(t *testing.T) {
 	const (
-		objPatt    = "obj-emm-%04d"
+		objPatt    = "obj-em-mpath-%04d"
 		numFiles   = 400
 		smallEvery = 4
 		concurr    = 24
