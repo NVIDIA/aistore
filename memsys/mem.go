@@ -73,8 +73,8 @@ import (
 // GetSlab2(), SelectSlab2() and AllocFromSlab2().
 //
 // NOTE the difference between the first and the second:
-// - GetSlab2(memsys.MaxSlabSize) returns the Slab of 256KB buffers
-// - SelectSlab2(memsys.MaxSlabSize) - the Slab that is considered optimal
+// - GetSlab2(memsys.MaxSlabSize) returns the Slab of MaxSlabSize buffers
+// - SelectSlab2(256 * 1024) - the Slab that is considered optimal
 //   for the estimated *total* size 256KB.
 //
 // Once selected, each Slab2 instance can be used via its own public API that
@@ -104,7 +104,7 @@ import (
 // ========================== end of TOO ========================================
 
 const (
-	MaxSlabSize = 256 * cmn.KiB
+	MaxSlabSize = 128 * cmn.KiB
 	NumSlabs    = MaxSlabSize / cmn.KiB / 4 // [4K - 256K] at 4K increments
 
 	deadBEEF       = "DEADBEEF"

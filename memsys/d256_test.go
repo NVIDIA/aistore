@@ -36,8 +36,8 @@ const (
 )
 
 // largobj alloc
-func BenchmarkLargeAlloc256K(b *testing.B) {
-	benchAlloc(b, largeobj, cmn.KiB*256)
+func BenchmarkLargeAllocMax(b *testing.B) {
+	benchAlloc(b, largeobj, memsys.MaxSlabSize)
 }
 func BenchmarkLargeAlloc128K(b *testing.B) {
 	benchAlloc(b, largeobj, cmn.KiB*128)
@@ -50,8 +50,8 @@ func BenchmarkLargeAlloc32K(b *testing.B) {
 }
 
 // smallobj alloc
-func BenchmarkSmallAlloc256K(b *testing.B) {
-	benchAlloc(b, smallobj, cmn.KiB*256)
+func BenchmarkSmallAllocMax(b *testing.B) {
+	benchAlloc(b, smallobj, memsys.MaxSlabSize)
 }
 func BenchmarkSmallAlloc128K(b *testing.B) {
 	benchAlloc(b, smallobj, cmn.KiB*128)
@@ -83,8 +83,8 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 }
 
 // largobj write
-func BenchmarkLargeWrite256K(b *testing.B) {
-	benchWrite(b, largeobj, cmn.KiB*256)
+func BenchmarkLargeWriteMax(b *testing.B) {
+	benchWrite(b, largeobj, memsys.MaxSlabSize)
 }
 func BenchmarkLargeWrite128K(b *testing.B) {
 	benchWrite(b, largeobj, cmn.KiB*128)
@@ -97,8 +97,8 @@ func BenchmarkLargeWrite32K(b *testing.B) {
 }
 
 // smallobj write
-func BenchmarkSmallWrite256K(b *testing.B) {
-	benchWrite(b, smallobj, cmn.KiB*256)
+func BenchmarkSmallWriteMax(b *testing.B) {
+	benchWrite(b, smallobj, memsys.MaxSlabSize)
 }
 func BenchmarkSmallWrite128K(b *testing.B) {
 	benchWrite(b, smallobj, cmn.KiB*128)
@@ -133,8 +133,8 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 }
 
 // largobj write => read => free
-func BenchmarkLargeWRF256K(b *testing.B) {
-	benchWRF(b, largeobj, cmn.KiB*256)
+func BenchmarkLargeWRFMax(b *testing.B) {
+	benchWRF(b, largeobj, memsys.MaxSlabSize)
 }
 func BenchmarkLargeWRF128K(b *testing.B) {
 	benchWRF(b, largeobj, cmn.KiB*128)
@@ -147,8 +147,8 @@ func BenchmarkLargeWRF32K(b *testing.B) {
 }
 
 // smallobj write => read => free
-func BenchmarkSmallWRF256K(b *testing.B) {
-	benchWRF(b, smallobj, cmn.KiB*256)
+func BenchmarkSmallWRFMax(b *testing.B) {
+	benchWRF(b, smallobj, memsys.MaxSlabSize)
 }
 func BenchmarkSmallWRF128K(b *testing.B) {
 	benchWRF(b, smallobj, cmn.KiB*128)
@@ -205,8 +205,8 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 }
 
 // file read to sgl
-func BenchmarkLargeFile256K(b *testing.B) {
-	benchFile(b, cmn.KiB*256)
+func BenchmarkLargeFileMax(b *testing.B) {
+	benchFile(b, memsys.MaxSlabSize)
 }
 func BenchmarkLargeFile128K(b *testing.B) {
 	benchFile(b, cmn.KiB*128)
