@@ -5,11 +5,14 @@ AISTORE_PATH=$(cd "$S_PATH/../../.."; pwd -P)
 CONTAINER_NAME=docker_test
 CLD_PROVIDER=3
 RUN_FLAGS=""
+GIT_COMMIT=""
 
 for i in "$@"; do
-case $i in
+case ${i} in
     --name=*)
         CONTAINER_NAME="${i#*=}"
+        # container name is supposed to be the same as the name of git branch
+        GIT_COMMIT="[$CONTAINER_NAME] "$(git log -n 1 ${CONTAINER_NAME} --format="%s #%h")
         shift # past argument=value
         ;;
 
@@ -72,6 +75,7 @@ docker run -it ${RUN_FLAGS} \
     --name=${CONTAINER_NAME} \
     test-docker # image
 
+echo -e "\n${GIT_COMMIT}"
 if [ $? -ne 0 ]; then
     echo -e "\nSome tests did not pass :("
 else
