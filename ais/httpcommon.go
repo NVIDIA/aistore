@@ -837,6 +837,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsif.AddErrorHTTP(r.Method, 1)
 }
 
+func (h *httprunner) invalmsghdlr_no_log(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
+	h.statsif.AddErrorHTTP(r.Method, 1)
+}
+
 //=====================
 //
 // metasync Rx handlers

@@ -149,17 +149,13 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 	http.Error(w, err.Error(), status)
 }
 
-// InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.
-func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	status := http.StatusBadRequest
-	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
-		status = errCode[0]
-	}
-
+func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, status int, silent bool) {
 	err, isHTTPError := NewHTTPError(r, msg, status)
 
 	if isHTTPError {
-		glog.Errorln(err.String())
+		if !silent {
+			glog.Errorln(err.String())
+		}
 		http.Error(w, err.Error(), status)
 		return
 	}
@@ -177,8 +173,30 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 		}
 	}
 	err.Trace = errMsg.String()
-	glog.Errorln(err.String())
+	if !silent {
+		glog.Errorln(err.String())
+	}
 	http.Error(w, err.Error(), status)
+}
+
+// InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.
+func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	status := http.StatusBadRequest
+	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
+		status = errCode[0]
+	}
+
+	invalidHandlerInternal(w, r, msg, status, false /*silent*/)
+}
+
+// InvalidHandlerDetailedNoLog writes detailed error (includes line and file) to response writer. It does not log any error
+func InvalidHandlerDetailedNoLog(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	status := http.StatusBadRequest
+	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
+		status = errCode[0]
+	}
+
+	invalidHandlerInternal(w, r, msg, status, true /*silent*/)
 }
 
 func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {

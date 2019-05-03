@@ -629,6 +629,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 				reqTgt := func(snode *cluster.Snode, moved *movedObj) {
 					query := make(url.Values)
 					query.Add(cmn.URLParamCached, "true")
+					query.Add(cmn.URLParamSilent, "true")
 					args := callArgs{
 						req: reqArgs{
 							method: http.MethodHead,

@@ -1332,6 +1332,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	)
 	query := r.URL.Query()
 	checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
+	silent, _ := cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1341,13 +1342,19 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+
+	invalidHandler := t.invalmsghdlr
+	if silent {
+		invalidHandler = t.invalmsghdlr_no_log
+	}
+
 	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
 	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+		invalidHandler(w, r, errstr)
 		return
 	}
 	if _, errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
-		t.invalmsghdlr(w, r, errstr)
+		invalidHandler(w, r, errstr)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1372,7 +1379,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objmeta, err, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
-			t.invalmsghdlr(w, r, errMsg, errcode)
+			invalidHandler(w, r, errMsg, errcode)
 			return
 		}
 	}

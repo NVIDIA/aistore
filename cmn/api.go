@@ -198,6 +198,7 @@ const (
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 	URLParamReadahead        = "rah" // Proxy to target: readeahed
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get From Neighbor request
+	URLParamSilent           = "sln" // true - destination should not log errors(HEAD request)
 
 	// dsort
 	URLParamTotalCompressedSize   = "tcs"
