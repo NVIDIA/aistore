@@ -47,6 +47,15 @@ func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {
 	}
 }
 
+func (mw *memoryWatcher) freeMemory() uint64 {
+	curMem := sigar.Mem{}
+	if err := curMem.Get(); err != nil {
+		return 0
+	}
+
+	return mw.maxMemoryToUse - curMem.ActualUsed
+}
+
 func (mw *memoryWatcher) watch() error {
 	mem := sigar.Mem{}
 	if err := mem.Get(); err != nil {

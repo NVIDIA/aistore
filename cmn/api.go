@@ -201,9 +201,9 @@ const (
 	URLParamSilent           = "sln" // true - destination should not log errors(HEAD request)
 
 	// dsort
-	URLParamTotalCompressedSize   = "tcs"
-	URLParamTotalInputShardsSeen  = "tiss"
-	URLParamTotalUncompressedSize = "tunc"
+	URLParamTotalCompressedSize       = "tcs"
+	URLParamTotalInputShardsExtracted = "tise"
+	URLParamTotalUncompressedSize     = "tunc"
 
 	// downloader
 	URLParamBucket      = "bucket"

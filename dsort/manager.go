@@ -100,8 +100,7 @@ type Manager struct {
 		compressed   atomic.Int64 // Total compressed size
 		uncompressed atomic.Int64 // Total uncompressed size
 	}
-	totalInputShardsSeen atomic.Uint64 // Number of shards processed during extraction phase
-	received             struct {
+	received struct {
 		count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
 		ch    chan int32
 	}
@@ -508,10 +507,6 @@ func (m *Manager) decrementRef(by int64) {
 		}
 		m.unlock()
 	}
-}
-
-func (m *Manager) addToTotalInputShardsSeen(seen uint64) {
-	m.totalInputShardsSeen.Add(seen)
 }
 
 func (m *Manager) inProgress() bool {

@@ -533,10 +533,10 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			cmn.InvalidHandlerWithMsg(w, r, s)
 			return
 		}
-		dStr := r.URL.Query().Get(cmn.URLParamTotalInputShardsSeen)
+		dStr := r.URL.Query().Get(cmn.URLParamTotalInputShardsExtracted)
 		d, err := strconv.ParseUint(dStr, 10, 64)
 		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalInputShardsSeen, r.URL.String(), err)
+			s := fmt.Sprintf("invalid %s in request to %s, err: %v", cmn.URLParamTotalInputShardsExtracted, r.URL.String(), err)
 			cmn.InvalidHandlerWithMsg(w, r, s)
 			return
 		}
@@ -549,7 +549,6 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		dsortManager.addCompressionSizes(compressed, uncompressed)
-		dsortManager.addToTotalInputShardsSeen(d)
 		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
 		glog.V(4).Infof("total times received records from another target: %d", dsortManager.received.count.Load())

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -94,6 +95,14 @@ func (r *Record) TotalSize() int64 {
 	for _, obj := range r.Objects {
 		size += obj.Size
 	}
+	return size
+}
+
+func (r *Record) MemorySize() uint64 {
+	size := uint64(unsafe.Sizeof(*r))
+	size += uint64(len(r.DaemonID))
+	size += uint64(len(r.ContentPath))
+	size += (uint64(unsafe.Sizeof(r.Objects)) + uint64(len(r.Objects[0].Extension))) * uint64(len(r.Objects))
 	return size
 }
 

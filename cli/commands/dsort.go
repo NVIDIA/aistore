@@ -563,7 +563,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 	)
 
 	for _, targetMetrics = range metrics {
-		phases[dsort.ExtractionPhase].progress += targetMetrics.Extraction.SeenCnt
+		phases[dsort.ExtractionPhase].progress += targetMetrics.Extraction.ExtractedCnt
 
 		phases[dsort.SortingPhase].progress = cmn.Max(phases[dsort.SortingPhase].progress, int(targetMetrics.Sorting.RecvStats.Count))
 
@@ -573,8 +573,7 @@ func (b *dsortProgressBar) updateBars(metrics map[string]*dsort.Metrics) bool {
 		finished = finished && targetMetrics.Creation.Finished
 	}
 
-	phases[dsort.ExtractionPhase].progress /= len(metrics)
-	phases[dsort.ExtractionPhase].total = targetMetrics.Extraction.ToSeenCnt
+	phases[dsort.ExtractionPhase].total = targetMetrics.Extraction.TotalCnt
 	phases[dsort.SortingPhase].total = int(math.Log2(float64(len(metrics))))
 
 	// Create progress bars if necessary and/or update them.

@@ -983,6 +983,18 @@ func ParseQuantity(quantity string) (ParsedQuantity, error) {
 	return parsedQ, nil
 }
 
+func (pq ParsedQuantity) String() string {
+	switch pq.Type {
+	case QuantityPercent:
+		return fmt.Sprintf("%d%%", pq.Value)
+	case QuantityBytes:
+		return UnsignedB2S(pq.Value, 2)
+	default:
+		AssertMsg(false, fmt.Sprintf("Unknown quantity type: %s", pq.Type))
+		return ""
+	}
+}
+
 //
 // time formatting
 //

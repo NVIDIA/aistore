@@ -116,14 +116,10 @@ func (pi *PhaseInfo) finish() {
 // LocalExtraction contains metrics for first phase of DSort.
 type LocalExtraction struct {
 	PhaseInfo
-	// SeenCnt describes number of shards which are in preparation to be either
-	// skipped if they do not belong to given target or processed. It should
-	// match ToSeenCnt when phase is finished.
-	SeenCnt int `json:"seen_count"`
-	// ToSeenCnt is the number of shards DSort has to process in total.
-	ToSeenCnt int `json:"to_seen_count"`
+	// TotalCnt is the number of shards DSort has to process in total.
+	TotalCnt int `json:"total_count"`
 	// ExtractedCnt describes number of extracted shards to given moment. At the
-	// end, number should be roughly equal to ToSeenCnt/#Targets.
+	// end, number should be roughly equal to TotalCnt/#Targets.
 	ExtractedCnt int `json:"extracted_count"`
 	// ExtractedSize describes uncompressed size of extracted shards to given moment.
 	ExtractedSize int64 `json:"extracted_size"`

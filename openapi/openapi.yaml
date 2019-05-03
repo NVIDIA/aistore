@@ -1142,9 +1142,7 @@ components:
                 type: boolean
               finished:
                 type: boolean
-              seen_count:
-                type: integer
-              to_seen_count:
+              total_count:
                 type: integer
               extracted_count:
                 type: integer

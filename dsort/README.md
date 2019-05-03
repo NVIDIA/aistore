@@ -123,8 +123,7 @@ which can be monitored. Description of metrics returned for *single node*:
   * `elapsed` - duration (in seconds) of the local extraction phase.
   * `running` - informs if the phase is currently running.
   * `finished` - informs if the phase has finished.
-  * `seen_count` - number of shards which were scanned during local extraction phase. Some of the shards may not be located at the given node and they are skipped.
-  * `to_seen_count` - static number of shards which needs to be scanned - informs what is the expected number of input shards.
+  * `total_count` - static number of shards which needs to be scanned - informs what is the expected number of input shards.
   * `extracted_count` - number of shards extracted/processed by given node. This number can differ from node to node since shards may not be equally distributed.
   * `extracted_size` - size of extracted/processed shards by given node.
   * `extracted_record_count` - number of records extracted (in total) from all processed shards.
@@ -200,8 +199,7 @@ Example output for single node:
     "elapsed": 1,
     "running": false,
     "finished": true,
-    "seen_count": 1000,
-    "to_seen_count": 1000,
+    "total_count": 1000,
     "extracted_count": 176,
     "extracted_size": 2306867200,
     "extracted_record_count": 7040,
