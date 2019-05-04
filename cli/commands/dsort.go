@@ -45,7 +45,7 @@ var (
 		dsortStatus: {
 			dsortIDFlag,
 			progressBarFlag,
-			refreshRateFlag,
+			refreshFlag,
 			logFlag,
 		},
 		dsortAbort: {
@@ -151,14 +151,18 @@ func dsortHandler(c *cli.Context) error {
 
 		showProgressBar := flagIsSet(c, progressBarFlag)
 		if showProgressBar {
-			dsortResult, err := newDSortProgressBar(baseParams, id, calcRefreshRate(c)).run()
+			refreshRate, err := calcRefreshRate(c)
+			if err != nil {
+				return err
+			}
+			dsortResult, err := newDSortProgressBar(baseParams, id, refreshRate).run()
 			if err != nil {
 				return err
 			}
 
 			fmt.Println(dsortResult)
 		} else {
-			if !flagIsSet(c, refreshRateFlag) {
+			if !flagIsSet(c, refreshFlag) {
 				// show metrics just once
 				if _, err := showMetrics(baseParams, id, os.Stdout); err != nil {
 					return err
@@ -166,9 +170,13 @@ func dsortHandler(c *cli.Context) error {
 			} else {
 				// show metrics once in a while
 				var (
-					rate = calcRefreshRate(c)
-					w    = os.Stdout
+					w = os.Stdout
 				)
+
+				rate, err := calcRefreshRate(c)
+				if err != nil {
+					return err
+				}
 
 				if flagIsSet(c, logFlag) {
 					file, err := cmn.CreateFile(c.String(logFlag.Name))

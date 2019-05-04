@@ -20,15 +20,11 @@ var (
 )
 
 func main() {
-	if err := commands.SetNTestAISURL(url); err != nil {
-		cmn.ExitInfof("Could not connect to AIS cluster: %s.", err)
-	}
-
 	if !commands.IsAutoCompConfigured() {
 		fmt.Printf("Auto complete script not installed in %q.\n", commands.AutoCompDir)
 	}
 
-	aisCLI := commands.New(build, version)
+	aisCLI := commands.New(build, version, url)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt)
@@ -40,6 +36,6 @@ func main() {
 	}()
 
 	if err := aisCLI.RunLong(os.Args); err != nil {
-		cmn.ExitInfof("%s", err)
+		cmn.ExitInfof("%s.", cmn.CapitalizeString(err.Error()))
 	}
 }

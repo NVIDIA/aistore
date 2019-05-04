@@ -213,14 +213,14 @@ const (
 	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
 		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
 
-	DownloadListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
+	DownloadListHeader = "JobID\t Status\t Description\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
-	DSortListHeader = "JOB ID\t STATUS\t DESCRIPTION\n"
+	DSortListHeader = "JobID\t Status\t Description\n"
 	DSortListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else if (eq $value.Archived true) }}Finished" +
@@ -228,7 +228,7 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
 
-	XactionBaseStatsHeader = "\nDaemonID\t Kind\t Bucket\t \t Status\t StartTime\t EndTime\n"
+	XactionBaseStatsHeader = "DaemonID\t Kind\t Bucket\t \t Status\t StartTime\t EndTime\n"
 	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t \t " +
 		"{{$xact.StatusX}}\t {{FormatTime $xact.StartTimeX}}\t " +
 		"{{if (IsUnsetTime $xact.EndTimeX)}}---{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\n"
@@ -238,13 +238,13 @@ const (
 		"{{$name}}: {{$val | printf `%0.0f`}}\t " +
 		"{{end}}" +
 		"{{end}}{{if $xact.Ext}}\n{{end}}"
-	XactStatsTmpl = "{{range $key, $daemon := .}}" + //iterate through the entire map
-		XactionBaseStatsHeader +
-		"{{range $xact := $daemon}}" + //for each daemon's xactions, print BaseXactStats
+	XactStatsTmpl = XactionBaseStatsHeader +
+		"{{range $key, $daemon := .}}" + // iterate through the entire map
+		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactStats
 		XactionBaseBody +
-		"{{end}}\n" +
+		"{{end}}" +
 
-		"{{range $xact := $daemon}}" + //for each daemon's xactions, print BaseXactExtStats
+		"{{range $xact := $daemon}}" + // for each daemon's xactions, print BaseXactExtStats
 		XactionExtBody +
 		"{{end}}" +
 		"{{end}}"

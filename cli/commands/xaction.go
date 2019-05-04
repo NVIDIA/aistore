@@ -104,16 +104,10 @@ func xactHandler(c *cli.Context) (err error) {
 			fmt.Printf("stopped %q xaction\n", xaction)
 		}
 	case xactStats:
-		isEmpty := true
-		for _, val := range xactStatsMap {
-			if len(val) != 0 {
-				isEmpty = false
-				break
+		for key, val := range xactStatsMap {
+			if len(val) == 0 {
+				delete(xactStatsMap, key)
 			}
-		}
-		if isEmpty {
-			fmt.Println("no xaction stats to show")
-			return
 		}
 		err = templates.DisplayOutput(xactStatsMap, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
 	default:

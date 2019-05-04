@@ -455,7 +455,7 @@ func buildOutputTemplate(props string) (string, error) {
 		if _, ok := templates.ObjectPropsMap[field]; !ok {
 			return "", fmt.Errorf("%q is not a valid property", field)
 		}
-		headSb.WriteString(field + "\t")
+		headSb.WriteString(strings.Title(field) + "\t")
 		bodySb.WriteString(templates.ObjectPropsMap[field])
 	}
 	headSb.WriteString("\n")
@@ -486,7 +486,7 @@ func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 }
 
 func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched bool) error {
-	outputTemplate := "name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
+	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
 	matchingEntries, rest := objectFilter.filter(entries)
 
 	err := templates.DisplayOutput(matchingEntries, outputTemplate)

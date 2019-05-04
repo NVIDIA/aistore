@@ -256,6 +256,13 @@ func ParseBool(s string) (value bool, err error) {
 	return
 }
 
+func CapitalizeString(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 const assertMsg = "assertion failed"
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below

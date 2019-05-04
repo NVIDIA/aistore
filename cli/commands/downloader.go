@@ -35,7 +35,6 @@ var (
 	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
 	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '5JjIuGemR'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	refreshRateFlag = cli.IntFlag{Name: "refresh", Usage: "refresh rate for progress bar (in milliseconds)"}
 
 	downloadFlags = map[string][]cli.Flag{
 		downloadStart: {
@@ -46,7 +45,7 @@ var (
 		downloadStatus: {
 			idFlag,
 			progressBarFlag,
-			refreshRateFlag,
+			refreshFlag,
 			verboseFlag,
 		},
 		downloadAbort: {
@@ -195,7 +194,12 @@ func downloadAdminHandler(c *cli.Context) error {
 
 		showProgressBar := flagIsSet(c, progressBarFlag)
 		if showProgressBar {
-			downloadingResult, err := newProgressBar(baseParams, id, calcRefreshRate(c)).run()
+			refreshRate, err := calcRefreshRate(c)
+			if err != nil {
+				return err
+			}
+
+			downloadingResult, err := newProgressBar(baseParams, id, refreshRate).run()
 			if err != nil {
 				return err
 			}

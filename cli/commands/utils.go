@@ -37,7 +37,9 @@ const (
 )
 
 var (
-	ClusterURL  = os.Getenv("AIS_URL")
+	ClusterURL = os.Getenv("AIS_URL")
+
+	// Global variables set by daemon command handler
 	refreshRate = "1s"
 	count       = countDefault
 
@@ -61,6 +63,11 @@ func SetNTestAISURL(url string) (err error) {
 	}
 	baseParams := cliAPIParams(ClusterURL)
 	_, err = api.GetClusterMap(baseParams)
+
+	if cmn.IsErrConnectionRefused(err) {
+		return fmt.Errorf("could not connect to AIS cluser at %s - check if the cluster is running", ClusterURL)
+	}
+
 	return err
 }
 
