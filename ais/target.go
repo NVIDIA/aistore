@@ -1345,7 +1345,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 	invalidHandler := t.invalmsghdlr
 	if silent {
-		invalidHandler = t.invalmsghdlr_no_log
+		invalidHandler = t.invalmsghdlrsilent
 	}
 
 	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
