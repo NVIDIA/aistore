@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -44,7 +45,11 @@ func (m *BMD) Exists(b string, bckID uint64, local bool) (exists bool) {
 	if bckID == 0 {
 		if local {
 			exists = m.IsLocal(b)
-			cmn.Assert(!exists) // local bucket must have unique ID
+			// cmn.Assert(!exists)
+			if exists {
+				glog.Errorf("%s: local bucket must have ID", m.Bstring(b, local))
+				exists = false
+			}
 		} else {
 			exists = m.IsCloud(b)
 		}
