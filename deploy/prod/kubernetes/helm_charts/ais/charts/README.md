@@ -61,8 +61,9 @@ This will not delete buckets and objects stored in AIS filesystems, but it will 
 #### Values
 
 The following can be changed in values.yaml or specified on the install cmdline with `--set`. Some other values in `values.yaml` can be changed, but others may break the chart deployment or AIS installation so proceed with care!
-| Key                               | Default                           | Description  |
-| --------------------------------- | --------------------------------- | ------------ |
+
+| Key | Default | Description |
+| --- | --- | --- |
 | `image.repository`                | `quay.io/nvidia/ais_k8s`          | Docker repo for AIS image |
 | `image.tag`                       | `stable`                          | Image tag value for AIS image |
 | `image.dockerRepoToken`           | nil                               | Token for private repo access |
