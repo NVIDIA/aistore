@@ -2211,6 +2211,9 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		ver string
 		lom = roi.lom
 	)
+	if !roi.migrated {
+		lom.SetAtimeUnix(roi.started.UnixNano())
+	}
 	if !lom.BckIsLocal && !roi.migrated {
 		file, err := os.Open(roi.workFQN)
 		if err != nil {

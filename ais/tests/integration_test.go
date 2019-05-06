@@ -1457,14 +1457,10 @@ func TestForwardCP(t *testing.T) {
 }
 
 func TestAtimeRebalance(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		m = metadata{
 			t:               t,
-			num:             900,
+			num:             2000,
 			numGetsEachFile: 2,
 		}
 		bucketProps = defaultBucketProps()
@@ -1488,17 +1484,13 @@ func TestAtimeRebalance(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	// Unregister a target
-	tutils.Logf("Trying to unregister target: %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
-	smap, err := tutils.WaitForPrimaryProxy(
-		m.proxyURL,
-		"target is gone",
-		m.smap.Version, testing.Verbose(),
-		m.originalProxyCount,
-		m.originalTargetCount-1,
-	)
-	tassert.CheckFatal(t, err)
+	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
 
 	// Put random files
 	m.puts()
@@ -1515,7 +1507,7 @@ func TestAtimeRebalance(t *testing.T) {
 		objNames[entry.Name] = entry.Atime
 	}
 
-	// register a new target
+	// re-register target
 	err = tutils.RegisterTarget(m.proxyURL, target, m.smap)
 	tassert.CheckFatal(t, err)
 
@@ -1523,7 +1515,7 @@ func TestAtimeRebalance(t *testing.T) {
 	_, err = tutils.WaitForPrimaryProxy(
 		m.proxyURL,
 		"to join target back",
-		smap.Version, testing.Verbose(),
+		m.smap.Version, testing.Verbose(),
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
@@ -1546,7 +1538,6 @@ func TestAtimeRebalance(t *testing.T) {
 			t.Errorf("Object %q not found", entry.Name)
 			continue
 		}
-
 		if atime != entry.Atime {
 			t.Errorf("Atime mismatched for %s: before %q, after %q", entry.Name, atime, entry.Atime)
 		}
