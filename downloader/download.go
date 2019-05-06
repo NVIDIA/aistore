@@ -878,8 +878,9 @@ func (t *task) download() {
 	}
 
 	t.started = time.Now()
+	lom.SetAtimeUnix(t.started.UnixNano())
 	if !t.obj.FromCloud {
-		statusMsg, err = t.downloadLocal(lom)
+		statusMsg, err = t.downloadLocal(lom, t.started)
 	} else {
 		statusMsg, err = t.downloadCloud(lom)
 	}
@@ -897,7 +898,7 @@ func (t *task) download() {
 	t.finishedCh <- nil
 }
 
-func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
+func (t *task) downloadLocal(lom *cluster.LOM, started time.Time) (string, error) {
 	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 	// Create request
@@ -926,7 +927,7 @@ func (t *task) downloadLocal(lom *cluster.LOM) (string, error) {
 	t.setTotalSize(response)
 
 	cksum := getCksum(t.obj.Link, response)
-	if err := t.parent.t.Receive(postFQN, progressReader, lom, cluster.ColdGet, cksum); err != nil {
+	if err := t.parent.t.Receive(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
 		return internalErrorMessage(), err
 	}
 	return "", nil

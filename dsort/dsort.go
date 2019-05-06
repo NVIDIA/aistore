@@ -271,7 +271,7 @@ ExtractAllShards:
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
-		beforeCreation time.Time
+		beforeCreation = time.Now()
 		loadContent    = m.loadContent()
 		metrics        = m.Metrics.Creation
 
@@ -282,15 +282,11 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		errCh = make(chan error, 2)
 	)
-
-	if m.Metrics.extended {
-		beforeCreation = time.Now()
-	}
-
 	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName, BucketProvider: bckProvider}.Init()
 	if errStr != "" {
 		return errors.New(errStr)
 	}
+	lom.SetAtimeUnix(beforeCreation.UnixNano())
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
 
 	// Check if aborted
@@ -311,7 +307,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	r, w := io.Pipe()
 	wg.Add(2)
 	go func() {
-		err := m.ctx.t.Receive(workFQN, r, lom, cluster.WarmGet, nil)
+		err := m.ctx.t.Receive(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
 		errCh <- err
 		wg.Done()
 	}()

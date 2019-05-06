@@ -757,8 +757,10 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			glog.Warningf("shard (%s) already exists, overriding", lom)
 		}
 		workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileRecvShard)
+		started := time.Now()
+		lom.SetAtimeUnix(started.UnixNano())
 		rc := ioutil.NopCloser(object)
-		if err := m.ctx.t.Receive(workFQN, rc, lom, cluster.WarmGet, nil); err != nil {
+		if err := m.ctx.t.Receive(workFQN, rc, lom, cluster.WarmGet, nil, started); err != nil {
 			glog.Error(err)
 			return
 		}

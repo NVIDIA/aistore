@@ -109,14 +109,14 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Version)
 	roi := &recvObjInfo{
+		started:      time.Now(),
 		t:            reb.t,
 		lom:          lom,
-		migrated:     true,
+		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 		r:            ioutil.NopCloser(objReader),
 		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
+		migrated:     true,
 	}
-	roi.init()
-
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
 	}

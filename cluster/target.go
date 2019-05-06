@@ -7,6 +7,7 @@ package cluster
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -31,6 +32,6 @@ type Target interface {
 	FSHC(err error, path string)
 	GetMem2() *memsys.Mem2
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
-	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer) error
+	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
 	GetFSPRG() fs.PathRunGroup
 }

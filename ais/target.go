@@ -616,7 +616,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	//
 	// 1. start, init lom, ...readahead
 	//
-	started = time.Now()
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -626,6 +625,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
+	started = time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
 	}
@@ -1004,7 +1004,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
 		return
 	}
-	if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
+	started := time.Now()
+	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
 	}
 	// PUT
@@ -1023,7 +1024,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if lom.BckIsLocal && lom.VerConf().Enabled {
 		lom.Load(true) // need to know the current version if versionig enabled
 	}
-	if err, errCode := t.doPut(r, lom); err != nil {
+	lom.SetAtimeUnix(started.UnixNano())
+	if err, errCode := t.doPut(r, lom, started); err != nil {
 		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
@@ -2111,7 +2113,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 //  - if the Cloud returns a new version id then save it to xattr
 // In both case a new checksum is saved to xattrs
 // compare with t.Receive()
-func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM) (err error, errcode int) {
+func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
 	var (
 		header     = r.Header
 		cksumType  = header.Get(cmn.HeaderObjCksumType)
@@ -2119,19 +2121,22 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM) (err error, errc
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 	roi := &recvObjInfo{
+		started:      started,
 		t:            t,
 		lom:          lom,
 		r:            r.Body,
 		cksumToCheck: cksum,
 		ctx:          t.contextWithAuth(header),
+		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
-	roi.init()
 	return roi.recv()
 }
 
 // slight variation vs t.doPut() above
-func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM, recvType cluster.RecvType, cksum cmn.Cksummer) error {
+func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM,
+	recvType cluster.RecvType, cksum cmn.Cksummer, started time.Time) error {
 	roi := &recvObjInfo{
+		started: started,
 		t:       t,
 		lom:     lom,
 		r:       reader,
@@ -2146,15 +2151,7 @@ func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluste
 	return err
 }
 
-func (roi *recvObjInfo) init() {
-	roi.started = time.Now()
-	roi.workFQN = fs.CSM.GenContentParsedFQN(roi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-	cmn.Assert(roi.lom != nil)
-	cmn.Assert(!roi.migrated || roi.cksumToCheck != nil)
-}
-
 func (roi *recvObjInfo) recv() (err error, errCode int) {
-	cmn.Assert(roi.lom != nil)
 	lom := roi.lom
 	// optimize out if the checksums do match
 	if roi.cksumToCheck != nil {
@@ -2211,9 +2208,6 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		ver string
 		lom = roi.lom
 	)
-	if !roi.migrated {
-		lom.SetAtimeUnix(roi.started.UnixNano())
-	}
 	if !lom.BckIsLocal && !roi.migrated {
 		file, err := os.Open(roi.workFQN)
 		if err != nil {
