@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // as in: mountpath/<content-type>/<CloudBs|LocalBs>/<bucket-name>/...
@@ -137,6 +138,7 @@ var (
 	_ Validator = &NetConf{}
 	_ Validator = &DownloaderConf{}
 	_ Validator = &DSortConf{}
+	_ Validator = &FSPathsConf{}
 	_ Validator = &TestfspathConf{}
 
 	_ PropsValidator = &CksumConf{}
@@ -310,7 +312,7 @@ type Config struct {
 	Replication      ReplicationConf `json:"replication"`
 	Cksum            CksumConf       `json:"cksum"`
 	Ver              VersionConf     `json:"version"`
-	FSpaths          SimpleKVs       `json:"fspaths"`
+	FSpaths          FSPathsConf     `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`
 	Net              NetConf         `json:"net"`
 	FSHC             FSHCConf        `json:"fshc"`
@@ -541,6 +543,10 @@ type DSortConf struct {
 	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
 }
 
+type FSPathsConf struct {
+	Paths map[string]struct{}
+}
+
 func SetLogLevel(config *Config, loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
@@ -559,28 +565,37 @@ func SetLogLevel(config *Config, loglevel string) (err error) {
 //
 //==============================
 func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
+	config, changed, err := LoadConfigErr(clivars)
+
+	if err != nil {
+		ExitLogf(err.Error())
+	}
+	return
+}
+
+func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error) {
 	GCO.SetConfigFile(clivars.ConfFile)
 
 	config = GCO.BeginUpdate()
 	defer GCO.CommitUpdate(config)
 
-	err := LocalLoad(clivars.ConfFile, &config)
+	err = LocalLoad(clivars.ConfFile, &config)
 
 	// NOTE: glog.Errorf + os.Exit is used instead of glog.Fatalf to not crash
 	// with dozens of backtraces on screen - this is user error not some
 	// internal error.
 
 	if err != nil {
-		ExitLogf("Failed to load config %q, err: %s", clivars.ConfFile, err)
+		return nil, false, fmt.Errorf("Failed to load config %q, err: %s", clivars.ConfFile, err)
 	}
 	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
-		ExitLogf("Failed to flag-set glog dir %q, err: %s", config.Log.Dir, err)
+		return nil, false, fmt.Errorf("Failed to flag-set glog dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err = CreateDir(config.Log.Dir); err != nil {
-		ExitLogf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
+		return nil, false, fmt.Errorf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err := config.Validate(); err != nil {
-		ExitLogf("%s", err)
+		return nil, false, fmt.Errorf("%s", err)
 	}
 
 	// glog rotate
@@ -620,12 +635,12 @@ func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	}
 	if clivars.LogLevel != "" {
 		if err = SetLogLevel(config, clivars.LogLevel); err != nil {
-			ExitLogf("Failed to set log level = %s, err: %s", clivars.LogLevel, err)
+			return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", clivars.LogLevel, err)
 		}
 		config.Log.Level = clivars.LogLevel
 		changed = true
 	} else if err = SetLogLevel(config, config.Log.Level); err != nil {
-		ExitLogf("Failed to set log level = %s, err: %s", config.Log.Level, err)
+		return nil, false, fmt.Errorf("Failed to set log level = %s, err: %s", config.Log.Level, err)
 	}
 	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
 		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
@@ -637,7 +652,7 @@ func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
-		&c.Downloader, &c.DSort, &c.TestFSP,
+		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths,
 	}
 	for _, validator := range validators {
 		if err := validator.Validate(c); err != nil {
@@ -937,6 +952,57 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
 		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 	}
+	return nil
+}
+
+// FIXME: change config to accept array of mpaths, not map of mpath -> " "
+func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
+	m := make(map[string]string)
+	err := jsoniter.Unmarshal(data, &m)
+
+	if err != nil {
+		return err
+	}
+
+	c.Paths = make(map[string]struct{})
+	for k := range m {
+		c.Paths[k] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
+	m := make(map[string]string)
+
+	for k := range c.Paths {
+		m[k] = " "
+	}
+
+	return jsoniter.Marshal(m)
+}
+
+func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
+	// Don't validate if testing environment
+	if contextConfig.TestingEnv() {
+		return nil
+	}
+
+	if len(c.Paths) == 0 {
+		return fmt.Errorf("expected at least one mountpath in fspaths config")
+	}
+
+	cleanMpaths := make(map[string]struct{})
+
+	for k := range c.Paths {
+		cleanMpath, err := ValidateMpath(k)
+		if err != nil {
+			return err
+		}
+		cleanMpaths[cleanMpath] = struct{}{}
+	}
+
+	c.Paths = cleanMpaths
 	return nil
 }
 

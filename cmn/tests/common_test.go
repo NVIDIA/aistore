@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package tests
 
 import (
 	"crypto/rand"
@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -36,7 +38,7 @@ func TestCopyStruct(t *testing.T) {
 	)
 
 	var emptySructResult struct{}
-	CopyStruct(&emptySructResult, &struct{}{})
+	cmn.CopyStruct(&emptySructResult, &struct{}{})
 
 	if !reflect.DeepEqual(struct{}{}, emptySructResult) {
 		t.Error("CopyStruct should correctly copy empty struct")
@@ -45,7 +47,7 @@ func TestCopyStruct(t *testing.T) {
 	loopNode := Tree{}
 	loopNode.left, loopNode.right, loopNode.value = &loopNode, &loopNode, 0
 	var copyLoopNode Tree
-	CopyStruct(&copyLoopNode, &loopNode)
+	cmn.CopyStruct(&copyLoopNode, &loopNode)
 
 	if !reflect.DeepEqual(loopNode, copyLoopNode) {
 		t.Error("CopyStruct should correctly copy self referencing struct")
@@ -61,7 +63,7 @@ func TestCopyStruct(t *testing.T) {
 	right := Tree{nil, nil, 1}
 	root := Tree{&left, &right, 2}
 	var rootCopy Tree
-	CopyStruct(&rootCopy, &root)
+	cmn.CopyStruct(&rootCopy, &root)
 
 	if !reflect.DeepEqual(root, rootCopy) {
 		t.Error("CopyStruct should correctly copy nested structs")
@@ -79,7 +81,7 @@ func TestCopyStruct(t *testing.T) {
 	nonPrimitive.m["two"] = 2
 	nonPrimitive.s = []int{1, 2}
 	var nonPrimitiveCopy NonPrimitiveStruct
-	CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
+	cmn.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
 
 	if !reflect.DeepEqual(nonPrimitive, nonPrimitiveCopy) {
 		t.Error("CopyStruct should correctly copy structs with nonprimitive types")
@@ -98,7 +100,7 @@ func TestSaveReader(t *testing.T) {
 	filename := filepath.Join(tmpDir, "savereadertest.txt")
 	byteBuffer := make([]byte, bytesToRead)
 
-	if _, err := SaveReader(filename, rand.Reader, byteBuffer, false, bytesToRead); err != nil {
+	if _, err := cmn.SaveReader(filename, rand.Reader, byteBuffer, false, bytesToRead); err != nil {
 		t.Errorf("SaveReader failed to read %d bytes", bytesToRead)
 	}
 
@@ -112,7 +114,7 @@ func TestSaveReaderWithNoSize(t *testing.T) {
 	byteBuffer := make([]byte, bytesLimit*2)
 	reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-	if _, err := SaveReader(filename, reader, byteBuffer, false); err != nil {
+	if _, err := cmn.SaveReader(filename, reader, byteBuffer, false); err != nil {
 		t.Errorf("SaveReader failed to read %d bytes", bytesLimit)
 	}
 
@@ -135,21 +137,21 @@ func validateSaveReaderOutput(t *testing.T, filename string, sourceData []byte) 
 
 func TestCreateDir(t *testing.T) {
 	nonExistingPath := filepath.Join(tmpDir, "non/existing/directory")
-	if err := CreateDir(nonExistingPath); err != nil {
+	if err := cmn.CreateDir(nonExistingPath); err != nil {
 		t.Error(err)
 	}
 
 	ensurePathExists(t, nonExistingPath, true)
 
 	// Should not error when creating directory which already exists
-	if err := CreateDir(nonExistingPath); err != nil {
+	if err := cmn.CreateDir(nonExistingPath); err != nil {
 		t.Error(err)
 	}
 
 	ensurePathExists(t, nonExistingPath, true)
 
 	// Should error when directory is not valid
-	if err := CreateDir(""); err == nil {
+	if err := cmn.CreateDir(""); err == nil {
 		t.Error("CreateDir should fail when given directory is empty")
 	}
 
@@ -158,7 +160,7 @@ func TestCreateDir(t *testing.T) {
 
 func TestCreateFile(t *testing.T) {
 	nonExistingFile := filepath.Join(tmpDir, "file.txt")
-	if file, err := CreateFile(nonExistingFile); err != nil {
+	if file, err := cmn.CreateFile(nonExistingFile); err != nil {
 		t.Error(err)
 	} else {
 		file.Close()
@@ -167,7 +169,7 @@ func TestCreateFile(t *testing.T) {
 	ensurePathExists(t, nonExistingFile, false)
 
 	// Should not return error when creating file which already exists
-	if file, err := CreateFile(nonExistingFile); err != nil {
+	if file, err := cmn.CreateFile(nonExistingFile); err != nil {
 		t.Error(err)
 	} else {
 		file.Close()
@@ -181,8 +183,8 @@ func TestCopyFile(t *testing.T) {
 	dstFilename := filepath.Join(tmpDir, "copyfiledst.txt")
 
 	// creates a file of random bytes
-	SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
-	if err := CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
+	cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
+	if err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
 		t.Error(err)
 	}
 
@@ -206,7 +208,7 @@ func TestCopyFile(t *testing.T) {
 
 func TestMvFile(t *testing.T) {
 	// Should error when src does not exist
-	if err := MvFile("/some/non/existing/file.txt", "/tmp/file.txt"); !os.IsNotExist(err) {
+	if err := cmn.MvFile("/some/non/existing/file.txt", "/tmp/file.txt"); !os.IsNotExist(err) {
 		t.Error("MvFile should fail when src file does not exist")
 	}
 
@@ -214,9 +216,9 @@ func TestMvFile(t *testing.T) {
 	nonExistingRenamedFile := filepath.Join(tmpDir, "some/path/fi.txt")
 
 	// Should not error when dst file does not exist
-	file, _ := CreateFile(nonExistingFile)
+	file, _ := cmn.CreateFile(nonExistingFile)
 	file.Close()
-	if err := MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
+	if err := cmn.MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
 		t.Error(err)
 	}
 
@@ -224,9 +226,9 @@ func TestMvFile(t *testing.T) {
 	ensurePathNotExists(t, nonExistingFile)
 
 	// Should not error when dst file already exists
-	file, _ = CreateFile(nonExistingFile)
+	file, _ = cmn.CreateFile(nonExistingFile)
 	file.Close()
-	if err := MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
+	if err := cmn.MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
 		t.Error(err)
 	}
 
@@ -239,14 +241,14 @@ func TestMvFile(t *testing.T) {
 var _ = Describe("Common file", func() {
 	Context("ParseBashTemplate", func() {
 		DescribeTable("parse bash template without error",
-			func(template string, expectedPt ParsedTemplate) {
-				pt, err := ParseBashTemplate(template)
+			func(template string, expectedPt cmn.ParsedTemplate) {
+				pt, err := cmn.ParseBashTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("with step", "prefix-{0010..0111..2}-suffix", ParsedTemplate{
+			Entry("with step", "prefix-{0010..0111..2}-suffix", cmn.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       2,
@@ -254,9 +256,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("without step and suffix", "prefix-{0010..0111}", ParsedTemplate{
+			Entry("without step and suffix", "prefix-{0010..0111}", cmn.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      10,
 					End:        111,
 					Step:       1,
@@ -264,9 +266,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal", "{1..2}", ParsedTemplate{
+			Entry("minimal", "{1..2}", cmn.ParsedTemplate{
 				Prefix: "",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -274,9 +276,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal multiple digits", "{110..220..10}", ParsedTemplate{
+			Entry("minimal multiple digits", "{110..220..10}", cmn.ParsedTemplate{
 				Prefix: "",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      110,
 					End:        220,
 					Step:       10,
@@ -284,9 +286,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal with digit count", "{1..02}", ParsedTemplate{
+			Entry("minimal with digit count", "{1..02}", cmn.ParsedTemplate{
 				Prefix: "",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -294,9 +296,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal with special suffix", "{1..02}}", ParsedTemplate{
+			Entry("minimal with special suffix", "{1..02}}", cmn.ParsedTemplate{
 				Prefix: "",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      1,
 					End:        2,
 					Step:       1,
@@ -304,9 +306,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "}",
 				}},
 			}),
-			Entry("multi-range", "prefix-{0010..0111..2}-gap-{10..12}-gap2-{0040..0099..4}-suffix", ParsedTemplate{
+			Entry("multi-range", "prefix-{0010..0111..2}-gap-{10..12}-gap2-{0040..0099..4}-suffix", cmn.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []TemplateRange{
+				Ranges: []cmn.TemplateRange{
 					{
 						Start:      10,
 						End:        111,
@@ -334,7 +336,7 @@ var _ = Describe("Common file", func() {
 
 		DescribeTable("parse bash template with error",
 			func(template string) {
-				_, err := ParseBashTemplate(template)
+				_, err := cmn.ParseBashTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing {", "prefix-0010..0111..2}-suffix"),
@@ -359,14 +361,14 @@ var _ = Describe("Common file", func() {
 
 	Context("ParseAtTemplate", func() {
 		DescribeTable("parse at template without error",
-			func(template string, expectedPt ParsedTemplate) {
-				pt, err := ParseAtTemplate(template)
+			func(template string, expectedPt cmn.ParsedTemplate) {
+				pt, err := cmn.ParseAtTemplate(template)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(pt).To(Equal(expectedPt))
 			},
-			Entry("full featured template", "prefix-@010-suffix", ParsedTemplate{
+			Entry("full featured template", "prefix-@010-suffix", cmn.ParsedTemplate{
 				Prefix: "prefix-",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      0,
 					End:        10,
 					Step:       1,
@@ -374,9 +376,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "-suffix",
 				}},
 			}),
-			Entry("minimal with prefix", "pref@9", ParsedTemplate{
+			Entry("minimal with prefix", "pref@9", cmn.ParsedTemplate{
 				Prefix: "pref",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      0,
 					End:        9,
 					Step:       1,
@@ -384,9 +386,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("minimal", "@0010", ParsedTemplate{
+			Entry("minimal", "@0010", cmn.ParsedTemplate{
 				Prefix: "",
-				Ranges: []TemplateRange{{
+				Ranges: []cmn.TemplateRange{{
 					Start:      0,
 					End:        10,
 					Step:       1,
@@ -394,9 +396,9 @@ var _ = Describe("Common file", func() {
 					Gap:        "",
 				}},
 			}),
-			Entry("multi-range", "pref@9-gap-@0100-suffix", ParsedTemplate{
+			Entry("multi-range", "pref@9-gap-@0100-suffix", cmn.ParsedTemplate{
 				Prefix: "pref",
-				Ranges: []TemplateRange{
+				Ranges: []cmn.TemplateRange{
 					{
 						Start:      0,
 						End:        9,
@@ -417,7 +419,7 @@ var _ = Describe("Common file", func() {
 
 		DescribeTable("parse at template with error",
 			func(template string) {
-				_, err := ParseAtTemplate(template)
+				_, err := cmn.ParseAtTemplate(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("missing @", "prefix-01-suffix"),
@@ -430,7 +432,7 @@ var _ = Describe("Common file", func() {
 	Context("ParsedTemplate", func() {
 		DescribeTable("iter method",
 			func(template string, expectedStrs ...string) {
-				pt, err := ParseBashTemplate(template)
+				pt, err := cmn.ParseBashTemplate(template)
 				Expect(err).NotTo(HaveOccurred())
 
 				var (
@@ -462,20 +464,20 @@ var _ = Describe("Common file", func() {
 	Context("ParseQuantity", func() {
 		DescribeTable("parse quantity without error",
 			func(quantity, ty string, value int) {
-				pq, err := ParseQuantity(quantity)
+				pq, err := cmn.ParseQuantity(quantity)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(pq).To(Equal(ParsedQuantity{Type: ty, Value: uint64(value)}))
+				Expect(pq).To(Equal(cmn.ParsedQuantity{Type: ty, Value: uint64(value)}))
 			},
-			Entry("simple number", "80B", QuantityBytes, 80),
-			Entry("simple percent", "80%", QuantityPercent, 80),
-			Entry("number with spaces", "  8 0 KB  ", QuantityBytes, 80*KiB),
-			Entry("percent with spaces", "80 %", QuantityPercent, 80),
+			Entry("simple number", "80B", cmn.QuantityBytes, 80),
+			Entry("simple percent", "80%", cmn.QuantityPercent, 80),
+			Entry("number with spaces", "  8 0 KB  ", cmn.QuantityBytes, 80*cmn.KiB),
+			Entry("percent with spaces", "80 %", cmn.QuantityPercent, 80),
 		)
 
 		DescribeTable("parse quantity with error",
 			func(template string) {
-				_, err := ParseQuantity(template)
+				_, err := cmn.ParseQuantity(template)
 				Expect(err).Should(HaveOccurred())
 			},
 			Entry("contains alphabet", "a80B"),

@@ -2,14 +2,16 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package tests
 
 import (
 	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestMatchRESTItemsSmoke(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/path/to/url", 2, true, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 2, true, "some", "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +21,7 @@ func TestMatchRESTItemsSmoke(t *testing.T) {
 }
 
 func TestMatchRESTItemsDontSplitAfter(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/path/to/url", 1, false, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 1, false, "some", "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +31,7 @@ func TestMatchRESTItemsDontSplitAfter(t *testing.T) {
 }
 
 func TestMatchRESTItemsMoreItemsAfter(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/path/to/url/more", 2, true, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/path/to/url/more", 2, true, "some", "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +41,7 @@ func TestMatchRESTItemsMoreItemsAfter(t *testing.T) {
 }
 
 func TestMatchRESTItemsMoreItemsAfterWithoutSplit(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/path/to/url/more", 2, false, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/path/to/url/more", 2, false, "some", "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,14 +51,14 @@ func TestMatchRESTItemsMoreItemsAfterWithoutSplit(t *testing.T) {
 }
 
 func TestMatchRESTItemsInvalidPath(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/to/url/path", 2, true, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/to/url/path", 2, true, "some", "path")
 	if err == nil {
 		t.Errorf("expected error, apiItems returned: %v", apiItems)
 	}
 }
 
 func TestMatchRESTItemsTooShort(t *testing.T) {
-	apiItems, err := MatchRESTItems("/some/path/to/url", 3, true, "some", "path")
+	apiItems, err := cmn.MatchRESTItems("/some/path/to/url", 3, true, "some", "path")
 	if err == nil {
 		t.Errorf("expected error, apiItems returned: %v", apiItems)
 	}

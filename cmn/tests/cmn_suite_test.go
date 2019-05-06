@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package cmn
+package tests
 
 import (
 	"testing"
