@@ -137,7 +137,6 @@ var (
 	_ Validator = &NetConf{}
 	_ Validator = &DownloaderConf{}
 	_ Validator = &DSortConf{}
-	_ Validator = &FSPathsConf{}
 	_ Validator = &TestfspathConf{}
 
 	_ PropsValidator = &CksumConf{}
@@ -311,7 +310,7 @@ type Config struct {
 	Replication      ReplicationConf `json:"replication"`
 	Cksum            CksumConf       `json:"cksum"`
 	Ver              VersionConf     `json:"version"`
-	FSpaths          FSPathsConf     `json:"fspaths"`
+	FSpaths          SimpleKVs       `json:"fspaths"`
 	TestFSP          TestfspathConf  `json:"test_fspaths"`
 	Net              NetConf         `json:"net"`
 	FSHC             FSHCConf        `json:"fshc"`
@@ -542,10 +541,6 @@ type DSortConf struct {
 	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
 }
 
-type FSPathsConf struct {
-	SimpleKVs
-}
-
 func SetLogLevel(config *Config, loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
@@ -642,7 +637,7 @@ func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
-		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths,
+		&c.Downloader, &c.DSort, &c.TestFSP,
 	}
 	for _, validator := range validators {
 		if err := validator.Validate(c); err != nil {
@@ -942,27 +937,6 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
 		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
 	}
-	return nil
-}
-
-func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
-	// Don't validate if testing environment
-	if contextConfig.TestingEnv() {
-		return nil
-	}
-
-	if len(c.SimpleKVs) == 0 {
-		return fmt.Errorf("expected at least one mountpath in fspaths config")
-	}
-
-	for k, mpath := range c.SimpleKVs {
-		cleanMpath, err := ValidateMpath(mpath)
-		if err != nil {
-			return err
-		}
-		c.SimpleKVs[k] = cleanMpath
-	}
-
 	return nil
 }
 

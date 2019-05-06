@@ -236,8 +236,8 @@ func aisinit(version, build string) {
 			fs.Mountpaths.DisableFsIDCheck()
 			t.testCachepathMounts()
 		} else {
-			fsPaths := make([]string, 0, len(config.FSpaths.SimpleKVs))
-			for path := range config.FSpaths.SimpleKVs {
+			fsPaths := make([]string, 0, len(config.FSpaths))
+			for path := range config.FSpaths {
 				fsPaths = append(fsPaths, path)
 			}
 
