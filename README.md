@@ -35,7 +35,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 <img src="docs/images/ais-target-20-block.png" alt="AIS target block diagram" width="400">
 
-> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets** or AIS buckets. Cloud-based and local buckets support the same API. AIS (local) buckets are distributed, content-wise, across the entire cluster and all the [supported storage services](docs/storage_svcs.md) equally apply to both kinds of the buckets with a few exceptions: as of v2.0, only local buckets can be renamed and erasure (en)coded.
+> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets** or AIS buckets. Cloud-based and local buckets support the same API. AIS (local) buckets are distributed, content-wise, across the entire cluster and all the [supported storage services](docs/storage_svcs.md) equally apply to both kinds of the buckets with a few exceptions: as of v2.1, only local buckets can be renamed and erasure (en)coded.
 
 > If (and only when) a cloud-based and a local bucket share the same name and are simultaneously accessible, users can explicitly let AIS know via [the API](docs/bucket.md) which bucket to use.
 
@@ -76,7 +76,7 @@ Distribution of objects across AIS cluster is done via (lightning fast) two-dime
 
 ### Open Format
 
-As of the v2.0, AIS targets utilize local Linux filesystems - examples including (but not limited to) xfs, ext4, and openzfs. User data is stored *as is* without any alteration. AIS on-disk format is, therefore, fully defined by the local filesystem chosen at AIS deployment time. The implication is that you can access your data with and without AIS, and without any need to *convert* or *export/import*, etc.
+AIS targets utilize local Linux filesystems - examples including (but not limited to) xfs, ext4, and openzfs. User data is stored *as is* without any alteration. AIS on-disk format is, therefore, fully defined by the local filesystem chosen at AIS deployment time. The implication is that you can access your data with and without AIS, and without any need to *convert* or *export/import*, etc.
 
 > Your own data is [unlocked](https://en.wikipedia.org/wiki/Vendor_lock-in) and immediately available at all times.
 
@@ -115,7 +115,7 @@ But what if the dataset exists in the form of (vanilla) HTTP/HTTPS URLs? If this
 
 #### Existing Datasets: Reverse Proxy
 
-Finally, AIS can be designated as HTTP proxy vis-à-vis 3rd party object storages. As of the v2.0, this mode of operation is limited to Google Cloud Storage (GCS) and requires two things:
+Finally, AIS can be designated as HTTP proxy vis-à-vis 3rd party object storages. This mode of operation is limited to Google Cloud Storage (GCS) and requires:
 
 1. HTTP(s) client side: set the `http_proxy` (`https_proxy` - for HTTPS) environment
 2. AIS configuration: set `rproxy=cloud` in the [configuration](ais/setup/config.sh)
@@ -146,7 +146,7 @@ AIS features a [highly-available control plane](docs/ha.md) where all gateways a
 ## Fast Tier
 AIS can be deployed as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage.
 
-As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](docs/batch.md#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
+As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](docs/batch.md#listrange-operations)) that runs in the background to download batches of objects.
 
 ### Other Services
 
@@ -157,7 +157,7 @@ The (quickly growing) list of services includes (but is not limited to):
 * performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
-> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
+> Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
 
 Most notably, AIStore provides **[dSort](dsort/README.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
@@ -201,7 +201,7 @@ AIStore provides an easy way to generate a python client package for simplified 
 
 To get started with the python client package, you need to first generate the client package. These instuctions can also be found [here](openapi/README.md#how-to-generate-package).
 
-1. Obtain the latest, as of v2.0, openapi-generator jar by running the following command:
+1. Obtain the latest openapi-generator jar by running the following command:
 
     ```shell
     wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.4/openapi-generator-cli-3.3.4.jar -O openapi-generator-cli.jar
@@ -356,7 +356,7 @@ This command runs test that matches the specified string ("download"). The test 
 
 The 2nd option to run AIS on your local machine requires [Docker](https://docs.docker.com/) and [Docker-Compose](https://docs.docker.com/compose/overview/). It also allows for multi-clusters deployment with multiple separate networks. You can deploy a simple AIS cluster within seconds or deploy a multi-container cluster for development.
 
-> AIS 2.0 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
+> AIS v2.1 supports up to 3 (three) logical networks: user (or public), intra-cluster control and intra-cluster data networks.
 
 To get started with AIStore and Docker, see: [Getting started with Docker](docs/docker_main.md).
 

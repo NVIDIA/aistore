@@ -59,7 +59,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}
 ```
 ### LRU for local buckets
 
-LRU eviction, as of version 2.0, is by default only enabled for cloud buckets. To enable for local buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in local buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
+By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for local buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in local buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
 
 ## Erasure coding
 
@@ -95,7 +95,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "
 
 ### Limitations
 
-In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
+In version 2.1, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
 
 Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
 

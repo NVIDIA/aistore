@@ -57,7 +57,7 @@ Most configuration options can be updated - on an individual (target or proxy) d
 # curl -i -X PUT 'http://G/v1/cluster/setconfig?stats_time=1m&periodic.iostat_time_long=4s'
 ```
 
-> As of v2.0, AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `iostat_time_long`, another - `disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
+> As of v2.1, AIS configuration includes a section called `disk`. The `disk` in turn contains several knobs - one of those knobs is `iostat_time_long`, another - `disk_util_low_wm`. To update one or both of those named variables on all or one of the clustered nodes, you could:
 
 * Set `iostat_time_long` = 3 seconds, `disk_util_low_wm` = 40 percent (scope of the operation: **one AIS node**)
 ```shell
@@ -176,7 +176,7 @@ All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
 ## Reverse proxy
 
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the version 2.0, this functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
 
 ## Examples
 

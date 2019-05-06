@@ -28,11 +28,6 @@ While global rebalancing (previous section) takes care of the *cluster-grow* and
 
 Further, mountpath removal can be done administratively or be triggered by a disk fault (see [filesystem health checking](/health/fshc.md). Irrespectively of the original cause, mountpath-level events activate local rebalancer that in many ways performs the same set of steps as the global one. The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
 
-## Limitations
+## IO Performance
 
-AIS *cluster rebalancing* has limitations that we are aware of. As of the v2.0, the limitations are:
-
-* **Single target at a time**. Joining another storage target, or targets, while AIS cluster is still rebalancing is **not recommended** as it may result in GET errors.
-* **IO performance**. During rebalancing, response latency and overall cluster throughput may substantially degrade.
-
-All of these limitations will be addressed and removed in the nearest (v2.1) future.
+During rebalancing, response latency and overall cluster throughput may substantially degrade.

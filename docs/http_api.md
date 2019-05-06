@@ -122,7 +122,7 @@ ___
 
 ### Bucket Provider
 
-Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
+Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS supports user-specified *bucket provider*.
 
 > Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for local buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 

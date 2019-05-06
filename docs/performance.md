@@ -146,11 +146,13 @@ AIStore's primary goal is to scale with clustered drives. Therefore, the choice 
 
 ## Performance testing
 
-[AIStore load generator](/docs/howto_benchmark.md) is a built-in tool to test performance. However, it won't show which local subsystem - disk or network - could be a bottleneck. AIStore provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then AIStore uses the environment variable.
+[AIStore load generator](/docs/howto_benchmark.md) is a built-in tool to test performance. One of the most common questions that arise when analyzing performance results is whether the bottleneck is imposed by the hardware - namely, HDDs.
 
-If any kind of IO is disabled then AIStore sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
+To that end, AIStore supports switching off disk IO to, effectively, perform dry-run type benchmarking. This can be done by passing command line arguments or by setting environment variables (see below).
 
->> As of version 2.0, disabling and (re)enabling IO on the fly (at runtime) is not supported.
+> The environment variables have higher priority: if both environment and command line are specified the former takes precedence.
+
+> Disabling disk IO must be done at startup; disabling/enabling disk IO at runtime is not supported.
 
 | CLI argument | Environment variable | Default value | Description |
 |---|---|---|---|
