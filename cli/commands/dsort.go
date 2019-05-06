@@ -122,8 +122,8 @@ func phaseToBarText(phase string) string {
 func dsortHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		id         = parseFlag(c, idFlag)
-		regex      = parseFlag(c, regexFlag)
+		id         = parseStrFlag(c, idFlag)
+		regex      = parseStrFlag(c, regexFlag)
 	)
 
 	commandName := c.Command.Name

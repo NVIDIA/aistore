@@ -23,8 +23,14 @@ Returns the status of the `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy`, `targe
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | output in JSON format | `false` |
-| `--watch` | `bool` | watch the progress of metric | `false` |
-| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |
+| `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
+| `--count` | `int` | total number of generated reports | `1` |
+
+Examples:
+
+* `ais status --count 5` - displays 5 reports with statuses of all daemons in the cluster with 1s interval between each report
+* `ais status proxy --count 5 --refresh 10s` - displays 5 reports with statuses of all proxies in the cluster with 10s interval between each report
+* `ais status target --refresh 2s` - displays a continuous report with statuses of all targets in the cluster with 2s interval between each report
 
 ### config
 
@@ -60,10 +66,16 @@ Returns the cluster map (smap) of the `DAEMON_ID`. If `DAEMON_ID` is not set, it
 ### stats
 
 `ais stats [DAEMON_ID]`
-Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the stats of the daemon that the `AIS_URL` is pointed at.
+Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the stats of a current primary proxy and all the targets in the cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json, -j` | `bool` | output in JSON format | `false` |
-| `--watch` | `bool` | watch the progress of metric | `false` |
-| `--refresh` | `string` | time.Duration string for how often to refresh | `5s` |
+| `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
+| `--count` | `int` | total number of generated reports | `1` |
+
+Examples:
+
+* `ais stats --count 5` - displays 5 reports with statistics of a current primary proxy and all targets in the cluster with 1s interval between each report
+* `ais stats --count 5 --refresh 10s` - displays 5 reports with statistics of a current primary proxy and all targets in the cluster with 10s interval between each report
+* `ais stats --refresh 2s` - displays a continuous report with statistics of a current primary proxy and all targets in the cluster with 2s interval between each report

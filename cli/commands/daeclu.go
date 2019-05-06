@@ -21,7 +21,7 @@ var (
 	target = make(map[string]*stats.DaemonStatus)
 
 	daemonFlag      = cli.StringFlag{Name: cmn.Daemon, Usage: "daemon id"}
-	daecluBaseFlags = []cli.Flag{watchFlag, refreshFlag}
+	daecluBaseFlags = []cli.Flag{refreshFlag, countFlag}
 
 	daecluFlags = map[string][]cli.Flag{
 		cmn.GetWhatSmap:         {jsonFlag},
@@ -82,15 +82,30 @@ var (
 	}
 )
 
+func updateLongRunVariables(c *cli.Context) {
+	if flagIsSet(c, refreshFlag) {
+		refreshRate = parseStrFlag(c, refreshFlag)
+		// Run forever unless `count` is also specified
+		count = Infinity
+	}
+
+	if flagIsSet(c, countFlag) {
+		count = parseIntFlag(c, countFlag)
+		if count <= 0 {
+			fmt.Printf("Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
+				countFlag.Name, count, countFlag.Name, countDefault)
+			count = countDefault
+		}
+	}
+}
+
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
 	if err = fillMap(ClusterURL); err != nil {
 		return errorHandler(err)
 	}
-	watch = flagIsSet(c, watchFlag)
-	if flagIsSet(c, refreshFlag) {
-		refreshRate = parseFlag(c, refreshFlag)
-	}
+	updateLongRunVariables(c)
+
 	useJSON := flagIsSet(c, jsonFlag)
 
 	baseParams := cliAPIParams(ClusterURL)

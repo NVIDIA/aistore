@@ -119,13 +119,13 @@ var (
 func downloadStartHandler(c *cli.Context) error {
 	var (
 		baseParams  = cliAPIParams(ClusterURL)
-		description = parseFlag(c, descriptionFlag)
-		timeout     = parseFlag(c, timeoutFlag)
+		description = parseStrFlag(c, descriptionFlag)
+		timeout     = parseStrFlag(c, timeoutFlag)
 
 		id string
 	)
 
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return err
 	}
@@ -182,8 +182,8 @@ func downloadStartHandler(c *cli.Context) error {
 func downloadAdminHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		id         = parseFlag(c, idFlag)
-		regex      = parseFlag(c, regexFlag)
+		id         = parseStrFlag(c, idFlag)
+		regex      = parseStrFlag(c, regexFlag)
 	)
 
 	commandName := c.Command.Name

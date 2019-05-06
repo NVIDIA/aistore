@@ -6,9 +6,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"runtime"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,12 +30,14 @@ const (
 	refreshRateUnit    = time.Millisecond
 	refreshRateDefault = 1000
 	refreshRateMin     = 500
+
+	countDefault = 1
 )
 
 var (
 	// Common Flags
-	watchFlag   = cli.BoolFlag{Name: "watch", Usage: "watch an action"}
 	refreshFlag = cli.StringFlag{Name: "refresh", Usage: "refresh period", Value: "5s"}
+	countFlag   = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
 
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
@@ -50,8 +49,6 @@ var (
 	bckProviderFlag = cli.StringFlag{Name: paramBckProvider,
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
 	regexFlag = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
-
-	clear map[string]func()
 )
 
 var AISHelpTemplate = `DESCRIPTION:
@@ -78,20 +75,6 @@ COPYRIGHT:
 {{.Copyright}}{{end}}
 `
 
-func init() {
-	clear = make(map[string]func())
-	clear["linux"] = func() {
-		cmd := exec.Command("clear")
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	}
-	clear["windows"] = func() {
-		cmd := exec.Command("cmd", "/c", "cls")
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	}
-}
-
 func New(build, version string) AISCLI {
 	aisCLI := AISCLI{cli.NewApp()}
 	aisCLI.Init(build, version)
@@ -114,15 +97,6 @@ func (aisCLI AISCLI) Init(build, version string) {
 	the 'ais_autocomplete' file to the '/etc/bash_completion.d/ais' directory.`
 }
 
-func clearScreen() error {
-	clearFunc, ok := clear[runtime.GOOS]
-	if !ok {
-		return fmt.Errorf("%s is not supported", runtime.GOOS)
-	}
-	clearFunc()
-	return nil
-}
-
 func (aisCLI AISCLI) RunLong(input []string) error {
 	if err := aisCLI.Run(input); err != nil {
 		return err
@@ -130,19 +104,38 @@ func (aisCLI AISCLI) RunLong(input []string) error {
 
 	rate, err := time.ParseDuration(refreshRate)
 	if err != nil {
-		return fmt.Errorf("Could not convert %q to time duration: %v", refreshRate, err)
+		return fmt.Errorf("could not convert %q to time duration: %v", refreshRate, err)
 	}
 
-	for watch {
+	if count == Infinity {
+		return runForever(aisCLI, input, rate)
+	}
+
+	return runNTimes(aisCLI, input, rate)
+}
+
+func runForever(aisCLI AISCLI, input []string, rate time.Duration) error {
+	for {
 		time.Sleep(rate)
-		if err := clearScreen(); err != nil {
-			return err
-		}
-		fmt.Printf("Refreshing every %s (CTRL+C to stop): %s\n", refreshRate, input)
+
+		fmt.Println()
 		if err := aisCLI.Run(input); err != nil {
 			return err
 		}
 	}
+}
+
+func runNTimes(aisCLI AISCLI, input []string, rate time.Duration) error {
+	// Be careful - count is a global variable set by aisCLI.Run(), so a new variable is needed here
+	for runCount := count - 1; runCount > 0; runCount-- {
+		time.Sleep(rate)
+
+		fmt.Println()
+		if err := aisCLI.Run(input); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -152,13 +145,22 @@ func flagIsSet(c *cli.Context, flag cli.Flag) bool {
 	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
 }
 
-// Returns the value of flag (either parent or local scope)
-func parseFlag(c *cli.Context, flag cli.Flag) string {
+// Returns the value of a string flag (either parent or local scope)
+func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 	flagName := cleanFlag(flag.GetName())
 	if c.GlobalIsSet(flagName) {
 		return c.GlobalString(flagName)
 	}
 	return c.String(flagName)
+}
+
+// Returns the value of an int flag (either parent or local scope)
+func parseIntFlag(c *cli.Context, flag cli.Flag) int {
+	flagName := cleanFlag(flag.GetName())
+	if c.GlobalIsSet(flagName) {
+		return c.GlobalInt(flagName)
+	}
+	return c.Int(flagName)
 }
 
 func checkFlags(c *cli.Context, flag ...cli.Flag) error {

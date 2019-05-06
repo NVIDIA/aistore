@@ -32,12 +32,14 @@ const (
 	s3Host = "s3.amazonaws.com"
 
 	AutoCompDir = "/etc/bash_completion.d/ais"
+
+	Infinity = -1
 )
 
 var (
 	ClusterURL  = os.Getenv("AIS_URL")
-	watch       = false
-	refreshRate = "5s"
+	refreshRate = "1s"
+	count       = countDefault
 
 	transport = &http.Transport{
 		DialContext: (&net.Dialer{

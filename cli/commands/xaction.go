@@ -73,7 +73,7 @@ func xactHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
 		command    = c.Command.Name
-		bucket     = parseFlag(c, bucketFlag)
+		bucket     = parseStrFlag(c, bucketFlag)
 		xaction    = c.Args().First()
 	)
 

@@ -190,7 +190,7 @@ func bucketHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	bucket := parseFlag(c, bucketFlag)
+	bucket := parseStrFlag(c, bucketFlag)
 
 	switch command {
 	case bucketCreate:
@@ -242,7 +242,7 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 	if err = checkFlags(c, newBucketFlag); err != nil {
 		return
 	}
-	newBucket := parseFlag(c, newBucketFlag)
+	newBucket := parseStrFlag(c, newBucketFlag)
 	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -262,7 +262,7 @@ func evictBucket(baseParams *api.BaseParams, bucket string) (err error) {
 
 // Lists bucket names
 func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -270,7 +270,7 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err != nil {
 		return
 	}
-	printBucketNames(bucketNames, parseFlag(c, regexFlag), bckProvider)
+	printBucketNames(bucketNames, parseStrFlag(c, regexFlag), bckProvider)
 	return
 }
 
@@ -281,24 +281,24 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 		return err
 	}
 
-	prefix := parseFlag(c, prefixFlag)
-	props := "name," + parseFlag(c, objPropsFlag)
+	prefix := parseStrFlag(c, prefixFlag)
+	props := "name," + parseStrFlag(c, objPropsFlag)
 	if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
 		// If `all` flag is set print status of the file so that the output is easier to understand -
 		// there might be multiple files with the same name listed (e.g EC replicas)
 		props = fmt.Sprintf("%s,%s", props, "status")
 	}
-	pagesize, err := strconv.Atoi(parseFlag(c, pageSizeFlag))
+	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
 	if err != nil {
 		return err
 	}
-	limit, err := strconv.Atoi(parseFlag(c, objLimitFlag))
+	limit, err := strconv.Atoi(parseStrFlag(c, objLimitFlag))
 	if err != nil {
 		return err
 	}
 
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, parseFlag(c, bckProviderFlag))
+	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
 
 	msg := &cmn.SelectMsg{PageSize: pagesize, Props: props}
@@ -318,7 +318,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 		return errors.New("expected at least one argument")
 	}
 
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -357,7 +357,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -376,7 +376,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string)
 
 // Get bucket props
 func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -391,7 +391,7 @@ func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -514,7 +514,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.Status == cmn.ObjStatusOK })
 	}
 
-	if regexStr := parseFlag(c, regexFlag); regexStr != "" {
+	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
 			return nil, err
@@ -523,7 +523,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return regex.MatchString(obj.Name) })
 	}
 
-	if bashTemplate := parseFlag(c, templateFlag); bashTemplate != "" {
+	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
 		pt, err := cmn.ParseBashTemplate(bashTemplate)
 		if err != nil {
 			return nil, err
