@@ -17,7 +17,8 @@ import (
 
 type (
 	bucketXactions struct {
-		r *xactionsRegistry
+		r       *xactionsRegistry
+		bckName string
 		sync.RWMutex
 		// entires
 		entries map[string]xactionBucketEntry
@@ -38,8 +39,8 @@ func (b *bucketXactions) uniqueID() int64 {
 	return b.r.uniqueID()
 }
 
-func newBucketXactions(r *xactionsRegistry) *bucketXactions {
-	return &bucketXactions{r: r, entries: make(map[string]xactionBucketEntry)}
+func newBucketXactions(r *xactionsRegistry, bckName string) *bucketXactions {
+	return &bucketXactions{r: r, entries: make(map[string]xactionBucketEntry), bckName: bckName}
 }
 
 func (b *bucketXactions) GetL(kind string) xactionBucketEntry {
@@ -61,6 +62,7 @@ func (b *bucketXactions) Update(e xactionBucketEntry) error {
 	if err := e.Start(b.uniqueID()); err != nil {
 		return err
 	}
+
 	b.entries[e.Kind()] = e
 	b.r.storeByID(e.Get().ID(), e)
 	return nil
@@ -287,18 +289,8 @@ func (b *baseBckEntry) ActOnPrevious(entry xactionBucketEntry) {
 }
 
 // STATS
-
-func (e *ecGetEntry) Stats() stats.XactStats {
-	e.stats.XactCountX = e.xact.Stats().GetReq
-	s := e.stats.FromXact(e.xact, e.bckName)
-	return s
-}
-
-func (e *ecPutEntry) Stats() stats.XactStats {
-	e.stats.XactCountX = e.xact.Stats().PutReq
-	return e.stats.FromXact(e.xact, e.bckName)
-}
-
+func (e *ecGetEntry) Stats() stats.XactStats          { return e.stats.FromXact(e.xact, e.bckName) }
+func (e *ecPutEntry) Stats() stats.XactStats          { return e.stats.FromXact(e.xact, e.bckName) }
 func (e *ecRespondEntry) Stats() stats.XactStats      { return e.stats.FromXact(e.xact, e.bckName) }
 func (e *mncEntry) Stats() stats.XactStats            { return e.stats.FromXact(e.xact, e.bckName) }
 func (e *putLocReplicasEntry) Stats() stats.XactStats { return e.stats.FromXact(e.xact, e.bckName) }

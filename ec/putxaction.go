@@ -211,6 +211,10 @@ func (r *XactPut) dispatchRequest(req *Request) {
 	}
 }
 
+func (r *XactPut) Description() string {
+	return "responsible for encoding files when put to EC-enabled bucket"
+}
+
 //
 // fsprunner methods
 //

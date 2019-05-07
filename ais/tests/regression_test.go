@@ -479,7 +479,7 @@ func TestRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
-	const filesize = 1024 * 128
+	const filesize = 128 * cmn.KiB
 	var (
 		randomTarget *cluster.Snode
 		numPuts      = 40
@@ -554,7 +554,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 5. wait for rebalance to run its course
 	//
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, time.Minute)
 	//
 	// step 6. statistics
 	//
@@ -1280,40 +1280,100 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 //
 //========
 
-func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams) {
-	time.Sleep(ais.NeighborRebalanceStartDelay)
-	for {
-		// Wait before querying so the rebalance statistics are populated.
-		time.Sleep(time.Second * 3)
-		tutils.Logln("Waiting for rebalance to complete.")
-
-		rebalanceStats, err := getXactionRebalance(baseParams)
-		if err != nil {
-			t.Fatalf("Unable to get rebalance stats. Error: [%v]", err)
+func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
+	for target, targetStats := range targetsStats {
+		for _, xaction := range targetStats {
+			if xaction.Running() {
+				tutils.Logf("%s still in progress for target %s; started %s\n", xaction.Kind(), target, xaction.StartTime().Format(time.RFC822))
+				return false
+			}
 		}
+	}
+	return true
+}
 
-		targetsCompleted := 0
-	STATS:
-		for _, targetStats := range rebalanceStats {
-			if len(targetStats) > 0 {
-				for idx := range targetStats {
-					xaction := &targetStats[idx]
-					if xaction.Status() != cmn.XactionStatusCompleted {
-						break STATS
-					}
-				}
-			}
-
-			targetsCompleted++
-			if targetsCompleted == len(rebalanceStats) {
-				return
-			}
+func checkXactAPIErr(t *testing.T, err error) {
+	if err != nil {
+		if httpErr, ok := err.(*cmn.HTTPError); !ok {
+			t.Fatalf("Unrecognized error from xactions request: [%v]", err)
+		} else if httpErr.Status != http.StatusNotFound {
+			t.Fatalf("Unable to get global rebalance stats. Error: [%v]", err)
 		}
 	}
 }
 
-func getXactionRebalance(baseParams *api.BaseParams) (map[string][]stats.BaseXactStatsExt, error) {
-	rebalanceStats, err := api.GetXactionResponse(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
+// Waits for both local and global rebalances to complete
+// If they were not started, this function treats them as completed
+// and returns. If timeout set, if any of rebalances doesn't complete before timeout
+// the function ends with fatal
+func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeouts ...time.Duration) {
+	tutils.Logf("Waiting for global and local rebalance to complete\n")
+
+	start := time.Now()
+	time.Sleep(ais.NeighborRebalanceStartDelay)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	ch := make(chan string)
+
+	timeout := time.Duration(0)
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+
+	go func() {
+		defer wg.Done()
+		for {
+			time.Sleep(3 * time.Second)
+			globalRebalanceStats, err := getXactionGlobalRebalance(baseParams)
+			checkXactAPIErr(t, err)
+
+			if allCompleted(globalRebalanceStats) {
+				return
+			}
+
+			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+				ch <- "global rebalance has not completed before " + timeout.String()
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for {
+			time.Sleep(time.Second * 3)
+			localRebalanceStats, err := getXactionLocalRebalance(baseParams)
+			checkXactAPIErr(t, err)
+
+			if allCompleted(localRebalanceStats) {
+				return
+			}
+
+			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+				ch <- "global rebalance has not completed before " + timeout.String()
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(ch)
+
+	for errstr := range ch {
+		t.Fatalf(errstr)
+	}
+}
+
+func getXactionGlobalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
+	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
+	if err != nil {
+		return nil, err
+	}
+	return rebalanceStats, nil
+}
+
+func getXactionLocalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
+	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActLocalReb, cmn.ActXactStats, "")
 	if err != nil {
 		return nil, err
 	}

@@ -44,7 +44,7 @@ const (
 
 type (
 	InitLRU struct {
-		Xlru                cmn.Xact
+		Xlru                *Xaction
 		Namelocker          cluster.NameLocker
 		Statsif             stats.Tracker
 		T                   cluster.Target
@@ -82,6 +82,11 @@ type (
 		bckIsLocal      bool
 		throttle        bool
 		aborted         bool
+	}
+
+	Xaction struct {
+		cmn.XactBase
+		cmn.MountpathXact
 	}
 )
 
@@ -165,4 +170,8 @@ func stopAll(joggers map[string]*lructx, exceptMpath string) {
 		}
 		j.stopCh <- struct{}{}
 	}
+}
+
+func (xact *Xaction) Description() string {
+	return "responsible for LRU-based cache eviction that depends on cluster and bucket configuration and the remaining free capacity"
 }

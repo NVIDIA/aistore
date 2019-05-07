@@ -12,51 +12,52 @@ import (
 )
 
 type XactStats interface {
-	Count() int64
 	ID() int64
 	Kind() string
 	Bucket() string
 	StartTime() time.Time
 	EndTime() time.Time
-	Status() string
+	ObjCount() int64
+	BytesCount() int64
+	Aborted() bool
+	Running() bool
 }
 
 type BaseXactStats struct {
-	IDX        int64     `json:"id"`
-	KindX      string    `json:"kind"`
-	BucketX    string    `json:"bucket"`
-	StartTimeX time.Time `json:"start_time"`
-	EndTimeX   time.Time `json:"end_time"`
-	StatusX    string    `json:"status"`
-	XactCountX int64     `json:"count"`
+	IDX         int64     `json:"id"`
+	KindX       string    `json:"kind"`
+	BucketX     string    `json:"bucket"`
+	StartTimeX  time.Time `json:"start_time"`
+	EndTimeX    time.Time `json:"end_time"`
+	ObjCountX   int64     `json:"obj_count"`
+	BytesCountX int64     `json:"bytes_count"`
+	AbortedX    bool      `json:"aborted"`
 }
 
 // Used to cast to generic stats type, with some more information in ext
-//nolint:unused
 type BaseXactStatsExt struct {
 	BaseXactStats
 	Ext interface{} `json:"ext"`
 }
 
-func (b *BaseXactStats) Count() int64 {
-	return b.XactCountX
-}
 func (b *BaseXactStats) ID() int64            { return b.IDX }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
 func (b *BaseXactStats) Bucket() string       { return b.BucketX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }
 func (b *BaseXactStats) EndTime() time.Time   { return b.EndTimeX }
-func (b *BaseXactStats) Status() string       { return b.StatusX }
+func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
+func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
+func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
+func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
 func (b *BaseXactStats) FromXact(xact cmn.Xact, bucket string) *BaseXactStats {
-	b.StatusX = cmn.XactionStatusInProgress
-	if xact.Finished() {
-		b.StatusX = cmn.XactionStatusCompleted
-	}
 	b.IDX = xact.ID()
 	b.KindX = xact.Kind()
 	b.StartTimeX = xact.StartTime()
 	b.EndTimeX = xact.EndTime()
 	b.BucketX = bucket
+	b.ObjCountX = xact.ObjectsCnt()
+	b.BytesCountX = xact.BytesCnt()
+	b.AbortedX = xact.Aborted()
 	return b
 }
 
@@ -83,25 +84,9 @@ func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {
 	s.Ext.NumSentBytes = r.Core.Tracker[TxSize].Value
 	s.Ext.NumSentFiles = r.Core.Tracker[TxCount].Value
 
+	s.ObjCountX = s.Ext.NumRecvFiles + s.Ext.NumSentFiles
+	s.BytesCountX = s.Ext.NumRecvBytes + s.Ext.NumSentBytes
+
 	vt.RUnlock()
 	vr.RUnlock()
-}
-
-type PrefetchTargetStats struct {
-	BaseXactStats
-	Ext ExtPrefetchStats `json:"ext"`
-}
-
-type ExtPrefetchStats struct {
-	NumFilesPrefetched int64 `json:"num_files_prefetched"`
-	NumBytesPrefetched int64 `json:"num_bytes_prefetched"`
-}
-
-func (s *PrefetchTargetStats) FillFromStatsRunner(r *Trunner) {
-	v := r.Core.Tracker[PrefetchCount]
-	v.RLock()
-
-	s.Ext.NumBytesPrefetched = r.Core.Tracker[PrefetchSize].Value
-	s.Ext.NumFilesPrefetched = r.Core.Tracker[PrefetchCount].Value
-	v.RUnlock()
 }

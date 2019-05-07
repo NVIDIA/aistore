@@ -100,6 +100,10 @@ func (r *XactBckMakeNCopies) init() (numjs int, err error) {
 	return
 }
 
+func (r *XactBckMakeNCopies) Description() string {
+	return "responsible for deleting or adding object's copies within a target"
+}
+
 //
 // mpath xcopyJogger - as mpather
 //
@@ -130,8 +134,13 @@ func (j *xcopyJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	} else {
 		size, err = j.addCopies(lom)
 	}
+
 	j.num++
 	j.size += size
+
+	j.parent.ObjectsInc()
+	j.parent.BytesAdd(size)
+
 	if (j.num % throttleNumObjects) == 0 {
 		if j.size > minThrottleSize*throttleNumObjects {
 			j.size = 0

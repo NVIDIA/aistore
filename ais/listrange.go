@@ -131,6 +131,11 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if err != nil {
 			return err
 		}
+
+		if lom.Exists() && evict {
+			xdel.ObjectsInc()
+			xdel.BytesAdd(lom.Size())
+		}
 	}
 
 	return nil
@@ -192,6 +197,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)
 	t.statsif.Add(stats.PrefetchSize, lom.Size())
+
 	if vchanged {
 		t.statsif.Add(stats.VerChangeSize, lom.Size())
 		t.statsif.Add(stats.VerChangeCount, 1)

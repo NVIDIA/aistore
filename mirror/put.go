@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -31,7 +30,6 @@ type (
 		namelocker     cluster.NameLocker
 		wg             *sync.WaitGroup
 		total, dropped int64
-		copied         atomic.Int64
 	}
 	xputJogger struct { // one per mountpath
 		parent    *XactPutLRepl
@@ -183,6 +181,10 @@ func (r *XactPutLRepl) stop() {
 	}
 }
 
+func (r *XactPutLRepl) Description() string {
+	return "responsible for creating local object replicas upon PUT into a mirrored bucket"
+}
+
 //
 // xputJogger - as mpather
 //
@@ -231,8 +233,9 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 		if glog.V(4) {
 			glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
 		}
-		if v := j.parent.copied.Add(1); (v % logNumProcessed) == 0 {
+		if v := j.parent.ObjectsInc(); (v % logNumProcessed) == 0 {
 			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)
 		}
+		j.parent.BytesAdd(lom.Size())
 	}
 }

@@ -15,15 +15,15 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// GetXactionResponse API
+// GetXactStatusStats API
 //
-// GetXactionResponse gets the response of the Xaction Query
+// GetXactStatusStats gets the response of the Xaction Query
 // Action can be one of: start, stop, stats
 // Kind will be one of the xactions
-func GetXactionResponse(baseParams *BaseParams, kind, action, bucket string) (map[string][]stats.BaseXactStatsExt, error) {
+func GetXactStatusStats(baseParams *BaseParams, kind, action, bucket string) (map[string][]*stats.BaseXactStatsExt, error) {
 	var (
 		resp      *http.Response
-		xactStats = make(map[string][]stats.BaseXactStatsExt)
+		xactStats = make(map[string][]*stats.BaseXactStatsExt)
 	)
 	optParams := OptionalParams{}
 	actMsg := &cmn.ActionMsg{

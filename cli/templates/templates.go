@@ -229,10 +229,11 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
 
-	XactionBaseStatsHeader = "DaemonID\t Kind\t Bucket\t \t Status\t StartTime\t EndTime\n"
-	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t \t " +
-		"{{$xact.StatusX}}\t {{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}---{{else}}{{FormatTime $xact.EndTimeX}}{{end}}\n"
+	XactionBaseStatsHeader = "DaemonID\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
+	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t " +
+		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}} \t" +
+		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}} \t {{FormatTime $xact.StartTimeX}}\t " +
+		"{{if (IsUnsetTime $xact.EndTimeX)}}---{{else}}{{FormatTime $xact.EndTimeX}}{{end}} \t {{$xact.AbortedX}}\n"
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
 		"Kind: {{$xact.KindX}}\n" +
 		"{{range $name, $val := $xact.Ext}}" +

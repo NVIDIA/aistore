@@ -88,7 +88,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | lowwm | 75 | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
 | highwm | 90 | LRU starts immediately if a filesystem usage exceeds the value |
 | lru.enabled | true | Enables and disabled the LRU |
-| rebalance.enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
+| rebalance.enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "globalrebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
 | cksum.type | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
 | cksum.validate_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
 | cksum.validate_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |

@@ -281,6 +281,9 @@ func (d *Downloader) ReqAddMountpath(mpath string)     { d.mpathReqCh <- fs.Moun
 func (d *Downloader) ReqRemoveMountpath(mpath string)  { d.mpathReqCh <- fs.MountpathRem(mpath) }
 func (d *Downloader) ReqEnableMountpath(mpath string)  {}
 func (d *Downloader) ReqDisableMountpath(mpath string) {}
+func (d *Downloader) Description() string {
+	return "responsible for downloading objects into a bucket based on provided link"
+}
 
 func (d *Downloader) addJogger(mpath string) {
 	if _, ok := d.joggers[mpath]; ok {
@@ -895,6 +898,8 @@ func (t *task) download() {
 		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(t.started))},
 	)
+	t.parent.XactDemandBase.ObjectsInc()
+	t.parent.XactDemandBase.BytesAdd(t.currentSize.Load())
 	t.finishedCh <- nil
 }
 

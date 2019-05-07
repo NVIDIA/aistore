@@ -521,12 +521,12 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 	for i := 0; i < timedout+1; i++ {
 		time.Sleep(time.Second)
 
-		allDetails, err := api.GetXactionResponse(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
+		allDetails, err := api.GetXactStatusStats(baseParams, cmn.ActMakeNCopies, cmn.ActXactStats, bucket)
 		tassert.CheckFatal(t, err)
 		ok = true
 		for tid := range allDetails {
 			detail := allDetails[tid][0] // TODO
-			if detail.Status() == cmn.XactionStatusInProgress {
+			if detail.Running() {
 				ok = false
 				break
 			}

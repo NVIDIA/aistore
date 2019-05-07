@@ -151,6 +151,9 @@ func (c *putJogger) encode(req *Request) error {
 		return err
 	}
 
+	c.parent.ObjectsInc()
+	c.parent.BytesAdd(req.LOM.Size())
+
 	// if an object is small just make `parity` copies
 	if meta.IsCopy {
 		if err := c.createCopies(req, meta); err != nil {

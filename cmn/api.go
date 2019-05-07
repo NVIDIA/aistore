@@ -70,8 +70,8 @@ var XactKind = XactKindType{
 // ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown     = "shutdown"
-	ActGlobalReb    = "rebalance"      // global cluster-wide rebalance
-	ActLocalReb     = "localrebalance" // local rebalance
+	ActGlobalReb    = "globalrebalance" // global cluster-wide rebalance
+	ActLocalReb     = "localrebalance"  // local rebalance
 	ActLRU          = "lru"
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
@@ -837,11 +837,6 @@ func (b *DlCloudBody) Describe() string {
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bucket)
 }
 
-const (
-	// Denote the status of an Xaction
-	XactionStatusInProgress = "InProgress"
-	XactionStatusCompleted  = "Completed"
-)
 const (
 	RWPolicyCloud    = "cloud"
 	RWPolicyNextTier = "next_tier"

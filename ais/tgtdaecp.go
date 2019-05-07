@@ -271,7 +271,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActXactStats:
 			jsbytes, err = t.xactStatsRequest(kind, bucket)
 			if err != nil {
-				t.invalmsghdlr(w, r, err.Error())
+				if _, ok := err.(cmn.XactionNotFoundError); ok {
+					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
+				} else {
+					t.invalmsghdlr(w, r, err.Error())
+				}
 				return
 			}
 		case cmn.ActXactStop:

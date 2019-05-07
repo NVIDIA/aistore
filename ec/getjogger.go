@@ -815,6 +815,9 @@ func (c *getJogger) restoreEncoded(req *Request, meta *Metadata, nodes map[strin
 		return err
 	}
 
+	c.parent.ObjectsInc()
+	c.parent.BytesAdd(req.LOM.Size())
+
 	// main replica is ready to download by a client.
 	// Start a background process that uploads reconstructed data to
 	// remote targets and then return from the function
@@ -863,6 +866,7 @@ func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
 	if len(nodes) < meta.Data {
 		return fmt.Errorf("cannot restore: too many slices missing (found %d slices, need %d or more)", meta.Data, len(nodes))
 	}
+
 	return c.restoreEncoded(req, meta, nodes, toDisk, buffer)
 }
 

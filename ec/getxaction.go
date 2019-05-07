@@ -284,6 +284,10 @@ func (r *XactGet) dispatchRequest(req *Request) {
 	}
 }
 
+func (r *XactGet) Description() string {
+	return "responsible for restoring EC objects when object is not present on a designated target"
+}
+
 //
 // fsprunner methods
 //

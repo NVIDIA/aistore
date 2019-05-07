@@ -85,7 +85,7 @@ func newTargetLRUMock() *cluster.TargetMock {
 }
 
 func newInitLRU(t cluster.Target) *InitLRU {
-	xlru := &xactMock{}
+	xlru := &Xaction{}
 	return &InitLRU{
 		Xlru:                xlru,
 		Namelocker:          &nameLockerMock{},
@@ -300,16 +300,3 @@ func (s *statsLRUMock) Add(name string, val int64)             {}
 func (s *statsLRUMock) AddErrorHTTP(method string, val int64)  {}
 func (s *statsLRUMock) AddMany(namedVal64 ...stats.NamedVal64) {}
 func (s *statsLRUMock) Register(name string, kind string)      {}
-
-type xactMock struct{}
-
-func (x *xactMock) ID() int64                          { return 0 }
-func (x *xactMock) Kind() string                       { return "" }
-func (x *xactMock) Bucket() string                     { return "" }
-func (x *xactMock) StartTime(s ...time.Time) time.Time { return time.Now() }
-func (x *xactMock) EndTime(e ...time.Time) time.Time   { return time.Now() }
-func (x *xactMock) String() string                     { return "" }
-func (x *xactMock) Abort()                             {}
-func (x *xactMock) ChanAbort() <-chan struct{}         { return nil }
-func (x *xactMock) Finished() bool                     { return false }
-func (*xactMock) IsMountpathXact() bool                { return true }

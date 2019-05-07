@@ -347,7 +347,7 @@ func (t *targetrunner) setupRebalanceManager() error {
 		objectsSent: filter.NewDefaultFilter(),
 	}
 
-	if _, err := transport.Register(network, "rebalance", t.rebManager.recvRebalanceObj); err != nil {
+	if _, err := transport.Register(network, rebalanceStreamName, t.rebManager.recvRebalanceObj); err != nil {
 		return err
 	}
 
@@ -474,7 +474,7 @@ func (t *targetrunner) RunLRU() {
 func (t *targetrunner) PrefetchQueueLen() int { return len(t.prefetchQueue) }
 
 func (t *targetrunner) Prefetch() {
-	xpre := t.xactions.renewPrefetch()
+	xpre := t.xactions.renewPrefetch(getstorstatsrunner())
 
 	if xpre == nil {
 		return
@@ -2302,7 +2302,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		}
 	}
 	if delFromAIS {
-		// Don't persis meta as object will be soon removed anyway
+		// Don't persist meta as object will be removed soon anyway
 		if errs := lom.DelAllCopies(); errs != "" {
 			glog.Errorf("%s: %s", lom, errs)
 		}

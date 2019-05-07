@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -29,11 +30,11 @@ type xactionGlobalEntry interface {
 
 type lruEntry struct {
 	baseGlobalEntry
-	xact *xactLRU
+	xact *lru.Xaction
 }
 
 func (e *lruEntry) Start(id int64) error {
-	e.xact = &xactLRU{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
+	e.xact = &lru.Xaction{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
 	return nil
 }
 
@@ -42,12 +43,12 @@ func (e *lruEntry) Get() cmn.Xact { return e.xact }
 
 type prefetchEntry struct {
 	baseGlobalEntry
-	stats stats.PrefetchTargetStats
-	xact  *xactPrefetch
+	r    *stats.Trunner
+	xact *xactPrefetch
 }
 
 func (e *prefetchEntry) Start(id int64) error {
-	e.xact = &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
+	e.xact = &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch), r: e.r}
 	return nil
 }
 func (e *prefetchEntry) Kind() string  { return cmn.ActPrefetch }
@@ -243,11 +244,6 @@ func makeXactRebBase(id int64, rebType int, runnerCnt int) xactRebBase {
 }
 
 // STATS
-func (e *prefetchEntry) Stats() stats.XactStats {
-	e.stats.FromXact(e.xact, "")
-	e.stats.FillFromStatsRunner(getstorstatsrunner())
-	return &e.stats
-}
 
 func (e *globalRebEntry) Stats() stats.XactStats {
 	e.stats.FromXact(e.xact, "")
@@ -260,3 +256,4 @@ func (e *localRebEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.x
 func (e *electionEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.xact, "") }
 func (e *evictDeleteEntry) Stats() stats.XactStats { return e.stats.FromXact(e.xact, "") }
 func (e *downloaderEntry) Stats() stats.XactStats  { return e.stats.FromXact(e.xact, "") }
+func (e *prefetchEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.xact, "") }

@@ -89,7 +89,7 @@ Example rebalance stats response:
 [
     {
       "id": 3,
-      "kind": "rebalance",
+      "kind": "globalrebalance",
       "bucket": "",
       "start_time": "2019-04-15T13:38:51.556388821-07:00",
       "end_time": "0001-01-01T00:00:00Z",

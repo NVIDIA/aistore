@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -225,6 +226,10 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
+	rebalanceTimeout := time.Minute
+	if len(objects) > 5000 {
+		rebalanceTimeout = 5 * time.Minute
+	}
 
 	smap := getClusterMap(t, proxyURL)
 	l := len(smap.Tmap)
@@ -262,7 +267,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Tmap)+1,
 	)
 	tassert.CheckFatal(t, err)
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)

@@ -46,7 +46,10 @@ type (
 )
 
 func newXactBckBase(id int64, kind, bucket string, t cluster.Target, blocal bool) *xactBckBase {
-	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bucket, blocal), t: t}
+	return &xactBckBase{
+		XactBase: *cmn.NewXactBaseWithBucket(id, kind, bucket, blocal),
+		t:        t,
+	}
 }
 
 //
@@ -55,6 +58,7 @@ func newXactBckBase(id int64, kind, bucket string, t cluster.Target, blocal bool
 func (r *xactBckBase) DoneCh() chan struct{}        { return r.doneCh }
 func (r *xactBckBase) Target() cluster.Target       { return r.t }
 func (r *xactBckBase) Mpathers() map[string]mpather { return r.mpathers }
+func (r *xactBckBase) Description() string          { return "base bucket xaction implementation" }
 
 // init and stop
 func (r *xactBckBase) Stop(error) { r.Abort() } // call base method

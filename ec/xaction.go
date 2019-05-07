@@ -184,6 +184,9 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 		return err
 	}
 
+	r.ObjectsInc()
+	r.BytesAdd(lom.Size())
+
 	cb := func(hdr transport.Header, c io.ReadCloser, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)

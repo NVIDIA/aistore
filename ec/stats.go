@@ -72,8 +72,8 @@ func (s *stats) updateQueue(l int) {
 	s.queueCnt.Inc()
 }
 
-func (s *stats) updateEncode(sz int64) {
-	s.encodeSize.Add(sz)
+func (s *stats) updateEncode(size int64) {
+	s.encodeSize.Add(size)
 	s.encodeReq.Inc()
 }
 

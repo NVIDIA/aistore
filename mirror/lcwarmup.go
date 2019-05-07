@@ -56,6 +56,10 @@ func (r *XactBckLoadLomCache) init() (numjs int, err error) {
 	return
 }
 
+func (r *XactBckLoadLomCache) Description() string {
+	return "responsible for populating objects' metadata into in-memory cache"
+}
+
 //
 // mpath xwarmJogger - as mpather
 //

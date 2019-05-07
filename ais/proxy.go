@@ -2917,7 +2917,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-// '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
+// '{"action": "globalrebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	var msg cmn.ActionMsg

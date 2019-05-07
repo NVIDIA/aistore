@@ -281,11 +281,11 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		return
 	}
 	glog.Infoln(xele.String())
-	p.doProxyElection(vr, curPrimary)
+	p.doProxyElection(vr, curPrimary, xele)
 	xele.EndTime(time.Now())
 }
 
-func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xact *xactElection) {
 	// First, ping current proxy with a short timeout: (Primary? State)
 	primaryURL := curPrimary.IntraControlNet.DirectURL
 	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
@@ -300,7 +300,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode)
 	glog.Infof("%s: primary proxy %v is confirmed down\n", p.si.Name(), primaryURL)
 
 	glog.Info("Moving to election state phase 1 (prepare)")
-	elected, votingErrors := p.electAmongProxies(vr)
+	elected, votingErrors := p.electAmongProxies(vr, xact)
 	if !elected {
 		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", primaryURL)
 		return
@@ -324,7 +324,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode)
 	}
 }
 
-func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map[string]bool) {
+func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xactElection) (winner bool, errors map[string]bool) {
 	// Simple Majority Vote
 	resch := p.requestVotes(vr)
 	errors = make(map[string]bool)
@@ -355,6 +355,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 		}
 	}
 
+	xact.ObjectsAdd(int64(y + n))
 	winner = y > n || (y+n == 0) // No Votes: Default Winner
 	glog.Infof("Vote Results:\n Y: %v, N:%v\n Victory: %v\n", y, n, winner)
 	return

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/aistore/lru"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -17,7 +19,7 @@ func TestXactionRenewLRU(t *testing.T) {
 	xactions := newXactions()
 	defer xactions.abortAll()
 
-	ch := make(chan *xactLRU, 10)
+	ch := make(chan *lru.Xaction, 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
@@ -49,7 +51,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			ch <- xactions.renewPrefetch()
+			ch <- xactions.renewPrefetch(nil)
 			wg.Done()
 		}()
 	}

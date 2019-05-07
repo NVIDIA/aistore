@@ -18,6 +18,7 @@ const xactIdleTimeout = time.Minute * 3
 
 type (
 	Xact interface {
+		XactCountStats
 		ID() int64
 		Kind() string
 		Bucket() string
@@ -27,9 +28,12 @@ type (
 		Abort()
 		ChanAbort() <-chan struct{}
 		Finished() bool
+		Aborted() bool
 		IsMountpathXact() bool
+		Description() string
 	}
 	XactBase struct {
+		XactBaseCountStats
 		id         int64
 		sutime     atomic.Int64
 		eutime     atomic.Int64
@@ -178,3 +182,22 @@ func ValidXact(xact string) (bool, bool) {
 
 func (*MountpathXact) IsMountpathXact() bool    { return true }
 func (*NonmountpathXact) IsMountpathXact() bool { return false }
+
+type (
+	XactCountStats interface {
+		ObjectsCnt() int64
+		BytesCnt() int64
+	}
+
+	XactBaseCountStats struct {
+		objects atomic.Int64
+		bytes   atomic.Int64
+	}
+)
+
+func (s *XactBaseCountStats) ObjectsCnt() int64          { return s.objects.Load() }
+func (s *XactBaseCountStats) ObjectsInc() int64          { return s.objects.Inc() }
+func (s *XactBaseCountStats) ObjectsAdd(cnt int64) int64 { return s.objects.Add(cnt) }
+
+func (s *XactBaseCountStats) BytesCnt() int64           { return s.bytes.Load() }
+func (s *XactBaseCountStats) BytesAdd(size int64) int64 { return s.bytes.Add(size) }

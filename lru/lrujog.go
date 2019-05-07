@@ -83,13 +83,16 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if errstr != "" {
 		return nil
 	}
+
+	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
+	if !lom.LRUEnabled() {
+		return nil
+	}
 	_, errstr = lom.Load(false)
 	if errstr != "" {
 		return nil
 	}
-	if !lom.LRUEnabled() {
-		return nil
-	}
+
 	// workfiles: evict old or do nothing
 	if lctx.contentType == fs.WorkfileType {
 		_, base := filepath.Split(fqn)
@@ -153,6 +156,7 @@ func (lctx *lructx) evict() (err error) {
 			}
 			continue
 		}
+
 		if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
 			return
 		}
@@ -170,6 +174,8 @@ func (lctx *lructx) evict() (err error) {
 	}
 	lctx.ini.Statsif.Add(stats.LruEvictSize, bevicted)
 	lctx.ini.Statsif.Add(stats.LruEvictCount, fevicted)
+	lctx.ini.Xlru.ObjectsAdd(fevicted)
+	lctx.ini.Xlru.BytesAdd(bevicted)
 	return nil
 }
 

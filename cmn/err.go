@@ -136,6 +136,20 @@ func NewInvalidaMountpathError(mpath, cause string) InvalidMountpathError {
 	}
 }
 
+type (
+	XactionNotFoundError struct {
+		cause string
+	}
+)
+
+func NewXactionNotFoundError(cause string) XactionNotFoundError {
+	return XactionNotFoundError{cause: cause}
+}
+
+func (e XactionNotFoundError) Error() string {
+	return "xaction not found; " + e.cause
+}
+
 // ErrorOnce should be used to collect possible consecutive errors
 // NOTE: presence of earlier error should not affect following calls
 // Example: err := Check(obj.field1); errC.PutErr(err); err = Check(obj.field2); errC.PutErr(err) is alright

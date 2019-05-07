@@ -5,10 +5,13 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/NVIDIA/aistore/lru"
 
 	"github.com/NVIDIA/aistore/downloader"
 
@@ -33,13 +36,10 @@ type (
 		xactRebBase
 		cmn.MountpathXact
 	}
-	xactLRU struct {
-		cmn.XactBase
-		cmn.MountpathXact
-	}
 	xactPrefetch struct {
 		cmn.XactBase
 		cmn.NonmountpathXact
+		r *stats.Trunner
 	}
 	xactEvictDelete struct {
 		cmn.XactBase
@@ -60,6 +60,36 @@ type (
 		IsGlobal() bool
 	}
 )
+
+func (xact *xactRebBase) Description() string { return "base for rebalance xactions" }
+func (xact *xactGlobalReb) Description() string {
+	return "responsible for cluster-wide balance on the cluster-grow and cluster-shrink events"
+}
+func (xact *xactLocalReb) Description() string {
+	return "responsible for the mountpath-added and mountpath-enabled events that are handled locally within (and by) each storage target"
+}
+func (xact *xactEvictDelete) Description() string {
+	return "responsible for evicting or deleting objects"
+}
+func (xact *xactElection) Description() string {
+	return "responsible for election of a new primary proxy in case of failure of previous one"
+}
+
+func (xact *xactPrefetch) ObjectsCnt() int64 {
+	v := xact.r.Core.Tracker[stats.PrefetchCount]
+	v.RLock()
+	defer v.RUnlock()
+	return xact.r.Core.Tracker[stats.PrefetchCount].Value
+}
+func (xact *xactPrefetch) BytesCnt() int64 {
+	v := xact.r.Core.Tracker[stats.PrefetchCount]
+	v.RLock()
+	defer v.RUnlock()
+	return xact.r.Core.Tracker[stats.PrefetchCount].Value
+}
+func (xact *xactPrefetch) Description() string {
+	return "responsible for prefetching a flexibly-defined list or range of objects from any given Cloud bucket"
+}
 
 // how often cleanup is called
 const cleanupInterval = 10 * time.Minute
@@ -231,12 +261,12 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 
 func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, error) {
 	if _, ok := cmn.ValidXact(kind); !ok {
-		return nil, fmt.Errorf("unrecognized xaction %s", kind)
+		return nil, errors.New("unrecognized xaction " + kind)
 	}
 
 	entry := r.GetL(kind)
 	if entry == nil {
-		return nil, fmt.Errorf("xaction %s has not started", kind)
+		return nil, cmn.NewXactionNotFoundError(kind + " has not started yet")
 	}
 
 	return []stats.XactStats{entry.Stats()}, nil
@@ -257,12 +287,12 @@ func (r *xactionsRegistry) abortGlobalXact(kind string) {
 func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string) ([]stats.XactStats, error) {
 	bucketXats, ok := r.getBucketsXacts(bucket)
 	if !ok {
-		return nil, fmt.Errorf("no bucket %s for xact %s", bucket, kind)
+		return nil, cmn.NewXactionNotFoundError("xactions for bucket " + bucket + " don't exist; bucket might have been removed or not created")
 	}
 
 	entry := bucketXats.GetL(kind)
 	if entry == nil {
-		return nil, fmt.Errorf("xact %s for bucket %s does not exist", kind, bucket)
+		return nil, cmn.NewXactionNotFoundError(kind + " not found for bucket " + bucket + "; xaction might have not been started")
 	}
 
 	return []stats.XactStats{entry.Stats()}, nil
@@ -363,7 +393,7 @@ func (r *xactionsRegistry) bucketsXacts(bucket string) *bucketXactions {
 		return val.(*bucketXactions)
 	}
 
-	val, _ = r.bucketXacts.LoadOrStore(bucket, newBucketXactions(r))
+	val, _ = r.bucketXacts.LoadOrStore(bucket, newBucketXactions(r, bucket))
 	return val.(*bucketXactions)
 }
 
@@ -410,8 +440,8 @@ func (r *xactionsRegistry) RenewGlobalXact(e xactionGlobalEntry) (stored bool, e
 	return r.Update(e)
 }
 
-func (r *xactionsRegistry) renewPrefetch() *xactPrefetch {
-	e := &prefetchEntry{}
+func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
+	e := &prefetchEntry{r: tr}
 	stored, _ := r.RenewGlobalXact(e)
 	entry := r.GetL(e.Kind()).(*prefetchEntry)
 
@@ -423,7 +453,7 @@ func (r *xactionsRegistry) renewPrefetch() *xactPrefetch {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewLRU() *xactLRU {
+func (r *xactionsRegistry) renewLRU() *lru.Xaction {
 	e := &lruEntry{}
 	stored, _ := r.RenewGlobalXact(e)
 	entry := r.GetL(e.Kind()).(*lruEntry)

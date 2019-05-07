@@ -615,7 +615,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.Logln("reregistering complete")
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
 
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
@@ -675,7 +675,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Wait for everything to finish
 	m.wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
 
 	// main check - try to read all objects
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -912,7 +912,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// wait for everything to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
 	md.wg.Wait()
 
 	// read files once again
@@ -1226,7 +1226,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	err = api.AddMountpath(baseParams, newMountpath)
 	tassert.CheckFatal(t, err)
 
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL))
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), 5*time.Minute)
 
 	// Read files after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1303,7 +1303,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 	}
 
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL))
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), 5*time.Minute)
 
 	// Read after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1521,7 +1521,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	waitForRebalanceToComplete(t, baseParams)
+	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
 
 	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
