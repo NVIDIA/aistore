@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
@@ -88,8 +87,8 @@ type RequestSpec struct {
 	MaxMemUsage       string        `json:"max_mem_usage"`             // Default: "80%"
 	BckProvider       string        `json:"bprovider"`                 // Default: "local"
 	OutputBckProvider string        `json:"output_bprovider"`          // Default: "local"
-	ExtractConcLimit  int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
-	CreateConcLimit   int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
+	ExtractConcLimit  int64         `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
+	CreateConcLimit   int64         `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
 	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
 }
 
@@ -106,8 +105,8 @@ type ParsedRequestSpec struct {
 	Algorithm         *SortAlgorithm        `json:"algorithm"`
 	MaxMemUsage       cmn.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt   []byte                `json:"target_order_salt"`
-	ExtractConcLimit  int                   `json:"extract_concurrency_limit"`
-	CreateConcLimit   int                   `json:"create_concurrency_limit"`
+	ExtractConcLimit  int64                 `json:"extract_concurrency_limit"`
+	CreateConcLimit   int64                 `json:"create_concurrency_limit"`
 	ExtendedMetrics   bool                  `json:"extended_metrics"`
 }
 
@@ -189,17 +188,6 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, errNegativeConcurrencyLimit
 	}
 
-	// TODO: By default these values should change dynamically.
-	availablePaths, _ := fs.Mountpaths.Get()
-	if rs.ExtractConcLimit == 0 {
-		rs.ExtractConcLimit = 4 * len(availablePaths) // extract 4 shards per disk in parallel
-	}
-	if rs.CreateConcLimit == 0 {
-		// Create concurrency should be a little bit more because due to network
-		// usage disks may not be used to the fullest even with a lot shards
-		// created in parallel.
-		rs.CreateConcLimit = 6 * len(availablePaths)
-	}
 	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics

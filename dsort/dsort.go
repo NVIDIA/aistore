@@ -115,19 +115,15 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		var (
 			warnPossibleOOM          bool
 			estimateTotalRecordsSize uint64
-			beforeExtraction         time.Time
 		)
 
-		if m.Metrics.extended {
-			beforeExtraction = time.Now()
-		}
-
-		defer m.releaseExtractGoroutineSema()
+		defer m.extractAdjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
 		si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
-		cmn.AssertMsg(si != nil, errStr)
-
+		if errStr != "" {
+			return errors.New(errStr)
+		}
 		if si.DaemonID != m.ctx.node.DaemonID {
 			return nil
 		}
@@ -144,20 +140,20 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return m.react(cfg.MissingShards, msg)
 		}
 
-		m.acquireExtractSema()
+		m.extractAdjuster.acquireSema(lom.ParsedFQN.MpathInfo)
 		if m.aborted() {
-			m.releaseExtractSema()
+			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			return newAbortError(m.ManagerUUID)
 		}
 		if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
-			m.releaseExtractSema()
+			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			return errors.New("out of space")
 		}
 
 		m.ctx.nameLocker.Lock(lom.Uname(), false)
 		f, err := os.Open(lom.FQN)
 		if err != nil {
-			m.releaseExtractSema()
+			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			m.ctx.nameLocker.Unlock(lom.Uname(), false)
 			return fmt.Errorf("unable to open local file, err: %v", err)
 		}
@@ -169,8 +165,14 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		expectedUncompressedSize := uint64(float64(lom.Size()) / m.avgCompressionRatio())
 		toDisk := m.mw.reserveMem(expectedUncompressedSize)
 
+		beforeExtraction := time.Now()
 		reader := io.NewSectionReader(f, 0, lom.Size())
 		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom.FQN, reader, m.recManager, toDisk)
+
+		dur := time.Since(beforeExtraction)
+
+		// Inform concurrency adjuster about new calculation
+		m.createAdjuster.inform(extractedSize, dur, lom.ParsedFQN.MpathInfo)
 
 		// Make sure that compression rate is updated before releasing
 		// next extractor goroutine.
@@ -178,7 +180,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			m.addCompressionSizes(compressedSize, extractedSize)
 		}
 
-		m.releaseExtractSema()
+		m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 		m.ctx.nameLocker.Unlock(lom.Uname(), false)
 
 		m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
@@ -210,7 +212,6 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			metrics.ExtractedToDiskSize += extractedSize
 		}
 		if m.Metrics.extended {
-			dur := time.Since(beforeExtraction)
 			throughput := int64(float64(extractedSize) / dur.Seconds())
 
 			metrics.ShardExtractionStats.updateTime(dur)
@@ -234,6 +235,9 @@ func (m *Manager) extractLocalShards() (err error) {
 		cfg = &cmn.GCO.Get().DSort
 	)
 
+	m.extractAdjuster.start()
+	defer m.extractAdjuster.stop()
+
 	// Metrics
 	metrics := m.Metrics.Extraction
 	metrics.begin()
@@ -256,7 +260,7 @@ ExtractAllShards:
 		default:
 		}
 
-		m.acquireExtractGoroutineSema()
+		m.extractAdjuster.acquireGoroutineSema()
 		group.Go(m.extractShard(name, metrics, cfg))
 	}
 	if err := group.Wait(); err != nil {
@@ -285,9 +289,8 @@ ExtractAllShards:
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
-		beforeCreation = time.Now()
-		loadContent    = m.loadContent()
-		metrics        = m.Metrics.Creation
+		loadContent = m.loadContent()
+		metrics     = m.Metrics.Creation
 
 		// object related variables
 		shardName   = s.Name
@@ -300,7 +303,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if errStr != "" {
 		return errors.New(errStr)
 	}
-	lom.SetAtimeUnix(beforeCreation.UnixNano())
+	lom.SetAtimeUnix(time.Now().UnixNano())
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
 
 	// Check if aborted
@@ -310,11 +313,14 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	default:
 	}
 
-	m.acquireCreateSema()
-	defer m.releaseCreateSema()
+	m.createAdjuster.acquireSema(lom.ParsedFQN.MpathInfo)
+	defer m.createAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+
 	if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
 		return errors.New("out of space")
 	}
+
+	beforeCreation := time.Now()
 
 	wg := &sync.WaitGroup{}
 	r, w := io.Pipe()
@@ -355,6 +361,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
+	dur := time.Since(beforeCreation)
+	m.createAdjuster.inform(lom.Size(), dur, lom.ParsedFQN.MpathInfo)
+
 	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	cmn.AssertMsg(si != nil, errStr)
 
@@ -371,12 +380,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			return err
 		}
 
-		stat, err := file.Stat()
-		if err != nil {
-			return err
-		}
-
-		if stat.Size() <= 0 {
+		if lom.Size() <= 0 {
 			goto exit
 		}
 
@@ -386,7 +390,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			Objname: shardName,
 			IsLocal: bckProvider == cmn.LocalBs,
 			ObjAttrs: transport.ObjectAttrs{
-				Size:       stat.Size(),
+				Size:       lom.Size(),
 				CksumType:  cksumType,
 				CksumValue: cksumValue,
 			},
@@ -439,6 +443,9 @@ func (m *Manager) createShardsLocally() (err error) {
 		return newAbortError(m.ManagerUUID)
 	}
 
+	m.createAdjuster.start()
+	defer m.createAdjuster.stop()
+
 	metrics := m.Metrics.Creation
 	metrics.begin()
 	defer metrics.finish()
@@ -459,11 +466,11 @@ CreateAllShards:
 		default:
 		}
 
-		m.acquireCreateGoroutineSema()
+		m.createAdjuster.acquireGoroutineSema()
 		group.Go(func(s *extract.Shard) func() error {
 			return func() error {
 				err := m.createShard(s)
-				m.releaseCreateGoroutineSema()
+				m.createAdjuster.releaseGoroutineSema()
 				return err
 			}
 		}(s))

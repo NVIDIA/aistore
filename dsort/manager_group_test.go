@@ -23,7 +23,7 @@ var _ = Describe("ManagerGroup", func() {
 	var mgrp *ManagerGroup
 
 	BeforeEach(func() {
-		err := os.MkdirAll(testingConfigDir, 0750)
+		err := cmn.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		config := cmn.GCO.BeginUpdate()
@@ -33,6 +33,11 @@ var _ = Describe("ManagerGroup", func() {
 
 		fs.Mountpaths = fs.NewMountedFS()
 		fs.Mountpaths.Add(testingConfigDir)
+	})
+
+	AfterEach(func() {
+		err := os.RemoveAll(testingConfigDir)
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	Context("add", func() {
@@ -104,10 +109,5 @@ var _ = Describe("ManagerGroup", func() {
 			Expect(m).ToNot(BeNil())
 			Expect(m.ManagerUUID).To(Equal("uuid"))
 		})
-	})
-
-	AfterEach(func() {
-		err := os.RemoveAll(testingConfigDir)
-		Expect(err).ShouldNot(HaveOccurred())
 	})
 })

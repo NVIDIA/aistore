@@ -35,6 +35,14 @@ type (
 		once sync.Once
 		ch   chan struct{}
 	}
+
+	// DynSemaphore implements sempahore which can change its size during usage.
+	DynSemaphore struct {
+		size int64
+		cur  int64
+		c    *sync.Cond
+		mu   sync.Mutex
+	}
 )
 
 func NewTimeoutGroup() *TimeoutGroup {
@@ -106,4 +114,51 @@ func (sc *StopCh) Close() {
 	sc.once.Do(func() {
 		close(sc.ch)
 	})
+}
+
+func NewDynSemaphore(n int64) *DynSemaphore {
+	sema := &DynSemaphore{
+		size: n,
+	}
+	sema.c = sync.NewCond(&sema.mu)
+	return sema
+}
+
+func (s *DynSemaphore) Size() int64 {
+	s.mu.Lock()
+	size := s.size
+	s.mu.Unlock()
+	return size
+}
+
+func (s *DynSemaphore) SetSize(n int64) {
+	s.mu.Lock()
+	s.size = n
+	s.mu.Unlock()
+}
+
+func (s *DynSemaphore) Acquire() {
+	s.mu.Lock()
+	if s.cur < s.size {
+		s.cur++
+		s.mu.Unlock()
+		return
+	}
+
+	// Wait for vacant place
+	s.c.Wait()
+	s.cur++
+	s.mu.Unlock()
+}
+
+func (s *DynSemaphore) Release() {
+	s.mu.Lock()
+
+	if s.cur < 1 {
+		panic("semaphore: bad release")
+	}
+
+	s.cur--
+	s.c.Signal()
+	s.mu.Unlock()
 }

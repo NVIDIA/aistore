@@ -41,26 +41,26 @@ Starts new dSort job with provided specification. Upon creation, `id` of the
 job is returned - it can then be used to abort it or retrieve metrics. Following
 table describes json keys which can be used in specification.
 
-| Key | Type | Description | Required |
-| --- | --- | --- | --- |
-| `extension` | `string` | extension of input and output shards (either `.tar`, `.tgz` or `.zip`) | yes |
-| `bucket` | `string` | bucket where shards objects are stored | yes |
-| `bprovider` | `string` | describes if the bucket is local or cloud | no (default: `"local"`) |
-| `output_bucket` | `string` | bucket where new output shards will be saved | no (default: same as `bucket`) |
-| `output_bprovider` | `string` | describes if the output bucket is local or cloud | no (default: same as `bpovider`) |
-| `input_format` | `string` | name template for input shard | yes |
-| `output_format` | `string` | name template for output shard | yes |
-| `description` | `string` | description of dsort job | no (default: `""`) |
-| `shard_size` | `int` | size of output of shard | yes |
-| `algorithm.kind` | `string` | determines which algorithm should be during dSort job, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no (default: `"alphanumeric"`) |
-| `algorithm.decreasing` | `bool` | determines if the algorithm should sort the records in decreasing or increasing order, used for `kind=alphanumeric` or `kind=content` | no (default: `false`) |
-| `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no (default: `""`, `time.Now()` is used) |
+| Key | Type | Description | Required | Default |
+| --- | --- | --- | --- | --- |
+| `extension` | `string` | extension of input and output shards (either `.tar`, `.tgz` or `.zip`) | yes | |
+| `input_format` | `string` | name template for input shard | yes | |
+| `output_format` | `string` | name template for output shard | yes | |
+| `bucket` | `string` | bucket where shards objects are stored | yes | |
+| `bprovider` | `string` | describes if the bucket is local or cloud | no | `"local"` |
+| `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` field |
+| `output_bprovider` | `string` | describes if the output bucket is local or cloud | no | same as `bpovider` field |
+| `description` | `string` | description of dsort job | no | `""` |
+| `shard_size` | `int` | size of output of shard | yes | |
+| `algorithm.kind` | `string` | determines which algorithm should be during dSort job, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
+| `algorithm.decreasing` | `bool` | determines if the algorithm should sort the records in decreasing or increasing order, used for `kind=alphanumeric` or `kind=content` | no | `false` |
+| `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no | `""` - `time.Now()` is used |
 | `algorithm.extension` | `string` | content of the file with provided extension will be used as sorting key, used when `kind=content` | yes (only when `kind=content`) |
 | `algorithm.format_type` | `string` | format type (`int`, `float` or `string`) describes how the content of the file should be interpreted, used when `kind=content` | yes (only when `kind=content`) |
-| `max_mem_usage` | `string` | limits maximum of total memory until extraction starts spilling data to the disk, can be 60% or 10GB | no (default: same as in `config.sh`) |
-| `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted | no (default: same as in `config.sh`) |
-| `create_concurrency_limit` | `string` | limits number of concurrent shards created | no (default: same as in `config.sh`) |
-| `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no (default: `false`) |
+| `max_mem_usage` | `string` | limits maximum of total memory until extraction starts spilling data to the disk, can be 60% or 10GB | no | same as in `config.sh` |
+| `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `config.sh` |
+| `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `config.sh` |
+| `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
 Examples:
 * starts (alphanumeric) sorting dSort job with extended metrics for shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. Each of output shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ... 
@@ -75,8 +75,8 @@ ais dsort start '{
     "algorithm": {
         "kind": "alphanumeric"
     },
-    "extract_concurrency_limit": 30,
-    "create_concurrency_limit": 50,
+    "extract_concurrency_limit": 3,
+    "create_concurrency_limit": 5,
     "extended_metrics": true
 }'
 ```

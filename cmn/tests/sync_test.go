@@ -4,9 +4,11 @@
 package tests
 
 import (
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -112,5 +114,39 @@ func TestTimeoutGroupStopAndTimeout(t *testing.T) {
 
 	if timed, stopped = wg.WaitTimeoutWithStop(time.Second*3, stopCh); timed || stopped {
 		t.Error("group timed out or was stopped on finish")
+	}
+}
+
+func TestDynSemaphore(t *testing.T) {
+	limit := int64(10)
+
+	sema := cmn.NewDynSemaphore(limit)
+
+	var i atomic.Int32
+	wg := &sync.WaitGroup{}
+	ch := make(chan int32, 10*limit)
+
+	for j := 0; j < int(10*limit); j++ {
+		sema.Acquire()
+		wg.Add(1)
+		go func() {
+			ch <- i.Inc()
+			time.Sleep(time.Millisecond)
+			i.Dec()
+			sema.Release()
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+	close(ch)
+
+	res := int32(0)
+	for c := range ch {
+		res = cmn.MaxI32(res, c)
+	}
+
+	if int64(res) != limit {
+		t.Fatalf("acutall limit %d was different than expected %d", res, limit)
 	}
 }

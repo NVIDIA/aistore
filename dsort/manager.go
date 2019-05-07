@@ -111,17 +111,11 @@ type Manager struct {
 		count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
 		ch    chan int32
 	}
-	refCount    atomic.Int64 // Reference counter used to determine if we can do cleanup
-	state       progressState
-	extractSema struct {
-		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to ExtractShard
-		gorountines chan struct{} // Counting semaphore to limit number of goroutines created in extract shard phase
-	}
-	createSema struct {
-		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to CreateShard
-		gorountines chan struct{} // Counting semaphore to limit number of goroutines created in create shard phase
-	}
-	streams struct {
+	refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup
+	state           progressState
+	extractAdjuster *concAdjuster
+	createAdjuster  *concAdjuster
+	streams         struct {
 		request  map[string]*StreamPool
 		response map[string]*StreamPool
 		shards   map[string]*StreamPool // streams for pushing streams to other targets if the fqn is non-local
@@ -161,7 +155,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	m.ctx.smap.Listeners().Reg(m)
 
-	targetCount := m.smap.CountTargets()
+	targetCount := int64(m.smap.CountTargets())
 
 	m.rs = rs
 	m.Description = rs.ProcDescription
@@ -184,16 +178,18 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.compression.uncompressed = *atomic.NewInt64(1)
 
 	// Concurrency
-	m.extractSema.funcCalls = make(chan struct{}, rs.ExtractConcLimit)
-	m.createSema.funcCalls = make(chan struct{}, rs.CreateConcLimit)
+
 	// Number of goroutines should be larger than number of concurrency limit
 	// but it should not be:
 	// * too small - we don't want to artificially bottleneck the phases.
 	// * too large - we don't want too much goroutines in the system, it can cause
 	//               too much overhead on context switching and managing the goroutines.
 	//               Also for large workloads goroutines can take a lot of memory.
-	m.extractSema.gorountines = make(chan struct{}, 3*targetCount*rs.ExtractConcLimit)
-	m.createSema.gorountines = make(chan struct{}, 3*rs.CreateConcLimit)
+	//
+	// Coeficient for extraction should be larger and depends on target count
+	// because we will skip a lot shards (which do not belong to us).
+	m.extractAdjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
+	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 3 /*goroutineLimitCoef*/)
 
 	m.streams.request = make(map[string]*StreamPool, 100)
 	m.streams.response = make(map[string]*StreamPool, 100)
@@ -580,38 +576,6 @@ func (m *Manager) lock() {
 
 func (m *Manager) unlock() {
 	m.mu.Unlock()
-}
-
-func (m *Manager) acquireExtractSema() {
-	m.extractSema.funcCalls <- struct{}{}
-}
-
-func (m *Manager) releaseExtractSema() {
-	<-m.extractSema.funcCalls
-}
-
-func (m *Manager) acquireExtractGoroutineSema() {
-	m.extractSema.gorountines <- struct{}{}
-}
-
-func (m *Manager) releaseExtractGoroutineSema() {
-	<-m.extractSema.gorountines
-}
-
-func (m *Manager) acquireCreateSema() {
-	m.createSema.funcCalls <- struct{}{}
-}
-
-func (m *Manager) releaseCreateSema() {
-	<-m.createSema.funcCalls
-}
-
-func (m *Manager) acquireCreateGoroutineSema() {
-	m.createSema.gorountines <- struct{}{}
-}
-
-func (m *Manager) releaseCreateGoroutineSema() {
-	<-m.createSema.gorountines
 }
 
 func (m *Manager) newStreamWriter(pathToContents string, w io.Writer) *streamWriter {

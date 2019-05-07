@@ -1103,15 +1103,15 @@ components:
         extract_concurrency_limit:
           type: integer
           minimum: 0
-          default: 10
-          example: 50
-          description: Limits number of concurrent shards extracted
+          default: 0
+          example: 3
+          description: Limits number of concurrent shards extracted per disk
         create_concurrency_limit:
           type: integer
           minimum: 0
-          default: 10
-          example: 50
-          description: Limits number of concurrent shards created
+          default: 0
+          example: 3
+          description: Limits number of concurrent shards created per disk
         extended_metrics:
           type: boolean
           description: Determines if metrics should include extened statistics

@@ -205,8 +205,8 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.CreateConcLimit).To(Equal(0))
-			Expect(parsed.ExtractConcLimit).To(Equal(0))
+			Expect(parsed.CreateConcLimit).To(BeEquivalentTo(0))
+			Expect(parsed.ExtractConcLimit).To(BeEquivalentTo(0))
 		})
 	})
 
