@@ -258,6 +258,20 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
+// DoesLocalBucketExist API
+//
+// DoesLocalBucketExist queries a proxy or target to get a list of all local
+// buckets, returns true if the bucket exists.
+func DoesLocalBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
+	buckets, err := GetBucketNames(baseParams, cmn.LocalBs)
+	if err != nil {
+		return false, err
+	}
+
+	exists := cmn.StringInSlice(bucket, buckets.Local)
+	return exists, nil
+}
+
 // RenameLocalBucket API
 //
 // RenameLocalBucket changes the name of a bucket from oldName to newBucketName

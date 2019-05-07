@@ -243,7 +243,8 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("dSort job with id %q has not been found", managerUUID), http.StatusNotFound)
+		msg := fmt.Sprintf("dSort job with id %q has not been found", managerUUID)
+		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
 
@@ -312,6 +313,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !seenOne {
 		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		return
 	}
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup

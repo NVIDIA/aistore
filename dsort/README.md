@@ -111,14 +111,6 @@ provide an overview of what is happening in the cluster, for example: which
 phase is currently running, how much time has been spent on each phase, etc.
 There are many metrics (numbers and stats) recorded for each of the phases.
 
-## Playground
-
-To easily use the dSort capabilities, we have created a bunch of scripts which
-will help user to understand dSort a little bit better and to showcase some uses
-dSort.
-
-All scripts can be found [here](playground/README.md). Have fun :)
-
 ## Metrics
 
 DSort allows users to fetch the statistics of a given job (either
@@ -288,5 +280,5 @@ Example output for single node:
 
 ## API
 
-You can use the [AIS's CLI](/cli/README.md) to start, abort, retrieve metrics or
-list dSort jobs.
+You can use the [AIS's CLI](/cli/README.md) to start, abort, retrieve metrics or list dSort jobs.
+It is also possible generate random dataset to test dSort's capabilities.

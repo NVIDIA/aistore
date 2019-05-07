@@ -6,11 +6,17 @@
 package commands
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,12 +24,15 @@ import (
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
+	dsortGen    = "gen"
 	dsortStart  = "start"
 	dsortStatus = "status"
 	dsortAbort  = "abort"
@@ -34,14 +43,28 @@ const (
 var (
 	phasesOrdered = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
 
-	dsortIDFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the dSort job, eg: '5JjIuGemR'"}
-	dsortDescriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all dSort jobs"}
-	logFlag              = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
+	dsortIDFlag = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the dSort job, eg: '5JjIuGemR'"}
+	logFlag     = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
+
+	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
+	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: "dsort-testing", Usage: "bucket where shards will be put"}
+	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
+	fileSizeFlag      = cli.IntFlag{Name: "fsize", Value: 1024, Usage: "single file size (in bytes) inside the shard"}
+	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
+	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "when set, the old bucket will be deleted and created again"}
+	concurrencyFlag   = cli.IntFlag{Name: "conc", Value: 10, Usage: "limits number of concurrent put requests and number of concurrent shards created"}
 
 	dsortFlags = map[string][]cli.Flag{
-		dsortStart: {
-			dsortDescriptionFlag,
+		dsortGen: {
+			extFlag,
+			dsortBucketFlag,
+			dsortTemplateFlag,
+			fileSizeFlag,
+			fileCountFlag,
+			cleanupFlag,
+			concurrencyFlag,
 		},
+		dsortStart: {},
 		dsortStatus: {
 			dsortIDFlag,
 			progressBarFlag,
@@ -59,7 +82,8 @@ var (
 		},
 	}
 
-	dsortStartUsage  = fmt.Sprintf("%s dsort <json_specification>", cliName)
+	dsortGenUsage    = fmt.Sprintf("%s dsort %s [FLAGS...]", cliName, dsortGen)
+	dsortStartUsage  = fmt.Sprintf("%s dsort %s <json_specification>", cliName, dsortStart)
 	dsortStatusUsage = fmt.Sprintf("%s dsort %s --id <value> [STATUS FLAGS...]", cliName, dsortStatus)
 	dsortAbortUsage  = fmt.Sprintf("%s dsort %s --id <value>", cliName, dsortAbort)
 	dsortRemoveUsage = fmt.Sprintf("%s dsort %s --id <value>", cliName, dsortRemove)
@@ -70,6 +94,14 @@ var (
 			Name:  "dsort",
 			Usage: "command that manages distributed sort jobs",
 			Subcommands: []cli.Command{
+				{
+					Name:         dsortGen,
+					Usage:        "put randomly generated shards which then can be used for dSort testing",
+					UsageText:    dsortGenUsage,
+					Flags:        dsortFlags[dsortGen],
+					Action:       dsortHandler,
+					BashComplete: flagList,
+				},
 				{
 					Name:         dsortStart,
 					Usage:        "start new dSort job with provided specification",
@@ -119,6 +151,168 @@ func phaseToBarText(phase string) string {
 	return strings.Title(phase) + " phase: "
 }
 
+func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) error {
+	var (
+		gzw       *gzip.Writer
+		tw        *tar.Writer
+		random    = rand.New(rand.NewSource(time.Now().UnixNano()))
+		buf       = make([]byte, fileSize)
+		randBytes = make([]byte, 10)
+	)
+
+	if ext == ".tgz" {
+		gzw = gzip.NewWriter(w)
+		tw = tar.NewWriter(gzw)
+		defer gzw.Close()
+	} else {
+		tw = tar.NewWriter(w)
+	}
+	defer tw.Close()
+
+	for fileNum := start; fileNum < end; fileNum++ {
+		// Generate random name
+		random.Read(randBytes)
+		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(randBytes), len(strconv.Itoa(fileCnt)), fileNum)
+
+		h := &tar.Header{
+			Typeflag: tar.TypeReg,
+			Size:     fileSize,
+			Name:     name,
+			Uid:      os.Getuid(),
+			Gid:      os.Getgid(),
+			Mode:     0664,
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			return err
+		}
+
+		if _, err := io.CopyBuffer(tw, io.LimitReader(random, fileSize), buf); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Creates bucket if not exists. If exists uses it or deletes and creates new
+// one if cleanup flag was set.
+func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+	cleanup := flagIsSet(c, cleanupFlag)
+
+	exists, err := api.DoesLocalBucketExist(baseParams, bucket)
+	if err != nil {
+		return errorHandler(err)
+	}
+
+	if exists && cleanup {
+		err := api.DestroyLocalBucket(baseParams, bucket)
+		if err != nil {
+			return errorHandler(err)
+		}
+	}
+
+	if !exists || cleanup {
+		if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
+			return errorHandler(err)
+		}
+	}
+
+	return nil
+}
+
+func dsortGenHandler(c *cli.Context, baseParams *api.BaseParams) error {
+	var (
+		ext       = parseStrFlag(c, extFlag)
+		bucket    = parseStrFlag(c, dsortBucketFlag)
+		template  = parseStrFlag(c, dsortTemplateFlag)
+		fileCnt   = parseIntFlag(c, fileCountFlag)
+		fileSize  = int64(parseIntFlag(c, fileSizeFlag))
+		concLimit = parseIntFlag(c, concurrencyFlag)
+	)
+
+	supportedExts := []string{".tar", ".tgz"}
+	if !cmn.StringInSlice(ext, supportedExts) {
+		return fmt.Errorf("extension is invalid: %s, should be one of: %s", ext, supportedExts)
+	}
+
+	mem := &memsys.Mem2{}
+	if err := mem.Init(false); err != nil {
+		return err
+	}
+
+	pt, err := cmn.ParseBashTemplate(template)
+	if err != nil {
+		return err
+	}
+
+	if err := setupBucket(c, baseParams, bucket); err != nil {
+		return err
+	}
+
+	// Progress bar
+	text := "Shards created: "
+	progress := mpb.New(mpb.WithWidth(progressBarWidth))
+	bar := progress.AddBar(
+		int64(pt.Count()),
+		mpb.PrependDecorators(
+			decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
+			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+		),
+		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+	)
+
+	concSemaphore := make(chan struct{}, concLimit)
+	group, ctx := errgroup.WithContext(context.Background())
+	shardIt := pt.Iter()
+	shardNum := 0
+CreateShards:
+	for shardName, hasNext := shardIt(); hasNext; shardName, hasNext = shardIt() {
+		select {
+		case concSemaphore <- struct{}{}:
+		case <-ctx.Done():
+			break CreateShards
+		}
+
+		group.Go(func(i int, name string) func() error {
+			return func() error {
+				defer func() {
+					bar.Increment()
+					<-concSemaphore
+				}()
+
+				name := fmt.Sprintf("%s%s", name, ext)
+				sgl := mem.NewSGL(fileSize * int64(fileCnt))
+				defer sgl.Free()
+
+				if err := createTar(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, fileSize); err != nil {
+					return err
+				}
+
+				putArgs := api.PutObjectArgs{
+					BaseParams: baseParams,
+					Bucket:     bucket,
+					Object:     name,
+					Reader:     sgl,
+				}
+				if err := api.PutObject(putArgs); err != nil {
+					return err
+				}
+
+				return nil
+			}
+		}(shardNum, shardName))
+		shardNum++
+	}
+
+	if err := group.Wait(); err != nil {
+		progress.Abort(bar, true)
+		return err
+	}
+
+	progress.Wait()
+	return nil
+}
+
 func dsortHandler(c *cli.Context) error {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
@@ -128,6 +322,8 @@ func dsortHandler(c *cli.Context) error {
 
 	commandName := c.Command.Name
 	switch commandName {
+	case dsortGen:
+		return dsortGenHandler(c, baseParams)
 	case dsortStart:
 		if c.NArg() == 0 {
 			return fmt.Errorf("starting dSort job requires specification in JSON format")
@@ -147,6 +343,10 @@ func dsortHandler(c *cli.Context) error {
 	case dsortStatus:
 		if err := checkFlags(c, idFlag); err != nil {
 			return err
+		}
+
+		if id == "" {
+			return fmt.Errorf("required `id` flag is empty")
 		}
 
 		showProgressBar := flagIsSet(c, progressBarFlag)

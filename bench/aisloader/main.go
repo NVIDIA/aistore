@@ -378,12 +378,12 @@ func setupBucket(runParams *params) error {
 	if runParams.bckProvider != cmn.LocalBs || runParams.getConfig {
 		return nil
 	}
-	exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
+	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
+	exists, err := api.DoesLocalBucketExist(baseParams, runParams.bucket)
 	if err != nil {
 		return fmt.Errorf("failed to get local bucket lists to check for %s, err = %v", runParams.bucket, err)
 	}
 
-	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 	if !exists {
 		err := api.CreateLocalBucket(baseParams, runParams.bucket)
 		if err != nil {

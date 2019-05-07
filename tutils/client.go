@@ -520,24 +520,6 @@ func GetPrimaryProxy(proxyURL string) (string, error) {
 	return smap.ProxySI.PublicNet.DirectURL, nil
 }
 
-// DoesLocalBucketExist queries a proxy or target to get a list of all local buckets, returns true if
-// the bucket exists.
-func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
-	baseParams := BaseAPIParams(serverURL)
-	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
-	if err != nil {
-		return false, err
-	}
-
-	for _, b := range buckets.Local {
-		if b == bucket {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 	DestroyLocalBucket(t, proxyURL, bucketFQN)
 	baseParams := BaseAPIParams(proxyURL)
@@ -546,10 +528,10 @@ func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 }
 
 func DestroyLocalBucket(t *testing.T, proxyURL, bucket string) {
-	exists, err := DoesLocalBucketExist(proxyURL, bucket)
+	baseParams := BaseAPIParams(proxyURL)
+	exists, err := api.DoesLocalBucketExist(baseParams, bucket)
 	tassert.CheckFatal(t, err)
 	if exists {
-		baseParams := BaseAPIParams(proxyURL)
 		err = api.DestroyLocalBucket(baseParams, bucket)
 		tassert.CheckFatal(t, err)
 	}
@@ -831,8 +813,8 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 	to := time.Now().Add(bucketTimeout)
 	for _, s := range smap.Tmap {
 		for {
-			pubURL := s.URL(cmn.NetworkPublic)
-			bucketExists, err := DoesLocalBucketExist(pubURL, name)
+			baseParams := BaseAPIParams(s.URL(cmn.NetworkPublic))
+			bucketExists, err := api.DoesLocalBucketExist(baseParams, name)
 			if err != nil {
 				return err
 			}
@@ -840,7 +822,7 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 				break
 			}
 			if time.Now().After(to) {
-				return fmt.Errorf("wait for local bucket timed out, target = %s", pubURL)
+				return fmt.Errorf("wait for local bucket timed out, target = %s", baseParams.URL)
 			}
 			time.Sleep(time.Second)
 		}
