@@ -25,7 +25,7 @@ sleep 2 # token effort to allow statsd to set up shop before aisloader tries to 
 [[ -n "$RUNSCRIPTSOURCE" ]] || whinge "RUNSCRIPTSOURCE not set"
 source "$RUNSCRIPTSOURCE" || whinge "Shell source of $RUNSCRIPTSOURCE failed"
 
-PATH=/go/bin:$PATH
+PATH=/:$PATH
 
 [[ -n "$MY_NODE" ]] || whinge "MY_NODE not set"
 

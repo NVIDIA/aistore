@@ -46,6 +46,26 @@ ais_packages:
   - make
   - gcc
   - g++
+  - tk
+  - graphviz
+  - debhelper
+  - m4
+  - gfortran
+  - dpatch
+  - autoconf
+  - tcl
+  - swig
+  - chrpath
+  - flex
+  - libgfortran3
+  - bison
+  - quilt
+  - automake
+  - libltdl-dev
+  - autotools-dev
+  - ntp
+  - tcptrack
+  - conntrack
 
 #
 # Packages unique to GPU systems. Don't include CUDA here - just generally-
@@ -67,6 +87,22 @@ cuda_repo_deb: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu18
 cuda_repo_key: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
 nvidia_docker_key: 'https://nvidia.github.io/nvidia-docker/gpgkey'
 libnvidia_container_key: 'https://nvidia.github.io/libnvidia-container/gpgkey'
+
+#
+# nvidia-docker2 and nvidia-container-runtime versions to install. These must correspond
+# to the version of Docker in use. Kubespray today is using Docker 18.09.5~3-ce. Having
+# configured their repos as above, use
+#
+#   apt-cache madison nvidia-docker2 nvidia-container-runtime
+#
+# to see available versions and choose those matching our Docker version.
+#
+# Note that recent versions of Kubespray may offer a more elegant solution here -
+# installing the required NVIDIA software from an initcontainer run in a DaemonSet
+# delivered by some Google repo. See group_vars/k8s-cluster/k8s-cluster.yml in Kubespray.
+#
+nvidia_docker2_version: 2.0.3+docker18.09.5-3
+nvidia_container_runtime_version: 2.0.0+docker18.09.5-3
 
 #
 # NVIDIA device plugin daemonset location
@@ -138,6 +174,16 @@ ais_pam_limits:
 ais_cpufreq_governor: performance
 
 #
+# Mellanox driver download and expected version info. topdir is the name of the directory that the download archive
+# extracts into (yuck).
+#
+mlx5_driver:
+  update: true
+  url: 'http://www.mellanox.com/downloads/ofed/MLNX_OFED-4.6-1.0.1.1/MLNX_OFED_LINUX-4.6-1.0.1.1-ubuntu18.04-x86_64.tgz'
+  topdir: 'MLNX_OFED_LINUX-4.6-1.0.1.1-ubuntu18.04-x86_64'
+  version: 4.6-1.0.1
+
+#
 # Block device tweaks suitable for xfs on scsi HDD
 # See e.g. https://www.beegfs.io/wiki/StorageServerTuning
 #
@@ -147,6 +193,23 @@ blkdevtune:
   queue/read_ahead_kb: 1024
   queue/rq_affinity: 2
   queue/max_sectors_kb: 8192
+
+#
+# Ethtool tweaks to apply on boot to interfaces with matching driver names.
+# These are applied by the rc.local service.
+#
+# For a given driver, each interface (as listed by ip link ls) that ethtool -i
+# indicates uses that driver will:
+# - for each 'ring' array element, perform an 'ethtool -G <interface> <item>'; no default handling
+# - for each 'channel' array element, perform an 'ethtool -L <interface> <item>'; default is
+#   to calculate the number of cpu cores in the system (ignoring hyperthreads) and used
+#   that number of 'combined' channels.
+#
+ethtool:
+  mlx5_core:
+    ring:
+      - rx 8192
+    channel:
 
 #
 # Items to add/tweak in /etc/sysctl.conf. The 'default' is just for reference/comparison,
@@ -250,3 +313,8 @@ ais_host_sysctl:
     state: present
     default: 60
     comment: Lowering this makes the kernel less inclined to push pages to swap unless we are close to using all memory.
+  - name: vm.min_free_kbytes
+    value: 262144
+    state: present
+    default: Variable, but too low for our purposes. 90112 on 192GB system, that is 88MB.
+    comment: Keep a bit more free memory for tight situations - have seen some errors during container startup under load.

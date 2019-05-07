@@ -2,35 +2,25 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# AIS Image, common between Target and Proxy
-
-#
-# XXX TODO The hostPath value spread around under /etc/ais should
-# be rationalized:
-#
-#   - under a single directory tree, for ease of management
-#   - not in a standard host OS location such as /etc, but it must be persistent across reboot
-#   - unique per helm application name instance, ideally, so that we can run more than one
-#     helm application instance per k8s cluster (this would go a long way towards solving
-#     the management of this persistent state across helm install/delete cycles)
-#   - secure, /tmp/ is an uncontrolled channel into the container
-#
-
-# XXX TODO we need docker repo tokens for other registries such as separate for ais and kubectl images
 image:
-  repository: quay.io/nvidia/ais_k8s
-  tag: stable
-  pullPolicy: IfNotPresent
-  dockerRepoToken: ""
-  initContainers:
-    repository: quay.io/nvidia/kubectl
-    tag: latest
+  aisnode:
+    repository: quay.io/nvidia/aisnode
+    tag: stable
+  kubectl:
+    repository: quay.io/nvidia/ais-kubectl
+    tag: stable
+  pullPolicy: Always
+  pullSecretNames:  # 
+    - ais-pull-secret
+
 common_config:
   dir: /etc/ais
   cloudprovider: aws
   cloud_buckets: cloud
   local_buckets: local
   clusterIP_gw_label: shared
+  rebalance:
+    multiplier: 4
   mirror:
     util_tresh: 0
     enabled: false
@@ -47,7 +37,8 @@ common_config:
   container_capabilities:
     # Needed for debug if you wish to run delve within a pod (or look into kubesquash etc)
     #- SYS_PTRACE
-
+  sysctls:
+    somaxconn: "1024"
 
 proxy:
   name : "proxy"      # A component label for selector
@@ -74,6 +65,7 @@ proxy:
   nodeSelector:
     key: ais-proxy-type 
     value: "electable"
+  resources: {}
   # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
   initialPrimaryProxyNodeLabel:
     name: "initial_primary_proxy"
@@ -111,13 +103,13 @@ ne_proxy:
   nodeSelector:
     key: ais-proxy-type 
     value: "nonelectable"
+  resources: {}
   # The path of the environment file to be passed into the ais container
   envMountPath:
     hostPath: /tmp/
     podPath:  /var/ais_env
   etcMountPath:
     hostPath: /etc/ais/proxy
-
 
 target:
   name : "target"   # A component label for selector
@@ -142,6 +134,7 @@ target:
   nodeSelector:
     key: ais-target-node 
     value: "yes"
+  resources: {}
   etcMountPath:
     hostPath: /etc/ais/target
     # No pod path as it should be the same as config.dir
@@ -163,17 +156,11 @@ target:
     
 ingress: {}
 
+#
+# Note that out target/proxy/ne_proxy DaemonSets use any resource values from their
+# respective values sections.
+#
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #  cpu: 100m
-  #  memory: 128Mi
-  # requests:
-  #  cpu: 100m
-  #  memory: 128Mi
 
 #
 # Storage nodes can/should be tainted to keep non-AIS loads off, so we must
@@ -329,5 +316,3 @@ external_monitoring:
 pre_install_hook:
   etcMountPath:
     hostPath: /etc/ais 
- 
-

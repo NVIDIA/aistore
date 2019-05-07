@@ -28,6 +28,6 @@ spec:
       containers:
       - name: pre-install-sleep
         image: "alpine:3.3"
-        command: [ "sleep", "2"]
+        command: [ "sleep", "5"]
       restartPolicy: Never
   backoffLimit: 2

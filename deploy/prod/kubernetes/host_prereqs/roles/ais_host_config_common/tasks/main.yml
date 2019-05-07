@@ -2,11 +2,39 @@
   apt:
     update_cache: yes
 
+#
+# With nvidia-docker2, nvidia-container-runtime dependent on specific Docker versions
+# we prefer not to have automatic updates. Easier than freezing versions, for now.
+# Besides, automatic updates of production bits are undesirable in general.
+#
+- name: Disable unattended upgrades
+  apt:
+    update_cache: no
+    name: unattended-upgrades
+    state: absent
+
 - name: Install desired packages
   apt:
     update_cache: no
     name: '{{ ais_packages }}'
     state: present
+
+# - name: Check mlx5_core driver version
+#   shell: modinfo mlx5_core | egrep '^version:' | awk '{print $2}'
+#   register: mlx5verchk
+# 
+# - name: Download and unpack Mellanox OFED driver on play hosts
+#   unarchive:
+#     remote_src: yes
+#     src: "{{ mlx5_driver.url }}"
+#     dest: /tmp/
+#   when:
+#     - mlx5verchk.stdout != "{{ mlx5_driver.version }}"
+# 
+# - name: Install Mellanox OFED driver and update firmware
+#   command: /tmp/{{ mlx5_driver.topdir }}/mlnxofedinstall --force
+#   when:
+#     - mlx5verchk.stdout != "{{ mlx5_driver.version }}"
 
 - name: Configure ulimits for host
   pam_limits:
@@ -45,6 +73,13 @@
 - name: Set CPU frequency governor to requested mode
   command: cpupower frequency-set -r -g {{ ais_cpufreq_governor }}
 
+- name: Persist CPU governor choice
+  lineinfile:
+    path: /etc/init.d/cpufrequtils
+    line: GOVERNOR={{ ais_cpufreq_governor }}
+    create: yes
+    mode: 0444
+
 - name: Make sure we have a /usr/local/bin
   file:
     dest: /usr/local/bin
@@ -76,8 +111,3 @@
     enabled: yes
     state: restarted
   when: configservice.changed or configscript.changed
-
-
-
-
-  

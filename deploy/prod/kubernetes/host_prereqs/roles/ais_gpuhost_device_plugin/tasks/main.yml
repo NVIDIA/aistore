@@ -13,13 +13,13 @@
 #
 # This role should not repeat for every host in the play
 #
-runonce: True
 
 - name: Check whether nvidia-device-plugin DaemonSet is installed
   local_action:
     module: command
     _raw_params: kubectl get ds nvidia-device-plugin-daemonset --namespace=kube-system
   ignore_errors: True
+  run_once: True
   register: ds
   changed_when: ds.rc != 0
 
@@ -27,4 +27,5 @@ runonce: True
   local_action:
     module: command
     _raw_params: kubectl create -f {{ nvidia_device_plugin_url }}
+  run_once: True
   when: ds.rc != 0

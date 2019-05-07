@@ -2,17 +2,18 @@
 
 #
 # Quick 'n' dirty host tuning for AIS. This is run as a oneshot service.
+# Anything that can't be done via sysctl etc we do here.
+#
 # We should apply triggers to restart that service for disk replacement
 # etc.
-#
-# These parameters are not configurable in /etc/sysctl.d, sadly. The IO scheduler
-# can be applied as a default by updating /etc/default/grub, but we do it here
-# for now.
 #
 
 #
 # first arg is path relative to /sys/block/sd*, eg 'queue/scheduler'
 # second arg is the value to write to all paths /sys/block/sd*
+# These parameters are not configurable in /etc/sysctl.d, sadly. The IO scheduler
+# can be applied as a default by updating /etc/default/grub, but we do it here
+# for now.
 #
 function update_blk_sd_value {
     what=$1
@@ -32,8 +33,61 @@ function update_blk_sd_value {
     echo
 }
 
-{% for item in blkdevtune.iteritems() %}
-update_blk_sd_value "{{ item[0] }}" "{{ item[1] }}"
-{% endfor %}
+function do_blk_sd {
+    {% for item in blkdevtune.iteritems() %}
+    update_blk_sd_value "{{ item[0] }}" "{{ item[1] }}"
+    {% endfor %}
+}
+
+#
+# Apply ethtool tweaks. These used to go in /etc/network/interfaces, no longer consulted
+# under netplan but sadly netplan syntax doesn't seem to support command hooks. This could
+# go in a networkd-dispatcher hook directory, but they're messy to restart on changes to
+# the script - so a good old rc script it it.
+#
+function do_ethtool {
+    for link in $(ip -brief link ls | awk '{print $1}')
+    do
+        driver="$(ethtool -i $link 2>/dev/null | egrep '^driver:' | awk '{print $2}')"
+        [[ -z "$driver" ]] && continue
+
+        case "$driver" in
+        mlx5_core)
+            {% if ethtool.mlx5_core.ring %}
+            {% for item in ethtool.mlx5_core.ring %}
+            echo "Setting ring params to {{ item }} for $link" >&2
+            ethtool -G $link {{ item }}
+            {% endfor %}
+            {% endif %}
+
+            {% if ethtool.mlx5_core.channel %}
+
+            # vars have something to say - go with that
+            {% for item in ethtool.mlx5_core.channel %}
+            ethtool -L $link {{ item }}
+            {% endfor %}
+
+            {% else %}
+
+            # default - #cores combined channels (ignore hyperthreads)
+            skts=$(lscpu | egrep '^Socket\(s\):' | cut -d: -f2)
+            coresperskt=$(lscpu | egrep '^Core\(s\) per socket' | cut -d: -f2)
+            if [[ -n "$skts" && -n "$coresperskt" ]]; then
+                channels=$(( $skts * $coresperskt ))
+                echo "$skts sockets and $coresperskt cores/socket, setting channels to $channels for $link" >&2
+                ethtool -L $link combined $channels
+            else
+                echo "Failed to calculate number of physical cores in system" >&2
+            fi
+            {% endif %}
+            ;;
+        *)
+            ;;
+        esac
+    done
+}
+
+do_blk_sd
+do_ethtool
 
 exit 0

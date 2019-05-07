@@ -1,0 +1,15 @@
+- name: Allow somaxconn sysctl in containers
+  lineinfile:
+    path: "/etc/kubernetes/kubelet.env"
+    line: "--allowed-unsafe-sysctls='net.core.somaxconn' \\"
+    state: present
+    insertafter: "^KUBELET_ARGS="
+  register: kubeletenv
+
+- name: Restart kubeletenv
+  systemd:
+    name: kubelet
+    daemon-reload: yes
+    enabled: yes
+    state: restarted
+  when: kubeletenv.changed

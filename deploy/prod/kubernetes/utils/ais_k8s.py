@@ -149,7 +149,7 @@ class Ais:
 
                 config = openapi_client.Configuration()
                 config.debug = False
-                config.host = "http://%s:%s/v1/" % (d['pod'].status.pod_ip, d['pod'].spec.containers[0].ports[0].container_port)
+                config.host = "http://%s:%s/v1" % (d['pod'].status.pod_ip, d['pod'].spec.containers[0].ports[0].container_port)
                 d['aisClientApi'] = openapi_client.ApiClient(config)
 
         createAisApiClients(self.daemons['proxy'])
@@ -216,7 +216,7 @@ class Ais:
                         if t.isAlive():
                             stuck.append(t.getName())
                     if len(stuck) > 0:
-                        print("  No response: %s", ', '.join(stuck))
+                        print("  No response: %s" % ', '.join(stuck))
 
 
         if not quiet:
@@ -311,6 +311,12 @@ def print_ais_topo(aishdl):
         'latest': None
     }
 
+    ready_counts = {
+        'proxy':    0,
+        'ne_proxy': 0,
+        'target':   0
+    }
+
     print("Node labelling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" % 
         (len(aishdl.aisProxyNodes()), len(aishdl.aisNeProxyNodes()), len(aishdl.aisTargetNodes()) ))
     print("\tNode labelled as initial primary proxy: %s\n" % nodename_ipp)
@@ -339,7 +345,10 @@ def print_ais_topo(aishdl):
         snode = kwargs['snode']
 
         nodename = pod.spec.node_name
-        if nodename == nodename_ipp and pod.metadata.labels.get(u'component', None) == 'proxy':
+        if nodename is None:
+            nodename = '(unscheduled)'
+        component = pod.metadata.labels.get(u'component', None)
+        if nodename == nodename_ipp and component == 'proxy':
             nodename += "*"
         else:
             nodename += ' '
@@ -352,6 +361,7 @@ def print_ais_topo(aishdl):
         now = datetime.datetime.now(pytz.utc)
 
         podstate = '-'
+        since ='-'
         try:
             statemap = pod.status.container_statuses[0].state
             for attr, attrname in statemap.attribute_map.items():
@@ -370,11 +380,16 @@ def print_ais_topo(aishdl):
         except TypeError:   # if statemap is not yet filled (early startup)
             pass
 
-        pod_restarts = pod.status.container_statuses[0].restart_count
-
-        if pod.status.container_statuses[0].ready:
-            pod_ready = "True"
+        if pod.status.container_statuses is not None:
+            pod_restarts = pod.status.container_statuses[0].restart_count
+            if pod.status.container_statuses[0].ready:
+                pod_ready = "True"
+                if component in ready_counts:
+                    ready_counts[component] += 1
+            else:
+                pod_ready = "False"
         else:
+            pod_restarts = '-'
             pod_ready = "False"
 
         daemonid = snode.get('daemon_id', '-')
@@ -392,9 +407,9 @@ def print_ais_topo(aishdl):
     if latest is not None:
         print("  %-25s: %d" % ("Version", smap_info['latest_version']))
         print("  %-25s: %s" % ("Current primary proxy", latest[u'proxy_si'][u'daemon_id']))
-        print("  %-25s: %d (of which %d electable)" % ("Total proxies: ", len(latest[u'pmap']), len(latest[u'pmap']) - len(latest[u'non_electable'])))
-        print("  %-25s: %d" % ("Non-electable proxies: ", len(latest[u'non_electable'])))
-        print("  %-25s: %d" % ("Targets: ", len(latest[u'tmap'])))
+        print("  %-25s: %d (%d ready)" % ("Electable proxies: ", len(latest[u'pmap']) - len(latest[u'non_electable']), ready_counts['proxy']))
+        print("  %-25s: %d (%d ready)" % ("Non-electable proxies: ", len(latest[u'non_electable']), ready_counts['ne_proxy']))
+        print("  %-25s: %d (%d ready)" % ("Targets: ", len(latest[u'tmap']), ready_counts['target']))
 
 print_ais_topo(aisk8s)
 

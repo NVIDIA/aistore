@@ -54,19 +54,14 @@
 # on GPU nodes after kubespray, and require docker be up-to-date (be careful to keep versions in sync
 # across CPU and GPU nodes).
 #
-# Kubespray today is using Docker 18.06.2-ce, and is reluctant to agree to install later versions.
-# So instead (having configued nvidia repos and using apt-cache madison nvidia-docker2 nvidia-container-runtime
-# to see available versions) we'll avoid selecting the latest nvidia packages (which want Docker 18.09)
-# and instead use those listed as depending on Docker 18.06.2.
-#
 # We must install both packages in a single apt invocation.
 #
 - name: Install nvidia-docker and nvidia-container-runtime
   apt:
     update_cache: yes
     name:
-      - nvidia-docker2=2.0.3+docker18.06.2-1
-      - nvidia-container-runtime=2.0.0+docker18.06.2-1
+      - nvidia-docker2={{ nvidia_docker2_version }}
+      - nvidia-container-runtime={{ nvidia_container_runtime_version }}
     state: present
 
 #

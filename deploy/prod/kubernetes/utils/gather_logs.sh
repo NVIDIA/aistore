@@ -5,15 +5,13 @@
 # on which kubectl is configured to operate.
 #
 
+TOP=""
+
 function whinge {
     echo "$*" >/dev/stderr
     [[ -n "$TOP" ]] && rm -rf $TOP
     exit 1
 }
-
-TOP=$(mktemp -t -d aislogs.XXXXXX)
-[[ -n "$TOP" ]] || whinge "Failed to create temporary directory for output"
-echo "Gathering data into $TOP ..."
 
 #
 # Copy file(s) from pods matching the given selector, using kubectl cp. This information
@@ -59,6 +57,61 @@ function get_k8s_pod_logs {
     done
 }
 
+#
+# Logs will be accumulated in a subdir of BASEDIR; BASEDIR must already exist.
+# We'll make a subdirectory of BASEDIR names aislogs[-{group}]-YYYYMMDDhhmm-XXX
+#
+
+# Default basedir is TMPDIR or /tmp
+BASEDIR=${TMPDIR:-/tmp}
+
+# Default group name
+GROUP=""
+
+# Datestamp - likely enough that we don't need the XXX component of mktemp?
+DATESTAMP=$(date +'%Y%m%d%H%M')
+
+TEMP=$(getopt -o 'd:g:' -n 'gather_logs.sh' -- "$@")
+if [ $? -ne 0 ]; then
+        echo 'Terminating...' >&2
+        exit 1
+fi
+
+eval set -- "$TEMP"
+unset TEMP
+
+while true; do
+        case "$1" in
+            '-d')
+                BASEDIR="$2"
+                shift; shift
+                continue
+            ;;
+
+            '-g')
+                GROUP="-$2"
+                shift; shift
+                continue
+            ;;
+
+            '--')
+                shift
+                break
+            ;;
+
+            *)
+                echo "Option parsing internal error" >&2
+                exit 1
+            ;;
+        esac
+done
+
+[[ -d "$BASEDIR" ]] || whinge "BASEDIR $BASEDIR does not exist"
+TEMPLATE="aislogs${GROUP}-$DATESTAMP-XXX"
+TOP=$(mktemp -d --tmpdir=$BASEDIR -t "$TEMPLATE")
+[[ -n "$TOP" ]] || whinge "Failed to create temporary directory for output"
+echo "Gathering data into $TOP ..."
+
 copy_files aislogs 'app=ais' var/log/ais/
 copy_files aisstate 'app=ais' etc/ais/
 copy_files aismisc 'app=ais' var/log/aismisc
@@ -76,7 +129,7 @@ while [[ $# -gt 0 ]]; do
     copy_files "$usertag" "$pfxarg"
 done
 
-tardest=/tmp/$(basename $TOP).tgz
+tardest=$BASEDIR/$(basename $TOP).tgz
 (cd $TOP && tar cf - .) | gzip > $tardest
 
 echo "Results browsable at $TOP, tar at $tardest"

@@ -26,7 +26,8 @@ spec:
     spec:
       initContainers:
         - name: populate-env
-          image: quay.io/nvidia/kubectl:latest
+          image: {{ .Values.image.kubectl.repository }}:{{ .Values.image.kubectl.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: MY_NODE
               valueFrom:
@@ -42,7 +43,7 @@ spec:
               mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.aisnode.repository }}:{{ .Values.image.aisnode.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             capabilities:
@@ -58,7 +59,7 @@ spec:
             - name : ROLE
               value : "proxy"
             - name : TARGETS
-              value : "1"
+              value : "0"
             - name: AIS_HOSTIP
               valueFrom:
                 fieldRef:
@@ -82,7 +83,7 @@ spec:
             httpGet:
               path: /v1/health
               port: {{ .Values.ne_proxy.service.port }}
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 5
             failureThreshold: 3
           readinessProbe:
@@ -93,7 +94,13 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           resources:
-{{ toYaml .Values.resources | indent 12 }}
+{{ toYaml .Values.ne_proxy.resources | indent 12 }}
+      securityContext:
+        sysctls:
+        - name: net.core.somaxconn
+          value: {{ .Values.common_config.sysctls.somaxconn | quote }}
+        - name: net.ipv4.ip_local_port_range
+          value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
       nodeSelector:
          {{ .Values.ne_proxy.nodeSelector.key }}: {{ .Values.ne_proxy.nodeSelector.value | quote }}
@@ -119,4 +126,6 @@ spec:
 {{ toYaml . | indent 8 }}
     {{- end }}
       imagePullSecrets:
-        - name: containerbuilder-pull-secret
+        {{- range .Values.image.pullSecretNames }}
+        - name: {{ . }}
+        {{- end }}

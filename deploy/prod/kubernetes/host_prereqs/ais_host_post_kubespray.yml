@@ -1,0 +1,12 @@
+#
+# Config tweaks performed *after* Kubespray, typically to tweak aspects of the
+# k8s installation.
+#
+---
+- hosts: '{{ playhosts | default("k8s-cluster") }}'
+  vars_files:
+    - "vars.yml"
+
+  gather_facts: False
+  roles:
+    - { role: ais_post_kubespray }

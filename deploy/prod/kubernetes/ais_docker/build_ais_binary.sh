@@ -4,9 +4,6 @@
 # Build the ais binary, ready for inclusion in a Docker image. This script
 # is primarily intended for use from Jenkins build jobs. See usage below.
 #
-# XXX TODO enforce minimum required Go version for build
-#
-
 
 function usage {
     cat > /dev/stderr <<-EOM
@@ -21,6 +18,20 @@ function usage {
 EOM
 }
 
+function whinge {
+    echo "$@" >&2
+    exit 2
+}
+
+function check_go_version {
+    gobin=$(which go)
+    [[ -n "$gobin" ]] || whinge "go not found"
+
+    gover=$(go version)
+    echo "Using $gobin $gover" >&2
+    [[ $gover =~ go1.12 ]] || whinge "Go version 1.12.* is required"
+}
+
 DEST=$(readlink -f $1)     # need an absolute path for subshell below
 
 set -e
@@ -30,26 +41,24 @@ AIS_SRC=github.com/NVIDIA/aistore/ais
 if [[ -n "$JENKINS_URL" ]]; then
     PATH=$PATH:/usr/local/go/bin 
 
+    check_go_version
+
     #
     # Create and populate a temporary go tree
     #
     export GOPATH=$(mktemp -d)
-    if [[ -z "$GOPATH" ]]; then
-        echo "Failed to make temp dir for go" >&2
-        exit 1
-    fi
+    [[ -n "$GOPATH" ]] || whinge "Failed to make temp dir for go" >&2
     mkdir $GOPATH/{bin,pkg,src}
     export GOBIN=$GOPATH/bin
 
     echo 'Go get AIStore source from $AIS_SRC'
     /usr/local/go/bin/go get -v $AIS_SRC
 else
+    # Use go in existing PATH
+    check_go_version
     GOPATH=${GOPATH:=$HOME/go}
     GOBIN=${GOBIN:=$GOPATH/bin}
-    if [[ ! -d $GOPATH/src/$AIS_SRC ]]; then
-        echo "$AIS_SRC not found in $GOPATH/src" >&2
-        exit 1
-    fi
+    [[ -d $GOPATH/src/$AIS_SRC ]] || whinge "$AIS_SRC not found in $GOPATH/src"
 fi
 
 VERSION=$(cd $GOPATH/src/$AIS_SRC && git rev-parse --short HEAD)
@@ -84,9 +93,6 @@ echo "Cloud provider set to: ${CLDPROVIDER}"
       setup/aisnode.go
 )
 
-if [[ $? -ne 0 ]]; then
-    echo "go build failed" >&2
-    exit 1
-fi
+[[ $? -eq 0 ]] || whinge "go build failed"
 
 exit 0

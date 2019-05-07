@@ -4,6 +4,8 @@ echo "---------------------------------------------------"
 echo "aisnode $ROLE container startup at $(date)"
 echo "---------------------------------------------------"
 
+[[ -f /git-showbranch.out ]] && cat /git-showbranch.out 
+
 cp -fv $CONFFILE /etc/ais || exit 1 
 cp -fv $STATSDCONF /opt/statsd/statsd.conf || exit 1
 
