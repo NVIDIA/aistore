@@ -93,7 +93,7 @@ var (
 	objectPrefetchUsage = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objPrefetch)
 	objectEvictUsage    = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objEvict)
 
-	ObjectCmds = []cli.Command{
+	objectCmds = []cli.Command{
 		{
 			Name:  "object",
 			Usage: "interact with objects",

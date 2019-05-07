@@ -6,6 +6,7 @@ package commands
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -75,6 +76,22 @@ COPYRIGHT:
 {{.Copyright}}{{end}}
 `
 
+// This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
+var helpCommand = cli.Command{
+	Name:      "help",
+	Usage:     "shows a list of commands or help for one command",
+	ArgsUsage: "[command]",
+	Action: func(c *cli.Context) error {
+		args := c.Args()
+		if args.Present() {
+			return cli.ShowCommandHelp(c, args.First())
+		}
+
+		cli.ShowAppHelp(c)
+		return nil
+	},
+}
+
 func New(build, version string) AISCLI {
 	aisCLI := AISCLI{cli.NewApp()}
 	aisCLI.Init(build, version)
@@ -86,6 +103,8 @@ func (aisCLI AISCLI) Init(build, version string) {
 	aisCLI.Usage = "CLI for AIStore"
 	aisCLI.Version = fmt.Sprintf("%s (build %s)", version, build)
 	aisCLI.EnableBashCompletion = true
+	aisCLI.HideHelp = true
+	aisCLI.Flags = []cli.Flag{cli.HelpFlag}
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
@@ -95,6 +114,34 @@ func (aisCLI AISCLI) Init(build, version string) {
 	The CLI has shell autocomplete functionality. To enable this feature, either source
 	the 'ais_autocomplete' file in the project's 'cli/' directory or, for a permanent option, copy 
 	the 'ais_autocomplete' file to the '/etc/bash_completion.d/ais' directory.`
+
+	aisCLI.setupCommands()
+}
+
+func (aisCLI AISCLI) setupCommands() {
+	aisCLI.Commands = append(aisCLI.Commands, downloaderCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, dSortCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, objectCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, bucketCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, daeCluCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, xactCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, helpCommand)
+	sort.Sort(cli.CommandsByName(aisCLI.Commands))
+
+	setupCommandHelp(aisCLI.Commands)
+}
+
+func setupCommandHelp(commands []cli.Command) {
+	for j := range commands {
+		command := &commands[j]
+
+		// Get rid of 'h'/'help' subcommands
+		command.HideHelp = true
+		// Need to set up the help flag manually when setting HideHelp = true
+		command.Flags = append(command.Flags, cli.HelpFlag)
+
+		setupCommandHelp(command.Subcommands)
+	}
 }
 
 func (aisCLI AISCLI) RunLong(input []string) error {

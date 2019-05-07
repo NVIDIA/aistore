@@ -35,7 +35,7 @@ var (
 	daemonSetConfText = fmt.Sprintf("%s %s --daemon <value>", cliName, cmn.ActSetProps)
 
 	// DaeCluCmds tracks available AIS API Information/Query Commands
-	DaeCluCmds = []cli.Command{
+	daeCluCmds = []cli.Command{
 		{
 			Name:         cmn.GetWhatSmap,
 			Usage:        "returns cluster map",
@@ -63,13 +63,6 @@ var (
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatStats],
 			BashComplete: daemonList,
-		},
-		{
-			Name:    commandList,
-			Aliases: []string{"ls"},
-			Usage:   "returns list of daemons",
-			Action:  queryHandler,
-			Flags:   daecluFlags[commandList],
 		},
 		{
 			Name:         cmn.ActSetConfig,
@@ -121,8 +114,6 @@ func queryHandler(c *cli.Context) (err error) {
 		err = daecluStats(baseParams, daemonID, useJSON)
 	case cmn.GetWhatDaemonStatus:
 		err = daecluStatus(daemonID, useJSON)
-	case commandList:
-		err = listAIS(c, daemonID)
 	case cmn.ActSetConfig:
 		err = setConfig(c, baseParams, daemonID)
 	default:
@@ -195,30 +186,6 @@ func daecluStatus(daemonID string, useJSON bool) (err error) {
 		return fmt.Errorf(invalidDaemonMsg, daemonID)
 	}
 
-	return err
-}
-
-// Display smap-like information of each individual daemon in the entire cluster
-func listAIS(c *cli.Context, whichDaemon string) (err error) {
-	outputTemplate := templates.ListTmpl
-	if flagIsSet(c, verboseFlag) {
-		outputTemplate = templates.ListTmplVerbose
-	}
-
-	switch whichDaemon {
-	case cmn.Proxy:
-		err = templates.DisplayOutput(proxy, outputTemplate)
-	case cmn.Target:
-		err = templates.DisplayOutput(target, outputTemplate)
-	case "", "all":
-		err = templates.DisplayOutput(proxy, outputTemplate)
-		if err != nil {
-			return err
-		}
-		err = templates.DisplayOutput(target, outputTemplate)
-	default:
-		return fmt.Errorf("list usage: list ['%s' or '%s' or 'all']", cmn.Proxy, cmn.Target)
-	}
 	return err
 }
 

@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -29,12 +30,14 @@ var (
 		xactStats: {jsonFlag},
 	}
 
-	xactGeneric    = "%s xaction %s --xact <value>"
+	xactGeneric    = "%s xaction %s [<kind>] --bucket <value>"
 	xactStartUsage = fmt.Sprintf(xactGeneric, cliName, xactStart)
 	xactStopUsage  = fmt.Sprintf(xactGeneric, cliName, xactStop)
-	xactStatsUsage = fmt.Sprintf(xactGeneric, cliName, xactStats)
+	xactStatsUsage = fmt.Sprintf("%s xaction %s", cliName, xactStats)
 
-	XactCmds = []cli.Command{
+	xactKindsMsg = buildXactKindsMsg()
+
+	xactCmds = []cli.Command{
 		{
 			Name:  cmn.GetWhatXaction,
 			Usage: "interacts with extended actions (xactions)",
@@ -44,6 +47,7 @@ var (
 					Name:         xactStart,
 					Usage:        "starts the extended action",
 					UsageText:    xactStartUsage,
+					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStart],
 					Action:       xactHandler,
 					BashComplete: xactList,
@@ -52,6 +56,7 @@ var (
 					Name:         xactStop,
 					Usage:        "stops the extended action",
 					UsageText:    xactStopUsage,
+					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStop],
 					Action:       xactHandler,
 					BashComplete: xactList,
@@ -60,6 +65,7 @@ var (
 					Name:         xactStats,
 					Usage:        "returns the stats of the extended action",
 					UsageText:    xactStatsUsage,
+					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStats],
 					Action:       xactHandler,
 					BashComplete: xactList,
@@ -114,4 +120,14 @@ func xactHandler(c *cli.Context) (err error) {
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
 	return errorHandler(err)
+}
+
+func buildXactKindsMsg() string {
+	xactKinds := make([]string, 0, len(cmn.XactKind))
+
+	for kind := range cmn.XactKind {
+		xactKinds = append(xactKinds, kind)
+	}
+
+	return fmt.Sprintf("<kind> can be one of: %s", strings.Join(xactKinds, ", "))
 }

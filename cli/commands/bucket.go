@@ -94,7 +94,7 @@ var (
 	bucketSetPropsText   = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
 	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s --bucket <value> --copies <value>", cliName, bucketNWayMirror)
 
-	BucketCmds = []cli.Command{
+	bucketCmds = []cli.Command{
 		{
 			Name:  cmn.URLParamBucket,
 			Usage: "interact with buckets",

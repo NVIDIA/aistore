@@ -65,7 +65,7 @@ var (
 	dsortRemoveUsage = fmt.Sprintf("%s dsort %s --id <value>", cliName, dsortRemove)
 	dsortListUsage   = fmt.Sprintf("%s dsort %s --regex <value>", cliName, dsortList)
 
-	DSortCmds = []cli.Command{
+	dSortCmds = []cli.Command{
 		{
 			Name:  "dsort",
 			Usage: "command that manages distributed sort jobs",

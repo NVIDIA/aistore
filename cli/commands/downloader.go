@@ -66,7 +66,7 @@ var (
 	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
 	downloadListUsage   = fmt.Sprintf("%s download %s --regex <value>", cliName, downloadList)
 
-	DownloaderCmds = []cli.Command{
+	downloaderCmds = []cli.Command{
 		{
 			Name:  "download",
 			Usage: "command that manages downloading files from external sources",
