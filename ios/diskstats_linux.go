@@ -78,6 +78,8 @@ func readSingleDiskStat(disk string) (DiskStat, bool) {
 	scanner.Scan()
 	fields := strings.Fields(scanner.Text())
 
+	_ = file.Close()
+
 	if len(fields) < 11 {
 		return DiskStat{}, false
 	}
@@ -115,6 +117,7 @@ func readMultipleDiskStats(disks cmn.SimpleKVs) DiskStats {
 		output[deviceName] = ds
 	}
 
+	_ = file.Close()
 	return output
 }
 
