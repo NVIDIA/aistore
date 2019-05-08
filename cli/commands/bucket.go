@@ -32,14 +32,15 @@ const (
 )
 
 var (
-	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list files that were not matched by regex and template"}
-	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all files in bucket (including EC replicas) and print their status"}
+	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
+	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all objects in a bucket and their details; include EC replicas"}
 	newBucketFlag     = cli.StringFlag{Name: "new-bucket", Usage: "new name of bucket"}
 	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
+	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
 
 	baseBucketFlags = []cli.Flag{
 		bucketFlag,
@@ -65,6 +66,7 @@ var (
 				objLimitFlag,
 				showUnmatchedFlag,
 				allFlag,
+				fastFlag,
 			},
 			baseBucketFlags...),
 		bucketSetProps: append(
@@ -282,12 +284,29 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	}
 
 	prefix := parseStrFlag(c, prefixFlag)
+	showUnmatched := flagIsSet(c, showUnmatchedFlag)
 	props := "name," + parseStrFlag(c, objPropsFlag)
 	if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
 		// If `all` flag is set print status of the file so that the output is easier to understand -
 		// there might be multiple files with the same name listed (e.g EC replicas)
 		props = fmt.Sprintf("%s,%s", props, "status")
 	}
+
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
+	query.Add(cmn.URLParamPrefix, prefix)
+
+	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
+	if flagIsSet(c, fastFlag) {
+		msg.Fast = true
+		objList, err := api.ListBucketFast(baseParams, bucket, msg, query)
+		if err != nil {
+			return err
+		}
+
+		return printObjectNames(objList.Entries, objectListFilter, showUnmatched)
+	}
+
 	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
 	if err != nil {
 		return err
@@ -296,18 +315,11 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	if err != nil {
 		return err
 	}
-
-	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
-	query.Add(cmn.URLParamPrefix, prefix)
-
-	msg := &cmn.SelectMsg{PageSize: pagesize, Props: props}
+	msg.PageSize = pagesize
 	objList, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
 		return err
 	}
-
-	showUnmatched := flagIsSet(c, showUnmatchedFlag)
 
 	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched)
 }
@@ -473,6 +485,23 @@ func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 	return err
 }
 
+func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched bool) error {
+	outputTemplate := "name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
+	matchingEntries, rest := objectFilter.filter(entries)
+
+	err := templates.DisplayOutput(matchingEntries, outputTemplate)
+	if err != nil {
+		return err
+	}
+
+	if showUnmatched {
+		outputTemplate = "Unmatched files:\n" + outputTemplate
+		err = templates.DisplayOutput(rest, outputTemplate)
+	}
+
+	return err
+}
+
 type (
 	entryFilter func(*cmn.BucketEntry) bool
 
@@ -509,7 +538,8 @@ func (o *objectListFilter) filter(entries []*cmn.BucketEntry) (matching []cmn.Bu
 func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
-	if !flagIsSet(c, allFlag) {
+	// if fastFlag is enabled, allFlag is enabled automatically because obj.Status is unset
+	if !flagIsSet(c, allFlag) && !flagIsSet(c, fastFlag) {
 		// Filter out files with status different than OK
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.Status == cmn.ObjStatusOK })
 	}
