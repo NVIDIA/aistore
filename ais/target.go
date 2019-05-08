@@ -2603,7 +2603,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-	t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
+	t.statsdC.Send(keyName+".io.errors", 1, metric{statsd.Counter, "count", 1})
 	getfshealthchecker().OnErr(filepath)
 }
 

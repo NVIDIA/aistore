@@ -67,7 +67,7 @@ func TestClient(t *testing.T) {
 	}
 	defer c.Close()
 
-	c.Send("timer",
+	c.Send("timer", 1,
 		statsd.Metric{
 			Type:  statsd.Timer,
 			Name:  "timer",
@@ -75,7 +75,7 @@ func TestClient(t *testing.T) {
 		})
 	checkMsg(t, s, "test.timer.timer:123|ms")
 
-	c.Send("three",
+	c.Send("three", 1,
 		statsd.Metric{
 			Type:  statsd.Timer,
 			Name:  "timer",
@@ -137,7 +137,7 @@ func BenchmarkSend(b *testing.B) {
 	defer c.Close()
 
 	for i := 0; i < b.N; i++ {
-		c.Send("timer",
+		c.Send("timer", 1,
 			statsd.Metric{
 				Type:  statsd.Timer,
 				Name:  "test",
@@ -166,7 +166,7 @@ func BenchmarkSendParallel(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			c.Send("timer",
+			c.Send("timer", 1,
 				statsd.Metric{
 					Type:  statsd.Timer,
 					Name:  "test",

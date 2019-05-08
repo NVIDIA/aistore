@@ -254,7 +254,7 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 		metricType = statsd.PersistentCounter
 	}
 
-	s.statsdC.Send(nroot,
+	s.statsdC.Send(nroot, 1,
 		metric{Type: metricType, Name: "bytes", Value: val},
 		metric{Type: metricType, Name: "count", Value: 1},
 	)

@@ -567,11 +567,11 @@ func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
 
 	if ok {
 		delta := t.Sub(last)
-		hb.statsdC.Send("keepalive.heartbeat."+id,
+		hb.statsdC.Send("keepalive.heartbeat."+id, 1,
 			metric{statsd.Gauge, "delta", int64(delta / time.Millisecond)},
 			metric{statsd.Counter, "count", 1})
 	} else {
-		hb.statsdC.Send("keepalive.heartbeat."+id, metric{statsd.Counter, "count", 1})
+		hb.statsdC.Send("keepalive.heartbeat."+id, 1, metric{statsd.Counter, "count", 1})
 	}
 }
 
@@ -631,7 +631,7 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	if reset || !ok {
 		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: time.Now()}
 		a.unlock()
-		a.statsdC.Send("keepalive.average."+id, metric{statsd.Counter, "reset", 1})
+		a.statsdC.Send("keepalive.average."+id, 1, metric{statsd.Counter, "reset", 1})
 		return
 	}
 
@@ -643,7 +643,7 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	a.rec[id] = rec
 	a.unlock()
 
-	a.statsdC.Send("keepalive.average."+id,
+	a.statsdC.Send("keepalive.average."+id, 1,
 		metric{statsd.Counter, "delta", int64(delta / time.Millisecond)},
 		metric{statsd.Counter, "count", 1})
 }

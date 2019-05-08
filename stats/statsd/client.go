@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -43,6 +44,54 @@ type (
 		Type  MetricType // time, counter or gauge
 		Name  string     // Name for this particular metric
 		Value interface{}
+	}
+
+	BaseMetricAgg struct {
+		name  string
+		start time.Time // time current stats started
+		cnt   int64     // total # of requests
+	}
+
+	MetricAgg struct {
+		MetricLatAgg
+		bytes   int64 // total bytes by all requests
+		errs    int64 // number of failed requests
+		pending int64
+	}
+
+	MetricLatAgg struct {
+		BaseMetricAgg
+		latency time.Duration // Accumulated request latency
+
+		// self maintained fields
+		minLatency time.Duration
+		maxLatency time.Duration
+	}
+
+	MetricConfigAgg struct {
+		BaseMetricAgg
+		latency    time.Duration
+		minLatency time.Duration
+		maxLatency time.Duration
+
+		proxyLatency    time.Duration
+		minProxyLatency time.Duration
+		maxProxyLatency time.Duration
+
+		proxyConnLatency    time.Duration
+		minProxyConnLatency time.Duration
+		maxProxyConnLatency time.Duration
+	}
+
+	MetricLatsAgg struct {
+		metrics map[string]*MetricLatAgg
+	}
+
+	Metrics struct {
+		Put     MetricAgg
+		Get     MetricAgg
+		Config  MetricConfigAgg
+		General MetricLatsAgg
 	}
 )
 
@@ -78,7 +127,9 @@ func (c Client) Close() error {
 
 // Send sends metrics to statsd server
 // Note: Sending error is ignored
-func (c Client) Send(bucket string, metrics ...Metric) {
+// 1/ratio - how many samples are aggregated into single metric
+// see: https://github.com/statsd/statsd/blob/master/docs/metric_types.md#sampling
+func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	if !c.opened {
 		return
 	}
@@ -109,10 +160,177 @@ func (c Client) Send(bucket string, metrics ...Metric) {
 		if packet.Len() > 0 {
 			packet.WriteRune('\n')
 		}
-		fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
+
+		if aggCnt != 1 {
+			fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s|@%.1f", c.prefix, bucket, m.Name, prefix, m.Value, t, float64(1)/float64(aggCnt))
+		} else {
+			fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
+		}
 	}
 
 	if packet.Len() > 0 {
 		c.conn.Write(packet.Bytes())
 	}
+}
+
+func (ma *MetricAgg) Add(size int64, lat time.Duration) {
+	cmn.Assert(size != 0)
+	cmn.Assert(lat.Nanoseconds() != 0)
+	ma.cnt++
+	ma.latency += lat
+	ma.bytes += size
+	ma.minLatency = cmn.MinDuration(ma.minLatency, lat)
+	ma.maxLatency = cmn.MaxDuration(ma.maxLatency, lat)
+}
+
+func (ma *MetricAgg) AddPending(pending int64) {
+	ma.pending += pending
+}
+
+func (ma *MetricAgg) AddErr() {
+	ma.errs++
+}
+
+func (ma *MetricAgg) AvgLatency() float64 {
+	if ma.cnt == 0 {
+		return 0
+	}
+	return float64(ma.latency/time.Millisecond) / float64(ma.cnt)
+}
+
+func (ma *MetricAgg) Throughput() int64 {
+	if ma.cnt == 0 {
+		return 0
+	}
+	return int64(float64(ma.bytes) / ma.latency.Seconds())
+}
+
+func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
+	if mgs.metrics == nil {
+		mgs.metrics = make(map[string]*MetricLatAgg)
+	}
+
+	if val, ok := mgs.metrics[name]; !ok {
+		mgs.metrics[name] = &MetricLatAgg{
+			BaseMetricAgg: BaseMetricAgg{
+				start: time.Now(),
+				cnt:   1,
+				name:  name,
+			},
+
+			latency:    lat,
+			minLatency: lat,
+			maxLatency: lat,
+		}
+	} else {
+		val.cnt++
+		val.latency += lat
+		val.maxLatency = cmn.MaxDuration(val.maxLatency, lat)
+		val.minLatency = cmn.MinDuration(val.minLatency, lat)
+	}
+}
+
+func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
+	mcg.cnt++
+
+	mcg.latency += lat
+	mcg.minLatency = cmn.MinDuration(mcg.minLatency, lat)
+	mcg.maxLatency = cmn.MaxDuration(mcg.maxLatency, lat)
+
+	mcg.proxyLatency += lat
+	mcg.minProxyLatency = cmn.MinDuration(mcg.minProxyLatency, lat)
+	mcg.maxProxyLatency = cmn.MaxDuration(mcg.maxProxyLatency, lat)
+
+	mcg.proxyConnLatency += lat
+	mcg.minProxyConnLatency = cmn.MinDuration(mcg.minProxyConnLatency, lat)
+	mcg.maxProxyConnLatency = cmn.MaxDuration(mcg.maxProxyConnLatency, lat)
+}
+
+func (mg *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {
+	if mg.cnt != 0 {
+		c.Send(mType, mg.cnt, Metric{
+			Type:  Gauge,
+			Name:  "pending",
+			Value: mg.pending / mg.cnt,
+		})
+	}
+	c.Send(mType, 1,
+		Metric{
+			Type:  Counter,
+			Name:  "count",
+			Value: mg.cnt,
+		})
+	c.Send(mType, mg.cnt, Metric{
+		Type:  Timer,
+		Name:  "latency",
+		Value: mg.AvgLatency(),
+	},
+		Metric{
+			Type:  Timer,
+			Name:  "minlatency",
+			Value: float64(mg.minLatency / time.Millisecond),
+		},
+		Metric{
+			Type:  Timer,
+			Name:  "maxlatency",
+			Value: float64(mg.maxLatency / time.Millisecond),
+		},
+		Metric{
+			Type:  Counter,
+			Name:  "throughput",
+			Value: mg.Throughput(),
+		},
+	)
+
+	if len(general) != 0 {
+		c.Send(mType, genAggCnt, general...)
+	}
+}
+
+func (mcg *MetricConfigAgg) Send(c *Client) {
+	if mcg.cnt == 0 {
+		return
+	}
+
+	c.Send("getconfig", 1,
+		Metric{
+			Type:  Counter,
+			Name:  "count",
+			Value: mcg.cnt,
+		})
+	c.Send("getconfig", mcg.cnt,
+		Metric{
+			Type:  Timer,
+			Name:  "latency",
+			Value: float64(mcg.latency/time.Millisecond) / float64(mcg.cnt),
+		},
+		Metric{
+			Type:  Timer,
+			Name:  "latency.proxyconn",
+			Value: float64(mcg.proxyConnLatency/time.Millisecond) / float64(mcg.cnt),
+		},
+		Metric{
+			Type:  Timer,
+			Name:  "latency.proxy",
+			Value: float64(mcg.proxyLatency/time.Millisecond) / float64(mcg.cnt),
+		},
+	)
+}
+
+func (m *Metrics) SendAll(c *Client) {
+	generalMetrics := make([]Metric, 0, len(m.General.metrics))
+	var aggCnt int64
+	for _, m := range m.General.metrics {
+		generalMetrics = append(generalMetrics, Metric{
+			Type:  Timer,
+			Name:  m.name,
+			Value: float64(m.latency/time.Millisecond) / float64(m.cnt),
+		})
+		// m.cnt is the same for all aggregated metrics
+		aggCnt = m.cnt
+	}
+
+	m.Get.Send(c, "get", generalMetrics, aggCnt)
+	m.Put.Send(c, "put", generalMetrics, aggCnt)
+	m.Config.Send(c)
 }

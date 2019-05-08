@@ -116,6 +116,7 @@ type (
 		put       stats.HTTPReq
 		get       stats.HTTPReq
 		getConfig stats.HTTPReq
+		statsd    statsd.Metrics
 	}
 
 	jsonStats struct {
@@ -574,6 +575,7 @@ L:
 			if runParams.statsShowInterval > 0 {
 				accumulatedStats.aggregate(intervalStats)
 				writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+				sendStatsdStats(&intervalStats)
 				intervalStats = newStats(time.Now())
 			}
 		case <-osSigChan:
@@ -841,6 +843,10 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 	}
 }
 
+func sendStatsdStats(s *sts) {
+	s.statsd.SendAll(&statsdC)
+}
+
 func newPutWorkOrder() *workOrder {
 	var size int64
 
@@ -905,178 +911,48 @@ func newWorkOrder() {
 func completeWorkOrder(wo *workOrder) {
 	delta := cmn.TimeDelta(wo.end, wo.start)
 
-	metrics := make([]statsd.Metric, 0)
 	if wo.err == nil {
-		metrics = []statsd.Metric{
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.proxyconn",
-				Value: float64(wo.latencies.ProxyConn / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.proxy",
-				Value: float64(wo.latencies.Proxy / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.targetconn",
-				Value: float64(wo.latencies.TargetConn / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.target",
-				Value: float64(wo.latencies.Target / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.posthttp",
-				Value: float64(wo.latencies.PostHTTP / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.proxyheader",
-				Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.proxyrequest",
-				Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.proxyresponse",
-				Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.targetheader",
-				Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.targetrequest",
-				Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency.targetresponse",
-				Value: cmn.MaxF64(float64(wo.latencies.TargetFirstResponse/time.Millisecond), 0),
-			},
-		}
+		intervalStats.statsd.General.Add("latency.proxyconn", wo.latencies.ProxyConn)
+		intervalStats.statsd.General.Add("latency.proxy", wo.latencies.Proxy)
+		intervalStats.statsd.General.Add("latency.targetconn", wo.latencies.TargetConn)
+		intervalStats.statsd.General.Add("latency.target", wo.latencies.Target)
+		intervalStats.statsd.General.Add("latency.posthttp", wo.latencies.PostHTTP)
+		intervalStats.statsd.General.Add("latency.proxyheader", wo.latencies.ProxyWroteHeader)
+		intervalStats.statsd.General.Add("latency.proxyrequest", wo.latencies.ProxyWroteRequest)
+		intervalStats.statsd.General.Add("latency.targetheader", wo.latencies.TargetWroteHeader)
+		intervalStats.statsd.General.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
+		intervalStats.statsd.General.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
+		intervalStats.statsd.General.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
 	}
 
 	switch wo.op {
 	case opGet:
 		getPending--
-		statsdC.Send("get",
-			statsd.Metric{
-				Type:  statsd.Gauge,
-				Name:  "pending",
-				Value: getPending,
-			},
-		)
+		intervalStats.statsd.Get.AddPending(getPending)
 		if wo.err == nil {
 			intervalStats.get.Add(wo.size, delta)
-			statsdC.Send("get",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(delta / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "throughput",
-					Value: wo.size,
-				},
-			)
-			if len(metrics) != 0 {
-				statsdC.Send("get", metrics...)
-			}
+			intervalStats.statsd.Get.Add(wo.size, delta)
 		} else {
 			fmt.Println("Get failed: ", wo.err)
+			intervalStats.statsd.Get.AddErr()
 			intervalStats.get.AddErr()
-			statsdC.Send("get",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "error",
-					Value: 1,
-				},
-			)
 		}
 	case opPut:
 		putPending--
-		statsdC.Send("put",
-			statsd.Metric{
-				Type:  statsd.Gauge,
-				Name:  "pending",
-				Value: putPending,
-			},
-		)
+		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
 			allObjects = append(allObjects, wo.objName)
 			intervalStats.put.Add(wo.size, delta)
-			statsdC.Send("put",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(delta / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "throughput",
-					Value: wo.size,
-				},
-			)
-			if len(metrics) != 0 {
-				statsdC.Send("put", metrics...)
-			}
+			intervalStats.statsd.Put.Add(wo.size, delta)
 		} else {
 			fmt.Println("Put failed: ", wo.err)
 			intervalStats.put.AddErr()
-			statsdC.Send("put",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "error",
-					Value: 1,
-				},
-			)
+			intervalStats.statsd.Put.AddErr()
 		}
 	case opConfig:
 		if wo.err == nil {
 			intervalStats.getConfig.Add(1, delta)
-			statsdC.Send("getconfig",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(delta / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyconn",
-					Value: float64(wo.latencies.ProxyConn / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxy",
-					Value: float64(wo.latencies.Proxy / time.Millisecond),
-				},
-			)
+			intervalStats.statsd.Config.Add(delta, wo.latencies.Proxy, wo.latencies.ProxyConn)
 		} else {
 			fmt.Println("Get config failed: ", wo.err)
 			intervalStats.getConfig.AddErr()

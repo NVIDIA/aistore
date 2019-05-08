@@ -164,7 +164,7 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	case KindLatency:
 		if strings.HasSuffix(name, ".µs") {
 			nroot := strings.TrimSuffix(name, ".µs")
-			s.statsdC.Send(nroot, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+			s.statsdC.Send(nroot, 1, metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		}
 		v.Lock()
 		v.numSamples++
@@ -180,7 +180,7 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	case KindCounter:
 		if strings.HasSuffix(name, ".n") {
 			nroot := strings.TrimSuffix(name, ".n")
-			s.statsdC.Send(nroot, metric{statsd.Counter, "count", val})
+			s.statsdC.Send(nroot, 1, metric{statsd.Counter, "count", val})
 			v.Lock()
 			v.Value += val
 			v.Unlock()
@@ -207,7 +207,7 @@ func (s *CoreStats) copyZeroReset(ctracker copyTracker) {
 			v.Unlock()
 			if strings.HasSuffix(name, ".bps") {
 				nroot := strings.TrimSuffix(name, ".bps")
-				s.statsdC.Send(nroot,
+				s.statsdC.Send(nroot, 1,
 					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
 				)
 			}
