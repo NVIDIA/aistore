@@ -249,10 +249,10 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	}
 
 	if flagIsSet(c, lengthFlag) {
-		fmt.Printf("\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		_, _ = fmt.Fprintf(os.Stderr, "\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
 		return
 	}
-	fmt.Printf("%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
+	_, _ = fmt.Fprintf(os.Stderr, "%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
 	return
 }
 

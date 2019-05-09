@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 
@@ -21,10 +20,6 @@ var (
 
 func main() {
 	commands.SetClusterURL(url)
-
-	if !commands.IsAutoCompConfigured() {
-		fmt.Printf("Auto complete script not installed in %q.\n", commands.AutoCompDir)
-	}
 
 	aisCLI := commands.New(build, version)
 

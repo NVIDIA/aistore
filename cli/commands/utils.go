@@ -74,11 +74,6 @@ func SetClusterURL(url string) {
 	}
 }
 
-func IsAutoCompConfigured() bool {
-	_, err := os.Stat(AutoCompDir)
-	return !os.IsNotExist(err)
-}
-
 func cliAPIParams(proxyURL string) *api.BaseParams {
 	return &api.BaseParams{
 		Client: httpClient,
