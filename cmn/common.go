@@ -5,11 +5,13 @@
 package cmn
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -558,6 +560,46 @@ func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum 
 		return "", err
 	}
 	return cksum, nil
+}
+
+// Read only the first line of a file.
+// Do not use for big files: it reads all the content and then extracts the first
+// line. Use for files that may contains a few lines with trailing EOL
+func ReadOneLine(filename string) (string, error) {
+	var line string
+	err := ReadLines(filename, func(l string) error {
+		line = l
+		return io.EOF
+	})
+	return line, err
+}
+
+// Read a file line by line and call a callback for each line until the file
+// ends or a callback returns io.EOF
+func ReadLines(filename string, cb func(string) error) error {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	lineReader := bufio.NewReader(bytes.NewBuffer(b))
+	for {
+		line, _, err := lineReader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return err
+		}
+
+		if err := cb(string(line)); err != nil {
+			if err != io.EOF {
+				return err
+			}
+			break
+		}
+	}
+	return nil
 }
 
 // WriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes

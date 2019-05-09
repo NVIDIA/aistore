@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/sys"
 	sigar "github.com/cloudfoundry/gosigar"
 )
 
@@ -743,8 +744,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 // 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
 // 3) on demand via Mem2.Free()
 func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
-	c := sigar.ConcreteSigar{}
-	avg, err := c.GetLoadAverage()
+	avg, err := sys.LoadAverage()
 	if err != nil {
 		glog.Errorf("Failed to load averages, err: %v", err)
 		avg.One = 999 // fall thru on purpose

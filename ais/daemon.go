@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -186,6 +187,10 @@ func aisinit(version, build string) {
 	}
 
 	glog.Infof("git: %s | build-time: %s\n", version, build)
+
+	// optimize GOMAXPROCS if the daemon is running inside a container with
+	// limited amount of memory and CPU
+	sys.UpdateMaxProcs()
 
 	// init daemon
 	fs.Mountpaths = fs.NewMountedFS()
