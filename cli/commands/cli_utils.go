@@ -14,7 +14,6 @@ import (
 )
 
 type AISCLI struct {
-	url string
 	*cli.App
 }
 
@@ -94,8 +93,8 @@ var helpCommand = cli.Command{
 	},
 }
 
-func New(build, version, url string) AISCLI {
-	aisCLI := AISCLI{url: url, App: cli.NewApp()}
+func New(build, version string) AISCLI {
+	aisCLI := AISCLI{App: cli.NewApp()}
 	aisCLI.Init(build, version)
 	return aisCLI
 }
@@ -148,7 +147,7 @@ func setupCommandHelp(commands []cli.Command) {
 
 func (aisCLI AISCLI) RunLong(input []string) error {
 	if err := aisCLI.Run(input); err != nil {
-		if err := SetNTestAISURL(aisCLI.url); err != nil {
+		if err := TestAISURL(); err != nil {
 			return err
 		}
 		return err

@@ -20,11 +20,13 @@ var (
 )
 
 func main() {
+	commands.SetClusterURL(url)
+
 	if !commands.IsAutoCompConfigured() {
 		fmt.Printf("Auto complete script not installed in %q.\n", commands.AutoCompDir)
 	}
 
-	aisCLI := commands.New(build, version, url)
+	aisCLI := commands.New(build, version)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt)

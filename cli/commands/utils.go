@@ -57,10 +57,7 @@ var (
 )
 
 // Checks if URL is valid by trying to get Smap
-func SetNTestAISURL(url string) (err error) {
-	if ClusterURL == "" {
-		ClusterURL = url
-	}
+func TestAISURL() (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	_, err = api.GetClusterMap(baseParams)
 
@@ -69,6 +66,12 @@ func SetNTestAISURL(url string) (err error) {
 	}
 
 	return err
+}
+
+func SetClusterURL(url string) {
+	if ClusterURL == "" {
+		ClusterURL = url
+	}
 }
 
 func IsAutoCompConfigured() bool {
