@@ -138,11 +138,9 @@ func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 	// [throttle]
 	// a bit of back-pressure when approaching the fixed boundary
 	if pending > 1 && max > 10 {
-		if pending >= max-max/8 && !r.mirror.OptimizePUT {
-			time.Sleep(cmn.ThrottleSleepMax)
-		} else if pending > max-max/4 {
-			time.Sleep((cmn.ThrottleSleepAvg + cmn.ThrottleSleepMax) / 2)
-		} else if pending > max/2 {
+		// increase the chances for the burst of PUTs to subside
+		// but only to a point
+		if pending > max/2 && pending < max-max/8 {
 			time.Sleep(cmn.ThrottleSleepAvg)
 		}
 	}
