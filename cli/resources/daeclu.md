@@ -4,16 +4,6 @@ The CLI allows users to interact with AIS daemons or cluster.
 
 ## Command List
 
-### list
-
-`ais list`
-
-Lists all of the Daemons in the AIS cluster
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--verbose, -v` | `bool` | verbose option | `false` |
-
 ### status
 
 `ais status [DAEMON_TYPE]`
@@ -31,28 +21,6 @@ Examples:
 * `ais status --count 5` - displays 5 reports with statuses of all daemons in the cluster with 1s interval between each report
 * `ais status proxy --count 5 --refresh 10s` - displays 5 reports with statuses of all proxies in the cluster with 10s interval between each report
 * `ais status target --refresh 2s` - displays a continuous report with statuses of all targets in the cluster with 2s interval between each report
-
-### config
-
-`ais config [DAEMON_ID]`
-
-Returns the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the configuration of the daemon that the `AIS_URL` is pointed at.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-
-### setconfig
-
-`ais setconfig [DAEMON_ID] [list of key=value]`
-
-Set configurations for a specific daemon or the entire cluster via key-value pairs. To set configurations for the entire cluster, use `cluster` as the `DAEMON_ID`. For the list of available runtime configurations, see [here](../../docs/configuration.md#runtime-configuration).
-
-Example:
-
-`ais setconfig cluster stats_time=10s`
-
-Sets the `stats_time` configuration to `10s` for the entire cluster.
 
 ### smap
 

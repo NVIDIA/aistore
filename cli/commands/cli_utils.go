@@ -125,6 +125,7 @@ func (aisCLI AISCLI) setupCommands() {
 	aisCLI.Commands = append(aisCLI.Commands, objectCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, bucketCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, daeCluCmds...)
+	aisCLI.Commands = append(aisCLI.Commands, configCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, xactCmds...)
 	aisCLI.Commands = append(aisCLI.Commands, helpCommand)
 	sort.Sort(cli.CommandsByName(aisCLI.Commands))
@@ -216,7 +217,7 @@ func parseIntFlag(c *cli.Context, flag cli.Flag) int {
 func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 	for _, f := range flag {
 		if !flagIsSet(c, f) {
-			return fmt.Errorf("`%s` flag is not set", f.GetName())
+			return fmt.Errorf("required flag `%s` is not set", f.GetName())
 		}
 	}
 	return nil

@@ -156,7 +156,8 @@ const (
 		" Enable Read Range: {{$obj.EnableReadRange}}\n"
 	VerConfTmpl = "\n{{$obj := .Ver}}Version Config\n" +
 		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n"
-	FSpathsConfTmpl = "\n{{$obj := .FSpaths}}File System Paths Config\n" +
+	FSpathsConfTmpl = "\nFile System Paths Config\n" +
+		"{{$obj := .FSpaths.Paths}}" +
 		"{{range $key, $val := $obj}}" +
 		"{{$key}}: {{$val}}\n" +
 		"{{end}}\n"
@@ -203,7 +204,7 @@ const (
 		" Duplicated Records: {{$obj.DuplicatedRecords}}\n" +
 		" Missing Shards: {{$obj.MissingShards}}\n"
 
-	ConfigTmpl = "\nConfig Directory: {{.Confdir}}\t Cloud Provider: {{.CloudProvider}}\n" +
+	ConfigTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n" +
 		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
