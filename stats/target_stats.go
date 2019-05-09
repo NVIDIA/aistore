@@ -127,7 +127,8 @@ func (r *Trunner) GetWhatStats() ([]byte, error) {
 
 func (r *Trunner) log() (runlru bool) {
 	// copy stats values while skipping zeros; reset latency stats
-	r.Core.Tracker[Uptime].Value = int64(time.Since(r.starttime) / time.Microsecond)
+	now := time.Now()
+	r.Core.Tracker[Uptime].Value = int64(now.Sub(r.starttime) / time.Microsecond)
 	r.Core.copyZeroReset(r.ctracker)
 
 	r.lines = r.lines[:0]
@@ -151,10 +152,7 @@ func (r *Trunner) log() (runlru bool) {
 	}
 
 	// 3. io stats
-	ioStr := fs.Mountpaths.Iostats.ToString()
-	if ioStr != "" {
-		r.lines = append(r.lines, ioStr)
-	}
+	r.lines = fs.Mountpaths.Iostats.LogAppend(r.lines, now)
 
 	// 4. log
 	for _, ln := range r.lines {

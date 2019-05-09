@@ -6,56 +6,61 @@
 package ios
 
 import (
+	"flag"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type LsBlk struct {
-	BlockDevices []BlockDevice `json:"blockdevices"`
+	BlockDevices []*BlockDevice `json:"blockdevices"`
 }
 
+type fsDisks map[string]int64 // disk name => sector size
+
+// `lsblk -Jt` structure
 type BlockDevice struct {
-	Name         string        `json:"name"`
-	BlockDevices []BlockDevice `json:"children"`
+	Name         string         `json:"name"`
+	Alligment    string         `json:"alignment"`
+	MinIO        string         `json:"min-io"`
+	OptIO        string         `json:"opt-io"`
+	PhySec       string         `json:"phy-sec"`
+	LogSec       string         `json:"log-sec"`
+	Rota         string         `json:"rota"`
+	Sched        string         `json:"sched"`
+	RqSize       string         `json:"rq-size"`
+	RA           string         `json:"ra"`
+	Wsame        string         `json:"wsame"`
+	BlockDevices []*BlockDevice `json:"children"`
 }
 
-// Fs2disks is used when a mountpath is added to
+// fs2disks is used when a mountpath is added to
 // retrieve the disk(s) associated with a filesystem.
 // This returns multiple disks only if the filesystem is RAID.
-func Fs2disks(fs string) (disks cmn.StringSet) {
-	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
+func fs2disks(fs string) (disks fsDisks) {
+	getDiskCommand := exec.Command("lsblk", "-Jt")
 	outputBytes, err := getDiskCommand.Output()
+	if err != nil || len(outputBytes) == 0 {
+		glog.Errorf("%s: no disks, err: %v", fs, err)
+		return
+	}
+	var (
+		lsBlkOutput LsBlk
+		device      = strings.TrimPrefix(fs, "/dev/")
+	)
+	disks = make(fsDisks)
+	err = jsoniter.Unmarshal(outputBytes, &lsBlkOutput)
 	if err != nil {
-		glog.Errorf("Failed to lsblk, err %v", err)
+		glog.Errorf("Unable to unmarshal lsblk output [%s], err: %v", string(outputBytes), err)
 		return
 	}
-	if len(outputBytes) == 0 {
-		glog.Errorf("Failed to lsblk - no disks?")
-		return
-	}
-	disks = LsblkOutput2disks(outputBytes, fs)
-	return
-}
-
-func LsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet) {
-	disks = make(cmn.StringSet)
-	device := strings.TrimPrefix(fs, "/dev/")
-	var lsBlkOutput LsBlk
-	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
-	if err != nil {
-		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
-		return
-	}
-
 	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
-	if glog.V(4) {
-		glog.Infof("Device: %s, disk list: %v\n", device, disks)
+	if flag.Parsed() {
+		glog.Infof("%s: %+v\n", fs, disks)
 	}
-
 	return disks
 }
 
@@ -63,30 +68,33 @@ func LsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet)
 // private
 //
 
-func childMatches(devList []BlockDevice, device string) bool {
+func childMatches(devList []*BlockDevice, device string) bool {
 	for _, dev := range devList {
 		if dev.Name == device {
 			return true
 		}
-
 		if len(dev.BlockDevices) != 0 && childMatches(dev.BlockDevices, device) {
 			return true
 		}
 	}
-
 	return false
 }
 
-func findDevDisks(devList []BlockDevice, device string, disks cmn.StringSet) {
+func findDevDisks(devList []*BlockDevice, device string, disks fsDisks) {
+	add := func(bd *BlockDevice) {
+		var err error
+		if disks[bd.Name], err = strconv.ParseInt(bd.PhySec, 10, 0); err != nil {
+			glog.Errorf("%s[%v]: %v", bd.Name, bd, err)
+			disks[bd.Name] = 512
+		}
+	}
 	for _, bd := range devList {
 		if bd.Name == device {
-			disks[bd.Name] = struct{}{}
+			add(bd)
 			continue
 		}
-		if len(bd.BlockDevices) != 0 {
-			if childMatches(bd.BlockDevices, device) {
-				disks[bd.Name] = struct{}{}
-			}
+		if len(bd.BlockDevices) > 0 && childMatches(bd.BlockDevices, device) {
+			add(bd)
 		}
 	}
 }

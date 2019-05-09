@@ -240,9 +240,8 @@ func aisinit(version, build string) {
 			for path := range config.FSpaths.Paths {
 				fsPaths = append(fsPaths, path)
 			}
-
 			if err := fs.Mountpaths.Init(fsPaths); err != nil {
-				glog.Fatal(err)
+				cmn.ExitLogf("%s", err)
 			}
 		}
 

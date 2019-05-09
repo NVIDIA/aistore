@@ -33,7 +33,7 @@ type DiskStat struct {
 
 type DiskStats map[string]DiskStat
 
-func (ds *DiskStat) ToString() string {
+func (ds *DiskStat) String() string {
 	return strings.Join([]string{
 		spI64("ReadComplete", ds.ReadComplete),
 		spI64("ReadMerged", ds.ReadMerged),
@@ -51,20 +51,18 @@ func (ds *DiskStat) ToString() string {
 
 // GetDiskStats returns the stats of the keys in disks
 func GetDiskStats(disks cmn.SimpleKVs) DiskStats {
-	if len(disks) < largeNumDisks {
-		output := make(DiskStats, len(disks))
-
-		for disk := range disks {
-			stat, ok := readSingleDiskStat(disk)
-			if !ok {
-				continue
-			}
-			output[disk] = stat
-		}
-		return output
+	if len(disks) >= largeNumDisks {
+		return readMultipleDiskStats(disks)
 	}
-
-	return readMultipleDiskStats(disks)
+	output := make(DiskStats, len(disks))
+	for disk := range disks {
+		stat, ok := readSingleDiskStat(disk)
+		if !ok {
+			continue
+		}
+		output[disk] = stat
+	}
+	return output
 }
 
 func readSingleDiskStat(disk string) (DiskStat, bool) {

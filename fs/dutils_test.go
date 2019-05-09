@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
 package fs
 
@@ -8,10 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ios"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -22,70 +21,32 @@ func init() {
 	Mountpaths = NewMountedFS()
 }
 
-func TestGetDiskFromFileSystem(t *testing.T) {
-	path := "/tmp"
-	fileSystem, err := Fqn2fsAtStartup(path)
-	if err != nil {
-		t.Errorf("Invalid FS for path: [%s]", path)
-	}
-	disks := ios.Fs2disks(fileSystem)
-	if len(disks) == 0 {
-		t.Errorf("Invalid FS disks: [%s]", fileSystem)
-	}
-
-	path = "asdasd"
-	fileSystem, err = Fqn2fsAtStartup(path)
-	if err != nil {
-		t.Errorf("Invalid FS for path: [%s]", path)
-	}
-	disks = ios.Fs2disks(path)
-	if len(disks) != 0 {
-		t.Errorf("Invalid FS disks: [%s]", fileSystem)
-	}
-}
-
-func TestMultipleMountPathsOnSameDisk(t *testing.T) {
+func TestLsblk(t *testing.T) {
+	var lsblk ios.LsBlk
 	rawJSON := jsoniter.RawMessage(
 		`{
-        "blockdevices": [{
-                "name": "xvda",
-                "children": [{
-                    "name": "xvda1"
-                }]
-            },
-            {
-                "name": "xvdb",
-                "children": [{
-                    "name": "md0"
-                }]
-            }, {
-                "name": "xvdd",
-                "children": [{
-                    "name": "md0"
-                }]
-            }
-        ]
-		}`)
-	bytes, err := jsoniter.Marshal(&rawJSON)
-	if err != nil {
-		t.Errorf("Unable to marshal input json. Error: [%v]", err)
+			"blockdevices": [
+			{"name": "sda", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B",
+			"children": [
+			{"name": "sda1", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"},
+			{"name": "sda2", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"}
+			]
+		},
+		{"name": "sdb", "alignment": "0", "min-io": "262144", "opt-io": "1048576", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"}]
+	}`)
+	out, _ := jsoniter.Marshal(&rawJSON)
+	jsoniter.Unmarshal(out, &lsblk)
+	if len(lsblk.BlockDevices) != 2 {
+		t.Fatalf("expected 2 block devices, got %d", len(lsblk.BlockDevices))
 	}
-	disks := ios.LsblkOutput2disks(bytes, "md0")
-	if len(disks) != 2 {
-		t.Errorf("Invalid number of disks returned. Disks: [%v]", disks)
+	if lsblk.BlockDevices[1].PhySec != "512" {
+		t.Fatalf("expected 512 sector, got %s", lsblk.BlockDevices[1].PhySec)
 	}
-	if _, ok := disks["xvdb"]; !ok {
-		t.Errorf("Expected disk [xvdb] not returned. Disks: [%v]", disks)
+	if lsblk.BlockDevices[0].BlockDevices[1].Name != "sda2" {
+		t.Fatalf("expected sda2 device, got %s", lsblk.BlockDevices[0].BlockDevices[1].Name)
 	}
-	if _, ok := disks["xvdd"]; !ok {
-		t.Errorf("Expected disk [xvdd] not returned. Disks: [%v]", disks)
-	}
-	disks = ios.LsblkOutput2disks(bytes, "xvda1")
-	if len(disks) != 1 {
-		t.Errorf("Invalid number of disks returned. Disks: [%v]", disks)
-	}
-	if _, ok := disks["xvda"]; !ok {
-		t.Errorf("Expected disk [xvda] not returned. Disks: [%v]", disks)
+	if len(lsblk.BlockDevices[0].BlockDevices) != 2 {
+		t.Fatalf("expected 2 block children devices, got %d", len(lsblk.BlockDevices[0].BlockDevices))
 	}
 }
 
@@ -204,61 +165,5 @@ func createDirs(dirs ...string) error {
 func removeDirs(dirs ...string) {
 	for _, dir := range dirs {
 		os.RemoveAll(dir)
-	}
-}
-
-func TestLsblk(t *testing.T) {
-	out := []byte(`{
-		   "blockdevices": [
-				{"name": "xvda", "size": "8G", "type": "disk", "mountpoint": null,
-					"children": [
-						{"name": "xvda1", "size": "8G", "type": "part", "mountpoint": "/"}
-					]
-				},
-				{"name": "xvdf", "size": "1.8T", "type": "disk", "mountpoint": null},
-				{"name": "xvdh", "size": "1.8T", "type": "disk", "mountpoint": null},
-				{"name": "xvdi", "size": "1.8T", "type": "disk", "mountpoint": null},
-				{"name": "xvdl", "size": "100G", "type": "disk", "mountpoint": "/ais/xvdl"},
-				{"name": "xvdy", "mountpoint": null, "fstype": "linux_raid_member",
-					"children": [
-						{"name": "md2", "mountpoint": "/ais/3", "fstype": "xfs"}
-					]
-				},
-				{"name": "xvdz", "mountpoint": null, "fstype": "linux_raid_member",
-					"children": [
-						{"name": "md2", "mountpoint": "/ais/3", "fstype": "xfs"}
-					]
-				}
-			]
-		}
-	`)
-
-	type test struct {
-		desc      string
-		dev       string
-		diskCnt   int
-		diskNames []string
-	}
-	testSets := []test{
-		{"Single disk (no children)", "/dev/xvdi", 1, []string{"xvdi"}},
-		{"Single disk (with children)", "/dev/xvda1", 1, []string{"xvda"}},
-		{"Invalid device", "/dev/xvda7", 0, []string{}},
-		{"Device with 2 disks", "/dev/md2", 2, []string{"xvdz", "xvdy"}},
-	}
-
-	for _, tst := range testSets {
-		t.Log(tst.desc)
-		disks := ios.LsblkOutput2disks(out, tst.dev)
-		if len(disks) != tst.diskCnt {
-			t.Errorf("Expected %d disk(s) for %s but found %d (%v)",
-				tst.diskCnt, tst.dev, len(disks), disks)
-		}
-		if tst.diskCnt != 0 {
-			for _, disk := range tst.diskNames {
-				if _, ok := disks[disk]; !ok {
-					t.Errorf("%s is not detected for device %s (%v)", disk, tst.dev, disks)
-				}
-			}
-		}
 	}
 }
