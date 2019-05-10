@@ -113,9 +113,10 @@ const (
 	adminStatus  = "STATUS"
 	adminList    = "LIST"
 	taskDownload = "DOWNLOAD"
-	queueChSize  = 200
 
-	putInQueueTimeout = time.Second * 10
+	// Very big, because at the moment all requests (representing files to be downloaded) are stored in the queue
+	// TODO: make it smaller and generate requests on demand
+	queueChSize = 100000
 )
 
 var (
@@ -965,8 +966,6 @@ func (t *task) abort(statusMsg string, err error) {
 	dbErr := t.parent.db.addError(t.id, t.obj.Objname, statusMsg)
 	cmn.AssertNoErr(dbErr)
 
-	glog.Errorf("error occurred when downloading %s: %v", t, err)
-
 	t.finishedCh <- err
 }
 
@@ -1011,8 +1010,6 @@ func newQueue() *queue {
 }
 
 func (q *queue) put(t *task) (added bool, err error, errCode int) {
-	timer := time.NewTimer(putInQueueTimeout)
-
 	q.Lock()
 	defer q.Unlock()
 	if _, exists := q.m[t.request.uid()]; exists {
@@ -1023,10 +1020,9 @@ func (q *queue) put(t *task) (added bool, err error, errCode int) {
 	select {
 	case q.ch <- t:
 		break
-	case <-timer.C:
-		return false, fmt.Errorf("timeout when trying to put task %v in queue, try later", t), http.StatusRequestTimeout
+	default:
+		return false, fmt.Errorf("error trying to process task %v: queue is full, try again later", t), http.StatusBadRequest
 	}
-	timer.Stop()
 	q.m[t.request.uid()] = struct{}{}
 	return true, nil, 0
 }

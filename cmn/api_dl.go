@@ -20,9 +20,8 @@ type DlPostResp struct {
 }
 
 type DlStatusResp struct {
-	Finished   int     `json:"finished"`
-	Total      int     `json:"total"`
-	Percentage float64 `json:"percentage"`
+	Finished int `json:"finished"`
+	Total    int `json:"total"`
 
 	Aborted    bool `json:"aborted"`
 	NumPending int  `json:"num_pending"`
@@ -39,7 +38,8 @@ func (d *DlStatusResp) Print(verbose bool) string {
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)", d.Finished, d.Total, d.Percentage))
+	realFinished := d.Finished + len(d.Errs)
+	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.Total, 100*float64(realFinished)/float64(d.Total)))
 	if !verbose {
 		return sb.String()
 	}

@@ -165,12 +165,10 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 			finishedTasks = append(finishedTasks, stat.FinishedTasks...)
 			downloadErrs = append(downloadErrs, stat.Errs...)
 		}
-		pct := float64(finished) / float64(total) * 100
 
 		resp := cmn.DlStatusResp{
 			Finished:      finished,
 			Total:         total,
-			Percentage:    pct,
 			CurrentTasks:  currTasks,
 			FinishedTasks: finishedTasks,
 			Aborted:       aborted,

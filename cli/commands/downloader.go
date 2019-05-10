@@ -388,7 +388,7 @@ func (b *progressBar) updateBars(downloadStatus cmn.DlStatusResp) {
 		b.updateFileBar(newState, oldState)
 	}
 
-	b.updateTotalBar(downloadStatus.Finished)
+	b.updateTotalBar(downloadStatus.Finished + len(downloadStatus.Errs))
 }
 
 func (b *progressBar) updateFinishedFiles(fileStates []cmn.TaskDlInfo) {
@@ -417,7 +417,7 @@ func (b *progressBar) trackNewFile(state cmn.TaskDlInfo) {
 		state.Total,
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
-			decor.Name(state.Name, decor.WC{W: len(state.Name) + 1, C: decor.DSyncWidthR}),
+			decor.Name(state.Name+" ", decor.WC{W: len(state.Name) + 1, C: decor.DSyncWidthR}),
 			decor.Counters(decor.UnitKiB, "% .1f/% .1f", decor.WCSyncWidth),
 		),
 		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
