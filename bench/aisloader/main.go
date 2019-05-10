@@ -9,10 +9,12 @@
 // Examples:
 // 1. No put or get, just clean up:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
-// 2. Time based local bucket put only:
+// 2. Time based local bucket put only, with random objects names:
 //    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -bckprovider=local
-// 3. Put limit based cloud bucket mixed put(30%) and get(70%):
+// 3. Put limit based cloud bucket mixed put(30%) and get(70%), with random objects names:
 //    aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240
+// 4. Put files with names: hex({0..2000}{loaderid}), stop when 2000 files put into the bucket
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000
 
 package main
 
@@ -25,10 +27,14 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
@@ -42,8 +48,9 @@ const (
 	opGet
 	opConfig
 
-	myName        = "loader"
-	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
+	myName           = "loader"
+	dockerEnvFile    = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
+	randomObjnameLen = 32
 )
 
 type (
@@ -91,10 +98,15 @@ type (
 		statsdPort        int
 		statsShowInterval int
 
-		loaderID   int // when multiple of instances of loader running on the same host
-		putPct     int // % of puts, rest are gets
+		loaderID   uint64 // when multiple of instances of loader running in the same cluster
+		putPct     int    // % of puts, rest are gets
 		numWorkers int
 		batchSize  int // batch is used for bootstraping(list) and delete
+
+		loaderCnt     uint64
+		maxObjectsPut uint64
+		randomObjName bool
+		objNamePrefix string
 
 		verifyHash bool // verify xxHash during get
 		cleanUp    bool
@@ -150,6 +162,10 @@ var (
 	ip   string
 	port string
 
+	useRandomObjName bool
+	loaderIDMaskLen  uint
+	objnameCnt       atomic.Uint64
+
 	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
 	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
 	dockerPort   = envVars["PORT"]
@@ -169,11 +185,13 @@ func printUsage(f *flag.FlagSet) {
 		"\tTime based local bucket PUT only. Bucket is cleaned up by default",
 
 		"  aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240",
-		"\tPut limit based cloud bucket mixed PUT(30%) and GET(70%). Bucket is cleaned up by default",
+		"\tPut limit based cloud bucket mixed PUT(30%) and GET(70%), with random objects names. Bucket is cleaned up by default",
 
 		"  aisloader -bucket=nvais -cleanup=false -duration 10s -numworkers=3 -pctput=100 -bckprovider=local",
 		"  aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local",
 		"\tFirst command PUTs into local bucket with clean up disabled, leaving the bucket for the second command to test only GET performance",
+		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000 -objnamePrefix=\"aisloader\"",
+		"\tPut files with names: `aisloader/hex({0..2000}{loaderid})`, stop when 2000 files put into the bucket",
 	}
 	for i := 0; i < len(examples); i++ {
 		fmt.Println(examples[i])
@@ -183,6 +201,21 @@ func printUsage(f *flag.FlagSet) {
 	fmt.Println("Additional Commands: ")
 	fmt.Println("aisloader usage        Shows this menu")
 	fmt.Println()
+}
+
+func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
+	// take first bigger power of 2:
+	// example: for loaderCnt 13, mask length should be 4 (2^4 == 16 > 13)
+	res := cmn.FastLog2Ceil(totalLoaders)
+
+	if res%4 == 0 {
+		return res
+	}
+
+	// if result is not divisible by 4 add reduntant bytes
+	// so objectname is better readable in hex representation
+	// (then each aisloader has unique last characters, not just bytes)
+	return res + 4 - (res % 4)
 }
 
 func parseCmdLine() (params, error) {
@@ -212,7 +245,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify multiplicative suffix")
 	f.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
-	f.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
+	f.Uint64Var(&p.loaderID, "loaderid", 0, "ID to identify a loader when multiple instances of loader running in the same cluster")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
 	f.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
 	f.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
@@ -222,6 +255,17 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
 	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
 	f.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify multiplicative suffix; 0 = read the entire object")
+
+	// objects naming
+	f.Uint64Var(&p.maxObjectsPut, "maxObjectsPut", 0, "Maximum number of put objects")
+	f.Uint64Var(&p.loaderCnt, "loaderNum", 0,
+		"total number of aisloaders in the cluster running at the same time; optional, default 0 = the only aisloader instance for a cluster\n"+
+			"If larger than 0 consecutive hex characters used for naming objects instead of random 32 characters, with trailing loaderid characters (see examples)\n"+
+			"Has to be larger than loaderid")
+	f.BoolVar(&p.randomObjName, "randomObjName", true,
+		"If set, new objects get random name of length 32 characters (slow for large workloads); omitted when loaderIDMaskLen set\n"+
+			"If not set or omitted, consecutive hex characters used for naming objects, with trailing loaderid characters (see examples)")
+	f.StringVar(&p.objNamePrefix, "objnamePrefix", "", "Common prefix for all objects created by aisloader")
 
 	//Advanced Usage
 	f.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
@@ -294,6 +338,23 @@ func parseCmdLine() (params, error) {
 	if p.readLenStr != "" {
 		if p.readLen, err = cmn.S2B(p.readLenStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
+		}
+	}
+
+	if p.loaderCnt == 0 && p.randomObjName {
+		// default values for masks, randomObjName == true - use random objects names
+		useRandomObjName = true
+	} else {
+		if p.loaderID > p.loaderCnt {
+			return params{}, fmt.Errorf("loaderid has to be smaller than loaderNum")
+		}
+		loaderIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
+	}
+
+	if p.objNamePrefix != "" {
+		p.objNamePrefix = filepath.Clean(p.objNamePrefix)
+		if p.objNamePrefix[0] == '/' {
+			return params{}, fmt.Errorf("object name prefix can't start with /")
 		}
 	}
 
@@ -549,9 +610,18 @@ func main() {
 			if runParams.putPct == 0 {
 				workOrders <- newGetWorkOrder()
 			} else {
-				workOrders <- newPutWorkOrder()
+				var wo *workOrder
+				wo, err = newPutWorkOrder()
+				if err != nil {
+					break
+				}
+				workOrders <- wo
 			}
 		}
+	}
+
+	if err != nil {
+		goto DONE
 	}
 
 L:
@@ -570,7 +640,11 @@ L:
 				accumulatedStats.aggregate(intervalStats)
 				intervalStats = newStats(time.Now())
 			}
-			newWorkOrder()
+
+			if err := newWorkOrder(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, err.Error())
+				break L
+			}
 		case <-statsTicker.C:
 			if runParams.statsShowInterval > 0 {
 				accumulatedStats.aggregate(intervalStats)
@@ -587,6 +661,7 @@ L:
 		}
 	}
 
+DONE:
 	timer.Stop()
 	statsTicker.Stop()
 	close(workOrders)
@@ -847,9 +922,13 @@ func sendStatsdStats(s *sts) {
 	s.statsd.SendAll(&statsdC)
 }
 
-func newPutWorkOrder() *workOrder {
-	var size int64
+func newPutWorkOrder() (*workOrder, error) {
+	objName, err := putObjectname()
+	if err != nil {
+		return nil, err
+	}
 
+	var size int64
 	if runParams.maxSize == runParams.minSize {
 		size = runParams.minSize
 	} else {
@@ -862,9 +941,27 @@ func newPutWorkOrder() *workOrder {
 		bucket:      runParams.bucket,
 		bckProvider: runParams.bckProvider,
 		op:          opPut,
-		objName:     myName + "/" + tutils.FastRandomFilename(rnd, 32),
+		objName:     objName,
 		size:        size,
+	}, nil
+}
+
+func putObjectname() (string, error) {
+	if runParams.maxObjectsPut != 0 && objnameCnt.Load() == runParams.maxObjectsPut {
+		return "", fmt.Errorf("number of put objects reached maxObjectsPut limit (%d)", runParams.maxObjectsPut)
 	}
+
+	if useRandomObjName {
+		return tutils.FastRandomFilename(rnd, randomObjnameLen), nil
+	}
+
+	objectNumber := (objnameCnt.Inc() - 1) << loaderIDMaskLen
+	objectNumber |= runParams.loaderID
+
+	if runParams.objNamePrefix == "" {
+		return strconv.FormatUint(objectNumber, 16), nil
+	}
+	return runParams.objNamePrefix + "/" + strconv.FormatUint(objectNumber, 16), nil
 }
 
 func newGetWorkOrder() *workOrder {
@@ -890,14 +987,16 @@ func newGetConfigWorkOrder() *workOrder {
 	}
 }
 
-func newWorkOrder() {
+func newWorkOrder() (err error) {
 	var wo *workOrder
 
 	if runParams.getConfig {
 		wo = newGetConfigWorkOrder()
 	} else {
 		if rnd.Intn(99) < runParams.putPct {
-			wo = newPutWorkOrder()
+			if wo, err = newPutWorkOrder(); err != nil {
+				return err
+			}
 		} else {
 			wo = newGetWorkOrder()
 		}
@@ -906,6 +1005,7 @@ func newWorkOrder() {
 	if wo != nil {
 		workOrders <- wo
 	}
+	return nil
 }
 
 func completeWorkOrder(wo *workOrder) {
@@ -1024,6 +1124,6 @@ func cleanUp() {
 func bootStrap() error {
 	var err error
 
-	allObjects, err = tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, myName)
+	allObjects, err = tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
 	return err
 }

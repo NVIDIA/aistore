@@ -128,3 +128,20 @@ func DivCeil(a, b int64) int64 {
 	}
 	return d
 }
+
+// FastLog2 returns floor(log2(c))
+func FastLog2(c uint64) uint {
+	for i := uint(0); ; {
+		if c >>= 1; c == 0 {
+			return i
+		}
+		i++
+	}
+}
+
+func FastLog2Ceil(c uint64) uint {
+	if c == 0 {
+		return 0
+	}
+	return FastLog2(c-1) + 1
+}
