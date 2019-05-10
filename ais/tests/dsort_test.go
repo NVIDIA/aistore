@@ -19,9 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
-	sigar "github.com/cloudfoundry/gosigar"
 )
 
 const (
@@ -1503,8 +1503,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	t.Skip("test can take more than couple minutes, run it only when necessary")
 
 	var (
-		mem = sigar.Mem{}
-		m   = &metadata{
+		m = &metadata{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1517,7 +1516,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 		}
 	)
 
-	err := mem.Get()
+	mem, err := sys.Mem()
 	tassert.CheckFatal(t, err)
 
 	// Calculate number of shards to cause OOM and overestimate it to make sure

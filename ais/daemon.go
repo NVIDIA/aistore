@@ -188,6 +188,20 @@ func aisinit(version, build string) {
 
 	glog.Infof("git: %s | build-time: %s\n", version, build)
 
+	containerized := sys.Containerized()
+	cpus, limited := sys.NumCPU()
+	memStat, _ := sys.Mem()
+	if containerized {
+		glog.Infof("AIS started containerized")
+	}
+	if limited {
+		glog.Infof("Number of CPUs is restricted to %d CPUs", cpus)
+	} else {
+		glog.Infof("AIS use all available %d CPUs", cpus)
+	}
+	glog.Infof("Memory total: %s, free: %s(actual free %s)",
+		cmn.B2S(int64(memStat.Total), 0), cmn.B2S(int64(memStat.Free), 0), cmn.B2S(int64(memStat.ActualFree), 0))
+
 	// optimize GOMAXPROCS if the daemon is running inside a container with
 	// limited amount of memory and CPU
 	sys.UpdateMaxProcs()

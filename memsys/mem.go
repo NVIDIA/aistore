@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/sys"
-	sigar "github.com/cloudfoundry/gosigar"
 )
 
 // ===================== Theory Of Operations (TOO) =============================
@@ -273,11 +272,8 @@ func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64, sbufSize ..
 
 // returns an estimate for the current memory pressured expressed as one of the enumerated values
 func (r *Mem2) MemPressure() int {
-	mem := sigar.Mem{}
-	mem.Get()
-	swap := sigar.Swap{}
-	swap.Get()
-	if swap.Used > r.swap.Load() {
+	mem, _ := sys.Mem()
+	if mem.SwapUsed > r.swap.Load() {
 		r.Swapping.Store(SwappingMax)
 	}
 	if r.Swapping.Load() > 0 {
@@ -321,8 +317,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		}
 	}
 	// 2. compute minfree - mem size that must remain free at all times
-	mem := sigar.Mem{}
-	mem.Get()
+	mem, _ := sys.Mem()
 	if r.MinPctTotal > 0 {
 		x := mem.Total * uint64(r.MinPctTotal) / 100
 		if r.MinFree == 0 {
@@ -368,9 +363,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 
 	// 5. final construction steps
 	r.sorted = make([]sortpair, NumSlabs)
-	swap := sigar.Swap{}
-	swap.Get()
-	r.swap.Store(swap.Used)
+	r.swap.Store(mem.SwapUsed)
 	r.minDepth.Store(minDepth)
 	r.toGC.Store(0)
 
@@ -435,8 +428,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 		if spec.MinSize == 0 {
 			spec.MinSize = sizeToGC // using default
 		}
-		mem := sigar.Mem{}
-		mem.Get()
+		mem, _ := sys.Mem()
 		r.doGC(mem.ActualFree, spec.MinSize, spec.ToOS /* force */, false)
 	}
 }
@@ -449,8 +441,7 @@ func (r *Mem2) Run() error {
 		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl.Load()])
 	}
 	r.time.t = time.NewTimer(r.time.d)
-	mem := sigar.Mem{}
-	mem.Get()
+	mem, _ := sys.Mem()
 	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowWM), 2)
 	logMsg(fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d))
 	f := cmn.B2S(int64(mem.ActualFree), 2)
@@ -619,17 +610,14 @@ func (r *Mem2) work() {
 		depth int               // => current ring depth tbd
 		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
 	)
-	mem := sigar.Mem{}
-	mem.Get()
-	swap := sigar.Swap{}
-	swap.Get()
-	swapping := swap.Used > r.swap.Load()
+	mem, _ := sys.Mem()
+	swapping := mem.SwapUsed > r.swap.Load()
 	if swapping {
 		r.Swapping.Store(SwappingMax)
 	} else {
 		r.Swapping.Store(r.Swapping.Load() / 2)
 	}
-	r.swap.Store(swap.Used)
+	r.swap.Store(mem.SwapUsed)
 
 	r.doStats()
 

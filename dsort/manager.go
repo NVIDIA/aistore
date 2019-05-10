@@ -22,8 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-	sigar "github.com/cloudfoundry/gosigar"
 )
 
 var (
@@ -207,8 +207,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
 
 	// Memory watcher
-	mem := sigar.Mem{}
-	if err := mem.Get(); err != nil {
+	mem, err := sys.Mem()
+	if err != nil {
 		return err
 	}
 	maxMemoryToUse := calcMaxMemoryUsage(rs.MaxMemUsage, mem)
@@ -1018,7 +1018,7 @@ func (m *Manager) react(reaction, msg string) error {
 	}
 }
 
-func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sigar.Mem) uint64 {
+func calcMaxMemoryUsage(maxUsage cmn.ParsedQuantity, mem sys.MemStat) uint64 {
 	switch maxUsage.Type {
 	case cmn.QuantityPercent:
 		return maxUsage.Value * (mem.Total / 100)

@@ -10,17 +10,20 @@ const (
 	// to detect container vs hardware
 	rootProcess     = proc + "1/cgroup"
 	hostLoadAvgPath = proc + "loadavg"
+	hostMemPath     = proc + "meminfo"
 	// TODO: for later use
-	// hostMemPath         = proc + "meminfo"
 	// hostProcessStatPath = proc + "%s/stat"
 
 	// container stats
 
-	// TODO: for later use
 	// path to read all memory info for cgroup
-	// contMemPath = "/sys/fs/cgroup/memory/"
+	contMemPath = "/sys/fs/cgroup/memory/"
 	// path to read all CPU info for cgroup
 	contCPUPath = "/sys/fs/cgroup/cpu/"
+	// memory counters
+	contMemUsedPath  = contMemPath + "memory.usage_in_bytes"
+	contMemLimitPath = contMemPath + "memory.limit_in_bytes"
+	contMemStatPath  = contMemPath + "memory.stat"
 
 	// time for cgroup given by scheduler before throttling cgroup
 	contCPULimit = contCPUPath + "cpu.cfs_quota_us"

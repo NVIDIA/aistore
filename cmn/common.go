@@ -574,6 +574,30 @@ func ReadOneLine(filename string) (string, error) {
 	return line, err
 }
 
+// Read only the first line of a file and return it as uint64
+// Do not use for big files: it reads all the content and then extracts the first
+// line. Use for files that may contains a few lines with trailing EOL
+func ReadOneUint64(filename string) (uint64, error) {
+	line, err := ReadOneLine(filename)
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.ParseUint(line, 10, 64)
+	return val, err
+}
+
+// Read only the first line of a file and return it as int64
+// Do not use for big files: it reads all the content and then extracts the first
+// line. Use for files that may contains a few lines with trailing EOL
+func ReadOneInt64(filename string) (int64, error) {
+	line, err := ReadOneLine(filename)
+	if err != nil {
+		return 0, err
+	}
+	val, err := strconv.ParseInt(line, 10, 64)
+	return val, err
+}
+
 // Read a file line by line and call a callback for each line until the file
 // ends or a callback returns io.EOF
 func ReadLines(filename string, cb func(string) error) error {

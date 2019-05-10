@@ -68,11 +68,7 @@ func Containerized() bool {
 func ContainerNumCPU() (int, error) {
 	var quota, period uint64
 
-	line, err := cmn.ReadOneLine(contCPULimit)
-	if err != nil {
-		return 0, err
-	}
-	quotaInt, err := strconv.ParseInt(line, 10, 64)
+	quotaInt, err := cmn.ReadOneInt64(contCPULimit)
 	if err != nil {
 		return 0, err
 	}
@@ -81,11 +77,7 @@ func ContainerNumCPU() (int, error) {
 		return runtime.NumCPU(), nil
 	}
 	quota = uint64(quotaInt)
-	line, err = cmn.ReadOneLine(contCPUPeriod)
-	if err != nil {
-		return 0, err
-	}
-	period, err = strconv.ParseUint(line, 10, 64)
+	period, err = cmn.ReadOneUint64(contCPUPeriod)
 	if err != nil {
 		return 0, err
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
-	sigar "github.com/cloudfoundry/gosigar"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 const (
@@ -48,8 +48,8 @@ func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {
 }
 
 func (mw *memoryWatcher) freeMemory() uint64 {
-	curMem := sigar.Mem{}
-	if err := curMem.Get(); err != nil {
+	curMem, err := sys.Mem()
+	if err != nil {
 		return 0
 	}
 
@@ -57,8 +57,8 @@ func (mw *memoryWatcher) freeMemory() uint64 {
 }
 
 func (mw *memoryWatcher) watch() error {
-	mem := sigar.Mem{}
-	if err := mem.Get(); err != nil {
+	mem, err := sys.Mem()
+	if err != nil {
 		return err
 	}
 	mw.memoryUsed.Store(mem.ActualUsed)
@@ -84,8 +84,8 @@ func (mw *memoryWatcher) watchReserved() {
 	// unfortunately it can happen when we underestimate the amount of memory
 	// which we will use when extracting compressed file.
 	for range mw.reservedTicker.C {
-		curMem := sigar.Mem{}
-		if err := curMem.Get(); err == nil {
+		curMem, err := sys.Mem()
+		if err == nil {
 			mw.memoryUsed.Store(curMem.ActualUsed)
 
 			unreserve := true
@@ -110,7 +110,7 @@ func (mw *memoryWatcher) watchReserved() {
 // `Shards`, `RecordContents`, `ExtractionPaths` etc. All these structures
 // require memory, sometimes it can be counted in GBs. That is why we also need
 // excess watcher so that it prevents memory overuse.
-func (mw *memoryWatcher) watchExcess(memStat sigar.Mem) {
+func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 	buf, slab := mem.AllocFromSlab2(cmn.MiB)
 	defer slab.Free(buf)
 
@@ -118,8 +118,8 @@ func (mw *memoryWatcher) watchExcess(memStat sigar.Mem) {
 	for {
 		select {
 		case <-mw.excessTicker.C:
-			curMem := sigar.Mem{}
-			if err := curMem.Get(); err != nil {
+			curMem, err := sys.Mem()
+			if err != nil {
 				continue
 			}
 
