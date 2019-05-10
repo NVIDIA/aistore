@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -618,8 +619,13 @@ func (lom *LOM) FromFS() (errstr string) {
 	lom.exists = true
 	if _, err := lom.lmfs(true); err != nil {
 		lom.exists = false
+		if err == syscall.ENODATA || err == syscall.ENOENT {
+			if _, errex := os.Stat(lom.FQN); os.IsNotExist(errex) {
+				return
+			}
+		}
 		if !os.IsNotExist(err) {
-			errstr = fmt.Sprintf("%s[%s]: errmeta %v", lom, lom.FQN, err)
+			errstr = fmt.Sprintf("%s: errmeta %v", lom.StringEx(), err)
 			lom.T.FSHC(err, lom.FQN)
 		}
 		return
@@ -629,13 +635,13 @@ func (lom *LOM) FromFS() (errstr string) {
 	if err != nil {
 		lom.exists = false
 		if !os.IsNotExist(err) {
-			errstr = fmt.Sprintf("%s[%s]: err %v", lom, lom.FQN, err)
+			errstr = fmt.Sprintf("%s: errstat %v", lom.StringEx(), err)
 			lom.T.FSHC(err, lom.FQN)
 		}
 		return
 	}
 	if lom.md.size != finfo.Size() { // corruption or tampering
-		errstr = fmt.Sprintf("%s[%s]: invalid size (%d != %d)", lom, lom.FQN, lom.md.size, finfo.Size())
+		errstr = fmt.Sprintf("%s: errsize (%d != %d)", lom.StringEx(), lom.md.size, finfo.Size())
 		return
 	}
 	atime := ios.GetATime(finfo)

@@ -2592,15 +2592,14 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled {
 		return
 	}
-	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
 	if !cmn.IsIOError(err) {
 		return
 	}
+	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(filepath)
 	if mpathInfo == nil {
 		return
 	}
-
 	keyName := mpathInfo.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsdC.Send(keyName+".io.errors", 1, metric{statsd.Counter, "count", 1})
