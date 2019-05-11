@@ -147,3 +147,43 @@ func validateBucketName(bucket string) bool {
 	}
 	return false
 }
+
+//
+// access perms
+//
+
+func (m *BMD) AllowGET(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "GET", cmn.AccessGET, local)
+}
+func (m *BMD) AllowHEAD(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "HEAD", cmn.AccessHEAD, local)
+}
+func (m *BMD) AllowPUT(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "PUT", cmn.AccessPUT, local)
+}
+func (m *BMD) AllowColdGET(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "cold-GET", cmn.AccessColdGET, local)
+}
+func (m *BMD) AllowDELETE(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "DELETE", cmn.AccessDELETE, local)
+}
+
+func (m *BMD) allow(b string, bprops []*cmn.BucketProps, oper string, bits uint64, local bool) (err error) {
+	var p *cmn.BucketProps
+	if len(bprops) > 0 {
+		p = bprops[0]
+	} else {
+		p, _ = m.Get(b, local)
+		if p == nil { // handle non-existence elsewhere
+			return
+		}
+	}
+	if p.AccessAttrs == cmn.AllowAnyAccess {
+		return
+	}
+	if (p.AccessAttrs & bits) != 0 {
+		return
+	}
+	err = cmn.NewBucketAccessDenied(m.Bstring(b, local), oper, p.AccessAttrs)
+	return
+}

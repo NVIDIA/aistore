@@ -768,13 +768,14 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	return
 }
 
-func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bckIsLocal, ok bool) {
+func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bmd *bucketMD, local bool) {
 	var err error
-	if bckIsLocal, err = h.bmdowner.get().ValidateBucket(bucket, bckProvider); err != nil {
+	bmd = h.bmdowner.get()
+	if local, err = bmd.ValidateBucket(bucket, bckProvider); err != nil {
 		h.invalmsghdlr(w, r, err.Error())
-		return
+		return nil, false
 	}
-	return bckIsLocal, true
+	return
 }
 
 func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err error) {

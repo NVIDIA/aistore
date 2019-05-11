@@ -8,9 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
-	"regexp"
-	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -139,9 +136,9 @@ const (
 	HeaderCloudProvider = "cloud_provider" // from Cloud Provider enum
 
 	// tiering
-	HeaderNextTierURL = "next_tier_url" // URL of the next tier in a AIStore multi-tier environment
-	HeaderReadPolicy  = "read_policy"   // Policy used for reading in a AIStore multi-tier environment
-	HeaderWritePolicy = "write_policy"  // Policy used for writing in a AIStore multi-tier environment
+	HeaderNextTierURL = "tier.next_url"     // URL of the next tier in a AIStore multi-tier environment
+	HeaderReadPolicy  = "tier.read_policy"  // Policy used for reading in a AIStore multi-tier environment
+	HeaderWritePolicy = "tier.write_policy" // Policy used for writing in a AIStore multi-tier environment
 
 	// bucket props
 	HeaderBucketChecksumType    = "cksum.type"              // Checksum type used for objects in the bucket
@@ -153,7 +150,7 @@ const (
 	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true
 	HeaderBucketLRULowWM        = "lru.lowwm"               // Capacity usage low water mark
 	HeaderBucketLRUHighWM       = "lru.highwm"              // Capacity usage high water mark
-	HeaderBucketDontEvictTime   = "lru.dont_evict_time"     // Enforces an eviction-free time period between [atime, atime+dontevicttime]
+	HeaderBucketDontEvictTime   = "lru.dont_evict_time"     // eviction-free time period [atime, atime+dontevicttime]
 	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"   // Minimum time to update the capacity
 	HeaderBucketMirrorEnabled   = "mirror.enabled"          // will only generate local copies when set to true
 	HeaderBucketCopies          = "mirror.copies"           // # local copies
@@ -162,7 +159,8 @@ const (
 	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
 	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
-	HeaderRebalanceEnabled      = "rebalance.enabled"       // starts rebalance automatically on Smap/Mountpath changes when set to true
+	HeaderRebalanceEnabled      = "rebalance.enabled"       // true: rebalance automatically on Smap/Mountpath changes
+	HeaderBucketAccessAttrs     = "aattrs"                  // Bucket access attributes
 
 	// object meta
 	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
@@ -406,441 +404,36 @@ const (
 	Target = "target"
 )
 
-// Download POST result returned to the user
-type DlPostResp struct {
-	ID string `json:"id"`
-}
-
-type DlStatusResp struct {
-	Finished   int     `json:"finished"`
-	Total      int     `json:"total"`
-	Percentage float64 `json:"percentage"`
-
-	Aborted    bool `json:"aborted"`
-	NumPending int  `json:"num_pending"`
-
-	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
-	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
-	Errs          []TaskErrInfo `json:"download_errors,omitempty"`
-}
-
-func (d *DlStatusResp) Print(verbose bool) string {
-	if d.Aborted {
-		return "Download was aborted."
-	}
-
-	var sb strings.Builder
-
-	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.0f%%)", d.Finished, d.Total, d.Percentage))
-	if !verbose {
-		return sb.String()
-	}
-
-	if len(d.CurrentTasks) != 0 {
-		sb.WriteString("\n")
-		sb.WriteString("Progress of files that are currently being downloaded:\n")
-		for _, task := range d.CurrentTasks {
-			sb.WriteString(fmt.Sprintf("\t%s: %s\n", task.Name, B2S(task.Downloaded, 2))) // TODO: print total too
-		}
-	}
-
-	return sb.String()
-}
-
-// Summary info of the download job
-// FIXME: add more stats
-type DlJobInfo struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	NumPending  int    `json:"num_pending"`
-	Aborted     bool   `json:"aborted"`
-}
-
-func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
-	j.NumPending += rhs.NumPending
-}
-
-func (j *DlJobInfo) String() string {
-	var sb strings.Builder
-
-	sb.WriteString(j.ID)
-
-	if j.Description != "" {
-		sb.WriteString(fmt.Sprintf(" (%s)", j.Description))
-	}
-
-	sb.WriteString(": ")
-
-	if j.NumPending == 0 {
-		sb.WriteString("finished")
-	} else {
-		sb.WriteString(fmt.Sprintf("%d files still being downloaded", j.NumPending))
-	}
-
-	return sb.String()
-}
-
-type DlBase struct {
-	Description string `json:"description"`
-	Bucket      string `json:"bucket"`
-	BckProvider string `json:"bprovider"`
-	Timeout     string `json:"timeout"`
-}
-
-func (b *DlBase) InitWithQuery(query url.Values) {
-	if b.Bucket == "" {
-		b.Bucket = query.Get(URLParamBucket)
-	}
-	b.BckProvider = query.Get(URLParamBckProvider)
-	b.Timeout = query.Get(URLParamTimeout)
-	b.Description = query.Get(URLParamDescription)
-}
-
-func (b *DlBase) AsQuery() url.Values {
-	query := url.Values{}
-	if b.Bucket != "" {
-		query.Add(URLParamBucket, b.Bucket)
-	}
-	if b.BckProvider != "" {
-		query.Add(URLParamBckProvider, b.BckProvider)
-	}
-	if b.Timeout != "" {
-		query.Add(URLParamTimeout, b.Timeout)
-	}
-	if b.Description != "" {
-		query.Add(URLParamDescription, b.Description)
-	}
-	return query
-}
-
-func (b *DlBase) Validate() error {
-	if b.Bucket == "" {
-		return fmt.Errorf("missing the %q which is required", URLParamBucket)
-	}
-	if b.Timeout != "" {
-		if _, err := time.ParseDuration(b.Timeout); err != nil {
-			return fmt.Errorf("failed to parse timeout field: %v", err)
-		}
-	}
-	return nil
-}
-
-type DlObj struct {
-	Objname   string `json:"objname"`
-	Link      string `json:"link"`
-	FromCloud bool   `json:"from_cloud"`
-}
-
-func (b *DlObj) Validate() error {
-	if b.Objname == "" {
-		objName := path.Base(b.Link)
-		if objName == "." || objName == "/" {
-			return fmt.Errorf("can not extract a valid %q from the provided download link", URLParamObjName)
-		}
-		b.Objname = objName
-	}
-	if b.Link == "" && !b.FromCloud {
-		return fmt.Errorf("missing the %q from the request body", URLParamLink)
-	}
-	if b.Objname == "" {
-		return fmt.Errorf("missing the %q from the request body", URLParamObjName)
-	}
-	return nil
-}
-
-// Internal status/delete request body
-type DlAdminBody struct {
-	ID    string `json:"id"`
-	Regex string `json:"regex"`
-}
-
-func (b *DlAdminBody) InitWithQuery(query url.Values) {
-	b.ID = query.Get(URLParamID)
-	b.Regex = query.Get(URLParamRegex)
-}
-
-func (b *DlAdminBody) AsQuery() url.Values {
-	query := url.Values{}
-	if b.ID != "" {
-		query.Add(URLParamID, b.ID)
-	}
-	if b.Regex != "" {
-		query.Add(URLParamRegex, b.Regex)
-	}
-	return query
-}
-
-func (b *DlAdminBody) Validate(requireID bool) error {
-	if b.ID != "" && b.Regex != "" {
-		return fmt.Errorf("regex %q defined at the same time as id %q", URLParamRegex, URLParamID)
-	} else if b.Regex != "" {
-		if _, err := regexp.CompilePOSIX(b.Regex); err != nil {
-			return err
-		}
-	} else if b.ID == "" && requireID {
-		return fmt.Errorf("ID not specified")
-	}
-	return nil
-}
-
-// Internal download request body
-type DlBody struct {
-	DlBase
-	ID   string  `json:"id"`
-	Objs []DlObj `json:"objs"`
-
-	Aborted bool `json:"aborted"`
-}
-
-func (b *DlBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	if b.ID == "" {
-		return fmt.Errorf("missing %q, something went wrong", URLParamID)
-	}
-	if b.Aborted {
-		// used to store abort status in db, should be unset
-		return fmt.Errorf("invalid flag 'aborteded'")
-	}
-	for _, obj := range b.Objs {
-		if err := obj.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *DlBody) String() string {
-	return fmt.Sprintf("%s, id=%q", b.DlBase, b.ID)
-}
-
-type TaskInfoByName []TaskDlInfo
-
-func (t TaskInfoByName) Len() int           { return len(t) }
-func (t TaskInfoByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t TaskInfoByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
-
-// Info about a task that is currently or has been downloaded by one of the joggers
-type TaskDlInfo struct {
-	Name       string `json:"name"`
-	Downloaded int64  `json:"downloaded"`
-	Total      int64  `json:"total,omitempty"`
-
-	StartTime time.Time `json:"start_time,omitempty"`
-	EndTime   time.Time `json:"end_time,omitempty"`
-
-	Running bool `json:"running"`
-}
-
-type TaskErrByName []TaskErrInfo
-
-func (t TaskErrByName) Len() int           { return len(t) }
-func (t TaskErrByName) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t TaskErrByName) Less(i, j int) bool { return t[i].Name < t[j].Name }
-
-type TaskErrInfo struct {
-	Name string `json:"name"`
-	Err  string `json:"error"`
-}
-
-// Single request
-type DlSingleBody struct {
-	DlBase
-	DlObj
-}
-
-func (b *DlSingleBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Link = query.Get(URLParamLink)
-	b.Objname = query.Get(URLParamObjName)
-}
-
-func (b *DlSingleBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(URLParamLink, b.Link)
-	query.Add(URLParamObjName, b.Objname)
-	return query
-}
-
-func (b *DlSingleBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	if err := b.DlObj.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (b *DlSingleBody) ExtractPayload() (SimpleKVs, error) {
-	objects := make(SimpleKVs, 1)
-	objects[b.Objname] = b.Link
-	return objects, nil
-}
-
-func (b *DlSingleBody) Describe() string {
-	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bucket, b.Objname)
-}
-
-func (b *DlSingleBody) String() string {
-	return fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
-}
-
-// Range request
-type DlRangeBody struct {
-	DlBase
-	Template string `json:"template"`
-	Subdir   string `json:"subdir"`
-}
-
-func (b *DlRangeBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Template = query.Get(URLParamTemplate)
-	b.Subdir = query.Get(URLParamSubdir)
-}
-
-func (b *DlRangeBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(URLParamTemplate, b.Template)
-	if b.Subdir != "" {
-		query.Add(URLParamSubdir, b.Subdir)
-	}
-	return query
-}
-
-func (b *DlRangeBody) Validate() error {
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	if b.Template == "" {
-		return fmt.Errorf("no %q for range found, %q is required", URLParamTemplate, URLParamTemplate)
-	}
-	return nil
-}
-
-func (b *DlRangeBody) ExtractPayload() (SimpleKVs, error) {
-	pt, err := ParseBashTemplate(b.Template)
-	if err != nil {
-		return nil, err
-	}
-
-	objects := make(SimpleKVs, pt.Count())
-	linksIt := pt.Iter()
-	for link, hasNext := linksIt(); hasNext; link, hasNext = linksIt() {
-		objName := path.Join(b.Subdir, path.Base(link))
-		objects[objName] = link
-	}
-	return objects, nil
-}
-
-func (b *DlRangeBody) Describe() string {
-	return fmt.Sprintf("%s -> %s", b.Template, b.Bucket)
-}
-
-func (b *DlRangeBody) String() string {
-	return fmt.Sprintf("bucket: %q, template: %q", b.Bucket, b.Template)
-}
-
-// Multi request
-type DlMultiBody struct {
-	DlBase
-}
-
-func (b *DlMultiBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-}
-
-func (b *DlMultiBody) Validate(body []byte) error {
-	if len(body) == 0 {
-		return errors.New("body should not be empty")
-	}
-
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (b *DlMultiBody) ExtractPayload(objectsPayload interface{}) (SimpleKVs, error) {
-	objects := make(SimpleKVs, 10)
-	switch ty := objectsPayload.(type) {
-	case map[string]interface{}:
-		for key, val := range ty {
-			switch v := val.(type) {
-			case string:
-				objects[key] = v
-			default:
-				return nil, fmt.Errorf("values in map should be strings, found: %T", v)
-			}
-		}
-	case []interface{}:
-		// process list of links
-		for _, val := range ty {
-			switch link := val.(type) {
-			case string:
-				objName := path.Base(link)
-				if objName == "." || objName == "/" {
-					// should we continue and let the use worry about this after?
-					return nil, fmt.Errorf("can not extract a valid `object name` from the provided download link: %q", link)
-				}
-				objects[objName] = link
-			default:
-				return nil, fmt.Errorf("values in array should be strings, found: %T", link)
-			}
-		}
-	default:
-		return nil, fmt.Errorf("JSON body should be map (string -> string) or array of strings, found: %T", ty)
-	}
-	return objects, nil
-}
-
-func (b *DlMultiBody) Describe() string {
-	return fmt.Sprintf("multi-download -> %s", b.Bucket)
-}
-
-func (b *DlMultiBody) String() string {
-	return fmt.Sprintf("bucket: %q", b.Bucket)
-}
-
-// Cloud request
-type DlCloudBody struct {
-	DlBase
-	Prefix string `json:"prefix"`
-	Suffix string `json:"suffix"`
-}
-
-func (b *DlCloudBody) InitWithQuery(query url.Values) {
-	b.DlBase.InitWithQuery(query)
-	b.Prefix = query.Get(URLParamPrefix)
-	b.Suffix = query.Get(URLParamSuffix)
-}
-
-func (b *DlCloudBody) Validate(bckIsLocal bool) error {
-	if bckIsLocal {
-		return errors.New("bucket download requires cloud bucket")
-	}
-	if err := b.DlBase.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (b *DlCloudBody) AsQuery() url.Values {
-	query := b.DlBase.AsQuery()
-	query.Add(URLParamPrefix, b.Prefix)
-	query.Add(URLParamSuffix, b.Suffix)
-	return query
-}
-
-func (b *DlCloudBody) Describe() string {
-	return fmt.Sprintf("cloud prefetch -> %s", b.Bucket)
-}
-
 const (
 	RWPolicyCloud    = "cloud"
 	RWPolicyNextTier = "next_tier"
 )
+
+// bucket and object access attrs and [TODO] some of their popular combinations
+const (
+	AccessGET = 1 << iota
+	AccessHEAD
+	AccessPUT
+	AccessColdGET
+	AccessDELETE
+
+	AllowAnyAccess = 0
+	AllowAllAccess = ^uint64(0)
+
+	AllowAccess = "allow"
+	DenyAccess  = "deny"
+)
+
+func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
+	if aattr == AllowAnyAccess {
+		aattr = AllowAllAccess
+	}
+	if action == AllowAccess {
+		return aattr | bits
+	}
+	Assert(action == DenyAccess)
+	return aattr & (AllowAllAccess ^ bits)
+}
 
 // BucketProps defines the configuration of the bucket with regard to
 // its type, checksum, and LRU. These characteristics determine its behavior
@@ -856,17 +449,8 @@ type BucketProps struct {
 	// Values: "all", "cloud", "local" or "none".
 	Versioning VersionConf `json:"versioning,omitempty"`
 
-	// NextTierURL is an absolute URI corresponding to the primary proxy
-	// of the next tier configured for the bucket specified
-	NextTierURL string `json:"next_tier_url,omitempty"`
-
-	// ReadPolicy determines if a read will be from cloud or next tier
-	// specified by NextTierURL. Default: "next_tier"
-	ReadPolicy string `json:"read_policy,omitempty"`
-
-	// WritePolicy determines if a write will be to cloud or next tier
-	// specified by NextTierURL. Default: "cloud"
-	WritePolicy string `json:"write_policy,omitempty"`
+	// tier location and tier/cloud policies
+	Tiering TierConf `json:"tier,omitempty"`
 
 	// Cksum is the embedded struct of the same name
 	Cksum CksumConf `json:"cksum"`
@@ -883,8 +467,25 @@ type BucketProps struct {
 	// Rebalance defines auto-rebalance policy for the bucket
 	Rebalance RebalanceConf `json:"rebalance"`
 
+	// Bucket access attributes - see Allow* above
+	AccessAttrs uint64 `json:"aattrs"`
+
 	// unique bucket ID
 	BID uint64
+}
+
+type TierConf struct {
+	// NextTierURL is an absolute URI corresponding to the primary proxy
+	// of the next tier configured for the bucket specified
+	NextTierURL string `json:"next_url,omitempty"`
+
+	// ReadPolicy determines if a read will be from cloud or next tier
+	// specified by NextTierURL. Default: "next_tier"
+	ReadPolicy string `json:"read_policy,omitempty"`
+
+	// WritePolicy determines if a write will be to cloud or next tier
+	// specified by NextTierURL. Default: "cloud"
+	WritePolicy string `json:"write_policy,omitempty"`
 }
 
 // ECConfig - per-bucket erasure coding configuration
@@ -919,25 +520,26 @@ type ObjectProps struct {
 
 func DefaultBucketProps() *BucketProps {
 	c := GCO.Clone()
-
 	c.Cksum.Type = PropInherit
 	return &BucketProps{
-		Cksum:      c.Cksum,
-		LRU:        c.LRU,
-		Mirror:     c.Mirror,
-		Versioning: c.Ver,
-		Rebalance:  c.Rebalance,
+		Cksum:       c.Cksum,
+		LRU:         c.LRU,
+		Mirror:      c.Mirror,
+		Versioning:  c.Ver,
+		Rebalance:   c.Rebalance,
+		AccessAttrs: AllowAllAccess,
 	}
 }
 
+// FIXME: *to = *from
 func (to *BucketProps) CopyFrom(from *BucketProps) {
-	to.NextTierURL = from.NextTierURL
+	to.Tiering.NextTierURL = from.Tiering.NextTierURL
 	to.CloudProvider = from.CloudProvider
-	if from.ReadPolicy != "" {
-		to.ReadPolicy = from.ReadPolicy
+	if from.Tiering.ReadPolicy != "" {
+		to.Tiering.ReadPolicy = from.Tiering.ReadPolicy
 	}
-	if from.WritePolicy != "" {
-		to.WritePolicy = from.WritePolicy
+	if from.Tiering.WritePolicy != "" {
+		to.Tiering.WritePolicy = from.Tiering.WritePolicy
 	}
 	if from.Cksum.Type != "" {
 		to.Cksum.Type = from.Cksum.Type
@@ -952,52 +554,52 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 			to.Versioning.Type = from.Versioning.Type
 		}
 	}
-
 	to.LRU = from.LRU
 	to.Mirror = from.Mirror
 	to.EC = from.EC
 	to.Rebalance = from.Rebalance
+	to.AccessAttrs = from.AccessAttrs
 }
 
 func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluster func(string) bool) error {
-	if bp.NextTierURL != "" {
-		if _, err := url.ParseRequestURI(bp.NextTierURL); err != nil {
-			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.NextTierURL, err)
+	if bp.Tiering.NextTierURL != "" {
+		if _, err := url.ParseRequestURI(bp.Tiering.NextTierURL); err != nil {
+			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.Tiering.NextTierURL, err)
 		}
-		if !urlOutsideCluster(bp.NextTierURL) {
-			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.NextTierURL)
+		if !urlOutsideCluster(bp.Tiering.NextTierURL) {
+			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.Tiering.NextTierURL)
 		}
 	}
 	if err := validateCloudProvider(bp.CloudProvider, bckIsLocal); err != nil {
 		return err
 	}
-	if bp.ReadPolicy != "" && bp.ReadPolicy != RWPolicyCloud && bp.ReadPolicy != RWPolicyNextTier {
-		return fmt.Errorf("invalid read policy: %s", bp.ReadPolicy)
+	if bp.Tiering.ReadPolicy != "" && bp.Tiering.ReadPolicy != RWPolicyCloud && bp.Tiering.ReadPolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid read policy: %s", bp.Tiering.ReadPolicy)
 	}
-	if bp.ReadPolicy == RWPolicyCloud && bckIsLocal {
+	if bp.Tiering.ReadPolicy == RWPolicyCloud && bckIsLocal {
 		return fmt.Errorf("read policy for local bucket cannot be '%s'", RWPolicyCloud)
 	}
-	if bp.WritePolicy != "" && bp.WritePolicy != RWPolicyCloud && bp.WritePolicy != RWPolicyNextTier {
-		return fmt.Errorf("invalid write policy: %s", bp.WritePolicy)
+	if bp.Tiering.WritePolicy != "" && bp.Tiering.WritePolicy != RWPolicyCloud && bp.Tiering.WritePolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid write policy: %s", bp.Tiering.WritePolicy)
 	}
-	if bp.WritePolicy == RWPolicyCloud && bckIsLocal {
+	if bp.Tiering.WritePolicy == RWPolicyCloud && bckIsLocal {
 		return fmt.Errorf("write policy for local bucket cannot be '%s'", RWPolicyCloud)
 	}
-	if bp.NextTierURL != "" {
+	if bp.Tiering.NextTierURL != "" {
 		if bp.CloudProvider == "" {
 			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
 				ProviderAmazon, ProviderGoogle, ProviderAIS)
 		}
-		if bp.ReadPolicy == "" {
-			bp.ReadPolicy = RWPolicyNextTier
+		if bp.Tiering.ReadPolicy == "" {
+			bp.Tiering.ReadPolicy = RWPolicyNextTier
 		}
-		if bp.WritePolicy == "" && !bckIsLocal {
-			bp.WritePolicy = RWPolicyCloud
-		} else if bp.WritePolicy == "" && bckIsLocal {
-			bp.WritePolicy = RWPolicyNextTier
+		if bp.Tiering.WritePolicy == "" {
+			bp.Tiering.WritePolicy = RWPolicyNextTier
+			if !bckIsLocal {
+				bp.Tiering.WritePolicy = RWPolicyCloud
+			}
 		}
 	}
-
 	validationArgs := &ValidationArgs{BckIsLocal: bckIsLocal, TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
 	for _, validator := range validators {
@@ -1042,8 +644,30 @@ func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
 }
 
 // Common errors
-
 var (
 	ErrorBucketAlreadyExists     = errors.New("bucket already exists")
 	ErrorCloudBucketDoesNotExist = errors.New("cloud bucket does not exist")
 )
+
+type errAccessDenied struct {
+	entity      string
+	operation   string
+	accessAttrs uint64
+}
+
+func (e *errAccessDenied) String() string {
+	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
+}
+
+type BucketAccessDenied struct{ errAccessDenied }
+type ObjectAccessDenied struct{ errAccessDenied }
+
+func (e *BucketAccessDenied) Error() string { return "bucket " + e.String() }
+func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
+
+func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDenied {
+	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
+}
+func NewObjectAccessDenied(name, oper string, aattrs uint64) *ObjectAccessDenied {
+	return &ObjectAccessDenied{errAccessDenied{name, oper, aattrs}}
+}

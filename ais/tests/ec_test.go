@@ -1486,8 +1486,8 @@ func TestECXattrs(t *testing.T) {
 func TestECDestroyBucket(t *testing.T) {
 	const (
 		objPatt  = "obj-destroy-bck-%04d"
-		numFiles = 1000
-		concurr  = 50
+		numFiles = 100
+		concurr  = 10
 	)
 
 	if testing.Short() {

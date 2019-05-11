@@ -138,7 +138,6 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
 	bucketmd.add("bucket1", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
-		NextTierURL:   "http://foo.com",
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
@@ -579,7 +578,6 @@ func TestMetaSyncData(t *testing.T) {
 	})
 	bucketmd.add("bucket2", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
-		NextTierURL:   "http://localhost:8082",
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},

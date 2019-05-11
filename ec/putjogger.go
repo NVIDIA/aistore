@@ -87,7 +87,7 @@ func (c *putJogger) ec(req *Request) {
 	}
 
 	if err != nil {
-		glog.Errorf("Error occurred during %s object [%s/%s], fqn: %q, err: %v",
+		glog.Errorf("Error %s object [%s/%s], fqn: %q, err: %v",
 			act, req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
 	}
 

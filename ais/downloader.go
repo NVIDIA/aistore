@@ -354,21 +354,25 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 		cloudPayload   = &cmn.DlCloudBody{}
 		objectsPayload interface{}
 
-		bckIsLocal, fromCloud, ok bool
-
 		description string
 		bucket      string
+		bmd         *bucketMD
+
+		bckIsLocal, fromCloud bool
 	)
 
 	payload.InitWithQuery(query)
 	bucket = payload.Bucket
 
-	if bckIsLocal, ok = p.validateBucket(w, r, bucket, payload.BckProvider); !ok {
+	if bmd, bckIsLocal = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
+		return
+	}
+	if err := bmd.AllowColdGET(bucket, bckIsLocal); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if !bckIsLocal {
-		_, exists := p.bmdowner.Get().Get(bucket, false)
-
+		_, exists := bmd.Get(bucket, false)
 		if !exists {
 			if err := p.handleUnknownCB(bucket); err != nil {
 				p.invalmsghdlr(w, r, err.Error())

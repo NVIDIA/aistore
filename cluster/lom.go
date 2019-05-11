@@ -57,7 +57,7 @@ type (
 		// runtime context
 		T          Target
 		config     *cmn.Config
-		bucketMD   *BMD
+		bmd        *BMD
 		BckProps   *cmn.BucketProps
 		ParsedFQN  fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		BckIsLocal bool         // the bucket (that contains this object) is local
@@ -85,7 +85,7 @@ func init() {
 //
 
 func (lom *LOM) Uname() string               { return lom.md.uname }
-func (lom *LOM) BMD() *BMD                   { return lom.bucketMD }
+func (lom *LOM) BMD() *BMD                   { return lom.bmd }
 func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
 func (lom *LOM) SetCopyFQN(cpyFQN []string)  { lom.md.copyFQN = cpyFQN }
 func (lom *LOM) AddXcopy(cpyfqn string)      { lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn) }
@@ -103,7 +103,7 @@ func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
 func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
 func (lom *LOM) HasCopies() bool             { return !lom.IsCopy() && lom.NumCopies() > 1 }
 func (lom *LOM) NumCopies() int              { return len(lom.md.copyFQN) + 1 }
-func (lom *LOM) SetBMD(bmd *BMD)             { lom.bucketMD = bmd } // NOTE: internal use!
+func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }      // NOTE: internal use!
 func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid } // ditto
 func (lom *LOM) IsCopy() bool {
 	return len(lom.md.copyFQN) == 1 && lom.md.copyFQN[0] == lom.HrwFQN // is a local copy of an object
@@ -209,7 +209,7 @@ func (lom *LOM) String() string { return lom._string(lom.Bucket) }
 func (lom *LOM) _string(b string) string {
 	var (
 		a string
-		s = fmt.Sprintf("lom[%s/%s fs=%s", b, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
+		s = fmt.Sprintf("o[%s/%s fs=%s", b, lom.Objname, lom.ParsedFQN.MpathInfo.FileSystem)
 	)
 	if glog.FastV(4, glog.SmoduleCluster) {
 		s += fmt.Sprintf("(%s)", lom.FQN)
@@ -224,7 +224,7 @@ func (lom *LOM) _string(b string) string {
 		}
 	}
 	if !lom.loaded {
-		a = "(uninitialized)"
+		a = "(-)"
 	} else if !lom.exists {
 		a = "(x)"
 	} else {
@@ -232,23 +232,25 @@ func (lom *LOM) _string(b string) string {
 			a += "(misplaced)"
 		}
 		if lom.IsCopy() {
-			a += "(is-copy)"
+			a += "(copy)"
 		}
 		if n := lom.NumCopies(); n > 1 {
 			a += fmt.Sprintf("(%d-copies)", n)
 		}
 		if lom.BadCksum {
-			a += "(bad-checksum)"
+			a += "(bad-cksum)"
 		}
 	}
 	return s + a + "]"
 }
 
+func (lom *LOM) bckString() string { return lom.bmd.Bstring(lom.Bucket, lom.BckIsLocal) }
+
 func (lom *LOM) StringEx() string {
-	if lom.bucketMD == nil {
+	if lom.bmd == nil {
 		return lom.String()
 	}
-	return lom._string(lom.bucketMD.Bstring(lom.Bucket, lom.BckIsLocal))
+	return lom._string(lom.bckString())
 }
 
 func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
@@ -473,12 +475,12 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 	}
 	lom.md.uname = Bo2Uname(lom.Bucket, lom.Objname)
 	// bucketmd, local, bprops
-	lom.bucketMD = bowner.Get()
+	lom.bmd = bowner.Get()
 	if bckProvider == "" {
-		lom.BckIsLocal = lom.bucketMD.IsLocal(lom.Bucket)
+		lom.BckIsLocal = lom.bmd.IsLocal(lom.Bucket)
 		bckProvider = cmn.BckProviderFromLocal(lom.BckIsLocal)
 	}
-	lom.BckProps, bckPresent = lom.bucketMD.Get(lom.Bucket, lom.BckIsLocal)
+	lom.BckProps, bckPresent = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.BckIsLocal && !bckPresent {
 		return fmt.Sprintf("%s local bucket %s", lom.Bucket, cmn.DoesNotExist)
 	}
@@ -587,7 +589,7 @@ func (lom *LOM) Exists() bool {
 	return lom.existsInBucket()
 }
 func (lom *LOM) existsInBucket() bool {
-	if lom.BckIsLocal && lom.exists && !lom.bucketMD.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
+	if lom.BckIsLocal && lom.exists && !lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
 		lom.Uncache()
 		lom.exists = false
 		return false
@@ -840,4 +842,18 @@ func lomCaches() []*fs.LomCache {
 		}
 	}
 	return caches
+}
+
+//
+// access perms
+//
+
+func (lom *LOM) AllowGET() error  { return lom.bmd.AllowGET(lom.Bucket, lom.BckIsLocal, lom.BckProps) }
+func (lom *LOM) AllowHEAD() error { return lom.bmd.AllowHEAD(lom.Bucket, lom.BckIsLocal, lom.BckProps) }
+func (lom *LOM) AllowPUT() error  { return lom.bmd.AllowPUT(lom.Bucket, lom.BckIsLocal, lom.BckProps) }
+func (lom *LOM) AllowColdGET() error {
+	return lom.bmd.AllowColdGET(lom.Bucket, lom.BckIsLocal, lom.BckProps)
+}
+func (lom *LOM) AllowDELETE() error {
+	return lom.bmd.AllowDELETE(lom.Bucket, lom.BckIsLocal, lom.BckProps)
 }

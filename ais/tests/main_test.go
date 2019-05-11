@@ -1819,14 +1819,6 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 		t.Errorf("Expected cloud provider: %s, received cloud provider: %s",
 			expected.CloudProvider, actual.CloudProvider)
 	}
-	if actual.ReadPolicy != expected.ReadPolicy {
-		t.Errorf("Expected read policy: %s, received read policy: %s",
-			expected.ReadPolicy, actual.ReadPolicy)
-	}
-	if actual.WritePolicy != expected.WritePolicy {
-		t.Errorf("Expected write policy: %s, received write policy: %s",
-			expected.WritePolicy, actual.WritePolicy)
-	}
 	if actual.Cksum.Type != expected.Cksum.Type {
 		t.Errorf("Expected checksum type: %s, received checksum type: %s",
 			expected.Cksum.Type, actual.Cksum.Type)
@@ -1866,9 +1858,6 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 func defaultBucketProps() cmn.BucketProps {
 	return cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
-		NextTierURL:   "http://foo.com",
-		ReadPolicy:    cmn.RWPolicyNextTier,
-		WritePolicy:   cmn.RWPolicyNextTier,
 		Cksum: cmn.CksumConf{
 			Type:            cmn.ChecksumXXHash,
 			ValidateColdGet: false,

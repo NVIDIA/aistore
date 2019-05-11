@@ -101,7 +101,7 @@ func (c *getJogger) ec(req *Request) {
 		}()
 	default:
 		err := fmt.Errorf("invalid EC action for getJogger: %v", req.Action)
-		glog.Errorf("Error occurred during restoring object [%s/%s], fqn: %q, err: %v",
+		glog.Errorf("Error restoring object [%s/%s], fqn: %q, err: %v",
 			req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
 		if req.ErrCh != nil {
 			req.ErrCh <- err

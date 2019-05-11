@@ -631,3 +631,49 @@ func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached i
 	}
 	return
 }
+
+func TestBucketReadOnly(t *testing.T) {
+	var (
+		m = metadata{
+			t:               t,
+			num:             10,
+			numGetsEachFile: 2,
+		}
+	)
+	m.init()
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	baseParams := tutils.DefaultBaseAPIParams(t)
+
+	m.puts()
+	m.wg.Add(m.num * m.numGetsEachFile)
+	m.gets()
+	m.wg.Wait()
+
+	p, err := api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	// make bucket read-only
+	aattrs := cmn.MakeAccess(p.AccessAttrs, cmn.DenyAccess, cmn.AccessPUT|cmn.AccessDELETE)
+	s := strconv.FormatUint(aattrs, 10)
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketAccessAttrs: s})
+	tassert.CheckFatal(t, err)
+
+	m.init()
+	nerr := m.puts(true /* don't fail */)
+	if nerr != m.num {
+		t.Fatalf("num failed PUTs %d, expecting %d", nerr, m.num)
+	}
+
+	// restore write access
+	s = strconv.FormatUint(p.AccessAttrs, 10)
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketAccessAttrs: s})
+	tassert.CheckFatal(t, err)
+
+	// write some more and destroy
+	m.init()
+	nerr = m.puts(true /* don't fail */)
+	if nerr != 0 {
+		t.Fatalf("num failed PUTs %d, expecting 0 (zero)", nerr)
+	}
+}

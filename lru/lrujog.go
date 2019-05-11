@@ -119,6 +119,9 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		lctx.oldwork = append(lctx.oldwork, fi)
 		return nil
 	}
+	if err = lom.AllowDELETE(); err != nil {
+		return nil
+	}
 
 	// partial optimization:
 	// do nothing if the heap's cursize >= totsize &&

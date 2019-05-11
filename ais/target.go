@@ -217,8 +217,8 @@ func (t *targetrunner) Run() error {
 
 	t.rtnamemap = newrtnamemap()
 
-	bucketmd := newBucketMD()
-	t.bmdowner.put(bucketmd)
+	bmd := newBucketMD()
+	t.bmdowner.put(bmd)
 
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si
@@ -622,9 +622,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
-	}
 	started = time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
@@ -637,6 +634,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	lom, errstr = cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init(config)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	if err = lom.AllowGET(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
@@ -708,6 +709,10 @@ do:
 	// 3. coldget
 	if coldGet {
 		t.rtnamemap.Unlock(lom.Uname(), false)
+		if err = lom.AllowColdGET(); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -1001,9 +1006,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
-	}
 	started := time.Now()
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
@@ -1019,6 +1021,10 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	if err = lom.AllowPUT(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if lom.BckIsLocal && lom.VerConf().Enabled {
@@ -1043,8 +1049,12 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket = apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bckIsLocal, ok := t.validateBucket(w, r, bucket, bckProvider)
-	if !ok {
+	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	if bmd == nil {
+		return
+	}
+	if err := bmd.AllowDELETE(bucket, bckIsLocal); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	b, err := ioutil.ReadAll(r.Body)
@@ -1075,7 +1085,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
-				bmd := t.bmdowner.get()
 				glog.Infof("DELETE list|range: %s, %d µs",
 					bmd.Bstring(bucket, bckIsLocal), int64(time.Since(started)/time.Microsecond))
 			}
@@ -1102,10 +1111,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
-	}
-
 	b, errstr, err := cmn.ReadBytes(r)
 	if err != nil {
 		t.invalmsghdlr(w, r, errstr)
@@ -1124,6 +1129,10 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
+	if err = lom.AllowDELETE(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
 	err = t.objDelete(t.contextWithAuth(r.Header), lom, evict)
 	if err != nil {
 		s := fmt.Sprintf("Error deleting %s: %v", lom.StringEx(), err)
@@ -1140,9 +1149,9 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		started        = time.Now()
-		msgInt         actionMsgInternal
-		bckIsLocal, ok bool
+		started = time.Now()
+		msgInt  actionMsgInternal
+		bmd     *bucketMD
 	)
 	if cmn.ReadJSON(w, r, &msgInt) != nil {
 		return
@@ -1154,8 +1163,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bckIsLocal, ok = t.validateBucket(w, r, bucket, bckProvider)
-	if !ok {
+	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	if bmd == nil {
 		return
 	}
 	t.ensureLatestMD(msgInt)
@@ -1171,7 +1180,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 		t.bmdowner.Lock() // lock#1 begin
 
-		bmd := t.bmdowner.get()
+		bmd = t.bmdowner.get()
 		props, ok := bmd.Get(bucketFrom, true)
 		if !ok {
 			t.bmdowner.Unlock()
@@ -1203,7 +1212,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 			if glog.FastV(4, glog.SmoduleAIS) {
-				bmd := t.bmdowner.get()
 				glog.Infof("LIST %s: %s, %d µs", tag, bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
 			}
 		}
@@ -1217,7 +1225,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-		bckIsLocal := t.bmdowner.get().IsLocal(bucket)
 		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsLocal)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
@@ -1241,20 +1248,18 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucketProps    cmn.SimpleKVs
-		errCode        int
-		bckIsLocal, ok bool
-		query          = r.URL.Query()
-		bucketmd       = t.bmdowner.get()
+		bucketProps cmn.SimpleKVs
+		query       = r.URL.Query()
+		errCode     int
 	)
-
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if bckIsLocal, ok = t.validateBucket(w, r, bucket, bckProvider); !ok {
+	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	if bmd == nil {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1265,7 +1270,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !bckIsLocal {
 		bucketProps, err, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
-			errMsg := fmt.Sprintf("the bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
+			errMsg := fmt.Sprintf("bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
 			t.invalmsghdlr(w, r, errMsg, errCode)
 			return
 		}
@@ -1273,14 +1278,13 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketProps = make(cmn.SimpleKVs)
 		bucketProps[cmn.HeaderCloudProvider] = cmn.ProviderAIS
 	}
-
 	hdr := w.Header()
 	for k, v := range bucketProps {
 		hdr.Add(k, v)
 	}
 
 	// include bucket's own config override
-	props, ok := bucketmd.Get(bucket, bckIsLocal)
+	props, ok := bmd.Get(bucket, bckIsLocal)
 	if props == nil {
 		return
 	}
@@ -1292,10 +1296,10 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		verConf = &props.Versioning
 	}
-	// transfer bucket props via http header;
-	// (it is totally legal for Cloud buckets to not have locally cached props)
-	hdr.Add(cmn.HeaderReadPolicy, props.ReadPolicy)
-	hdr.Add(cmn.HeaderWritePolicy, props.WritePolicy)
+	// transfer bucket props via http header
+	// (it is ok for Cloud buckets not to have locally cached props)
+	hdr.Add(cmn.HeaderReadPolicy, props.Tiering.ReadPolicy)
+	hdr.Add(cmn.HeaderWritePolicy, props.Tiering.WritePolicy)
 	hdr.Add(cmn.HeaderBucketChecksumType, cksumConf.Type)
 	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
 	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
@@ -1322,6 +1326,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
 	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
 	hdr.Add(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
+	hdr.Add(cmn.HeaderBucketAccessAttrs, strconv.FormatUint(props.AccessAttrs, 10))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1341,10 +1346,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname = apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
-		return
-	}
-
 	invalidHandler := t.invalmsghdlr
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
@@ -2335,10 +2336,9 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 	bucket, objnameFrom := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if _, ok := t.validateBucket(w, r, bucket, bckProvider); !ok {
+	if bmd, _ := t.validateBucket(w, r, bucket, bckProvider); bmd == nil {
 		return
 	}
-
 	objnameTo := msg.Name
 	uname := cluster.Bo2Uname(bucket, objnameFrom)
 	t.rtnamemap.Lock(uname, true)
@@ -2362,8 +2362,8 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if si, errstr = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
 	}
-	bucketmd := t.bmdowner.get()
-	bckIsLocalFrom := bucketmd.IsLocal(bucketFrom)
+	bmd := t.bmdowner.get()
+	bckIsLocalFrom := bmd.IsLocal(bucketFrom)
 	fqn, _, errstr := cluster.HrwFQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
 	if errstr != "" {
 		return
@@ -2374,7 +2374,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
-		bckIsLocalTo := bucketmd.IsLocal(bucketTo)
+		bckIsLocalTo := bmd.IsLocal(bucketTo)
 		newFQN, _, errstr = cluster.HrwFQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
 		if errstr != "" {
 			return

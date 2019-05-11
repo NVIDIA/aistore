@@ -91,7 +91,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 		optParams = OptionalParams{}
 		r         *http.Response
 		n         int64
-		u         uint64
+		u, aattrs uint64
 		b         bool
 	)
 	baseParams.Method = http.MethodHead
@@ -190,17 +190,25 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-
+	tierProps := cmn.TierConf{
+		NextTierURL: r.Header.Get(cmn.HeaderNextTierURL),
+		ReadPolicy:  r.Header.Get(cmn.HeaderReadPolicy),
+		WritePolicy: r.Header.Get(cmn.HeaderWritePolicy),
+	}
+	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketAccessAttrs), 10, 64); err == nil {
+		aattrs = u
+	} else {
+		return
+	}
 	p = &cmn.BucketProps{
 		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
 		Versioning:    verProps,
-		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
-		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
-		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
+		Tiering:       tierProps,
 		Cksum:         cksumProps,
 		LRU:           lruProps,
 		Mirror:        mirrorProps,
 		EC:            ecProps,
+		AccessAttrs:   aattrs,
 	}
 	return
 }

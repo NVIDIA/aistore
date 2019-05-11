@@ -55,16 +55,18 @@ type metadata struct {
 }
 
 func (m *metadata) saveClusterState() {
-	m.proxyURL = getPrimaryURL(m.t, proxyURLReadOnly)
+	m.init()
 	m.smap = getClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)
 	tutils.Logf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
+}
 
+func (m *metadata) init() {
+	m.proxyURL = getPrimaryURL(m.t, proxyURLReadOnly)
 	if m.fileSize == 0 {
 		m.fileSize = cmn.KiB
 	}
-
 	if m.num > 0 {
 		m.repFilenameCh = make(chan repFile, m.num)
 	}
@@ -123,7 +125,7 @@ func (m *metadata) checkObjectDistribution(t *testing.T) {
 	}
 }
 
-func (m *metadata) puts() {
+func (m *metadata) puts(dontFail ...bool) int {
 	sgl := tutils.Mem2.NewSGL(int64(m.fileSize))
 	defer sgl.Free()
 
@@ -135,13 +137,16 @@ func (m *metadata) puts() {
 	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bucket)
 	start := time.Now()
 	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, m.fileSize, m.num, errCh, filenameCh, sgl)
-	selectErr(errCh, "put", m.t, false)
+	if len(dontFail) == 0 {
+		selectErr(errCh, "put", m.t, false)
+	}
 	close(filenameCh)
 	close(errCh)
 	tutils.Logf("PUT time: %v\n", time.Since(start))
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
+	return len(errCh)
 }
 
 func (m *metadata) gets() {

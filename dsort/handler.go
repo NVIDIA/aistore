@@ -83,10 +83,14 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
 	bmd := ctx.bmdowner.Get()
-	if _, err := bmd.ValidateBucket(parsedRS.Bucket, parsedRS.BckProvider); err != nil {
+	if _, err = bmd.ValidateBucket(parsedRS.Bucket, parsedRS.BckProvider); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
-	} else if _, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
+	}
+	if outIsLocal, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	} else if err = bmd.AllowPUT(parsedRS.OutputBucket, outIsLocal); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
