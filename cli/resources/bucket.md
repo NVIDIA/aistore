@@ -67,9 +67,9 @@ Lists all the objects along with some of the objects' properties. For the full l
 
 **Example:**
 
-* `ais bucket list --bucket mylocalbucket --prefix "mytestfolder/" --regex ".txt`  
+* `ais bucket list --bucket mylocalbucket --prefix "mytestfolder/" --regex ".txt`
 Returns all objects matching `.txt` under the `mytestfolder` directory from `mylocalbucket` bucket
-* `ais bucket list --bucket mylocalbucket --template="shard-{0..99}.tgz" --show-unmatched`  
+* `ais bucket list --bucket mylocalbucket --template="shard-{0..99}.tgz" --show-unmatched`
 Returns all objects with names from `shard-0.tgz` to `shard-99.tgz` from `mylocalbucket`.
 Also returns a separate list of objects that do not match the template.
 
@@ -96,11 +96,22 @@ Sets bucket properties. For the available options, see [bucket-properties](../..
 | `--bucket-provider` | [Provider](../README.md#enums) | locality of bucket | `""` |
 | `--json` | bool | use json as input (need set all bucket props) | `false` |
 
-**Example:**
+When JSON is not used, some properties support user-friendly aliases
+
+| Property | Value alias | Description |
+| --- | --- | --- |
+| aattrs | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
+| aattrs | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
+
+**Examples:**
 
 `ais bucket setprops --bucket mybucket 'mirror.enabled=true' 'mirror.copies=2'`
 
 Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively.
+
+`ais bucket setprops --bucket mybucket 'aattrs=ro'`
+
+Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail.
 
 ### resetprops
 

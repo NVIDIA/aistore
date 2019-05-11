@@ -29,6 +29,9 @@ const (
 	bucketGetProps   = commandProps
 	bucketNWayMirror = cmn.ActMakeNCopies
 	bucketEvict      = commandEvict
+
+	readonlyBucketAccess  = "ro"
+	readwriteBucketAccess = "rw"
 )
 
 var (
@@ -324,6 +327,33 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched)
 }
 
+// replace user-friendly properties like `access=ro` with real values
+// like `aattrs = GET | HEAD`. All numbers are passed to API as is
+func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Values, nvs cmn.SimpleKVs) error {
+	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
+		props, err := api.HeadBucket(baseParams, bucket, query)
+		if err != nil {
+			return err
+		}
+
+		writeAccess := uint64(cmn.AccessPUT | cmn.AccessDELETE | cmn.AccessColdGET)
+		switch v {
+		case readwriteBucketAccess:
+			aattrs := cmn.MakeAccess(props.AccessAttrs, cmn.AllowAccess, writeAccess)
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(aattrs, 10)
+		case readonlyBucketAccess:
+			aattrs := cmn.MakeAccess(props.AccessAttrs, cmn.DenyAccess, writeAccess)
+			nvs[cmn.HeaderBucketAccessAttrs] = strconv.FormatUint(aattrs, 10)
+		default:
+			if _, err := strconv.ParseUint(v, 10, 64); err != nil {
+				return fmt.Errorf("invalid bucket access %q, must be an integer, %q or %q",
+					v, readonlyBucketAccess, readwriteBucketAccess)
+			}
+		}
+	}
+	return nil
+}
+
 // Sets bucket properties
 func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	if c.NArg() < 1 {
@@ -358,6 +388,9 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	// For setting bucket props via URL query string
 	nvs, err := makeKVS(c.Args(), "=")
 	if err != nil {
+		return
+	}
+	if err = reformatBucketProps(baseParams, bucket, query, nvs); err != nil {
 		return
 	}
 	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
