@@ -7,8 +7,11 @@ package sys
 // Do not import main 'tutils' package because of circular dependency
 // Use t.Logf or t.Errorf instead of tutils.Logf
 import (
+	"math"
+	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -75,4 +78,40 @@ func TestMemoryStats(t *testing.T) {
 		// not a error(e.g, Jenkins VM has swap off) - just a warining
 		t.Logf("Either swap is off or failed to read its stats")
 	}
+}
+
+func TestProc(t *testing.T) {
+	pid := os.Getpid()
+	stats, err := ProcessStats(pid)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, stats.Mem.Size > 0 && stats.Mem.Resident > 0 && stats.Mem.Share > 0,
+		"Failed to read memory stats: %+v", stats.Mem)
+
+	// burn CPU for a few seconds by calculating prime numbers
+	// and make a short break to make usage lower than 100%
+	for i := 0; i < 20; i++ {
+		n := int64(1)<<52 + int64((i*2)|1)
+		middle := int64(math.Sqrt(float64(n)))
+		divider := int64(3)
+		prime := true
+		for divider <= middle {
+			if n%divider == 0 {
+				prime = false
+			}
+			divider += 2
+		}
+		t.Logf("%d is prime: %v", n, prime)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	newStats, err := ProcessStats(pid)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, newStats.CPU.User > 0, "Failed to read CPU stats: %+v", newStats.CPU)
+	tassert.Errorf(t, newStats.CPU.User+newStats.CPU.System == newStats.CPU.Total,
+		"Total must be equal to sum of User and System: %+v", newStats.CPU)
+	tassert.Errorf(t, newStats.CPU.Total > stats.CPU.Total, "New stats must show more CPU used. Old usage %d, new one: %d", stats.CPU.Total, newStats.CPU.Total)
+	tassert.Errorf(t, newStats.CPU.Percent > 0.0, "Process must use some CPU. Usage: %g", stats.CPU.Percent)
+	tassert.Errorf(t, newStats.CPU.Percent < 100.0, "Process should use less than 100%% CPU. Usage: %g", newStats.CPU.Percent)
+	tassert.Errorf(t, newStats.CPU.LastTime > stats.CPU.LastTime, "Time must change: new %d, old %d", newStats.CPU.LastTime, stats.CPU.LastTime)
+	t.Logf("Process CPU usage: %6.2f%%", newStats.CPU.Percent)
 }

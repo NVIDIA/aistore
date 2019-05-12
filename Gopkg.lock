@@ -77,17 +77,6 @@
   version = "v1.15.57"
 
 [[projects]]
-  digest = "1:5aaec2559dbb1fde897fd21b4165881391d7f7e069700bef640802068c8e7988"
-  name = "github.com/cloudfoundry/gosigar"
-  packages = [
-    ".",
-    "sys/windows",
-  ]
-  pruneopts = "UT"
-  revision = "dcb1afc219e4c99f21c37fb1ec22ed9ffe443317"
-  version = "v1.1.0"
-
-[[projects]]
   digest = "1:76dc72490af7174349349838f2fe118996381b31ea83243812a97e5a0fd5ed55"
   name = "github.com/dgrijalva/jwt-go"
   packages = ["."]
@@ -275,14 +264,6 @@
   pruneopts = "UT"
   revision = "7615b9433f86a8bdf29709bf288bc4fd0636a369"
   version = "v1.4.2"
-
-[[projects]]
-  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
-  name = "github.com/pkg/errors"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
-  version = "v0.8.0"
 
 [[projects]]
   branch = "master"
@@ -563,7 +544,6 @@
     "github.com/aws/aws-sdk-go/aws/session",
     "github.com/aws/aws-sdk-go/service/s3",
     "github.com/aws/aws-sdk-go/service/s3/s3manager",
-    "github.com/cloudfoundry/gosigar",
     "github.com/dgrijalva/jwt-go",
     "github.com/json-iterator/go",
     "github.com/karrick/godirwalk",
@@ -581,7 +561,6 @@
     "golang.org/x/net/http2",
     "golang.org/x/net/http2/h2c",
     "golang.org/x/sync/errgroup",
-    "google.golang.org/api/googleapi",
     "google.golang.org/api/iterator",
     "google.golang.org/api/option",
   ]

@@ -47,8 +47,8 @@ const (
 
 	// Proxy Info
 	ProxyInfoHeader = "\nType: Proxy\nID\t MemUsed(%)\t MemAvail\t CpuUsed(%)\t Uptime(µs)\n"
-	ProxyInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t " +
-		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 3}}\t {{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t " +
+	ProxyInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 
 	ProxyInfoTmpl       = ProxyInfoHeader + "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}\n"
@@ -57,10 +57,10 @@ const (
 	// Target Info
 	TargetInfoHeader = "\nType: Target\nID\t MemUsed(%)\t MemAvail\t CapUsed(%)\t CapAvail\t CpuUsed(%)\t Throughput\n"
 	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
-		"{{$value.SysInfo.PctMemUsed | printf `%0.5f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 3}}\t " +
-		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
-		"{{$value.SysInfo.PctCPUUsed | printf `%0.2f`}}\t " +
-		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2}}\n"
+		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
+		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 2}}\t " +
+		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
+		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2 | printf `%s/s`}}\n"
 
 	TargetInfoTmpl       = TargetInfoHeader + "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
 	TargetInfoSingleTmpl = TargetInfoHeader + "{{$value := . }}" + TargetInfoBody

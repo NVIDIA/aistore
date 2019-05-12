@@ -11,8 +11,10 @@ const (
 	rootProcess     = proc + "1/cgroup"
 	hostLoadAvgPath = proc + "loadavg"
 	hostMemPath     = proc + "meminfo"
-	// TODO: for later use
-	// hostProcessStatPath = proc + "%s/stat"
+	// CPU usage by a process
+	hostProcessStatCPUPath = proc + "%d/stat"
+	// Memory usage by a process
+	hostProcessStatMemPath = proc + "%d/statm"
 
 	// container stats
 

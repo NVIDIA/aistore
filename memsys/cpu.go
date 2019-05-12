@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cmn"
-	sigar "github.com/cloudfoundry/gosigar"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 // This file provides additional functions to monitor system statistics, such as cpu and disk usage, using the memsys library
@@ -18,19 +18,13 @@ import (
 func (r *Mem2) FetchSysInfo() cmn.SysInfo {
 	sysInfo := cmn.SysInfo{}
 
-	concSigar := sigar.ConcreteSigar{}
-	concMem, _ := concSigar.GetMem()
+	osMem, _ := sys.Mem()
+	sysInfo.MemAvail = osMem.Total
 
-	sysInfo.MemAvail = concMem.Total
-
-	mem := sigar.ProcMem{}
-	mem.Get(os.Getpid())
-	sysInfo.MemUsed = mem.Resident
+	proc, _ := sys.ProcessStats(os.Getpid())
+	sysInfo.MemUsed = proc.Mem.Resident
 	sysInfo.PctMemUsed = float64(sysInfo.MemUsed) * 100 / float64(sysInfo.MemAvail)
-
-	cpu := sigar.ProcCpu{}
-	cpu.Get(os.Getpid())
-	sysInfo.PctCPUUsed = cpu.Percent
+	sysInfo.PctCPUUsed = proc.CPU.Percent
 
 	return sysInfo
 }
