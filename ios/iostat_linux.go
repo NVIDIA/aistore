@@ -42,11 +42,15 @@ type (
 		cacheIdx    int
 		updating    bool
 	}
+	SelectedDiskStats struct {
+		RBps, WBps, Util int64
+	}
 	ioStatCache struct {
 		expireTime time.Time
 		timestamp  time.Time
 
 		diskIOms map[string]int64
+		diskUtil map[string]int64
 		diskRms  map[string]int64
 		diskRSec map[string]int64
 		diskRBps map[string]int64
@@ -78,6 +82,7 @@ func NewIostatContext(fqnr FQNResolver) (ctx *IostatContext) {
 func newIostatCache() *ioStatCache {
 	return &ioStatCache{
 		diskIOms:  make(map[string]int64),
+		diskUtil:  make(map[string]int64),
 		diskRms:   make(map[string]int64),
 		diskRSec:  make(map[string]int64),
 		diskRBps:  make(map[string]int64),
@@ -192,17 +197,24 @@ func (ctx *IostatContext) GetDiskUtil(mpath string, timestamp ...time.Time) int6
 	return cache.mpathUtil[mpath]
 }
 
+func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
+	var cache = ctx.refreshIostatCache(time.Now())
+	m = make(map[string]*SelectedDiskStats)
+	for disk := range cache.diskIOms {
+		m[disk] = &SelectedDiskStats{
+			RBps: cache.diskRBps[disk],
+			WBps: cache.diskWBps[disk],
+			Util: cache.diskUtil[disk]}
+	}
+	return
+}
+
 func (ctx *IostatContext) LogAppend(lines []string, timestamp time.Time) []string {
 	var cache = ctx.refreshIostatCache(timestamp)
 	for disk := range cache.diskIOms {
-		mpath := ctx.disk2mpath[disk]
-		util := cache.mpathUtil[mpath]
-		if util == 0 {
-			continue
-		}
 		rbps := cmn.B2S(cache.diskRBps[disk], 0)
 		wbps := cmn.B2S(cache.diskWBps[disk], 0)
-		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, util)
+		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, cache.diskUtil[disk])
 		lines = append(lines, line)
 	}
 	return lines
@@ -265,6 +277,7 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 			continue
 		}
 		ncache.diskIOms[disk] = stat.IOMs
+		ncache.diskUtil[disk] = (stat.IOMs - statsCache.diskIOms[disk]) * 100 * millis / elapsed
 		ncache.diskRms[disk] = stat.ReadMs
 		ncache.diskRSec[disk] = stat.ReadSectors
 		ncache.diskWms[disk] = stat.WriteMs
@@ -274,11 +287,10 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 			continue
 		}
 		var (
-			util = (stat.IOMs - statsCache.diskIOms[disk]) * 100 * millis / elapsed
 			rque = (stat.ReadMs - statsCache.diskRms[disk]) * millis / elapsed
 			wque = (stat.WriteMs - statsCache.diskWms[disk]) * millis * writesPerRead / elapsed
 		)
-		ncache.mpathUtil[mpath] += util
+		ncache.mpathUtil[mpath] += ncache.diskIOms[disk]
 		disks := ctx.mpath2disks[mpath]
 		if sectorSize, ok := disks[disk]; ok {
 			ncache.diskRBps[disk] = (ncache.diskRSec[disk] - statsCache.diskRSec[disk]) * sectorSize * second / elapsed
