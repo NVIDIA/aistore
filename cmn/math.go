@@ -121,6 +121,13 @@ func MaxF32(a, b float32) float32 {
 	return b
 }
 
+func MinDur(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func DivCeil(a, b int64) int64 {
 	d, r := a/b, a%b
 	if r > 0 {

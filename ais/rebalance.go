@@ -37,9 +37,6 @@ const (
 
 const (
 	NeighborRebalanceStartDelay = 10 * time.Second
-	// time to wait until all objects sent via transport are created on
-	// the destination after global rebalance finishes
-	objTransferTimeout = 2 * time.Minute
 	// time between requests to targets to check if they received and saved
 	// transferred via transport objects
 	objTransferInterval = 500 * time.Millisecond
@@ -503,6 +500,31 @@ func (reb *rebManager) abortGlobalReb() {
 	}
 }
 
+func (reb *rebManager) reqTgt(snode *cluster.Snode, moved *movedObj, wg *sync.WaitGroup) {
+	query := make(url.Values)
+	query.Add(cmn.URLParamCached, "true")
+	query.Add(cmn.URLParamSilent, "true")
+	args := callArgs{
+		req: reqArgs{
+			method: http.MethodHead,
+			query:  query,
+			base:   snode.URL(cmn.NetworkIntraData),
+			path:   cmn.URLPath(cmn.Version, cmn.Objects, moved.bucket, moved.objname),
+		},
+		si: snode,
+	}
+
+	// HEAD object request with param cached=true checks only if a
+	// file corresponding to a object exists on the destination
+	res := reb.t.call(args)
+	if res.err == nil && res.status < http.StatusBadRequest {
+		moved.found = true
+	} else if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s/%s is still not transferred", moved.bucket, moved.objname)
+	}
+	wg.Done()
+}
+
 func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	var (
 		wg       = &sync.WaitGroup{}
@@ -617,59 +639,51 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		reb.pollRebalancingDone(smap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
 
-	// wait until all objects appear on the correct targets
-	if len(lastObjs) != 0 {
-		glog.Info("Wait for all objects are transferred to correct targets...")
-		deadLine := time.Now().Add(objTransferTimeout)
-		wg := &sync.WaitGroup{}
+	// time to wait until all objects sent via transport should be created on
+	// the destination after global rebalance finishes
+	targetBasedTimeout := time.Minute*2 + time.Duration(int(time.Minute)*smap.CountTargets()/10)
+	objTransferTimeout := cmn.MinDur(targetBasedTimeout, time.Minute*6)
+	deadline := time.Now().Add(objTransferTimeout)
 
-		for time.Now().Before(deadLine) {
-			for si, mv := range lastObjs {
-				wg.Add(1)
-				reqTgt := func(snode *cluster.Snode, moved *movedObj) {
-					query := make(url.Values)
-					query.Add(cmn.URLParamCached, "true")
-					query.Add(cmn.URLParamSilent, "true")
-					args := callArgs{
-						req: reqArgs{
-							method: http.MethodHead,
-							query:  query,
-							base:   snode.URL(cmn.NetworkIntraData),
-							path:   cmn.URLPath(cmn.Version, cmn.Objects, moved.bucket, moved.objname),
-						},
-						si: snode,
-					}
-
-					// HEAD object request with param cached=true checks only if a
-					// file corresponding to a object exists on the destination
-					res := reb.t.call(args)
-					if res.err == nil && res.status < http.StatusBadRequest {
-						moved.found = true
-					} else if glog.FastV(4, glog.SmoduleAIS) {
-						glog.Infof("%s/%s is still not transferred", moved.bucket, moved.objname)
-					}
-					wg.Done()
-				}
-
-				go reqTgt(si, mv)
-			}
-			wg.Wait()
-
-			// clean up transferred objects
-			for si, mv := range lastObjs {
-				if mv.found {
-					delete(lastObjs, si)
-				}
-			}
-			// check length and break here instead of in "for" declaration to avoid redundant sleep
-			if len(lastObjs) == 0 {
-				break
-			}
-			time.Sleep(objTransferInterval)
-		}
-		glog.Info("Waiting for all objects are transferred to correct targets ended")
+	if len(lastObjs) == 0 {
+		goto done
 	}
 
+	// wait until all objects appear on the correct targets
+	glog.Info("Wait for all objects are transferred to correct targets...")
+	wg = &sync.WaitGroup{}
+
+	for {
+		if time.Now().After(deadline) {
+			glog.Warningf("rebalance did not transfer objects within timeout (%s)", objTransferTimeout)
+			break
+		}
+
+		for si, mv := range lastObjs {
+			wg.Add(1)
+			// TODO: add single HEAD request for multiple objects
+			go reb.reqTgt(si, mv, wg)
+		}
+		wg.Wait()
+
+		// clean up transferred objects
+		for si, mv := range lastObjs {
+			if mv.found {
+				delete(lastObjs, si)
+				// if some object was successfully transferred, we reset the counter
+				// and wait another objTransferTimeout for a new state change
+				deadline = time.Now().Add(objTransferTimeout)
+			}
+		}
+		// check length and break here instead of in "for" declaration to avoid redundant sleep
+		if len(lastObjs) == 0 {
+			break
+		}
+		time.Sleep(objTransferInterval)
+	}
+	glog.Info("Waiting for all objects are transferred to correct targets ended")
+
+done:
 	xreb.EndTime(time.Now())
 
 	// if we deactivate GFN in the beginning, there is a very tiny 0.1-0.2s gap

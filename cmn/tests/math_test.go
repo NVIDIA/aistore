@@ -5,6 +5,7 @@ package tests
 
 import (
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -52,4 +53,12 @@ func TestFastLog2Ceil(t *testing.T) {
 	tassert.Fatalf(t, log152 == 4, "wrong ceil(log2) result; got %d, expected %d", log152, 4)
 	tassert.Fatalf(t, log10232 == 10, "wrong ceil(log2) result; got %d, expected %d", log10232, 10)
 	tassert.Fatalf(t, log10252 == 11, "wrong ceil(log2) result; got %d, expected %d", log10252, 11)
+}
+
+func TestMinDur(t *testing.T) {
+	baseTime := time.Minute
+
+	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
+	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
+	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
 }

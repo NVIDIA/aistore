@@ -1284,7 +1284,7 @@ func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
 	for target, targetStats := range targetsStats {
 		for _, xaction := range targetStats {
 			if xaction.Running() {
-				tutils.Logf("%s still in progress for target %s; started %s\n", xaction.Kind(), target, xaction.StartTime().Format(time.RFC822))
+				tutils.Logf("%s(%d) still in progress for target %s; started %s\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
 				return false
 			}
 		}
@@ -1313,7 +1313,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	time.Sleep(ais.NeighborRebalanceStartDelay)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	ch := make(chan string)
+	ch := make(chan string, 2)
 
 	timeout := time.Duration(0)
 	if len(timeouts) > 0 {
@@ -1362,6 +1362,8 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	for errstr := range ch {
 		t.Fatalf(errstr)
 	}
+
+	tutils.Logf("global and local rebalance completed\n")
 }
 
 func getXactionGlobalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {

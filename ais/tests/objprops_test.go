@@ -226,10 +226,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
-	rebalanceTimeout := time.Minute
-	if len(objects) > 5000 {
-		rebalanceTimeout = 5 * time.Minute
-	}
+	rebalanceTimeout := 5 * time.Minute
 
 	smap := getClusterMap(t, proxyURL)
 	l := len(smap.Tmap)
@@ -328,7 +325,7 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	const (
 		objCountToTest = 15
-		filesize       = 1024 * 1024
+		filesize       = cmn.MiB
 	)
 	var (
 		filesPutCh = make(chan string, objCountToTest)
