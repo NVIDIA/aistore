@@ -2,16 +2,17 @@
 - [Bucket](#bucket)
     - [Bucket Provider](#bucket-provider)
 - [Local Bucket](#local-bucket)
-    - [Example: create, rename and, destroy local bucket](#example-create-rename-and-destroy-local-bucket)
+    - [Curl examples: create, rename and, destroy local bucket](#curl-examples-create-rename-and-destroy-local-bucket)
 - [Cloud Bucket](#cloud-bucket)
     - [Prefetch/Evict Objects](#prefetchevict-objects)
     - [Evict Cloud Bucket](#evict-cloud-bucket)
+- [Bucket Access Attributes](#bucket-access-attributes)
 - [List Bucket](#list-bucket)
-    - [properties-and-options](#properties-and-options)
-    - [Example: listing local and Cloud buckets](#example-listing-local-and-cloud-buckets)
-    - [Example: Listing all pages](#example-listing-all-pages)
+    - [Properties and Options](#properties-and-options)
+    - [Curl example: listing local and Cloud buckets](#curl-example-listing-local-and-cloud-buckets)
+    - [Go code example: listing all pages](#go-code-example-listing-all-pages)
 - [Recover Buckets](#recover-buckets)
-    - [Example: Recovering buckets](#example-recovering-buckets)
+    - [Curl example: recovering buckets](#curl-example-recovering-buckets)
 
 ## Bucket
 
@@ -26,7 +27,9 @@ There are two different kinds of buckets in AIS, **local buckets** and **cloud b
 | local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [RESTful API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 | cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
-Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. Local buckets, as of v2.0, are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
+Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. Local buckets are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
+
+> Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cli/resources/bucket.md).
 
 ### Bucket Provider
 
@@ -43,7 +46,7 @@ The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy l
 
 New local buckets must be given a unique name that is not shared with any other local or cloud bucket.
 
-### Example: create, rename and, destroy local bucket
+### Curl examples: create, rename and, destroy local bucket
 
 To create a local bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
 
@@ -95,11 +98,38 @@ For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' http://localhost:8080/v1/buckets/myS3bucket
 ```
 
+
+## Bucket Access Attributes
+
+Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
+
+| Operation | Bit Mask |
+| --- | --- |
+| GET | 0x1 |
+| HEAD | 0x2 |
+| PUT | 0x4 |
+| Cold GET | 0x8 |
+| DELETE | 0x16 |
+
+For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
+
+```shell
+ais bucket setprops --bucket abc 'aattrs=ro'
+```
+
+The same expressed via `curl` will look as follows:
+
+```shell
+curl -i -X PUT 'http://localhost:8080/v1/buckets/abc/setprops?aattrs=18446744073709551587'
+```
+
+> 18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)
+
 ## List Bucket
 
 ListBucket API returns a page of object names and, optionally, their properties (including sizes, creation times, checksums, and more), in addition to a token that servers as a cursor or a marker for the *next* page retrieval.
 
-### properties-and-options
+### Properties and options
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
 | Property/Option | Description | Value |
@@ -140,7 +170,7 @@ The full list of bucket properties are:
 
  <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
 
-### Example: listing local and Cloud buckets
+### Curl example: listing local and Cloud buckets
 
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
 
@@ -154,7 +184,7 @@ This request will produce an output that (in part) may look as follows:
 
 For many more examples, please refer to the [test sources](/ais/tests/) in the repository.
 
-### Example: Listing all pages
+### Go code example: listing all pages
 
 The following Go code retrieves a list of all of object names from a named bucket (note: error handling omitted):
 
@@ -197,15 +227,15 @@ After rebuilding a cluster and redeploying proxies, the primary proxy does not h
 
 Bucket recovering comes in two flavours: safe and forced. In safe mode the primary proxy requests bucket metadata from all targets in the cluster. If all the targets have the same metadata version, the primary applies received metadata and then synchronize the new information across the cluster. Otherwise, API returns an error. When force mode is enabled, the primary does not require all the targets to have the same version. The primary chooses the metadata with highest version and proceeds with it.
 
-### Example: Recovering buckets
+### Example: recovering buckets
 
-To recover buckets in safe mode, run:
+To recover buckets *safely*, run:
 
 ```shell
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets
 ```
 
-To force recovering buckets, run:
+To force recovering buckets:
 
 ```shell
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' http://localhost:8080/v1/buckets?force=true

@@ -55,6 +55,9 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 
 > For developers and first-time users: if you deployed AIS locally having followed [these instructions](../README.md#local-non-containerized) then most likely you will have `http://localhost:8080` as the primary proxy, and generally, `http://localhost:808x` for all locally-deployed AIS daemons.
 
+> The reference below is "formulated" in `curl` - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](../cli/README.md).
+
+
 ### API Reference
 
 | Operation | HTTP action | Example |
