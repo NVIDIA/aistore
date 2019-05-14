@@ -152,3 +152,12 @@ func FastLog2Ceil(c uint64) uint {
 	}
 	return FastLog2(c-1) + 1
 }
+
+// CailAlign returns smallest number bigger or equal to val, which is divisible by align
+func CeilAlign(val, align uint) uint {
+	mod := val % align
+	if mod != 0 {
+		val += align - mod
+	}
+	return val
+}

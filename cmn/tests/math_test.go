@@ -58,7 +58,13 @@ func TestFastLog2Ceil(t *testing.T) {
 func TestMinDur(t *testing.T) {
 	baseTime := time.Minute
 
-	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
-	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
-	tassert.Errorf(t, cmn.MinDur(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
+	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
+	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
+	tassert.Fatalf(t, cmn.MinDur(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
+}
+
+func TestCeilAlign(t *testing.T) {
+	tassert.Fatalf(t, cmn.CeilAlign(12, 3) == 12, "got %d, expected 12", cmn.CeilAlign(12, 3))
+	tassert.Fatalf(t, cmn.CeilAlign(10, 3) == 12, "got %d, expected 12", cmn.CeilAlign(10, 3))
+	tassert.Fatalf(t, cmn.CeilAlign(10, 1) == 10, "got %d, expected 10", cmn.CeilAlign(10, 1))
 }
