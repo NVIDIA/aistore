@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,25 +40,22 @@ func normalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func (p *proxyrunner) targetDownloadRequest(method string, path string, si *cluster.Snode, msg interface{}) dlResponse {
-	query := url.Values{}
-	query.Add(cmn.URLParamProxyID, p.si.DaemonID)
-	query.Add(cmn.URLParamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 10))
-
-	body, err := jsoniter.Marshal(msg)
-	if err != nil {
-		return dlResponse{
-			body:       nil,
-			statusCode: http.StatusInternalServerError,
-			err:        err,
+func (p *proxyrunner) targetDownloadRequest(method string, path string, body []byte, query url.Values, si *cluster.Snode) dlResponse {
+	fullQuery := url.Values{}
+	for k, vs := range query {
+		for _, v := range vs {
+			fullQuery.Add(k, v)
 		}
 	}
+	fullQuery.Add(cmn.URLParamProxyID, p.si.DaemonID)
+	fullQuery.Add(cmn.URLParamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 10))
+
 	args := callArgs{
 		si: si,
 		req: reqArgs{
 			method: method,
 			path:   cmn.URLPath(cmn.Version, cmn.Download, path),
-			query:  query,
+			query:  fullQuery,
 			body:   body,
 		},
 		timeout: defaultTimeout,
@@ -72,7 +68,7 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, si *clus
 	}
 }
 
-func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
+func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body []byte, query url.Values) []dlResponse {
 	var (
 		smap        = p.smapowner.get()
 		wg          = &sync.WaitGroup{}
@@ -83,7 +79,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 	for _, si := range smap.Tmap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			responsesCh <- p.targetDownloadRequest(method, path, si, msg)
+			responsesCh <- p.targetDownloadRequest(method, path, body, query, si)
 			wg.Done()
 		}(si)
 	}
@@ -96,6 +92,17 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 	for resp := range responsesCh {
 		responses = append(responses, resp)
 	}
+
+	return responses
+}
+
+func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
+	body, err := jsoniter.Marshal(msg)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
 
 	notFoundCnt := 0
 	errs := make([]dlResponse, 0, 10) // errors other than than 404 (not found)
@@ -186,78 +193,28 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, msg *
 	}
 }
 
-// objects is a map of objnames (keys) where the corresponding
-// value is the link that the download will be saved as.
-func (p *proxyrunner) bulkDownloadProcessor(id string, payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) error {
-	var (
-		smap  = p.smapowner.get()
-		wg    = &sync.WaitGroup{}
-		errCh chan error
-	)
-
-	bulkTargetRequest := make(map[*cluster.Snode]*cmn.DlBody, smap.CountTargets())
-	for objName, link := range objects {
-		// Make sure that objName doesn't contain "?query=smth" suffix.
-		objName, err := normalizeObjName(objName)
-		if err != nil {
-			return err
-		}
-		// Make sure that link contains protocol (absence of protocol can result in errors).
-		link = cmn.PrependProtocol(link)
-
-		si, errstr := hrwTarget(payload.Bucket, objName, smap)
-		if errstr != "" {
-			return fmt.Errorf(errstr)
-		}
-
-		dlObj := cmn.DlObj{
-			Objname:   objName,
-			Link:      link,
-			FromCloud: cloud,
-		}
-
-		b, ok := bulkTargetRequest[si]
-		if !ok {
-			dlBody := &cmn.DlBody{
-				ID: id,
-			}
-			dlBody.Bucket = payload.Bucket
-			dlBody.BckProvider = payload.BckProvider
-			dlBody.Timeout = payload.Timeout
-			dlBody.Description = payload.Description
-
-			bulkTargetRequest[si] = dlBody
-			b = dlBody
-		}
-
-		b.Objs = append(b.Objs, dlObj)
+func (p *proxyrunner) broadcastStartDownloadRequest(r *http.Request, id string) (err error, errCode int) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err, http.StatusInternalServerError
 	}
+	query := r.URL.Query()
+	query.Set(cmn.URLParamID, id)
 
-	errCh = make(chan error, len(bulkTargetRequest))
-	for si, dlBody := range bulkTargetRequest {
-		wg.Add(1)
-		go func(si *cluster.Snode, dlBody *cmn.DlBody) {
-			if resp := p.targetDownloadRequest(http.MethodPost, "", si, dlBody); resp.err != nil {
-				errCh <- resp.err
-			}
-			wg.Done()
-		}(si, dlBody)
-	}
-	wg.Wait()
-	close(errCh)
+	responses := p.broadcastDownloadRequest(http.MethodPost, r.URL.Path, body, query)
 
-	// FIXME: consider adding new stats: downloader failures
 	failures := make([]error, 0, 10)
-	for err := range errCh {
-		if err != nil {
-			failures = append(failures, err)
+	for _, resp := range responses {
+		if resp.err != nil {
+			failures = append(failures, resp.err)
 		}
 	}
+
 	if len(failures) > 0 {
-		glog.Error(failures, len(failures))
-		return fmt.Errorf("following downloads failed: %v", failures)
+		return fmt.Errorf("following downloads failed: %v", failures), http.StatusBadRequest
 	}
-	return nil
+
+	return nil, http.StatusOK
 }
 
 // [METHOD] /v1/download
@@ -305,7 +262,7 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 		glog.Infof("httpDownloadAdmin payload %v", payload)
 	}
 
-	resp, statusCode, err := p.broadcastDownloadRequest(r.Method, path, payload)
+	resp, statusCode, err := p.broadcastDownloadAdminRequest(r.Method, path, payload)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), statusCode)
 		return
@@ -323,136 +280,19 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if ok := p.validateStartDownloadRequest(w, r); !ok {
+		return
+	}
+
 	id, err := cmn.GenUUID()
 	if err != nil {
 		glog.Error(err)
-		p.invalmsghdlr(w, r, "failed to generate id for the request", http.StatusInternalServerError)
+		p.invalmsghdlr(w, r, "Failed to generate id for the request.", http.StatusInternalServerError)
 		return
 	}
 
-	p.objectDownloadHandler(w, r, id)
-}
-
-// POST /v1/download?bucket=...&link=...&objname=...&template=...
-func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Request, id string) {
-	var (
-		// link -> objname
-		objects cmn.SimpleKVs
-		query   = r.URL.Query()
-
-		payload        = &cmn.DlBase{}
-		singlePayload  = &cmn.DlSingleBody{}
-		rangePayload   = &cmn.DlRangeBody{}
-		multiPayload   = &cmn.DlMultiBody{}
-		cloudPayload   = &cmn.DlCloudBody{}
-		objectsPayload interface{}
-
-		description string
-		bucket      string
-		bmd         *bucketMD
-
-		bckIsLocal, fromCloud bool
-	)
-
-	payload.InitWithQuery(query)
-	bucket = payload.Bucket
-
-	if bmd, bckIsLocal = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
-		return
-	}
-	if err := bmd.AllowColdGET(bucket, bckIsLocal); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if !bckIsLocal {
-		_, exists := bmd.Get(bucket, false)
-		if !exists {
-			if err := p.handleUnknownCB(bucket); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-		}
-	}
-
-	singlePayload.InitWithQuery(query)
-	rangePayload.InitWithQuery(query)
-	multiPayload.InitWithQuery(query)
-	cloudPayload.InitWithQuery(query)
-
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if err := singlePayload.Validate(); err == nil {
-		if objects, err = singlePayload.ExtractPayload(); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		description = singlePayload.Describe()
-	} else if err := rangePayload.Validate(); err == nil {
-		if objects, err = rangePayload.ExtractPayload(); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		description = rangePayload.Describe()
-	} else if err := multiPayload.Validate(b); err == nil {
-		if err := jsoniter.Unmarshal(b, &objectsPayload); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-
-		if objects, err = multiPayload.ExtractPayload(objectsPayload); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		description = multiPayload.Describe()
-	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
-		msg := cmn.SelectMsg{
-			Prefix:     cloudPayload.Prefix,
-			PageMarker: "",
-			Fast:       true,
-		}
-
-		bckEntries := make([]*cmn.BucketEntry, 0, 1024)
-		for {
-			curBckEntries, err := p.listBucket(r, bucket, payload.BckProvider, msg)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-
-			// filter only with matching suffix
-			for _, entry := range curBckEntries.Entries {
-				if strings.HasSuffix(entry.Name, cloudPayload.Suffix) {
-					bckEntries = append(bckEntries, entry)
-				}
-			}
-
-			msg.PageMarker = curBckEntries.PageMarker
-			if msg.PageMarker == "" {
-				break
-			}
-		}
-
-		objects = make(cmn.SimpleKVs, 10)
-		for _, entry := range bckEntries {
-			objects[entry.Name] = ""
-		}
-		fromCloud = true
-		description = cloudPayload.Describe()
-	} else {
-		p.invalmsghdlr(w, r, "invalid query keys or query values")
-		return
-	}
-
-	if payload.Description == "" {
-		payload.Description = description
-	}
-
-	if err := p.bulkDownloadProcessor(id, payload, objects, fromCloud); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if err, errCode := p.broadcastStartDownloadRequest(r, id); err != nil {
+		p.invalmsghdlr(w, r, fmt.Sprintf("Error starting download: %v.", err.Error()), errCode)
 		return
 	}
 
@@ -460,6 +300,39 @@ func (p *proxyrunner) objectDownloadHandler(w http.ResponseWriter, r *http.Reque
 }
 
 // Helper methods
+
+func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request) (ok bool) {
+	var (
+		bucket     string
+		bmd        *bucketMD
+		bckIsLocal bool
+		query      = r.URL.Query()
+
+		payload = &cmn.DlBase{}
+	)
+
+	payload.InitWithQuery(query)
+	bucket = payload.Bucket
+
+	if bmd, bckIsLocal = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
+		return false
+	}
+	if err := bmd.AllowColdGET(bucket, bckIsLocal); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return false
+	}
+	if !bckIsLocal {
+		_, exists := bmd.Get(bucket, false)
+		if !exists {
+			if err := p.handleUnknownCB(bucket); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return false
+			}
+		}
+	}
+
+	return true
+}
 
 func (p *proxyrunner) respondWithID(w http.ResponseWriter, r *http.Request, id string) {
 	resp := cmn.DlPostResp{
