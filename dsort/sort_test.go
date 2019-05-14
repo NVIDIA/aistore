@@ -17,7 +17,7 @@ import (
 func createRecords(keys ...interface{}) *extract.Records {
 	records := extract.NewRecords(len(keys))
 	for _, key := range keys {
-		records.Insert(&extract.Record{Key: key, ContentPath: fmt.Sprintf("%v", key)})
+		records.Insert(&extract.Record{Key: key, Name: fmt.Sprintf("%v", key)})
 	}
 	return records
 }

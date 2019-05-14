@@ -38,12 +38,12 @@ type (
 		ExtractShard(fqn string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
+		SupportsOffset() bool
 		MetadataSize() int64
 	}
 
 	RecordExtractor interface {
-		ExtractRecord(fqn string, name string, r cmn.ReadSizer, metadata []byte, toDisk bool) (int64, error)
-		ExtractRecordWithBuffer(fqn string, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, buf []byte) (int64, error)
+		ExtractRecordWithBuffer(t ExtractCreator, fqn string, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
 	}
 
 	RecordManager struct {
@@ -101,20 +101,20 @@ func NewRecordManager(daemonID, extension string, keyExtractor KeyExtractor, onD
 	}
 }
 
-func (rm *RecordManager) ExtractRecord(fqn, name string, r cmn.ReadSizer, metadata []byte, toDisk bool) (int64, error) {
-	return rm.ExtractRecordWithBuffer(fqn, name, r, metadata, toDisk, nil)
-}
+func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
+	var (
+		contentPath string
+		mdSize      int64
 
-func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, buf []byte) (size int64, err error) {
-	ext := filepath.Ext(name)
-	recordPath, fullPath := rm.paths(fqn, name, ext)
+		ext                  = filepath.Ext(name)
+		recordPath, fullPath = rm.paths(fqn, name, ext)
+	)
 
 	// If the content already exists we should skip it but set error (caller
 	// needs to handle it properly).
 	if rm.Records.Exists(recordPath, ext) {
 		msg := fmt.Sprintf("record %q has been duplicated", recordPath)
 		rm.Records.DeleteDup(recordPath, ext)
-		copyMetadataAndData(ioutil.Discard, r, metadata, buf)
 
 		// NOTE: there is no need to remove anything from `rm.extractionPaths`
 		// or `rm.contents` since it will be removed anyway in cleanup.
@@ -123,8 +123,21 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 		return 0, rm.onDuplicatedRecords(msg)
 	}
 
-	r, ske := rm.keyExtractor.PrepareExtractor(name, r, ext)
-	if toDisk {
+	r, ske, needRead := rm.keyExtractor.PrepareExtractor(name, r, ext)
+	// TODO: support SGLs even when offsets are supported.
+	if t.SupportsOffset() {
+		// If extractor was initialized we need to read the content, since it
+		// may contain information about the sorting/shuffling key.
+		if needRead {
+			if _, err := io.CopyBuffer(ioutil.Discard, r, buf); err != nil {
+				return 0, err
+			}
+		}
+
+		mdSize = t.MetadataSize()
+		size = r.Size()
+		contentPath = fqn
+	} else if toDisk {
 		newF, err := cmn.CreateFile(fullPath)
 		if err != nil {
 			return size, err
@@ -135,12 +148,18 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 		}
 		newF.Close()
 		rm.extractionPaths.Store(fullPath, struct{}{})
+
+		mdSize = int64(len(metadata))
+		contentPath = recordPath
 	} else {
 		sgl := mem.NewSGL(r.Size() + int64(len(metadata)))
 		if size, err = copyMetadataAndData(sgl, r, metadata, buf); err != nil {
 			return size, err
 		}
 		rm.contents.Store(fullPath, sgl)
+
+		mdSize = int64(len(metadata))
+		contentPath = recordPath
 	}
 
 	key, err := rm.keyExtractor.ExtractKey(ske)
@@ -148,12 +167,15 @@ func (rm *RecordManager) ExtractRecordWithBuffer(fqn, name string, r cmn.ReadSiz
 		return size, err
 	}
 
+	cmn.AssertMsg(contentPath != "", fmt.Sprintf("fqn: %s; name: %s", fqn, name))
 	rm.Records.Insert(&Record{
 		Key:         key,
+		Name:        recordPath,
 		DaemonID:    rm.daemonID,
-		ContentPath: recordPath,
+		ContentPath: contentPath,
 		Objects: []*RecordObj{&RecordObj{
-			MetadataSize: int64(len(metadata)),
+			Offset:       offset,
+			MetadataSize: mdSize,
 			Size:         size,
 			Extension:    ext,
 		}},

@@ -47,18 +47,10 @@ func newZipRecordDataReader() *zipRecordDataReader {
 }
 
 func (rd *zipRecordDataReader) reinit(zw *zip.Writer, size int64, metadataSize int64) {
-	rd.grow(metadataSize)
 	rd.zipWriter = zw
 	rd.written = 0
 	rd.size = size
 	rd.metadataSize = metadataSize
-}
-
-func (rd *zipRecordDataReader) grow(size int64) {
-	if int64(len(rd.metadataBuf)) < size {
-		rd.slab.Free(rd.metadataBuf)
-		rd.metadataBuf, rd.slab = mem.AllocFromSlab2(size)
-	}
 }
 
 func (rd *zipRecordDataReader) free() {
@@ -146,7 +138,7 @@ func (z *zipExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extrac
 			}
 
 			data := cmn.NewSizedReader(file, int64(header.UncompressedSize64))
-			if size, err = extractor.ExtractRecordWithBuffer(fqn, header.Name, data, bmeta, toDisk, buf); err != nil {
+			if size, err = extractor.ExtractRecordWithBuffer(z, fqn, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
 				file.Close()
 				return extractedSize, extractedCount, err
 			}
@@ -188,6 +180,10 @@ func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadC
 
 func (z *zipExtractCreator) UsingCompression() bool {
 	return true
+}
+
+func (z *zipExtractCreator) SupportsOffset() bool {
+	return false
 }
 
 func (z *zipExtractCreator) MetadataSize() int64 {

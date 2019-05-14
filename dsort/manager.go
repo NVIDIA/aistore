@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -74,6 +75,12 @@ type streamWriter struct {
 	n   int64
 	err error
 	wg  *cmn.TimeoutGroup
+}
+
+type remoteRequest struct {
+	DaemonID  string             `json:"d"`
+	Record    *extract.Record    `json:"r"`
+	RecordObj *extract.RecordObj `json:"o"`
 }
 
 // Manager maintains all the state required for a single run of a distributed archive file shuffle.
@@ -432,8 +439,10 @@ func (m *Manager) setExtractCreator() (err error) {
 	m.shardManager = extract.NewShardManager()
 
 	switch m.rs.Extension {
-	case extTar, extTarTgz, extTgz:
-		m.extractCreator = extract.NewTarExtractCreator(m.rs.Extension != extTar)
+	case extTar:
+		m.extractCreator = extract.NewTarExtractCreator()
+	case extTarTgz, extTgz:
+		m.extractCreator = extract.NewTargzExtractCreator()
 	case extZip:
 		m.extractCreator = extract.NewZipExtractCreator()
 	default:
@@ -644,10 +653,21 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 		}
 	}
 
+	// TODO: error handling should be improved - we probably should abort on
+	// error in all cases because it means that something bad happened: either
+	// networking problems or some target went down (in the latter we will
+	// abort anyway).
+
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		fromNode := m.smap.GetTarget(string(hdr.Opaque))
+		req := remoteRequest{}
+		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+			glog.Errorf("received damaged request: %s", err)
+			return
+		}
+
+		fromNode := m.smap.GetTarget(req.DaemonID)
 		if fromNode == nil {
-			glog.Errorf("received request from node %q which is not present in the smap", hdr.Opaque)
+			glog.Errorf("received request from node %q which is not present in the smap", req.DaemonID)
 			return
 		}
 
@@ -657,7 +677,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 		}
 
 		respHdr := transport.Header{
-			Objname: hdr.Objname,
+			Objname: req.Record.Name,
 		}
 
 		if m.aborted() {
@@ -665,8 +685,33 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		v, ok := m.recManager.RecordContents().Load(hdr.Objname)
-		if !ok {
+		if m.extractCreator.SupportsOffset() { // offset
+			f, err := cmn.NewFileHandle(hdr.Objname)
+			if err != nil {
+				errHandler(err, respHdr, fromNode)
+				return
+			}
+			_, err = f.Seek(req.RecordObj.Offset-req.RecordObj.MetadataSize, io.SeekStart)
+			if err != nil {
+				f.Close()
+				errHandler(err, respHdr, fromNode)
+				return
+			}
+			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+			r := cmn.NewLimitedReadCloser(f, respHdr.ObjAttrs.Size)
+			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, r, m.responseCallback); err != nil {
+				f.Close()
+				glog.Error(err)
+			}
+		} else if v, ok := m.recManager.RecordContents().Load(hdr.Objname); ok { // sgl
+			m.recManager.RecordContents().Delete(hdr.Objname)
+			sgl := v.(*memsys.SGL)
+			respHdr.ObjAttrs.Size = sgl.Size()
+			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
+				sgl.Free()
+				glog.Error(err)
+			}
+		} else { // file
 			f, err := cmn.NewFileHandle(hdr.Objname)
 			if err != nil {
 				errHandler(err, respHdr, fromNode)
@@ -681,14 +726,6 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			respHdr.ObjAttrs.Size = fi.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.responseCallback); err != nil {
 				f.Close()
-				glog.Error(err)
-			}
-		} else {
-			m.recManager.RecordContents().Delete(hdr.Objname)
-			sgl := v.(*memsys.SGL)
-			respHdr.ObjAttrs.Size = sgl.Size()
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
-				sgl.Free()
 				glog.Error(err)
 			}
 		}
@@ -781,8 +818,30 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}()
 
 			var n int64
-			v, ok := m.recManager.RecordContents().Load(pathToContent)
-			if !ok {
+			if m.extractCreator.SupportsOffset() {
+				f, err := os.Open(pathToContent) // TODO: it should be open always
+				if err != nil {
+					return written, err
+				}
+				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
+				if err != nil {
+					f.Close()
+					return written, err
+				}
+				if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
+					f.Close()
+					return written, err
+				}
+				f.Close()
+			} else if v, ok := m.recManager.RecordContents().Load(pathToContent); ok { // sgl
+				m.recManager.RecordContents().Delete(pathToContent)
+				sgl := v.(*memsys.SGL)
+				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
+					sgl.Free()
+					return written, err
+				}
+				sgl.Free()
+			} else { // file
 				f, err := os.Open(pathToContent)
 				if err != nil {
 					return written, err
@@ -792,14 +851,6 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 					return written, err
 				}
 				f.Close()
-			} else {
-				m.recManager.RecordContents().Delete(pathToContent)
-				sgl := v.(*memsys.SGL)
-				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
-					sgl.Free()
-					return written, err
-				}
-				sgl.Free()
 			}
 
 			written += n
@@ -812,19 +863,28 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				beforeRecv time.Time
 				beforeSend time.Time
 
-				wg      = &sync.WaitGroup{}
-				writer  = m.newStreamWriter(pathToContents, w)
+				wg      = cmn.NewTimeoutGroup()
+				writer  = m.newStreamWriter(rec.Name, w)
 				metrics = m.Metrics.Creation
 
-				hdr = transport.Header{
-					Objname: pathToContents,
-					Opaque:  []byte(m.ctx.node.DaemonID),
-				}
 				toNode = m.smap.GetTarget(daemonID)
 			)
 
 			if toNode == nil {
 				return 0, fmt.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
+			}
+
+			req := remoteRequest{
+				DaemonID:  m.ctx.node.DaemonID,
+				Record:    rec,
+				RecordObj: obj,
+			}
+			opaque, err := jsoniter.Marshal(req)
+			cmn.AssertNoErr(err)
+
+			hdr := transport.Header{
+				Objname: pathToContents,
+				Opaque:  opaque,
 			}
 
 			if m.Metrics.extended {
@@ -848,8 +908,8 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				return 0, err
 			}
 
-			// Send should be synchronous to make sure that 'wait timeout' is calculated
-			// only for receive side.
+			// Send should be synchronous to make sure that 'wait timeout' is
+			// calculated only for receive side.
 			wg.Wait()
 
 			if cbErr != nil {
@@ -869,7 +929,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			if timed || stopped {
 				// In case of time out or abort we need to pull the writer to
 				// avoid concurrent Close and Write on `writer.w`.
-				pulled = m.pullStreamWriter(pathToContents) != nil
+				pulled = m.pullStreamWriter(rec.Name) != nil
 			}
 
 			if m.Metrics.extended {
@@ -903,11 +963,11 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 		}
 
 		if rec.DaemonID != m.ctx.node.DaemonID { // File source contents are located on a different target.
-			return loadRemote(w, rec.DaemonID, rec.FullContentPath(obj))
+			return loadRemote(w, rec.DaemonID, rec.FullContentPath(m.extractCreator, obj))
 		}
 
 		// Load from local source: file or sgl
-		return loadLocal(w, rec.FullContentPath(obj))
+		return loadLocal(w, rec.FullContentPath(m.extractCreator, obj))
 	}
 }
 

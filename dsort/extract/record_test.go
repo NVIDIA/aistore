@@ -15,8 +15,8 @@ var _ = Describe("Records", func() {
 		It("should insert record", func() {
 			records := NewRecords(0)
 			records.Insert(&Record{
-				Key:         "some_key",
-				ContentPath: "some_key",
+				Key:  "some_key",
+				Name: "some_key",
 				Objects: []*RecordObj{
 					&RecordObj{
 						MetadataSize: 10,
@@ -26,8 +26,8 @@ var _ = Describe("Records", func() {
 				},
 			})
 			records.Insert(&Record{
-				Key:         "some_key1",
-				ContentPath: "some_key1",
+				Key:  "some_key1",
+				Name: "some_key1",
 				Objects: []*RecordObj{
 					&RecordObj{
 						MetadataSize: 10,
@@ -43,8 +43,8 @@ var _ = Describe("Records", func() {
 		It("should insert record but merge it", func() {
 			records := NewRecords(0)
 			records.Insert(&Record{
-				Key:         "some_key",
-				ContentPath: "some_key",
+				Key:  "some_key",
+				Name: "some_key",
 				Objects: []*RecordObj{
 					&RecordObj{
 						MetadataSize: 10,
@@ -70,8 +70,8 @@ var _ = Describe("Records", func() {
 			Expect(r.TotalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
 
 			records.Insert(&Record{
-				Key:         "some_key",
-				ContentPath: "some_key",
+				Key:  "some_key",
+				Name: "some_key",
 				Objects: []*RecordObj{
 					&RecordObj{
 						MetadataSize: 10,

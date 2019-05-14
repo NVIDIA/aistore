@@ -312,7 +312,6 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 	m.acquireCreateSema()
 	defer m.releaseCreateSema()
-
 	if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
 		return errors.New("out of space")
 	}
@@ -411,19 +410,19 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 exit:
+	metrics.Lock()
+	metrics.CreatedCnt++
+	if si.DaemonID != m.ctx.node.DaemonID {
+		metrics.MovedShardCnt++
+	}
 	if m.Metrics.extended {
-		metrics.Lock()
 		dur := time.Since(beforeCreation)
 		throughput := int64(float64(lom.Size()) / dur.Seconds())
 
-		metrics.CreatedCnt++
 		metrics.ShardCreationStats.updateTime(dur)
 		metrics.ShardCreationStats.updateThroughput(throughput)
-		if si.DaemonID != m.ctx.node.DaemonID {
-			metrics.MovedShardCnt++
-		}
-		metrics.Unlock()
 	}
+	metrics.Unlock()
 
 	return nil
 }

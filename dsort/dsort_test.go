@@ -120,6 +120,7 @@ func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadCon
 	ec.createShard(s, w, loadContent)
 	return 0, nil
 }
+func (ec *extractCreatorMock) SupportsOffset() bool   { return true }
 func (ec *extractCreatorMock) UsingCompression() bool { return ec.useCompression }
 func (ec *extractCreatorMock) MetadataSize() int64    { return 0 }
 
@@ -365,8 +366,8 @@ var _ = Describe("Distributed Sort", func() {
 					records := extract.NewRecords(len(keys))
 					for _, key := range keys {
 						records.Insert(&extract.Record{
-							Key:         key,
-							ContentPath: key,
+							Key:  key,
+							Name: key,
 						})
 					}
 					return records
@@ -601,6 +602,7 @@ var _ = Describe("Distributed Sort", func() {
 
 					manager.recManager.Records.Insert(&extract.Record{
 						Key:         key,
+						Name:        key,
 						ContentPath: key,
 						Objects: []*extract.RecordObj{&extract.RecordObj{
 							Size:      args.recordSize,

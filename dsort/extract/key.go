@@ -35,7 +35,7 @@ type (
 	}
 
 	KeyExtractor interface {
-		PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor)
+		PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool)
 
 		// ExtractKey extracts key from either name or reader (file/sgl)
 		ExtractKey(ske *SingleKeyExtractor) (interface{}, error)
@@ -62,16 +62,16 @@ func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, err
 	return s, nil
 }
 
-func (ke *md5KeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor) {
-	return r, &SingleKeyExtractor{name: name}
+func (ke *md5KeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
+	return r, &SingleKeyExtractor{name: name}, false
 }
 
 func NewNameKeyExtractor() (KeyExtractor, error) {
 	return &nameKeyExtractor{}, nil
 }
 
-func (ke *nameKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor) {
-	return r, &SingleKeyExtractor{name: name}
+func (ke *nameKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
+	return r, &SingleKeyExtractor{name: name}, false
 }
 
 func (ke *nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
@@ -86,14 +86,14 @@ func NewContentKeyExtractor(ty, ext string) (KeyExtractor, error) {
 	return &contentKeyExtractor{ty: ty, ext: ext}, nil
 }
 
-func (ke *contentKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor) {
+func (ke *contentKeyExtractor) PrepareExtractor(name string, r cmn.ReadSizer, ext string) (cmn.ReadSizer, *SingleKeyExtractor, bool) {
 	if ke.ext != ext {
-		return r, nil
+		return r, nil, false
 	}
 
 	buf := &bytes.Buffer{}
 	tee := cmn.NewSizedReader(io.TeeReader(r, buf), r.Size())
-	return tee, &SingleKeyExtractor{name: name, buf: buf}
+	return tee, &SingleKeyExtractor{name: name, buf: buf}, true
 }
 
 func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{}, error) {
