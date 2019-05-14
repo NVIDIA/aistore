@@ -48,9 +48,9 @@ Examples:
 * `ais stats --count 5 --refresh 10s` - displays 5 reports with statistics of a current primary proxy and all targets in the cluster with 10s interval between each report
 * `ais stats --refresh 2s` - displays a continuous report with statistics of a current primary proxy and all targets in the cluster with 2s interval between each report
 
-### diskstats
+### disk
 
-`ais diskstats [TARGET_ID]`
+`ais disk [TARGET_ID]`
 Returns the disk stats of the `TARGET_ID`. `TARGET_ID` is optional, if not present disk stats for all targets will be returned.
 
 | Flag | Type | Description | Default |
@@ -59,6 +59,6 @@ Returns the disk stats of the `TARGET_ID`. `TARGET_ID` is optional, if not prese
 | `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
 | `--count` | `int` | total number of generated reports | `1` |
 
-* `ais diskstats --count 5` - displays 5 reports with disk statistics of all targets in the cluster with 1s interval between each report
-* `ais diskstats --count 5 --refresh 10s` - displays 5 reports with disk statistics of all targets in the cluster with 10s interval between each report
-* `ais diskstats --refresh 2s` - displays a continuous report with disk statistics of all targets in the cluster with 2s interval between each report
+* `ais disk --count 5` - displays 5 reports with disk statistics of all targets in the cluster with 1s interval between each report
+* `ais disk --count 5 --refresh 10s` - displays 5 reports with disk statistics of all targets in the cluster with 10s interval between each report
+* `ais disk --refresh 2s` - displays a continuous report with disk statistics of all targets in the cluster with 2s interval between each report

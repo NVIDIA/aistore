@@ -146,7 +146,7 @@ func daecluStats(baseParams *api.BaseParams, daemonID string, useJSON bool) erro
 // Displays the disk stats of a target
 func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but diskstats works only for targets", daemonID)
+		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, cmn.GetWhatDiskStats)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
 		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)

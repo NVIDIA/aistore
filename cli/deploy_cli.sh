@@ -48,7 +48,7 @@ fi
 if [[ ! -z "${AIS_URL}" ]]; then
     URL=${AIS_URL}
 else 
-    echo "AIS_URL env variable is not set. Using ${URL}. To set a different one, run export AIS_URL=<URL>."
+    echo "AIS_URL env variable is not set. CLI will use ${URL} as default URL. To make it use a different one, run export AIS_URL=<URL>."
 fi
 
 # Install the CLI

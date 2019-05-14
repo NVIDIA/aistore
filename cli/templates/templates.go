@@ -21,17 +21,6 @@ import (
 // Templates for output
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
-	// List output
-	ListHeader = "\nDaemonID\t Type\t SmapVersion\t Uptime(µs)\t "
-	ListBody   = "{{$value.Snode.DaemonID}}\t {{$value.Snode.DaemonType}}\t {{$value.SmapVersion}}\t " +
-		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\t "
-
-	ListTmpl        = ListHeader + "\n{{ range $key, $value := . }}" + ListBody + "\n{{end}}\n"
-	ListTmplVerbose = ListHeader + "PublicURL\t IntraControlURL\t IntraDataURL\n" +
-		"{{ range $key, $value := . }}" + ListBody +
-		"{{$value.Snode.PublicNet.DirectURL}}\t {{$value.Snode.IntraControlNet.DirectURL}}\t {{$value.Snode.IntraDataNet.DirectURL}}\n" +
-		"{{end}}\n"
-
 	// Smap
 	SmapHeader = "\nDaemonID\t Type\t PublicURL\t IntraControlURL\t IntraDataURL\n"
 	SmapBody   = "{{$value.DaemonID}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}\t " +
@@ -46,7 +35,7 @@ const (
 		"PrimaryProxy: {{.ProxySI.DaemonID}}\t Proxies: {{len .Pmap}}\t Targets: {{len .Tmap}}\t Smap Version: {{.Version}}\n"
 
 	// Proxy Info
-	ProxyInfoHeader = "\nType: Proxy\nID\t MemUsed(%)\t MemAvail\t CpuUsed(%)\t Uptime(µs)\n"
+	ProxyInfoHeader = "Proxy\t %MemUsed\t MemAvail\t %CpuUsed\t Uptime\n"
 	ProxyInfoBody   = "{{$value.Snode.DaemonID}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
@@ -55,18 +44,18 @@ const (
 	ProxyInfoSingleTmpl = ProxyInfoHeader + "{{$value := . }}" + ProxyInfoBody
 
 	// Target Info
-	TargetInfoHeader = "\nType: Target\nID\t MemUsed(%)\t MemAvail\t CapUsed(%)\t CapAvail\t CpuUsed(%)\t Throughput\n"
+	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Throughput\n"
 	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 2}}\t " +
+		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
-		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2 | printf `%s/s`}}\n"
+		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2}}/s\n"
 
 	TargetInfoTmpl       = TargetInfoHeader + "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
 	TargetInfoSingleTmpl = TargetInfoHeader + "{{$value := . }}" + TargetInfoBody
 
 	// Stats
-	StatsHeader = "{{$obj := . }}\nDaemonID: {{ .Snode.DaemonID }}\t Type: {{ .Snode.DaemonType }}\n\nStats\n"
+	StatsHeader = "{{$obj := . }}\nDaemon: {{ .Snode.DaemonID }}\t Type: {{ .Snode.DaemonType }}\n\nStats\n"
 	StatsBody   = "{{range $key, $val := $obj.Stats.Tracker }}" +
 		"{{$statVal := ExtractStat $obj.Stats $key}}" +
 		"{{if (eq $statVal 0)}}{{else}}{{$key}}\t{{$statVal}}\n{{end}}" +
@@ -74,7 +63,7 @@ const (
 
 	ProxyStatsTmpl  = StatsHeader + StatsBody
 	TargetStatsTmpl = StatsHeader + StatsBody +
-		"Mountpaths\t CapacityUsed(%)\t CapacityAvail\n" +
+		"Mountpaths\t %CapacityUsed\t CapacityAvail\n" +
 		"{{range $key, $val := $obj.Capacity}}" +
 		"{{$key}}\t {{$val.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $val.Avail 5}}\n" +
 		"{{end}}\n"
@@ -90,25 +79,25 @@ const (
 		"{{$statVal := ExtractStat $val.Core $statKey}}" +
 		"{{if (eq $statVal 0)}}{{else}}{{$statKey}}\t{{$statVal}}\n{{end}}" +
 		"{{end}}\n" +
-		"Mountpaths\t CapacityUsed(%)\t CapacityAvail\n" +
+		"Mountpaths\t %CapacityUsed\t CapacityAvail\n" +
 		"{{range $mount, $capa := $val.Capacity}}" +
 		"{{$mount}}\t {{$capa.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $capa.Avail 5}}\n" +
 		"{{end}}\n\n" +
 		"{{end}}"
 
 	// Disk Stats
-	DiskStatsHeader = "TargetID\t" +
-		"DiskName\t" +
-		"ReadThroughput\t" +
-		"WriteThroughput\t" +
-		"DiskUtilization\n"
+	DiskStatsHeader = "Target\t" +
+		"Disk\t" +
+		"Read\t" +
+		"Write\t" +
+		"%Util\n"
 
 	DiskStatsBody = "{{ $value.TargetID }}\t" +
 		"{{ $value.DiskName }}\t" +
 		"{{ $stat := $value.Stat }}" +
-		"{{ BToKB $stat.RBps }} kB/s\t" +
-		"{{ BToKB $stat.WBps }} kB/s\t" +
-		"{{ $stat.Util }} %\n"
+		"{{ BToKB $stat.RBps }}kB/s\t" +
+		"{{ BToKB $stat.WBps }}kB/s\t" +
+		"{{ $stat.Util }}\n"
 
 	DiskStatsTmpl = DiskStatsHeader + "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 
@@ -247,7 +236,7 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
 
-	XactionBaseStatsHeader = "DaemonID\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
+	XactionBaseStatsHeader = "Daemon\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
 	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t " +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}} \t" +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}} \t {{FormatTime $xact.StartTimeX}}\t " +

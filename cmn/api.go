@@ -284,7 +284,7 @@ const (
 	GetWhatMountpaths   = "mountpaths"
 	GetWhatSnode        = "snode"
 	GetWhatSysInfo      = "sysinfo"
-	GetWhatDiskStats    = "diskstats"
+	GetWhatDiskStats    = "disk"
 	GetWhatDaemonStatus = "status"
 	GetWhatBucketMetaX  = "bucketmdxattr"
 )
