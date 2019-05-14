@@ -58,6 +58,7 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
     - [Local Docker-Compose](#local-docker-compose)
     - [Local Kubernetes](#local-kubernetes)
     - [Performance Monitoring](#performance-monitoring)
+- [Containerized Deployment and Host Resource Sharing](#containerized-deployment-and-host-resource-sharing)
 - [Guides and References](#guides-and-references)
 - [Selected Package READMEs](#selected-package-readmes)
 
@@ -76,7 +77,9 @@ Distribution of objects across AIS cluster is done via (lightning fast) two-dime
 
 ### Open Format
 
-AIS targets utilize local Linux filesystems - examples including (but not limited to) xfs, ext4, and openzfs. User data is stored *as is* without any alteration. AIS on-disk format is, therefore, fully defined by the local filesystem chosen at AIS deployment time. The implication is that you can access your data with and without AIS, and without any need to *convert* or *export/import*, etc.
+AIS targets utilize local Linux filesystems - examples including (but not limited to) xfs, ext4, and openzfs. User data is stored *as is* without any alteration. AIS on-disk format is, therefore, fully defined by the local filesystem chosen at AIS deployment time.
+
+> **You can access your data with and without AIS, and without any need to *convert* or *export/import*, etc. - at any time! Your data is stored in its original native format using user-given object names. Your data can be migrated out of AIS at any time as well, and, again, without any dependency whatsoever on the AIS itself.**
 
 > Your own data is [unlocked](https://en.wikipedia.org/wiki/Vendor_lock-in) and immediately available at all times.
 
@@ -343,6 +346,8 @@ $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match=
 
 This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match 'a\d+' regex.
 
+> In addition to the AIS cluster itself you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/deploy_cli.sh`) and sourcing Bash auto-completions.
+
 > For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 > For other useful commands, see the [Makefile](ais/Makefile).
 
@@ -389,11 +394,41 @@ $ ./stop_docker.sh -l # stop docker
 
 The 3rd and final local-deployment option makes use of [Kubeadm](https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm/) and is documented [here](deploy/dev/kubernetes).
 
+## Containerized Deployment and Host Resource Sharing
+
+The following **applies to all containerized deployments**: local and non-local - the latter including those that are "kubernetized".
+
+1. AIS nodes always automatically detect *containerization*.
+2. If deployed as a container, each AIS node independently discovers whether its own container's memory and/or CPU resources are restricted.
+3. Finally, the node then abides by those restrictions.
+
+To that end, each AIS node at startup loads and parses [cgroup](https://www.kernel.org/doc/Documentation/cgroup-v2.txt) settings for the container and, if the number of CPUs is restricted, adjusts the number of allocated system threads for its goroutines.
+
+> This adjustment is accomplished via the Go runtime [GOMAXPROCS variable](https://golang.org/pkg/runtime/). For in-depth information on CPU bandwidth control and scheduling in a multi-container environment, please refer to the [CFS Bandwidth Control](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt) document.
+
+Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself. Note, however, that memory in particular may affect dSort and erasure coding performance "forcing" those two to, effectively, "spill" their temporary content onto local drives, etc.
+
+> For technical details on AIS memory management, please see [this readme](memsys/README.md).
+
 ### Performance Monitoring
 
-AIS has out of the box support for [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite which then can be used as a data-source for Grafana to get visual overview of the statistics and metrics.
+As is usually the case with storage clusters, there are multiple ways to monitor their performance. For starters, AIS collects and logs a fairly large and constantly growing number of counters that describe absolutely all aspects of its operation including (but not limited to) those related to cluster recovery/rebalancing and object storage per se.
 
-We have provided scripts for easy deployment of both Graphite and Grafana.
+In particular:
+
+> For dSort monitoring, please see [dSort](dsort/README.md)
+> For Downloader monitoring, please see [Internet Downloader](downloader/README.md)
+
+The logging interval is called `stats_time` (default `10s`) and is [configurable](docs/configuration.md) on the level of both each specific node and the entire cluster.
+
+However. Speaking of ways to monitor AIS remotely, the two most obvious ones would be:
+
+* [AIS CLI](cli/README.md)
+* Graphite/Grafana
+
+As far as Graphite/Grafana, AIS integrates with these popular backends via [StatsD](https://github.com/etsy/statsd) - the *daemon for easy but powerful stats aggregation*. StatsD can be connected to Graphite which then can be used as a data-source for Grafana to get visual overview of the statistics and metrics.
+
+> The scripts for easy deployment of both Graphite and Grafana are included (see below).
 
 > For [local non-containerized deployments](#local-non-containerized), use `./ais/setup/deploy_grafana.sh` to start Graphite and Grafana containers. Local deployment will automatically notice the presence of the containers and will send statistics to the Graphite.
 
