@@ -20,26 +20,35 @@ type mpather interface {
 }
 
 func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {
-	var util int64 = 101
+	var (
+		util int64 = 101
+		skip       = make(cmn.SimpleKVs)
+	)
 loop:
 	for _, j := range mpathers {
-		mpathInfo := j.mountpathInfo()
-		if mpathInfo.Path == lom.ParsedFQN.MpathInfo.Path {
+		jpath := j.mountpathInfo().Path
+		if jpath == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
 		if lom.HasCopies() {
+			// skip existing
 			for _, cpyfqn := range lom.CopyFQN() {
-				parsedFQN, err := fs.Mountpaths.FQN2Info(cpyfqn) // can be optimized via lom.init
-				if err != nil {
-					glog.Errorf("%s: failed to parse copyFQN %s, err: %v", lom, cpyfqn, err)
-					continue loop
+				cpath, ok := skip[cpyfqn]
+				if !ok {
+					parsedFQN, err := fs.Mountpaths.FQN2Info(cpyfqn) // can be optimized via lom.init
+					if err != nil {
+						glog.Errorf("%s: failed to parse copyFQN %s, err: %v", lom, cpyfqn, err)
+						continue loop
+					}
+					cpath = parsedFQN.MpathInfo.Path
+					skip[cpyfqn] = cpath
 				}
-				if mpathInfo.Path == parsedFQN.MpathInfo.Path {
+				if jpath == cpath {
 					continue loop
 				}
 			}
 		}
-		if u := fs.Mountpaths.Iostats.GetDiskUtil(mpathInfo.Path); u < util {
+		if u := fs.Mountpaths.Iostats.GetDiskUtil(jpath); u < util {
 			out = j
 			util = u
 		}

@@ -411,7 +411,7 @@ func TestLocalMirror2_1(t *testing.T) {
 	}
 }
 
-// NOTE: targets must have at least 3 mountpaths for this test to PASS
+// NOTE: targets must have at least 4 mountpaths for this test to PASS
 func TestLocalMirror2_1_3(t *testing.T) {
 	total, copies2, copies3 := testLocalMirror(t, 1, 3)
 	if copies3 != total || copies2 != 0 {
@@ -441,7 +441,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		tassert.CheckFatal(t, err)
 
 		l := len(mpList.Available)
-		max := cmn.Max(cmn.Max(2, num1), num2)
+		max := cmn.Max(cmn.Max(2, num1), num2) + 1
 		if l < max {
 			t.Skipf("test %q requires at least %d mountpaths (target %s has %d)", t.Name(), max, targets[0], l)
 		}
@@ -569,6 +569,18 @@ func TestCloudMirror(t *testing.T) {
 	if l < num {
 		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), clibucket, num)
 	}
+	smap := getClusterMap(t, baseParams.URL)
+	{
+		targets := tutils.ExtractTargetNodes(smap)
+		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
+		mpList, err := api.GetMountpaths(baseTgtParams)
+		tassert.CheckFatal(t, err)
+
+		numps := len(mpList.Available)
+		if numps < 4 {
+			t.Skipf("test %q requires at least 4 mountpaths (target %s has %d)", t.Name(), targets[0], numps)
+		}
+	}
 
 	// cold GET - causes local mirroring
 	tutils.Logf("cold GET %d object into a 2-way mirror...\n", num)
@@ -591,19 +603,6 @@ func TestCloudMirror(t *testing.T) {
 	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
 	if copies2 < num {
 		t.Fatalf("listbucket: expecting %d 2-copies, got %d", num, copies2)
-	}
-
-	smap := getClusterMap(t, baseParams.URL)
-	{
-		targets := tutils.ExtractTargetNodes(smap)
-		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
-		mpList, err := api.GetMountpaths(baseTgtParams)
-		tassert.CheckFatal(t, err)
-
-		numps := len(mpList.Available)
-		if numps < 3 {
-			t.Skipf("test %q requires at least 3 mountpaths (target %s has %d)", t.Name(), targets[0], numps)
-		}
 	}
 
 	makeNCopies(t, 3, clibucket, baseParams)
