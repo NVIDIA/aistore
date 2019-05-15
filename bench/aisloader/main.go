@@ -32,7 +32,10 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/tabwriter"
 	"time"
+
+	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 
@@ -50,7 +53,7 @@ const (
 
 	myName           = "loader"
 	dockerEnvFile    = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
-	randomObjnameLen = 32
+	randomObjNameLen = 32
 )
 
 type (
@@ -59,7 +62,7 @@ type (
 		proxyURL    string
 		bucket      string
 		bckProvider string
-		objName     string // In the format of 'virtual dir' + "/" + objname
+		objName     string // In the format of 'virtual dir' + "/" + objName
 		size        int64
 		err         error
 		start       time.Time
@@ -108,6 +111,8 @@ type (
 		randomObjName bool
 		objNamePrefix string
 
+		uniqueGETs bool
+
 		verifyHash bool // verify xxHash during get
 		cleanUp    bool
 		usingSG    bool
@@ -151,7 +156,7 @@ var (
 	workOrderResults chan *workOrder
 	intervalStats    sts
 	accumulatedStats sts
-	allObjects       []string // All objects created under virtual directory myName
+	bucketObjsNames  namegetter.ObjectNameGetter
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC          statsd.Client
 	getPending       int64
@@ -164,7 +169,7 @@ var (
 
 	useRandomObjName bool
 	loaderIDMaskLen  uint
-	objnameCnt       atomic.Uint64
+	objNameCnt       atomic.Uint64
 
 	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
 	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
@@ -190,7 +195,7 @@ func printUsage(f *flag.FlagSet) {
 		"  aisloader -bucket=nvais -cleanup=false -duration 10s -numworkers=3 -pctput=100 -bckprovider=local",
 		"  aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local",
 		"\tFirst command PUTs into local bucket with clean up disabled, leaving the bucket for the second command to test only GET performance",
-		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000 -objnamePrefix=\"aisloader\"",
+		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000 -objNamePrefix=\"aisloader\"",
 		"\tPut files with names: `aisloader/hex({0..2000}{loaderid})`, stop when 2000 files put into the bucket",
 	}
 	for i := 0; i < len(examples); i++ {
@@ -265,7 +270,11 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.randomObjName, "randomObjName", true,
 		"If set, new objects get random name of length 32 characters (slow for large workloads); omitted when loaderIDMaskLen set\n"+
 			"If not set or omitted, consecutive hex characters used for naming objects, with trailing loaderid characters (see examples)")
-	f.StringVar(&p.objNamePrefix, "objnamePrefix", "", "Common prefix for all objects created by aisloader")
+	f.StringVar(&p.objNamePrefix, "objNamePrefix", "", "Common prefix for all objects created by aisloader")
+
+	f.BoolVar(&p.uniqueGETs, "uniquegets", true, "When true, aisloader executes GET on different objects "+
+		"(randomly selected from the entire list of objects to GET). Simultaneously, aisloader makes sure not to GET the same object twice."+
+		"Once the entire list is \"completed\" aisloader repeats the process all over again if required")
 
 	//Advanced Usage
 	f.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
@@ -416,7 +425,29 @@ func parseCmdLine() (params, error) {
 	}
 
 	p.proxyURL = "http://" + ip + ":" + port
+
+	printArguments(f)
 	return p, nil
+}
+
+func printArguments(set *flag.FlagSet) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', 0)
+
+	_, _ = fmt.Fprintf(w, "\n==== COMMAND LINE ARGUMENTS ============\n")
+	_, _ = fmt.Fprintf(w, "======== DEFAULTS ========\n")
+	set.VisitAll(func(f *flag.Flag) {
+		if f.Value.String() == f.DefValue {
+			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
+		}
+	})
+	_, _ = fmt.Fprintf(w, "======== CUSTOM ==========\n")
+	set.Visit(func(f *flag.Flag) {
+		if f.Value.String() != f.DefValue {
+			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
+		}
+	})
+	_, _ = fmt.Fprintf(w, "========================================\n\n")
+	_ = w.Flush()
 }
 
 // newStats returns a new stats object with given time as the starting point
@@ -537,12 +568,13 @@ func main() {
 			return
 		}
 
-		if runParams.putPct == 0 && len(allObjects) == 0 {
+		objsLen := bucketObjsNames.Len()
+		if runParams.putPct == 0 && objsLen == 0 {
 			fmt.Println("Nothing to read, bucket is empty")
 			return
 		}
 
-		fmt.Printf("Found %d existing objects\n", len(allObjects))
+		fmt.Printf("Found %d existing objects\n", objsLen)
 	}
 
 	osSigChan := make(chan os.Signal, 2)
@@ -853,10 +885,11 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	pl := prettyLatency
 	pt := prettyTimeStamp
 
+	workOrderResLen := int64(len(workOrderResults))
 	// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
 	if s.put.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "Put",
-			pn(s.put.Total())+"("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(int64(len(workOrderResults)))+")",
+			pn(s.put.Total())+"("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(workOrderResLen)+")",
 			pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
 			pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
 			pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
@@ -864,7 +897,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	}
 	if s.get.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "Get",
-			pn(s.get.Total())+"("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(int64(len(workOrderResults)))+")",
+			pn(s.get.Total())+"("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(workOrderResLen)+")",
 			pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
 			pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
 			pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
@@ -947,15 +980,15 @@ func newPutWorkOrder() (*workOrder, error) {
 }
 
 func putObjectname() (string, error) {
-	if runParams.maxObjectsPut != 0 && objnameCnt.Load() == runParams.maxObjectsPut {
+	if runParams.maxObjectsPut != 0 && objNameCnt.Load() == runParams.maxObjectsPut {
 		return "", fmt.Errorf("number of put objects reached maxObjectsPut limit (%d)", runParams.maxObjectsPut)
 	}
 
 	if useRandomObjName {
-		return tutils.FastRandomFilename(rnd, randomObjnameLen), nil
+		return tutils.FastRandomFilename(rnd, randomObjNameLen), nil
 	}
 
-	objectNumber := (objnameCnt.Inc() - 1) << loaderIDMaskLen
+	objectNumber := (objNameCnt.Inc() - 1) << loaderIDMaskLen
 	objectNumber |= runParams.loaderID
 
 	if runParams.objNamePrefix == "" {
@@ -965,8 +998,7 @@ func putObjectname() (string, error) {
 }
 
 func newGetWorkOrder() *workOrder {
-	n := len(allObjects)
-	if n == 0 {
+	if bucketObjsNames.Len() == 0 {
 		return nil
 	}
 
@@ -976,7 +1008,7 @@ func newGetWorkOrder() *workOrder {
 		bucket:      runParams.bucket,
 		bckProvider: runParams.bckProvider,
 		op:          opGet,
-		objName:     allObjects[rnd.Intn(n)],
+		objName:     bucketObjsNames.ObjName(),
 	}
 }
 
@@ -1041,7 +1073,7 @@ func completeWorkOrder(wo *workOrder) {
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
-			allObjects = append(allObjects, wo.objName)
+			bucketObjsNames.AddObjName(wo.objName)
 			intervalStats.put.Add(wo.size, delta)
 			intervalStats.statsd.Put.Add(wo.size, delta)
 		} else {
@@ -1099,15 +1131,16 @@ func cleanUp() {
 	}
 
 	w := runParams.numWorkers
-	n := len(allObjects) / w
+	objsLen := bucketObjsNames.Len()
+	n := objsLen / w
 	for i := 0; i < w; i++ {
 		wg.Add(1)
-		go f(allObjects[i*n:(i+1)*n], &wg)
+		go f(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
 	}
 
-	if len(allObjects)%w != 0 {
+	if objsLen%w != 0 {
 		wg.Add(1)
-		go f(allObjects[n*w:], &wg)
+		go f(bucketObjsNames.Names()[n*w:], &wg)
 	}
 
 	wg.Wait()
@@ -1122,8 +1155,19 @@ func cleanUp() {
 
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
-	var err error
+	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
 
-	allObjects, err = tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
+	if !runParams.uniqueGETs {
+		bucketObjsNames = &namegetter.RandomNameGetter{}
+	} else {
+		bucketObjsNames = &namegetter.RandomUniqueIterNameGetter{}
+
+		// number from benchmarks: aisloader/tests/objNamegetter_test.go
+		// below this threshold, Random strategies are better
+		if len(names) > 800000 && runParams.putPct == 0 {
+			bucketObjsNames = &namegetter.PermutationUniqueNameGetter{}
+		}
+	}
+	bucketObjsNames.Init(names, rnd)
 	return err
 }
