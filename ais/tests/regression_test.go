@@ -554,7 +554,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 5. wait for rebalance to run its course
 	//
-	waitForRebalanceToComplete(t, baseParams, time.Minute)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	//
 	// step 6. statistics
 	//

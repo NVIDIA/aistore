@@ -35,6 +35,7 @@ const (
 	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)
 	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 	readerType              = tutils.ReaderTypeSG
+	rebalanceTimeout        = 5 * time.Minute
 )
 
 var (

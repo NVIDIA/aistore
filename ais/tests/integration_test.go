@@ -620,7 +620,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	tutils.Logln("reregistering complete")
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
@@ -680,7 +680,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Wait for everything to finish
 	m.wg.Wait()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	// main check - try to read all objects
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -917,7 +917,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// wait for everything to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
-	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	md.wg.Wait()
 
 	// read files once again
@@ -1231,7 +1231,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	err = api.AddMountpath(baseParams, newMountpath)
 	tassert.CheckFatal(t, err)
 
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), 5*time.Minute)
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 
 	// Read files after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1308,7 +1308,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 	}
 
-	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), 5*time.Minute)
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
 
 	// Read after rebalance
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1526,7 +1526,7 @@ func TestAtimeRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	waitForRebalanceToComplete(t, baseParams, 5*time.Minute)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	msg = &cmn.SelectMsg{Props: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus, TimeFormat: time.StampNano}
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)

@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -226,7 +225,6 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
-	rebalanceTimeout := 5 * time.Minute
 
 	smap := getClusterMap(t, proxyURL)
 	l := len(smap.Tmap)

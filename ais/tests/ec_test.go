@@ -1660,7 +1660,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	defer func() {
 		smap = tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
-		waitForRebalanceToComplete(t, baseParams)
+		waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
 	// 3. Read objects
@@ -1760,7 +1760,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		for _, target := range removedTargets {
 			smap = tutils.RestoreTarget(t, proxyURL, smap, target)
 		}
-		waitForRebalanceToComplete(t, baseParams)
+		waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	}()
 
 	hasTarget := func(targets []*cluster.Snode, target *cluster.Snode) bool {
