@@ -11,6 +11,8 @@ import (
 	"hash/crc32"
 )
 
+const BadCksumPrefix = "BAD CHECKSUM:"
+
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
@@ -65,6 +67,22 @@ func EqCksum(a, b Cksummer) bool {
 	t1, v1 := a.Get()
 	t2, v2 := b.Get()
 	return t1 == t2 && v1 == v2
+}
+
+func BadCksum(a, b Cksummer) string {
+	if a != nil && b == nil {
+		return fmt.Sprintf("%s (%s != %v)", BadCksumPrefix, a, b)
+	} else if a == nil && b != nil {
+		return fmt.Sprintf("%s (%v != %s)", BadCksumPrefix, a, b)
+	} else if a == nil && b == nil {
+		return fmt.Sprintf("%s (nil != nil)", BadCksumPrefix)
+	}
+	t1, v1 := a.Get()
+	t2, v2 := b.Get()
+	if t1 == t2 {
+		return fmt.Sprintf("%s %s(%s != %s)", BadCksumPrefix, t1, v1, v2)
+	}
+	return fmt.Sprintf("%s [%s,%s...] != [%s,%s...]", BadCksumPrefix, t1, v1[:Min(8, len(v1))], t2, v2[:Min(8, len(v2))])
 }
 
 func (v Cksumvalxxhash) Get() (string, string) { return v.kind, v.val }

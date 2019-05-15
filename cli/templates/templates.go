@@ -159,7 +159,7 @@ const (
 		" Type: {{$obj.Type}}\n" +
 		" Validate Cold Get: {{$obj.ValidateColdGet}}\n" +
 		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n" +
-		" Validate Cluster Migration: {{$obj.ValidateClusterMigration}}\n" +
+		" Validate Object Migration: {{$obj.ValidateObjMove}}\n" +
 		" Enable Read Range: {{$obj.EnableReadRange}}\n"
 	VerConfTmpl = "\n{{$obj := .Ver}}Version Config\n" +
 		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n"

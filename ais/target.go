@@ -2512,7 +2512,7 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 		checkCksumType = roiCkConf.Type
 		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
 
-		if !roi.migrated || roiCkConf.ValidateClusterMigration {
+		if !roi.migrated || roiCkConf.ValidateObjMove {
 			saveHash = xxhash.New64()
 			hashes = []hash.Hash{saveHash}
 
@@ -2521,9 +2521,8 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 				checkHash = saveHash
 			}
 		} else {
-			// If migration validation is not required we can just take
-			// calculated checksum by some other node (from which we received
-			// the object). If not present we need to calculate it.
+			// if migration validation is not configured we can just take
+			// the checksum that has arrived with the object (and compute it if not present)
 			roi.lom.SetCksum(roi.cksumToCheck)
 			if roi.cksumToCheck == nil {
 				saveHash = xxhash.New64()
@@ -2531,11 +2530,11 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 			}
 		}
 	} else if roi.cold {
-		// by default we should calculate xxhash and save it together with file
+		// compute xxhash (the default checksum) and save it as part of the object metadata
 		saveHash = xxhash.New64()
 		hashes = []hash.Hash{saveHash}
 
-		// if configured and the cksum is provied we should also check md5 hash (aws, gcp)
+		// if validate-cold-get and the cksum is provied we should also check md5 hash (aws, gcp)
 		if roiCkConf.ValidateColdGet && roi.cksumToCheck != nil {
 			expectedCksum = roi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
@@ -2557,8 +2556,8 @@ func (roi *recvObjInfo) writeToFile() (err error) {
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			err = fmt.Errorf("bad checksum - expected %s, got: %s; workFQN: %q",
-				expectedCksum.String(), computedCksum.String(), roi.workFQN)
+			s := cmn.BadCksum(expectedCksum, computedCksum) + ", " + roi.lom.StringEx() + "[" + roi.workFQN + "]"
+			err = fmt.Errorf(s)
 			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}

@@ -29,10 +29,7 @@ import (
 //   bucket that contains the object, etc.
 //
 
-const (
-	pkgName = "cluster"
-	badCsum = "BAD CHECKSUM:"
-)
+const pkgName = "cluster"
 
 type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
@@ -254,12 +251,7 @@ func (lom *LOM) StringEx() string {
 }
 
 func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (errstr string) {
-	if lom.md.cksum != nil {
-		errstr = fmt.Sprintf("%s %s (%s != %s)", badCsum, lom, cksum, lom.md.cksum)
-	} else {
-		errstr = fmt.Sprintf("%s %s (%s != nil)", badCsum, lom, cksum)
-	}
-	return
+	return cmn.BadCksum(cksum, lom.md.cksum) + ", " + lom.StringEx()
 }
 
 // IncObjectVersion increments the current version xattrs and returns the new value.

@@ -62,11 +62,11 @@ cat > $CONFFILE <<EOL
 		"dest_retry_time": "2m"
 	},
 	"cksum": {
-		"type":                       "xxhash",
-		"validate_cold_get":          true,
-		"validate_warm_get":          false,
-		"validate_cluster_migration": false,
-		"enable_read_range":          false
+		"type":			"xxhash",
+		"validate_cold_get":	true,
+		"validate_warm_get":	false,
+		"validate_obj_move":	false,
+		"enable_read_range":	false
 	},
 	"versioning": {
 		"enabled":		"true",

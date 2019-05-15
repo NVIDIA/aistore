@@ -89,7 +89,7 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 	payload = mdstr[cmn.SizeofI64:]
 	actualCksm = xxhash.ChecksumString64S(payload, MLCG32)
 	if expectedCksm != actualCksm {
-		return fmt.Errorf("%s (%x != %x)", badCsum, expectedCksm, actualCksm)
+		return fmt.Errorf("%s (%x != %x)", cmn.BadCksumPrefix, expectedCksm, actualCksm)
 	}
 	records = strings.Split(payload, recordSepa)
 	for _, record := range records {
