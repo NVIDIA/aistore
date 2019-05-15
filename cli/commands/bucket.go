@@ -26,7 +26,7 @@ const (
 	bucketNames      = "names"
 	bucketSetProps   = cmn.ActSetProps
 	bucketResetProps = cmn.ActResetProps
-	bucketGetProps   = commandProps
+	bucketGetProps   = "props"
 	bucketNWayMirror = cmn.ActMakeNCopies
 	bucketEvict      = commandEvict
 
@@ -37,6 +37,7 @@ const (
 var (
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
 	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all objects in a bucket and their details; include EC replicas"}
+	propsFlag         = cli.BoolFlag{Name: "props", Usage: "properties of a bucket"}
 	newBucketFlag     = cli.StringFlag{Name: "new-bucket", Usage: "new name of bucket"}
 	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}

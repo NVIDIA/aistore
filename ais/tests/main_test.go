@@ -19,7 +19,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -894,38 +893,73 @@ func TestHeadObject(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		objName  = "headobject_test_obj"
-		objSize  = 1024
+		objSize  = int64(1024)
+
+		putTime time.Time
 	)
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	r, rrErr := tutils.NewRandReader(int64(objSize), false)
+	r, rrErr := tutils.NewRandReader(objSize, true)
 	if rrErr != nil {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", rrErr)
 	}
 	defer r.Close()
+	hash := r.XXHash()
 	putArgs := api.PutObjectArgs{
 		BaseParams: tutils.DefaultBaseAPIParams(t),
 		Bucket:     TestLocalBucketName,
 		Object:     objName,
-		Hash:       r.XXHash(),
+		Hash:       hash,
 		Reader:     r,
 	}
+
+	putTime, _ = time.Parse(time.RFC822, time.Now().Format(time.RFC822)) // Get the time in the same format as atime (with milliseconds truncated)
 	if err := api.PutObject(putArgs); err != nil {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: ""}
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "", NumCopies: 1, Checksum: hash, Present: true, BucketLocal: true}
 	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
 
-	if !reflect.DeepEqual(props, propsExp) {
-		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
+	if props.Size != propsExp.Size {
+		t.Errorf("Returned `Size` not correct. Expected: %v, actual: %v", propsExp.Size, props.Size)
 	}
+	if props.Version != propsExp.Version {
+		t.Errorf("Returned `Version` not correct. Expected: %v, actual: %v", propsExp.Version, props.Version)
+	}
+	if props.NumCopies != propsExp.NumCopies {
+		t.Errorf("Returned `Number` of copies not correct. Expected: %v, actual: %v", propsExp.NumCopies, props.NumCopies)
+	}
+	if props.Checksum != propsExp.Checksum {
+		t.Errorf("Returned `Checksum` not correct. Expected: %v, actual: %v", propsExp.Checksum, props.Checksum)
+	}
+	if props.Present != propsExp.Present {
+		t.Errorf("Returned `Present` not correct. Expected: %v, actual: %v", propsExp.Present, props.Present)
+	}
+	if props.BucketLocal != propsExp.BucketLocal {
+		t.Errorf("Returned `BucketLocal` not correct. Expected: %v, actual: %v", propsExp.BucketLocal, props.BucketLocal)
+	}
+	if props.Atime.IsZero() {
+		t.Fatalf("Returned `Atime` (%s) is zero.", props.Atime)
+	}
+	if props.Atime.Before(putTime) {
+		t.Errorf("Returned `Atime` (%s) not correct - expected `atime` after `put` time (%s)", props.Atime, putTime.Format(time.RFC822))
+	}
+}
 
-	_, err = api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", "this_object_should_not_exist")
+func TestHeadNonexistentObject(t *testing.T) {
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		objName  = "this_object_should_not_exist"
+	)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	_, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}

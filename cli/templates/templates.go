@@ -106,6 +106,18 @@ const (
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
 
+	// Object stat
+	ObjStatHeader = "Local\tPresent\tSize\tVersion\tAtime\tCopies\tChecksum\n"
+	ObjStatBody   = "{{ .BucketLocal }}\t" +
+		"{{ .Present }}\t" +
+		"{{ FormatBytesSigned .Size 2 }}\t" +
+		"{{ .Version }}\t" +
+		"{{ if IsUnsetTime .Atime }}-{{else}}{{ FormatTime .Atime }}{{end}}\t" +
+		"{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t" +
+		"{{ if .Checksum }}{{ .Checksum }}{{else}}-{{end}}\n"
+
+	ObjStatTmpl = ObjStatHeader + ObjStatBody
+
 	// Config
 	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +
 		" Copies: {{$obj.Copies}}\n" +
@@ -245,7 +257,7 @@ const (
 	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t " +
 		"{{if (eq $xact.ObjCountX 0) }}-{{else}}{{$xact.ObjCountX}}{{end}} \t" +
 		"{{if (eq $xact.BytesCountX 0) }}-{{else}}{{FormatBytesSigned $xact.BytesCountX 2}}{{end}} \t {{FormatTime $xact.StartTimeX}}\t " +
-		"{{if (IsUnsetTime $xact.EndTimeX)}}---{{else}}{{FormatTime $xact.EndTimeX}}{{end}} \t {{$xact.AbortedX}}\n"
+		"{{if (IsUnsetTime $xact.EndTimeX)}}-{{else}}{{FormatTime $xact.EndTimeX}}{{end}} \t {{$xact.AbortedX}}\n"
 	XactionExtBody = "{{if $xact.Ext}}" + // if not nil
 		"Kind: {{$xact.KindX}}\n" +
 		"{{range $name, $val := $xact.Ext}}" +
@@ -297,6 +309,11 @@ type DiskStatsTemplateHelper struct {
 	TargetID string
 	DiskName string
 	Stat     *ios.SelectedDiskStats
+}
+
+type ObjectStatTemplateHelper struct {
+	Name  string
+	Props *cmn.ObjectProps
 }
 
 // Gets the associated value from CoreStats

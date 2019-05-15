@@ -21,7 +21,6 @@ const (
 	cliName          = "ais"
 	commandList      = "list"
 	commandRename    = "rename"
-	commandProps     = "props"
 	commandEvict     = "evict"
 	paramBckProvider = "bucket-provider"
 
@@ -44,7 +43,6 @@ var (
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
-	propsFlag    = cli.BoolFlag{Name: commandProps, Usage: "properties of resource (object, bucket)"}
 	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'"}

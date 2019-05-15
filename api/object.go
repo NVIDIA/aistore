@@ -70,14 +70,50 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 		return nil, err
 	}
 
-	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderObjSize))
+	var (
+		size        int64
+		numCopies   int
+		present     bool
+		localBucket bool
+		atime       time.Time
+	)
+
+	size, err = strconv.ParseInt(r.Header.Get(cmn.HeaderObjSize), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	numCopiesStr := r.Header.Get(cmn.HeaderObjNumCopies)
+	if numCopiesStr != "" {
+		numCopies, err = strconv.Atoi(numCopiesStr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	atimeStr := r.Header.Get(cmn.HeaderObjAtime)
+	if atimeStr != "" {
+		atime, err = time.Parse(time.RFC822, atimeStr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	present, err = strconv.ParseBool(r.Header.Get(cmn.HeaderObjPresent))
+	if err != nil {
+		return nil, err
+	}
+	localBucket, err = strconv.ParseBool(r.Header.Get(cmn.HeaderObjIsBckLocal))
 	if err != nil {
 		return nil, err
 	}
 
 	return &cmn.ObjectProps{
-		Size:    size,
-		Version: r.Header.Get(cmn.HeaderObjVersion),
+		Size:        size,
+		Version:     r.Header.Get(cmn.HeaderObjVersion),
+		Atime:       atime,
+		NumCopies:   numCopies,
+		Checksum:    r.Header.Get(cmn.HeaderObjCksumVal),
+		Present:     present,
+		BucketLocal: localBucket,
 	}, nil
 }
 

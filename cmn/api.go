@@ -167,12 +167,15 @@ const (
 	HeaderBucketAccessAttrs     = "aattrs"                  // Bucket access attributes
 
 	// object meta
-	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
-	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
-	HeaderObjAtime     = "ObjAtime"     // Object access time
-	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
-	HeaderObjSize      = "ObjSize"      // Object size (bytes)
-	HeaderObjVersion   = "ObjVersion"   // Object version/generation - local or Cloud
+	HeaderObjCksumType  = "ObjCksumType"  // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal   = "ObjCksumVal"   // Checksum Value
+	HeaderObjAtime      = "ObjAtime"      // Object access time
+	HeaderObjReplicSrc  = "ObjReplicSrc"  // In replication PUT request specifies the source target
+	HeaderObjSize       = "ObjSize"       // Object size (bytes)
+	HeaderObjVersion    = "ObjVersion"    // Object version/generation - local or Cloud
+	HeaderObjPresent    = "ObjPresent"    // Is object present in the cluster
+	HeaderObjNumCopies  = "ObjNumCopies"  // Number of copies of the object
+	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
 )
 
 // URL Query "?name1=val1&name2=..."
@@ -624,8 +627,13 @@ func (c *ECConf) RequiredRestoreTargets() int {
 
 // ObjectProps
 type ObjectProps struct {
-	Size    int
-	Version string
+	Size        int64
+	Version     string
+	Atime       time.Time
+	NumCopies   int
+	Checksum    string
+	Present     bool
+	BucketLocal bool
 }
 
 func DefaultBucketProps() *BucketProps {

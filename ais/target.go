@@ -1335,13 +1335,15 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, objname, errstr string
-		checkCached             bool
-		errcode                 int
 		objmeta                 cmn.SimpleKVs
+		query                   = r.URL.Query()
+
+		errcode        int
+		exists         bool
+		checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached)) // establish local presence, ignore obj attrs
+		silent, _      = cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	)
-	query := r.URL.Query()
-	checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
-	silent, _ := cmn.ParseBool(query.Get(cmn.URLParamSilent))
+
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1358,6 +1360,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler(w, r, errstr)
 		return
 	}
+	t.rtnamemap.Lock(lom.Uname(), false)
+	defer t.rtnamemap.Unlock(lom.Uname(), false)
+
 	if _, errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
 		invalidHandler(w, r, errstr)
 		return
@@ -1366,17 +1371,17 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom.StringEx(), pid)
 	}
+
+	exists = lom.Exists()
 	if lom.BckIsLocal || checkCached {
-		if !lom.Exists() {
-			status := http.StatusNotFound
-			http.Error(w, http.StatusText(status), status)
+		if !exists {
+			invalidHandler(w, r, fmt.Sprintf("no such object %s in bucket %s", objname, bucket), http.StatusNotFound)
 			return
-		} else if checkCached {
+		}
+		if checkCached {
 			return
 		}
 		objmeta = make(cmn.SimpleKVs)
-		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size(), 10)
-		objmeta[cmn.HeaderObjVersion] = lom.Version()
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
@@ -1388,6 +1393,20 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	if exists {
+		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size(), 10)
+		objmeta[cmn.HeaderObjVersion] = lom.Version()
+		if lom.AtimeUnix() != 0 {
+			objmeta[cmn.HeaderObjAtime] = lom.Atime().Format(time.RFC822)
+		}
+		objmeta[cmn.HeaderObjNumCopies] = strconv.Itoa(lom.NumCopies())
+		_, ckSum := lom.Cksum().Get()
+		objmeta[cmn.HeaderObjCksumVal] = ckSum
+	}
+	objmeta[cmn.HeaderObjIsBckLocal] = strconv.FormatBool(lom.BckIsLocal)
+	objmeta[cmn.HeaderObjPresent] = strconv.FormatBool(exists)
+
 	hdr := w.Header()
 	for k, v := range objmeta {
 		hdr.Add(k, v)
