@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -95,7 +94,7 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (z *zipExtractCreator) ExtractShard(shardName string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		zr   *zip.Reader
 		size int64
@@ -139,7 +138,7 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 			}
 
 			data := cmn.NewSizedReader(file, int64(header.UncompressedSize64))
-			if size, err = extractor.ExtractRecordWithBuffer(z, fqn, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
+			if size, err = extractor.ExtractRecordWithBuffer(z, shardName, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
 				file.Close()
 				return extractedSize, extractedCount, err
 			}

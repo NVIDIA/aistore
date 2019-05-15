@@ -36,7 +36,7 @@ type (
 	// ExtractCreator is interface which describes set of functions which each
 	// shard creator should implement.
 	ExtractCreator interface {
-		ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
+		ExtractShard(shardName string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool
@@ -44,7 +44,7 @@ type (
 	}
 
 	RecordExtractor interface {
-		ExtractRecordWithBuffer(t ExtractCreator, fqn fs.ParsedFQN, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
+		ExtractRecordWithBuffer(t ExtractCreator, shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
 	}
 
 	RecordManager struct {
@@ -106,14 +106,15 @@ func NewRecordManager(t cluster.Target, daemonID, bucket, extension string, keyE
 	}
 }
 
-func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.ParsedFQN, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
+func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
 	var (
-		storeType   string
-		contentPath string
-		mdSize      int64
+		storeType       string
+		contentPath     string
+		fullContentPath string
+		mdSize          int64
 
 		ext              = filepath.Ext(recordName)
-		recordUniqueName = rm.genRecordUniqueName(fqn, recordName, ext)
+		recordUniqueName = rm.genRecordUniqueName(shardName, recordName)
 	)
 
 	// If the content already exists we should skip it but set error (caller
@@ -130,11 +131,20 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.Parsed
 	}
 
 	r, ske, needRead := rm.keyExtractor.PrepareExtractor(recordName, r, ext)
-	// TODO: support SGLs even when offsets are supported.
-	if t.SupportsOffset() {
+	if !toDisk {
+		mdSize = int64(len(metadata))
+		storeType = SGLStoreType
+		contentPath, fullContentPath = rm.encodeRecordName(storeType, shardName, recordName)
+
+		sgl := mem.NewSGL(r.Size() + int64(len(metadata)))
+		if size, err = copyMetadataAndData(sgl, r, metadata, buf); err != nil {
+			return size, err
+		}
+		rm.contents.Store(fullContentPath, sgl)
+	} else if t.SupportsOffset() {
 		mdSize, size = t.MetadataSize(), r.Size()
 		storeType = OffsetStoreType
-		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
+		contentPath, _ = rm.encodeRecordName(storeType, shardName, recordName)
 
 		// If extractor was initialized we need to read the content, since it
 		// may contain information about the sorting/shuffling key.
@@ -143,12 +153,12 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.Parsed
 				return 0, err
 			}
 		}
-	} else if toDisk {
+	} else {
 		mdSize = int64(len(metadata))
 		storeType = DiskStoreType
-		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
+		contentPath, fullContentPath = rm.encodeRecordName(storeType, shardName, recordName)
 
-		newF, err := cmn.CreateFile(contentPath)
+		newF, err := cmn.CreateFile(fullContentPath)
 		if err != nil {
 			return size, err
 		}
@@ -157,17 +167,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.Parsed
 			return size, err
 		}
 		newF.Close()
-		rm.extractionPaths.Store(contentPath, struct{}{})
-	} else {
-		mdSize = int64(len(metadata))
-		storeType = SGLStoreType
-		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
-
-		sgl := mem.NewSGL(r.Size() + int64(len(metadata)))
-		if size, err = copyMetadataAndData(sgl, r, metadata, buf); err != nil {
-			return size, err
-		}
-		rm.contents.Store(contentPath, sgl)
+		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	}
 
 	key, err := rm.keyExtractor.ExtractKey(ske)
@@ -175,15 +175,15 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.Parsed
 		return size, err
 	}
 
-	cmn.AssertMsg(contentPath != "", fmt.Sprintf("shardName: %s; recordName: %s", fqn.Objname, recordName))
+	cmn.AssertMsg(contentPath != "", fmt.Sprintf("shardName: %s; recordName: %s", shardName, recordName))
 	cmn.Assert(storeType != "")
 	rm.Records.Insert(&Record{
-		Key:         key,
-		Name:        recordUniqueName,
-		DaemonID:    rm.daemonID,
-		StoreType:   storeType,
-		ContentPath: contentPath,
+		Key:      key,
+		Name:     recordUniqueName,
+		DaemonID: rm.daemonID,
 		Objects: []*RecordObj{&RecordObj{
+			ContentPath:  contentPath,
+			StoreType:    storeType,
 			Offset:       offset,
 			MetadataSize: mdSize,
 			Size:         size,
@@ -215,43 +215,122 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 	}
 }
 
-func (rm *RecordManager) genRecordUniqueName(fqn fs.ParsedFQN, recordName, recordNameExt string) string {
-	shardWithoutExt := strings.TrimSuffix(fqn.Objname, rm.extension)
-	keyWithoutExt := strings.TrimSuffix(recordName, recordNameExt)
-	return shardWithoutExt + "-" + keyWithoutExt
+func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
+	shardWithoutExt := strings.TrimSuffix(shardName, rm.extension)
+	recordWithoutExt := strings.TrimSuffix(recordName, filepath.Ext(recordName))
+	return shardWithoutExt + "|" + recordWithoutExt
 }
 
-func (rm *RecordManager) encodeRecordName(storeType string, fqn fs.ParsedFQN, recordName string) string {
+func (rm *RecordManager) parseRecordUniqueName(recordUniqueName string) (shardName, recordName string) {
+	splits := strings.SplitN(recordUniqueName, "|", 2)
+	return splits[0] + rm.extension, splits[1]
+}
+
+func (rm *RecordManager) encodeRecordName(storeType string, shardName, recordName string) (contentPath, fullContentPath string) {
 	switch storeType {
 	case OffsetStoreType:
-		return fqn.Objname // shard name
+		// For offset:
+		//  * contentPath = shard name (eg. shard_1.tar)
+		//  * fullContentPath = not used
+		return shardName, ""
 	case SGLStoreType:
-		return fqn.Objname + recordName // unique key for record
+		// For sgl:
+		//  * contentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
+		//  * fullContentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
+		recordExt := filepath.Ext(recordName)
+		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
+		return contentPath, contentPath // unique key for record
 	case DiskStoreType:
-		shardWithoutExt := strings.TrimSuffix(fqn.Objname, rm.extension)
-		recordPath := fs.CSM.GenContentFQN(shardWithoutExt+"-"+recordName, filetype.DSortFileType, "")
-		return recordPath
+		// For disk:
+		//  * contentPath = recordUniqueName with extension  (eg. shard_1-record_name.cls)
+		//  * fullContentPath = fqn to recordUniqueName with extension (eg. /tmp/ais/dsort/local/bucket/shard_1-record_name.cls)
+		recordExt := filepath.Ext(recordName)
+		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
+		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init()
+		cmn.Assert(errMsg == "")
+		return contentPath, fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortFileType, "")
 	default:
 		cmn.AssertMsg(false, storeType)
+		return "", ""
+	}
+}
+
+func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
+	switch obj.StoreType {
+	case OffsetStoreType:
+		// To convert contentPath to fullContentPath we need to make shard name
+		// full FQN.
+		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: obj.ContentPath}.Init()
+		cmn.Assert(errMsg == "")
+		return lom.FQN
+	case SGLStoreType:
+		// To convert contentPath to fullContentPath we need to add record
+		// object extension.
+		return obj.ContentPath
+	case DiskStoreType:
+		// To convert contentPath to fullContentPath we need to make record
+		// unique name full FQN.
+		contentPath := obj.ContentPath
+		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init()
+		cmn.Assert(errMsg == "")
+		return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortFileType, "")
+	default:
+		cmn.AssertMsg(false, obj.StoreType)
 		return ""
 	}
 }
 
-func (rm *RecordManager) FullContentPath(rec *Record) string {
-	switch rec.StoreType {
-	case OffsetStoreType:
-		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: rec.ContentPath}.Init()
-		cmn.Assert(errMsg == "")
-		return lom.FQN // full path to the shard
-	case SGLStoreType:
-		// Does not require any manipulation as it is just the key to the map
-		return rec.ContentPath
-	case DiskStoreType:
-		return rec.ContentPath // disk has full path
-	default:
-		cmn.AssertMsg(false, rec.StoreType)
-		return ""
+func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value interface{}, buf []byte) (n int64) {
+	sgl := value.(*memsys.SGL)
+
+	recordObjExt := filepath.Ext(fullContentPath)
+	contentPath := strings.TrimSuffix(fullContentPath, recordObjExt)
+
+	rm.Records.Lock()
+	defer rm.Records.Unlock()
+
+	// In SGLs `contentPath == recordUniqueName`
+	record, exists := rm.Records.Find(contentPath)
+	if !exists {
+		// Generally should not happen but it is not proven that it cannot.
+		// There is nothing wrong with just returning here though.
+		return
 	}
+
+	idx := record.find(recordObjExt)
+	if idx == -1 {
+		// Duplicated records are removed so we cannot assert here.
+		return
+	}
+	obj := record.Objects[idx]
+
+	cmn.Assert(obj.StoreType == SGLStoreType) // only SGLs are supported
+
+	switch newStoreType {
+	case OffsetStoreType:
+		shardName, _ := rm.parseRecordUniqueName(record.Name)
+		obj.ContentPath = shardName
+	case DiskStoreType:
+		diskPath := rm.FullContentPath(obj)
+		// No matter what the outcome we should store `path` in
+		// `extractionPaths` to make sure that all files, even incomplete ones,
+		// are deleted (if the file will not exist this is not much of a
+		// problem).
+		rm.extractionPaths.Store(diskPath, struct{}{})
+
+		if _, err := cmn.SaveReader(diskPath, sgl, buf, false); err != nil {
+			glog.Error(err)
+			return
+		}
+	default:
+		cmn.AssertMsg(false, newStoreType)
+	}
+
+	obj.StoreType = newStoreType
+	rm.contents.Delete(fullContentPath)
+	n = sgl.Size()
+	sgl.Free()
+	return
 }
 
 func (rm *RecordManager) RecordContents() *sync.Map {

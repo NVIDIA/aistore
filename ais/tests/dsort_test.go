@@ -740,10 +740,6 @@ func TestDistributedSortWithDisk(t *testing.T) {
 		}
 	)
 
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	dsortFW.init()
 
 	// Initialize metadata
@@ -779,6 +775,132 @@ func TestDistributedSortWithDisk(t *testing.T) {
 	for target, metrics := range allMetrics {
 		if metrics.Extraction.ExtractedToDiskCnt == 0 && metrics.Extraction.ExtractedCnt > 0 {
 			t.Errorf("target %s did not extract any files do disk", target)
+		}
+	}
+
+	dsortFW.checkOutputShards(0)
+	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
+	var (
+		err error
+		m   = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                m,
+			tarballCnt:       200,
+			fileInTarballCnt: 50,
+			extension:        ".tar.gz",
+			maxMemUsage:      "1KB",
+		}
+	)
+
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	dsortFW.createInputShards()
+
+	tutils.Logln("starting distributed sort with compression (.tar.gz)...")
+	rs := dsortFW.gen()
+	managerUUID, err := api.StartDSort(baseParams, rs)
+	tassert.CheckFatal(t, err)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+	tassert.CheckFatal(t, err)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	dsortFW.checkOutputShards(5)
+	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	mem, err := sys.Mem()
+	tassert.CheckFatal(t, err)
+
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			outputTempl:       "output-{0..10000}",
+			tarballCnt:        1000,
+			fileInTarballSize: cmn.MiB,
+			fileInTarballCnt:  5,
+			extension:         ".tar",
+			maxMemUsage:       cmn.UnsignedB2S(mem.ActualUsed+2*cmn.GiB, 0),
+		}
+	)
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	dsortFW.createInputShards()
+
+	tutils.Logln("starting distributed sort with using memory and disk...")
+	rs := dsortFW.gen()
+	managerUUID, err := api.StartDSort(baseParams, rs)
+	tassert.CheckFatal(t, err)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+	tassert.CheckFatal(t, err)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	for target, metrics := range allMetrics {
+		if metrics.Extraction.ExtractedToDiskCnt == 0 {
+			t.Errorf("target %s did not extract any files do disk", target)
+		}
+		if metrics.Extraction.ExtractedToDiskCnt == metrics.Extraction.ExtractedCnt {
+			t.Errorf("target %s extracted all files to the disk", target)
 		}
 	}
 

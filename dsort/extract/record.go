@@ -20,15 +20,28 @@ var (
 )
 
 const (
-	OffsetStoreType = "offset"
-	SGLStoreType    = "sgl"
-	DiskStoreType   = "disk"
+	// Values are small to save memory.
+	OffsetStoreType = "o"
+	SGLStoreType    = "s"
+	DiskStoreType   = "d"
 )
 
 type (
 	// RecordObj describes single object of record. Objects inside single record
 	// differs by extension.
 	RecordObj struct {
+		// Can represent, one of the following:
+		//  * Shard name - in case offset is used.
+		//  * Key for extractCreator's RecordContents - records stored in SGLs.
+		//  * Location (full path) on disk where extracted record has been placed.
+		//
+		// To get path for given object you need to use `FullContentPath` method.
+		ContentPath string `json:"p"`
+
+		// Determines where the record has been stored, can be either: OffsetStoreType,
+		// SGLStoreType, DiskStoreType.
+		StoreType string `json:"st"`
+
 		// If set, determines the offset in shard file where the record begins.
 		Offset       int64  `json:"f,omitempty"`
 		MetadataSize int64  `json:"ms"`
@@ -41,16 +54,6 @@ type (
 		Key      interface{} `json:"k"` // Used to determine the sorting order.
 		Name     string      `json:"n"` // Name which uniquely identifies record across all shards.
 		DaemonID string      `json:"d"` // ID of the target which maintains the contents for this record.
-		// Determines where the record has been stored, can be either: OffsetStoreType,
-		// SGLStoreType, DiskStoreType.
-		StoreType string `json:"s"`
-		// Can represent, one of the following:
-		//  * Shard name - in case offset is used.
-		//  * Key for extractCreator's RecordContents - records stored in SGLs.
-		//  * Location (full path) on disk where extracted record has been placed.
-		//
-		// To get path for given object you need to use `FullContentPath` method.
-		ContentPath string `json:"p"`
 		// All objects associated with given record. Record can be composed of
 		// multiple objects which have the same name but different extension.
 		Objects []*RecordObj `json:"o"`
@@ -58,7 +61,7 @@ type (
 
 	// Records abstract array of records. It safe to be used concurrently.
 	Records struct {
-		mu               sync.RWMutex
+		sync.RWMutex
 		arr              []*Record
 		m                map[string]*Record
 		dups             map[string]struct{} // contains duplicate object names, if any
@@ -110,8 +113,9 @@ func (r *Record) MemorySize() uint64 {
 	size := uint64(unsafe.Sizeof(*r))
 	size += uint64(len(r.DaemonID))
 	size += uint64(len(r.Name))
-	size += uint64(len(r.ContentPath))
-	size += (uint64(unsafe.Sizeof(r.Objects)) + uint64(len(r.Objects[0].Extension))) * uint64(len(r.Objects))
+	size += (uint64(unsafe.Sizeof(r.Objects)) +
+		uint64(len(r.Objects[0].Extension)) +
+		uint64(len(r.Objects[0].ContentPath))) * uint64(len(r.Objects))
 	return size
 }
 
@@ -126,15 +130,15 @@ func NewRecords(n int) *Records {
 }
 
 func (r *Records) Drain() {
-	r.mu.Lock()
+	r.Lock()
 	r.arr = nil
 	r.m = nil
 	r.dups = nil
-	r.mu.Unlock()
+	r.Unlock()
 }
 
 func (r *Records) Insert(records ...*Record) {
-	r.mu.Lock()
+	r.Lock()
 	for _, record := range records {
 		// Checking if record is already registered. If that is the case we need
 		// to merge extensions (files with same names but different extensions
@@ -148,29 +152,35 @@ func (r *Records) Insert(records ...*Record) {
 
 		r.totalObjectCount += len(record.Objects)
 	}
-	r.mu.Unlock()
+	r.Unlock()
 }
 
 func (r *Records) DeleteDup(name, ext string) {
 	cmn.Assert(r.Exists(name, ext))
-	r.mu.Lock()
+	r.Lock()
 	if record, ok := r.m[name]; ok {
 		record.delete(ext)
 	}
 	r.dups[name+ext] = struct{}{}
 	r.totalObjectCount--
-	r.mu.Unlock()
+	r.Unlock()
+}
+
+// NOTE: must be done under lock
+func (r *Records) Find(name string) (record *Record, exists bool) {
+	record, exists = r.m[name]
+	return
 }
 
 func (r *Records) Exists(name, ext string) (exists bool) {
-	r.mu.RLock()
+	r.RLock()
 	if record, ok := r.m[name]; ok {
 		exists = record.exists(ext)
 		if !exists {
 			_, exists = r.dups[name+ext]
 		}
 	}
-	r.mu.RUnlock()
+	r.RUnlock()
 	return
 }
 

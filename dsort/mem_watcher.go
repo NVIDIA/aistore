@@ -6,12 +6,12 @@ package dsort
 
 import (
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -21,29 +21,40 @@ const (
 	unreserveMemoryBufferSize = 10000
 )
 
+type singleMemoryWatcher struct {
+	wg     *sync.WaitGroup
+	ticker *time.Ticker
+	stopCh cmn.StopCh
+}
+
 // memoryWatcher is responsible for monitoring memory changes and decide
 // wether specific action should happen or not. It may also decide to return
 type memoryWatcher struct {
 	m *Manager
 
-	excessTicker      *time.Ticker
-	reservedTicker    *time.Ticker
+	excess, reserved  *singleMemoryWatcher
 	maxMemoryToUse    uint64
 	reservedMemory    atomic.Uint64
 	memoryUsed        atomic.Uint64 // memory used in specifc point in time, it is refreshed once in a while
 	unreserveMemoryCh chan uint64
-	stopCh            cmn.StopCh
+}
+
+func newSingleMemoryWatcher(interval time.Duration) *singleMemoryWatcher {
+	return &singleMemoryWatcher{
+		wg:     &sync.WaitGroup{},
+		ticker: time.NewTicker(interval),
+		stopCh: cmn.NewStopCh(),
+	}
 }
 
 func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {
 	return &memoryWatcher{
 		m: m,
 
-		excessTicker:      time.NewTicker(memoryExcessInterval),
-		reservedTicker:    time.NewTicker(memoryReservedInterval),
+		excess:            newSingleMemoryWatcher(memoryExcessInterval),
+		reserved:          newSingleMemoryWatcher(memoryReservedInterval),
 		maxMemoryToUse:    maxMemoryUsage,
 		unreserveMemoryCh: make(chan uint64, unreserveMemoryBufferSize),
-		stopCh:            cmn.NewStopCh(),
 	}
 }
 
@@ -63,12 +74,16 @@ func (mw *memoryWatcher) watch() error {
 	}
 	mw.memoryUsed.Store(mem.ActualUsed)
 
+	mw.reserved.wg.Add(1)
 	go mw.watchReserved()
+	mw.excess.wg.Add(1)
 	go mw.watchExcess(mem)
 	return nil
 }
 
 func (mw *memoryWatcher) watchReserved() {
+	defer mw.reserved.wg.Done()
+
 	// Starting memory updater. Since extraction phase is concurrent and we
 	// cannot know how much memory will given compressed shard extract we need
 	// to employ mechanism for updating memory. Just before extraction we
@@ -83,20 +98,27 @@ func (mw *memoryWatcher) watchReserved() {
 	// exceed maximum memory which we are able to use (set by user) -
 	// unfortunately it can happen when we underestimate the amount of memory
 	// which we will use when extracting compressed file.
-	for range mw.reservedTicker.C {
-		curMem, err := sys.Mem()
-		if err == nil {
-			mw.memoryUsed.Store(curMem.ActualUsed)
+	for {
+		select {
+		case <-mw.reserved.ticker.C:
+			curMem, err := sys.Mem()
+			if err == nil {
+				mw.memoryUsed.Store(curMem.ActualUsed)
 
-			unreserve := true
-			for unreserve {
-				select {
-				case size := <-mw.unreserveMemoryCh:
-					mw.reservedMemory.Sub(size)
-				default:
-					unreserve = false
+				unreserve := true
+				for unreserve {
+					select {
+					case size := <-mw.unreserveMemoryCh:
+						mw.reservedMemory.Sub(size)
+					default:
+						unreserve = false
+					}
 				}
 			}
+		case <-mw.m.listenAborted():
+			return
+		case <-mw.reserved.stopCh.Listen():
+			return
 		}
 	}
 }
@@ -111,13 +133,15 @@ func (mw *memoryWatcher) watchReserved() {
 // require memory, sometimes it can be counted in GBs. That is why we also need
 // excess watcher so that it prevents memory overuse.
 func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
+	defer mw.excess.wg.Done()
+
 	buf, slab := mem.AllocFromSlab2(cmn.MiB)
 	defer slab.Free(buf)
 
 	lastMemoryUsage := memStat.ActualUsed
 	for {
 		select {
-		case <-mw.excessTicker.C:
+		case <-mw.excess.ticker.C:
 			curMem, err := sys.Mem()
 			if err != nil {
 				continue
@@ -139,29 +163,21 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 			}
 
 			// In case memory is exceeded spill sgls to disk
-			rc, ep := mw.m.recManager.RecordContents(), mw.m.recManager.ExtractionPaths()
-			rc.Range(func(path, value interface{}) bool {
-				// No matter what the outcome we should store `path` in
-				// `extractionPaths` to make sure that all files, even
-				// incomplete ones, are deleted (if the file will not exist this
-				// is not much of a problem).
-				ep.Store(path, struct{}{})
-
-				sgl := value.(*memsys.SGL)
-				if _, err := cmn.SaveReader(path.(string), sgl, buf, false); err != nil {
-					glog.Error(err)
+			mw.m.recManager.RecordContents().Range(func(key, value interface{}) bool {
+				var n int64
+				if mw.m.extractCreator.SupportsOffset() {
+					n = mw.m.recManager.ChangeStoreType(key.(string), extract.OffsetStoreType, value, buf)
 				} else {
-					rc.Delete(path)
-					memExcess -= sgl.Size()
-					sgl.Free()
+					n = mw.m.recManager.ChangeStoreType(key.(string), extract.DiskStoreType, value, buf)
 				}
+				memExcess -= n
 				return memExcess > 0 // continue only if we still need to do some memory cleanup
 			})
 
 			debug.FreeOSMemory() // try to free the memory
 		case <-mw.m.listenAborted():
 			return
-		case <-mw.stopCh.Listen():
+		case <-mw.excess.stopCh.Listen():
 			return
 		}
 	}
@@ -182,16 +198,19 @@ func (mw *memoryWatcher) unreserveMem(toUnreserve uint64) {
 }
 
 func (mw *memoryWatcher) stopWatchingExcess() {
-	mw.excessTicker.Stop()
+	mw.excess.ticker.Stop()
+	mw.excess.stopCh.Close()
+	mw.excess.wg.Wait()
 }
 
 func (mw *memoryWatcher) stopWatchingReserved() {
-	mw.reservedTicker.Stop()
+	mw.reserved.ticker.Stop()
+	mw.reserved.stopCh.Close()
+	mw.reserved.wg.Wait()
 }
 
 func (mw *memoryWatcher) stop() {
 	mw.stopWatchingExcess()
 	mw.stopWatchingReserved()
-	mw.stopCh.Close()
 	close(mw.unreserveMemoryCh)
 }

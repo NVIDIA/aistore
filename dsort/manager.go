@@ -649,9 +649,9 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		fullContentPath := m.recManager.FullContentPath(req.Record)
+		fullContentPath := m.recManager.FullContentPath(req.RecordObj)
 
-		switch req.Record.StoreType {
+		switch req.RecordObj.StoreType {
 		case extract.OffsetStoreType:
 			f, err := cmn.NewFileHandle(fullContentPath)
 			if err != nil {
@@ -672,7 +672,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			}
 		case extract.SGLStoreType:
 			v, ok := m.recManager.RecordContents().Load(fullContentPath)
-			cmn.Assert(ok)
+			cmn.AssertMsg(ok, fullContentPath)
 			m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
@@ -788,10 +788,10 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				m.decrementRef(1)
 			}()
 
-			fullContentPath := m.recManager.FullContentPath(rec)
+			fullContentPath := m.recManager.FullContentPath(obj)
 
 			var n int64
-			switch rec.StoreType {
+			switch obj.StoreType {
 			case extract.OffsetStoreType:
 				f, err := os.Open(fullContentPath) // TODO: it should be open always
 				if err != nil {
@@ -809,7 +809,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				f.Close()
 			case extract.SGLStoreType:
 				v, ok := m.recManager.RecordContents().Load(fullContentPath)
-				cmn.Assert(ok)
+				cmn.AssertMsg(ok, fullContentPath)
 				m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
 				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {

@@ -93,10 +93,6 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
-	// In shard creation we should not expect memory increase (at least not from
-	// dSort). Also it would be really hard to have concurrent sends and memory
-	// cleanup.
-	m.mw.stopWatchingExcess()
 	runtime.GC()
 	debug.FreeOSMemory()
 
@@ -167,7 +163,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		beforeExtraction := time.Now()
 		reader := io.NewSectionReader(f, 0, lom.Size())
-		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom.ParsedFQN, reader, m.recManager, toDisk)
+		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(shardName, reader, m.recManager, toDisk)
 
 		dur := time.Since(beforeExtraction)
 
@@ -516,6 +512,12 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 
 		if i%2 == 0 {
+			// In shard creation we should not expect memory increase (at least
+			// not from dSort). Also it would be really hard to have concurrent
+			// sends and memory cleanup. We must stop before sending records
+			// because it affects content of the records.
+			m.mw.stopWatchingExcess()
+
 			beforeSend := time.Now()
 			body, e := js.Marshal(m.recManager.Records)
 			if e != nil {
@@ -577,6 +579,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 	}
 
 	err = sortRecords(m.recManager.Records, m.rs.Algorithm)
+	m.mw.stopWatchingExcess()
 	return true, err
 }
 
