@@ -31,24 +31,36 @@ type (
 		*extract.Records
 		decreasing bool
 		formatType string
+		err        error
 	}
 )
 
 var (
-	_ sort.Interface = alphaByKey{}
+	_ sort.Interface = &alphaByKey{}
 )
 
-func (s alphaByKey) Less(i, j int) bool {
+func (s *alphaByKey) Less(i, j int) bool {
+	var (
+		less bool
+		err  error
+	)
+
 	if s.decreasing {
-		return s.Records.Less(j, i, s.formatType)
+		less, err = s.Records.Less(j, i, s.formatType)
+	} else {
+		less, err = s.Records.Less(i, j, s.formatType)
 	}
-	return s.Records.Less(i, j, s.formatType)
+
+	if err != nil {
+		s.err = err
+	}
+	return less
 }
 
 // sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
-func sortRecords(r *extract.Records, algo *SortAlgorithm) {
+func sortRecords(r *extract.Records, algo *SortAlgorithm) error {
 	if algo.Kind == SortKindNone {
-		return
+		return nil
 	} else if algo.Kind == SortKindShuffle {
 		seed := time.Now().Unix()
 		if algo.Seed != "" {
@@ -63,6 +75,13 @@ func sortRecords(r *extract.Records, algo *SortAlgorithm) {
 			r.Swap(i, j)
 		}
 	} else {
-		sort.Sort(alphaByKey{r, algo.Decreasing, algo.FormatType})
+		keys := &alphaByKey{r, algo.Decreasing, algo.FormatType, nil}
+		sort.Sort(keys)
+
+		if keys.err != nil {
+			return keys.err
+		}
 	}
+
+	return nil
 }

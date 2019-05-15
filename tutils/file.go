@@ -130,7 +130,7 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSiz
 	return nil
 }
 
-func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType string, customFileExt string) error {
+func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
 	// set up the output file
 	extension := ".tar"
 	name := tarName + extension
@@ -148,21 +148,24 @@ func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileT
 			return err
 		}
 
-		var buf []byte
-		// random content
-		switch customFileType {
-		case extract.FormatTypeInt:
-			buf = []byte(strconv.Itoa(rand.Int()))
-		case extract.FormatTypeString:
-			buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
-		case extract.FormatTypeFloat:
-			buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
-		default:
-			return fmt.Errorf("invalid custom file type: %q", customFileType)
-		}
+		// If missingKeys enabled we should only add keys randomly
+		if !missingKeys || (missingKeys && rand.Intn(2) == 0) {
+			var buf []byte
+			// random content
+			switch customFileType {
+			case extract.FormatTypeInt:
+				buf = []byte(strconv.Itoa(rand.Int()))
+			case extract.FormatTypeString:
+				buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
+			case extract.FormatTypeFloat:
+				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
+			default:
+				return fmt.Errorf("invalid custom file type: %q", customFileType)
+			}
 
-		if err := addFileToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
-			return err
+			if err := addFileToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -5,16 +5,13 @@
 package extract
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -200,14 +197,20 @@ func (r *Records) Len() int {
 
 func (r *Records) Swap(i, j int) { r.arr[i], r.arr[j] = r.arr[j], r.arr[i] }
 
-func (r *Records) Less(i, j int, formatType string) bool {
+func (r *Records) Less(i, j int, formatType string) (bool, error) {
 	lhs, rhs := r.arr[i].Key, r.arr[j].Key
+	if lhs == nil {
+		return false, fmt.Errorf("key is missing for %q", r.arr[i].Name)
+	} else if rhs == nil {
+		return false, fmt.Errorf("key is missing for %q", r.arr[j].Name)
+	}
+
 	switch formatType {
 	case FormatTypeInt:
 		ilhs, lok := lhs.(int64)
 		irhs, rok := rhs.(int64)
 		if lok && rok {
-			return ilhs < irhs
+			return ilhs < irhs, nil
 		}
 
 		// One side was parsed as float64 - javascript does not support
@@ -219,36 +222,15 @@ func (r *Records) Less(i, j int, formatType string) bool {
 			irhs = int64(rhs.(float64))
 		}
 
-		return ilhs < irhs
+		return ilhs < irhs, nil
 	case FormatTypeFloat:
-		return lhs.(float64) < rhs.(float64)
+		return lhs.(float64) < rhs.(float64), nil
 	case FormatTypeString:
-		return lhs.(string) < rhs.(string)
+		return lhs.(string) < rhs.(string), nil
 	}
 
 	cmn.AssertFmt(false, lhs, rhs, r.arr[i], r.arr[j])
-	return false
-}
-
-// EnsureKeys checks if all records have non-nil keys (all keys are set)
-func (r *Records) EnsureKeys() error {
-	cpus, _ := sys.NumCPU()
-	perCPU := cmn.Max(len(r.arr)/cpus, 1)
-	group, _ := errgroup.WithContext(context.Background())
-	for i := 0; i < len(r.arr); i += perCPU {
-		group.Go(func(i, j int) func() error {
-			return func() error {
-				for _, record := range r.arr[i:j] {
-					if record.Key == nil {
-						return fmt.Errorf("record %q does not contain any key", record.Name)
-					}
-				}
-				return nil
-			}
-		}(i, cmn.Min(i+perCPU, len(r.arr))))
-	}
-
-	return group.Wait()
+	return false, nil
 }
 
 func (r *Records) objectCount() int {

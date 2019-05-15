@@ -52,6 +52,7 @@ type dsortFramework struct {
 
 	extension       string
 	algorithm       *dsort.SortAlgorithm
+	missingKeys     bool
 	outputShardSize int64
 	maxMemUsage     string
 }
@@ -117,7 +118,7 @@ func (df *dsortFramework) createInputShards() {
 
 			path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension)
+				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == ".tar" {
 				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication)
 			} else if df.extension == ".tar.gz" {
@@ -899,187 +900,98 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	dsortFW.checkDSortList()
 }
 
-func TestDistributedSortWithContentInt(t *testing.T) {
-	var (
-		err error
-		m   = &metadata{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		dsortFW = &dsortFramework{
-			m: m,
-			algorithm: &dsort.SortAlgorithm{
-				Kind:       dsort.SortKindContent,
-				Extension:  ".loss",
-				FormatType: extract.FormatTypeInt,
-			},
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			extension:        ".tar",
-			maxMemUsage:      "90%",
-		}
-	)
+func TestDistributedSortWithContent(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
 
-	dsortFW.init()
-
-	// Initialize metadata
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
-	dsortFW.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	dsortFW.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	rs := dsortFW.gen()
-	managerUUID, err := api.StartDSort(baseParams, rs)
-	tassert.CheckFatal(t, err)
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	metrics, err := api.MetricsDSort(baseParams, managerUUID)
-	tassert.CheckFatal(t, err)
-	if len(metrics) != m.originalTargetCount {
-		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
-	}
-
-	dsortFW.checkOutputShards(5)
-	dsortFW.checkDSortList()
-}
-
-func TestDistributedSortWithContentFloat(t *testing.T) {
 	var (
-		err error
-		m   = &metadata{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		dsortFW = &dsortFramework{
-			m: m,
-			algorithm: &dsort.SortAlgorithm{
-				Kind:       dsort.SortKindContent,
-				Extension:  ".cls",
-				FormatType: extract.FormatTypeFloat,
-			},
-			tarballCnt:       1000,
-			fileInTarballCnt: 50,
-			extension:        ".tar",
-			maxMemUsage:      "90%",
+		cases = []struct {
+			extension   string
+			formatType  string
+			missingKeys bool
+		}{
+			{".loss", extract.FormatTypeInt, false},
+			{".cls", extract.FormatTypeFloat, false},
+			{".smth", extract.FormatTypeString, false},
+
+			{".loss", extract.FormatTypeInt, true},
+			{".cls", extract.FormatTypeFloat, true},
+			{".smth", extract.FormatTypeString, true},
 		}
 	)
-	if testing.Short() {
-		t.Skip(skipping)
+
+	for _, entry := range cases {
+		test := fmt.Sprintf("%s-%v", entry.formatType, entry.missingKeys)
+		t.Run(test, func(t *testing.T) {
+			var (
+				m = &metadata{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				dsortFW = &dsortFramework{
+					m: m,
+					algorithm: &dsort.SortAlgorithm{
+						Kind:       dsort.SortKindContent,
+						Extension:  entry.extension,
+						FormatType: entry.formatType,
+					},
+					missingKeys:      entry.missingKeys,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					extension:        ".tar",
+					maxMemUsage:      "90%",
+				}
+			)
+
+			dsortFW.init()
+
+			// Initialize metadata
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			baseParams := tutils.BaseAPIParams(proxyURL)
+
+			dsortFW.clearDSortList()
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			dsortFW.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			rs := dsortFW.gen()
+			managerUUID, err := api.StartDSort(baseParams, rs)
+			tassert.CheckFatal(t, err)
+
+			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+			tassert.CheckFatal(t, err)
+			if entry.missingKeys && !aborted {
+				t.Error("dsort was not aborted")
+			}
+
+			tutils.Logln("checking metrics...")
+			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+			tassert.CheckFatal(t, err)
+			if len(allMetrics) != m.originalTargetCount {
+				t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+			}
+
+			for target, metrics := range allMetrics {
+				if entry.missingKeys && !metrics.Aborted {
+					t.Errorf("dsort was not aborted by target: %s", target)
+				}
+			}
+
+			if !entry.missingKeys {
+				dsortFW.checkOutputShards(5)
+			}
+			dsortFW.checkDSortList()
+		})
 	}
-
-	dsortFW.init()
-
-	// Initialize metadata
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
-	dsortFW.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	dsortFW.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	rs := dsortFW.gen()
-	managerUUID, err := api.StartDSort(baseParams, rs)
-	tassert.CheckFatal(t, err)
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	metrics, err := api.MetricsDSort(baseParams, managerUUID)
-	tassert.CheckFatal(t, err)
-	if len(metrics) != m.originalTargetCount {
-		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
-	}
-
-	dsortFW.checkOutputShards(5)
-	dsortFW.checkDSortList()
-}
-
-func TestDistributedSortWithContentString(t *testing.T) {
-	var (
-		err error
-		m   = &metadata{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		dsortFW = &dsortFramework{
-			m: m,
-			algorithm: &dsort.SortAlgorithm{
-				Kind:       dsort.SortKindContent,
-				Extension:  ".smth",
-				FormatType: extract.FormatTypeString,
-			},
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			extension:        ".tar",
-			maxMemUsage:      "90%",
-		}
-	)
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
-	dsortFW.init()
-
-	// Initialize metadata
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
-	dsortFW.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	dsortFW.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	rs := dsortFW.gen()
-	managerUUID, err := api.StartDSort(baseParams, rs)
-	tassert.CheckFatal(t, err)
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	metrics, err := api.MetricsDSort(baseParams, managerUUID)
-	tassert.CheckFatal(t, err)
-	if len(metrics) != m.originalTargetCount {
-		t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
-	}
-
-	dsortFW.checkOutputShards(5)
-	dsortFW.checkDSortList()
 }
 
 func TestDistributedSortAbort(t *testing.T) {

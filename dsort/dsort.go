@@ -270,16 +270,6 @@ ExtractAllShards:
 	// We will no longer reserve any memory
 	m.mw.stopWatchingReserved()
 
-	// FIXME: maybe there is a way to check this faster or earlier?
-	//
-	// Checking if all records have keys (keys are not nil). Algorithms other
-	// than content kind should have keys, it is a bug if they don't.
-	if m.rs.Algorithm.Kind == SortKindContent {
-		if err := m.recManager.Records.EnsureKeys(); err != nil {
-			return err
-		}
-	}
-
 	metrics.Lock()
 	totalExtractedCount := metrics.ExtractedRecordCnt
 	metrics.Unlock()
@@ -586,8 +576,8 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		m.recManager.MergeEnqueuedRecords()
 	}
 
-	sortRecords(m.recManager.Records, m.rs.Algorithm)
-	return true, nil
+	err = sortRecords(m.recManager.Records, m.rs.Algorithm)
+	return true, err
 }
 
 // distributeShardRecords creates Shard structs in the order of
