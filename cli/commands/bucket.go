@@ -436,7 +436,33 @@ func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 		return
 	}
 
-	return templates.DisplayOutput(bckProps, templates.BucketPropsTmpl, flagIsSet(c, jsonFlag))
+	if flagIsSet(c, jsonFlag) {
+		return templates.DisplayOutput(bckProps, templates.BucketPropsTmpl, true)
+	}
+
+	return printBckHeadTable(bckProps)
+}
+
+func printBckHeadTable(props *cmn.BucketProps) error {
+	// list instead of map to keep properties in the same order always.
+	// All names are one word ones - for easier parsing
+	propList := []struct {
+		Name string
+		Val  string
+	}{
+		{"Provider", props.CloudProvider},
+		{"Access", props.AccessToStr()},
+		{"Checksum", props.Cksum.String()},
+		{"Mirror", props.Mirror.String()},
+		{"EC", props.EC.String()},
+		{"LRU", props.LRUToStr()},
+		{"Rebalance", props.Rebalance.String()},
+		{"Versioning", props.Versioning.String()},
+		{"Tiering", props.Tiering.String()},
+	}
+
+	template := "PROPERTY\tVALUE\n{{range $p := . }}{{$p.Name}}\t{{$p.Val}}\n{{end}}\n"
+	return templates.DisplayOutput(propList, template)
 }
 
 // Configure bucket as n-way mirror

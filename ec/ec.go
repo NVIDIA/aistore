@@ -110,8 +110,6 @@ const (
 	SliceType = "ec"   // object slice prefix
 	MetaType  = "meta" // metafile prefix
 
-	DefaultSizeLimit = 256 * cmn.KiB // default minimal object size for EC
-
 	ActSplit   = "split"
 	ActRestore = "restore"
 	ActDelete  = "delete"
@@ -322,7 +320,7 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 }
 
 func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
-	return size < ecConf.ObjSizeLimit || (ecConf.ObjSizeLimit == 0 && size < DefaultSizeLimit)
+	return size < ecConf.ObjSizeLimit || (ecConf.ObjSizeLimit == 0 && size < cmn.ECDefaultSizeLimit)
 }
 
 // returns whether EC must use disk instead of keeping everything in memory.

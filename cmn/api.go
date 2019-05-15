@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -24,6 +25,9 @@ const (
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
 	ChecksumCRC32C = "crc32c"
+
+	// EC default object size limit: smaller objects are replicated instead of EC'ing
+	ECDefaultSizeLimit = 256 * KiB
 )
 
 // Bucket property type (used by cksum, versioning)
@@ -495,6 +499,111 @@ type ECConf struct {
 	DataSlices   int   `json:"data_slices"`   // number of data slices
 	ParitySlices int   `json:"parity_slices"` // number of parity slices/replicas
 	Enabled      bool  `json:"enabled"`       // EC is enabled
+}
+
+func (c *VersionConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+
+	if c.ValidateWarmGet {
+		return "Enabled (validated on Cold and Warm GETs)"
+	}
+
+	return "Enabled (validated on Cold GET)"
+}
+
+func (c *CksumConf) String() string {
+	if c.Type == ChecksumNone {
+		return "Disabled"
+	}
+
+	props := make([]string, 0)
+	if c.ValidateWarmGet {
+		props = append(props, "WarmGET")
+	}
+	if c.ValidateColdGet {
+		props = append(props, "ColdGET")
+	}
+	if c.ValidateObjMove {
+		props = append(props, "ObjectMove")
+	}
+	if c.EnableReadRange {
+		props = append(props, "ReadRange")
+	}
+	if len(props) == 0 {
+		return fmt.Sprintf("%s, Validate on: -", c.Type)
+	}
+	return fmt.Sprintf("%s, Validate on: %s", c.Type, strings.Join(props, ","))
+}
+
+func (c *BucketProps) LRUToStr() string {
+	if !c.LRU.Enabled {
+		return "Disabled"
+	}
+	if c.CloudProvider == ProviderAIS && !c.LRU.LocalBuckets {
+		return "Disabled"
+	}
+	return fmt.Sprintf("Watermarks: %d/%d, do not evict time: %s",
+		c.LRU.LowWM, c.LRU.HighWM, c.LRU.DontEvictTimeStr)
+}
+
+func (c *BucketProps) AccessToStr() string {
+	aattrs := c.AccessAttrs
+	if aattrs == 0 {
+		return "No access"
+	}
+	accList := make([]string, 0, 8)
+	if aattrs&AccessGET == AccessGET {
+		accList = append(accList, "GET")
+	}
+	if aattrs&AccessPUT == AccessPUT {
+		accList = append(accList, "PUT")
+	}
+	if aattrs&AccessDELETE == AccessDELETE {
+		accList = append(accList, "DELETE")
+	}
+	if aattrs&AccessHEAD == AccessHEAD {
+		accList = append(accList, "HEAD")
+	}
+	if aattrs&AccessColdGET == AccessColdGET {
+		accList = append(accList, "ColdGET")
+	}
+	return strings.Join(accList, ",")
+}
+
+func (c *MirrorConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+
+	return fmt.Sprintf("%d copies", c.Copies)
+}
+
+func (c *RebalanceConf) String() string {
+	if c.Enabled {
+		return "Enabled"
+	}
+	return "Disabled"
+}
+
+func (c *TierConf) String() string {
+	if c.NextTierURL == "" {
+		return "Disabled"
+	}
+
+	return c.NextTierURL
+}
+
+func (c *ECConf) String() string {
+	if !c.Enabled {
+		return "Disabled"
+	}
+	objSizeLimit := c.ObjSizeLimit
+	if objSizeLimit == 0 {
+		objSizeLimit = ECDefaultSizeLimit
+	}
+	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, B2S(objSizeLimit, 0))
 }
 
 func (c *ECConf) Updatable(field string) bool {
