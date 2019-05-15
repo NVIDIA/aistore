@@ -40,8 +40,10 @@ const (
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 
-	ProxyInfoTmpl       = ProxyInfoHeader + "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}\n"
-	ProxyInfoSingleTmpl = ProxyInfoHeader + "{{$value := . }}" + ProxyInfoBody
+	ProxyInfoBodyTmpl       = "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}\n"
+	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
+	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
+	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
 
 	// Target Info
 	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Throughput\n"
@@ -51,8 +53,10 @@ const (
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2}}/s\n"
 
-	TargetInfoTmpl       = TargetInfoHeader + "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
-	TargetInfoSingleTmpl = TargetInfoHeader + "{{$value := . }}" + TargetInfoBody
+	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
+	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
+	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
+	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
 	// Stats
 	StatsHeader = "{{$obj := . }}\nDaemon: {{ .Snode.DaemonID }}\t Type: {{ .Snode.DaemonType }}\n\nStats\n"
@@ -99,7 +103,8 @@ const (
 		"{{ BToKB $stat.WBps }}kB/s\t" +
 		"{{ $stat.Util }}\n"
 
-	DiskStatsTmpl = DiskStatsHeader + "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
+	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
+	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
 
 	// Config
 	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +

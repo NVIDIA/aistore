@@ -28,9 +28,9 @@ var (
 
 	daecluFlags = map[string][]cli.Flag{
 		cmn.GetWhatSmap:         daecluBaseFlags,
-		cmn.GetWhatDaemonStatus: append(daecluBaseFlags, longRunFlags...),
+		cmn.GetWhatDaemonStatus: append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
 		cmn.GetWhatStats:        append(daecluBaseFlags, longRunFlags...),
-		cmn.GetWhatDiskStats:    append(daecluBaseFlags, longRunFlags...),
+		cmn.GetWhatDiskStats:    append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
 	}
 
 	// DaeCluCmds tracks available AIS API Information/Query Commands
@@ -92,6 +92,7 @@ func queryHandler(c *cli.Context) (err error) {
 
 	var (
 		useJSON    = flagIsSet(c, jsonFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
 		baseParams = cliAPIParams(ClusterURL)
 		daemonID   = c.Args().First()
 		req        = c.Command.Name
@@ -103,9 +104,9 @@ func queryHandler(c *cli.Context) (err error) {
 	case cmn.GetWhatStats:
 		err = daecluStats(baseParams, daemonID, useJSON)
 	case cmn.GetWhatDiskStats:
-		err = daecluDiskStats(baseParams, daemonID, useJSON)
+		err = daecluDiskStats(baseParams, daemonID, useJSON, hideHeader)
 	case cmn.GetWhatDaemonStatus:
-		err = daecluStatus(daemonID, useJSON)
+		err = daecluStatus(daemonID, useJSON, hideHeader)
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
@@ -144,7 +145,7 @@ func daecluStats(baseParams *api.BaseParams, daemonID string, useJSON bool) erro
 }
 
 // Displays the disk stats of a target
-func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
 		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, cmn.GetWhatDiskStats)
 	}
@@ -162,7 +163,8 @@ func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON bool) 
 		return err
 	}
 
-	err = templates.DisplayOutput(diskStats, templates.DiskStatsTmpl, useJSON)
+	template := chooseTmpl(templates.DiskStatBodyTmpl, templates.DiskStatsFullTmpl, hideHeader)
+	err = templates.DisplayOutput(diskStats, template, useJSON)
 	if err != nil {
 		return err
 	}
@@ -171,15 +173,19 @@ func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON bool) 
 }
 
 // Displays the status of the cluster or daemon
-func daecluStatus(daemonID string, useJSON bool) (err error) {
+func daecluStatus(daemonID string, useJSON, hideHeader bool) (err error) {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
-		err = templates.DisplayOutput(res, templates.ProxyInfoSingleTmpl, useJSON)
+		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
+		err = templates.DisplayOutput(res, template, useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
-		err = templates.DisplayOutput(res, templates.TargetInfoSingleTmpl, useJSON)
+		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
+		err = templates.DisplayOutput(res, template, useJSON)
 	} else if daemonID == cmn.Proxy {
-		err = templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON)
+		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
+		err = templates.DisplayOutput(proxy, template, useJSON)
 	} else if daemonID == cmn.Target {
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
+		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
+		err = templates.DisplayOutput(target, template, useJSON)
 	} else if daemonID == "" {
 		if err := templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err

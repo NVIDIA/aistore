@@ -50,7 +50,8 @@ var (
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'"}
 	bckProviderFlag = cli.StringFlag{Name: paramBckProvider,
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
-	regexFlag = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
+	regexFlag    = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
+	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 )
 
 var AISHelpTemplate = `DESCRIPTION:
@@ -240,4 +241,11 @@ func calcRefreshRate(c *cli.Context) (time.Duration, error) {
 	}
 
 	return refreshRate, nil
+}
+
+func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
+	if useShort {
+		return tmplShort
+	}
+	return tmplLong
 }

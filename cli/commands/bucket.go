@@ -51,8 +51,12 @@ var (
 	}
 
 	bucketFlags = map[string][]cli.Flag{
-		bucketCreate:  []cli.Flag{bucketFlag},
-		bucketNames:   []cli.Flag{regexFlag, bckProviderFlag},
+		bucketCreate: []cli.Flag{bucketFlag},
+		bucketNames: []cli.Flag{
+			regexFlag,
+			bckProviderFlag,
+			noHeaderFlag,
+		},
 		bucketDestroy: []cli.Flag{bucketFlag},
 		commandRename: append(
 			[]cli.Flag{
@@ -70,6 +74,7 @@ var (
 				showUnmatchedFlag,
 				allFlag,
 				fastFlag,
+				noHeaderFlag,
 			},
 			baseBucketFlags...),
 		bucketSetProps: append(
@@ -275,7 +280,7 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err != nil {
 		return
 	}
-	printBucketNames(bucketNames, parseStrFlag(c, regexFlag), bckProvider)
+	printBucketNames(bucketNames, parseStrFlag(c, regexFlag), bckProvider, !flagIsSet(c, noHeaderFlag))
 	return
 }
 
@@ -307,7 +312,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 			return err
 		}
 
-		return printObjectNames(objList.Entries, objectListFilter, showUnmatched)
+		return printObjectNames(objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
 	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
@@ -324,7 +329,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 		return err
 	}
 
-	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched)
+	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
 // replace user-friendly properties like `access=ro` with real values
@@ -455,27 +460,33 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 }
 
 // HELPERS
-func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string) {
+func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
 	if bckProvider == cmn.LocalBs || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)
-		fmt.Printf("Local Buckets (%d)\n", len(localBuckets))
+		if showHeaders {
+			fmt.Printf("Local Buckets (%d)\n", len(localBuckets))
+		}
 		for _, bucket := range localBuckets {
 			fmt.Println(bucket)
 		}
 		if bckProvider == cmn.LocalBs {
 			return
 		}
-		fmt.Println()
+		if showHeaders {
+			fmt.Println()
+		}
 	}
 
 	cloudBuckets := regexFilter(regex, bucketNames.Cloud)
-	fmt.Printf("Cloud Buckets (%d)\n", len(cloudBuckets))
+	if showHeaders {
+		fmt.Printf("Cloud Buckets (%d)\n", len(cloudBuckets))
+	}
 	for _, bucket := range cloudBuckets {
 		fmt.Println(bucket)
 	}
 }
 
-func buildOutputTemplate(props string) (string, error) {
+func buildOutputTemplate(props string, showHeaders bool) (string, error) {
 	var (
 		headSb strings.Builder
 		bodySb strings.Builder
@@ -492,13 +503,17 @@ func buildOutputTemplate(props string) (string, error) {
 		bodySb.WriteString(templates.ObjectPropsMap[field])
 	}
 	headSb.WriteString("\n")
-	bodySb.WriteString("\n{{end}}\n")
+	bodySb.WriteString("\n{{end}}")
 
-	return headSb.String() + bodySb.String(), nil
+	if showHeaders {
+		return headSb.String() + bodySb.String() + "\n", nil
+	}
+
+	return bodySb.String(), nil
 }
 
-func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched bool) error {
-	outputTemplate, err := buildOutputTemplate(props)
+func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched, showHeaders bool) error {
+	outputTemplate, err := buildOutputTemplate(props, showHeaders)
 	if err != nil {
 		return err
 	}
@@ -510,16 +525,19 @@ func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 		return err
 	}
 
-	if showUnmatched {
-		outputTemplate = "Unmatched files:\n" + outputTemplate
+	if showHeaders && showUnmatched {
+		outputTemplate = "Unmatched objects:\n" + outputTemplate
 		err = templates.DisplayOutput(rest, outputTemplate)
 	}
 
 	return err
 }
 
-func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched bool) error {
+func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched, showHeaders bool) error {
 	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
+	if !showHeaders {
+		outputTemplate = "{{range $obj := .}}{{$obj.Name}}\n{{end}}"
+	}
 	matchingEntries, rest := objectFilter.filter(entries)
 
 	err := templates.DisplayOutput(matchingEntries, outputTemplate)
@@ -527,8 +545,8 @@ func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 		return err
 	}
 
-	if showUnmatched {
-		outputTemplate = "Unmatched files:\n" + outputTemplate
+	if showHeaders && showUnmatched {
+		outputTemplate = "Unmatched objects:\n" + outputTemplate
 		err = templates.DisplayOutput(rest, outputTemplate)
 	}
 
