@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -35,7 +36,7 @@ type (
 	// ExtractCreator is interface which describes set of functions which each
 	// shard creator should implement.
 	ExtractCreator interface {
-		ExtractShard(fqn string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
+		ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool
@@ -43,13 +44,15 @@ type (
 	}
 
 	RecordExtractor interface {
-		ExtractRecordWithBuffer(t ExtractCreator, fqn string, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
+		ExtractRecordWithBuffer(t ExtractCreator, fqn fs.ParsedFQN, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
 	}
 
 	RecordManager struct {
 		Records *Records
 
+		t                   cluster.Target
 		daemonID            string
+		bucket              string
 		extension           string
 		onDuplicatedRecords func(string) error
 
@@ -87,11 +90,13 @@ func FreeMemory() {
 	})
 }
 
-func NewRecordManager(daemonID, extension string, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
+func NewRecordManager(t cluster.Target, daemonID, bucket, extension string, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records: NewRecords(1000),
 
+		t:                   t,
 		daemonID:            daemonID,
+		bucket:              bucket,
 		extension:           extension,
 		onDuplicatedRecords: onDuplicatedRecords,
 
@@ -101,20 +106,21 @@ func NewRecordManager(daemonID, extension string, keyExtractor KeyExtractor, onD
 	}
 }
 
-func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
+func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn fs.ParsedFQN, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
 	var (
+		storeType   string
 		contentPath string
 		mdSize      int64
 
-		ext                  = filepath.Ext(name)
-		recordPath, fullPath = rm.paths(fqn, name, ext)
+		ext              = filepath.Ext(recordName)
+		recordUniqueName = rm.genRecordUniqueName(fqn, recordName, ext)
 	)
 
 	// If the content already exists we should skip it but set error (caller
 	// needs to handle it properly).
-	if rm.Records.Exists(recordPath, ext) {
-		msg := fmt.Sprintf("record %q has been duplicated", recordPath)
-		rm.Records.DeleteDup(recordPath, ext)
+	if rm.Records.Exists(recordUniqueName, ext) {
+		msg := fmt.Sprintf("record %q has been duplicated", recordName)
+		rm.Records.DeleteDup(recordUniqueName, ext)
 
 		// NOTE: there is no need to remove anything from `rm.extractionPaths`
 		// or `rm.contents` since it will be removed anyway in cleanup.
@@ -123,9 +129,13 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name str
 		return 0, rm.onDuplicatedRecords(msg)
 	}
 
-	r, ske, needRead := rm.keyExtractor.PrepareExtractor(name, r, ext)
+	r, ske, needRead := rm.keyExtractor.PrepareExtractor(recordName, r, ext)
 	// TODO: support SGLs even when offsets are supported.
 	if t.SupportsOffset() {
+		mdSize, size = t.MetadataSize(), r.Size()
+		storeType = OffsetStoreType
+		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
+
 		// If extractor was initialized we need to read the content, since it
 		// may contain information about the sorting/shuffling key.
 		if needRead {
@@ -133,12 +143,12 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name str
 				return 0, err
 			}
 		}
-
-		mdSize = t.MetadataSize()
-		size = r.Size()
-		contentPath = fqn
 	} else if toDisk {
-		newF, err := cmn.CreateFile(fullPath)
+		mdSize = int64(len(metadata))
+		storeType = DiskStoreType
+		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
+
+		newF, err := cmn.CreateFile(contentPath)
 		if err != nil {
 			return size, err
 		}
@@ -147,19 +157,17 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name str
 			return size, err
 		}
 		newF.Close()
-		rm.extractionPaths.Store(fullPath, struct{}{})
-
-		mdSize = int64(len(metadata))
-		contentPath = recordPath
+		rm.extractionPaths.Store(contentPath, struct{}{})
 	} else {
+		mdSize = int64(len(metadata))
+		storeType = SGLStoreType
+		contentPath = rm.encodeRecordName(storeType, fqn, recordName)
+
 		sgl := mem.NewSGL(r.Size() + int64(len(metadata)))
 		if size, err = copyMetadataAndData(sgl, r, metadata, buf); err != nil {
 			return size, err
 		}
-		rm.contents.Store(fullPath, sgl)
-
-		mdSize = int64(len(metadata))
-		contentPath = recordPath
+		rm.contents.Store(contentPath, sgl)
 	}
 
 	key, err := rm.keyExtractor.ExtractKey(ske)
@@ -167,11 +175,13 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, fqn, name str
 		return size, err
 	}
 
-	cmn.AssertMsg(contentPath != "", fmt.Sprintf("fqn: %s; name: %s", fqn, name))
+	cmn.AssertMsg(contentPath != "", fmt.Sprintf("shardName: %s; recordName: %s", fqn.Objname, recordName))
+	cmn.Assert(storeType != "")
 	rm.Records.Insert(&Record{
 		Key:         key,
-		Name:        recordPath,
+		Name:        recordUniqueName,
 		DaemonID:    rm.daemonID,
+		StoreType:   storeType,
 		ContentPath: contentPath,
 		Objects: []*RecordObj{&RecordObj{
 			Offset:       offset,
@@ -205,12 +215,43 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 	}
 }
 
-func (rm *RecordManager) paths(fqn, name, ext string) (string, string) {
-	fqnWithoutExt := strings.TrimSuffix(fqn, rm.extension)
-	keyWithoutExt := strings.TrimSuffix(name, ext)
-	recordPath := fs.CSM.GenContentFQN(fqnWithoutExt+"-"+keyWithoutExt, filetype.DSortFileType, "")
-	fullPath := recordPath + ext
-	return recordPath, fullPath
+func (rm *RecordManager) genRecordUniqueName(fqn fs.ParsedFQN, recordName, recordNameExt string) string {
+	shardWithoutExt := strings.TrimSuffix(fqn.Objname, rm.extension)
+	keyWithoutExt := strings.TrimSuffix(recordName, recordNameExt)
+	return shardWithoutExt + "-" + keyWithoutExt
+}
+
+func (rm *RecordManager) encodeRecordName(storeType string, fqn fs.ParsedFQN, recordName string) string {
+	switch storeType {
+	case OffsetStoreType:
+		return fqn.Objname // shard name
+	case SGLStoreType:
+		return fqn.Objname + recordName // unique key for record
+	case DiskStoreType:
+		shardWithoutExt := strings.TrimSuffix(fqn.Objname, rm.extension)
+		recordPath := fs.CSM.GenContentFQN(shardWithoutExt+"-"+recordName, filetype.DSortFileType, "")
+		return recordPath
+	default:
+		cmn.AssertMsg(false, storeType)
+		return ""
+	}
+}
+
+func (rm *RecordManager) FullContentPath(rec *Record) string {
+	switch rec.StoreType {
+	case OffsetStoreType:
+		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: rec.ContentPath}.Init()
+		cmn.Assert(errMsg == "")
+		return lom.FQN // full path to the shard
+	case SGLStoreType:
+		// Does not require any manipulation as it is just the key to the map
+		return rec.ContentPath
+	case DiskStoreType:
+		return rec.ContentPath // disk has full path
+	default:
+		cmn.AssertMsg(false, rec.StoreType)
+		return ""
+	}
 }
 
 func (rm *RecordManager) RecordContents() *sync.Map {

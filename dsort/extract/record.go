@@ -19,6 +19,12 @@ var (
 	_ json.Unmarshaler = &Records{}
 )
 
+const (
+	OffsetStoreType = "offset"
+	SGLStoreType    = "sgl"
+	DiskStoreType   = "disk"
+)
+
 type (
 	// RecordObj describes single object of record. Objects inside single record
 	// differs by extension.
@@ -35,13 +41,16 @@ type (
 		Key      interface{} `json:"k"` // Used to determine the sorting order.
 		Name     string      `json:"n"` // Name which uniquely identifies record across all shards.
 		DaemonID string      `json:"d"` // ID of the target which maintains the contents for this record.
-		// Can represent, one of the following keys/paths:
-		//  * Location to the shard - in case offset is used.
+		// Determines where the record has been stored, can be either: OffsetStoreType,
+		// SGLStoreType, DiskStoreType.
+		StoreType string `json:"s"`
+		// Can represent, one of the following:
+		//  * Shard name - in case offset is used.
 		//  * Key for extractCreator's RecordContents - records stored in SGLs.
-		//  * Location on disk where extracted record has been placed.
+		//  * Location (full path) on disk where extracted record has been placed.
 		//
-		// To get full path for given object you need to use `FullContentPath` method.
-		ContentPath string `json:"p"` // TODO: now it contains full path, but could be only objname (we know the target and we know the bucket)
+		// To get path for given object you need to use `FullContentPath` method.
+		ContentPath string `json:"p"`
 		// All objects associated with given record. Record can be composed of
 		// multiple objects which have the same name but different extension.
 		Objects []*RecordObj `json:"o"`
@@ -89,14 +98,6 @@ func (r *Record) delete(ext string) {
 	}
 }
 
-// FullContentPath makes path to particular object.
-func (r *Record) FullContentPath(extractCreator ExtractCreator, obj *RecordObj) string {
-	if extractCreator.SupportsOffset() {
-		return r.ContentPath
-	}
-	return makeFullContentPath(r.ContentPath, obj.Extension)
-}
-
 func (r *Record) TotalSize() int64 {
 	size := int64(0)
 	for _, obj := range r.Objects {
@@ -112,10 +113,6 @@ func (r *Record) MemorySize() uint64 {
 	size += uint64(len(r.ContentPath))
 	size += (uint64(unsafe.Sizeof(r.Objects)) + uint64(len(r.Objects[0].Extension))) * uint64(len(r.Objects))
 	return size
-}
-
-func makeFullContentPath(contentPath, extension string) string {
-	return contentPath + extension
 }
 
 // NewRecords creates new instance of Records struct and allocates n places for
@@ -154,23 +151,23 @@ func (r *Records) Insert(records ...*Record) {
 	r.mu.Unlock()
 }
 
-func (r *Records) DeleteDup(contentPath, ext string) {
-	cmn.Assert(r.Exists(contentPath, ext))
+func (r *Records) DeleteDup(name, ext string) {
+	cmn.Assert(r.Exists(name, ext))
 	r.mu.Lock()
-	if record, ok := r.m[contentPath]; ok {
+	if record, ok := r.m[name]; ok {
 		record.delete(ext)
 	}
-	r.dups[contentPath+ext] = struct{}{}
+	r.dups[name+ext] = struct{}{}
 	r.totalObjectCount--
 	r.mu.Unlock()
 }
 
-func (r *Records) Exists(contentPath, ext string) (exists bool) {
+func (r *Records) Exists(name, ext string) (exists bool) {
 	r.mu.RLock()
-	if record, ok := r.m[contentPath]; ok {
+	if record, ok := r.m[name]; ok {
 		exists = record.exists(ext)
 		if !exists {
-			_, exists = r.dups[contentPath+ext]
+			_, exists = r.dups[name+ext]
 		}
 	}
 	r.mu.RUnlock()

@@ -431,7 +431,7 @@ func (m *Manager) setExtractCreator() (err error) {
 		return m.react(cfg.DuplicatedRecords, msg)
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.node.DaemonID, m.rs.Extension, keyExtractor, onDuplicatedRecords)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Extension, keyExtractor, onDuplicatedRecords)
 	m.shardManager = extract.NewShardManager()
 
 	switch m.rs.Extension {
@@ -649,8 +649,11 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		if m.extractCreator.SupportsOffset() { // offset
-			f, err := cmn.NewFileHandle(hdr.Objname)
+		fullContentPath := m.recManager.FullContentPath(req.Record)
+
+		switch req.Record.StoreType {
+		case extract.OffsetStoreType:
+			f, err := cmn.NewFileHandle(fullContentPath)
 			if err != nil {
 				errHandler(err, respHdr, fromNode)
 				return
@@ -667,16 +670,18 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				f.Close()
 				glog.Error(err)
 			}
-		} else if v, ok := m.recManager.RecordContents().Load(hdr.Objname); ok { // sgl
-			m.recManager.RecordContents().Delete(hdr.Objname)
+		case extract.SGLStoreType:
+			v, ok := m.recManager.RecordContents().Load(fullContentPath)
+			cmn.Assert(ok)
+			m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
 				sgl.Free()
 				glog.Error(err)
 			}
-		} else { // file
-			f, err := cmn.NewFileHandle(hdr.Objname)
+		case extract.DiskStoreType:
+			f, err := cmn.NewFileHandle(fullContentPath)
 			if err != nil {
 				errHandler(err, respHdr, fromNode)
 				return
@@ -692,6 +697,8 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				f.Close()
 				glog.Error(err)
 			}
+		default:
+			cmn.Assert(false)
 		}
 	}
 }
@@ -771,7 +778,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 // loadLocalContent returns function to load content from local storage (either disk or memory).
 func (m *Manager) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
-		loadLocal := func(w io.Writer, pathToContent string) (written int64, err error) {
+		loadLocal := func(w io.Writer) (written int64, err error) {
 			slab, err := mem.GetSlab2(memsys.MaxSlabSize)
 			cmn.AssertNoErr(err)
 			buf := slab.Alloc()
@@ -781,9 +788,12 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				m.decrementRef(1)
 			}()
 
+			fullContentPath := m.recManager.FullContentPath(rec)
+
 			var n int64
-			if m.extractCreator.SupportsOffset() {
-				f, err := os.Open(pathToContent) // TODO: it should be open always
+			switch rec.StoreType {
+			case extract.OffsetStoreType:
+				f, err := os.Open(fullContentPath) // TODO: it should be open always
 				if err != nil {
 					return written, err
 				}
@@ -797,16 +807,18 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 					return written, err
 				}
 				f.Close()
-			} else if v, ok := m.recManager.RecordContents().Load(pathToContent); ok { // sgl
-				m.recManager.RecordContents().Delete(pathToContent)
+			case extract.SGLStoreType:
+				v, ok := m.recManager.RecordContents().Load(fullContentPath)
+				cmn.Assert(ok)
+				m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
 				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
 					sgl.Free()
 					return written, err
 				}
 				sgl.Free()
-			} else { // file
-				f, err := os.Open(pathToContent)
+			case extract.DiskStoreType:
+				f, err := os.Open(fullContentPath)
 				if err != nil {
 					return written, err
 				}
@@ -815,13 +827,15 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 					return written, err
 				}
 				f.Close()
+			default:
+				cmn.Assert(false)
 			}
 
 			written += n
 			return
 		}
 
-		loadRemote := func(w io.Writer, daemonID, pathToContents string) (int64, error) {
+		loadRemote := func(w io.Writer, daemonID string) (int64, error) {
 			var (
 				cbErr      error
 				beforeRecv time.Time
@@ -847,8 +861,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			cmn.AssertNoErr(err)
 
 			hdr := transport.Header{
-				Objname: pathToContents,
-				Opaque:  opaque,
+				Opaque: opaque,
 			}
 
 			if m.Metrics.extended {
@@ -927,11 +940,11 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 		}
 
 		if rec.DaemonID != m.ctx.node.DaemonID { // File source contents are located on a different target.
-			return loadRemote(w, rec.DaemonID, rec.FullContentPath(m.extractCreator, obj))
+			return loadRemote(w, rec.DaemonID)
 		}
 
-		// Load from local source: file or sgl
-		return loadLocal(w, rec.FullContentPath(m.extractCreator, obj))
+		// Load from local source
+		return loadLocal(w)
 	}
 }
 

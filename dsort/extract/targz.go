@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -111,7 +112,7 @@ func (rd *targzRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size   int64
 		header *tar.Header
