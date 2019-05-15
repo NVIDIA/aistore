@@ -7,8 +7,8 @@ PROXYPORT='8081'
 bucket=`hostname`
 pctput=0
 duration=120m
-minsize=8192
-maxsize=8192
+minsize=8M
+maxsize=8M
 threads=64
 nbuckets=1
 cleanup='false'
@@ -63,7 +63,7 @@ done
 source /etc/profile.d/aispaths.sh
 cd $AISSRC/../bench/aisloader
 sudo rm -rf screenlog.0
-screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
+screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -bckprovider=local -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4T -numworkers=$threads
 
 echo "started aisloader, wait for screnlog file to show up with timeout of 2min"
 x=0
@@ -80,7 +80,7 @@ cat screenlog.0
 if grep -q 'Failed to boot strap' screenlog.0; then
 	echo 'Failed to boot strap, restarting one more time'
 	sudo rm -rf screenlog.0
-	screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
+	screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -bckprovider=local -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4T -numworkers=$threads
 	echo "started aisloader, wait for screnlog file to show up with timeout of 2min"
 	x=0
 	while [ "$x" -lt 24 -a ! -f screenlog.0 ]

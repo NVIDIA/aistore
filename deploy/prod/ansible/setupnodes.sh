@@ -10,16 +10,18 @@ sudo chmod 777 /etc/profile.d/aispaths.sh
 . /etc/profile.d/aispaths.sh
 rm -rf ~/ais || true
 mkdir -p ~/ais/{bin,pkg,src}
-
-if [ ! -d "/usr/local/go" ]; then
-    GOLANG_VERSION="1.12"
-
+GOLANG_VERSION="go1.12"
+CURRENT_GOLANG_VERSION=$(cat /usr/local/go/VERSION)
+if [ $CURRENT_GOLANG_VERSION != $GOLANG_VERSION ]; then
+    echo 'Current go lang version does not match with expected, so upadating golang to ' $GOLANG_VERSION
+    sudo rm -rf /usr/local/go
+    sudo rm -rf /use/bin/go
     echo 'Download go'
-    curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz
+    curl -LO https://storage.googleapis.com/golang/${GOLANG_VERSION}.linux-amd64.tar.gz
     shasum -a 256 go1.*
-    sudo tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null
+    sudo tar -C /usr/local -xvzf ${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null
     sudo ln -s /usr/local/go/bin/go /usr/bin/go
-    rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
+    rm -rf ${GOLANG_VERSION}.linux-amd64.tar.gz
 fi
 echo 'Setup go dep binary'
 curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
