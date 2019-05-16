@@ -132,6 +132,7 @@ func (s *DynSemaphore) Size() int64 {
 }
 
 func (s *DynSemaphore) SetSize(n int64) {
+	Assert(n >= 1)
 	s.mu.Lock()
 	s.size = n
 	s.mu.Unlock()
@@ -154,9 +155,7 @@ func (s *DynSemaphore) Acquire() {
 func (s *DynSemaphore) Release() {
 	s.mu.Lock()
 
-	if s.cur < 1 {
-		panic("semaphore: bad release")
-	}
+	Assert(s.cur >= 1)
 
 	s.cur--
 	s.c.Signal()

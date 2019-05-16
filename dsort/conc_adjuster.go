@@ -127,7 +127,7 @@ func newConcAdjuster(limit, goroutineLimitCoef int64) *concAdjuster {
 		adjusters:    adjusters,
 
 		goroutineLimitCoef: goroutineLimitCoef,
-		gorountinesSema:    cmn.NewDynSemaphore(goroutineLimitCoef * limit),
+		gorountinesSema:    cmn.NewDynSemaphore(goroutineLimitCoef * int64(len(availablePaths)) * limit),
 	}
 }
 
