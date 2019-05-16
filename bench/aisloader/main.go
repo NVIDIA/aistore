@@ -25,6 +25,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -175,6 +176,25 @@ var (
 	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
 	dockerPort   = envVars["PORT"]
 )
+
+func (wo *workOrder) String() string {
+	var errstr, opName string
+	switch wo.op {
+	case opGet:
+		opName = http.MethodGet
+	case opPut:
+		opName = http.MethodPut
+	case opConfig:
+		opName = "CONFIG"
+	}
+
+	if wo.err != nil {
+		errstr = ", error: " + wo.err.Error()
+	}
+
+	return fmt.Sprintf("WO: %s/%s, start:%s end:%s, size: %d, type: %s%s",
+		wo.bucket, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
+}
 
 func printUsage(f *flag.FlagSet) {
 	fmt.Println("Flags: ")
@@ -840,7 +860,7 @@ func writeIntervalStats(to io.Writer, jsonFormat bool, s, t sts) {
 }
 
 func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
-	stats := &jsonStats{
+	jStats := &jsonStats{
 		Cnt:        r.Total(),
 		Bytes:      r.TotalBytes(),
 		Start:      r.Start(),
@@ -852,11 +872,11 @@ func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
 		Throughput: r.Throughput(r.Start(), time.Now()),
 	}
 
-	return stats
+	return jStats
 }
 
 func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
-	stats := struct {
+	jStats := struct {
 		Get *jsonStats `json:"get"`
 		Put *jsonStats `json:"put"`
 		Cfg *jsonStats `json:"cfg"`
@@ -865,7 +885,7 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 		Put: jsonStatsFromReq(s.put),
 		Cfg: jsonStatsFromReq(s.getConfig),
 	}
-	jsonOutput, err := json.Marshal(stats)
+	jsonOutput, err := json.Marshal(jStats)
 	if err != nil {
 		fmt.Fprint(os.Stderr, "Error during converting stats to json, skipping")
 	}
@@ -1040,6 +1060,15 @@ func newWorkOrder() (err error) {
 	return nil
 }
 
+func validateWorkOrder(wo *workOrder, delta time.Duration) error {
+	if wo.op == opGet || wo.op == opPut {
+		if delta == 0 {
+			return fmt.Errorf("%s has the same start time as end time", wo)
+		}
+	}
+	return nil
+}
+
 func completeWorkOrder(wo *workOrder) {
 	delta := cmn.TimeDelta(wo.end, wo.start)
 
@@ -1055,6 +1084,11 @@ func completeWorkOrder(wo *workOrder) {
 		intervalStats.statsd.General.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
 		intervalStats.statsd.General.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
 		intervalStats.statsd.General.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
+	}
+
+	if err := validateWorkOrder(wo, delta); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] %s", err.Error())
+		return
 	}
 
 	switch wo.op {
@@ -1160,12 +1194,17 @@ func bootStrap() error {
 	if !runParams.uniqueGETs {
 		bucketObjsNames = &namegetter.RandomNameGetter{}
 	} else {
-		bucketObjsNames = &namegetter.RandomUniqueIterNameGetter{}
+		bucketObjsNames = &namegetter.RandomUniqueNameGetter{}
 
-		// number from benchmarks: aisloader/tests/objNamegetter_test.go
-		// below this threshold, Random strategies are better
-		if len(names) > 800000 && runParams.putPct == 0 {
+		// Permutation strategies seem to be always better (they use more memory though)
+		if runParams.putPct == 0 {
 			bucketObjsNames = &namegetter.PermutationUniqueNameGetter{}
+
+			// number from benchmarks: aisloader/tests/objNamegetter_test.go
+			// After 50k overhead on new go routine and WaitGroup becomes smaller than benefits
+			if len(names) > 50000 {
+				bucketObjsNames = &namegetter.PermutationUniqueImprovedNameGetter{}
+			}
 		}
 	}
 	bucketObjsNames.Init(names, rnd)

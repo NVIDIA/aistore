@@ -127,10 +127,16 @@ func (c Client) Close() error {
 
 // Send sends metrics to statsd server
 // Note: Sending error is ignored
+// aggCnt - if stats were aggregated - number of stats which were aggregated, 1 otherwise
 // 1/ratio - how many samples are aggregated into single metric
 // see: https://github.com/statsd/statsd/blob/master/docs/metric_types.md#sampling
 func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	if !c.opened {
+		return
+	}
+
+	if aggCnt == 0 {
+		// there was no data aggregated, don't send anything to statsd
 		return
 	}
 
@@ -174,8 +180,6 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 }
 
 func (ma *MetricAgg) Add(size int64, lat time.Duration) {
-	cmn.Assert(size != 0)
-	cmn.Assert(lat.Nanoseconds() != 0)
 	ma.cnt++
 	ma.latency += lat
 	ma.bytes += size
@@ -247,40 +251,42 @@ func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
 }
 
 func (mg *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {
-	if mg.cnt != 0 {
-		c.Send(mType, mg.cnt, Metric{
-			Type:  Gauge,
-			Name:  "pending",
-			Value: mg.pending / mg.cnt,
-		})
-	}
 	c.Send(mType, 1,
 		Metric{
 			Type:  Counter,
 			Name:  "count",
 			Value: mg.cnt,
 		})
-	c.Send(mType, mg.cnt, Metric{
-		Type:  Timer,
-		Name:  "latency",
-		Value: mg.AvgLatency(),
-	},
-		Metric{
+
+	// don't send anything when cnt == 0 -> no data aggregated
+	if mg.cnt != 0 {
+		c.Send(mType, mg.cnt, Metric{
+			Type:  Gauge,
+			Name:  "pending",
+			Value: mg.pending / mg.cnt,
+		})
+		c.Send(mType, mg.cnt, Metric{
 			Type:  Timer,
-			Name:  "minlatency",
-			Value: float64(mg.minLatency / time.Millisecond),
+			Name:  "latency",
+			Value: mg.AvgLatency(),
 		},
-		Metric{
-			Type:  Timer,
-			Name:  "maxlatency",
-			Value: float64(mg.maxLatency / time.Millisecond),
-		},
-		Metric{
-			Type:  Counter,
-			Name:  "throughput",
-			Value: mg.Throughput(),
-		},
-	)
+			Metric{
+				Type:  Timer,
+				Name:  "minlatency",
+				Value: float64(mg.minLatency / time.Millisecond),
+			},
+			Metric{
+				Type:  Timer,
+				Name:  "maxlatency",
+				Value: float64(mg.maxLatency / time.Millisecond),
+			},
+			Metric{
+				Type:  Counter,
+				Name:  "throughput",
+				Value: mg.Throughput(),
+			},
+		)
+	}
 
 	if len(general) != 0 {
 		c.Send(mType, genAggCnt, general...)
@@ -288,6 +294,7 @@ func (mg *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt i
 }
 
 func (mcg *MetricConfigAgg) Send(c *Client) {
+	// don't send anything when cnt == 0 -> no data aggregated
 	if mcg.cnt == 0 {
 		return
 	}

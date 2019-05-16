@@ -7,8 +7,6 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
-
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -75,8 +73,11 @@ func (rung *RandomUniqueNameGetter) ObjName() string {
 
 	for {
 		idx := rung.rnd.Intn(len(rung.names))
-		if rung.bitmask[idx/64]&(1<<uint64(idx%64)) == 0 {
+		bitmaskID := idx / 64
+		bitmaskBit := uint64(1) << uint64(idx%64)
+		if rung.bitmask[bitmaskID]&bitmaskBit == 0 {
 			rung.used++
+			rung.bitmask[bitmaskID] |= bitmaskBit
 			return rung.names[idx]
 		}
 	}
@@ -116,13 +117,18 @@ func (ruing *RandomUniqueIterNameGetter) ObjName() string {
 		ruing.used = 0
 	}
 
-	idx := ruing.rnd.Intn(len(ruing.names))
+	namesLen := len(ruing.names)
+	idx := ruing.rnd.Intn(namesLen)
 
 	for {
-		if ruing.bitmask[idx/64]&(1<<uint64(idx%64)) == 0 {
+		bitmaskID := idx / 64
+		bitmaskBit := uint64(1) << uint64(idx%64)
+		if ruing.bitmask[bitmaskID]&bitmaskBit == 0 {
+			ruing.bitmask[bitmaskID] |= bitmaskBit
+			ruing.used++
 			return ruing.names[idx]
 		}
-		idx = (idx + 1) % len(ruing.names)
+		idx = (idx + 1) % namesLen
 	}
 }
 
@@ -130,7 +136,7 @@ type PermutationUniqueNameGetter struct {
 	BaseNameGetter
 	rnd     *rand.Rand
 	perm    []int
-	permidx atomic.Int32
+	permidx int
 }
 
 func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
@@ -144,12 +150,12 @@ func (pung *PermutationUniqueNameGetter) AddObjName(objName string) {
 }
 
 func (pung *PermutationUniqueNameGetter) ObjName() string {
-	if pung.permidx.Load() == int32(len(pung.names)) {
-		pung.permidx.Store(0)
+	if pung.permidx == len(pung.names) {
+		pung.permidx = 0
 		pung.perm = pung.rnd.Perm(len(pung.names))
 	}
-	objName := pung.names[pung.permidx.Load()]
-	pung.permidx.Inc()
+	objName := pung.names[pung.perm[pung.permidx]]
+	pung.permidx++
 	return objName
 }
 
@@ -158,11 +164,12 @@ type PermutationUniqueImprovedNameGetter struct {
 	rnd       *rand.Rand
 	perm      []int
 	permNext  []int
-	permidx   atomic.Int32
+	permidx   int
 	nextReady sync.WaitGroup
 }
 
 func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.Rand) {
+	pung.nextReady.Wait() // in case someone called Init twice, wait until initializing pung.permNext in ObjName() has finished
 	pung.names = names
 	pung.rnd = rnd
 	pung.perm = pung.rnd.Perm(len(names))
@@ -174,19 +181,19 @@ func (pung *PermutationUniqueImprovedNameGetter) AddObjName(objName string) {
 }
 
 func (pung *PermutationUniqueImprovedNameGetter) ObjName() string {
-	if pung.permidx.Load() == int32(len(pung.names)) {
+	if pung.permidx == len(pung.names) {
 		pung.nextReady.Wait()
-		pung.permNext, pung.perm = pung.perm, pung.permNext
-		pung.permidx.Store(0)
+		pung.perm, pung.permNext = pung.permNext, pung.perm
+		pung.permidx = 0
 
 		pung.nextReady.Add(1)
 		go func() {
-			pung.perm = pung.rnd.Perm(len(pung.names))
+			pung.permNext = pung.rnd.Perm(len(pung.names))
 			pung.nextReady.Done()
 		}()
 	}
-	objName := pung.names[pung.permidx.Load()]
-	pung.permidx.Inc()
+	objName := pung.names[pung.perm[pung.permidx]]
+	pung.permidx++
 	return objName
 }
 
