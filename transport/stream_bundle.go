@@ -211,22 +211,27 @@ func (sb *StreamBundle) ListenSmapChanged(newSmapVersionChannel chan int64) {
 }
 
 func (sb *StreamBundle) apply(action int) {
-	streams := sb.get()
+	cmn.Assert(action == closeFin || action == closeStop)
+	var (
+		streams = sb.get()
+		wg      = &sync.WaitGroup{}
+	)
 	for _, robin := range streams {
-		for _, s := range robin.stsdest {
-			if s.Terminated() {
-				continue
+		wg.Add(1)
+		go func(stsdest stsdest, wg *sync.WaitGroup) {
+			for _, s := range stsdest {
+				if !s.Terminated() {
+					if action == closeFin {
+						s.Fin()
+					} else {
+						s.Stop()
+					}
+				}
 			}
-			switch action {
-			case closeFin:
-				s.Fin()
-			case closeStop:
-				s.Stop()
-			default:
-				cmn.Assert(false)
-			}
-		}
+			wg.Done()
+		}(robin.stsdest, wg)
 	}
+	wg.Wait()
 }
 
 // TODO: collect stats from all (stsdest) STreams to the Same Destination, and possibly

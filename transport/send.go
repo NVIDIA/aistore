@@ -453,24 +453,24 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 	return
 }
 
-func (s *Stream) Fin() (err error) {
+func (s *Stream) Fin() {
 	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-	err = s.Send(hdr, nil, nil)
-	s.wg.Wait() // normal (graceful, synchronous) termination
-	return
+	_ = s.Send(hdr, nil, nil)
+	s.wg.Wait()
 }
-func (s *Stream) Stop() {
-	s.stopCh.Close()
-}
+func (s *Stream) Stop()               { s.stopCh.Close() }
 func (s *Stream) URL() string         { return s.toURL }
 func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
 func (s *Stream) Terminated() bool    { return s.term.barr.Load() != 0 }
 func (s *Stream) terminate() {
-	s.term.barr.Store(0xDEADBEEF)
-	gc.remove(s)
-	s.Stop()
-	close(s.cmplCh)
+	if s.term.barr.Swap(0xDEADBEEF) == 0xDEADBEEF {
+		glog.Warningf("%s: already terminated (%s, %v)", s, *s.term.reason, s.term.err)
+	} else {
+		gc.remove(s)
+		s.Stop()
+		close(s.cmplCh)
+	}
 }
 
 func (s *Stream) TermInfo() (string, error) {

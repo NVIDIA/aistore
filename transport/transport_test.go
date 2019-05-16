@@ -484,11 +484,7 @@ func Test_ObjAttrs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	if err := stream.Fin(); err != nil {
-		t.Fatal(err)
-	}
-
+	stream.Fin()
 	if receivedCount.Load() != int64(len(testAttrs)) {
 		t.Fatalf("invalid received count: %d, expected: %d", receivedCount.Load(), len(testAttrs))
 	}
