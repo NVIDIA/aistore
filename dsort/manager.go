@@ -116,9 +116,9 @@ type Manager struct {
 	extractAdjuster *concAdjuster
 	createAdjuster  *concAdjuster
 	streams         struct {
-		request  map[string]*StreamPool
-		response map[string]*StreamPool
-		shards   map[string]*StreamPool // streams for pushing streams to other targets if the fqn is non-local
+		request  *transport.StreamBundle
+		response *transport.StreamBundle
+		shards   *transport.StreamBundle // streams for pushing streams to other targets if the fqn is non-local
 	}
 	streamWriters struct {
 		mu      sync.Mutex
@@ -191,10 +191,6 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.extractAdjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
 	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 3 /*goroutineLimitCoef*/)
 
-	m.streams.request = make(map[string]*StreamPool, 100)
-	m.streams.response = make(map[string]*StreamPool, 100)
-	m.streams.shards = make(map[string]*StreamPool, 100)
-
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
 	// we will know that all daemons have finished operation).
@@ -220,6 +216,9 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	return nil
 }
 
+// TODO: Currently we create streams for each dSort job but maybe we should
+// create streams once and have them available for all the dSort jobs so they
+// would share the resource rather than competeing for it.
 func (m *Manager) initStreams() error {
 	// Requests are usually small packets, no more 1KB that is why we want to
 	// utilize intraControl network
@@ -235,40 +234,44 @@ func (m *Manager) initStreams() error {
 		respNetwork = cmn.NetworkPublic
 	}
 
+	client := transport.NewDefaultClient()
+
 	trname := fmt.Sprintf("dsort-%s-recv_req", m.ManagerUUID)
-	reqPath, err := transport.Register(reqNetwork, trname, m.makeRecvRequestFunc())
-	if err != nil {
+	reqSbArgs := transport.SBArgs{
+		Multiplier: 2,
+		Network:    reqNetwork,
+		Trname:     trname,
+		Ntype:      cluster.Targets,
+	}
+	if _, err := transport.Register(reqNetwork, trname, m.makeRecvRequestFunc()); err != nil {
 		return err
 	}
 
 	trname = fmt.Sprintf("dsort-%s-recv_resp", m.ManagerUUID)
-	respPath, err := transport.Register(respNetwork, trname, m.makeRecvResponseFunc())
-	if err != nil {
+	respSbArgs := transport.SBArgs{
+		Multiplier: transport.IntraBundleMultiplier,
+		Network:    respNetwork,
+		Trname:     trname,
+		Ntype:      cluster.Targets,
+	}
+	if _, err := transport.Register(respNetwork, trname, m.makeRecvResponseFunc()); err != nil {
 		return err
 	}
 
 	trname = fmt.Sprintf("dsort-%s-shard", m.ManagerUUID)
-	shardPath, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc())
-	if err != nil {
+	shardsSbArgs := transport.SBArgs{
+		Multiplier: transport.IntraBundleMultiplier,
+		Network:    respNetwork,
+		Trname:     trname,
+		Ntype:      cluster.Targets,
+	}
+	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {
 		return err
 	}
 
-	for _, si := range ctx.smap.Get().Tmap {
-		m.streams.request[si.DaemonID] = NewStreamPool(2)
-		m.streams.response[si.DaemonID] = NewStreamPool(transport.IntraBundleMultiplier)
-		m.streams.shards[si.DaemonID] = NewStreamPool(transport.IntraBundleMultiplier)
-		for i := 0; i < transport.IntraBundleMultiplier; i++ {
-			url := si.IntraControlNet.DirectURL + reqPath
-			m.streams.request[si.DaemonID].Add(NewStream(url))
-
-			url = si.IntraDataNet.DirectURL + respPath
-			m.streams.response[si.DaemonID].Add(NewStream(url))
-
-			url = si.IntraDataNet.DirectURL + shardPath
-			m.streams.shards[si.DaemonID].Add(NewStream(url))
-		}
-	}
-
+	m.streams.request = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, reqSbArgs)
+	m.streams.response = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, respSbArgs)
+	m.streams.shards = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, shardsSbArgs)
 	return nil
 }
 
@@ -285,30 +288,30 @@ func (m *Manager) cleanupStreams() error {
 		respNetwork = cmn.NetworkPublic
 	}
 
-	if len(m.streams.request) > 0 {
+	if m.streams.request != nil {
 		trname := fmt.Sprintf("dsort-%s-recv_req", m.ManagerUUID)
 		if err := transport.Unregister(reqNetwork, trname); err != nil {
 			return err
 		}
 	}
 
-	if len(m.streams.response) > 0 {
+	if m.streams.response != nil {
 		trname := fmt.Sprintf("dsort-%s-recv_resp", m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
 			return err
 		}
 	}
 
-	if len(m.streams.shards) > 0 {
+	if m.streams.shards != nil {
 		trname := fmt.Sprintf("dsort-%s-shard", m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
 			return err
 		}
 	}
 
-	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
-		for _, streamPool := range streamPoolArr {
-			streamPool.Stop()
+	for _, streamBundle := range []*transport.StreamBundle{m.streams.request, m.streams.response, m.streams.shards} {
+		if streamBundle != nil {
+			streamBundle.Close(true)
 		}
 	}
 
@@ -612,7 +615,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 	errHandler := func(err error, hdr transport.Header, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
-		if err = m.streams.response[node.DaemonID].Get().Send(hdr, nil, nil); err != nil {
+		if err = m.streams.response.SendV(hdr, nil, nil, node); err != nil {
 			glog.Error(err)
 		}
 	}
@@ -658,15 +661,15 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				errHandler(err, respHdr, fromNode)
 				return
 			}
-			_, err = f.Seek(req.RecordObj.Offset-req.RecordObj.MetadataSize, io.SeekStart)
+			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+			r, err := cmn.NewFileSectionHandle(f, req.RecordObj.Offset-req.RecordObj.MetadataSize, respHdr.ObjAttrs.Size, 0)
 			if err != nil {
 				f.Close()
 				errHandler(err, respHdr, fromNode)
 				return
 			}
-			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			r := cmn.NewLimitedReadCloser(f, respHdr.ObjAttrs.Size)
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, r, m.responseCallback); err != nil {
+
+			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, fromNode); err != nil {
 				f.Close()
 				glog.Error(err)
 			}
@@ -676,7 +679,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
+			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, fromNode); err != nil {
 				sgl.Free()
 				glog.Error(err)
 			}
@@ -693,7 +696,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.responseCallback); err != nil {
+			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, fromNode); err != nil {
 				f.Close()
 				glog.Error(err)
 			}
@@ -881,7 +884,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}
 
 			wg.Add(1)
-			if err := m.streams.request[toNode.DaemonID].Get().Send(hdr, nil, cb); err != nil {
+			if err := m.streams.request.SendV(hdr, nil, cb, toNode); err != nil {
 				return 0, err
 			}
 

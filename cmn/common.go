@@ -361,11 +361,6 @@ type (
 		Size() int64
 	}
 
-	LimitedReadCloser struct {
-		r io.ReadCloser
-		l *io.LimitedReader
-	}
-
 	FileHandle struct {
 		*os.File
 		fqn string
@@ -397,18 +392,6 @@ func NewFileHandle(fqn string) (*FileHandle, error) {
 
 func (f *FileHandle) Open() (io.ReadCloser, error) {
 	return os.Open(f.fqn)
-}
-
-func NewLimitedReadCloser(r io.ReadCloser, n int64) io.ReadCloser {
-	return &LimitedReadCloser{r: r, l: &io.LimitedReader{R: r, N: n}}
-}
-
-func (f *LimitedReadCloser) Read(b []byte) (n int, err error) {
-	return f.l.Read(b)
-}
-
-func (f *LimitedReadCloser) Close() error {
-	return f.r.Close()
 }
 
 func NewSizedReader(r io.Reader, size int64) *SizedReader {
