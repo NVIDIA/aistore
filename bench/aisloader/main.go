@@ -40,6 +40,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -1089,17 +1090,20 @@ func putObjectname() (string, error) {
 		return "", fmt.Errorf("number of PUT objects reached maxObjectsPut limit (%d)", runParams.maxObjectsPut)
 	}
 
-	if useRandomObjName {
-		return tutils.FastRandomFilename(rnd, randomObjNameLen), nil
-	}
+	var baseObjName string
 
-	objectNumber := (cnt - 1) << suffixIDMaskLen
-	objectNumber |= suffixID
+	if useRandomObjName {
+		baseObjName = tutils.FastRandomFilename(rnd, randomObjNameLen)
+	} else {
+		objectNumber := (cnt - 1) << suffixIDMaskLen
+		objectNumber |= suffixID
+		baseObjName = strconv.FormatUint(objectNumber, 16)
+	}
 
 	if runParams.subDir == "" {
-		return strconv.FormatUint(objectNumber, 16), nil
+		return baseObjName, nil
 	}
-	return runParams.subDir + "/" + strconv.FormatUint(objectNumber, 16), nil
+	return path.Join(runParams.subDir, baseObjName), nil
 }
 
 func newGetWorkOrder() *workOrder {
