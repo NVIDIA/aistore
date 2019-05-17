@@ -22,7 +22,7 @@ Puts randomly generated shards which then can be used for dSort testing.
 | `--ext` | `string` | extension for shards (either '.tar' or '.tgz') | `.tar` |
 | `--bucket` | `string` | bucket where shards will be put | `dsort-testing` |
 | `--template` | `string` | template of input shard name | `shard-{0..9}` |
-| `--fsize` | `int` | single file size (in bytes) inside the shard | `1024` |
+| `--fsize` | `string` | single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
 | `--fcount` | `int` | number of files inside single shard | `5` |
 | `--cleanup` | `bool` | when set, the old bucket will be deleted and created again | `false` |
 | `--conc` | `int` | limits number of concurrent put requests and number of concurrent shards created | `10` |

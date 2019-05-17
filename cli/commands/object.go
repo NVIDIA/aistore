@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -193,11 +194,21 @@ func retrieveObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		return
 	}
 	obj := parseStrFlag(c, nameFlag)
+
+	offset, err := getByteFlagValue(c, offsetFlag)
+	if err != nil {
+		return err
+	}
+	length, err := getByteFlagValue(c, lengthFlag)
+	if err != nil {
+		return err
+	}
+
 	var objLen int64
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)
-	query.Add(cmn.URLParamOffset, parseStrFlag(c, offsetFlag))
-	query.Add(cmn.URLParamLength, parseStrFlag(c, lengthFlag))
+	query.Add(cmn.URLParamOffset, offset)
+	query.Add(cmn.URLParamLength, length)
 	objArgs := api.GetObjectInput{Writer: os.Stdout, Query: query}
 
 	// Output to user location
@@ -425,4 +436,17 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckPro
 	fmt.Printf("%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
 		command, prefix, regex, rangeStr, bucket)
 	return
+}
+
+// Returns a string containing the value of the `flag` in bytes, used for `offset` and `length` flags
+func getByteFlagValue(c *cli.Context, flag cli.Flag) (string, error) {
+	if flagIsSet(c, flag) {
+		offsetInt, err := parseByteFlagToInt(c, flag)
+		if err != nil {
+			return "", err
+		}
+		return strconv.FormatInt(offsetInt, 10), nil
+	}
+
+	return "", nil
 }

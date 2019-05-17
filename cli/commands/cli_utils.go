@@ -215,6 +215,16 @@ func parseIntFlag(c *cli.Context, flag cli.Flag) int {
 	return c.Int(flagName)
 }
 
+func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
+	flagValue := parseStrFlag(c, flag)
+	b, err := cmn.S2B(flagValue)
+	if err != nil {
+		return 0, fmt.Errorf("%s (%s) is invalid, expected either a number or a number with a size suffix (kb, MB, GiB, ...)", flag.GetName(), flagValue)
+	}
+
+	return b, nil
+}
+
 func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 	for _, f := range flag {
 		if !flagIsSet(c, f) {

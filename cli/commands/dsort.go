@@ -49,7 +49,7 @@ var (
 	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
 	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: "dsort-testing", Usage: "bucket where shards will be put"}
 	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
-	fileSizeFlag      = cli.IntFlag{Name: "fsize", Value: 1024, Usage: "single file size (in bytes) inside the shard"}
+	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
 	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
 	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "when set, the old bucket will be deleted and created again"}
 	concurrencyFlag   = cli.IntFlag{Name: "conc", Value: 10, Usage: "limits number of concurrent put requests and number of concurrent shards created"}
@@ -226,9 +226,14 @@ func dsortGenHandler(c *cli.Context, baseParams *api.BaseParams) error {
 		bucket    = parseStrFlag(c, dsortBucketFlag)
 		template  = parseStrFlag(c, dsortTemplateFlag)
 		fileCnt   = parseIntFlag(c, fileCountFlag)
-		fileSize  = int64(parseIntFlag(c, fileSizeFlag))
 		concLimit = parseIntFlag(c, concurrencyFlag)
+
+		fileSize int64
 	)
+	fileSize, err := parseByteFlagToInt(c, fileSizeFlag)
+	if err != nil {
+		return err
+	}
 
 	supportedExts := []string{".tar", ".tgz"}
 	if !cmn.StringInSlice(ext, supportedExts) {

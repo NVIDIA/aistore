@@ -15,8 +15,8 @@ Gets the object from the bucket. If `--out-file` is empty, it stores the file in
 | `--bucket` | string | name of the bucket to retrieve the object | `""` |
 | `--name` | string | name of the object | `""` |
 | `--out-file` | string | name of the file to store the contents of the object | `""` |
-| `--offset` | string | read offset | `""` |
-| `--length` | string | read length |  `""` |
+| `--offset` | string | read offset, can end with size suffix (k, MB, GiB, ...) | `""` |
+| `--length` | string | read length, can end with size suffix (k, MB, GiB, ...) |  `""` |
 | `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 | `--checksum` | bool | validate the checksum of the object | `false` |
 | `--props` | bool | returns the properties of object (size and version). It does not download the object. | `false` |
