@@ -625,10 +625,6 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 }
 
 func TestDownloadIntoNonexistentBucket(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		bucket  = TestNonexistentBucketName
 		params  = tutils.DefaultBaseAPIParams(t)

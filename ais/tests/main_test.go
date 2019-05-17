@@ -196,8 +196,8 @@ func Test_putdeleteRange(t *testing.T) {
 		t.Skip("numfiles must be a positive multiple of 10")
 	}
 
-	if testing.Short() {
-		t.Skip(skipping)
+	if testing.Short() && !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
 	const (
@@ -332,8 +332,8 @@ func Test_putdeleteRange(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
+	if testing.Short() && !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skipf("don't run when short mode and cloud bucket")
 	}
 
 	if err := cmn.CreateDir(DeleteDir); err != nil {

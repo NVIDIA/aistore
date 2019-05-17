@@ -290,9 +290,6 @@ func TestRegressionLocalBuckets(t *testing.T) {
 }
 
 func TestRenameLocalBuckets(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestLocalBucketName
@@ -415,10 +412,6 @@ func TestListObjectsPrefix(t *testing.T) {
 }
 
 func TestRenameObjects(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		renameStr    = "rename"
 		bucket       = t.Name()

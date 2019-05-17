@@ -494,10 +494,6 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			maxMemUsage:      "99%",
 		}
 	)
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	dsortFW.init()
 
 	// Initialize metadata

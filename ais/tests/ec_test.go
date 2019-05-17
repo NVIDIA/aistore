@@ -818,10 +818,6 @@ func TestECChecksum(t *testing.T) {
 		objPatt = "obj-cksum-%04d"
 	)
 
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	if tutils.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
