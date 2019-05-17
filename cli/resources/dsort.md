@@ -57,7 +57,7 @@ table describes json keys which can be used in specification.
 | `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no | `""` - `time.Now()` is used |
 | `algorithm.extension` | `string` | content of the file with provided extension will be used as sorting key, used when `kind=content` | yes (only when `kind=content`) |
 | `algorithm.format_type` | `string` | format type (`int`, `float` or `string`) describes how the content of the file should be interpreted, used when `kind=content` | yes (only when `kind=content`) |
-| `max_mem_usage` | `string` | limits maximum of total memory until extraction starts spilling data to the disk, can be 60% or 10GB | no | same as in `config.sh` |
+| `max_mem_usage` | `string` | limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB | no | same as in `config.sh` |
 | `extract_concurrency_limit` | `string` | limits number of concurrent shards extracted per disk | no | same as in `config.sh` |
 | `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `config.sh` |
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |

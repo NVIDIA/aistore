@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -832,9 +834,6 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	mem, err := sys.Mem()
-	tassert.CheckFatal(t, err)
-
 	var (
 		m = &metadata{
 			t:      t,
@@ -843,11 +842,10 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		dsortFW = &dsortFramework{
 			m:                 m,
 			outputTempl:       "output-{0..10000}",
-			tarballCnt:        1000,
+			tarballCnt:        60,
 			fileInTarballSize: cmn.MiB,
-			fileInTarballCnt:  5,
+			fileInTarballCnt:  50,
 			extension:         ".tar",
-			maxMemUsage:       cmn.UnsignedB2S(mem.ActualUsed+2*cmn.GiB, 0),
 		}
 	)
 
@@ -868,6 +866,16 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 
 	dsortFW.createInputShards()
 
+	// Try to free all memory to get estimated actual used memory size
+	runtime.GC()
+	debug.FreeOSMemory()
+	time.Sleep(time.Second)
+
+	// Get current memory
+	mem, err := sys.Mem()
+	tassert.CheckFatal(t, err)
+	dsortFW.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+500*cmn.MiB, 0)
+
 	tutils.Logln("starting distributed sort with using memory and disk...")
 	rs := dsortFW.gen()
 	managerUUID, err := api.StartDSort(baseParams, rs)
@@ -883,13 +891,17 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
 	}
 
-	for target, metrics := range allMetrics {
-		if metrics.Extraction.ExtractedToDiskCnt == 0 {
-			t.Errorf("target %s did not extract any files do disk", target)
-		}
-		if metrics.Extraction.ExtractedToDiskCnt == metrics.Extraction.ExtractedCnt {
-			t.Errorf("target %s extracted all files to the disk", target)
-		}
+	extractedToDisk, extractedTotal := 0, 0
+	for _, metrics := range allMetrics {
+		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
+		extractedTotal += metrics.Extraction.ExtractedCnt
+	}
+
+	if extractedToDisk == 0 {
+		t.Error("all extractions by all targets were done exclusively into memory")
+	}
+	if extractedToDisk == extractedTotal {
+		t.Error("all extractions by all targets were done exclusively into disk")
 	}
 
 	dsortFW.checkOutputShards(0)

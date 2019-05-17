@@ -44,7 +44,7 @@ type (
 	}
 
 	RecordExtractor interface {
-		ExtractRecordWithBuffer(t ExtractCreator, shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
+		ExtractRecordWithBuffer(shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (int64, error)
 	}
 
 	RecordManager struct {
@@ -56,6 +56,7 @@ type (
 		extension           string
 		onDuplicatedRecords func(string) error
 
+		extractCreator  ExtractCreator
 		keyExtractor    KeyExtractor
 		contents        *sync.Map
 		extractionPaths *sync.Map // Keys correspond to all paths to record contents on disk.
@@ -90,7 +91,7 @@ func FreeMemory() {
 	})
 }
 
-func NewRecordManager(t cluster.Target, daemonID, bucket, extension string, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
+func NewRecordManager(t cluster.Target, daemonID, bucket, extension string, extractCreator ExtractCreator, keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records: NewRecords(1000),
 
@@ -100,13 +101,14 @@ func NewRecordManager(t cluster.Target, daemonID, bucket, extension string, keyE
 		extension:           extension,
 		onDuplicatedRecords: onDuplicatedRecords,
 
+		extractCreator:  extractCreator,
 		keyExtractor:    keyExtractor,
 		contents:        &sync.Map{},
 		extractionPaths: &sync.Map{},
 	}
 }
 
-func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
+func (rm *RecordManager) ExtractRecordWithBuffer(shardName, recordName string, r cmn.ReadSizer, metadata []byte, toDisk bool, offset int64, buf []byte) (size int64, err error) {
 	var (
 		storeType       string
 		contentPath     string
@@ -141,8 +143,8 @@ func (rm *RecordManager) ExtractRecordWithBuffer(t ExtractCreator, shardName, re
 			return size, err
 		}
 		rm.contents.Store(fullContentPath, sgl)
-	} else if t.SupportsOffset() {
-		mdSize, size = t.MetadataSize(), r.Size()
+	} else if rm.extractCreator.SupportsOffset() {
+		mdSize, size = rm.extractCreator.MetadataSize(), r.Size()
 		storeType = OffsetStoreType
 		contentPath, _ = rm.encodeRecordName(storeType, shardName, recordName)
 
@@ -310,6 +312,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 	case OffsetStoreType:
 		shardName, _ := rm.parseRecordUniqueName(record.Name)
 		obj.ContentPath = shardName
+		obj.MetadataSize = rm.extractCreator.MetadataSize()
 	case DiskStoreType:
 		diskPath := rm.FullContentPath(obj)
 		// No matter what the outcome we should store `path` in

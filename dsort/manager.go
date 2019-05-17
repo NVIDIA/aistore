@@ -434,9 +434,6 @@ func (m *Manager) setExtractCreator() (err error) {
 		return m.react(cfg.DuplicatedRecords, msg)
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Extension, keyExtractor, onDuplicatedRecords)
-	m.shardManager = extract.NewShardManager()
-
 	switch m.rs.Extension {
 	case extTar:
 		m.extractCreator = extract.NewTarExtractCreator()
@@ -447,6 +444,9 @@ func (m *Manager) setExtractCreator() (err error) {
 	default:
 		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
 	}
+
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
+	m.shardManager = extract.NewShardManager()
 
 	return nil
 }

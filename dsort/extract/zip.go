@@ -138,7 +138,7 @@ func (z *zipExtractCreator) ExtractShard(shardName string, r *io.SectionReader, 
 			}
 
 			data := cmn.NewSizedReader(file, int64(header.UncompressedSize64))
-			if size, err = extractor.ExtractRecordWithBuffer(z, shardName, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
+			if size, err = extractor.ExtractRecordWithBuffer(shardName, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
 				file.Close()
 				return extractedSize, extractedCount, err
 			}

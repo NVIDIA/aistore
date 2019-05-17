@@ -1099,7 +1099,7 @@ components:
         max_mem_usage:
           type: string
           example: "10%"
-          description: Limits maximum of total memory until extraction starts spilling data to the disk, can be 60% or 10GB
+          description: Limits the amount of total system memory allocated by both dSort and other running processes. Once and if this threshold is crossed, dSort will continue extracting onto local drives. Can be in format 60% or 10GB
         extract_concurrency_limit:
           type: integer
           minimum: 0

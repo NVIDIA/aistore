@@ -175,7 +175,7 @@ func (t *tarExtractCreator) ExtractShard(shardName string, r *io.SectionReader, 
 			continue
 		} else if header.Typeflag == tar.TypeReg {
 			data := cmn.NewSizedReader(tr, header.Size)
-			if size, err = extractor.ExtractRecordWithBuffer(t, shardName, header.Name, data, bmeta, toDisk, offset, buf); err != nil {
+			if size, err = extractor.ExtractRecordWithBuffer(shardName, header.Name, data, bmeta, toDisk, offset, buf); err != nil {
 				return extractedSize, extractedCount, err
 			}
 		} else {
