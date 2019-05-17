@@ -1,5 +1,7 @@
 ## Table of Contents
-- [AIS Load Generator](#ais-load-generator)
+- [AIS Loader](#ais-loader)
+   - [Examples](#examples)
+   - [Command-line options](#command-line-options)
    - [Cluster Under Test](#cluster-under-test)
    - [Local vs Cloud-based bucket](#local-vs-cloud-based-bucket)
    - [Duration](#duration)
@@ -9,27 +11,121 @@
    - [Object size](#object-size)
    - [Grafana and Graphite](#grafana-and-graphite)
 
-## AIS Load Generator
+## AIS Loader
 
-`aisloader` is a command-line load generator [included with AIStore](/bench/aisloader/). For usage, cd to the `aisloader` source directory and run:
+AIS Loader (`aisloader`) is a tool to measure storage performance. It's a load generator that has been developed (and is currently used) to benchmark and stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.
+
+For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
+
+To get started, cd to [aisloader home](/bench/aisloader/) and run:
 
 ```shell
 $ go install
-$ $GOPATH/bin/aisloader --help
+$ $GOPATH/bin/aisloader
 ```
+### Examples
 
-To run, the loader requires a **certain minimal subset** of command line options. The list includes:
+For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
+1. Destroy existing local bucket. If the bucket is Cloud-based, delete all objects:
 ```shell
--ip=<IPv4 or hostname of the current primary proxy>
--port=<TCP port>
--bucket=<bucket-name>
--local=true | false
--duration=<duration in human-readable format, e.g. 120s, 2h, etc.>
--numworkers=...
+# aisloader -bucket=nvais -duration 0s -totalputsize=0
 ```
 
-Rest of this document desctibes these command line options and gives examples.
+2. Time-based 100% PUT into local bucket. Upon exit the bucket is emptied (by default):
+```shell
+# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
+```
+
+3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
+```shell
+aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
+```
+
+4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
+```shell
+# aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
+```
+
+5. PUT 1GB total into a local bucket with cleanup disabled, object size = 1MB, duration unlimited:
+```shell
+# aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -bckprovider=local
+```
+
+6. 100% GET from a local bucket:
+```shell
+# aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local
+```
+
+7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid}):
+```shell
+# aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader"
+```
+
+8. Use random object names and loaderID to report statistics:
+```shell
+# aisloader -loaderid=10
+```
+
+9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
+```shell
+# aisloader -loaderid=10 -loadernum=20
+```
+
+10. Same as above except that loaderID is computed by the aisloader as hash(loaderstring) & 0xff:
+```shell
+# aisloader -loaderid=loaderstring -loaderidhashlen=8
+```
+
+11. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:
+```shell
+# aisloader -getloaderid (0x0)
+# aisloader -loaderid=10 -getloaderid (0xa)
+# aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
+```
+
+### Command-line Options
+
+For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
+
+| Command-line option | Description |
+| --- | --- |
+| -batchsize | Batch size to list and delete (default 100) |
+| -bckprovider | local - for local bucket, cloud - for Cloud based bucket (default "local") |
+| -bprops | JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply |
+| -bucket | Bucket name (default "nvais") |
+| -check-statsd | true: prior to benchmark make sure that StatsD is reachable |
+| -cleanup | true: remove all created objects upon benchmark termination (default true) |
+| -dry-run | show the configuration and parameters that aisloader will use |
+| -duration | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do |
+| -getconfig | true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) |
+| -getloaderid | true: print stored/computed unique loaderID aka aisloader identifier and exit |
+| -ip | AIS proxy/gateway IP address or hostname (default "localhost") |
+| -json | true: print the output in JSON |
+| -loaderid | ID to identify a loader among multiple concurrent instances (default "0") |
+| -loaderidhashlen | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum |
+| -loadernum | total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen |
+| -maxputs | Maximum number of objects to PUT |
+| -maxsize | Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.) |
+| -minsize | Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.) |
+| -numworkers | Number of goroutine workers operating on AIS in parallel (default 10) |
+| -pctput | Percentage of PUTs in the aisloader-generated workload |
+| -port | Percentage of PUTs in the aisloader-generated workload |
+| -randomname | true: generate object names of 32 random characters. This option is ignored when loadernum is defined (default true) |
+| -readertype | Type of reader: sg(default) | file | rand (default "sg") |
+| -readlen | Read range length (can contain multiplicative suffix; 0 - GET full object) |
+| -readoff | Read range offset (can contain multiplicative suffix K, MB, GiB, etc.) |
+| -seed | Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds) |
+| -stats-output | filename to log statistics (empty string translates as standard output (default) |
+| -statsdip | StatsD IP address or hostname (default "localhost") |
+| -statsdport | StatsD UDP port (default 8125) |
+| -statsinterval | Interval in seconds to print performance counters; 0 - disabled (default 10 seconds) |
+| -subdir | Virtual destination directory for all aisloader-generated objects |
+| -tmpdir | Local directory to store temporary files (default "/tmp/ais") |
+| -totalputsize | Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.), 0 - unlimited |
+| -uniquegets | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others (default true) |
+| -usage | Show command-line options, usage, and examples |
+| -verifyhash | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata |
 
 ### Cluster Under Test
 

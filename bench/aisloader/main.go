@@ -2,29 +2,31 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 
-// 'aisloader' is a load generator for AIStore.
-// It sends HTTP requests to a proxy server fronting targets.
-// Run with -help for usage information.
+// AIS loader (aisloader) is a tool to measure storage performance. It's a load
+// generator that has been developed (and is currently used) to benchmark and
+// stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.
+// For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
 // Examples:
-// 1. No PUT or GET, just clean up:
+// 1. Destroy existing local bucket. If the bucket is Cloud-based, delete all objects:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
-// 2. Time based local bucket PUT only, with random objects names:
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -bckprovider=local
-// 3. PUT limit based cloud bucket mixed PUT(30%) and GET(70%), with random objects names:
-//    aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240
-// 4. PUT files with names: hex({0..2000}{loaderid}), stop when 2000 files PUT into the bucket
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000
-//
-// 5. Use random object names and loaderID for reporting stats
+// 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
+//    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
+// 3. Time-based PUT into local bucket, random objects names:
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
+// 4. Mixed 30% PUT and 70% GET to/from Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
+//    aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
+// 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
+// 6. Use random object names and loaderID for reporting stats
 //    aisloader -loaderid=10
-// 6. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
-//    aisloader -loaderid=10 -loaderNum=20
-// 7. PUT objects with names passed on hash of loaderID of length -loaderidhashlen; names: hex({0..}{hash(loaderid)})
+// 7. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
+//    aisloader -loaderid=10 -loadernum=20
+// 8. PUT objects with names passed on hash of loaderID of length -loaderidhashlen; names: hex({0..}{hash(loaderid)})
 //    aisloader -loaderid=loaderstring -loaderidhashlen=8
-// 6. Does nothing but prints loaderID:
+// 9. Does nothing but prints loaderID:
 //    aisloader -getloaderid (0x0)
-//	  aisloader -loaderid=10 -getloaderid (0xa)
+//    aisloader -loaderid=10 -getloaderid (0xa)
 //    aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 
 package main
@@ -49,18 +51,15 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
-
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/OneOfOne/xxhash"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -72,6 +71,43 @@ const (
 	dockerEnvFile    = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 	randomObjNameLen = 32
 )
+
+var examples = []string{
+	"1. Cleanup (i.e., empty) existing bucket:",
+	"# aisloader -bucket=nvais -duration 0s -totalputsize=0\n",
+
+	"2. Time-based 100% PUT into local bucket. Upon exit the bucket is emptied (by default):",
+	"# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local\n",
+
+	"3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:",
+	"# aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false\n",
+
+	"4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket.\n   PUT will generate random object names and is limited by the 10GB total size.\n   Cleanup is not disabled, which means that upon completion all generated objects will be deleted:",
+	"# aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G\n",
+
+	"5. PUT 1GB total into a local bucket with cleanup disabled, object size = 1MB, duration unlimited:",
+	"# aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -bckprovider=local\n",
+
+	"6. 100% GET from a local bucket:",
+	"# aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local\n",
+
+	"7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:",
+	"# aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix=\"aisloader\"\n",
+
+	"8. Use random object names and loaderID to report statistics:",
+	"# aisloader -loaderid=10\n",
+
+	"9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:",
+	"# aisloader -loaderid=10 -loadernum=20\n",
+
+	"10. Same as above except that loaderID is computed by the aisloader as hash(loaderstring) & 0xff:",
+	"# aisloader -loaderid=loaderstring -loaderidhashlen=8\n",
+
+	"11. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:",
+	"# aisloader -getloaderid (0x0)",
+	"# aisloader -loaderid=10 -getloaderid (0xa)",
+	"# aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)",
+}
 
 type (
 	workOrder struct {
@@ -88,64 +124,54 @@ type (
 	}
 
 	params struct {
-		seed int64 // random seed, 0=current time
-
+		seed              int64 // random seed; UnixNano() if omitted
 		putSizeUpperBound int64
 		minSize           int64
 		maxSize           int64
+		readOff           int64 // read offset
+		readLen           int64 // read length
+		loaderCnt         uint64
+		maxputs           uint64
 
-		readOff int64 // read offset \
-		readLen int64 // read length / to test range read
-
-		putSizeUpperBoundStr string // Stops after written at least this much data
+		loaderID             string // used with multiple loader instances generating objects in parallel
+		proxyURL             string
+		bckProvider          string // "local" or "cloud"
+		bucket               string
+		readerType           string
+		tmpDir               string // used only when usingFile
+		statsOutput          string
+		statsdIP             string
+		bPropsStr            string
+		putSizeUpperBoundStr string // stop after writing that amount of data
 		minSizeStr           string
 		maxSizeStr           string
+		readOffStr           string // read offset
+		readLenStr           string // read length
+		subDir               string
 
-		readOffStr string // read offset \
-		readLenStr string // read length / to test range read
+		bProps cmn.BucketProps
 
-		duration time.Duration // Stops after run at least this long
+		duration time.Duration // stop after the run for at least that much
 
-		proxyURL    string
-		bckProvider string //If bucket is "local" or "cloud" bucket
-		bucket      string
-
-		readerType  string
-		tmpDir      string // only used when usingFile is true
-		statsOutput string
-
-		statsdIP          string
 		statsdPort        int
 		statsShowInterval int
+		putPct            int // % of puts, rest are gets
+		numWorkers        int
+		batchSize         int // batch is used for bootstraping(list) and delete
+		loaderIDHashLen   uint
 
-		loaderID   string // when multiple of instances of loader running in the same cluster
-		putPct     int    // % of puts, rest are gets
-		numWorkers int
-		batchSize  int // batch is used for bootstraping(list) and delete
-
-		loaderCnt     uint64
-		maxObjectsPut uint64
-		randomObjName bool
-		subDir        string
-
-		getLoaderID     bool
-		loaderIDHashLen uint
-
-		uniqueGETs bool
-
-		verifyHash bool // verify xxHash during get
-		cleanUp    bool
-		usingSG    bool
-		usingFile  bool
-		getConfig  bool // true if only run get proxy config request
-		jsonFormat bool
-
-		stopable       bool // if true, will stop when `stop` is sent through stdin
+		getLoaderID    bool
+		randomObjName  bool
+		uniqueGETs     bool
+		verifyHash     bool // verify xxhash during get
+		cleanUp        bool
+		usingSG        bool
+		usingFile      bool
+		getConfig      bool // true: load control plane (read proxy config)
+		jsonFormat     bool
+		stoppable      bool // true: terminate by Ctrl-C
 		statsdRequired bool
-
-		// bucket-related options
-		bPropsStr string
-		bProps    cmn.BucketProps
+		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
 	}
 
 	// sts records accumulated puts/gets information.
@@ -218,47 +244,24 @@ func (wo *workOrder) String() string {
 }
 
 func printUsage(f *flag.FlagSet) {
-	fmt.Println("Flags: ")
+	fmt.Println("\nAbout")
+	fmt.Println("=====")
+	fmt.Println("AIS loader (aisloader) is a tool to measure storage performance. It's a load")
+	fmt.Println("generator that has been developed (and is currently used) to benchmark and")
+	fmt.Println("stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.")
+	fmt.Println("For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.")
+	fmt.Println("Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benchmark.md")
+
+	fmt.Println("\nCommand-line options")
+	fmt.Println("====================")
 	f.PrintDefaults()
 	fmt.Println()
 
-	fmt.Println("Examples: ")
-	examples := []string{
-		"  aisloader -bucket=nvais -duration 0s -totalputsize=0",
-		"\tNo PUT or GET, just clean up",
-
-		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -bckprovider=local",
-		"\tTime based local bucket PUT only. Bucket is cleaned up by default",
-
-		"  aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -bckprovider=cloud -totalputsize=10240",
-		"\tPut limit based cloud bucket mixed PUT(30%) and GET(70%), with random objects names. Bucket is cleaned up by default",
-
-		"  aisloader -bucket=nvais -cleanup=false -duration 10s -numworkers=3 -pctput=100 -bckprovider=local",
-		"  aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local",
-		"\tFirst command PUTs into local bucket with clean up disabled, leaving the bucket for the second command to test only GET performance",
-		"  aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loaderNum=20 -maxObjectsPut=2000 -subdir=\"aisloader\"",
-		"\tPut files with names: `aisloader/hex({0..2000}{loaderid})`, stop when 2000 files put into the bucket",
-		"",
-		"(loaderid)",
-		"  aisloader -loaderid=10",
-		"\tUse random object names and loaderID just for reporting stats",
-		"  aisloader -loaderid=10 -loaderNum=20",
-		"\tPut objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})",
-		"  aisloader -loaderid=loaderstring -loaderidhashlen=8",
-		"\tPut objects with names passed on hash of loaderID of length -loaderidhashlen; names: hex({0..}{hash(loaderid)})",
-		"  aisloader -getloaderid (0x0)",
-		"  aisloader -loaderid=10 -getloaderid (0xa)",
-		"  aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)",
-		"\tDo nothing but print loaderID",
-	}
+	fmt.Println("\nExamples")
+	fmt.Println("========")
 	for i := 0; i < len(examples); i++ {
 		fmt.Println(examples[i])
 	}
-	fmt.Println()
-
-	fmt.Println("Additional Commands: ")
-	fmt.Println("aisloader usage        Shows this menu")
-	fmt.Println()
 }
 
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
@@ -278,63 +281,59 @@ func parseCmdLine() (params, error) {
 		err error
 	)
 
-	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) //Discard flags of imported packages
+	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
 
-	// Command line options
-	f.BoolVar(&flagUsage, "usage", false, "Show extensive help menu with examples and exit")
-	f.StringVar(&ip, "ip", "localhost", "IP address for proxy server")
-	f.StringVar(&port, "port", "8080", "Port number for proxy server")
-	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
+	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
+	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
+	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
+	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "'local' if using local bucket, otherwise 'cloud'")
-	f.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
-		"If duration is 0 and totalputsize is also 0, it is a no op.")
-	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
-	f.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests, bucket must not be empty if zero")
-	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
-	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stops after total put size exceeds this, can specify multiplicative suffix; 0 = no limit")
-	f.BoolVar(&p.cleanUp, "cleanup", true, "Determines if aisloader cleans up the files it creates when run is finished, true by default.")
-	f.BoolVar(&p.verifyHash, "verifyhash", false, "If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.")
-	f.StringVar(&p.minSizeStr, "minsize", "", "Minimal object size, can specify multiplicative suffix")
-	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximal object size, can specify multiplicative suffix")
+	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "local - for local bucket, cloud - for Cloud based bucket")
+	f.DurationVar(&p.duration, "duration", time.Minute, "Benchmark duration (0 - run forever or until Ctrl-C)."+
+		" Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do")
+	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of goroutine workers operating on AIS in parallel")
+	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
+	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
+	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
+	f.BoolVar(&p.cleanUp, "cleanup", true, "true: remove all created objects upon benchmark termination")
+	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
+	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
 		fmt.Sprintf("Type of reader: %s(default) | %s | %s", tutils.ReaderTypeSG, tutils.ReaderTypeFile, tutils.ReaderTypeRand))
-	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader when multiple instances of loader running in the same cluster.\n"+
-		"can be string when using loaderidhashlen, number otherwise.")
-	f.StringVar(&p.statsdIP, "statsdip", "localhost", "IP for statsd server")
-	f.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for statsd server")
-	f.BoolVar(&p.statsdRequired, "check-statsd", false, "If set, checks if statsd is running before run")
-	f.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
-	f.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketPropsMsg format)")
-	f.Int64Var(&p.seed, "seed", 0, "Seed for random source, 0=use current time")
-	f.BoolVar(&p.jsonFormat, "json", false, "Determines if the output should be printed in JSON format")
-	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset, can specify multiplicative suffix")
-	f.StringVar(&p.readLenStr, "readlen", "", "Read range length, can specify multiplicative suffix; 0 = read the entire object")
-	f.Uint64Var(&p.maxObjectsPut, "maxObjectsPut", 0, "Maximum number of PUT objects")
+	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
+	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
+	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
+	f.BoolVar(&p.statsdRequired, "check-statsd", false, "true: prior to benchmark make sure that StatsD is reachable")
+	f.IntVar(&p.batchSize, "batchsize", 100, "Batch size to list and delete")
+	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply")
+	f.Int64Var(&p.seed, "seed", 0, "Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
+	f.BoolVar(&p.jsonFormat, "json", false, "true: print the output in JSON")
+	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
+	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
 
-	// objects naming
-	f.Uint64Var(&p.loaderCnt, "loaderNum", 0,
-		"total number of aisloaders in the cluster running at the same time; optional, default 0 = the only aisloader instance for a cluster\n"+
-			"If larger than 0 consecutive hex characters used for naming objects instead of random 32 characters, with trailing loaderid characters (see examples)\n"+
-			"Has to be larger than loaderid. Can't be used with -loaderidhashlen")
+	//
+	// object naming
+	//
+	f.Uint64Var(&p.loaderCnt, "loadernum", 0,
+		"total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen")
 	f.BoolVar(&p.getLoaderID, "getloaderid", false,
-		"If set, aisloader just prints stored/computed unique aisloader identifier (used in objects names and statsd), and returns. identifier is based on provided loaderid")
+		"true: print stored/computed unique loaderID aka aisloader identifier and exit")
 	f.UintVar(&p.loaderIDHashLen, "loaderidhashlen", 0,
-		"Length of calculated aisloader identifier (based on hash of -loaderid), in bits, the longer, the smaller chance of hash collisions;"+
-			" can't be used together with loaderNum; automatically aligned to multiples of 4, max 63")
+		"Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum")
+	f.BoolVar(&p.randomObjName, "randomname", true,
+		"true: generate object names of 32 random characters. This option is ignored when loadernum is defined")
+	f.StringVar(&p.subDir, "subdir", "", "Virtual destination directory for all aisloader-generated objects")
+	f.BoolVar(&p.uniqueGETs, "uniquegets", true, "true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
 
-	f.BoolVar(&p.randomObjName, "randomObjName", true,
-		"If set, new objects get random name of length 32 characters (slow for large workloads); omitted when loaderNum set\n"+
-			"If not set or omitted, consecutive hex characters used for naming objects, with trailing loaderid characters (see examples)")
-	f.StringVar(&p.subDir, "subdir", "", "Common prefix for all objects created by aisloader")
-
-	f.BoolVar(&p.uniqueGETs, "uniquegets", true, "When true, aisloader executes GET on different objects "+
-		"(randomly selected from the entire list of objects to GET). Simultaneously, aisloader makes sure not to GET the same object twice."+
-		"Once the entire list is \"completed\" aisloader repeats the process all over again if required")
-	//Advanced Usage
-	f.BoolVar(&p.getConfig, "getconfig", false, "If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.")
-	f.StringVar(&p.statsOutput, "stats-output", "", "Determines where the stats should be printed to. Default stdout")
-	f.BoolVar(&p.stopable, "stopable", false, "if true, will stop on receiving CTRL+C, prevents aisloader being a no op")
+	//
+	// advanced usage
+	//
+	f.BoolVar(&p.getConfig, "getconfig", false, "true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
+	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
+	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
+	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
 
 	f.Parse(os.Args[1:])
 
@@ -419,10 +418,10 @@ func parseCmdLine() (params, error) {
 		// don't have to set suffixIDLen as userRandomObjName = true
 	} else {
 		if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
-			return params{}, fmt.Errorf("loaderNum and loaderIDHashlen can't be == 0 at the same time when using randomobjname=false")
+			return params{}, fmt.Errorf("loadernum and loaderIDHashlen can't be == 0 at the same time when using randomobjname=false")
 		}
 		if p.loaderCnt > 0 && p.loaderIDHashLen > 0 {
-			return params{}, fmt.Errorf("loaderNum and loaderIDHashLen can't be > 0 at the same time")
+			return params{}, fmt.Errorf("loadernum and loaderIDHashLen can't be > 0 at the same time")
 		}
 
 		if p.loaderIDHashLen > 0 {
@@ -435,10 +434,10 @@ func parseCmdLine() (params, error) {
 		} else {
 			// p.loaderCnt > 0
 			if parseErr != nil {
-				return params{}, fmt.Errorf("loadername has to be a number when using loaderNum")
+				return params{}, fmt.Errorf("loadername has to be a number when using loadernum")
 			}
 			if loaderID > p.loaderCnt {
-				return params{}, fmt.Errorf("loaderid has to be smaller than loaderNum")
+				return params{}, fmt.Errorf("loaderid has to be smaller than loadernum")
 			}
 
 			suffixIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
@@ -640,10 +639,10 @@ func main() {
 	}
 
 	// If neither duration nor put upper bound is specified, it is a no op.
-	// Note that stopable prevents being a no op
+	// Note that stoppable prevents being a no op
 	// This can be used as a cleaup only run (no put no get).
 	if runParams.duration == 0 {
-		if runParams.putSizeUpperBound == 0 && !runParams.stopable {
+		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
 			if runParams.cleanUp {
 				cleanUp()
 			}
@@ -683,7 +682,7 @@ func main() {
 	}
 
 	osSigChan := make(chan os.Signal, 2)
-	if runParams.stopable {
+	if runParams.stoppable {
 		signal.Notify(osSigChan, syscall.SIGINT, syscall.SIGTERM)
 	}
 
@@ -790,7 +789,7 @@ L:
 				intervalStats = newStats(time.Now())
 			}
 		case <-osSigChan:
-			if runParams.stopable {
+			if runParams.stoppable {
 				break L
 			}
 		default:
@@ -828,9 +827,9 @@ func logRunParams(p params) {
 		Bucket        string `json:"bucket"`
 		Duration      string `json:"duration"`
 		MaxPutBytes   int64  `json:"PUT upper bound"`
-		PutPct        int    `json:"PUT %"`
-		MinSize       int64  `json:"minimal object size in Bytes"`
-		MaxSize       int64  `json:"maximal object size in Bytes"`
+		PutPct        int    `json:"% PUT"`
+		MinSize       int64  `json:"minimum object size (bytes)"`
+		MaxSize       int64  `json:"maximum object size (bytes)"`
 		NumWorkers    int    `json:"# workers"`
 		StatsInterval string `json:"stats interval"`
 		Backing       string `json:"backed by"`
@@ -851,7 +850,11 @@ func logRunParams(p params) {
 		Cleanup:       p.cleanUp,
 	}, "", "   ")
 
-	fmt.Printf("Run configuration:\n%s\n\n", string(b))
+	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
+	if p.dryRun {
+		os.Exit(0)
+	}
+	time.Sleep(time.Second)
 }
 
 // prettyNumber converts a number to format like 1,234,567
@@ -872,6 +875,9 @@ func prettyNumBytes(n int64) string {
 		TB
 		PB
 	)
+	if n == 0 {
+		return "-"
+	}
 
 	table := []struct {
 		v int64
@@ -892,6 +898,13 @@ func prettyNumBytes(n int64) string {
 
 	// Less than 1KB
 	return fmt.Sprintf("%dB", n)
+}
+
+func prettySpeed(n int64) string {
+	if n == 0 {
+		return "-"
+	}
+	return prettyNumBytes(n) + "/s"
 }
 
 // prettyDuration converts an interger representing a time in nano second to a string
@@ -1022,6 +1035,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
+	ps := prettySpeed
 	pl := prettyLatency
 	pt := prettyTimeStamp
 	preWriteStats(to, false)
@@ -1029,13 +1043,13 @@ func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 		pn(t.put.Total()),
 		pb(t.put.TotalBytes()),
 		pl(t.put.MinLatency(), t.put.AvgLatency(), t.put.MaxLatency()),
-		pb(t.put.Throughput(t.put.Start(), time.Now())),
+		ps(t.put.Throughput(t.put.Start(), time.Now())),
 		pn(t.put.TotalErrs()))
 	p(to, statsPrintHeader, pt(), "GET",
 		pn(t.get.Total()),
 		pb(t.get.TotalBytes()),
 		pl(t.get.MinLatency(), t.get.AvgLatency(), t.get.MaxLatency()),
-		pb(t.get.Throughput(t.get.Start(), time.Now())),
+		ps(t.get.Throughput(t.get.Start(), time.Now())),
 		pn(t.get.TotalErrs()))
 	p(to, statsPrintHeader, pt(), "CFG",
 		pn(t.getConfig.Total()),
@@ -1086,8 +1100,8 @@ func newPutWorkOrder() (*workOrder, error) {
 
 func putObjectname() (string, error) {
 	cnt := objNameCnt.Inc()
-	if runParams.maxObjectsPut != 0 && cnt-1 == runParams.maxObjectsPut {
-		return "", fmt.Errorf("number of PUT objects reached maxObjectsPut limit (%d)", runParams.maxObjectsPut)
+	if runParams.maxputs != 0 && cnt-1 == runParams.maxputs {
+		return "", fmt.Errorf("number of PUT objects reached maxputs limit (%d)", runParams.maxputs)
 	}
 
 	var baseObjName string
@@ -1218,7 +1232,7 @@ func completeWorkOrder(wo *workOrder) {
 }
 
 func cleanUp() {
-	fmt.Println(prettyTimeStamp() + " Clean up ...")
+	fmt.Println(prettyTimeStamp() + " Cleaning up ...")
 
 	var wg sync.WaitGroup
 	f := func(objs []string, wg *sync.WaitGroup) {
@@ -1273,7 +1287,7 @@ func cleanUp() {
 		api.DestroyLocalBucket(baseParams, runParams.bucket)
 	}
 
-	fmt.Println(prettyTimeStamp() + " Clean up done")
+	fmt.Println(prettyTimeStamp() + " Done")
 }
 
 // bootStrap boot straps existing objects in the bucket
