@@ -206,5 +206,8 @@ func (bng *BaseNameGetter) Names() []string {
 }
 
 func (bng *BaseNameGetter) Len() int {
+	if bng == nil || bng.names == nil {
+		return 0
+	}
 	return len(bng.names)
 }

@@ -10,6 +10,7 @@
 // Examples:
 // 1. Destroy existing local bucket. If the bucket is Cloud-based, delete all objects:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
+//    aisloader -bucket=nvais -bckprovider=cloud -cleanup=true -duration 0s -totalputsize=0
 // 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 //    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
 // 3. Time-based PUT into local bucket, random objects names:
@@ -75,6 +76,7 @@ const (
 var examples = []string{
 	"1. Cleanup (i.e., empty) existing bucket:",
 	"# aisloader -bucket=nvais -duration 0s -totalputsize=0\n",
+	"# aisloader -bucket=nvais -bckprovider=cloud -cleanup=true -duration 0s -totalputsize=0\n",
 
 	"2. Time-based 100% PUT into local bucket. Upon exit the bucket is emptied (by default):",
 	"# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local\n",
@@ -151,7 +153,7 @@ type (
 
 		bProps cmn.BucketProps
 
-		duration time.Duration // stop after the run for at least that much
+		durationFromUser string // stop after the run for at least that much
 
 		statsdPort        int
 		statsShowInterval int
@@ -160,18 +162,18 @@ type (
 		batchSize         int // batch is used for bootstraping(list) and delete
 		loaderIDHashLen   uint
 
-		getLoaderID    bool
-		randomObjName  bool
-		uniqueGETs     bool
-		verifyHash     bool // verify xxhash during get
-		cleanUp        bool
-		usingSG        bool
-		usingFile      bool
-		getConfig      bool // true: load control plane (read proxy config)
-		jsonFormat     bool
-		stoppable      bool // true: terminate by Ctrl-C
-		statsdRequired bool
-		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
+		getLoaderID     bool
+		randomObjName   bool
+		uniqueGETs      bool
+		verifyHash      bool // verify xxhash during get
+		cleanUpFromUser string
+		usingSG         bool
+		usingFile       bool
+		getConfig       bool // true: load control plane (read proxy config)
+		jsonFormat      bool
+		stoppable       bool // true: terminate by Ctrl-C
+		statsdRequired  bool
+		dryRun          bool // true: print configuration and parameters that aisloader will use at runtime
 	}
 
 	// sts records accumulated puts/gets information.
@@ -212,6 +214,9 @@ var (
 
 	ip   string
 	port string
+
+	actualDuration time.Duration
+	actualCleanUp  bool
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -289,13 +294,13 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "local - for local bucket, cloud - for Cloud based bucket")
-	f.DurationVar(&p.duration, "duration", time.Minute, "Benchmark duration (0 - run forever or until Ctrl-C)."+
+	f.StringVar(&p.durationFromUser, "duration", "", "Benchmark duration (0 - run forever or until Ctrl-C)."+
 		" Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do")
 	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of goroutine workers operating on AIS in parallel")
 	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	f.BoolVar(&p.cleanUp, "cleanup", true, "true: remove all created objects upon benchmark termination")
+	f.StringVar(&p.cleanUpFromUser, "cleanup", "", "true: remove bucket upon benchmark termination; default false for cloud buckets")
 	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
@@ -378,6 +383,21 @@ func parseCmdLine() (params, error) {
 		}
 	} else {
 		p.maxSize = cmn.GiB
+	}
+
+	if p.durationFromUser == "" {
+		if p.putSizeUpperBound != 0 {
+			// user specified putSizeUpperBound, but not duration
+			actualDuration = time.Duration(cmn.MaxInt64)
+		} else {
+			actualDuration = time.Minute
+		}
+	} else {
+		dur, durErr := time.ParseDuration(p.durationFromUser)
+		if durErr != nil {
+			return params{}, fmt.Errorf("error parsing duration %s", p.durationFromUser)
+		}
+		actualDuration = dur
 	}
 
 	// Sanity check
@@ -500,6 +520,18 @@ func parseCmdLine() (params, error) {
 			}
 		}
 	}
+
+	if p.cleanUpFromUser != "" {
+		// user explicitly specified cleanup
+		actualCleanUp, err = cmn.ParseBool(p.cleanUpFromUser)
+		if err != nil {
+			return params{}, fmt.Errorf("couldn't parse cleanup flag: %s", err.Error())
+		}
+	} else {
+		// user didn't provide any cleanup value - defaults: local -> true, cloud -> false
+		actualCleanUp = p.bckProvider == cmn.LocalBs
+	}
+
 	// For Dry-Run on Docker
 	if tutils.DockerRunning() && ip == "localhost" {
 		ip = dockerHostIP
@@ -641,16 +673,16 @@ func main() {
 	// If neither duration nor put upper bound is specified, it is a no op.
 	// Note that stoppable prevents being a no op
 	// This can be used as a cleaup only run (no put no get).
-	if runParams.duration == 0 {
+	if actualDuration == 0 {
 		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
-			if runParams.cleanUp {
+			if actualCleanUp {
 				cleanUp()
 			}
 
 			return
 		}
 
-		runParams.duration = time.Duration(math.MaxInt64)
+		actualDuration = time.Duration(math.MaxInt64)
 	}
 
 	if runParams.usingFile {
@@ -688,6 +720,10 @@ func main() {
 
 	logRunParams(runParams)
 
+	if actualCleanUp {
+		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n", runParams.bucket)
+	}
+
 	host, err := os.Hostname()
 	if err != nil {
 		fmt.Println("Failed to get host name", err)
@@ -713,7 +749,7 @@ func main() {
 	}
 
 	var statsTicker *time.Ticker
-	timer := time.NewTimer(runParams.duration)
+	timer := time.NewTimer(actualDuration)
 
 	if runParams.statsShowInterval == 0 {
 		statsTicker = time.NewTicker(time.Duration(math.MaxInt64))
@@ -813,7 +849,7 @@ DONE:
 	accumulatedStats.aggregate(intervalStats)
 	writeStats(statsWriter, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
 	postWriteStats(statsWriter, runParams.jsonFormat)
-	if runParams.cleanUp {
+	if actualCleanUp {
 		cleanUp()
 	}
 }
@@ -839,7 +875,7 @@ func logRunParams(p params) {
 		URL:           p.proxyURL,
 		BckProvider:   p.bckProvider,
 		Bucket:        p.bucket,
-		Duration:      p.duration.String(),
+		Duration:      actualDuration.String(),
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,
 		MinSize:       p.minSize,
@@ -847,7 +883,7 @@ func logRunParams(p params) {
 		NumWorkers:    p.numWorkers,
 		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		Backing:       p.readerType,
-		Cleanup:       p.cleanUp,
+		Cleanup:       actualCleanUp,
 	}, "", "   ")
 
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
@@ -1267,20 +1303,23 @@ func cleanUp() {
 		}
 	}
 
-	w := runParams.numWorkers
-	objsLen := bucketObjsNames.Len()
-	n := objsLen / w
-	for i := 0; i < w; i++ {
-		wg.Add(1)
-		go f(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
-	}
+	if bucketObjsNames != nil {
+		// bucketObjsNames has been actually assigned to/initialized
+		w := runParams.numWorkers
+		objsLen := bucketObjsNames.Len()
+		n := objsLen / w
+		for i := 0; i < w; i++ {
+			wg.Add(1)
+			go f(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
+		}
 
-	if objsLen%w != 0 {
-		wg.Add(1)
-		go f(bucketObjsNames.Names()[n*w:], &wg)
-	}
+		if objsLen%w != 0 {
+			wg.Add(1)
+			go f(bucketObjsNames.Names()[n*w:], &wg)
+		}
 
-	wg.Wait()
+		wg.Wait()
+	}
 
 	if runParams.bckProvider == cmn.LocalBs {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
@@ -1293,6 +1332,18 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
+
+	if runParams.subDir != "" {
+		filteredNames := names[:0]
+
+		for _, name := range names {
+			if strings.HasPrefix(name, runParams.subDir) {
+				filteredNames = append(filteredNames, name)
+			}
+		}
+
+		names = filteredNames
+	}
 
 	if !runParams.uniqueGETs {
 		bucketObjsNames = &namegetter.RandomNameGetter{}
