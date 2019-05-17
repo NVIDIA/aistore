@@ -738,6 +738,33 @@ func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSi
 	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl)
 }
 
+// Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET
+func PutObjectInCloudBucketWithoutCachingLocally(t *testing.T, object, bucket, proxyURL string, objContent cmn.ReadOpenCloser) {
+	baseParams := DefaultBaseAPIParams(t)
+
+	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: object, Reader: objContent})
+	tassert.CheckFatal(t, err)
+
+	EvictObjects(t, proxyURL, []string{object}, bucket)
+}
+
+func GetObjectAtime(t *testing.T, baseParams *api.BaseParams, object string, bucket string, timeFormat string) time.Time {
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
+	bucketList, err := api.ListBucket(baseParams, bucket, msg, 0)
+	tassert.CheckFatal(t, err)
+
+	for _, entry := range bucketList.Entries {
+		if entry.Name == object {
+			atime, err := time.Parse(timeFormat, entry.Atime)
+			tassert.CheckFatal(t, err)
+			return atime
+		}
+	}
+
+	tassert.Fatalf(t, false, "Object with name %s not present in bucket %s.", object, bucket)
+	return time.Time{}
+}
+
 func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	for {
@@ -828,4 +855,11 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 		}
 	}
 	return nil
+}
+
+func EvictObjects(t *testing.T, proxyURL string, fileslist []string, bucket string) {
+	err := api.EvictList(BaseAPIParams(proxyURL), bucket, cmn.CloudBs, fileslist, true, 0)
+	if err != nil {
+		t.Errorf("Evict bucket %s failed, err = %v", bucket, err)
+	}
 }

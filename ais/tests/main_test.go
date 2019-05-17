@@ -786,7 +786,7 @@ func Test_coldgetmd5(t *testing.T) {
 	for fname := range filesPutCh {
 		fileslist = append(fileslist, filepath.Join(ColdValidStr, fname))
 	}
-	evictObjects(t, proxyURL, fileslist)
+	tutils.EvictObjects(t, proxyURL, fileslist, clibucket)
 	// Disable Cold Get Validation
 	if bcoldget {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "false"})
@@ -800,7 +800,7 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without MD5 validation: %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
-	evictObjects(t, proxyURL, fileslist)
+	tutils.EvictObjects(t, proxyURL, fileslist, clibucket)
 	// Enable Cold Get Validation
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.validate_cold_get": "true"})
 	if t.Failed() {
@@ -1664,7 +1664,7 @@ func Test_checksum(t *testing.T) {
 		}
 	}
 	// Delete it from cache.
-	evictObjects(t, proxyURL, fileslist)
+	tutils.EvictObjects(t, proxyURL, fileslist, clibucket)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"cksum.type": cmn.ChecksumNone})
@@ -1688,7 +1688,7 @@ func Test_checksum(t *testing.T) {
 	}
 	tutils.Logf("GET %d MB without any checksum validation: %v\n", totalio, duration)
 	selectErr(errCh, "get", t, false)
-	evictObjects(t, proxyURL, fileslist)
+	tutils.EvictObjects(t, proxyURL, fileslist, clibucket)
 	switch clichecksum {
 	case "all":
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{
@@ -1767,13 +1767,6 @@ func getFromObjList(proxyURL, bucket string, errCh chan error, fileslist []strin
 		}
 	}
 	getsGroup.Wait()
-}
-
-func evictObjects(t *testing.T, proxyURL string, fileslist []string) {
-	err := api.EvictList(tutils.BaseAPIParams(proxyURL), clibucket, cmn.CloudBs, fileslist, true, 0)
-	if err != nil {
-		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
-	}
 }
 
 func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {

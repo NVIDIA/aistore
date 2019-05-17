@@ -713,6 +713,7 @@ do:
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
+		lom.SetAtimeUnix(started.UnixNano())
 		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -923,6 +924,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	// GFN: atime must be already set by the getFromNeighbor
 	if !coldGet && !isGFNRequest {
 		lom.SetAtimeUnix(started.UnixNano())
+		lom.ReCache() // GFN and cold GETs already did this
 	}
 
 	// Update objects which were sent during GFN. Thanks to this we will not

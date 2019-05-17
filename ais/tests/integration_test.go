@@ -1553,6 +1553,121 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 }
 
+func TestAtimeLocalGet(t *testing.T) {
+	var (
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		bucket        = t.Name()
+		objectName    = t.Name()
+		objectContent = tutils.NewBytesReader([]byte("file content"))
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objectName, Reader: objectContent})
+	tassert.CheckFatal(t, err)
+
+	timeAfterPut := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+
+	// Get object so that atime is updated
+	_, err = api.GetObject(baseParams, bucket, objectName)
+	tassert.CheckFatal(t, err)
+
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+
+	if !(timeAfterGet.After(timeAfterPut)) {
+		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+	}
+}
+
+func TestAtimeColdGet(t *testing.T) {
+	var (
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		bucket        = clibucket
+		objectName    = t.Name()
+		objectContent = tutils.NewBytesReader([]byte("file content"))
+	)
+
+	if !isCloudBucket(t, proxyURL, bucket) {
+		t.Skip("test requires a cloud bucket")
+	}
+	tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+	defer tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bucket, proxyURL, objectContent)
+
+	timeAfterPut := time.Now()
+
+	// Perform the COLD get
+	_, err := api.GetObject(baseParams, bucket, objectName)
+	tassert.CheckFatal(t, err)
+
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+
+	if !(timeAfterGet.After(timeAfterPut)) {
+		t.Errorf("Expected PUT atime (%s) to be before subsequent GET atime (%s).", timeAfterGet.Format(time.RFC3339Nano), timeAfterPut.Format(time.RFC3339Nano))
+	}
+}
+
+func TestAtimePrefetch(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	var (
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		bucket        = clibucket
+		objectName    = t.Name()
+		objectContent = tutils.NewBytesReader([]byte("file content"))
+	)
+
+	if !isCloudBucket(t, proxyURL, bucket) {
+		t.Skip("test requires a cloud bucket")
+	}
+	tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+	defer tutils.CleanCloudBucket(t, proxyURL, bucket, objectName)
+
+	tutils.PutObjectInCloudBucketWithoutCachingLocally(t, objectName, bucket, proxyURL, objectContent)
+
+	timeAfterPut := time.Now()
+
+	err := api.PrefetchList(baseParams, bucket, cmn.CloudBs, []string{objectName}, true, 0)
+	tassert.CheckFatal(t, err)
+
+	timeAfterGet := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+
+	if !(timeAfterGet.Before(timeAfterPut)) {
+		t.Errorf("Atime should not be updated after prefetch (got: atime after PUT: %s, atime after GET: %s).",
+			timeAfterPut.Format(time.RFC3339Nano), timeAfterGet.Format(time.RFC3339Nano))
+	}
+}
+
+func TestAtimeLocalPut(t *testing.T) {
+	var (
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		bucket        = t.Name()
+		objectName    = t.Name()
+		objectContent = tutils.NewBytesReader([]byte("file content"))
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	timeBeforePut := time.Now()
+	err := api.PutObject(api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objectName, Reader: objectContent})
+	tassert.CheckFatal(t, err)
+
+	timeAfterPut := tutils.GetObjectAtime(t, baseParams, objectName, bucket, time.RFC3339Nano)
+
+	if !(timeAfterPut.After(timeBeforePut)) {
+		t.Errorf("Expected atime after PUT (%s) to be after atime before PUT (%s).", timeAfterPut.Format(time.RFC3339Nano), timeBeforePut.Format(time.RFC3339Nano))
+	}
+}
+
 // 1. Unregister target
 // 2. Add bucket - unregistered target should miss the update
 // 3. Reregister target
