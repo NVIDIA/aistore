@@ -274,6 +274,7 @@ const (
 		XactionExtBody +
 		"{{end}}" +
 		"{{end}}"
+	BucketStatTmpl = "Value\tTotal\tData\tLocal\n{{range $p := . }}{{$p.Name}}\t{{$p.Total}}\t{{$p.Data}}\t{{$p.Local}}\n{{end}}\n"
 )
 
 var (

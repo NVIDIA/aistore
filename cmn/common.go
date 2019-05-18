@@ -339,6 +339,32 @@ func CopyStruct(dst interface{}, src interface{}) {
 
 }
 
+// WaitForFunc executes a function in goroutine and waits for it to finish.
+// If the function runs longer than `timeLong` WaitForFunc notifies a user
+// that the user should wait for the result
+func WaitForFunc(f func() error, timeLong time.Duration) error {
+	timer := time.NewTimer(timeLong)
+	chDone := make(chan struct{}, 1)
+	var err error
+	go func() {
+		err = f()
+		chDone <- struct{}{}
+	}()
+
+loop:
+	for {
+		select {
+		case <-timer.C:
+			fmt.Println("Please wait, the operation may take some time")
+		case <-chDone:
+			timer.Stop()
+			break loop
+		}
+	}
+
+	return err
+}
+
 //
 // files, IO, hash
 //

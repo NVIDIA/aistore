@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -29,9 +30,13 @@ const (
 	bucketGetProps   = "props"
 	bucketNWayMirror = cmn.ActMakeNCopies
 	bucketEvict      = commandEvict
+	bucketSummary    = "summary"
 
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
+
+	// max wait time for a function finishes before printing "Please wait"
+	longCommandTime = time.Second * 10
 )
 
 var (
@@ -89,6 +94,13 @@ var (
 			[]cli.Flag{copiesFlag},
 			baseBucketFlags...),
 		bucketEvict: []cli.Flag{bucketFlag},
+		bucketSummary: append(
+			[]cli.Flag{
+				regexFlag,
+				prefixFlag,
+				pageSizeFlag,
+			},
+			baseBucketFlags...),
 	}
 
 	bucketGeneric        = "%s bucket %s --bucket <value>"
@@ -102,6 +114,7 @@ var (
 	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --new-bucket <value>", cliName, commandRename)
 	bucketSetPropsText   = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
 	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s --bucket <value> --copies <value>", cliName, bucketNWayMirror)
+	bucketStatsText      = fmt.Sprintf(bucketGeneric, cliName, bucketSummary)
 
 	bucketCmds = []cli.Command{
 		{
@@ -189,6 +202,14 @@ var (
 					Action:       bucketHandler,
 					BashComplete: flagList,
 				},
+				{
+					Name:         bucketSummary,
+					Usage:        "displays bucket stats",
+					UsageText:    bucketStatsText,
+					Flags:        bucketFlags[bucketSummary],
+					Action:       bucketHandler,
+					BashComplete: flagList,
+				},
 			},
 		},
 	}
@@ -224,6 +245,8 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = bucketProps(c, baseParams, bucket)
 	case bucketNWayMirror:
 		err = configureNCopies(c, baseParams, bucket)
+	case bucketSummary:
+		err = statBucket(c, baseParams, bucket)
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
@@ -331,6 +354,77 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	}
 
 	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
+}
+
+// show bucket statistics
+func statBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+	// make new function to capture arguments
+	fStats := func() error {
+		return statsBucketSync(c, baseParams, bucket)
+	}
+	return cmn.WaitForFunc(fStats, longCommandTime)
+}
+
+// show bucket statistics
+func statsBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+	prefix := parseStrFlag(c, prefixFlag)
+	props := "name,size,status,copies,iscached"
+
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
+	query.Add(cmn.URLParamPrefix, prefix)
+
+	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
+	if flagIsSet(c, pageSizeFlag) {
+		pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
+		if err != nil {
+			return err
+		}
+		msg.PageSize = pagesize
+	}
+	objList, err := api.ListBucket(baseParams, bucket, msg, 0, query)
+	if err != nil {
+		return err
+	}
+
+	var regex *regexp.Regexp
+	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	totalCnt, localCnt, dataCnt := int64(0), int64(0), int64(0)
+	totalSz, localSz, dataSz := int64(0), int64(0), int64(0)
+	for _, obj := range objList.Entries {
+		if regex != nil && !regex.MatchString(obj.Name) {
+			continue
+		}
+
+		totalCnt++
+		totalSz += obj.Size
+		if obj.Status == cmn.ObjStatusOK {
+			dataCnt++
+			dataSz += obj.Size
+		}
+		if obj.IsCached {
+			localCnt++
+			localSz += obj.Size
+		}
+	}
+
+	statList := []struct {
+		Name  string
+		Total string
+		Data  string
+		Local string
+	}{
+		{"Object count", strconv.FormatInt(totalCnt, 10), strconv.FormatInt(dataCnt, 10), strconv.FormatInt(localCnt, 10)},
+		{"Object size", cmn.B2S(totalSz, 2), cmn.B2S(dataSz, 2), cmn.B2S(localSz, 2)},
+	}
+
+	return templates.DisplayOutput(statList, templates.BucketStatTmpl)
 }
 
 // replace user-friendly properties like `access=ro` with real values
