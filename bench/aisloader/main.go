@@ -110,6 +110,10 @@ var examples = []string{
 	"# aisloader -loaderid=10 -getloaderid (0xa)",
 	"# aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)",
 }
+var (
+	version = "1.0"
+	build   string
+)
 
 type (
 	workOrder struct {
@@ -150,10 +154,10 @@ type (
 		readOffStr           string // read offset
 		readLenStr           string // read length
 		subDir               string
+		durationFromUser     string // stop after the run for at least that much
+		cleanUpFromUser      string
 
 		bProps cmn.BucketProps
-
-		durationFromUser string // stop after the run for at least that much
 
 		statsdPort        int
 		statsShowInterval int
@@ -162,18 +166,17 @@ type (
 		batchSize         int // batch is used for bootstraping(list) and delete
 		loaderIDHashLen   uint
 
-		getLoaderID     bool
-		randomObjName   bool
-		uniqueGETs      bool
-		verifyHash      bool // verify xxhash during get
-		cleanUpFromUser string
-		usingSG         bool
-		usingFile       bool
-		getConfig       bool // true: load control plane (read proxy config)
-		jsonFormat      bool
-		stoppable       bool // true: terminate by Ctrl-C
-		statsdRequired  bool
-		dryRun          bool // true: print configuration and parameters that aisloader will use at runtime
+		getLoaderID    bool
+		randomObjName  bool
+		uniqueGETs     bool
+		verifyHash     bool // verify xxhash during get
+		usingSG        bool
+		usingFile      bool
+		getConfig      bool // true: load control plane (read proxy config)
+		jsonFormat     bool
+		stoppable      bool // true: terminate by Ctrl-C
+		statsdRequired bool
+		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
 	}
 
 	// sts records accumulated puts/gets information.
@@ -210,7 +213,8 @@ var (
 	getPending       int64
 	putPending       int64
 
-	flagUsage bool
+	flagUsage   bool
+	flagVersion bool
 
 	ip   string
 	port string
@@ -251,8 +255,8 @@ func (wo *workOrder) String() string {
 func printUsage(f *flag.FlagSet) {
 	fmt.Println("\nAbout")
 	fmt.Println("=====")
-	fmt.Println("AIS loader (aisloader) is a tool to measure storage performance. It's a load")
-	fmt.Println("generator that has been developed (and is currently used) to benchmark and")
+	fmt.Printf("AIS loader (aisloader v%s, build %s) is a tool to measure storage performance.\n", version, build)
+	fmt.Println("It's a load generator that has been developed (and is currently used) to benchmark and")
 	fmt.Println("stress-test AIStore(tm) but can be easily extended for any S3-compatible backend.")
 	fmt.Println("For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.")
 	fmt.Println("Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benchmark.md")
@@ -289,6 +293,7 @@ func parseCmdLine() (params, error) {
 	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
 
 	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
+	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
@@ -352,6 +357,10 @@ func parseCmdLine() (params, error) {
 
 	if flagUsage || f.NArg() != 0 && f.Arg(0) == "usage" {
 		printUsage(f)
+		os.Exit(0)
+	}
+	if flagVersion || f.NArg() != 0 && f.Arg(0) == "version" {
+		fmt.Printf("version %s, build %s\n", version, build)
 		os.Exit(0)
 	}
 
