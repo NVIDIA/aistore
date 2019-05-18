@@ -29,7 +29,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
@@ -70,7 +70,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	for i := 0; i < stressReps; i++ {

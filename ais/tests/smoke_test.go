@@ -24,7 +24,7 @@ var (
 
 func Test_smoke(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)

@@ -173,7 +173,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	if tutils.DockerRunning() {

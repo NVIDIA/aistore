@@ -382,7 +382,7 @@ func TestRWStress(t *testing.T) {
 //    test finishes it executes extra loop to delete all files
 func Test_rwstress(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	numLoops = cycles

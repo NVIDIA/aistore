@@ -34,7 +34,7 @@ func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader
 
 func Test_OneStream10G(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(tutils.SkipMsg)
 	}
 	network := "np"
 	mux := mux.NewServeMux()
@@ -89,7 +89,7 @@ func Test_OneStream10G(t *testing.T) {
 
 func Test_DryRunTB(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(tutils.SkipMsg)
 	}
 	stream := transport.NewStream(nil, "dummy/null", &transport.Extra{DryRun: true})
 

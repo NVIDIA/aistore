@@ -188,11 +188,11 @@ func Example_mux() {
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second)
 
 	sendText(stream, text1, text2)
 
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second)
 
 	sendText(stream, text3, text4)
 	stream.Fin()
@@ -207,7 +207,7 @@ func Example_mux() {
 // test random streaming
 func Test_OneStream(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(tutils.SkipMsg)
 	}
 	mux := mux.NewServeMux()
 
@@ -289,7 +289,7 @@ func Test_CancelStream(t *testing.T) {
 
 func Test_MultiStream(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(tutils.SkipMsg)
 	}
 	tutils.Logf("Duration %v\n", duration)
 	mux := mux.NewServeMux()
@@ -376,7 +376,14 @@ func Test_MultipleNetworks(t *testing.T) {
 }
 
 func Test_OnSendCallback(t *testing.T) {
-	mux := mux.NewServeMux()
+	var (
+		objectCnt = 10000
+		mux       = mux.NewServeMux()
+	)
+
+	if testing.Short() {
+		objectCnt = 1000
+	}
 
 	transport.SetMux("n1", mux)
 
@@ -395,7 +402,7 @@ func Test_OnSendCallback(t *testing.T) {
 	var (
 		totalSend int64
 		mu        sync.Mutex
-		posted    = make([]*randReader, 10000) // 10K objects
+		posted    = make([]*randReader, objectCnt)
 	)
 	for idx := 0; idx < len(posted); idx++ {
 		hdr, rr := makeRandReader()

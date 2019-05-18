@@ -454,7 +454,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 
 func TestObjPropsVersionEnabled(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	propsMainTest(t, true)
@@ -462,7 +462,7 @@ func TestObjPropsVersionEnabled(t *testing.T) {
 
 func TestObjPropsVersionDisabled(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	propsMainTest(t, false)

@@ -57,6 +57,10 @@ func init() {
 }
 
 func Test_Sleep(t *testing.T) {
+	if testing.Short() {
+		duration = 4 * time.Second
+	}
+
 	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
@@ -90,6 +94,10 @@ func Test_Sleep(t *testing.T) {
 }
 
 func Test_NoSleep(t *testing.T) {
+	if testing.Short() {
+		duration = 4 * time.Second
+	}
+
 	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {

@@ -733,10 +733,6 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 		semaCnt  = 8
 	)
 
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		bucket   = TestLocalBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
@@ -886,7 +882,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 		semaCnt  = 8
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -978,7 +974,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		semaCnt  = 8
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1330,7 +1326,7 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1487,7 +1483,7 @@ func TestECDestroyBucket(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1573,7 +1569,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1680,7 +1676,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1832,7 +1828,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (

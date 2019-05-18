@@ -1658,7 +1658,7 @@ func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName str
 
 func Test_checksum(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	const filesize = largefilesize * 1024 * 1024

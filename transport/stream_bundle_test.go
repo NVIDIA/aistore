@@ -42,6 +42,10 @@ func (listeners *slisteners) Reg(sl cluster.Slistener)  {}
 func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 
 func Test_Bundle(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
 	var (
 		numCompleted atomic.Int64
 		Mem2         = tutils.Mem2

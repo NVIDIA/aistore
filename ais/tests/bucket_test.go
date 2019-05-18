@@ -82,6 +82,10 @@ func TestListObjects(t *testing.T) {
 		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)
 
+	if testing.Short() {
+		iterations = 5
+	}
+
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
@@ -421,7 +425,7 @@ func TestLocalMirror2_1_3(t *testing.T) {
 
 func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (

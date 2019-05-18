@@ -440,7 +440,7 @@ func TestDistributedSort(t *testing.T) {
 		}
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -544,7 +544,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 		}
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -597,7 +597,7 @@ func TestDistributedSortParallel(t *testing.T) {
 		dSortsCount = 5
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW := &dsortFramework{m: m}
@@ -637,7 +637,7 @@ func TestDistributedSortChain(t *testing.T) {
 		dSortsCount = 5
 	)
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW := &dsortFramework{m: m}
@@ -677,10 +677,6 @@ func TestDistributedSortShuffle(t *testing.T) {
 			maxMemUsage:      "99%",
 		}
 	)
-
-	if testing.Short() {
-		t.Skip(skipping)
-	}
 
 	dsortFW.init()
 
@@ -794,10 +790,6 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 		}
 	)
 
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	dsortFW.init()
 
 	// Initialize metadata
@@ -837,7 +829,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	mem, err := sys.Mem()
@@ -921,7 +913,7 @@ func TestDistributedSortZip(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -978,7 +970,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -1020,7 +1012,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 
 func TestDistributedSortWithContent(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1128,10 +1120,6 @@ func TestDistributedSortAbort(t *testing.T) {
 		}
 	)
 
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	dsortFW.init()
 
 	// Initialize metadata
@@ -1198,7 +1186,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -1272,7 +1260,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -1349,7 +1337,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	dsortFW.init()
@@ -1412,16 +1400,12 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 		dsortFW = &dsortFramework{
 			m:                m,
 			outputTempl:      "output-{0..1000}",
-			tarballCnt:       100,
+			tarballCnt:       50,
 			fileInTarballCnt: 10,
 			extension:        ".tar",
 			maxMemUsage:      "40%",
 		}
 	)
-
-	if testing.Short() {
-		t.Skip(skipping)
-	}
 
 	dsortFW.init()
 
@@ -1592,7 +1576,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 
 func TestDistributedSortMissingShards(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1655,7 +1639,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 func TestDistributedSortDuplications(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (

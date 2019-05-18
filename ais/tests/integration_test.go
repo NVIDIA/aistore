@@ -28,8 +28,6 @@ import (
 
 const rebalanceObjectDistributionTestCoef = 0.3
 
-const skipping = "skipping test in short mode."
-
 type repFile struct {
 	repetitions int
 	filename    string
@@ -243,7 +241,7 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 // 4. GET the objects while simultaneously re-registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -305,7 +303,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 4. Failback to the original primary proxy, re-register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -389,7 +387,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 4. Get the objects while simultaneously re-registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -448,10 +446,6 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 }
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		m = metadata{
 			t: t,
@@ -493,7 +487,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -559,7 +553,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -632,7 +626,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 func TestPutDuringRebalance(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -693,7 +687,7 @@ func TestPutDuringRebalance(t *testing.T) {
 
 func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -797,7 +791,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 func TestGetDuringLocalRebalance(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -866,7 +860,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 func TestGetDuringRebalance(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -931,7 +925,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	const (
@@ -1119,7 +1113,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 
 func TestAddAndRemoveMountpath(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1183,7 +1177,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	const newMountpath = "/tmp/ais/mountpath"
@@ -1254,7 +1248,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	const (
@@ -1340,10 +1334,6 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 }
 
 func TestDisableAndEnableMountpath(t *testing.T) {
-	if testing.Short() {
-		t.Skip(skipping)
-	}
-
 	var (
 		m = metadata{
 			t:               t,
@@ -1462,6 +1452,10 @@ func TestForwardCP(t *testing.T) {
 }
 
 func TestAtimeRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
 	var (
 		m = metadata{
 			t:               t,
@@ -1613,7 +1607,7 @@ func TestAtimeColdGet(t *testing.T) {
 
 func TestAtimePrefetch(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1675,7 +1669,7 @@ func TestAtimeLocalPut(t *testing.T) {
 // 5. Get objects - everything should succeed
 func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -1728,7 +1722,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 // 5. Get objects - everything should succeed
 func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (

@@ -465,13 +465,18 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestObjectsVersions(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
 	propsMainTest(t, true /*versioning enabled*/)
 }
 
 func TestRebalance(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
+
 	const filesize = 128 * cmn.KiB
 	var (
 		randomTarget *cluster.Snode
@@ -808,7 +813,7 @@ func TestLRU(t *testing.T) {
 
 func TestPrefetchList(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 	var (
 		toprefetch    = make(chan string, numfiles)
@@ -921,7 +926,7 @@ func TestDeleteList(t *testing.T) {
 
 func TestPrefetchRange(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 	var (
 		netprefetches  = int64(0)
@@ -1085,7 +1090,7 @@ func TestDeleteRange(t *testing.T) {
 // Testing only local bucket objects since generally not concerned with cloud bucket object deletion
 func TestStressDeleteRange(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 	const (
 		numFiles   = 20000 // FIXME: must divide by 10 and by the numReaders

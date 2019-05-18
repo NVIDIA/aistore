@@ -325,7 +325,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 func TestDownloadCloud(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -403,7 +403,7 @@ func TestDownloadCloud(t *testing.T) {
 
 func TestDownloadStatus(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -460,7 +460,7 @@ func TestDownloadStatus(t *testing.T) {
 
 func TestDownloadStatusError(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -511,7 +511,7 @@ func TestDownloadStatusError(t *testing.T) {
 
 func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -552,7 +552,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 
 func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
@@ -592,7 +592,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 
 func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	if testing.Short() {
-		t.Skip(skipping)
+		t.Skip(tutils.SkipMsg)
 	}
 
 	var (
