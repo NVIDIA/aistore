@@ -4,7 +4,8 @@ AIS CLI is a tool used to interact with resources of AIStore. Users are able to 
 
 ## Getting Started
 
-Run `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
+Run the `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.  
+The script also allows you to install [shell autocompletions](#ais-cli-shell-auto-complete) for AIS CLI.
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
 > Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.  
 > You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).
@@ -22,20 +23,16 @@ Before using the CLI, we need to export the `AIS_URL` environment variable (eg. 
 
 ## AIS CLI Shell Auto-Complete
 
-The CLI tool supports bash and zsh auto-complete functionality. To enable shell auto-complete, source the auto-complete script or, for a more permanent option, install it into your `/etc/bash_completion.d` directory
-* Sourcing
+The CLI tool supports bash and zsh auto-complete functionality.
 
- ```sh
- $ source ais_autocomplete
- ```
+##### Installing
 
-* Installing to `/etc/bash_autocomplete.d`
+When running `install.sh` you will be asked if you want to install autocompletions.  
+To install them manually, run `bash autocomplete/install.sh`.
 
- ```sh
- $ sudo cp ais_autocomplete /etc/bash_completion.d/ais
- $ source /etc/bash_completion.d/ais
- ```
-Doing `ais <tab><tab>` should return the list of available commands.
+##### Uninstalling
+
+To uninstall autocompletions run `bash autocomplete/uninstall.sh`.
 
 ## Supported Resources
 

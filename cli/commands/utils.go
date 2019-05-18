@@ -31,8 +31,6 @@ const (
 	gsHost = "storage.googleapis.com"
 	s3Host = "s3.amazonaws.com"
 
-	AutoCompDir = "/etc/bash_completion.d/ais"
-
 	Infinity = -1
 )
 

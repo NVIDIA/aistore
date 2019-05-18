@@ -6,9 +6,14 @@ if [[ -x "$FILE" ]]; then
     rm ${FILE}
 fi
 
-VERSION="0.2"
+VERSION="0.3"
 BUILD=`git rev-parse --short HEAD`
+BINARY_NAME="ais"
 URL="http://127.0.0.1:8080"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+AUTOCOMPLETE_SCRIPT_DIR="${DIR}/autocomplete"
+AUTOCOMPLETE_INSTALL_SCRIPT="${AUTOCOMPLETE_SCRIPT_DIR}/install.sh"
 
 getDockerURL() {
     proxy_name="ais0_proxy_1"
@@ -39,7 +44,7 @@ if [[ "$?" == "0" ]]; then
     docker_running=$(docker container ls)
     if [[ "$?" != "0" ]]; then
         echo "Warning: Can't check if AIS is running from docker, verify that you have permissions for /var/run/docker.sock" >&2
-    elif [[ "$(echo ${docker_running} | grep ais)" != "" ]]; then
+    elif [[ "$(echo ${docker_running} | grep ${BINARY_NAME})" != "" ]]; then
         getDockerURL
     fi
 fi
@@ -52,5 +57,14 @@ else
 fi
 
 # Install the CLI
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-GOBIN=${GOPATH}/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}' -X 'main.url=${URL}'" ${DIR}/ais.go
+GOBIN=${GOPATH}/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}' -X 'main.url=${URL}'" ${DIR}/${BINARY_NAME}.go
+
+if [[ "$?" -eq 0 ]]; then
+    echo "*** AIS CLI successfully installed."
+    echo "*** "
+
+    # Install autocompletions
+    bash ${AUTOCOMPLETE_INSTALL_SCRIPT}
+else
+    echo "Error installing AIS CLI."
+fi

@@ -535,8 +535,8 @@ rm config.sh
 docker ps
 
 # Install the CLI and enable auto-complete
-../../../cli/install.sh
-source ../../../cli/ais_autocomplete
+echo "n" | ../../../cli/install.sh
+source ../../../cli/autocomplete/bash
 
 deploy_mode
 echo done
