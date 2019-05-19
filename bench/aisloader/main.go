@@ -154,8 +154,8 @@ type (
 		readOffStr           string // read offset
 		readLenStr           string // read length
 		subDir               string
-		durationFromUser     string // stop after the run for at least that much
-		cleanUpFromUser      string
+		duration             cmn.DurationExt // stop after the run for at least that much
+		cleanUp              cmn.BoolExt
 
 		bProps cmn.BucketProps
 
@@ -218,9 +218,6 @@ var (
 
 	ip   string
 	port string
-
-	actualDuration time.Duration
-	actualCleanUp  bool
 
 	useRandomObjName bool
 	objNameCnt       atomic.Uint64
@@ -299,13 +296,17 @@ func parseCmdLine() (params, error) {
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "local - for local bucket, cloud - for Cloud based bucket")
-	f.StringVar(&p.durationFromUser, "duration", "", "Benchmark duration (0 - run forever or until Ctrl-C)."+
-		" Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do")
+
+	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
+		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
+			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
+			"totalputsize reached")
+
 	f.IntVar(&p.numWorkers, "numworkers", 10, "Number of goroutine workers operating on AIS in parallel")
 	f.IntVar(&p.putPct, "pctput", 0, "Percentage of PUTs in the aisloader-generated workload")
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0", "Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	f.StringVar(&p.cleanUpFromUser, "cleanup", "", "true: remove bucket upon benchmark termination; default false for cloud buckets")
+	cmn.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination; default false for cloud buckets")
 	f.BoolVar(&p.verifyHash, "verifyhash", false, "true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
@@ -394,19 +395,10 @@ func parseCmdLine() (params, error) {
 		p.maxSize = cmn.GiB
 	}
 
-	if p.durationFromUser == "" {
-		if p.putSizeUpperBound != 0 {
-			// user specified putSizeUpperBound, but not duration
-			actualDuration = time.Duration(cmn.MaxInt64)
-		} else {
-			actualDuration = time.Minute
-		}
-	} else {
-		dur, durErr := time.ParseDuration(p.durationFromUser)
-		if durErr != nil {
-			return params{}, fmt.Errorf("error parsing duration %s", p.durationFromUser)
-		}
-		actualDuration = dur
+	if !p.duration.IsSet && p.putSizeUpperBound != 0 {
+		// user specified putSizeUpperBound, but not duration, override default 1 minute
+		// and run aisloader until putSizeUpperBound is reached
+		p.duration.Val = time.Duration(cmn.MaxInt64)
 	}
 
 	// Sanity check
@@ -438,17 +430,21 @@ func parseCmdLine() (params, error) {
 	}
 
 	loaderID, parseErr := strconv.ParseUint(p.loaderID, 10, 64)
-	if p.loaderCnt == 0 && p.loaderIDHashLen == 0 && p.randomObjName {
-		useRandomObjName = true
-		if parseErr != nil {
-			return params{}, errors.New("loaderID as string only allowed when using loaderIDHashLen")
+	if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
+		if p.randomObjName {
+			useRandomObjName = true
+			if parseErr != nil {
+				return params{}, errors.New("loaderID as string only allowed when using loaderIDHashLen")
+			}
+			// don't have to set suffixIDLen as userRandomObjName = true
+			suffixID = loaderID
+		} else {
+			// stats will be using loaderID
+			// but as suffixIDMaskLen = 0, object names will be just consecutive numbers
+			suffixID = loaderID
+			suffixIDMaskLen = 0
 		}
-		suffixID = loaderID
-		// don't have to set suffixIDLen as userRandomObjName = true
 	} else {
-		if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
-			return params{}, fmt.Errorf("loadernum and loaderIDHashlen can't be == 0 at the same time when using randomobjname=false")
-		}
 		if p.loaderCnt > 0 && p.loaderIDHashLen > 0 {
 			return params{}, fmt.Errorf("loadernum and loaderIDHashLen can't be > 0 at the same time")
 		}
@@ -530,15 +526,8 @@ func parseCmdLine() (params, error) {
 		}
 	}
 
-	if p.cleanUpFromUser != "" {
-		// user explicitly specified cleanup
-		actualCleanUp, err = cmn.ParseBool(p.cleanUpFromUser)
-		if err != nil {
-			return params{}, fmt.Errorf("couldn't parse cleanup flag: %s", err.Error())
-		}
-	} else {
-		// user didn't provide any cleanup value - defaults: local -> true, cloud -> false
-		actualCleanUp = p.bckProvider == cmn.LocalBs
+	if !p.cleanUp.IsSet {
+		p.cleanUp.Val = p.bckProvider == cmn.LocalBs
 	}
 
 	// For Dry-Run on Docker
@@ -682,16 +671,16 @@ func main() {
 	// If neither duration nor put upper bound is specified, it is a no op.
 	// Note that stoppable prevents being a no op
 	// This can be used as a cleaup only run (no put no get).
-	if actualDuration == 0 {
+	if runParams.duration.Val == 0 {
 		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
-			if actualCleanUp {
+			if runParams.cleanUp.Val {
 				cleanUp()
 			}
 
 			return
 		}
 
-		actualDuration = time.Duration(math.MaxInt64)
+		runParams.duration.Val = time.Duration(math.MaxInt64)
 	}
 
 	if runParams.usingFile {
@@ -729,7 +718,7 @@ func main() {
 
 	logRunParams(runParams)
 
-	if actualCleanUp {
+	if runParams.cleanUp.Val {
 		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be destroyed after the run!\n", runParams.bucket)
 	}
 
@@ -758,7 +747,7 @@ func main() {
 	}
 
 	var statsTicker *time.Ticker
-	timer := time.NewTimer(actualDuration)
+	timer := time.NewTimer(runParams.duration.Val)
 
 	if runParams.statsShowInterval == 0 {
 		statsTicker = time.NewTicker(time.Duration(math.MaxInt64))
@@ -858,7 +847,7 @@ DONE:
 	accumulatedStats.aggregate(intervalStats)
 	writeStats(statsWriter, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
 	postWriteStats(statsWriter, runParams.jsonFormat)
-	if actualCleanUp {
+	if runParams.cleanUp.Val {
 		cleanUp()
 	}
 }
@@ -884,7 +873,7 @@ func logRunParams(p params) {
 		URL:           p.proxyURL,
 		BckProvider:   p.bckProvider,
 		Bucket:        p.bucket,
-		Duration:      actualDuration.String(),
+		Duration:      p.duration.String(),
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,
 		MinSize:       p.minSize,
@@ -892,7 +881,7 @@ func logRunParams(p params) {
 		NumWorkers:    p.numWorkers,
 		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		Backing:       p.readerType,
-		Cleanup:       actualCleanUp,
+		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")
 
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
