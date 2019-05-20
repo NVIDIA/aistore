@@ -14,7 +14,7 @@ import (
 )
 
 type AISCLI struct {
-	*cli.App
+	app *cli.App
 }
 
 const (
@@ -93,24 +93,26 @@ var helpCommand = cli.Command{
 }
 
 func New(build, version string) AISCLI {
-	aisCLI := AISCLI{App: cli.NewApp()}
+	aisCLI := AISCLI{app: cli.NewApp()}
 	aisCLI.Init(build, version)
 	return aisCLI
 }
 
 func (aisCLI AISCLI) Init(build, version string) {
-	aisCLI.Name = cliName
-	aisCLI.Usage = "CLI for AIStore"
-	aisCLI.Version = fmt.Sprintf("%s (build %s)", version, build)
-	aisCLI.EnableBashCompletion = true
-	aisCLI.HideHelp = true
-	aisCLI.Flags = []cli.Flag{cli.HelpFlag}
+	app := aisCLI.app
+
+	app.Name = cliName
+	app.Usage = "AIS CLI: command-line management utility for AIStore(tm)"
+	app.Version = fmt.Sprintf("%s (build %s)", version, build)
+	app.EnableBashCompletion = true
+	app.HideHelp = true
+	app.Flags = []cli.Flag{cli.HelpFlag}
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
 	}
 	cli.AppHelpTemplate = AISHelpTemplate
-	aisCLI.Description = `
+	app.Description = `
 	The CLI has shell autocomplete functionality. To enable this feature, either source
 	the 'ais_autocomplete' file in the project's 'cli/' directory or, for a permanent option, copy 
 	the 'ais_autocomplete' file to the '/etc/bash_completion.d/ais' directory.`
@@ -119,17 +121,19 @@ func (aisCLI AISCLI) Init(build, version string) {
 }
 
 func (aisCLI AISCLI) setupCommands() {
-	aisCLI.Commands = append(aisCLI.Commands, downloaderCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, dSortCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, objectCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, bucketCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, daeCluCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, configCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, xactCmds...)
-	aisCLI.Commands = append(aisCLI.Commands, helpCommand)
-	sort.Sort(cli.CommandsByName(aisCLI.Commands))
+	app := aisCLI.app
 
-	setupCommandHelp(aisCLI.Commands)
+	app.Commands = append(app.Commands, downloaderCmds...)
+	app.Commands = append(app.Commands, dSortCmds...)
+	app.Commands = append(app.Commands, objectCmds...)
+	app.Commands = append(app.Commands, bucketCmds...)
+	app.Commands = append(app.Commands, daeCluCmds...)
+	app.Commands = append(app.Commands, configCmds...)
+	app.Commands = append(app.Commands, xactCmds...)
+	app.Commands = append(app.Commands, helpCommand)
+	sort.Sort(cli.CommandsByName(app.Commands))
+
+	setupCommandHelp(app.Commands)
 }
 
 func setupCommandHelp(commands []cli.Command) {
@@ -145,8 +149,9 @@ func setupCommandHelp(commands []cli.Command) {
 	}
 }
 
-func (aisCLI AISCLI) RunLong(input []string) error {
-	if err := aisCLI.Run(input); err != nil {
+func (aisCLI AISCLI) Run(input []string) error {
+	if err := aisCLI.runOnce(input); err != nil {
+		// If the command failed, check if it failed because AIS is unreachable
 		if err := TestAISURL(); err != nil {
 			return err
 		}
@@ -159,34 +164,52 @@ func (aisCLI AISCLI) RunLong(input []string) error {
 	}
 
 	if count == Infinity {
-		return runForever(aisCLI, input, rate)
+		return aisCLI.runForever(input, rate)
 	}
 
-	return runNTimes(aisCLI, input, rate)
+	return aisCLI.runNTimes(input, rate)
 }
 
-func runForever(aisCLI AISCLI, input []string, rate time.Duration) error {
+func (aisCLI AISCLI) runOnce(input []string) error {
+	if err := aisCLI.app.Run(input); err != nil {
+		return handleCLIError(err)
+	}
+
+	return nil
+}
+
+func (aisCLI AISCLI) runForever(input []string, rate time.Duration) error {
 	for {
 		time.Sleep(rate)
 
 		fmt.Println()
-		if err := aisCLI.Run(input); err != nil {
+		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}
 	}
 }
 
-func runNTimes(aisCLI AISCLI, input []string, rate time.Duration) error {
-	// Be careful - count is a global variable set by aisCLI.Run(), so a new variable is needed here
+func (aisCLI AISCLI) runNTimes(input []string, rate time.Duration) error {
+	// Be careful - count is a global variable set by aisCLI.app.Run(), so a new variable is needed here
 	for runCount := count - 1; runCount > 0; runCount-- {
 		time.Sleep(rate)
 
 		fmt.Println()
-		if err := aisCLI.Run(input); err != nil {
+		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Formats the error message from HTTPErrors (see http.go)
+func handleCLIError(err error) error {
+	switch err := err.(type) {
+	case *cmn.HTTPError:
+		return fmt.Errorf("%s", err.Message)
+	default:
+		return err
+	}
 }
 
 func flagIsSet(c *cli.Context, flag cli.Flag) bool {

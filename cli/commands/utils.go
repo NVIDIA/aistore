@@ -270,16 +270,6 @@ func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
 	return destBucket, destPathSuffix, nil
 }
 
-// Formats the error message from HTTPErrors (see http.go)
-func errorHandler(e error) error {
-	switch err := e.(type) {
-	case *cmn.HTTPError:
-		return fmt.Errorf("%s (%d): %s", http.StatusText(err.Status), err.Status, err.Message)
-	default:
-		return err
-	}
-}
-
 func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) error {
 	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
 	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {

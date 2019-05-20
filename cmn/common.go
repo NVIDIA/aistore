@@ -258,6 +258,20 @@ func ParseBool(s string) (value bool, err error) {
 	return
 }
 
+func ErrorToSentence(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	capitalized := CapitalizeString(err.Error())
+
+	if !strings.HasSuffix(capitalized, ".") {
+		capitalized += "."
+	}
+
+	return capitalized
+}
+
 func CapitalizeString(s string) string {
 	if s == "" {
 		return ""

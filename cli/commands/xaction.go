@@ -91,7 +91,7 @@ func xactHandler(c *cli.Context) (err error) {
 
 	xactStatsMap, err := api.GetXactStatusStats(baseParams, xaction, command, bucket)
 	if err != nil {
-		return errorHandler(err)
+		return err
 	}
 
 	switch command {
@@ -113,7 +113,7 @@ func xactHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
-	return errorHandler(err)
+	return err
 }
 
 func buildXactKindsMsg() string {

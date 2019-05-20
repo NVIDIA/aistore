@@ -158,7 +158,7 @@ func downloadStartHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadRangeWithParam(baseParams, payload)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 	} else {
 		// Single
@@ -171,7 +171,7 @@ func downloadStartHandler(c *cli.Context) error {
 		}
 		id, err = api.DownloadSingleWithParam(baseParams, payload)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 	}
 	fmt.Println(id)
@@ -208,7 +208,7 @@ func downloadAdminHandler(c *cli.Context) error {
 		} else {
 			resp, err := api.DownloadStatus(baseParams, id)
 			if err != nil {
-				return errorHandler(err)
+				return err
 			}
 
 			verbose := flagIsSet(c, verboseFlag)
@@ -220,7 +220,7 @@ func downloadAdminHandler(c *cli.Context) error {
 		}
 
 		if err := api.DownloadAbort(baseParams, id); err != nil {
-			return errorHandler(err)
+			return err
 		}
 		fmt.Printf("download aborted: %s\n", id)
 	case downloadRemove:
@@ -229,13 +229,13 @@ func downloadAdminHandler(c *cli.Context) error {
 		}
 
 		if err := api.DownloadRemove(baseParams, id); err != nil {
-			return errorHandler(err)
+			return err
 		}
 		fmt.Printf("download removed: %s\n", id)
 	case downloadList:
 		list, err := api.DownloadGetList(baseParams, regex)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 
 		err = templates.DisplayOutput(list, templates.DownloadListTmpl)

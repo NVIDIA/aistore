@@ -60,7 +60,7 @@ var (
 
 func configHandler(c *cli.Context) error {
 	if err := fillMap(ClusterURL); err != nil {
-		return errorHandler(err)
+		return err
 	}
 
 	var (
@@ -79,7 +79,7 @@ func configHandler(c *cli.Context) error {
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
 
-	return errorHandler(err)
+	return err
 }
 
 // Displays the config of a daemon

@@ -85,8 +85,8 @@ func updateLongRunVariables(c *cli.Context) {
 
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
-	if err = fillMap(ClusterURL); err != nil {
-		return errorHandler(err)
+	if err := fillMap(ClusterURL); err != nil {
+		return err
 	}
 	updateLongRunVariables(c)
 
@@ -110,7 +110,7 @@ func queryHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
-	return errorHandler(err)
+	return err
 }
 
 // Displays smap of single daemon

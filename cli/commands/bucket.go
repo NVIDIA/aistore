@@ -250,7 +250,7 @@ func bucketHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
-	return errorHandler(err)
+	return err
 }
 
 // Creates new local bucket

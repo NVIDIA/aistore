@@ -200,7 +200,7 @@ func objectHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, commandName)
 	}
-	return errorHandler(err)
+	return err
 }
 
 // Get object from bucket
@@ -247,7 +247,7 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 				fmt.Printf("Cached: %v\n", false)
 				return nil
 			}
-			return errorHandler(err)
+			return err
 		}
 		fmt.Printf("Cached: %v\n", true)
 		return nil
@@ -295,8 +295,8 @@ func objectPut(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider s
 	}
 
 	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, BucketProvider: bckProvider, Object: objName, Reader: reader}
-	if err = api.PutObject(putArgs); err != nil {
-		return errorHandler(err)
+	if err := api.PutObject(putArgs); err != nil {
+		return err
 	}
 
 	fmt.Printf("%s put into %s bucket\n", objName, bucket)

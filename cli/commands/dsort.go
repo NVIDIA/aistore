@@ -201,19 +201,19 @@ func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) erro
 
 	exists, err := api.DoesLocalBucketExist(baseParams, bucket)
 	if err != nil {
-		return errorHandler(err)
+		return err
 	}
 
 	if exists && cleanup {
 		err := api.DestroyLocalBucket(baseParams, bucket)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 	}
 
 	if !exists || cleanup {
-		if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
-			return errorHandler(err)
+		if err := api.CreateLocalBucket(baseParams, bucket); err != nil {
+			return err
 		}
 	}
 
@@ -342,7 +342,7 @@ func dsortHandler(c *cli.Context) error {
 
 		id, err := api.StartDSort(baseParams, rs)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 		fmt.Println(id)
 	case dsortStatus:
@@ -413,7 +413,7 @@ func dsortHandler(c *cli.Context) error {
 		}
 
 		if err := api.AbortDSort(baseParams, id); err != nil {
-			return errorHandler(err)
+			return err
 		}
 		fmt.Printf("DSort job aborted: %s\n", id)
 	case dsortRemove:
@@ -422,13 +422,13 @@ func dsortHandler(c *cli.Context) error {
 		}
 
 		if err := api.RemoveDSort(baseParams, id); err != nil {
-			return errorHandler(err)
+			return err
 		}
 		fmt.Printf("DSort job removed: %s\n", id)
 	case dsortList:
 		list, err := api.ListDSort(baseParams, regex)
 		if err != nil {
-			return errorHandler(err)
+			return err
 		}
 
 		err = templates.DisplayOutput(list, templates.DSortListTmpl)
@@ -525,7 +525,7 @@ func (b *dsortProgressBar) run() (dsortResult, error) {
 		metrics, err := api.MetricsDSort(b.params, b.id)
 		if err != nil {
 			b.cleanBars()
-			return dsortResult{}, errorHandler(err)
+			return dsortResult{}, err
 		}
 
 		var targetMetrics *dsort.Metrics
@@ -553,7 +553,7 @@ func (b *dsortProgressBar) run() (dsortResult, error) {
 func (b *dsortProgressBar) start() (bool, error) {
 	metrics, err := api.MetricsDSort(b.params, b.id)
 	if err != nil {
-		return false, errorHandler(err)
+		return false, err
 	}
 
 	finished := b.updateBars(metrics)
@@ -645,7 +645,7 @@ func (b *dsortProgressBar) result() dsortResult {
 func showMetrics(baseParams *api.BaseParams, id string, w io.Writer) (bool, error) {
 	resp, err := api.MetricsDSort(baseParams, id)
 	if err != nil {
-		return false, errorHandler(err)
+		return false, err
 	}
 
 	finished := true

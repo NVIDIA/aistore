@@ -32,7 +32,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if err := aisCLI.RunLong(os.Args); err != nil {
-		cmn.ExitInfof("%s.", cmn.CapitalizeString(err.Error()))
+	if err := aisCLI.Run(os.Args); err != nil {
+		cmn.ExitInfof("%s", cmn.ErrorToSentence(err))
 	}
 }
