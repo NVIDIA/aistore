@@ -17,7 +17,7 @@ Gets the object from the bucket. If `--out-file` is empty, it stores the file in
 | `--out-file` | string | name of the file to store the contents of the object | `""` |
 | `--offset` | string | read offset, can end with size suffix (k, MB, GiB, ...) | `""` |
 | `--length` | string | read length, can end with size suffix (k, MB, GiB, ...) |  `""` |
-| `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 | `--checksum` | bool | validate the checksum of the object | `false` |
 | `--props` | bool | returns the properties of object (size and version). It does not download the object. | `false` |
 | `--cached` | bool | checks if the object is cached locally. It does not download the object. | `false` |
@@ -43,7 +43,7 @@ Put an object into the bucket.
 | `--bucket` | string | name of the bucket to put the object | `""` |
 | `--name` | string | name of the object | `last element on the path of --file argument` |
 | `--file` | string | file that contains the contents of the object | `""` |
-| `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 
 **Example:**
 
@@ -66,7 +66,7 @@ Deletes an object from the bucket.
 | `--prefix` | string | prefix for range delete | `""` |
 | `--regex` | string | regex for range delete | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**
@@ -94,7 +94,7 @@ Deletes the objects in the range `001` to `003` with prefix `test-` matching the
 | `--prefix` | string | prefix for range eviction | `""` |
 | `--regex` | string | regex for range eviction | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**
@@ -118,7 +118,7 @@ Evicts the range of objects from `001` to `010` with the matching prefix `testfl
 | `--prefix` | string | prefix for range prefetch | `""` |
 | `--regex` | string | regex for range prefetch | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--bucket-provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**

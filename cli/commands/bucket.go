@@ -25,12 +25,14 @@ const (
 	bucketCreate     = "create"
 	bucketDestroy    = "destroy"
 	bucketNames      = "names"
-	bucketSetProps   = cmn.ActSetProps
-	bucketResetProps = cmn.ActResetProps
-	bucketGetProps   = "props"
 	bucketNWayMirror = cmn.ActMakeNCopies
 	bucketEvict      = commandEvict
 	bucketSummary    = "summary"
+
+	commandBucketProps = "props"
+	propsList          = "list"
+	propsSet           = "set"
+	propsReset         = "reset"
 
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
@@ -83,13 +85,6 @@ var (
 				noHeaderFlag,
 			},
 			baseBucketFlags...),
-		bucketSetProps: append(
-			[]cli.Flag{jsonFlag},
-			baseBucketFlags...),
-		bucketResetProps: baseBucketFlags,
-		bucketGetProps: append(
-			[]cli.Flag{jsonFlag},
-			baseBucketFlags...),
 		bucketNWayMirror: append(
 			[]cli.Flag{copiesFlag},
 			baseBucketFlags...),
@@ -103,18 +98,29 @@ var (
 			baseBucketFlags...),
 	}
 
-	bucketGeneric        = "%s bucket %s --bucket <value>"
-	bucketCreateText     = fmt.Sprintf(bucketGeneric, cliName, bucketCreate)
-	bucketDelText        = fmt.Sprintf(bucketGeneric, cliName, bucketDestroy)
-	bucketListText       = fmt.Sprintf(bucketGeneric, cliName, commandList)
-	bucketResetPropsText = fmt.Sprintf(bucketGeneric, cliName, bucketResetProps)
-	bucketGetPropsText   = fmt.Sprintf(bucketGeneric, cliName, bucketGetProps)
-	bucketEvictText      = fmt.Sprintf(bucketGeneric, cliName, bucketEvict)
+	bucketPropsFlags = map[string][]cli.Flag{
+		propsList: append(
+			[]cli.Flag{jsonFlag},
+			baseBucketFlags...),
+		propsSet: append(
+			[]cli.Flag{jsonFlag},
+			baseBucketFlags...),
+		propsReset: baseBucketFlags,
+	}
+
+	bucketGenericText    = "%s bucket %s --bucket <value>"
+	bucketCreateText     = fmt.Sprintf(bucketGenericText, cliName, bucketCreate)
+	bucketDelText        = fmt.Sprintf(bucketGenericText, cliName, bucketDestroy)
+	bucketListText       = fmt.Sprintf(bucketGenericText, cliName, commandList)
+	bucketEvictText      = fmt.Sprintf(bucketGenericText, cliName, bucketEvict)
 	bucketNamesText      = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
 	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --new-bucket <value>", cliName, commandRename)
-	bucketSetPropsText   = fmt.Sprintf("%s bucket %s --bucket <value> key=value ...", cliName, bucketSetProps)
 	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s --bucket <value> --copies <value>", cliName, bucketNWayMirror)
-	bucketStatsText      = fmt.Sprintf(bucketGeneric, cliName, bucketSummary)
+	bucketStatsText      = fmt.Sprintf(bucketGenericText, cliName, bucketSummary)
+
+	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s --bucket <value>", cliName, commandBucketProps, propsList)
+	bucketSetPropsText   = fmt.Sprintf("%s bucket %s %s --bucket <value> key=value ...", cliName, commandBucketProps, propsSet)
+	bucketResetPropsText = fmt.Sprintf("%s bucket %s %s --bucket <value>", cliName, commandBucketProps, propsReset)
 
 	bucketCmds = []cli.Command{
 		{
@@ -122,6 +128,37 @@ var (
 			Usage: "interact with buckets",
 			Flags: baseBucketFlags,
 			Subcommands: []cli.Command{
+				{
+					Name:  commandBucketProps,
+					Usage: "interact with bucket properties",
+					Flags: baseBucketFlags,
+					Subcommands: []cli.Command{
+						{
+							Name:         propsList,
+							Usage:        "lists bucket properties",
+							UsageText:    bucketGetPropsText,
+							Flags:        bucketPropsFlags[propsList],
+							Action:       bucketPropsHandler,
+							BashComplete: flagList,
+						},
+						{
+							Name:         propsSet,
+							Usage:        "sets bucket properties",
+							UsageText:    bucketSetPropsText,
+							Flags:        bucketPropsFlags[propsSet],
+							Action:       bucketPropsHandler,
+							BashComplete: flagList,
+						},
+						{
+							Name:         propsReset,
+							Usage:        "resets bucket properties",
+							UsageText:    bucketResetPropsText,
+							Flags:        bucketPropsFlags[propsReset],
+							Action:       bucketPropsHandler,
+							BashComplete: flagList,
+						},
+					},
+				},
 				{
 					Name:         bucketCreate,
 					Usage:        "creates the local bucket",
@@ -163,30 +200,6 @@ var (
 					BashComplete: flagList,
 				},
 				{
-					Name:         bucketSetProps,
-					Usage:        "sets bucket properties",
-					UsageText:    bucketSetPropsText,
-					Flags:        bucketFlags[bucketSetProps],
-					Action:       bucketHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         bucketResetProps,
-					Usage:        "resets bucket properties",
-					UsageText:    bucketResetPropsText,
-					Flags:        bucketFlags[bucketResetProps],
-					Action:       bucketHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         bucketGetProps,
-					Usage:        "gets bucket properties",
-					UsageText:    bucketGetPropsText,
-					Flags:        bucketFlags[bucketGetProps],
-					Action:       bucketHandler,
-					BashComplete: flagList,
-				},
-				{
 					Name:         bucketNWayMirror,
 					Usage:        "configures the bucket for n-way mirroring",
 					UsageText:    bucketNWayMirrorText,
@@ -218,7 +231,7 @@ var (
 func bucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	command := c.Command.Name
-	if err = checkFlags(c, bucketFlag); err != nil && command != bucketNames {
+	if err := checkFlags(c, bucketFlag); err != nil && command != bucketNames {
 		return err
 	}
 
@@ -237,12 +250,6 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = listBucketNames(c, baseParams)
 	case commandList:
 		err = listBucketObj(c, baseParams, bucket)
-	case bucketSetProps:
-		err = setBucketProps(c, baseParams, bucket)
-	case bucketResetProps:
-		err = resetBucketProps(c, baseParams, bucket)
-	case bucketGetProps:
-		err = bucketProps(c, baseParams, bucket)
 	case bucketNWayMirror:
 		err = configureNCopies(c, baseParams, bucket)
 	case bucketSummary:
@@ -250,6 +257,29 @@ func bucketHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
+	return err
+}
+
+func bucketPropsHandler(c *cli.Context) (err error) {
+	baseParams := cliAPIParams(ClusterURL)
+	command := c.Command.Name
+	if err := checkFlags(c, bucketFlag); err != nil {
+		return err
+	}
+
+	bucket := parseStrFlag(c, bucketFlag)
+
+	switch command {
+	case propsList:
+		err = bucketProps(c, baseParams, bucket)
+	case propsSet:
+		err = setBucketProps(c, baseParams, bucket)
+	case propsReset:
+		err = resetBucketProps(c, baseParams, bucket)
+	default:
+		return fmt.Errorf(invalidCmdMsg, command)
+	}
+
 	return err
 }
 
@@ -539,7 +569,7 @@ func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 }
 
 func printBckHeadTable(props *cmn.BucketProps) error {
-	// list instead of map to keep properties in the same order always.
+	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing
 	propList := []struct {
 		Name string
@@ -556,8 +586,7 @@ func printBckHeadTable(props *cmn.BucketProps) error {
 		{"Tiering", props.Tiering.String()},
 	}
 
-	template := "PROPERTY\tVALUE\n{{range $p := . }}{{$p.Name}}\t{{$p.Val}}\n{{end}}\n"
-	return templates.DisplayOutput(propList, template)
+	return templates.DisplayOutput(propList, templates.BucketPropsSimpleTmpl)
 }
 
 // Configure bucket as n-way mirror

@@ -238,6 +238,11 @@ const (
 	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
 		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
 
+	BucketPropsSimpleTmpl = "Property\tValue\n" +
+		"{{range $p := . }}" +
+		"{{$p.Name}}\t{{$p.Val}}\n" +
+		"{{end}}\n"
+
 	DownloadListHeader = "JobID\t Status\t Description\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +

@@ -7,6 +7,7 @@ package commands
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,11 +19,10 @@ type AISCLI struct {
 }
 
 const (
-	cliName          = "ais"
-	commandList      = "list"
-	commandRename    = "rename"
-	commandEvict     = "evict"
-	paramBckProvider = "bucket-provider"
+	cliName       = "ais"
+	commandList   = "list"
+	commandRename = "rename"
+	commandEvict  = "evict"
 
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
@@ -46,7 +46,7 @@ var (
 	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
 	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'"}
-	bckProviderFlag = cli.StringFlag{Name: paramBckProvider,
+	bckProviderFlag = cli.StringFlag{Name: "provider",
 		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
 	regexFlag    = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
@@ -137,8 +137,8 @@ func (aisCLI AISCLI) setupCommands() {
 }
 
 func setupCommandHelp(commands []cli.Command) {
-	for j := range commands {
-		command := &commands[j]
+	for i := range commands {
+		command := &commands[i]
 
 		// Get rid of 'h'/'help' subcommands
 		command.HideHelp = true
@@ -247,11 +247,23 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 }
 
 func checkFlags(c *cli.Context, flag ...cli.Flag) error {
+	missingFlags := make([]string, 0)
+
 	for _, f := range flag {
 		if !flagIsSet(c, f) {
-			return fmt.Errorf("required flag `%s` is not set", f.GetName())
+			missingFlags = append(missingFlags, f.GetName())
 		}
 	}
+
+	missingFlagCount := len(missingFlags)
+
+	if missingFlagCount == 1 {
+		return fmt.Errorf("required flag %q is not set", missingFlags[0])
+	}
+	if missingFlagCount > 1 {
+		return fmt.Errorf("required flags %q are not set", strings.Join(missingFlags, ", "))
+	}
+
 	return nil
 }
 

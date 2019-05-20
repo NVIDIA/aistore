@@ -72,4 +72,4 @@ To add a new command to a new resource,
 
 | Enum | Values | Description |
 | --- | --- | --- |
-| Provider | `local`, `cloud`, `''` | Locality of bucket. If empty, AIS automatically determines the locality. |
+| Provider | `local`, `cloud`, `""` | Locality of the bucket. If empty, AIS automatically determines the locality. |
