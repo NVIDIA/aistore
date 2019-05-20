@@ -346,7 +346,7 @@ $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match=
 
 This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby the names of those objects match 'a\d+' regex.
 
-> In addition to the AIS cluster itself you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/deploy_cli.sh`) and sourcing Bash auto-completions.
+> In addition to the AIS cluster itself you can deploy [AIS CLI](cli/README.md) - an easy-to-use AIS-integrated command-line management tool. The tool supports multiple commands and options; the first one that you may want to try is `ais status` to show state and status of the AIS cluster and its nodes. AIS CLI deployment is documented in the [CLI readme](cli/README.md) and includes two easy steps: building the binary (via `cli/install.sh`) and sourcing Bash auto-completions.
 
 > For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 > For other useful commands, see the [Makefile](ais/Makefile).

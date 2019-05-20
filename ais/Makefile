@@ -51,13 +51,13 @@ clean:
 
 
 # Target for local deployment
-.PHONY: deploy deploy_cli
+.PHONY: install_cli deploy
+
+install_cli:
+	@cd ../cli && ./install.sh
 
 deploy:
 	@./setup/deploy.sh
-
-deploy_cli:
-	@cd ../cli && ./deploy_cli.sh
 
 # Target for local docker deployment
 .PHONY: deploy_docker stop_docker

@@ -4,7 +4,7 @@ AIS CLI is a tool used to interact with resources of AIStore. Users are able to 
 
 ## Getting Started
 
-Run the `deploy_cli.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
+Run `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
 > Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.  
 > You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).

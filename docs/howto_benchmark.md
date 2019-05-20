@@ -20,7 +20,7 @@ For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 To get started, cd to [aisloader home](/bench/aisloader/) and run:
 
 ```shell
-$ ./deploy_aisloader.sh
+$ ./install.sh
 $ $GOPATH/bin/aisloader
 ```
 ### Examples

@@ -170,7 +170,7 @@ Setting the number of replicas to `6` will create six targets.
 To interact with the cluster, install the `AIS` CLI tool
 ```sh
 $ cd ../../../cli
-$ ./deploy_cli.sh
+$ ./install.sh
 ```
 This will create a binary named `ais` that can be used to interact with the cluster. Configure the CLI tool to point to the Kubernetes cluster by assigning the `AIS_URL` environment variable to the URL of the primary proxy. 
 
