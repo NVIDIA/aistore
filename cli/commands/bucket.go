@@ -581,7 +581,6 @@ func printBckHeadTable(props *cmn.BucketProps) error {
 		{"Mirror", props.Mirror.String()},
 		{"EC", props.EC.String()},
 		{"LRU", props.LRUToStr()},
-		{"Rebalance", props.Rebalance.String()},
 		{"Versioning", props.Versioning.String()},
 		{"Tiering", props.Tiering.String()},
 	}

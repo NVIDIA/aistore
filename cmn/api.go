@@ -163,7 +163,6 @@ const (
 	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
 	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
-	HeaderRebalanceEnabled      = "rebalance.enabled"       // true: rebalance automatically on Smap/Mountpath changes
 	HeaderBucketAccessAttrs     = "aattrs"                  // Bucket access attributes
 
 	// object meta
@@ -472,9 +471,6 @@ type BucketProps struct {
 	// EC defines erasure coding setting for the bucket
 	EC ECConf `json:"ec"`
 
-	// Rebalance defines auto-rebalance policy for the bucket
-	Rebalance RebalanceConf `json:"rebalance"`
-
 	// Bucket access attributes - see Allow* above
 	AccessAttrs uint64 `json:"aattrs"`
 
@@ -644,7 +640,6 @@ func DefaultBucketProps() *BucketProps {
 		LRU:         c.LRU,
 		Mirror:      c.Mirror,
 		Versioning:  c.Ver,
-		Rebalance:   c.Rebalance,
 		AccessAttrs: AllowAllAccess,
 	}
 }
@@ -675,7 +670,6 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 	to.LRU = from.LRU
 	to.Mirror = from.Mirror
 	to.EC = from.EC
-	to.Rebalance = from.Rebalance
 	to.AccessAttrs = from.AccessAttrs
 }
 

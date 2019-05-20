@@ -126,7 +126,6 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 	}
 	return conf
 }
-func (lom *LOM) RebalanceConf() *cmn.RebalanceConf { return &lom.BckProps.Rebalance }
 
 //
 // local copy management

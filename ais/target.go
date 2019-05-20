@@ -1322,8 +1322,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hdr.Add(cmn.HeaderBucketCopies, "0")
 	}
-	hdr.Add(cmn.HeaderRebalanceEnabled, strconv.FormatBool(props.Rebalance.Enabled))
-
 	hdr.Add(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
 	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
 	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))

@@ -301,10 +301,6 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
-	// skip the directory if rebalance is disabled for the bucket
-	if !lom.RebalanceConf().Enabled {
-		return filepath.SkipDir
-	}
 	_, errstr = lom.Load(false)
 	if errstr != "" {
 		if glog.FastV(4, glog.SmoduleAIS) {

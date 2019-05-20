@@ -1046,12 +1046,6 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
-		case cmn.HeaderRebalanceEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
-				bprops.Rebalance.Enabled = v
-			} else {
-				errRet = fmt.Errorf(errFmt, name, value, err)
-			}
 		case cmn.HeaderBucketAccessAttrs:
 			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
 				bprops.AccessAttrs = v

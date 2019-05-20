@@ -1502,7 +1502,6 @@ func TestECDestroyBucket(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	bckProps := defaultECBckProps()
-	bckProps.Rebalance.Enabled = false
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
 
 	wg := &sync.WaitGroup{}
@@ -1594,7 +1593,6 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	bckProps := defaultECBckProps()
-	bckProps.Rebalance.Enabled = false
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
@@ -1713,7 +1711,6 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	bckProps := defaultECBckProps()
-	bckProps.Rebalance.Enabled = false
 	newLocalBckWithProps(t, bucket, bckProps, seed, 0, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
@@ -1858,7 +1855,6 @@ func TestECEmergencyMpath(t *testing.T) {
 	rnd := rand.New(rand.NewSource(seed))
 
 	bckProps := defaultECBckProps()
-	bckProps.Rebalance.Enabled = false
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
