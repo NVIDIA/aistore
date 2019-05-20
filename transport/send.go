@@ -229,8 +229,7 @@ func (gc *collector) run() (err error) {
 				cmn.AssertMsg(!ok, s.lid)
 				gc.streams[s.lid] = s
 				heap.Push(gc, s)
-			} else {
-				cmn.AssertMsg(ok, s.lid)
+			} else if ok {
 				heap.Remove(gc, s.time.index)
 				s.time.ticks = 1
 			}
