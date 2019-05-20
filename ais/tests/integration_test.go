@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -1202,8 +1204,8 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	err := cmn.CreateDir(newMountpath)
 	tassert.CheckFatal(t, err)
 
-	if tutils.DockerRunning() {
-		err := tutils.DockerCreateMpathDir(0, newMountpath)
+	if containers.DockerRunning() {
+		err := containers.DockerCreateMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 	} else {
 		err := cmn.CreateDir(newMountpath)
@@ -1211,7 +1213,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}
 
 	defer func() {
-		if !tutils.DockerRunning() {
+		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
 		tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
@@ -1233,7 +1235,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.wg.Wait()
 
 	// Remove new mountpath from target
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 		if err := api.RemoveMountpath(baseParams, newMountpath); err != nil {
 			t.Error(err.Error())
@@ -1274,7 +1276,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
-		if !tutils.DockerRunning() {
+		if !containers.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
 		tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
@@ -1283,8 +1285,8 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Put random files
 	m.puts()
 
-	if tutils.DockerRunning() {
-		err := tutils.DockerCreateMpathDir(0, newMountpath)
+	if containers.DockerRunning() {
+		err := containers.DockerCreateMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
@@ -1310,8 +1312,8 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.wg.Wait()
 
 	// Remove new mountpath from all targets
-	if tutils.DockerRunning() {
-		err := tutils.DockerRemoveMpathDir(0, newMountpath)
+	if containers.DockerRunning() {
+		err := containers.DockerRemoveMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
 			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))

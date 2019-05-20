@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/webdav"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
@@ -372,7 +373,7 @@ func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, err
 // This requirement can be removed after proxy/target can be started in unit test
 // Also assumes the localhost:8080 is one of the proxy
 func TestFS(t *testing.T) {
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip("TestFS requires direct access to local filesystem, not compatible with docker")
 	}
 	proxyURL := tutils.DefaultBaseAPIParams(t).URL

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/api"
@@ -176,7 +178,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
 	}
 

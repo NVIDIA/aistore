@@ -52,6 +52,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
@@ -531,11 +533,11 @@ func parseCmdLine() (params, error) {
 	}
 
 	// For Dry-Run on Docker
-	if tutils.DockerRunning() && ip == "localhost" {
+	if containers.DockerRunning() && ip == "localhost" {
 		ip = dockerHostIP
 	}
 
-	if tutils.DockerRunning() && port == "8080" {
+	if containers.DockerRunning() && port == "8080" {
 		port = dockerPort
 	}
 

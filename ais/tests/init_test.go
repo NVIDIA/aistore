@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -102,11 +104,11 @@ func init() {
 	flag.Parse()
 
 	proxyURLReadOnly = proxyURL
-	if tutils.DockerRunning() && proxyURLReadOnly == proxyURL {
+	if containers.DockerRunning() && proxyURLReadOnly == proxyURL {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
 
 	}
-	if tutils.DockerRunning() && proxyNextTierURLReadOnly == proxyURLNext {
+	if containers.DockerRunning() && proxyNextTierURLReadOnly == proxyURLNext {
 		proxyNextTierURLReadOnly = "http://" + nextTierHostIP + ":" + port
 	}
 

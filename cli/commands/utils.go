@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -28,14 +30,16 @@ const (
 	s3Scheme      = "s3"
 	aisScheme     = "ais"
 
-	gsHost = "storage.googleapis.com"
-	s3Host = "s3.amazonaws.com"
+	gsHost               = "storage.googleapis.com"
+	s3Host               = "s3.amazonaws.com"
+	defaultAISHost       = "http://127.0.0.1:8080"
+	defaultAISDockerHost = "http://172.50.0.2:8080"
 
 	Infinity = -1
 )
 
 var (
-	ClusterURL = os.Getenv("AIS_URL")
+	ClusterURL string
 
 	// Global variables set by daemon command handler
 	refreshRate = "1s"
@@ -54,6 +58,41 @@ var (
 	mu sync.Mutex
 )
 
+// cluster URL resolving order
+// 1. AIS_URL; if not present:
+// 2. Proxy docker containter IP address; if not successful:
+// 3. Docker default; if not present:
+// 4. Default = localhost:8080
+func GetClusterURL() string {
+	if envURL := os.Getenv("AIS_URL"); envURL != "" {
+		return envURL
+	}
+
+	if containers.DockerRunning() {
+		clustersIDs, err := containers.ClusterIDs()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Couldn't automatically discover docker proxy URL (%s), using the default: %q. To change: export AIS_URL=`url`\n", err.Error(), defaultAISDockerHost)
+			return defaultAISDockerHost
+		}
+
+		cmn.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running, when docker running detected")
+		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
+
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Couldn't automatically discover docker proxy URL (%s), using the default: %q. To change: export AIS_URL=`url`\n", err.Error(), defaultAISDockerHost)
+			return defaultAISDockerHost
+		}
+
+		if len(clustersIDs) > 1 {
+			_, _ = fmt.Fprintf(os.Stderr, "Multiple docker clusters running. Connected to %d via %s. To change: export AIS_URL=`url`\n", clustersIDs[0], proxyGateway)
+		}
+
+		return "http://" + proxyGateway + ":8080"
+	}
+
+	return defaultAISHost
+}
+
 // Checks if URL is valid by trying to get Smap
 func TestAISURL() (err error) {
 	baseParams := cliAPIParams(ClusterURL)
@@ -64,12 +103,6 @@ func TestAISURL() (err error) {
 	}
 
 	return err
-}
-
-func SetClusterURL(url string) {
-	if ClusterURL == "" {
-		ClusterURL = url
-	}
 }
 
 func cliAPIParams(proxyURL string) *api.BaseParams {

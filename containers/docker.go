@@ -1,8 +1,8 @@
-// Package tutils provides common low-level utilities for all aistore unit and integration tests
+// Package containers provides common utilities for managing containerized deployments of AIS
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package tutils
+package containers
 
 import (
 	"fmt"
@@ -10,6 +10,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 //For container naming
@@ -34,7 +38,6 @@ func init() {
 
 	r := regexp.MustCompile(pattern)
 	lines := strings.Split(string(bytes), "\n")
-
 	// Checks to see if there is any container P_proxy_{jj}" running
 	for _, line := range lines {
 		match := r.MatchString(line)
@@ -77,32 +80,65 @@ func ContainerCount(clusterNumber ...int) (proxyCnt int, targetCnt int) {
 	return
 }
 
-// ClusterCount returns the current number of clusters running
-func ClusterCount() int {
+func clustersMap() (map[int]int, error) {
 	cmd := exec.Command("docker", "ps", "--format", "\"{{.Names}}\"")
 	bytes, err := cmd.Output()
 	if err != nil {
-		return 0
+		return nil, err
 	}
-	m := make(map[string]int)
+
+	clusterRegex := regexp.MustCompile(`ais(\d+)_(target|proxy)_\d+`)
+
+	m := make(map[int]int)
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
-		if len(line) > len("\""+prefixStr+"i_") && strings.HasPrefix(line, "\""+prefixStr) {
-			// container names have the prefix aisi_ where i is the ith ais cluster
-			m[line[:len("\""+prefixStr+"i_")]]++
+		if !clusterRegex.MatchString(line) {
+			continue
 		}
+
+		matches := clusterRegex.FindStringSubmatch(line)
+		// first match the whole string, second number after ais prefix
+		// matched because of \d+ being inside parenthesis
+		cmn.Assert(len(matches) > 1)
+		i, err := strconv.ParseInt(matches[1], 10, 32)
+		cmn.AssertNoErr(err)
+		m[int(i)]++
 	}
-	return len(m)
+
+	return m, nil
+}
+
+// ClusterIDs returns all IDs of running ais docker clusters
+func ClusterIDs() ([]int, error) {
+	m, err := clustersMap()
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]int, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // TargetsInCluster returns the names of the targets in cluster i
 func TargetsInCluster(i int) (ans []string) {
+	return nodesInCluster(i, targetStr)
+}
+
+// ProxiesInCluster returns the names of the targets in cluster i
+func ProxiesInCluster(i int) (ans []string) {
+	return nodesInCluster(i, proxyStr)
+}
+
+func nodesInCluster(i int, prefix string) (ans []string) {
 	cmd := exec.Command("docker", "ps", "--format", "\"{{.Names}}\"")
 	bytes, err := cmd.Output()
 	if err != nil {
 		return
 	}
-	targetPrefix := prefixStr + strconv.Itoa(i) + targetStr
+	targetPrefix := prefixStr + strconv.Itoa(i) + prefix
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
 		if strings.Contains(line, targetPrefix) {
@@ -146,7 +182,7 @@ func ContainerExec(containerName string, args ...string) error {
 
 	_, err := cmd.Output()
 	if err != nil {
-		Logf("%q error executing docker command: docker exec %s %v.\n", err.Error(), containerName, args)
+		glog.Infof("%q error executing docker command: docker exec %s %v.\n", err.Error(), containerName, args)
 		return err
 	}
 	return nil
@@ -192,6 +228,27 @@ func ConnectContainer(containerID string, networks []string) error {
 	}
 
 	return nil
+}
+
+func ClusterProxyURL(i int) (string, error) {
+	proxies := ProxiesInCluster(i)
+
+	if len(proxies) == 0 {
+		return "", fmt.Errorf("couldn't find any proxies in cluster %d", i)
+	}
+
+	containerID := proxies[0]
+
+	aisPublicNetwork := prefixStr + strconv.Itoa(i) + "_public"
+
+	cmd := exec.Command("docker", "inspect", "--format={{.NetworkSettings.Networks."+aisPublicNetwork+".IPAddress }}", containerID)
+	bytes, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	output := strings.TrimSpace(string(bytes))
+	return output, nil
 }
 
 // containerNetworkList returns all names of networks to which given container

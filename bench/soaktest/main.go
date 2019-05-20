@@ -18,6 +18,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/bench/soaktest/recipes"
 	"github.com/NVIDIA/aistore/bench/soaktest/report"
 	"github.com/NVIDIA/aistore/bench/soaktest/scheduler"
@@ -237,7 +239,7 @@ func main() {
 
 	// Sanity check for ip and port
 	if soakcmn.Params.IP == "" && soakcmn.Params.Port == "" {
-		if tutils.DockerRunning() {
+		if containers.DockerRunning() {
 			dockerEnvFile := "/tmp/docker_ais/deploy.env"
 			envVars := tutils.ParseEnvVariables(dockerEnvFile)
 			soakcmn.Params.IP = envVars["PRIMARY_HOST_IP"]

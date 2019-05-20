@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 
@@ -116,8 +118,8 @@ func clusterHealthCheck(t *testing.T, smapBefore cluster.Smap) {
 		}
 	}
 
-	if tutils.DockerRunning() {
-		pCnt, tCnt := tutils.ContainerCount()
+	if containers.DockerRunning() {
+		pCnt, tCnt := containers.ContainerCount()
 		if pCnt != len(smapAfter.Pmap) {
 			t.Fatalf("Some proxy containers crashed: expected %d, found %d containers", len(smapAfter.Pmap), pCnt)
 		}
@@ -180,7 +182,7 @@ func primaryCrashElectRestart(t *testing.T) {
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
 // line proxy becomes the new primary, restore the target and proxy, restore original primary.
 func primaryAndTargetCrash(t *testing.T) {
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip("Skipped because setting new primary URL in command line for docker is not supported")
 	}
 
@@ -404,7 +406,7 @@ func crashAndFastRestore(t *testing.T) {
 }
 
 func joinWhileVoteInProgress(t *testing.T) {
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip("Skipping because mocking is not supported for docker cluster")
 	}
 
@@ -822,9 +824,9 @@ func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
 }
 
 func kill(daemonID, port string) (string, []string, error) {
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		tutils.Logf("Stopping container %s\n", daemonID)
-		err := tutils.StopContainer(daemonID)
+		err := containers.StopContainer(daemonID)
 		return daemonID, nil, err
 	}
 
@@ -866,9 +868,9 @@ func kill(daemonID, port string) (string, []string, error) {
 }
 
 func restore(cmd string, args []string, asPrimary bool, tag string) error {
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		tutils.Logf("Restarting %s container %s\n", tag, cmd)
-		return tutils.RestartContainer(cmd)
+		return containers.RestartContainer(cmd)
 	}
 	tutils.Logf("Restoring %s: %s %+v\n", tag, cmd, args)
 
@@ -1059,7 +1061,7 @@ func networkFailureTarget(t *testing.T) {
 	}
 
 	tutils.Logf("Disconnecting target: %s\n", targetID)
-	oldNetworks, err := tutils.DisconnectContainer(targetID)
+	oldNetworks, err := containers.DisconnectContainer(targetID)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(
@@ -1072,7 +1074,7 @@ func networkFailureTarget(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Connecting target %s to networks again\n", targetID)
-	err = tutils.ConnectContainer(targetID, oldNetworks)
+	err = containers.ConnectContainer(targetID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(
@@ -1098,7 +1100,7 @@ func networkFailureProxy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Disconnecting proxy: %s\n", proxyID)
-	oldNetworks, err := tutils.DisconnectContainer(proxyID)
+	oldNetworks, err := containers.DisconnectContainer(proxyID)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(
@@ -1111,7 +1113,7 @@ func networkFailureProxy(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tutils.Logf("Connecting proxy %s to networks again\n", proxyID)
-	err = tutils.ConnectContainer(proxyID, oldNetworks)
+	err = containers.ConnectContainer(proxyID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tutils.WaitForPrimaryProxy(
@@ -1143,7 +1145,7 @@ func networkFailurePrimary(t *testing.T) {
 
 	// Disconnect primary
 	tutils.Logf("Disconnecting primary %s from all networks\n", oldPrimaryID)
-	oldNetworks, err := tutils.DisconnectContainer(oldPrimaryID)
+	oldNetworks, err := containers.DisconnectContainer(oldPrimaryID)
 	tassert.CheckFatal(t, err)
 
 	// Check smap
@@ -1162,7 +1164,7 @@ func networkFailurePrimary(t *testing.T) {
 
 	// Connect again
 	tutils.Logf("Connecting primary %s to networks again\n", oldPrimaryID)
-	err = tutils.ConnectContainer(oldPrimaryID, oldNetworks)
+	err = containers.ConnectContainer(oldPrimaryID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
 	// give a little time to original primary, so it picks up the network
@@ -1199,7 +1201,7 @@ func networkFailurePrimary(t *testing.T) {
 }
 
 func networkFailure(t *testing.T) {
-	if !tutils.DockerRunning() {
+	if !containers.DockerRunning() {
 		t.Skip("Network failure test requires Docker cluster")
 	}
 

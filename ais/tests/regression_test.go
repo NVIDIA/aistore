@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/ais"
@@ -240,7 +242,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		fqn        string
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 

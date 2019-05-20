@@ -12,15 +12,21 @@ The script also allows you to install [shell autocompletions](#ais-cli-shell-aut
 
 ## Using AIS CLI
 
-Before using the CLI, we need to export the `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`) to configure the CLI tool to point to the AIStore cluster.
+AIS CLI makes requests to AIStore cluster. It will resolve cluster address in the following order:
+1. `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`); if not present:
+2. Discover IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
+if not successful or local non-containerized deployment:
+3. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
+
+This command returns the list of commands for the CLI.
  ```sh
- $ export AIS_URL=http://localhost:8080
  $ ais --help
  ```
- This should return the list of commands for the CLI.
-
-> By default, the CLI is configured to point to `http://172.50.0.2:8080` and `http:/127.0.0.1:8080` for local containerized and non-containerized deployments respectively.
-
+This command returns status of the cluster; if successful, cluster address was resolved correctly.
+ ```sh
+ $ ais status
+ ```
+ 
 ## AIS CLI Shell Auto-Complete
 
 The CLI tool supports bash and zsh auto-complete functionality.

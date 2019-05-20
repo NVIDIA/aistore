@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/cluster"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -1197,7 +1199,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 	sgl := tutils.Mem2.NewSGL(fileSize)
@@ -1401,7 +1403,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
 	)
 
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 

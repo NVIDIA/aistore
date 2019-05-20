@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/containers"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
@@ -814,7 +816,7 @@ func TestECChecksum(t *testing.T) {
 		objPatt = "obj-cksum-%04d"
 	)
 
-	if tutils.DockerRunning() {
+	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 

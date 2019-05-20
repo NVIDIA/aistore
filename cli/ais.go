@@ -15,11 +15,10 @@ import (
 var (
 	build   string
 	version string
-	url     string
 )
 
 func main() {
-	commands.SetClusterURL(url)
+	commands.ClusterURL = commands.GetClusterURL()
 
 	aisCLI := commands.New(build, version)
 
