@@ -1687,9 +1687,6 @@ components:
             http:
               type: object
               properties:
-                max_num_targets:
-                  type: integer
-                  format: int32
                 use_http2:
                   type: boolean
                 use_https:

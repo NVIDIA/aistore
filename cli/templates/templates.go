@@ -201,7 +201,6 @@ const (
 		" \tReverse Proxy Cache: {{$obj.HTTP.RevProxyCache}}\t \tIntraControl Port: {{$obj.L4.PortIntraControlStr}}\n" +
 		" \tCertificate: {{$obj.HTTP.Certificate}}\t \tIntraData Port: {{$obj.L4.PortIntraDataStr}}\n" +
 		" \tKey: {{$obj.HTTP.Key}}\t \t\n" +
-		" \tMaxNumTargets: {{$obj.HTTP.MaxNumTargets}}\t \t\n" +
 		" \tUseHTTPS: {{$obj.HTTP.UseHTTPS}}\t \t\n"
 	FSHCConfTmpl = "\n{{$obj := .FSHC}}FSHC Config\n" +
 		" Enabled: {{$obj.Enabled}}\n" +
