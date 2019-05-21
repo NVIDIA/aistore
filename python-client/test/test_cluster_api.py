@@ -69,7 +69,7 @@ class TestClusterApi(unittest.TestCase):
             "cksum.enable_read_range", "true")
         self.cluster.perform_operation(input_params)
         target_ids = self.daemon.get(self.models.GetWhat.SMAP)["tmap"].keys()
-        target_ports = [target_id.split(":")[1] for target_id in target_ids]
+        target_ports = [target_id.split("_")[1] for target_id in target_ids]
         old_host = self.cluster.api_client.configuration.host
         for target_port in target_ports:
             self.daemon.api_client.configuration.host = (

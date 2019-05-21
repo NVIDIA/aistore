@@ -436,7 +436,7 @@ func (h *httprunner) initSI(daemonType string) {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if cmn.GCO.Get().TestingEnv() {
-			daemonID += ":" + config.Net.L4.PortStr
+			daemonID += "_" + config.Net.L4.PortStr
 		}
 	}
 

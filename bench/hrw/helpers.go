@@ -63,7 +63,7 @@ func randNodeID(randGen *rand.Rand) string {
 	cksum := xxhash.ChecksumString32S(randIP, xxHashSeed)
 	nodeID := strconv.Itoa(int(cksum & 0xfffff))
 	randPort := strconv.Itoa(randGen.Intn(65535))
-	return nodeID + ":" + randPort
+	return nodeID + "_" + randPort
 }
 
 func randNodeIDs(numNodes int, randGen *rand.Rand) []node {
