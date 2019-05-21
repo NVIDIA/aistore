@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,8 @@ const (
 	propsSet           = "set"
 	propsReset         = "reset"
 
+	propsSetListDelimiter = "="
+
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
 
@@ -45,7 +48,6 @@ var (
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
 	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all objects in a bucket and their details; include EC replicas"}
 	propsFlag         = cli.BoolFlag{Name: "props", Usage: "properties of a bucket"}
-	newBucketFlag     = cli.StringFlag{Name: "new-bucket", Usage: "new name of bucket"}
 	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
 	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
@@ -54,26 +56,18 @@ var (
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
 
 	baseBucketFlags = []cli.Flag{
-		bucketFlag,
 		bckProviderFlag,
 	}
 
 	bucketFlags = map[string][]cli.Flag{
-		bucketCreate: {
-			bucketFlag,
-		},
+		bucketCreate: {},
 		bucketNames: {
 			regexFlag,
 			bckProviderFlag,
 			noHeaderFlag,
 		},
-		bucketDestroy: {
-			bucketFlag,
-		},
-		commandRename: append(
-			baseBucketFlags,
-			newBucketFlag,
-		),
+		bucketDestroy: {},
+		commandRename: {},
 		commandList: append(
 			baseBucketFlags,
 			regexFlag,
@@ -91,9 +85,7 @@ var (
 			baseBucketFlags,
 			copiesFlag,
 		),
-		bucketEvict: {
-			bucketFlag,
-		},
+		bucketEvict: {},
 		bucketSummary: append(
 			baseBucketFlags,
 			regexFlag,
@@ -114,19 +106,19 @@ var (
 		propsReset: baseBucketFlags,
 	}
 
-	bucketGenericText    = "%s bucket %s --bucket <value>"
+	bucketGenericText    = "%s bucket %s <bucket>"
 	bucketCreateText     = fmt.Sprintf(bucketGenericText, cliName, bucketCreate)
 	bucketDelText        = fmt.Sprintf(bucketGenericText, cliName, bucketDestroy)
 	bucketListText       = fmt.Sprintf(bucketGenericText, cliName, commandList)
 	bucketEvictText      = fmt.Sprintf(bucketGenericText, cliName, bucketEvict)
 	bucketNamesText      = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
-	bucketRenameText     = fmt.Sprintf("%s bucket %s --bucket <value> --new-bucket <value>", cliName, commandRename)
-	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s --bucket <value> --copies <value>", cliName, bucketNWayMirror)
+	bucketRenameText     = fmt.Sprintf("%s bucket %s <bucket> <new-bucket>", cliName, commandRename)
+	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s <bucket> --copies <value>", cliName, bucketNWayMirror)
 	bucketStatsText      = fmt.Sprintf(bucketGenericText, cliName, bucketSummary)
 
-	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s --bucket <value>", cliName, commandBucketProps, propsList)
-	bucketSetPropsText   = fmt.Sprintf("%s bucket %s %s --bucket <value> key=value ...", cliName, commandBucketProps, propsSet)
-	bucketResetPropsText = fmt.Sprintf("%s bucket %s %s --bucket <value>", cliName, commandBucketProps, propsReset)
+	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, propsList)
+	bucketSetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket> key=value ...", cliName, commandBucketProps, propsSet)
+	bucketResetPropsText = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, propsReset)
 
 	bucketCmds = []cli.Command{
 		{
@@ -235,11 +227,12 @@ var (
 func bucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	command := c.Command.Name
-	if err := checkFlags(c, bucketFlag); err != nil && command != bucketNames {
+
+	bucket, err := bucketFromArgsOrEnv(c)
+	// In case of commandRename validation will be done inside renameBucket
+	if err != nil && command != bucketNames && command != commandRename {
 		return err
 	}
-
-	bucket := parseStrFlag(c, bucketFlag)
 
 	switch command {
 	case bucketCreate:
@@ -247,7 +240,7 @@ func bucketHandler(c *cli.Context) (err error) {
 	case bucketDestroy:
 		err = destroyBucket(baseParams, bucket)
 	case commandRename:
-		err = renameBucket(c, baseParams, bucket)
+		err = renameBucket(c, baseParams)
 	case bucketEvict:
 		err = evictBucket(baseParams, bucket)
 	case bucketNames:
@@ -267,19 +260,14 @@ func bucketHandler(c *cli.Context) (err error) {
 func bucketPropsHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	command := c.Command.Name
-	if err := checkFlags(c, bucketFlag); err != nil {
-		return err
-	}
-
-	bucket := parseStrFlag(c, bucketFlag)
 
 	switch command {
 	case propsList:
-		err = bucketProps(c, baseParams, bucket)
+		err = bucketProps(c, baseParams)
 	case propsSet:
-		err = setBucketProps(c, baseParams, bucket)
+		err = setBucketProps(c, baseParams)
 	case propsReset:
-		err = resetBucketProps(c, baseParams, bucket)
+		err = resetBucketProps(c, baseParams)
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
@@ -306,11 +294,12 @@ func destroyBucket(baseParams *api.BaseParams, bucket string) (err error) {
 }
 
 // Rename local bucket
-func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = checkFlags(c, newBucketFlag); err != nil {
-		return
+func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	bucket, newBucket, err := getRenameBucketParameters(c)
+	if err != nil {
+		return err
 	}
-	newBucket := parseStrFlag(c, newBucketFlag)
+
 	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -489,9 +478,24 @@ func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Va
 }
 
 // Sets bucket properties
-func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if c.NArg() < 1 {
-		return errors.New("expected at least one argument")
+func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	var (
+		propsArgs = c.Args().Tail()
+		bucket    = c.Args().First()
+	)
+
+	if strings.Contains(bucket, propsSetListDelimiter) {
+		// First argument is a key-value pair -> bucket should be read from env variable
+		bucketEnv, ok := os.LookupEnv(aisBucketEnvVar)
+		if !ok {
+			return missingArgsMessage("bucket name")
+		}
+		bucket = bucketEnv
+		propsArgs = c.Args()
+	}
+
+	if len(propsArgs) == 0 {
+		return errors.New("expected at least one key-value pair")
 	}
 
 	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
@@ -507,7 +511,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	// For setting bucket props via action message
 	if flagIsSet(c, jsonFlag) {
 		props := cmn.BucketProps{}
-		inputProps := []byte(c.Args().First())
+		inputProps := []byte(propsArgs[0])
 		if err = json.Unmarshal(inputProps, &props); err != nil {
 			return
 		}
@@ -520,7 +524,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	}
 
 	// For setting bucket props via URL query string
-	nvs, err := makePairs(c.Args(), "=")
+	nvs, err := makePairs(propsArgs, propsSetListDelimiter)
 	if err != nil {
 		return
 	}
@@ -535,7 +539,12 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 }
 
 // Resets bucket props
-func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	bucket, err := bucketFromArgsOrEnv(c)
+	if err != nil {
+		return err
+	}
+
 	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
@@ -554,7 +563,12 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string)
 }
 
 // Get bucket props
-func bucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func bucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	bucket, err := bucketFromArgsOrEnv(c)
+	if err != nil {
+		return err
+	}
+
 	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
@@ -613,6 +627,35 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 }
 
 // HELPERS
+
+// Rename bucket expects 2 arguments - bucket name and new bucket name.
+// This function returns bucket name and new bucket name based on arguments provided to the command
+// and AIS_BUCKET env variable. In case something is missing it also generates a meaningful error message.
+func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err error) {
+	var (
+		args     = c.Args()
+		argCount = c.NArg()
+
+		bucketEnv, envVarSet = os.LookupEnv(aisBucketEnvVar)
+	)
+
+	if argCount == 0 && envVarSet || (argCount == 1 && !envVarSet) {
+		return "", "", missingArgsMessage("new bucket name")
+	} else if argCount == 0 {
+		return "", "", missingArgsMessage("bucket name", "new bucket names")
+	}
+
+	if argCount == 1 {
+		bucket = bucketEnv      // AIS_BUCKET was set - treat it as the value of the first argument
+		newBucket = args.Get(0) // Treat the only argument as name of new bucket
+	} else {
+		bucket = args.Get(0)
+		newBucket = args.Get(1)
+	}
+
+	return bucket, newBucket, nil
+}
+
 func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
 	if bckProvider == cmn.LocalBs || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)

@@ -75,11 +75,12 @@ To add a new command to a new resource,
 1. Create a new `.go` file with the name of the new resource and follow the format of the existing files
 2. Once the new resource and commands are implemented, make sure to add the new command set to the main function located in `ais.go`.
 
-## Default flag values via environment variables
+## Default flag and argument values via environment variables
 
 #### Bucket
 If `AIS_BUCKET` environment variable is set, the `--bucket` flag is set to the value of this variable.
-Setting `--bucket` flag overwrites the default value.
+Setting `--bucket` flag overwrites the default value.  
+Setting `AIS_BUCKET` also allows you to omit one of the arguments to `ais bucket` commands. For more information, check [here](./resources/bucket.md#default-bucket-argument-value).
 
 #### Bucket Provider
 If `AIS_BUCKET_PROVIDER` environment variable is set, the `--provider` flag is set to the value of this variable.

@@ -114,7 +114,7 @@ Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Pro
 For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
 
 ```shell
-ais bucket setprops --bucket abc 'aattrs=ro'
+ais bucket setprops abc 'aattrs=ro'
 ```
 
 The same expressed via `curl` will look as follows:
@@ -192,16 +192,16 @@ For many more examples, please refer to the [test sources](/ais/tests/) in the r
 $ AIS_BUCKET=mybucket ais bucket props list
 ```
 
-or, same via `--bucket` flag (and without the environment variable):
+or, same via command argument (and without the environment variable):
 
 ```shell
-$ ais bucket props list --bucket=mybucket
+$ ais bucket props list mybucket
 ```
 
 or, the same to get output in a (raw) JSON form:
 
 ```shell
-$ ais bucket props list --bucket=mybucket --json
+$ ais bucket props list mybucket --json
 ```
 
 2. Enable erasure coding on a bucket:

@@ -5,6 +5,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/urfave/cli"
 
 	"github.com/NVIDIA/aistore/containers"
 
@@ -111,6 +114,18 @@ func TestAISURL() (err error) {
 	}
 
 	return err
+}
+
+func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
+	bucket := c.Args().First()
+	if bucket == "" {
+		var ok bool
+		if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
+			return "", errors.New("missing argument - bucket name")
+		}
+	}
+
+	return bucket, nil
 }
 
 func cliAPIParams(proxyURL string) *api.BaseParams {
@@ -337,4 +352,14 @@ func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) err
 		return fmt.Errorf("could not reach %q bucket: %v", bckName, err)
 	}
 	return nil
+}
+
+func missingArgsMessage(args ...string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	if len(args) == 1 {
+		return fmt.Errorf("missing argument: %s", args[0])
+	}
+	return fmt.Errorf("missing arguments: %s", strings.Join(args, ", "))
 }
