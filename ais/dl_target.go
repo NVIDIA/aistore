@@ -106,7 +106,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		cmn.AssertMsg(false, r.Method)
+		cmn.AssertMsg(false, fmt.Sprintf("Invalid http method %s; expected one of %s, %s, %s", r.Method, http.MethodGet, http.MethodPost, http.MethodDelete))
 		return
 	}
 

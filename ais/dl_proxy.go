@@ -225,7 +225,8 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpDownloadPost(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid method %s for /download path; expected one of %s, %s, %s", r.Method, http.MethodGet, http.MethodDelete, http.MethodPost))
+
 	}
 }
 
