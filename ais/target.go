@@ -1641,9 +1641,11 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 }
 
 func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+	query := make(url.Values)
+	query.Add(cmn.URLParamSilent, "true")
 	res := t.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
-		nil, // query
+		query,
 		http.MethodHead,
 		nil,
 		smap,
