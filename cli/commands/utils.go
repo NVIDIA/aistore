@@ -36,6 +36,9 @@ const (
 	defaultAISDockerHost = "http://172.50.0.2:8080"
 
 	Infinity = -1
+
+	envVarURL       = "AIS_URL"
+	envVarNamespace = "AIS_NAMESPACE"
 )
 
 var (
@@ -60,15 +63,20 @@ var (
 
 // cluster URL resolving order
 // 1. AIS_URL; if not present:
-// 2. Proxy docker containter IP address; if not successful:
-// 3. Docker default; if not present:
-// 4. Default = localhost:8080
+// 2. If kubernetes detected, tries to find a primary proxy in k8s cluster
+// 3. Proxy docker containter IP address; if not successful:
+// 4. Docker default; if not present:
+// 5. Default = localhost:8080
 func GetClusterURL() string {
-	if envURL := os.Getenv("AIS_URL"); envURL != "" {
+	if envURL := os.Getenv(envVarURL); envURL != "" {
 		return envURL
 	}
 
-	if containers.DockerRunning() {
+	namespace := os.Getenv(envVarNamespace)
+	k8sURL, err := containers.K8sPrimaryURL(namespace)
+	if err == nil && k8sURL != "" {
+		return k8sURL
+	} else if containers.DockerRunning() {
 		clustersIDs, err := containers.ClusterIDs()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Couldn't automatically discover docker proxy URL (%s), using the default: %q. To change: export AIS_URL=`url`\n", err.Error(), defaultAISDockerHost)

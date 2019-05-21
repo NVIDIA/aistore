@@ -4,19 +4,20 @@ AIS CLI is a tool used to interact with resources of AIStore. Users are able to 
 
 ## Getting Started
 
-Run the `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.  
+Run the `install.sh` script to install AIS CLI binary in your `$GOPATH/bin` directory.
 The script also allows you to install [shell autocompletions](#ais-cli-shell-auto-complete) for AIS CLI.
 > The rest of the README assumes that user's `PATH` environment variable contains `$GOPATH/bin` directory.
-> Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.  
+> Run `export PATH=$PATH:$GOPATH/bin` if this is not the case for you.
 > You can read more about GOPATH environment variable [here](https://golang.org/doc/code.html#GOPATH).
 
 ## Using AIS CLI
 
-AIS CLI makes requests to AIStore cluster. It will resolve cluster address in the following order:
+AIS CLI makes requests to AIStore cluster. It resolves cluster address in the following order:
 1. `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`); if not present:
-2. Discover IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
+2. Discover IP address of proxy kubernetes pod; if kubernetes runs multiple clusters, set an environment variable `AIS_NAMESPACE` to select a proxy from the given namespace
+3. Discover IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
 if not successful or local non-containerized deployment:
-3. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
+4. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
 
 This command returns the list of commands for the CLI.
  ```sh
@@ -26,14 +27,14 @@ This command returns status of the cluster; if successful, cluster address was r
  ```sh
  $ ais status
  ```
- 
+
 ## AIS CLI Shell Auto-Complete
 
 The CLI tool supports bash and zsh auto-complete functionality.
 
 ##### Installing
 
-When running `install.sh` you will be asked if you want to install autocompletions.  
+When running `install.sh` you will be asked if you want to install autocompletions.
 To install them manually, run `bash autocomplete/install.sh`.
 
 ##### Uninstalling
