@@ -765,31 +765,35 @@ func GetObjectAtime(t *testing.T, baseParams *api.BaseParams, object string, buc
 	return time.Time{}
 }
 
-func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
+// WaitForDSortToFinish waits until all dSorts jobs finishe without failure or
+// all jobs abort.
+func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
 	baseParams := BaseAPIParams(proxyURL)
-	for {
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
 		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil {
 			return false, err
 		}
 
+		allAborted := true
 		allFinished := true
 		for _, metrics := range allMetrics {
-			if metrics.Aborted {
-				return true, nil
-			}
+			allAborted = allAborted && metrics.Aborted
+			allFinished = allFinished && !metrics.Aborted && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
+		}
 
-			allFinished = allFinished && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
+		if allAborted {
+			return true, nil
 		}
 
 		if allFinished {
-			break
+			return false, nil
 		}
 
 		time.Sleep(500 * time.Millisecond)
 	}
-
-	return false, nil
+	return false, fmt.Errorf("deadline exceeded")
 }
 
 func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
