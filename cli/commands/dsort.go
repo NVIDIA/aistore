@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -43,9 +44,7 @@ const (
 var (
 	phasesOrdered = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
 
-	dsortIDFlag = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the dSort job, eg: '5JjIuGemR'"}
-	logFlag     = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-
+	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
 	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: "dsort-testing", Usage: "bucket where shards will be put"}
 	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
@@ -66,17 +65,12 @@ var (
 		},
 		dsortStart: {},
 		dsortStatus: {
-			dsortIDFlag,
 			progressBarFlag,
 			refreshFlag,
 			logFlag,
 		},
-		dsortAbort: {
-			dsortIDFlag,
-		},
-		dsortRemove: {
-			dsortIDFlag,
-		},
+		dsortAbort:  {},
+		dsortRemove: {},
 		dsortList: {
 			regexFlag,
 		},
@@ -84,9 +78,9 @@ var (
 
 	dsortGenUsage    = fmt.Sprintf("%s dsort %s [FLAGS...]", cliName, dsortGen)
 	dsortStartUsage  = fmt.Sprintf("%s dsort %s <json_specification>", cliName, dsortStart)
-	dsortStatusUsage = fmt.Sprintf("%s dsort %s --id <value> [STATUS FLAGS...]", cliName, dsortStatus)
-	dsortAbortUsage  = fmt.Sprintf("%s dsort %s --id <value>", cliName, dsortAbort)
-	dsortRemoveUsage = fmt.Sprintf("%s dsort %s --id <value>", cliName, dsortRemove)
+	dsortStatusUsage = fmt.Sprintf("%s dsort %s <id> [STATUS FLAGS...]", cliName, dsortStatus)
+	dsortAbortUsage  = fmt.Sprintf("%s dsort %s <id>", cliName, dsortAbort)
+	dsortRemoveUsage = fmt.Sprintf("%s dsort %s <id>", cliName, dsortRemove)
 	dsortListUsage   = fmt.Sprintf("%s dsort %s --regex <value>", cliName, dsortList)
 
 	dSortCmds = []cli.Command{
@@ -320,12 +314,21 @@ CreateShards:
 
 func dsortHandler(c *cli.Context) error {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		id         = parseStrFlag(c, idFlag)
-		regex      = parseStrFlag(c, regexFlag)
+		baseParams  = cliAPIParams(ClusterURL)
+		id          = c.Args().First()
+		regex       = parseStrFlag(c, regexFlag)
+		commandName = c.Command.Name
 	)
 
-	commandName := c.Command.Name
+	if commandName == dsortStatus || commandName == dsortAbort || commandName == dsortRemove {
+		if c.NArg() < 1 {
+			return missingArgsMessage("dSort job ID")
+		}
+		if id == "" {
+			return errors.New("dSort job ID can't be empty")
+		}
+	}
+
 	switch commandName {
 	case dsortGen:
 		return dsortGenHandler(c, baseParams)
@@ -346,14 +349,6 @@ func dsortHandler(c *cli.Context) error {
 		}
 		fmt.Println(id)
 	case dsortStatus:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
-		if id == "" {
-			return fmt.Errorf("required `id` flag is empty")
-		}
-
 		showProgressBar := flagIsSet(c, progressBarFlag)
 		if showProgressBar {
 			refreshRate, err := calcRefreshRate(c)
@@ -408,19 +403,11 @@ func dsortHandler(c *cli.Context) error {
 			}
 		}
 	case dsortAbort:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
 		if err := api.AbortDSort(baseParams, id); err != nil {
 			return err
 		}
 		fmt.Printf("DSort job aborted: %s\n", id)
 	case dsortRemove:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
 		if err := api.RemoveDSort(baseParams, id); err != nil {
 			return err
 		}

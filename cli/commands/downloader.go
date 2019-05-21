@@ -6,6 +6,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -33,7 +34,6 @@ const (
 var (
 	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
 	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
-	idFlag          = cli.StringFlag{Name: cmn.URLParamID, Usage: "id of the download job, eg: '5JjIuGemR'"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
 
 	downloadFlags = map[string][]cli.Flag{
@@ -43,26 +43,21 @@ var (
 			descriptionFlag,
 		},
 		downloadStatus: {
-			idFlag,
 			progressBarFlag,
 			refreshFlag,
 			verboseFlag,
 		},
-		downloadAbort: {
-			idFlag,
-		},
-		downloadRemove: {
-			idFlag,
-		},
+		downloadAbort:  {},
+		downloadRemove: {},
 		downloadList: {
 			regexFlag,
 		},
 	}
 
 	downloadStartUsage  = fmt.Sprintf("%s download %s <source> <dest>", cliName, downloadStart)
-	downloadStatusUsage = fmt.Sprintf("%s download %s --id <value> [STATUS FLAGS...]", cliName, downloadStatus)
-	downloadAbortUsage  = fmt.Sprintf("%s download %s --id <value>", cliName, downloadAbort)
-	downloadRemoveUsage = fmt.Sprintf("%s download %s --id <value>", cliName, downloadRemove)
+	downloadStatusUsage = fmt.Sprintf("%s download %s <id> [STATUS FLAGS...]", cliName, downloadStatus)
+	downloadAbortUsage  = fmt.Sprintf("%s download %s <id>", cliName, downloadAbort)
+	downloadRemoveUsage = fmt.Sprintf("%s download %s <id>", cliName, downloadRemove)
 	downloadListUsage   = fmt.Sprintf("%s download %s --regex <value>", cliName, downloadList)
 
 	downloaderCmds = []cli.Command{
@@ -180,18 +175,23 @@ func downloadStartHandler(c *cli.Context) error {
 
 func downloadAdminHandler(c *cli.Context) error {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		id         = parseStrFlag(c, idFlag)
-		regex      = parseStrFlag(c, regexFlag)
+		baseParams  = cliAPIParams(ClusterURL)
+		id          = c.Args().First()
+		regex       = parseStrFlag(c, regexFlag)
+		commandName = c.Command.Name
 	)
 
-	commandName := c.Command.Name
+	if commandName != downloadList {
+		if c.NArg() < 1 {
+			return missingArgsMessage("download job ID")
+		}
+		if id == "" {
+			return errors.New("download job ID can't be empty")
+		}
+	}
+
 	switch commandName {
 	case downloadStatus:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
 		showProgressBar := flagIsSet(c, progressBarFlag)
 		if showProgressBar {
 			refreshRate, err := calcRefreshRate(c)
@@ -215,19 +215,11 @@ func downloadAdminHandler(c *cli.Context) error {
 			fmt.Println(resp.Print(verbose))
 		}
 	case downloadAbort:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
 		if err := api.DownloadAbort(baseParams, id); err != nil {
 			return err
 		}
 		fmt.Printf("download aborted: %s\n", id)
 	case downloadRemove:
-		if err := checkFlags(c, idFlag); err != nil {
-			return err
-		}
-
 		if err := api.DownloadRemove(baseParams, id); err != nil {
 			return err
 		}

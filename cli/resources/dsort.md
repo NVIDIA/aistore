@@ -83,48 +83,39 @@ ais dsort start '{
 
 ### status
 
-`ais dsort status --id <value>`
+`ais dsort status <id>`
 
 Retrieves status of the dSort with provided `id` which is returned upon creation.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--id` | `string` | unique identifier of dSort job returned upon job creation | `""` |
 | `--progress` | `bool` | if set, displays a progress bar that illustrates the progress of the dSort | `false` |
 | `--refresh` | `int` | refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
 | `--log` | `string` | path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
 Examples:
-* `ais dsort status --id "5JjIuGemR"` returns the metrics of the dSort job
-* `ais dsort status --id "5JjIuGemR" --progress --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
-* `ais dsort status --id "5JjIuGemR" --refresh 500` every `500` milliseconds returns newly fetched metrics of the dSort job
-* `ais dsort status --id "5JjIuGemR" --refresh 500 --log "/tmp/dsort_run.txt"` every `500` milliseconds saves newly fetched metrics of the dSort job to `/tmp/dsort_run.txt` file
+* `ais dsort status 5JjIuGemR` returns the metrics of the dSort job
+* `ais dsort status 5JjIuGemR --progress --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
+* `ais dsort status 5JjIuGemR --refresh 500` every `500` milliseconds returns newly fetched metrics of the dSort job
+* `ais dsort status 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"` every `500` milliseconds saves newly fetched metrics of the dSort job to `/tmp/dsort_run.txt` file
 
 ### abort
 
-`ais dsort abort --id <value>`
+`ais dsort abort <id>`
 
 Aborts dSort job given its id.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--id` | `string` | unique identifier of dSort job returned upon job creation | `""` |
-
 Examples:
-* `ais dsort abort --id "5JjIuGemR"` aborts the dSort job
+* `ais dsort abort 5JjIuGemR` aborts the dSort job
 
 ### rm
 
-`ais dsort rm --id <value>`
+`ais dsort rm <id>`
 
 Removes finished dSort job from the list given its id.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--id` | `string` | unique identifier of dSort job returned upon job creation | `""` |
-
 Examples:
-* `ais dsort rm --id "5JjIuGemR"` removes the dSort job
+* `ais dsort rm 5JjIuGemR` removes the dSort job
 
 ### ls
 

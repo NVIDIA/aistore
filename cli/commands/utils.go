@@ -5,7 +5,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -121,7 +120,7 @@ func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
 	if bucket == "" {
 		var ok bool
 		if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
-			return "", errors.New("missing argument - bucket name")
+			return "", missingArgsMessage("bucket name")
 		}
 	}
 

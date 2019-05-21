@@ -46,45 +46,36 @@ The same result can be obtained with  `ais download start http://releases.ubuntu
 
 ### abort
 
-`ais download abort --id <value>`
+`ais download abort <id>`
 
 Aborts download job given its id.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--id` | string | unique identifier of download job returned upon job creation | `""` |
-
 Examples:
-* `ais download abort --id "5JjIuGemR"` aborts the download job
+* `ais download abort 5JjIuGemR` aborts the download job
 
 ### rm
 
-`ais download rm --id <value>`
+`ais download rm <id>`
 
 Removes finished download job from the list given its id.
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--id` | string | unique identifier of download job returned upon job creation | `""` |
-
 Examples:
-* `ais download rm --id "5JjIuGemR"` removes the download job
+* `ais download rm 5JjIuGemR` removes the download job
 
 ### status
 
-`ais download status --id <value>`
+`ais download status <id>`
 
 Retrieves status of the download with provided `id` which is returned upon creation of every download job.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--id` | string | unique identifier of download job returned upon job creation | `""` |
 | `--progress` | bool | if set, displays a progress bar that illustrates the progress of the download | `false` |
 | `--refresh` | int | refreshing rate of the progress bar (in milliseconds), works only if `--progress` flag is set | `1000` |
 
 Examples:
-* `ais download status --id "5JjIuGemR"` returns the condensed status of the download
-* `ais download status --id "5JjIuGemR" --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
+* `ais download status 5JjIuGemR` returns the condensed status of the download
+* `ais download status 5JjIuGemR --progress --refresh 500` creates progress bars for each currently downloading file and refreshes them every `500` milliseconds
 
 ### ls
 
