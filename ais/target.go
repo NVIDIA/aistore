@@ -1305,7 +1305,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Add(cmn.HeaderBucketChecksumType, cksumConf.Type)
 	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
 	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
-	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumConf.EnableReadRange))
+	hdr.Add(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
+	hdr.Add(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
 
 	hdr.Add(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
 	hdr.Add(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))

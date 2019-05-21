@@ -10,6 +10,7 @@
 - [List Bucket](#list-bucket)
     - [Properties and Options](#properties-and-options)
     - [Curl example: listing local and Cloud buckets](#curl-example-listing-local-and-cloud-buckets)
+    - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
     - [Go code example: listing all pages](#go-code-example-listing-all-pages)
 - [Recover Buckets](#recover-buckets)
     - [Curl example: recovering buckets](#curl-example-recovering-buckets)
@@ -98,7 +99,6 @@ For example, to evict the `abc` cloud bucket from the AIS cluster, run:
 curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "evictcb"}' http://localhost:8080/v1/buckets/myS3bucket
 ```
 
-
 ## Bucket Access Attributes
 
 Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Properties structure](../cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
@@ -183,6 +183,39 @@ This request will produce an output that (in part) may look as follows:
 <img src="images/ais-ls-subdir.png" alt="AIStore list directory" width="440">
 
 For many more examples, please refer to the [test sources](/ais/tests/) in the repository.
+
+### CLI examples: listing and setting bucket properties
+
+1. List bucket properties:
+
+```shell
+$ AIS_BUCKET=mybucket ais bucket props list
+```
+
+or, same via `--bucket` flag (and without the environment variable):
+
+```shell
+$ ais bucket props list --bucket=mybucket
+```
+
+or, the same to get output in a (raw) JSON form:
+
+```shell
+$ ais bucket props list --bucket=mybucket --json
+```
+
+2. Enable erasure coding on a bucket:
+
+```shell
+$ AIS_BUCKET=mybucket ais bucket props set ec.enabled=true
+```
+
+3. Enable object versioning and then list updated bucket properties:
+
+```shell
+$ AIS_BUCKET=mybucket ais bucket props set ver.enabled=true
+$ AIS_BUCKET=mybucket ais bucket props list
+```
 
 ### Go code example: listing all pages
 

@@ -1046,14 +1046,71 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
+		case cmn.HeaderBucketVerEnabled:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Versioning.Enabled = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketVerValidateWarm:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Versioning.ValidateWarmGet = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketLRUEnabled:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.LRU.Enabled = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketLRULowWM:
+			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
+				bprops.LRU.LowWM = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketLRUHighWM:
+			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
+				bprops.LRU.HighWM = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketValidateColdGet:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Cksum.ValidateColdGet = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketValidateWarmGet:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Cksum.ValidateWarmGet = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketValidateObjMove:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Cksum.ValidateObjMove = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
+		case cmn.HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Cksum.EnableReadRange = v
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
 		case cmn.HeaderBucketAccessAttrs:
 			if v, err := strconv.ParseUint(value, 10, 64); err == nil {
 				bprops.AccessAttrs = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
+		case cmn.HeaderBucketChecksumType, cmn.HeaderBucketDontEvictTime,
+			cmn.HeaderBucketCapUpdTime:
+			errRet = fmt.Errorf("property '%s' is read-only", name)
 		default:
-			errRet = fmt.Errorf("changing property %s is not supported", name)
+			errRet = fmt.Errorf("property '%s' is unknown or read-only", name)
 		}
 
 		if errRet != nil {

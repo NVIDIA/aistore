@@ -116,7 +116,12 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateRange)); err == nil {
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateObjMove)); err == nil {
+		cksumProps.ValidateObjMove = b
+	} else {
+		return
+	}
+	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketEnableReadRange)); err == nil {
 		cksumProps.EnableReadRange = b
 	} else {
 		return

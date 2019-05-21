@@ -148,7 +148,8 @@ const (
 	HeaderBucketChecksumType    = "cksum.type"              // Checksum type used for objects in the bucket
 	HeaderBucketValidateColdGet = "cksum.validate_cold_get" // Validate checksum on cold GET
 	HeaderBucketValidateWarmGet = "cksum.validate_warm_get" // Validate checksum on warm GET
-	HeaderBucketValidateRange   = "cksum.enable_read_range" // Byte range validation policy used for objects in the bucket
+	HeaderBucketValidateObjMove = "cksum.validate_obj_move" // Validate checksum upon intra-cluster migration
+	HeaderBucketEnableReadRange = "cksum.enable_read_range" // Return range checksum (otherwise, return the obj's)
 	HeaderBucketVerEnabled      = "ver.enabled"             // Enable/disable object versioning in a bucket
 	HeaderBucketVerValidateWarm = "ver.validate_warm_get"   // Validate version on warm GET
 	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true

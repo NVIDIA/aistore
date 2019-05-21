@@ -1075,7 +1075,9 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	}
 
 	switch key {
-	// TOP LEVEL CONFIG
+	//
+	// 1. TOP LEVEL CONFIG
+	//
 	case "vmodule":
 		if err := SetGLogVModule(value); err != nil {
 			return nil, fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
@@ -1085,23 +1087,60 @@ func (conf *Config) update(key, value string) (Validator, error) {
 			return nil, fmt.Errorf("failed to set log level = %s, err: %v", value, err)
 		}
 
-	// PERIODIC
-	case "stats_time", "periodic.stats_time":
-		return &conf.Periodic, updateValue(&conf.Periodic.StatsTimeStr)
+	//
+	// 2. CONFIG SECTIONS THAT CAN BE OVERRIDDEN via cmn.BucketProps
+	//    (that in turn include VersionConf, TierConf, CksumConf, LRUConf, MirrorConf, ECConf)
+	//
 
 	// LRU
-	case "lru_enabled", "lru.enabled":
+	case "lru_enabled", HeaderBucketLRUEnabled:
 		return &conf.LRU, updateValue(&conf.LRU.Enabled)
-	case "lowwm", "lru.lowwm":
+	case "lowwm", HeaderBucketLRULowWM:
 		return &conf.LRU, updateValue(&conf.LRU.LowWM)
-	case "highwm", "lru.highwm":
+	case "highwm", HeaderBucketLRUHighWM:
 		return &conf.LRU, updateValue(&conf.LRU.HighWM)
-	case "dont_evict_time", "lru.dont_evict_time":
+	case "dont_evict_time", HeaderBucketDontEvictTime:
 		return &conf.LRU, updateValue(&conf.LRU.DontEvictTimeStr)
-	case "capacity_upd_time", "lru.capacity_upd_time":
+	case "capacity_upd_time", HeaderBucketCapUpdTime:
 		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
 	case "lru_local_buckets", "lru.local_buckets":
 		return &conf.LRU, updateValue(&conf.LRU.LocalBuckets)
+
+	// CHECKSUM
+	case "checksum", HeaderBucketChecksumType:
+		return &conf.Cksum, updateValue(&conf.Cksum.Type)
+	case "validate_checksum_cold_get", HeaderBucketValidateColdGet:
+		return &conf.Cksum, updateValue(&conf.Cksum.ValidateColdGet)
+	case "validate_checksum_warm_get", HeaderBucketValidateWarmGet:
+		return &conf.Cksum, updateValue(&conf.Cksum.ValidateWarmGet)
+	case "validate_obj_move", HeaderBucketValidateObjMove:
+		return &conf.Cksum, updateValue(&conf.Cksum.ValidateObjMove)
+	case "enable_read_range_checksum", HeaderBucketEnableReadRange:
+		return &conf.Cksum, updateValue(&conf.Cksum.EnableReadRange)
+
+	// VERSION
+	case "versioning_enabled", "ver_enabled", HeaderBucketVerEnabled:
+		return nil, updateValue(&conf.Ver.Enabled)
+	case "versioning_validate_warm_get", "ver_validate_warm_get", HeaderBucketVerValidateWarm:
+		return nil, updateValue(&conf.Ver.ValidateWarmGet)
+
+	// MIRROR
+	case "mirror_enabled", HeaderBucketMirrorEnabled:
+		return &conf.Mirror, updateValue(&conf.Mirror.Enabled)
+	case "mirror_burst_buffer", "mirror.burst_buffer":
+		return &conf.Mirror, updateValue(&conf.Mirror.Burst)
+	case "mirror_util_thresh", HeaderBucketMirrorThresh:
+		return &conf.Mirror, updateValue(&conf.Mirror.UtilThresh)
+	case "mirror_copies", HeaderBucketCopies:
+		return &conf.Mirror, updateValue(&conf.Mirror.Copies)
+
+	//
+	// 3. CONFIG SECTIONS
+	//
+
+	// PERIODIC
+	case "stats_time", "periodic.stats_time":
+		return &conf.Periodic, updateValue(&conf.Periodic.StatsTimeStr)
 
 	// DISK
 	case "disk_util_low_wm", "disk.disk_util_low_wm":
@@ -1133,33 +1172,9 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	case "max_keepalive", "timeout.max_keepalive":
 		return &conf.Timeout, updateValue(&conf.Timeout.MaxKeepaliveStr)
 
-	// CHECKSUM
-	case "checksum", "cksum.type":
-		return &conf.Cksum, updateValue(&conf.Cksum.Type)
-	case "validate_checksum_cold_get", "cksum.validate_cold_get":
-		return &conf.Cksum, updateValue(&conf.Cksum.ValidateColdGet)
-	case "validate_checksum_warm_get", "cksum.validate_warm_get":
-		return &conf.Cksum, updateValue(&conf.Cksum.ValidateWarmGet)
-	case "enable_read_range_checksum", "cksum.enable_read_range":
-		return &conf.Cksum, updateValue(&conf.Cksum.EnableReadRange)
-
-	// VERSION
-	case "versioning_enabled", "versioning.enabled":
-		return nil, updateValue(&conf.Ver.Enabled)
-	case "validate_version_warm_get", "version.validate_warm_get":
-		return nil, updateValue(&conf.Ver.ValidateWarmGet)
-
 	// FSHC
 	case "fshc_enabled", "fshc.enabled":
 		return nil, updateValue(&conf.FSHC.Enabled)
-
-	// MIRROR
-	case "mirror_enabled", "mirror.enabled":
-		return &conf.Mirror, updateValue(&conf.Mirror.Enabled)
-	case "mirror_burst_buffer", "mirror.burst_buffer":
-		return &conf.Mirror, updateValue(&conf.Mirror.Burst)
-	case "mirror_util_thresh", "mirror.util_thresh":
-		return &conf.Mirror, updateValue(&conf.Mirror.UtilThresh)
 
 	// KEEPALIVE
 	case "keepalivetracker.proxy.interval":
