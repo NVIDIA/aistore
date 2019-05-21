@@ -12,7 +12,7 @@ Creates a local bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket to be created | `""` |
+| `--bucket` | string | name of the bucket to be created | `""` or [default](../README.md#bucket) |
 
 
 ### destroy
@@ -23,7 +23,7 @@ Destroys a local bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket to be deleted | `""` |
+| `--bucket` | string | name of the bucket to be deleted | `""` or [default](../README.md#bucket) |
 
 
 ### evict
@@ -34,7 +34,7 @@ Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the cloud bucket to be evicted | `""` |
+| `--bucket` | string | name of the cloud bucket to be evicted | `""` or [default](../README.md#bucket) |
 
 ### rename
 
@@ -44,7 +44,7 @@ Renames a local bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | old name of the bucket | `""` |
+| `--bucket` | string | old name of the bucket | `""` or [default](../README.md#bucket) |
 | `--new-bucket` | string | new name of the bucket | `""` |
 
 ### list
@@ -55,21 +55,21 @@ Lists all the objects along with some of the objects' properties. For the full l
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket | `""` |
+| `--bucket` | string | name of the bucket | `""` or [default](../README.md#bucket) |
 | `--props` | string | comma separated list of properties to return with object names | `size,version` |
 | `--regex` | string | pattern for object matching | `""` |
 | `--prefix` | string | prefix for object matching | `""` |
 | `--template` | string | bash-style template for object matching | `""` |
 | `--page-size` | string | maximum number of object names returned in response | `1000` (cloud), `65536` (local) |
 | `--limit` | string | limit of object count | `0` (unlimited) |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--show-unmatched` | bool | also return objects that did not match the filters (`regex`, `template`) | false |
 
 **Example:**
 
 * `ais bucket list --bucket mylocalbucket --prefix "mytestfolder/" --regex ".txt`
 Returns all objects matching `.txt` under the `mytestfolder` directory from `mylocalbucket` bucket
-* `ais bucket list --bucket mylocalbucket --template="shard-{0..99}.tgz" --show-unmatched`
+* `AIS_BUCKET=mylocalbucket ais bucket list --template="shard-{0..99}.tgz" --show-unmatched`
 Returns all objects with names from `shard-0.tgz` to `shard-99.tgz` from `mylocalbucket`.
 Also returns a separate list of objects that do not match the template.
 
@@ -81,9 +81,9 @@ Starts an extended action (xaction) to bring a given bucket to a certain redunda
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket | `""` |
+| `--bucket` | string | name of the bucket | `""` or [default](../README.md#bucket) |
 | `--copies` | int | number of copies | `1` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### names
 
@@ -94,7 +94,7 @@ Returns the names of the buckets.
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | string | pattern for bucket matching | `""` |
-| `--provider` | [Provider](../README.md#enums) | returns `local` or `cloud` buckets. If empty, returns all bucket names. | `""` |
+| `--provider` | [Provider](../README.md#enums) | returns `local` or `cloud` buckets. If empty, returns all bucket names. | `""` or [default](../README.md#bucket-provider) |
 
 ### props list
 
@@ -104,8 +104,8 @@ Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--bucket` | string | name of the bucket | `""` or [default](../README.md#bucket) |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### props set
 
@@ -115,8 +115,8 @@ Sets bucket properties. For the available options, see [bucket-properties](../..
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--bucket` | string | name of the bucket | `""` or [default](../README.md#bucket) |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider)|
 | `--json` | bool | use json as input (need set all bucket props) | `false` |
 
 When JSON is not used, some properties support user-friendly aliases
@@ -144,5 +144,5 @@ Reset bucket properties to cluster default.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--bucket` | string | name of the bucket | `""` or [default](../README.md#bucket) |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |

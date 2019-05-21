@@ -6,31 +6,30 @@ The CLI allows users to interact with objects in the AIS cluster.
 
 ### get
 
-`ais object get --bucket <value> --name <value>`
+`ais object get --bucket <value> --name <value> --out-file <value>`
 
-Gets the object from the bucket. If `--out-file` is empty, it stores the file in a locally cached version in the bucket.
+Gets the object from the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket to retrieve the object | `""` |
+| `--bucket` | string | name of the bucket to retrieve the object | `""` or [default](../README.md#bucket) |
 | `--name` | string | name of the object | `""` |
-| `--out-file` | string | name of the file to store the contents of the object | `""` |
+| `--out-file` | string | name of the file to store the contents of the object, can be set to `-` to print to STDOUT | `""` |
 | `--offset` | string | read offset, can end with size suffix (k, MB, GiB, ...) | `""` |
 | `--length` | string | read length, can end with size suffix (k, MB, GiB, ...) |  `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--checksum` | bool | validate the checksum of the object | `false` |
-| `--props` | bool | returns the properties of object (size and version). It does not download the object. | `false` |
 | `--cached` | bool | checks if the object is cached locally. It does not download the object. | `false` |
 
 **Examples:**
 
 `ais object get --bucket mycloudbucket --name mycloudobj.txt --out-file "~/obj.txt"`
 
-Gets `mycloudobj.txt` from `mycloudbucket` and stores it in `obj.txt` in the `HOME` directory.
+Gets `mycloudobj.txt` from `mycloudbucket` and saves it in `obj.txt` in the `HOME` directory.
 
-`ais object get --bucket mylocalbucket --name obj.txt --props`
+`AIS_BUCKET=mylocalbucket ais object get --name obj.txt --out-file -`
 
-Returns the properties of `obj.txt` without downloading the object.
+Gets `obj.txt` from `mycloudbucket` and prints its content to STDOUT.
 
 ### put
 
@@ -40,10 +39,10 @@ Put an object into the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket to put the object | `""` |
+| `--bucket` | string | name of the bucket to put the object | `""` or [default](../README.md#bucket) |
 | `--name` | string | name of the object | `last element on the path of --file argument` |
 | `--file` | string | file that contains the contents of the object | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 **Example:**
 
@@ -59,14 +58,14 @@ Deletes an object from the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket that contains the object | `""` |
+| `--bucket` | string | name of the bucket that contains the object | `""` or [default](../README.md#bucket) |
 | `--name` | string | name of the object | `""` |
 | `--list` | string | comma separated list of objects for list delete| `""` |
 | `--range` | string | start and end interval (eg. 1:100) for range delete | `""` |
 | `--prefix` | string | prefix for range delete | `""` |
 | `--regex` | string | regex for range delete | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**
@@ -87,14 +86,14 @@ Deletes the objects in the range `001` to `003` with prefix `test-` matching the
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket that contains the object | `""` |
+| `--bucket` | string | name of the bucket that contains the object | `""` or [default](../README.md#bucket) |
 | `--name` | string | name of the object | `""` |
 | `--list` | string | comma separated list of objects for list eviction| `""` |
 | `--range` | string | start and end interval (eg. `1:100`) for range eviction | `""` |
 | `--prefix` | string | prefix for range eviction | `""` |
 | `--regex` | string | regex for range eviction | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**
@@ -112,13 +111,13 @@ Evicts the range of objects from `001` to `010` with the matching prefix `testfl
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket that contains the object | `""` |
+| `--bucket` | string | name of the bucket that contains the object | `""` or [default](../README.md#bucket) |
 | `--list` | string | comma separated list of objects for list prefetch| `""` |
 | `--range` | string | start and end interval (eg. `1:100`) for range prefetch | `""` |
 | `--prefix` | string | prefix for range prefetch | `""` |
 | `--regex` | string | regex for range prefetch | `""` |
 | `--deadline` | string | amount of time [(Go Duration string)](https://golang.org/pkg/time/#Duration.String) before the request expires | `0s` (no deadline) |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--wait` | bool | wait for operation to finish before returning response | `true` |
 
 **Examples:**
@@ -135,7 +134,7 @@ Rename object from a local bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--bucket` | string | name of the bucket that holds the object | `""` |
+| `--bucket` | string | name of the bucket that holds the object | `""` or [default](../README.md#bucket) |
 | `--name` | string | old name of object | `""` |
 | `--new-name` | string | new name of object | `""` |
 

@@ -41,7 +41,6 @@ var (
 		{
 			Name:  cmn.GetWhatXaction,
 			Usage: "interacts with extended actions (xactions)",
-			Flags: baseXactFlag,
 			Subcommands: []cli.Command{
 				{
 					Name:         xactStart,

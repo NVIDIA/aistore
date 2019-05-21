@@ -29,6 +29,8 @@ const (
 	objStat     = "stat"
 	objPrefetch = cmn.ActPrefetch
 	objEvict    = commandEvict
+
+	outFileStdout = "-"
 )
 
 var (
@@ -61,33 +63,40 @@ var (
 
 	objectFlags = map[string][]cli.Flag{
 		objPut: append(
-			[]cli.Flag{fileFlag},
-			baseObjectFlags...),
+			baseObjectFlags,
+			fileFlag,
+		),
 		objGet: append(
-			[]cli.Flag{
-				outFileFlag,
-				offsetFlag,
-				lengthFlag,
-				checksumFlag,
-				propsFlag,
-				cachedFlag,
-			},
-			baseObjectFlags...),
-		commandRename: []cli.Flag{
-			bucketFlag,
-			newNameFlag,
+			baseObjectFlags,
+			outFileFlag,
+			offsetFlag,
+			lengthFlag,
+			checksumFlag,
+			propsFlag,
+			cachedFlag,
+		),
+		commandRename: {
 			nameFlag,
+			newNameFlag,
+			bucketFlag,
 		},
 		objDel: append(
-			baseLstRngFlags,
-			baseObjectFlags...),
-		objStat: append(baseObjectFlags, jsonFlag),
+			baseObjectFlags,
+			baseLstRngFlags...,
+		),
+		objStat: append(
+			baseObjectFlags,
+			jsonFlag,
+		),
 		objPrefetch: append(
-			[]cli.Flag{bucketFlag},
-			baseLstRngFlags...),
+			baseLstRngFlags,
+			bucketFlag,
+		),
 		objEvict: append(
-			[]cli.Flag{bucketFlag, nameFlag},
-			baseLstRngFlags...),
+			baseLstRngFlags,
+			bucketFlag,
+			nameFlag,
+		),
 	}
 
 	objectBasicUsageText = "%s object %s --bucket <value> --name <value>"
@@ -103,7 +112,6 @@ var (
 		{
 			Name:  "object",
 			Usage: "interact with objects",
-			Flags: baseObjectFlags,
 			Subcommands: []cli.Command{
 				{
 					Name:         objGet,
@@ -205,7 +213,7 @@ func objectHandler(c *cli.Context) (err error) {
 
 // Get object from bucket
 func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
-	if err = checkFlags(c, nameFlag); err != nil {
+	if err = checkFlags(c, nameFlag, outFileFlag); err != nil {
 		return
 	}
 
@@ -223,11 +231,14 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	query.Add(cmn.URLParamBckProvider, bckProvider)
 	query.Add(cmn.URLParamOffset, offset)
 	query.Add(cmn.URLParamLength, length)
-	objArgs := api.GetObjectInput{Writer: os.Stdout, Query: query}
 
-	// Output to user location
-	if flagIsSet(c, outFileFlag) {
-		outFile := parseStrFlag(c, outFileFlag)
+	var objArgs api.GetObjectInput
+	outFile := parseStrFlag(c, outFileFlag)
+
+	if outFile == outFileStdout {
+		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
+	} else {
+		// Output to user location
 		f, err := os.Create(outFile)
 		if err != nil {
 			return err

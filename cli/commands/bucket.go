@@ -59,52 +59,58 @@ var (
 	}
 
 	bucketFlags = map[string][]cli.Flag{
-		bucketCreate: []cli.Flag{bucketFlag},
-		bucketNames: []cli.Flag{
+		bucketCreate: {
+			bucketFlag,
+		},
+		bucketNames: {
 			regexFlag,
 			bckProviderFlag,
 			noHeaderFlag,
 		},
-		bucketDestroy: []cli.Flag{bucketFlag},
+		bucketDestroy: {
+			bucketFlag,
+		},
 		commandRename: append(
-			[]cli.Flag{
-				newBucketFlag,
-			},
-			baseBucketFlags...),
+			baseBucketFlags,
+			newBucketFlag,
+		),
 		commandList: append(
-			[]cli.Flag{
-				regexFlag,
-				templateFlag,
-				prefixFlag,
-				pageSizeFlag,
-				objPropsFlag,
-				objLimitFlag,
-				showUnmatchedFlag,
-				allFlag,
-				fastFlag,
-				noHeaderFlag,
-			},
-			baseBucketFlags...),
+			baseBucketFlags,
+			regexFlag,
+			templateFlag,
+			prefixFlag,
+			pageSizeFlag,
+			objPropsFlag,
+			objLimitFlag,
+			showUnmatchedFlag,
+			allFlag,
+			fastFlag,
+			noHeaderFlag,
+		),
 		bucketNWayMirror: append(
-			[]cli.Flag{copiesFlag},
-			baseBucketFlags...),
-		bucketEvict: []cli.Flag{bucketFlag},
+			baseBucketFlags,
+			copiesFlag,
+		),
+		bucketEvict: {
+			bucketFlag,
+		},
 		bucketSummary: append(
-			[]cli.Flag{
-				regexFlag,
-				prefixFlag,
-				pageSizeFlag,
-			},
-			baseBucketFlags...),
+			baseBucketFlags,
+			regexFlag,
+			prefixFlag,
+			pageSizeFlag,
+		),
 	}
 
 	bucketPropsFlags = map[string][]cli.Flag{
 		propsList: append(
-			[]cli.Flag{jsonFlag},
-			baseBucketFlags...),
+			baseBucketFlags,
+			jsonFlag,
+		),
 		propsSet: append(
-			[]cli.Flag{jsonFlag},
-			baseBucketFlags...),
+			baseBucketFlags,
+			jsonFlag,
+		),
 		propsReset: baseBucketFlags,
 	}
 
@@ -125,13 +131,11 @@ var (
 	bucketCmds = []cli.Command{
 		{
 			Name:  cmn.URLParamBucket,
-			Usage: "interact with buckets",
-			Flags: baseBucketFlags,
+			Usage: "operate on buckets",
 			Subcommands: []cli.Command{
 				{
 					Name:  commandBucketProps,
-					Usage: "interact with bucket properties",
-					Flags: baseBucketFlags,
+					Usage: "operate on bucket properties",
 					Subcommands: []cli.Command{
 						{
 							Name:         propsList,

@@ -33,6 +33,9 @@ const (
 	refreshRateMin     = 500 * time.Millisecond
 
 	durationParseErrorFmt = "could not convert %q to time duration: %v"
+
+	aisBucketEnvVar         = "AIS_BUCKET"
+	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
 )
 
 var (
@@ -45,9 +48,11 @@ var (
 	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
 	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 
-	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'"}
+	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
 	bckProviderFlag = cli.StringFlag{Name: "provider",
-		Usage: "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically"}
+		Usage:  "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically",
+		EnvVar: aisBucketProviderEnvVar,
+	}
 	regexFlag    = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 )
@@ -112,10 +117,6 @@ func (aisCLI AISCLI) Init(build, version string) {
 		Usage: "print only the version",
 	}
 	cli.AppHelpTemplate = AISHelpTemplate
-	app.Description = `
-	The CLI has shell autocomplete functionality. To enable this feature, either source
-	the 'ais_autocomplete' file in the project's 'cli/' directory or, for a permanent option, copy 
-	the 'ais_autocomplete' file to the '/etc/bash_completion.d/ais' directory.`
 
 	aisCLI.setupCommands()
 }

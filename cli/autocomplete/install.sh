@@ -38,7 +38,7 @@ case "$response" in
         [[ -d ${AUTOCOMPLETE_DIR_ZSH} ]] && sudo cp ${ZSH_AUTOCOMPLETE_SOURCE_FILE} ${AUTOCOMPLETE_FILE_ZSH}
         if [[ $? -eq 0 ]]; then
             rm ~/.zcompdump* &> /dev/null # Sometimes needed for zsh users (see: https://github.com/robbyrussell/oh-my-zsh/issues/3356)
-            echo "Zsh completions installed. (You man need to restart your shell or run \`source ${AUTOCOMPLETE_FILE_ZSH}\` to use them)"
+            echo "Zsh completions installed. (You may need to restart your shell or run \`source ${AUTOCOMPLETE_FILE_ZSH}\` to use them)"
         else
             echo "Zsh completions not installed (some error occurred)."
         fi

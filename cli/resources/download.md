@@ -33,7 +33,7 @@ As for `dest` location, the only supported schema is `ais://` and the link shoul
 | --- | --- | --- | --- |
 | `--description, -desc` | string | description for the download request | `""` |
 | `--timeout` | string | timeout for request to external resource | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the destination bucket | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the destination bucket | `""` or [default](../README.md#bucket-provider) |
 
 Examples:
 * `ais download start http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso` downloads object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP location and saves it in `ubuntu` bucket, named as `ubuntu-18.04.1.iso`.  
