@@ -125,10 +125,9 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		}
 
 		lom, errMsg := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket, BucketProvider: m.rs.BckProvider}.Init()
-		if errMsg != "" {
-			return errors.New(errMsg)
+		if errMsg == "" {
+			_, errMsg = lom.Load(true)
 		}
-		_, errMsg = lom.Load(true)
 		if errMsg != "" {
 			return errors.New(errMsg)
 		} else if !lom.Exists() {

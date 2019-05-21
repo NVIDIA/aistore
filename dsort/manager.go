@@ -27,6 +27,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	pkgName = "dsort"
+)
+
 var (
 	ctx dsortContext
 
@@ -834,6 +838,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				cmn.Assert(false)
 			}
 
+			cmn.Dassert(n > 0, pkgName)
 			written += n
 			return
 		}

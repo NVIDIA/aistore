@@ -61,11 +61,14 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 	// Read header and initialize file writer
 	remainingMetadataSize := rd.metadataSize - rd.written
 	if remainingMetadataSize > 0 {
-		if int64(len(p)) < remainingMetadataSize {
+		writeN := int64(len(p))
+		if writeN < remainingMetadataSize {
+			cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= writeN, pkgName)
 			copy(rd.metadataBuf[rd.written:], p)
-			rd.written += int64(len(p))
+			rd.written += writeN
 			return len(p), nil
 		}
+		cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize, pkgName)
 
 		copy(rd.metadataBuf[rd.written:], p[:remainingMetadataSize])
 		rd.written += remainingMetadataSize

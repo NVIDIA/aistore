@@ -22,6 +22,10 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+const (
+	pkgName = "dsort"
+)
+
 var (
 	_ RecordExtractor = &RecordManager{}
 

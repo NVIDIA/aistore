@@ -106,12 +106,15 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 	// Write header
 	remainingMetadataSize := rd.metadataSize - rd.written
 	if remainingMetadataSize > 0 {
-		if int64(len(p)) < remainingMetadataSize {
+		writeN := int64(len(p))
+		if writeN < remainingMetadataSize {
+			cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= writeN, pkgName)
 			copy(rd.metadataBuf[rd.written:], p)
-			rd.written += int64(len(p))
+			rd.written += writeN
 			return len(p), nil
 		}
 
+		cmn.Dassert(int64(len(rd.metadataBuf))-rd.written >= remainingMetadataSize, pkgName)
 		copy(rd.metadataBuf[rd.written:], p[:remainingMetadataSize])
 		rd.written += remainingMetadataSize
 		p = p[remainingMetadataSize:]
@@ -226,6 +229,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 					}
 					n += diff
 				}
+				cmn.Dassert(diff >= 0 && diff < 512, pkgName)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 				if n, err = loadContent(rdReader, rec, obj); err != nil {

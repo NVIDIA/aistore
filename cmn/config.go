@@ -1271,7 +1271,7 @@ func CheckDebug(pkgName string) (logLvl glog.Level, ok bool) {
 // used for testing/initial development and to set the verbosity of glog
 func loadDebugMap() {
 	var opts []string
-	// Input will be in the format of AISDEBUG=transport=4,memsys=3 (same as GODEBUG)
+	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG)
 	if val := os.Getenv("AIS_DEBUG"); val != "" {
 		opts = strings.Split(val, ",")
 	}

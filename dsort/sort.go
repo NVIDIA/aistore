@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
@@ -58,15 +59,16 @@ func (s *alphaByKey) Less(i, j int) bool {
 }
 
 // sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
-func sortRecords(r *extract.Records, algo *SortAlgorithm) error {
+func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
 	if algo.Kind == SortKindNone {
 		return nil
 	} else if algo.Kind == SortKindShuffle {
 		seed := time.Now().Unix()
 		if algo.Seed != "" {
-			// We can safely ignore error since we know that the seed was validated
+			seed, err = strconv.ParseInt(algo.Seed, 10, 64)
+			// We assert error since we know that the seed should be validated
 			// during request spec validation.
-			seed, _ = strconv.ParseInt(algo.Seed, 10, 64)
+			cmn.AssertNoErr(err)
 		}
 
 		rand.Seed(seed)
