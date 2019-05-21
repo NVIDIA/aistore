@@ -1201,8 +1201,6 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	err := cmn.CreateDir(newMountpath)
-	tassert.CheckFatal(t, err)
 
 	if containers.DockerRunning() {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
@@ -1224,7 +1222,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Add new mountpath to target
 	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-	err = api.AddMountpath(baseParams, newMountpath)
+	err := api.AddMountpath(baseParams, newMountpath)
 	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)

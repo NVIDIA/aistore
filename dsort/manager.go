@@ -391,11 +391,19 @@ func (m *Manager) finalCleanup() {
 }
 
 // abort stops currently running sort job and frees associated resources.
-func (m *Manager) abort() {
+func (m *Manager) abort(errs ...error) {
 	m.lock()
 	if m.aborted() { // do not abort if already aborted
 		m.unlock()
 		return
+	}
+
+	if len(errs) > 0 {
+		m.Metrics.lock()
+		for _, err := range errs {
+			m.Metrics.Errors = append(m.Metrics.Errors, err.Error())
+		}
+		m.Metrics.unlock()
 	}
 
 	glog.Infof("manager %s has been aborted", m.ManagerUUID)
@@ -1031,7 +1039,7 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 		// check if some target has been removed - abort in case it does
 		for sid := range m.smap.Tmap {
 			if newSmap.GetTarget(sid) == nil {
-				m.abort()
+				m.abort(fmt.Errorf("target %q was disconnected from the cluster", sid))
 				// return from the listener as the whole manager is aborted
 				return
 			}

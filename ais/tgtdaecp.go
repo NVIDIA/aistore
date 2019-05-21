@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -565,6 +566,12 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	}
 
 	t.xactions.stopMountpathXactions()
+
+	// TODO: Currently we must abort on enabling mountpath. In some places we open
+	// files directly and put them directly on mountpaths. This can lead to
+	// problems where we get from new mountpath without asking other (old)
+	// mountpaths if they have it (local rebalance has not yet finished).
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during dSort job - aborting due to possible errors", mountpath))
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -585,6 +592,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 	}
 
 	t.xactions.stopMountpathXactions()
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been disabled and is unusable", mountpath))
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -595,7 +603,14 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		t.gfn.local.deactivate()
 		return
 	}
+
 	t.xactions.stopMountpathXactions()
+
+	// TODO: Currently we must abort on adding mountpath. In some places we open
+	// files directly and put them directly on mountpaths. This can lead to
+	// problems where we get from new mountpath without asking other (old)
+	// mountpaths if they have it (local rebalance has not yet finished).
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during dSort job - aborting due to possible errors", mountpath))
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -603,7 +618,9 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %s", err.Error()))
 		return
 	}
+
 	t.xactions.stopMountpathXactions()
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
 }
 
 // FIXME: use the message

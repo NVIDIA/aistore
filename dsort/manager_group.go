@@ -176,3 +176,12 @@ func (mg *ManagerGroup) persist(managerUUID string) {
 	}
 	delete(mg.managers, managerUUID)
 }
+
+func (mg *ManagerGroup) AbortAll(err error) {
+	mg.mtx.Lock()
+	defer mg.mtx.Unlock()
+
+	for _, manager := range mg.managers {
+		manager.abort(err)
+	}
+}

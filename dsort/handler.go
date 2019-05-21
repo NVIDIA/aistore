@@ -8,6 +8,7 @@ package dsort
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -579,7 +580,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsortManager.abort()
+	dsortManager.abort(errors.New("dSort has been aborted via API (remotely)"))
 }
 
 func removeSortHandler(w http.ResponseWriter, r *http.Request) {
