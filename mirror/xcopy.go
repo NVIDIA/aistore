@@ -65,11 +65,8 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 
 func ValidateNCopies(copies int) error {
 	const s = "number of local copies"
-	if copies <= 0 {
-		return fmt.Errorf("%s cannot be negative (%d)", s, copies)
-	}
-	if copies > MaxNCopies {
-		return fmt.Errorf("%s (%d) exceeds %d and is likely invalid", s, copies, MaxNCopies)
+	if _, err := cmn.CheckI64Range(int64(copies), 1, MaxNCopies); err != nil {
+		return fmt.Errorf("%s (%d) %s", s, copies, err.Error())
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	nmp := len(availablePaths)

@@ -1011,13 +1011,13 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketECData:
-			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 32, 1, 32); err == nil {
 				bprops.EC.DataSlices = int(v)
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketECParity:
-			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, 32); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 32, 1, 32); err == nil {
 				bprops.EC.ParitySlices = int(v)
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
@@ -1028,21 +1028,27 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
+		case cmn.HeaderBucketMirrorEnabled:
+			if v, err := strconv.ParseBool(value); err == nil {
+				bprops.Mirror.Enabled = v
+				if v && bprops.Mirror.Copies == 1 {
+					bprops.Mirror.Copies = 2
+				}
+			} else {
+				errRet = fmt.Errorf(errFmt, name, value, err)
+			}
 		case cmn.HeaderBucketCopies:
-			if v, err := cmn.ParseIntRanged(value, 10, 32, 1, mirror.MaxNCopies); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 32, 1, mirror.MaxNCopies); err == nil {
 				bprops.Mirror.Copies = v
+				if v == 1 {
+					bprops.Mirror.Enabled = false
+				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketMirrorThresh:
-			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 64, 0, 100); err == nil {
 				bprops.Mirror.UtilThresh = v
-			} else {
-				errRet = fmt.Errorf(errFmt, name, value, err)
-			}
-		case cmn.HeaderBucketMirrorEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
-				bprops.Mirror.Enabled = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
@@ -1065,13 +1071,13 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketLRULowWM:
-			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 64, 0, 100); err == nil {
 				bprops.LRU.LowWM = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketLRUHighWM:
-			if v, err := cmn.ParseIntRanged(value, 10, 64, 0, 100); err == nil {
+			if v, err := cmn.ParseI64Range(value, 10, 64, 0, 100); err == nil {
 				bprops.LRU.HighWM = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)

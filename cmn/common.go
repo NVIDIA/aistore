@@ -701,20 +701,21 @@ func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	return HashToStr(xx), ""
 }
 
-func ParseIntRanged(str string, base, bits int, low, high int64) (int64, error) {
+func ParseI64Range(str string, base, bits int, low, high int64) (int64, error) {
 	Assert(low <= high)
 	v, err := strconv.ParseInt(str, base, bits)
 	if err != nil {
 		return low, err
 	}
-
+	return CheckI64Range(v, low, high)
+}
+func CheckI64Range(v, low, high int64) (int64, error) {
 	if v < low || v > high {
 		if low == high {
-			return low, fmt.Errorf("only %d is supported", low)
+			return low, fmt.Errorf("must be equal %d", low)
 		}
-		return low, fmt.Errorf("it must be between %d and %d", low, high)
+		return low, fmt.Errorf("must be in [%d, %d] range", low, high)
 	}
-
 	return v, nil
 }
 
