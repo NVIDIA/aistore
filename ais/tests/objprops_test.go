@@ -11,22 +11,21 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {
-	stats := getClusterStats(t, proxyURL)
+	cstats := getClusterStats(t, proxyURL)
 	objChanged = 0
 	bytesChanged = 0
 
-	for _, v := range stats.Target {
-		// FIXME: stats names => API package, here and elsewhere
-		objChanged += getNamedTargetStats(v, "vchange.n")
-		bytesChanged += getNamedTargetStats(v, "vchange.size")
+	for _, v := range cstats.Target {
+		objChanged += getNamedTargetStats(v, stats.VerChangeCount)
+		bytesChanged += getNamedTargetStats(v, stats.VerChangeSize)
 	}
 	return
 }
@@ -423,20 +422,20 @@ func propsMainTest(t *testing.T, versioning bool) {
 	oldVersioning := config.Ver.Enabled
 
 	if oldChkVersion != chkVersion {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", chkVersion)})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerValidateWarm: fmt.Sprintf("%v", chkVersion)})
 	}
 	if oldVersioning != versioning {
-		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning.enabled": strconv.FormatBool(versioning)})
+		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(versioning)})
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"version.validate_warm_get": fmt.Sprintf("%v", oldChkVersion)})
+			setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerValidateWarm: fmt.Sprintf("%v", oldChkVersion)})
 		}
 		if oldVersioning != versioning {
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"versioning.enabled": strconv.FormatBool(oldVersioning)})
+			setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(oldVersioning)})
 		}
 		if created {
 			tutils.DestroyLocalBucket(t, proxyURL, clibucket)

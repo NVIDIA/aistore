@@ -487,6 +487,9 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		makeNCopies(t, num1, m.bucket, baseParams)
 	}
 	if num2 != 0 {
+		if num1 != 0 {
+			time.Sleep(time.Second * 30)
+		}
 		makeNCopies(t, num2, m.bucket, baseParams)
 	}
 
