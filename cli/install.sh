@@ -19,11 +19,9 @@ AUTOCOMPLETE_INSTALL_SCRIPT="${AUTOCOMPLETE_SCRIPT_DIR}/install.sh"
 GOBIN=${GOPATH}/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ${DIR}/${BINARY_NAME}.go
 
 if [[ "$?" -eq 0 ]]; then
-    echo "*** AIS CLI successfully installed."
-    echo "*** "
-
+    echo "*** AIS CLI executable has been successfully installed."
     # Install autocompletions
     bash ${AUTOCOMPLETE_INSTALL_SCRIPT}
 else
-    echo "Error installing AIS CLI."
+    echo "Error installing AIS CLI"
 fi
