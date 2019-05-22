@@ -671,7 +671,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := cmn.DefaultBucketProps()
+	bucketProps := cmn.DefaultBucketProps(local)
 	if !clone.add(bucket, local, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.ErrorBucketAlreadyExists
@@ -977,7 +977,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			return cmn.ErrorCloudBucketDoesNotExist
 		}
 
-		bprops = cmn.DefaultBucketProps()
+		bprops = cmn.DefaultBucketProps(bckIsLocal)
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
 
@@ -991,6 +991,18 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		// Disable ability to set EC properties once enabled
 		if !bprops.EC.Updatable(name) {
 			errRet = errors.New("cannot change EC configuration after it is enabled")
+			p.bmdowner.Unlock()
+			return
+		}
+
+		readonly, ok := cmn.BucketPropList[name]
+		if !ok {
+			errRet = fmt.Errorf("unknown property '%s'", name)
+			p.bmdowner.Unlock()
+			return
+		}
+		if ok && readonly {
+			errRet = fmt.Errorf("property '%s' is read-only", name)
 			p.bmdowner.Unlock()
 			return
 		}
@@ -1085,24 +1097,36 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		case cmn.HeaderBucketValidateColdGet:
 			if v, err := strconv.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateColdGet = v
+				if bprops.Cksum.Type == cmn.PropInherit {
+					bprops.Cksum.Type = config.Cksum.Type
+				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketValidateWarmGet:
 			if v, err := strconv.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateWarmGet = v
+				if bprops.Cksum.Type == cmn.PropInherit {
+					bprops.Cksum.Type = config.Cksum.Type
+				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketValidateObjMove:
 			if v, err := strconv.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateObjMove = v
+				if bprops.Cksum.Type == cmn.PropInherit {
+					bprops.Cksum.Type = config.Cksum.Type
+				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
 			if v, err := strconv.ParseBool(value); err == nil {
 				bprops.Cksum.EnableReadRange = v
+				if bprops.Cksum.Type == cmn.PropInherit {
+					bprops.Cksum.Type = config.Cksum.Type
+				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
@@ -1112,11 +1136,8 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
-		case cmn.HeaderBucketChecksumType, cmn.HeaderBucketDontEvictTime,
-			cmn.HeaderBucketCapUpdTime:
-			errRet = fmt.Errorf("property '%s' is read-only", name)
 		default:
-			errRet = fmt.Errorf("property '%s' is unknown or read-only", name)
+			cmn.AssertMsg(false, "unknown property: "+name)
 		}
 
 		if errRet != nil {
@@ -1180,7 +1201,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
 	// Note: this use case is for setting all bucket props
-	nprops := cmn.DefaultBucketProps()
+	nprops := cmn.DefaultBucketProps(bckIsLocal)
 	msg := cmn.ActionMsg{Value: nprops}
 	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
@@ -1213,7 +1234,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not exist.", bucket), http.StatusNotFound)
 			return
 		}
-		bprops = cmn.DefaultBucketProps()
+		bprops = cmn.DefaultBucketProps(bckIsLocal)
 		clone.add(bucket, false /* bucket is local */, bprops)
 	}
 
@@ -1244,7 +1265,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 				http.StatusBadRequest)
 			return
 		}
-		bprops = cmn.DefaultBucketProps()
+		bprops = cmn.DefaultBucketProps(bckIsLocal)
 	}
 	clone.set(bucket, bckIsLocal, bprops)
 	if e := p.savebmdconf(clone, config); e != "" {

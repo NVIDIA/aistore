@@ -178,6 +178,19 @@ const (
 	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
 )
 
+// BucketPropList is a map bucket property <-> readonly, groupped by type
+var BucketPropList = map[string]bool{
+	HeaderCloudProvider: true,
+	HeaderNextTierURL:   false, HeaderReadPolicy: false, HeaderWritePolicy: false,
+	HeaderBucketChecksumType: true, HeaderBucketValidateColdGet: false, HeaderBucketValidateWarmGet: false,
+	HeaderBucketEnableReadRange: false, HeaderBucketValidateObjMove: false,
+	HeaderBucketVerEnabled: false, HeaderBucketVerValidateWarm: false,
+	HeaderBucketLRUEnabled: false, HeaderBucketLRULowWM: false, HeaderBucketLRUHighWM: false, HeaderBucketDontEvictTime: true, HeaderBucketCapUpdTime: true,
+	HeaderBucketMirrorEnabled: false, HeaderBucketMirrorThresh: false, HeaderBucketCopies: false,
+	HeaderBucketECEnabled: false, HeaderBucketECData: false, HeaderBucketECParity: false, HeaderBucketECMinSize: false,
+	HeaderBucketAccessAttrs: false,
+}
+
 // URL Query "?name1=val1&name2=..."
 const (
 	// user/app API
@@ -506,11 +519,14 @@ func (c *VersionConf) String() string {
 		return "Disabled"
 	}
 
+	text := "(validation: WarmGET="
 	if c.ValidateWarmGet {
-		return "Enabled (validated on Cold and Warm GETs)"
+		text += "yes)"
+	} else {
+		text += "no)"
 	}
 
-	return "Enabled (validated on Cold GET)"
+	return text
 }
 
 func (c *CksumConf) String() string {
@@ -518,34 +534,38 @@ func (c *CksumConf) String() string {
 		return "Disabled"
 	}
 
-	props := make([]string, 0)
-	if c.ValidateWarmGet {
-		props = append(props, "WarmGET")
+	yesProps := make([]string, 0)
+	noProps := make([]string, 0)
+	add := func(val bool, name string) {
+		if val {
+			yesProps = append(yesProps, name)
+		} else {
+			noProps = append(noProps, name)
+		}
 	}
-	if c.ValidateColdGet {
-		props = append(props, "ColdGET")
+
+	add(c.ValidateColdGet, "ColdGET")
+	add(c.ValidateWarmGet, "WarmGET")
+	add(c.ValidateObjMove, "ObjectMove")
+	add(c.EnableReadRange, "ReadRange")
+
+	props := make([]string, 0, 2)
+	if len(yesProps) != 0 {
+		props = append(props, strings.Join(yesProps, ",")+"=yes")
 	}
-	if c.ValidateObjMove {
-		props = append(props, "ObjectMove")
+	if len(noProps) != 0 {
+		props = append(props, strings.Join(noProps, ",")+"=no")
 	}
-	if c.EnableReadRange {
-		props = append(props, "ReadRange")
-	}
-	if len(props) == 0 {
-		return fmt.Sprintf("%s, Validate on: -", c.Type)
-	}
-	return fmt.Sprintf("%s, Validate on: %s", c.Type, strings.Join(props, ","))
+
+	return fmt.Sprintf("%s (validation: %s)", c.Type, strings.Join(props, ", "))
 }
 
-func (c *BucketProps) LRUToStr() string {
-	if !c.LRU.Enabled {
-		return "Disabled"
-	}
-	if c.CloudProvider == ProviderAIS && !c.LRU.LocalBuckets {
+func (c *LRUConf) String() string {
+	if !c.Enabled {
 		return "Disabled"
 	}
 	return fmt.Sprintf("Watermarks: %d/%d, do not evict time: %s",
-		c.LRU.LowWM, c.LRU.HighWM, c.LRU.DontEvictTimeStr)
+		c.LowWM, c.HighWM, c.DontEvictTimeStr)
 }
 
 func (c *BucketProps) AccessToStr() string {
@@ -633,9 +653,14 @@ type ObjectProps struct {
 	BucketLocal bool
 }
 
-func DefaultBucketProps() *BucketProps {
+func DefaultBucketProps(local bool) *BucketProps {
 	c := GCO.Clone()
 	c.Cksum.Type = PropInherit
+	if local {
+		if !c.LRU.LocalBuckets {
+			c.LRU.Enabled = false
+		}
+	}
 	return &BucketProps{
 		Cksum:       c.Cksum,
 		LRU:         c.LRU,

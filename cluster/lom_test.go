@@ -735,7 +735,7 @@ func getTestFileHash(fqn string) (hash string) {
 func addLocalBucket(lom *cluster.LOM) {
 	bmd.LBmap = make(map[string]*cmn.BucketProps)
 	bmd.Version++
-	p := cmn.DefaultBucketProps()
+	p := cmn.DefaultBucketProps(true)
 	p.BID = bmd.GenBucketID(true)
 	lom.SetBID(p.BID)
 	bmd.LBmap[lom.Bucket] = p

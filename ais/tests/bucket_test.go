@@ -32,6 +32,22 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	}
 }
 
+func TestDefaultBucketProps(t *testing.T) {
+	var (
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
+		globalConfig = getDaemonConfig(t, proxyURL)
+	)
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
+	tassert.CheckFatal(t, err)
+	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.LocalBuckets {
+		t.Errorf("LRU should be disabled for local buckets (bucket.Enabled: %v, global.localBuckets: %v)",
+			p.LRU.Enabled, globalConfig.LRU.LocalBuckets)
+	}
+}
+
 func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
@@ -50,6 +66,8 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.CloudProvider = cmn.ProviderAIS
 	globalProps.Cksum = globalConfig.Cksum
 	globalProps.LRU = testBucketProps(t).LRU
+	// For local bucket, there is additional config option that affects LRU.Enabled
+	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.LocalBuckets
 
 	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
 	tassert.CheckFatal(t, err)

@@ -93,7 +93,7 @@ func (m *BMD) Get(b string, local bool) (p *cmn.BucketProps, present bool) {
 	}
 	p, present = m.CBmap[b]
 	if !present {
-		p = cmn.DefaultBucketProps()
+		p = cmn.DefaultBucketProps(local)
 	}
 	return
 }

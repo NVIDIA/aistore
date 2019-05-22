@@ -235,6 +235,28 @@ func makeKVS(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
 	return
 }
 
+// Converts a list of "key value" and "key=value" into map
+func makePairs(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
+	nvs = cmn.SimpleKVs{}
+	i := 0
+	for i < len(args) {
+		pairs := makeList(args[i], delimiter)
+		if len(pairs) != 1 {
+			// "key=value" case
+			nvs[pairs[0]] = pairs[1]
+			i++
+		} else {
+			// "key value" case with a corner case: last name without a value
+			if i == len(args)-1 {
+				return nil, fmt.Errorf("No value for %v", args[i])
+			}
+			nvs[args[i]] = args[i+1]
+			i += 2
+		}
+	}
+	return
+}
+
 func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {

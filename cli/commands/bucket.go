@@ -151,7 +151,7 @@ var (
 							UsageText:    bucketSetPropsText,
 							Flags:        bucketPropsFlags[propsSet],
 							Action:       bucketPropsHandler,
-							BashComplete: flagList,
+							BashComplete: propList,
 						},
 						{
 							Name:         propsReset,
@@ -515,12 +515,12 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 			return
 		}
 
-		fmt.Printf("Bucket props set for %s bucket\n", bucket)
+		fmt.Println()
 		return
 	}
 
 	// For setting bucket props via URL query string
-	nvs, err := makeKVS(c.Args(), "=")
+	nvs, err := makePairs(c.Args(), "=")
 	if err != nil {
 		return
 	}
@@ -530,7 +530,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams, bucket string) (
 	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
 		return
 	}
-	fmt.Printf("%d properties set for %s bucket\n", c.NArg(), bucket)
+	fmt.Println()
 	return
 }
 
@@ -584,7 +584,7 @@ func printBckHeadTable(props *cmn.BucketProps) error {
 		{"Checksum", props.Cksum.String()},
 		{"Mirror", props.Mirror.String()},
 		{"EC", props.EC.String()},
-		{"LRU", props.LRUToStr()},
+		{"LRU", props.LRU.String()},
 		{"Versioning", props.Versioning.String()},
 		{"Tiering", props.Tiering.String()},
 	}

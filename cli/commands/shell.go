@@ -48,3 +48,11 @@ func xactList(_ *cli.Context) {
 		fmt.Println(key)
 	}
 }
+
+func propList(_ *cli.Context) {
+	for prop, readonly := range cmn.BucketPropList {
+		if !readonly {
+			fmt.Println(prop)
+		}
+	}
+}
