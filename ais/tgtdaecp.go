@@ -198,7 +198,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	proxyid := apitems[1]
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = strconv.ParseBool(preparestr); err != nil {
+	if prepare, err = cmn.ParseBool(preparestr); err != nil {
 		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", cmn.URLParamPrepare, err)
 		t.invalmsghdlr(w, r, s)
 		return

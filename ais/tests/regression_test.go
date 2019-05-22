@@ -674,7 +674,7 @@ func TestConfig(t *testing.T) {
 		}
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{"lowwm": oldlwmStr})
 	}
-	if pt, err := strconv.ParseBool(configRegression["lru.enabled"]); err != nil {
+	if pt, err := cmn.ParseBool(configRegression["lru.enabled"]); err != nil {
 		t.Fatalf("Error parsing lru.enabled: %v", err)
 	} else if nlruconfig.Enabled != pt {
 		t.Errorf("lru.enabled was not set properly: %v, should be %v",

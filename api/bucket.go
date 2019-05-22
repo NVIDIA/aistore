@@ -106,34 +106,34 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	cksumProps := cmn.CksumConf{
 		Type: r.Header.Get(cmn.HeaderBucketChecksumType),
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
 		cksumProps.ValidateColdGet = b
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateWarmGet)); err == nil {
 		cksumProps.ValidateWarmGet = b
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateObjMove)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketValidateObjMove)); err == nil {
 		cksumProps.ValidateObjMove = b
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketEnableReadRange)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketEnableReadRange)); err == nil {
 		cksumProps.EnableReadRange = b
 	} else {
 		return
 	}
 
 	verProps := cmn.VersionConf{}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketVerEnabled)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketVerEnabled)); err == nil {
 		verProps.Enabled = b
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketVerValidateWarm)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketVerValidateWarm)); err == nil {
 		verProps.ValidateWarmGet = b
 	} else {
 		return
@@ -153,7 +153,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
 		lruProps.Enabled = b
 	} else {
 		return
@@ -165,7 +165,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketMirrorEnabled)); err == nil {
 		mirrorProps.Enabled = b
 	} else {
 		return
@@ -177,7 +177,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	}
 
 	ecProps := cmn.ECConf{}
-	if b, err = strconv.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
+	if b, err = cmn.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
 		ecProps.Enabled = b
 	} else {
 		return

@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -139,7 +138,7 @@ func init() {
 // dry-run environment overrides dry-run clivars
 func dryinit() {
 	str := os.Getenv("AIS_NODISKIO")
-	if b, err := strconv.ParseBool(str); err == nil {
+	if b, err := cmn.ParseBool(str); err == nil {
 		dryRun.disk = b
 	}
 	str = os.Getenv("AIS_DRYOBJSIZE")

@@ -1217,7 +1217,7 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 
 	for name, value := range nvmap {
 		if name == ActPersist {
-			if persist, err = strconv.ParseBool(value); err != nil {
+			if persist, err = ParseBool(value); err != nil {
 				err = fmt.Errorf("invalid value set for %s, err: %v", name, err)
 				GCO.DiscardUpdate()
 				return

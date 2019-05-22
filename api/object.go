@@ -97,11 +97,11 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 		}
 	}
 
-	present, err = strconv.ParseBool(r.Header.Get(cmn.HeaderObjPresent))
+	present, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjPresent))
 	if err != nil {
 		return nil, err
 	}
-	localBucket, err = strconv.ParseBool(r.Header.Get(cmn.HeaderObjIsBckLocal))
+	localBucket, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjIsBckLocal))
 	if err != nil {
 		return nil, err
 	}

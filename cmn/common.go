@@ -250,12 +250,24 @@ func ExitLogf(f string, a ...interface{}) {
 	ExitInfof(f, a...)
 }
 
+// ParseBool converts string to bool (case-insensitive):
+//   y, yes, on -> true
+//   n, no, off, <empty value> -> false
+// strconv handles the following:
+//   1, true, t -> true
+//   0, false, f -> false
 func ParseBool(s string) (value bool, err error) {
 	if s == "" {
 		return
 	}
-	value, err = strconv.ParseBool(s)
-	return
+	s = strings.ToLower(s)
+	switch s {
+	case "y", "yes", "on":
+		return true, nil
+	case "n", "no", "off":
+		return false, nil
+	}
+	return strconv.ParseBool(s)
 }
 
 func ErrorToSentence(err error) string {

@@ -28,7 +28,7 @@ var (
 )
 
 func (b *BoolExt) Set(s string) (err error) {
-	b.Val, err = strconv.ParseBool(s)
+	b.Val, err = ParseBool(s)
 	b.IsSet = true
 	return err
 }

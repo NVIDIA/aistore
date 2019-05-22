@@ -1009,7 +1009,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 
 		switch name {
 		case cmn.HeaderBucketECEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				if v {
 					if bprops.EC.DataSlices == 0 {
 						bprops.EC.DataSlices = 2
@@ -1041,7 +1041,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketMirrorEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Mirror.Enabled = v
 				if v && bprops.Mirror.Copies == 1 {
 					bprops.Mirror.Copies = 2
@@ -1065,19 +1065,19 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketVerEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Versioning.Enabled = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketVerValidateWarm:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Versioning.ValidateWarmGet = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketLRUEnabled:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.LRU.Enabled = v
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
@@ -1095,7 +1095,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketValidateColdGet:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateColdGet = v
 				if bprops.Cksum.Type == cmn.PropInherit {
 					bprops.Cksum.Type = config.Cksum.Type
@@ -1104,7 +1104,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketValidateWarmGet:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateWarmGet = v
 				if bprops.Cksum.Type == cmn.PropInherit {
 					bprops.Cksum.Type = config.Cksum.Type
@@ -1113,7 +1113,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketValidateObjMove:
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Cksum.ValidateObjMove = v
 				if bprops.Cksum.Type == cmn.PropInherit {
 					bprops.Cksum.Type = config.Cksum.Type
@@ -1122,7 +1122,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 				errRet = fmt.Errorf(errFmt, name, value, err)
 			}
 		case cmn.HeaderBucketEnableReadRange: // true: Return range checksum, false: return the obj's
-			if v, err := strconv.ParseBool(value); err == nil {
+			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Cksum.EnableReadRange = v
 				if bprops.Cksum.Type == cmn.PropInherit {
 					bprops.Cksum.Type = config.Cksum.Type
@@ -2328,7 +2328,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	query := r.URL.Query()
 	preparestr := query.Get(cmn.URLParamPrepare)
-	if prepare, err = strconv.ParseBool(preparestr); err != nil {
+	if prepare, err = cmn.ParseBool(preparestr); err != nil {
 		s := fmt.Sprintf("Failed to parse %s URL parameter: %v", cmn.URLParamPrepare, err)
 		p.invalmsghdlr(w, r, s)
 		return

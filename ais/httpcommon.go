@@ -377,7 +377,7 @@ func (h *httprunner) init(s stats.Tracker) {
 func (h *httprunner) initSI(daemonType string) {
 	var s string
 	config := cmn.GCO.Get()
-	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
+	allowLoopback, _ := cmn.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
 	addrList, err := getLocalIPv4List(allowLoopback)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)

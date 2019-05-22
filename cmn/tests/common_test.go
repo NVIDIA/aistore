@@ -238,6 +238,37 @@ func TestMvFile(t *testing.T) {
 	os.RemoveAll(tmpDir)
 }
 
+func TestParseBool(t *testing.T) {
+	trues := []string{"1", "ON", "yes", "Y", "trUe"}
+	falses := []string{"0", "off", "No", "n", "falsE", ""}
+	errs := []string{"2", "enable", "nothing"}
+
+	for _, s := range trues {
+		v, err := cmn.ParseBool(s)
+		if err != nil {
+			t.Errorf("Failed to parse %s: %v", s, err)
+		} else if !v {
+			t.Errorf("Failed to parse %s as `true`", s)
+		}
+	}
+
+	for _, s := range falses {
+		v, err := cmn.ParseBool(s)
+		if err != nil {
+			t.Errorf("Failed to parse %s: %v", s, err)
+		} else if v {
+			t.Errorf("Failed to parse %s as `false`", s)
+		}
+	}
+
+	for _, s := range errs {
+		_, err := cmn.ParseBool(s)
+		if err == nil {
+			t.Errorf("Parsing %s must return as error", s)
+		}
+	}
+}
+
 var _ = Describe("Common file", func() {
 	Context("ParseBashTemplate", func() {
 		DescribeTable("parse bash template without error",
