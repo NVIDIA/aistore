@@ -1,5 +1,8 @@
 # AIStore: scalable storage for AI applications
 
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
+
 AIStore (AIS for short) is a built from scratch storage solution for AI applications. At its core, it's open-source object storage with extensions tailored for AI and, specifically, for petascale deep learning.
 
 As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and control primitives to read and write objects and create, destroy, list, and configure [buckets](docs/bucket.md#bucket) that contain those objects.
