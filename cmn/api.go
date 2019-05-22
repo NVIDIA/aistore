@@ -30,6 +30,13 @@ const (
 	ECDefaultSizeLimit = 256 * KiB
 )
 
+// Module names
+
+const (
+	DSortName          = "dSort"
+	DSortNameLowercase = "dsort"
+)
+
 // Bucket property type (used by cksum, versioning)
 const (
 	PropInherit = "inherit" // inherit bucket property from global config

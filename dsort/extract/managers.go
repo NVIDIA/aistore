@@ -78,7 +78,7 @@ type (
 
 func init() {
 	mem = &memsys.Mem2{
-		Name: "DSort.Extract.Mem2",
+		Name: cmn.DSortName + ".Extract.Mem2",
 	}
 	if err := mem.Init(false); err != nil {
 		glog.Error(err)

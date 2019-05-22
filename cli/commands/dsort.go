@@ -46,7 +46,7 @@ var (
 
 	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
 	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
-	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: "dsort-testing", Usage: "bucket where shards will be put"}
+	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}
 	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
 	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
 	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
@@ -76,21 +76,21 @@ var (
 		},
 	}
 
-	dsortGenUsage    = fmt.Sprintf("%s dsort %s [FLAGS...]", cliName, dsortGen)
-	dsortStartUsage  = fmt.Sprintf("%s dsort %s <json_specification>", cliName, dsortStart)
-	dsortStatusUsage = fmt.Sprintf("%s dsort %s <id> [STATUS FLAGS...]", cliName, dsortStatus)
-	dsortAbortUsage  = fmt.Sprintf("%s dsort %s <id>", cliName, dsortAbort)
-	dsortRemoveUsage = fmt.Sprintf("%s dsort %s <id>", cliName, dsortRemove)
-	dsortListUsage   = fmt.Sprintf("%s dsort %s --regex <value>", cliName, dsortList)
+	dsortGenUsage    = fmt.Sprintf("%s %s %s [FLAGS...]", cliName, cmn.DSortNameLowercase, dsortGen)
+	dsortStartUsage  = fmt.Sprintf("%s %s %s <json_specification>", cliName, cmn.DSortNameLowercase, dsortStart)
+	dsortStatusUsage = fmt.Sprintf("%s %s %s <id> [STATUS FLAGS...]", cliName, cmn.DSortNameLowercase, dsortStatus)
+	dsortAbortUsage  = fmt.Sprintf("%s %s %s <id>", cliName, cmn.DSortNameLowercase, dsortAbort)
+	dsortRemoveUsage = fmt.Sprintf("%s %s %s <id>", cliName, cmn.DSortNameLowercase, dsortRemove)
+	dsortListUsage   = fmt.Sprintf("%s %s %s --regex <value>", cmn.DSortNameLowercase, cliName, dsortList)
 
 	dSortCmds = []cli.Command{
 		{
-			Name:  "dsort",
+			Name:  cmn.DSortNameLowercase,
 			Usage: "command that manages distributed sort jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:         dsortGen,
-					Usage:        "put randomly generated shards which then can be used for dSort testing",
+					Usage:        fmt.Sprintf("put randomly generated shards which then can be used for %s testing", cmn.DSortName),
 					UsageText:    dsortGenUsage,
 					Flags:        dsortFlags[dsortGen],
 					Action:       dsortHandler,
@@ -98,7 +98,7 @@ var (
 				},
 				{
 					Name:         dsortStart,
-					Usage:        "start new dSort job with provided specification",
+					Usage:        fmt.Sprintf("start new %s job with provided specification", cmn.DSortName),
 					UsageText:    dsortStartUsage,
 					Flags:        dsortFlags[dsortStart],
 					Action:       dsortHandler,
@@ -106,7 +106,7 @@ var (
 				},
 				{
 					Name:         dsortStatus,
-					Usage:        "retrieve statistics and metrics of currently running dSort job",
+					Usage:        fmt.Sprintf("retrieve statistics and metrics of currently running %s job", cmn.DSortName),
 					UsageText:    dsortStatusUsage,
 					Flags:        dsortFlags[dsortStatus],
 					Action:       dsortHandler,
@@ -114,7 +114,7 @@ var (
 				},
 				{
 					Name:         dsortAbort,
-					Usage:        "abort currently running dSort job",
+					Usage:        fmt.Sprintf("abort currently running %s job", cmn.DSortName),
 					UsageText:    dsortAbortUsage,
 					Flags:        dsortFlags[dsortAbort],
 					Action:       dsortHandler,
@@ -122,7 +122,7 @@ var (
 				},
 				{
 					Name:         dsortRemove,
-					Usage:        "remove finished dSort job from the list",
+					Usage:        fmt.Sprintf("remove finished %s job from the list", cmn.DSortName),
 					UsageText:    dsortRemoveUsage,
 					Flags:        dsortFlags[dsortRemove],
 					Action:       dsortHandler,
@@ -130,7 +130,7 @@ var (
 				},
 				{
 					Name:         dsortList,
-					Usage:        "list all dSort jobs and their states",
+					Usage:        fmt.Sprintf("list all %s jobs and their states", cmn.DSortName),
 					UsageText:    dsortListUsage,
 					Flags:        dsortFlags[dsortList],
 					Action:       dsortHandler,
@@ -322,10 +322,10 @@ func dsortHandler(c *cli.Context) error {
 
 	if commandName == dsortStatus || commandName == dsortAbort || commandName == dsortRemove {
 		if c.NArg() < 1 {
-			return missingArgsMessage("dSort job ID")
+			return missingArgsMessage(cmn.DSortName + " job ID")
 		}
 		if id == "" {
-			return errors.New("dSort job ID can't be empty")
+			return errors.New(cmn.DSortName + " job ID can't be empty")
 		}
 	}
 
@@ -334,7 +334,7 @@ func dsortHandler(c *cli.Context) error {
 		return dsortGenHandler(c, baseParams)
 	case dsortStart:
 		if c.NArg() == 0 {
-			return fmt.Errorf("starting dSort job requires specification in JSON format")
+			return fmt.Errorf("starting %s job requires specification in JSON format", cmn.DSortName)
 		}
 
 		var rs dsort.RequestSpec
@@ -399,19 +399,19 @@ func dsortHandler(c *cli.Context) error {
 					time.Sleep(rate)
 				}
 
-				fmt.Printf("DSort has finished.")
+				fmt.Printf("%s has finished.", cmn.DSortName)
 			}
 		}
 	case dsortAbort:
 		if err := api.AbortDSort(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("DSort job aborted: %s\n", id)
+		fmt.Printf("%s job aborted: %s\n", cmn.DSortName, id)
 	case dsortRemove:
 		if err := api.RemoveDSort(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("DSort job removed: %s\n", id)
+		fmt.Printf("%s job removed: %s\n", cmn.DSortName, id)
 	case dsortList:
 		list, err := api.ListDSort(baseParams, regex)
 		if err != nil {
@@ -438,7 +438,7 @@ type dsortResult struct {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return "DSort job was aborted."
+		return fmt.Sprintf("%s job was aborted.", cmn.DSortName)
 	}
 
 	var sb strings.Builder

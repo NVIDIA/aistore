@@ -29,6 +29,11 @@ import (
 
 const (
 	pkgName = "dsort"
+
+	// Stream names
+	recvReqStreamNameFmt  = cmn.DSortNameLowercase + "-%s-recv_req"
+	recvRespStreamNameFmt = cmn.DSortNameLowercase + "-%s-recv_resp"
+	shardStreamNameFmt    = cmn.DSortNameLowercase + "-%s-shard"
 )
 
 var (
@@ -41,7 +46,7 @@ var (
 		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
 		mem = &memsys.Mem2{
-			Name:     "DSort.Mem2",
+			Name:     cmn.DSortName + ".Mem2",
 			TimeIval: time.Minute * 10,
 		}
 		if err := mem.Init(false); err != nil {
@@ -240,7 +245,7 @@ func (m *Manager) initStreams() error {
 
 	client := transport.NewDefaultClient()
 
-	trname := fmt.Sprintf("dsort-%s-recv_req", m.ManagerUUID)
+	trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 	reqSbArgs := transport.SBArgs{
 		Multiplier: 2,
 		Network:    reqNetwork,
@@ -251,7 +256,7 @@ func (m *Manager) initStreams() error {
 		return err
 	}
 
-	trname = fmt.Sprintf("dsort-%s-recv_resp", m.ManagerUUID)
+	trname = fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
 	respSbArgs := transport.SBArgs{
 		Multiplier: transport.IntraBundleMultiplier,
 		Network:    respNetwork,
@@ -262,7 +267,7 @@ func (m *Manager) initStreams() error {
 		return err
 	}
 
-	trname = fmt.Sprintf("dsort-%s-shard", m.ManagerUUID)
+	trname = fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := transport.SBArgs{
 		Multiplier: transport.IntraBundleMultiplier,
 		Network:    respNetwork,
@@ -293,21 +298,21 @@ func (m *Manager) cleanupStreams() error {
 	}
 
 	if m.streams.request != nil {
-		trname := fmt.Sprintf("dsort-%s-recv_req", m.ManagerUUID)
+		trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(reqNetwork, trname); err != nil {
 			return err
 		}
 	}
 
 	if m.streams.response != nil {
-		trname := fmt.Sprintf("dsort-%s-recv_resp", m.ManagerUUID)
+		trname := fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
 			return err
 		}
 	}
 
 	if m.streams.shards != nil {
-		trname := fmt.Sprintf("dsort-%s-shard", m.ManagerUUID)
+		trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
 			return err
 		}
@@ -337,12 +342,12 @@ func (m *Manager) cleanup() {
 
 	m.lock()
 	m.mw.stop()
-	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
+	glog.Infof("%s %s has started a cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
 
 	defer func() {
 		m.unlock()
-		glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
+		glog.Infof("%s %s cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
 	if m.inProgress() {
@@ -370,10 +375,10 @@ func (m *Manager) finalCleanup() {
 		return // do not clean if already scheduled
 	}
 
-	glog.Infof("dsort %s has started a final cleanup", m.ManagerUUID)
+	glog.Infof("%s %s has started a final cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
 	defer func() {
-		glog.Infof("dsort %s final cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
+		glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
 	if err := m.cleanupStreams(); err != nil {

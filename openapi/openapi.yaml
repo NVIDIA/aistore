@@ -29,7 +29,7 @@ tags:
     externalDocs:
       url: https://github.com/NVIDIA/aistore
   - name: Sort
-    description: All APIs to interact with DSort operation
+    description: All APIs to interact with dSort operation
     externalDocs:
       url: https://github.com/NVIDIA/aistore/dsort
 servers:
@@ -730,7 +730,7 @@ paths:
       parameters:
         - name: id
           in: query
-          description: Sort uuid which is returned when starting dsort
+          description: Sort uuid which is returned when starting dSort
           required: true
           schema:
             type: string
@@ -757,7 +757,7 @@ paths:
       parameters:
         - name: id
           in: query
-          description: Sort uuid which is returned when starting dsort
+          description: Sort uuid which is returned when starting dSort
           required: true
           schema:
             type: string
@@ -1052,7 +1052,7 @@ components:
         bucket:
           type: string
           description: Name of the source bucket which data is read from
-          example: "dsort-bucket"
+          example: "dSort-bucket"
         output_bucket:
           type: string
           description: Name of the bucket where data is written/saved. By default it is same as bucket.

@@ -7,12 +7,13 @@
 package filetype
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
-	DSortFileType     = "dsort"
-	DSortWorkfileType = "dsortw"
+	DSortFileType     = cmn.DSortNameLowercase
+	DSortWorkfileType = cmn.DSortNameLowercase + "w"
 
 	WorkfileRecvShard   = "recv-shard"
 	WorkfileCreateShard = "create-shard"

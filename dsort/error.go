@@ -1,6 +1,10 @@
 package dsort
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/NVIDIA/aistore/cmn"
+)
 
 type (
 	abortError struct {
@@ -15,7 +19,7 @@ func newAbortError(managerUUID string) error {
 }
 
 func (e *abortError) Error() string {
-	return fmt.Sprintf("dsort %s process was aborted", e.managerUUID)
+	return fmt.Sprintf("%s %s process was aborted", cmn.DSortName, e.managerUUID)
 }
 
 // Returns if the error is not abort error - in other cases we need to report

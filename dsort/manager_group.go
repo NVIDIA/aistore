@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	persistManagersPath = "dsort_managers.db" // base name to persist managers' file
+	persistManagersPath = cmn.DSortNameLowercase + "_managers.db" // base name to persist managers' file
 	managersCollection  = "managers"
 )
 
@@ -134,7 +134,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 	defer mg.mtx.Unlock()
 
 	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived {
-		return fmt.Errorf("dsort process %s still in progress and cannot be removed", managerUUID)
+		return fmt.Errorf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID)
 	} else if ok {
 		delete(mg.managers, managerUUID)
 	}

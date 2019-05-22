@@ -571,7 +571,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
 	// mountpaths if they have it (local rebalance has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during dSort job - aborting due to possible errors", mountpath))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been enabled during %s job - aborting due to possible errors", mountpath, cmn.DSortName))
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -610,7 +610,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 	// files directly and put them directly on mountpaths. This can lead to
 	// problems where we get from new mountpath without asking other (old)
 	// mountpaths if they have it (local rebalance has not yet finished).
-	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during dSort job - aborting due to possible errors", mountpath))
+	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been added during %s job - aborting due to possible errors", mountpath, cmn.DSortName))
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {

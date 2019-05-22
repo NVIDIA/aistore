@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	dsortDescAllPrefix = "dsort-test-integration"
+	dsortDescAllPrefix = cmn.DSortNameLowercase + "-test-integration"
 	dsortDescAllRegex  = "^" + dsortDescAllPrefix
 )
 
@@ -271,10 +271,10 @@ func (df *dsortFramework) checkReactionResult(reaction string, allMetrics map[st
 	case cmn.IgnoreReaction:
 		for target, metrics := range allMetrics {
 			if len(metrics.Warnings) != 0 {
-				df.m.t.Errorf("target %q has dSort warnings: %s", target, metrics.Warnings)
+				df.m.t.Errorf("target %q has %s warnings: %s", target, cmn.DSortName, metrics.Warnings)
 			}
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has dSort errors: %s", target, metrics.Errors)
+				df.m.t.Errorf("target %q has %s errors: %s", target, cmn.DSortName, metrics.Errors)
 			}
 		}
 	case cmn.WarnReaction:
@@ -283,7 +283,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, allMetrics map[st
 			totalWarnings += len(metrics.Warnings)
 
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has dSort errors: %s", target, metrics.Errors)
+				df.m.t.Errorf("target %q has %s errors: %s", target, cmn.DSortName, metrics.Errors)
 			}
 		}
 
@@ -294,7 +294,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, allMetrics map[st
 		totalErrors := 0
 		for target, metrics := range allMetrics {
 			if !metrics.Aborted {
-				df.m.t.Errorf("dsort was not aborted by target: %s", target)
+				df.m.t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 			}
 			totalErrors += len(metrics.Errors)
 		}
@@ -354,7 +354,7 @@ func (df *dsortFramework) checkDSortList(expNumEntries ...int) {
 	actEntries := len(listDSort)
 
 	if expNumEntriesVal != actEntries {
-		df.m.t.Fatalf("Incorrect # of dsort proc entries: expected %d, actual %d", expNumEntriesVal, actEntries)
+		df.m.t.Fatalf("Incorrect # of %s proc entries: expected %d, actual %d", cmn.DSortName, expNumEntriesVal, actEntries)
 	}
 }
 
@@ -515,7 +515,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	rs := dsortFW.gen()
 	if _, err := api.StartDSort(baseParams, rs); err == nil {
-		t.Error("expected dSort job to fail when input bucket does not exist")
+		t.Errorf("expected %s job to fail when input bucket does not exist", cmn.DSortName)
 	}
 
 	// Now destroy output bucket and create input bucket
@@ -525,7 +525,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 
 	tutils.Logln("starting second distributed sort...")
 	if _, err := api.StartDSort(baseParams, rs); err == nil {
-		t.Error("expected dSort job to fail when output bucket does not exist")
+		t.Errorf("expected %s job to fail when output bucket does not exist", cmn.DSortName)
 	}
 
 	dsortFW.checkDSortList(0)
@@ -1097,7 +1097,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckFatal(t, err)
 			if entry.missingKeys && !aborted {
-				t.Error("dsort was not aborted")
+				t.Errorf("%s was not aborted", cmn.DSortName)
 			}
 
 			tutils.Logln("checking metrics...")
@@ -1109,7 +1109,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 
 			for target, metrics := range allMetrics {
 				if entry.missingKeys && !metrics.Aborted {
-					t.Errorf("dsort was not aborted by target: %s", target)
+					t.Errorf("%s was not aborted by target: %s", target, cmn.DSortName)
 				}
 			}
 
@@ -1168,7 +1168,7 @@ func TestDistributedSortAbort(t *testing.T) {
 	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 	tassert.CheckFatal(t, err)
 	if !aborted {
-		t.Error("dsort was not aborted")
+		t.Errorf("%s was not aborted", cmn.DSortName)
 	}
 
 	tutils.Logln("checking metrics...")
@@ -1180,7 +1180,7 @@ func TestDistributedSortAbort(t *testing.T) {
 
 	for target, metrics := range allMetrics {
 		if !metrics.Aborted {
-			t.Errorf("dsort was not aborted by target: %s", target)
+			t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 		}
 	}
 
@@ -1241,7 +1241,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckFatal(t, err)
 			if !aborted {
-				t.Error("dsort was not aborted")
+				t.Errorf("%s was not aborted", cmn.DSortName)
 			}
 
 			tutils.Logln("checking metrics...")
@@ -1253,7 +1253,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 
 			for target, metrics := range allMetrics {
 				if !metrics.Aborted {
-					t.Errorf("dsort was not aborted by target: %s", target)
+					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 				}
 			}
 
@@ -1317,7 +1317,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckError(t, err)
 			if !aborted {
-				t.Error("dsort was not aborted")
+				t.Errorf("%s was not aborted", cmn.DSortName)
 			}
 
 			tutils.Logln("checking metrics...")
@@ -1329,7 +1329,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			for target, metrics := range allMetrics {
 				if !metrics.Aborted {
-					t.Errorf("dsort was not aborted by target: %s", target)
+					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 				}
 			}
 
@@ -1451,19 +1451,19 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckError(t, err)
 			if !aborted {
-				t.Error("dsort was not aborted")
+				t.Errorf("%s was not aborted", cmn.DSortName)
 			}
 
 			tutils.Logln("checking metrics...")
 			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 			tassert.CheckError(t, err)
 			if len(allMetrics) != m.originalTargetCount {
-				t.Errorf("number of metrics %d is different than number of targets when dSort started %d", len(allMetrics), m.originalTargetCount)
+				t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), cmn.DSortName, m.originalTargetCount)
 			}
 
 			for target, metrics := range allMetrics {
 				if !metrics.Aborted {
-					t.Errorf("dsort was not aborted by target: %s", target)
+					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 				}
 			}
 
@@ -1542,14 +1542,14 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
 	tassert.CheckFatal(t, err)
 	if aborted {
-		t.Error("dsort was aborted")
+		t.Errorf("%s was aborted", cmn.DSortName)
 	}
 
 	tutils.Logln("checking metrics...")
 	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 	tassert.CheckFatal(t, err)
 	if len(allMetrics) != m.originalTargetCount-1 {
-		t.Errorf("number of metrics %d is different than number of targets when dSort started %d", len(allMetrics), m.originalTargetCount-1)
+		t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), cmn.DSortName, m.originalTargetCount-1)
 	}
 
 	dsortFW.checkDSortList()
@@ -1671,7 +1671,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 	// Check that all nodes have aborted their jobs
 	for target, metrics := range allMetrics {
 		if !metrics.Aborted {
-			t.Errorf("dsort was not aborted by target: %s", target)
+			t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
 		}
 	}
 

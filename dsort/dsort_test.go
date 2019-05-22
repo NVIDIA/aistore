@@ -26,8 +26,8 @@ import (
 
 const (
 	testIP            = "127.0.0.1"
-	testDir           = "/tmp/dsort_tests"
-	testBucket        = "dsort_tests"
+	testDir           = "/tmp/" + cmn.DSortNameLowercase + "_tests"
+	testBucket        = cmn.DSortNameLowercase + "_tests"
 	globalManagerUUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 )
 

@@ -8,7 +8,6 @@ package dsort
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -248,7 +247,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("dSort job with id %q has not been found", managerUUID)
+		msg := fmt.Sprintf("%s job with id %q has not been found", cmn.DSortName, managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -310,7 +309,7 @@ func proxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !metrics.Archived {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("dsort process %s still in progress and cannot be removed", managerUUID))
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID))
 			return
 		}
 		seenOne = true
@@ -484,11 +483,11 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 		if !dsortManager.inProgress() {
-			cmn.InvalidHandlerWithMsg(w, r, "no dsort process in progress")
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.InvalidHandlerWithMsg(w, r, "dsort process was aborted")
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
 			return
 		}
 
@@ -521,11 +520,11 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 		if !dsortManager.inProgress() {
-			cmn.InvalidHandlerWithMsg(w, r, "no dsort process in progress")
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("no %s process in progress", cmn.DSortName))
 			return
 		}
 		if dsortManager.aborted() {
-			cmn.InvalidHandlerWithMsg(w, r, "dsort process was aborted")
+			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("%s process was aborted", cmn.DSortName))
 			return
 		}
 		compStr := r.URL.Query().Get(cmn.URLParamTotalCompressedSize)
@@ -584,7 +583,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsortManager.abort(errors.New("dSort has been aborted via API (remotely)"))
+	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", cmn.DSortName))
 }
 
 func removeSortHandler(w http.ResponseWriter, r *http.Request) {

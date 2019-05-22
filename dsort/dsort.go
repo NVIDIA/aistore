@@ -51,7 +51,7 @@ func (m *Manager) start() (err error) {
 		return err
 	}
 
-	glog.Infof("starting dsort %s", m.ManagerUUID)
+	glog.Infof("starting %s %s", cmn.DSortName, m.ManagerUUID)
 
 	// start watching memory
 	if err := m.mw.watch(); err != nil {
@@ -102,7 +102,7 @@ func (m *Manager) start() (err error) {
 		return err
 	}
 
-	glog.Infof("finished dsort %s successfully", m.ManagerUUID)
+	glog.Infof("finished %s %s successfully", cmn.DSortName, m.ManagerUUID)
 	return nil
 }
 
