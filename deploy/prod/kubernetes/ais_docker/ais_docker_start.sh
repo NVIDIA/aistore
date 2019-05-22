@@ -164,7 +164,7 @@ if $must_wait; then
     sleep 5
 fi
 
-# token effort to allow statsd to set up shop before ais tries to connect
+# token effort to allow StatsD to set up shop before ais tries to connect
 [[ $total_wait -le 2 ]] && sleep 2
 
 ARGS="-config=/etc/ais/$(basename -- $CONFFILE) -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true"

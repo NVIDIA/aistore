@@ -2,8 +2,8 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// A statsd client that sends basic statd metrics(timer, counter and gauge) to a
-// listening UDP statsd server
+// A StatsD client that sends basic statd metrics(timer, counter and gauge) to a
+// listening UDP StatsD server
 
 package statsd
 
@@ -11,35 +11,36 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// MetricType is the type of statsd metric
+// MetricType is the type of StatsD metric
 type MetricType int
 
 const (
-	// Timer is statsd's timer type
+	// Timer is StatsD's timer type
 	Timer MetricType = iota
-	// Counter is statsd's counter type
+	// Counter is StatsD's counter type
 	Counter
-	// Gauge is statsd's gauge type
+	// Gauge is StatsD's gauge type
 	Gauge
-	// PersistentCounter is statsd's gauge type which is increased every time by the value
+	// PersistentCounter is StatsD's gauge type which is increased every time by the value
 	PersistentCounter
 )
 
 type (
-	// Client implements a statd client
+	// Client implements a StatsD client
 	Client struct {
 		conn   *net.UDPConn
 		prefix string
-		opened bool // true if the connection with statsd is successfully opened
+		opened bool // true if the connection with StatsD is successfully opened
 	}
 
-	// Metric is a generic structure for all type of statsd metrics
+	// Metric is a generic structure for all type of StatsD metrics
 	Metric struct {
 		Type  MetricType // time, counter or gauge
 		Name  string     // Name for this particular metric
@@ -125,7 +126,7 @@ func (c Client) Close() error {
 	return nil
 }
 
-// Send sends metrics to statsd server
+// Send sends metrics to StatsD server
 // Note: Sending error is ignored
 // aggCnt - if stats were aggregated - number of stats which were aggregated, 1 otherwise
 // 1/ratio - how many samples are aggregated into single metric
@@ -136,7 +137,7 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	}
 
 	if aggCnt == 0 {
-		// there was no data aggregated, don't send anything to statsd
+		// there was no data aggregated, don't send anything to StatsD
 		return
 	}
 
@@ -167,15 +168,20 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 			packet.WriteRune('\n')
 		}
 
+		var err error
 		if aggCnt != 1 {
-			fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s|@%.1f", c.prefix, bucket, m.Name, prefix, m.Value, t, float64(1)/float64(aggCnt))
+			_, err = fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s|@%f", c.prefix, bucket, m.Name, prefix, m.Value, t, float64(1)/float64(aggCnt))
 		} else {
-			fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
+			_, err = fmt.Fprintf(&packet, "%s.%s.%s:%s%v|%s", c.prefix, bucket, m.Name, prefix, m.Value, t)
 		}
+		cmn.AssertNoErr(err)
 	}
 
 	if packet.Len() > 0 {
-		c.conn.Write(packet.Bytes())
+		_, err := c.conn.Write(packet.Bytes())
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Sending to StatsD failed: %s\n", err.Error())
+		}
 	}
 }
 
@@ -250,40 +256,40 @@ func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
 	mcg.maxProxyConnLatency = cmn.MaxDuration(mcg.maxProxyConnLatency, lat)
 }
 
-func (mg *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {
-	c.Send(mType, 1,
-		Metric{
-			Type:  Counter,
-			Name:  "count",
-			Value: mg.cnt,
-		})
+func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {
+	c.Send(mType, 1, Metric{
+		Type:  Counter,
+		Name:  "count",
+		Value: ma.cnt,
+	})
 
 	// don't send anything when cnt == 0 -> no data aggregated
-	if mg.cnt != 0 {
-		c.Send(mType, mg.cnt, Metric{
+	if ma.cnt != 0 {
+		c.Send(mType, ma.cnt, Metric{
 			Type:  Gauge,
 			Name:  "pending",
-			Value: mg.pending / mg.cnt,
+			Value: ma.pending / ma.cnt,
 		})
-		c.Send(mType, mg.cnt, Metric{
-			Type:  Timer,
-			Name:  "latency",
-			Value: mg.AvgLatency(),
-		},
+		c.Send(mType, ma.cnt,
+			Metric{
+				Type:  Timer,
+				Name:  "latency",
+				Value: ma.AvgLatency(),
+			},
 			Metric{
 				Type:  Timer,
 				Name:  "minlatency",
-				Value: float64(mg.minLatency / time.Millisecond),
+				Value: float64(ma.minLatency / time.Millisecond),
 			},
 			Metric{
 				Type:  Timer,
 				Name:  "maxlatency",
-				Value: float64(mg.maxLatency / time.Millisecond),
+				Value: float64(ma.maxLatency / time.Millisecond),
 			},
 			Metric{
 				Type:  Counter,
 				Name:  "throughput",
-				Value: mg.Throughput(),
+				Value: ma.Throughput(),
 			},
 		)
 	}

@@ -273,14 +273,9 @@ func printUsage(f *flag.FlagSet) {
 }
 
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
-	// take first bigger power of 2:
-	// example: for loaderCnt 13, mask length should be 4 (2^4 == 16 > 13)
-	res := cmn.CeilAlign(cmn.FastLog2Ceil(totalLoaders), 4)
-
-	// if result is not divisible by 4 add reduntant bytes
-	// so objectname is better readable in hex representation
-	// (then each aisloader has unique last characters, not just bytes)
-	return res + 4 - (res % 4)
+	// take first bigger power of 2, then take first bigger or equal number
+	// divisible by 4. This makes loaderID more visible in hex object name
+	return cmn.CeilAlign(cmn.FastLog2Ceil(totalLoaders), 4)
 }
 
 func parseCmdLine() (params, error) {
@@ -665,7 +660,7 @@ func main() {
 	if runParams.getLoaderID {
 		fmt.Printf("0x%x\n", suffixID)
 		if useRandomObjName {
-			fmt.Printf("Warning: loaderID 0x%x used only for statsd, not for object names!\n", suffixID)
+			fmt.Printf("Warning: loaderID 0x%x used only for StatsD, not for object names!\n", suffixID)
 		}
 		return
 	}
@@ -732,7 +727,7 @@ func main() {
 
 	statsdC, err = statsd.New(runParams.statsdIP, runParams.statsdPort, fmt.Sprintf("aisloader.%s-%x", host, suffixID))
 	if err != nil {
-		fmt.Printf("%s", "Failed to connect to statsd server")
+		fmt.Printf("%s", "Failed to connect to StatsD server")
 		if runParams.statsdRequired {
 			cmn.ExitInfof("... aborting")
 		} else {
