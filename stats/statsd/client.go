@@ -11,10 +11,10 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -179,8 +179,8 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 
 	if packet.Len() > 0 {
 		_, err := c.conn.Write(packet.Bytes())
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Sending to StatsD failed: %s\n", err.Error())
+		if err != nil && glog.V(5) {
+			glog.Infof("Sending to StatsD failed: %s\n", err.Error())
 		}
 	}
 }
