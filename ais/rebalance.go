@@ -400,10 +400,9 @@ func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config) (ok boo
 	return
 }
 
-// waitForRebalanceFinish waits for the other target to complete the current
-// rebalancing operation.
+// waitForRebalanceFinish waits for a target (neighbor) to complete its current rebalancing operation
 func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersion int64) {
-	// Phase 1: Call and check if smap is at least our version.
+	// 1: Check if Smap is at least our version
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	args := callArgs{
@@ -426,7 +425,7 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		}
 
 		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.PublicNet.DirectURL, res.err)
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.Name(), res.err)
 			return
 		}
 
@@ -444,10 +443,10 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		time.Sleep(keepaliveRetryDuration(config))
 	}
 
-	// Phase 2: Wait to ensure any rebalancing on neighbor has kicked in.
+	// 2: Sleep a bit for the neighbor's rebalancing to kick in
 	time.Sleep(NeighborRebalanceStartDelay)
 
-	// Phase 3: Call thy neighbor to check whether it is rebalancing and wait until it is not.
+	// 3: Call thy neighbor to check whether it is still rebalancing, and wait some more if it is
 	args = callArgs{
 		si: si,
 		req: reqArgs{
@@ -457,24 +456,22 @@ func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		},
 		timeout: defaultTimeout,
 	}
-
 	for {
 		res := reb.t.call(args)
 		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.PublicNet.DirectURL, res.err)
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.Name(), res.err)
 			break
 		}
 		status := &thealthstatus{}
 		err := jsoniter.Unmarshal(res.outjson, status)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
-				si.PublicNet.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.Name(), err, string(res.outjson))
 			break
 		}
 		if !status.IsRebalancing {
 			break
 		}
-		glog.Infof("waiting for rebalance: %v", si.PublicNet.DirectURL)
+		glog.Infof("waiting for %s to complete rebalancing...", si.Name())
 		time.Sleep(keepaliveRetryDuration(config))
 	}
 }
@@ -525,7 +522,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	var (
 		wg       = &sync.WaitGroup{}
 		cnt      = smap.CountTargets() - 1
-		cancelCh = make(chan string, cnt)
+		cancelCh = make(chan *cluster.Snode, cnt)
 		ver      = smap.version()
 		config   = cmn.GCO.Get()
 	)
@@ -539,7 +536,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 		go func(si *cluster.Snode) {
 			ok := reb.pingTarget(si, config)
 			if !ok {
-				cancelCh <- si.PublicNet.DirectURL
+				cancelCh <- si
 			}
 			wg.Done()
 		}(si)
@@ -548,8 +545,8 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 
 	close(cancelCh)
 	if len(cancelCh) > 0 {
-		for sid := range cancelCh {
-			glog.Errorf("Not starting rebalancing: %s appears to be offline, Smap v%d", smap.printname(sid), ver)
+		for si := range cancelCh {
+			glog.Errorf("Not starting rebalancing: %s appears to be offline, Smap v%d", si.Name(), ver)
 		}
 		return
 	}

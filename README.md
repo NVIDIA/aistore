@@ -115,9 +115,11 @@ In all other cases, AIS will service the GET request without going to Cloud.
 
 Alternatively or in parallel, you can also *prefetch* a flexibly-defined *list* or *range* of objects from any given Cloud bucket, as described in [this readme](docs/batch.md).
 
-#### Existing Datasets: Internet Downloader
+#### Existing Datasets: integrated Downloader
 
-But what if the dataset exists in the form of (vanilla) HTTP/HTTPS URLs? If this is the case, use [downloader](downloader/README.md) - the integrated tool that can populate AIStore directly from the Internet.
+But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS URL(s)? What if there's a popular bucket in, say, Google Cloud that contains images that you'd like to bring over into your Data Center and make available locally for AI researchers?
+
+For these and similar use cases we have [AIS Downloader](downloader/README.md) - an integrated tool that can execute massive download requests, track their progress, and populate AIStore directly from the Internet.
 
 #### Existing Datasets: Reverse Proxy
 

@@ -10,7 +10,7 @@ Meet **Internet downloader** - an integrated part of the AIStore. AIStore cluste
 
 ## Download Request
 
-AIS's *Downloader* supports 4 types of download requests:
+AIS *Downloader* supports 4 types of download requests:
 
 * *Single* - download a single object
 * *Multi* - download multiple objects provided by JSON map (string -> string) or list of strings

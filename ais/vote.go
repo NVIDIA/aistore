@@ -447,7 +447,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary %s @%v has failed\n", p.si.Name(), clone.ProxySI.Name(), clone.ProxySI.PublicNet.DirectURL)
+	glog.Infof("%s: primary %s @%v has failed\n", p.si.Name(), clone.ProxySI.Name(), clone.ProxySI.IntraControlNet.DirectURL)
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.
@@ -501,7 +501,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	if !clone.isValid() {
 		return
 	}
-	glog.Infof("%s: primary proxy (%s @ %v) failed\n", t.si.Name(), clone.ProxySI, clone.ProxySI.PublicNet.DirectURL)
+	glog.Infof("%s: primary proxy (%s @ %v) failed\n", t.si.Name(), clone.ProxySI.Name(), clone.ProxySI.IntraControlNet.DirectURL)
 
 	// Find out the first proxy (using HRW algorithm) that is running and can be
 	// elected as the primary one.

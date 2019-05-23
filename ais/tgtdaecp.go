@@ -1043,8 +1043,7 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 		proxystats := &stats.CoreStats{}
 		err := jsoniter.Unmarshal(res.outjson, proxystats)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
-				psi.PublicNet.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.Name(), err, string(res.outjson))
 			continue
 		}
 		if proxystats.Tracker[stats.Uptime].Value != 0 {

@@ -1522,8 +1522,8 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 
 	// FIXME: For now, need to re-translate lom.BckIsLocal to appropriate value ("local"|"cloud")
 	// FIXME: this code below looks like a general code for sending request
-	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s",
-		neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamBckProvider, lom.BucketProvider, cmn.URLParamIsGFNRequest, "true")
+	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s", neighsi.IntraDataNet.DirectURL,
+		r.URL.Path, cmn.URLParamBckProvider, lom.BucketProvider, cmn.URLParamIsGFNRequest, "true")
 	//
 	// http request
 	//
