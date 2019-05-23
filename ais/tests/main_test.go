@@ -599,18 +599,19 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 
 func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	var (
-		bucketName   = clibucket
-		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		fileName     = "mytestobj1.txt"
-		baseParams   = tutils.DefaultBaseAPIParams(t)
-		queryLocal   = url.Values{}
-		queryCloud   = url.Values{}
-		dataLocal    = []byte("im local")
-		dataCloud    = []byte("I'm from the cloud!")
-		globalProps  cmn.BucketProps
-		globalConfig = getDaemonConfig(t, proxyURL)
-		msg          = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
-		found        = false
+		bucketName    = clibucket
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
+		fileName      = "mytestobj1.txt"
+		baseParams    = tutils.DefaultBaseAPIParams(t)
+		queryLocal    = url.Values{}
+		queryCloud    = url.Values{}
+		dataLocal     = []byte("im local")
+		dataCloud     = []byte("I'm from the cloud!")
+		defLocalProps cmn.BucketProps
+		defCloudProps cmn.BucketProps
+		globalConfig  = getDaemonConfig(t, proxyURL)
+		msg           = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
+		found         = false
 	)
 
 	if !isCloudBucket(t, proxyURL, bucketName) {
@@ -624,8 +625,14 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
 
 	//Common
-	globalProps.Cksum = globalConfig.Cksum
-	globalProps.LRU = testBucketProps(t).LRU
+	defCloudProps.Cksum = globalConfig.Cksum
+	defCloudProps.LRU = testBucketProps(t).LRU
+	defLocalProps.Cksum = globalConfig.Cksum
+	defLocalProps.LRU = testBucketProps(t).LRU
+	defLocalProps.CloudProvider = cmn.ProviderAIS
+	if !globalConfig.LRU.LocalBuckets {
+		defLocalProps.LRU.Enabled = false
+	}
 
 	// Local bucket props
 	bucketPropsLocal := defaultBucketProps()
@@ -726,12 +733,11 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, bucketPropsCloud, *cloudProps)
 
 	// Reset local bucket props and validate they are reset
-	globalProps.CloudProvider = cmn.ProviderAIS
 	err = api.ResetBucketProps(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, globalProps, *localProps)
+	validateBucketProps(t, defLocalProps, *localProps)
 
 	// Check if cloud bucket props remain the same
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
@@ -739,19 +745,17 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	validateBucketProps(t, bucketPropsCloud, *cloudProps)
 
 	// Reset cloud bucket props
-	globalProps.CloudProvider = cmn.ProviderAmazon
+	defCloudProps.CloudProvider = cmn.ProviderAmazon
 	err = api.ResetBucketProps(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
 	cloudProps, err = api.HeadBucket(baseParams, bucketName, queryCloud)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, globalProps, *cloudProps)
+	validateBucketProps(t, defCloudProps, *cloudProps)
 
 	// Check if local bucket props remain the same
-	globalProps.CloudProvider = cmn.ProviderAIS
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
-	validateBucketProps(t, globalProps, *localProps)
-
+	validateBucketProps(t, defLocalProps, *localProps)
 }
 
 func Test_coldgetmd5(t *testing.T) {
