@@ -163,3 +163,10 @@ func FastLog2Ceil(c uint64) uint {
 	}
 	return FastLog2(c-1) + 1
 }
+
+type Bits uint8
+
+func (b *Bits) Set(flag Bits)      { x := *b; x |= flag; *b = x }
+func (b *Bits) Clear(flag Bits)    { x := *b; x &^= flag; *b = x }
+func (b *Bits) Toggle(flag Bits)   { x := *b; x ^= flag; *b = x }
+func (b *Bits) Has(flag Bits) bool { return *b&flag != 0 }

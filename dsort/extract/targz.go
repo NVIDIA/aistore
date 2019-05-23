@@ -11,6 +11,8 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort/filetype"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -22,10 +24,13 @@ var (
 type targzExtractCreator struct{}
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size   int64
 		header *tar.Header
+
+		// tarFQN
+		workFQN = fs.CSM.GenContentParsedFQN(fqn, filetype.DSortFileType, "")
 	)
 
 	gzr, err := gzip.NewReader(r)
@@ -34,6 +39,17 @@ func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader
 	}
 	defer gzr.Close()
 	tr := tar.NewReader(gzr)
+
+	// extract to .tar
+	f, err := cmn.CreateFile(workFQN)
+	if err != nil {
+		return 0, 0, err
+	}
+	tw := tar.NewWriter(f)
+	defer func() {
+		tw.Close()
+		f.Close()
+	}()
 
 	var slabSize int64 = memsys.MaxSlabSize
 	if r.Size() < cmn.MiB {
@@ -45,6 +61,7 @@ func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader
 	buf := slab.Alloc()
 	defer slab.Free(buf)
 
+	offset := int64(0)
 	for {
 		header, err = tr.Next()
 		if err == io.EOF {
@@ -59,6 +76,12 @@ func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader
 			return extractedSize, extractedCount, err
 		}
 
+		if err := tw.WriteHeader(header); err != nil {
+			return extractedSize, extractedCount, err
+		}
+
+		offset += t.MetadataSize()
+
 		if header.Typeflag == tar.TypeDir {
 			// We can safely ignore this case because we do `MkdirAll` anyway
 			// when we create files. And since dirs can appear after all the files
@@ -66,7 +89,25 @@ func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader
 			continue
 		} else if header.Typeflag == tar.TypeReg {
 			data := cmn.NewSizedReader(tr, header.Size)
-			if size, err = extractor.ExtractRecordWithBuffer(shardName, header.Name, data, bmeta, toDisk, 0, buf); err != nil {
+
+			var extractMethod cmn.Bits = ExtractToMem
+			if toDisk {
+				extractMethod = ExtractToDisk
+			}
+			extractMethod.Set(ExtractToWriter)
+
+			args := extractRecordArgs{
+				shardName:     fqn.Objname,
+				fileType:      filetype.DSortFileType,
+				recordName:    header.Name,
+				r:             data,
+				w:             tw,
+				metadata:      bmeta,
+				extractMethod: extractMethod,
+				offset:        offset,
+				buf:           buf,
+			}
+			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
 				return extractedSize, extractedCount, err
 			}
 		} else {
@@ -76,6 +117,9 @@ func (t *targzExtractCreator) ExtractShard(shardName string, r *io.SectionReader
 
 		extractedSize += size
 		extractedCount++
+
+		// .tar format pads all block to 512 bytes
+		offset += paddedSize(header.Size)
 	}
 }
 
@@ -88,6 +132,7 @@ func NewTargzExtractCreator() ExtractCreator {
 func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var (
 		n        int64
+		padBuf   = make([]byte, tarBlockSize)
 		gzw      = gzip.NewWriter(tarball)
 		tw       = tar.NewWriter(gzw)
 		rdReader = newTarRecordDataReader()
@@ -101,9 +146,32 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
-			rdReader.reinit(tw, obj.Size, obj.MetadataSize)
-			if n, err = loadContent(rdReader, rec, obj); err != nil {
-				return written + n, err
+			switch obj.StoreType {
+			case OffsetStoreType:
+				if n, err = loadContent(gzw, rec, obj); err != nil {
+					return written + n, err
+				}
+
+				// pad to 512 bytes
+				diff := paddedSize(n) - n
+				if diff > 0 {
+					if _, err = gzw.Write(padBuf[:diff]); err != nil {
+						return written + n, err
+					}
+					n += diff
+				}
+				cmn.Dassert(diff >= 0 && diff < 512, pkgName)
+			case SGLStoreType, DiskStoreType:
+				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
+				if n, err = loadContent(rdReader, rec, obj); err != nil {
+					return written + n, err
+				}
+				if err := tw.Flush(); err != nil {
+					return written + n, err
+				}
+				written += n
+			default:
+				cmn.AssertMsg(false, obj.StoreType)
 			}
 
 			written += n
@@ -117,7 +185,7 @@ func (t *targzExtractCreator) UsingCompression() bool {
 }
 
 func (t *targzExtractCreator) SupportsOffset() bool {
-	return false
+	return true
 }
 
 func (t *targzExtractCreator) MetadataSize() int64 {

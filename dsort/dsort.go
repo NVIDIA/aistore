@@ -163,7 +163,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		beforeExtraction := time.Now()
 		reader := io.NewSectionReader(f, 0, lom.Size())
-		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(shardName, reader, m.recManager, toDisk)
+		extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom.ParsedFQN, reader, m.recManager, toDisk)
 
 		dur := time.Since(beforeExtraction)
 

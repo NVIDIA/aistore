@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -137,7 +138,7 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *tarExtractCreator) ExtractShard(shardName string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size   int64
 		tr     = tar.NewReader(r)
@@ -178,7 +179,23 @@ func (t *tarExtractCreator) ExtractShard(shardName string, r *io.SectionReader, 
 			continue
 		} else if header.Typeflag == tar.TypeReg {
 			data := cmn.NewSizedReader(tr, header.Size)
-			if size, err = extractor.ExtractRecordWithBuffer(shardName, header.Name, data, bmeta, toDisk, offset, buf); err != nil {
+
+			var extractMethod cmn.Bits = ExtractToMem
+			if toDisk {
+				extractMethod = ExtractToDisk
+			}
+
+			args := extractRecordArgs{
+				shardName:     fqn.Objname,
+				fileType:      fqn.ContentType,
+				recordName:    header.Name,
+				r:             data,
+				metadata:      bmeta,
+				extractMethod: extractMethod,
+				offset:        offset,
+				buf:           buf,
+			}
+			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
 				return extractedSize, extractedCount, err
 			}
 		} else {

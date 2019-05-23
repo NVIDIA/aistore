@@ -909,6 +909,84 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	dsortFW.checkDSortList()
 }
 
+func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                 m,
+			tarballCnt:        400,
+			fileInTarballSize: cmn.MiB,
+			fileInTarballCnt:  3,
+			extension:         ".tar.gz",
+		}
+	)
+
+	dsortFW.init()
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	dsortFW.createInputShards()
+
+	// Try to free all memory to get estimated actual used memory size
+	runtime.GC()
+	debug.FreeOSMemory()
+	time.Sleep(time.Second)
+
+	// Get current memory
+	mem, err := sys.Mem()
+	tassert.CheckFatal(t, err)
+	dsortFW.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+300*cmn.MiB, 2)
+
+	tutils.Logf("starting distributed sort with using memory, disk and compression (max mem usage: %s)...\n", dsortFW.maxMemUsage)
+	rs := dsortFW.gen()
+	managerUUID, err := api.StartDSort(baseParams, rs)
+	tassert.CheckFatal(t, err)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+	tassert.CheckFatal(t, err)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	extractedToDisk, extractedTotal := 0, 0
+	for _, metrics := range allMetrics {
+		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
+		extractedTotal += metrics.Extraction.ExtractedCnt
+	}
+
+	if extractedToDisk == 0 {
+		t.Error("all extractions by all targets were done exclusively into memory")
+	}
+	if extractedToDisk == extractedTotal {
+		t.Error("all extractions by all targets were done exclusively into disk")
+	}
+
+	dsortFW.checkOutputShards(5)
+	dsortFW.checkDSortList()
+}
+
 func TestDistributedSortZip(t *testing.T) {
 	var (
 		err error

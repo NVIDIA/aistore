@@ -38,6 +38,10 @@ type (
 		// To get path for given object you need to use `FullContentPath` method.
 		ContentPath string `json:"p"`
 
+		// Filesystem file type where the shard is stored - used to determine
+		// location for content path when asking filesystem.
+		ObjectFileType string `json:"ft"`
+
 		// Determines where the record has been stored, can be either: OffsetStoreType,
 		// SGLStoreType, DiskStoreType.
 		StoreType string `json:"st"`
