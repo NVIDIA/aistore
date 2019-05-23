@@ -4,7 +4,11 @@
  */
 package commands
 
-import "testing"
+import (
+	"github.com/NVIDIA/aistore/cmn"
+	"reflect"
+	"testing"
+)
 
 func TestParseSourceValidURIs(t *testing.T) {
 	var parseSourceTests = []struct {
@@ -90,6 +94,49 @@ func TestParseDestInvalidURIs(t *testing.T) {
 		_, _, err := parseDest(test)
 		if err == nil {
 			t.Errorf("expected error while parsing dest URI %s: %v", test, err)
+		}
+	}
+}
+
+func TestMakePairs(t *testing.T) {
+	var makePairsTest = []struct {
+		input []string
+		nvs   cmn.SimpleKVs
+	}{
+		{ []string{"key1=value1", "key2=value2", "key3=value3"},
+			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
+		{ []string{"key1", "value1", "key2", "value2", "key3", "value3"},
+			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
+		{ []string{"key1=value1", "key2", "value2", "key3=value3"},
+			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
+	}
+
+	for _, test := range makePairsTest {
+		nvs, err := makePairs(test.input, "=")
+
+		if err != nil {
+			t.Fatalf("unexpected error of make pairs for input %#v: %v", test.input, err)
+		}
+
+		if !reflect.DeepEqual(nvs, test.nvs) {
+			t.Errorf("makePairs expected output: %#v, got: %#v", test.nvs, nvs)
+		}
+	}
+}
+
+
+func TestMakePairsErrors(t *testing.T) {
+	var makePairsTest = []struct {
+		input []string
+	}{
+		{ []string{"key1", "value1", "key2=value2", "key3"}},
+	}
+
+	for _, test := range makePairsTest {
+		_, err := makePairs(test.input, "=")
+
+		if err == nil {
+			t.Fatalf("expected error of make pairs for input %#v, but got none", test.input)
 		}
 	}
 }

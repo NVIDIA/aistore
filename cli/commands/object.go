@@ -212,12 +212,18 @@ func objectHandler(c *cli.Context) (err error) {
 }
 
 // Get object from bucket
-func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
-	if err = checkFlags(c, nameFlag, outFileFlag); err != nil {
-		return
+func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
+	if flagIsSet(c, cachedFlag) {
+		return objectCheckCached(c, baseParams, bucket, bckProvider)
 	}
 
-	obj := parseStrFlag(c, nameFlag)
+	if err := checkFlags(c, nameFlag, outFileFlag); err != nil {
+		return err
+	}
+	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
+		return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+	}
+
 	offset, err := getByteFlagValue(c, offsetFlag)
 	if err != nil {
 		return err
@@ -226,6 +232,8 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	if err != nil {
 		return err
 	}
+	obj := parseStrFlag(c, nameFlag)
+	outFile := parseStrFlag(c, outFileFlag)
 
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, bckProvider)
@@ -233,7 +241,6 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	query.Add(cmn.URLParamLength, length)
 
 	var objArgs api.GetObjectInput
-	outFile := parseStrFlag(c, outFileFlag)
 
 	if outFile == outFileStdout {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
@@ -247,23 +254,6 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		objArgs = api.GetObjectInput{Writer: f, Query: query}
 	}
 
-	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
-	}
-
-	if flagIsSet(c, cachedFlag) {
-		_, err := api.HeadObject(baseParams, bucket, bckProvider, obj, true)
-		if err != nil {
-			if err.(*cmn.HTTPError).Status == http.StatusNotFound {
-				fmt.Printf("Cached: %v\n", false)
-				return nil
-			}
-			return err
-		}
-		fmt.Printf("Cached: %v\n", true)
-		return nil
-	}
-
 	var objLen int64
 	if flagIsSet(c, checksumFlag) {
 		objLen, err = api.GetObjectWithValidation(baseParams, bucket, obj, objArgs)
@@ -271,15 +261,31 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		objLen, err = api.GetObject(baseParams, bucket, obj, objArgs)
 	}
 	if err != nil {
-		return
+		return err
 	}
 
 	if flagIsSet(c, lengthFlag) {
-		_, _ = fmt.Fprintf(os.Stderr, "\nRead %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
-		return
+		_, _ = fmt.Fprintf(os.Stderr, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		return err
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
-	return
+	return err
+}
+
+func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
+	object := parseStrFlag(c, nameFlag)
+
+	_, err := api.HeadObject(baseParams, bucket, bckProvider, object, true)
+	if err != nil {
+		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
+			fmt.Printf("Cached: %v\n", false)
+			return nil
+		}
+		return err
+	}
+
+	fmt.Printf("Cached: %v\n", true)
+	return nil
 }
 
 // Put object into bucket

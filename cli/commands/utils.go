@@ -262,7 +262,7 @@ func makePairs(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
 		} else {
 			// "key value" case with a corner case: last name without a value
 			if i == len(args)-1 {
-				return nil, fmt.Errorf("No value for %v", args[i])
+				return nil, fmt.Errorf("no value for %v", args[i])
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2
