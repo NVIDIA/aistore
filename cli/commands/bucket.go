@@ -135,7 +135,7 @@ var (
 							UsageText:    bucketGetPropsText,
 							Flags:        bucketPropsFlags[propsList],
 							Action:       bucketPropsHandler,
-							BashComplete: flagList,
+							BashComplete: bucketList([]cli.BashCompleteFunc{}),
 						},
 						{
 							Name:         propsSet,
@@ -143,7 +143,7 @@ var (
 							UsageText:    bucketSetPropsText,
 							Flags:        bucketPropsFlags[propsSet],
 							Action:       bucketPropsHandler,
-							BashComplete: propList,
+							BashComplete: bucketList([]cli.BashCompleteFunc{propList}),
 						},
 						{
 							Name:         propsReset,
@@ -151,7 +151,7 @@ var (
 							UsageText:    bucketResetPropsText,
 							Flags:        bucketPropsFlags[propsReset],
 							Action:       bucketPropsHandler,
-							BashComplete: flagList,
+							BashComplete: bucketList([]cli.BashCompleteFunc{}),
 						},
 					},
 				},
@@ -169,7 +169,7 @@ var (
 					UsageText:    bucketDelText,
 					Flags:        bucketFlags[bucketDestroy],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
 				},
 				{
 					Name:         commandRename,
@@ -177,7 +177,7 @@ var (
 					UsageText:    bucketRenameText,
 					Flags:        bucketFlags[commandRename],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
 				},
 				{
 					Name:         bucketNames,
@@ -193,7 +193,7 @@ var (
 					UsageText:    bucketListText,
 					Flags:        bucketFlags[commandList],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}),
 				},
 				{
 					Name:         bucketNWayMirror,
@@ -201,7 +201,7 @@ var (
 					UsageText:    bucketNWayMirrorText,
 					Flags:        bucketFlags[bucketNWayMirror],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}),
 				},
 				{
 					Name:         bucketEvict,
@@ -209,7 +209,7 @@ var (
 					UsageText:    bucketEvictText,
 					Flags:        bucketFlags[bucketEvict],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.CloudBs),
 				},
 				{
 					Name:         bucketSummary,
@@ -217,7 +217,7 @@ var (
 					UsageText:    bucketStatsText,
 					Flags:        bucketFlags[bucketSummary],
 					Action:       bucketHandler,
-					BashComplete: flagList,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}),
 				},
 			},
 		},

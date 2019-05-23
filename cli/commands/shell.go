@@ -7,6 +7,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -39,6 +40,61 @@ func targetList(_ *cli.Context) {
 func flagList(c *cli.Context) {
 	for _, flag := range c.Command.Flags {
 		fmt.Printf("--%s\n", cleanFlag(flag.GetName()))
+	}
+}
+
+// The function will list bucket names if the first argument to the command was not yet specified, otherwise it will
+// list flags and everything that `additionalCompletions` list.
+// By default it tries to read `provider` from flag `--provider` or AIS_BUCKET_PROVIDER env variable. If none
+// is provided it lists all buckets.
+// Optional parameter `provider` can be used to specify which buckets will be listed - only local or only cloud.
+func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string) cli.BashCompleteFunc {
+	bckProvider := ""
+	if len(provider) > 0 {
+		bckProvider = provider[0]
+	}
+
+	// Completions for bucket names based on bucket provider
+	return func(c *cli.Context) {
+		// Don't list buckets if one is provided via env variable
+		if c.NArg() >= 1 {
+			for _, f := range additionalCompletions {
+				f(c)
+			}
+			flagList(c)
+			return
+		}
+
+		// If not specified, try to get provider from flag or env variable
+		if bckProvider == "" {
+			bckProvider = parseStrFlag(c, bckProviderFlag)
+			if bckProvider == "" {
+				bckProvider = os.Getenv(aisBucketProviderEnvVar)
+			}
+
+			var err error
+			bckProvider, err = cmn.BckProviderFromStr(bckProvider)
+			if err != nil {
+				bckProvider = ""
+			}
+		}
+
+		baseParams := cliAPIParams(ClusterURL)
+		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
+		if err != nil {
+			return
+		}
+
+		if bckProvider == cmn.LocalBs || bckProvider == "" {
+			for _, bucket := range bucketNames.Local {
+				fmt.Println(bucket)
+			}
+		}
+		if bckProvider == cmn.CloudBs || bckProvider == "" {
+			for _, bucket := range bucketNames.Cloud {
+				fmt.Println(bucket)
+			}
+		}
 	}
 }
 
