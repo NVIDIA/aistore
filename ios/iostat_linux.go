@@ -149,6 +149,8 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 func (ctx *IostatContext) RemoveMpath(mpath string) {
 	ctx.mpathLock.Lock()
 	defer ctx.mpathLock.Unlock()
+
+	config := cmn.GCO.Get()
 	oldDisks, ok := ctx.mpath2disks[mpath]
 	if !ok {
 		glog.Warningf("mountpath %s already removed", mpath)
@@ -156,7 +158,7 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 	}
 	for disk := range oldDisks {
 		if mp, ok := ctx.disk2mpath[disk]; ok {
-			if mp != mpath {
+			if mp != mpath && !config.TestingEnv() {
 				s := fmt.Sprintf("(mpath %s => disk %s => mpath %s) violation", mp, disk, mpath)
 				cmn.AssertMsg(false, s)
 			}
