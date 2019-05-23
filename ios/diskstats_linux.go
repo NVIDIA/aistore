@@ -2,7 +2,6 @@ package ios
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -11,13 +10,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const (
-	largeNumDisks = 3
-)
-
-type DiskStat struct {
-	// based on https://www.kernel.org/doc/Documentation/iostats.txt
-	//   and https://www.kernel.org/doc/Documentation/block/stat.txt
+// based on https://www.kernel.org/doc/Documentation/iostats.txt
+//   and https://www.kernel.org/doc/Documentation/block/stat.txt
+type dblockStat struct {
 	ReadComplete  int64 // 1 - # of reads completed
 	ReadMerged    int64 // 2 - # of reads merged
 	ReadSectors   int64 // 3 - # of sectors read
@@ -31,96 +26,39 @@ type DiskStat struct {
 	IOMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
 }
 
-type DiskStats map[string]DiskStat
+type diskBlockStats map[string]dblockStat
 
-func (ds *DiskStat) String() string {
-	return strings.Join([]string{
-		spI64("ReadComplete", ds.ReadComplete),
-		spI64("ReadMerged", ds.ReadMerged),
-		spI64("ReadSectors", ds.ReadSectors),
-		spI64("ReadMs", ds.ReadMs),
-		spI64("WriteComplete", ds.WriteComplete),
-		spI64("WriteMerged", ds.WriteMerged),
-		spI64("WriteSectors", ds.WriteSectors),
-		spI64("WriteMs", ds.WriteMs),
-		spI64("IOPending", ds.IOPending),
-		spI64("IOMs", ds.IOMs),
-		spI64("IOMsWeighted", ds.IOMsWeighted),
-	}, " ")
-}
-
-// GetDiskStats returns the stats of the keys in disks
-func GetDiskStats(disks cmn.SimpleKVs) DiskStats {
-	if len(disks) >= largeNumDisks {
-		return readMultipleDiskStats(disks)
-	}
-	output := make(DiskStats, len(disks))
-	for disk := range disks {
-		stat, ok := readSingleDiskStat(disk)
+// readDiskStats returns disk stats FIXME: optimize
+func readDiskStats(disks, sysfnames cmn.SimpleKVs, blockStats diskBlockStats) {
+	for d := range disks {
+		stat, ok := readSingleDiskStat(sysfnames[d])
 		if !ok {
 			continue
 		}
-		output[disk] = stat
+		blockStats[d] = stat
 	}
-	return output
 }
 
-func readSingleDiskStat(disk string) (DiskStat, bool) {
-	file, err := os.Open(fmt.Sprintf("/sys/class/block/%v/stat", disk))
+// https://www.kernel.org/doc/Documentation/block/stat.txt
+func readSingleDiskStat(sysfn string) (dblockStat, bool) {
+	file, err := os.Open(sysfn)
 	if err != nil {
-		glog.Error(err)
-		return DiskStat{}, false
+		glog.Errorf("%s: %v", sysfn, err)
+		return dblockStat{}, false
 	}
-
 	scanner := bufio.NewScanner(file)
 	scanner.Scan()
 	fields := strings.Fields(scanner.Text())
 
 	_ = file.Close()
-
 	if len(fields) < 11 {
-		return DiskStat{}, false
+		return dblockStat{}, false
 	}
-
 	return extractDiskStat(fields, 0), true
 }
 
-func readMultipleDiskStats(disks cmn.SimpleKVs) DiskStats {
-	output := make(DiskStats, len(disks))
-
-	file, err := os.Open("/proc/diskstats")
-	if err != nil {
-		glog.Error(err)
-		return output
-	}
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 14 {
-			continue
-		}
-		deviceName := fields[2]
-		if _, ok := disks[deviceName]; !ok {
-			continue
-		}
-
-		ds := extractDiskStat(fields, 3)
-		output[deviceName] = ds
-	}
-
-	_ = file.Close()
-	return output
-}
-
-func extractDiskStat(fields []string, offset int) DiskStat {
-	return DiskStat{
+func extractDiskStat(fields []string, offset int) dblockStat {
+	return dblockStat{
 		extractI64(fields[offset]),
 		extractI64(fields[offset+1]),
 		extractI64(fields[offset+2]),
@@ -142,8 +80,4 @@ func extractI64(field string) int64 {
 			field, err)
 	}
 	return val
-}
-
-func spI64(name string, field int64) string {
-	return fmt.Sprintf("%s=%v", name, field)
 }

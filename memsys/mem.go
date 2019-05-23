@@ -378,7 +378,6 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 			get:     make([][]byte, 0, minDepth),
 			put:     make([][]byte, 0, minDepth),
 		}
-		slab.tag = r.Getname() + "." + cmn.B2S(slab.bufSize, 0)
 		slab.pMinDepth = &r.minDepth
 		slab.debug = r.Debug
 		r.rings[i] = slab
@@ -444,6 +443,12 @@ func (r *Mem2) Run() error {
 	mem, _ := sys.Mem()
 	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowWM), 2)
 	logMsg(fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d))
+
+	// assign tags
+	for _, s := range &r.rings {
+		s.tag = r.Getname() + "." + cmn.B2S(s.bufSize, 0)
+	}
+
 	f := cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree > mem.Total-mem.Total/5 { // more than 80%
 		logMsg(fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f))

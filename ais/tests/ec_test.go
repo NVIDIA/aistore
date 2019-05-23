@@ -1933,6 +1933,10 @@ func TestECEmergencyMpath(t *testing.T) {
 }
 
 func init() {
+	config := cmn.GCO.BeginUpdate()
+	config.TestFSP.Count = 1
+	cmn.GCO.CommitUpdate(config)
+
 	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	targetDirs, _ := ioutil.ReadDir(rootDir)

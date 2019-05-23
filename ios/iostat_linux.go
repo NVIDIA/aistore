@@ -8,12 +8,14 @@ package ios
 import (
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 
 	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -36,6 +38,9 @@ type (
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
+		sorted      []string
+		blockStats  diskBlockStats
+		disk2sysfn  cmn.SimpleKVs
 		cache       atomic.Pointer
 		updateLock  *sync.Cond
 		cacheHst    [16]*ioStatCache // history TODO
@@ -67,8 +72,11 @@ type (
 func NewIostatContext(fqnr FQNResolver) (ctx *IostatContext) {
 	ctx = &IostatContext{
 		fqnr:        fqnr,
-		mpath2disks: make(map[string]fsDisks),
-		disk2mpath:  make(cmn.SimpleKVs),
+		mpath2disks: make(map[string]fsDisks, 10),
+		disk2mpath:  make(cmn.SimpleKVs, 10),
+		sorted:      make([]string, 0, 10),
+		blockStats:  make(diskBlockStats, 10),
+		disk2sysfn:  make(cmn.SimpleKVs, 10),
 		updateLock:  sync.NewCond(&sync.Mutex{}),
 	}
 	for i := 0; i < len(ctx.cacheHst); i++ {
@@ -100,29 +108,59 @@ func newIostatCache() *ioStatCache {
 //
 
 func (ctx *IostatContext) AddMpath(mpath, fs string) {
-	ctx.RemoveMpath(mpath) // called to cleanup old
-
 	ctx.mpathLock.Lock()
 	defer ctx.mpathLock.Unlock()
 
+	config := cmn.GCO.Get()
 	disks := fs2disks(fs)
 	if len(disks) == 0 {
 		return
 	}
+	if dd, ok := ctx.mpath2disks[mpath]; ok {
+		s := fmt.Sprintf("mountpath %s already added, disks %+v %+v", mpath, dd, disks)
+		cmn.AssertMsg(false, s)
+	}
 	ctx.mpath2disks[mpath] = disks
 	for disk := range disks {
+		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
+			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s", mp, fs, mpath, disk)
+			cmn.AssertMsg(false, s)
+			return
+		}
 		ctx.disk2mpath[disk] = mpath
+	}
+	ctx.sorted = ctx.sorted[:0]
+	for disk := range ctx.disk2mpath {
+		ctx.sorted = append(ctx.sorted, disk)
+		if _, ok := ctx.disk2sysfn[disk]; !ok {
+			ctx.disk2sysfn[disk] = fmt.Sprintf("/sys/class/block/%v/stat", disk)
+		}
+	}
+	sort.Strings(ctx.sorted) // log
+	if len(ctx.disk2sysfn) != len(ctx.disk2mpath) {
+		for disk := range ctx.disk2sysfn {
+			if _, ok := ctx.disk2mpath[disk]; !ok {
+				delete(ctx.disk2sysfn, disk)
+			}
+		}
 	}
 }
 
 func (ctx *IostatContext) RemoveMpath(mpath string) {
 	ctx.mpathLock.Lock()
 	defer ctx.mpathLock.Unlock()
-	if oldDisks, ok := ctx.mpath2disks[mpath]; ok {
-		for disk := range oldDisks {
-			if mappedMpath, ok := ctx.disk2mpath[disk]; ok && mappedMpath == mpath {
-				delete(ctx.disk2mpath, disk)
+	oldDisks, ok := ctx.mpath2disks[mpath]
+	if !ok {
+		glog.Warningf("mountpath %s already removed", mpath)
+		return
+	}
+	for disk := range oldDisks {
+		if mp, ok := ctx.disk2mpath[disk]; ok {
+			if mp != mpath {
+				s := fmt.Sprintf("(mpath %s => disk %s => mpath %s) violation", mp, disk, mpath)
+				cmn.AssertMsg(false, s)
 			}
+			delete(ctx.disk2mpath, disk)
 		}
 	}
 	delete(ctx.mpath2disks, mpath)
@@ -211,7 +249,15 @@ func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 
 func (ctx *IostatContext) LogAppend(lines []string, timestamp time.Time) []string {
 	var cache = ctx.refreshIostatCache(timestamp)
-	for disk := range cache.diskIOms {
+	for _, disk := range ctx.sorted {
+		if _, ok := cache.diskIOms[disk]; !ok {
+			glog.Errorf("no stats for disk %s", disk) // TODO: remove
+			continue
+		}
+		util := cache.diskUtil[disk]
+		if util == 0 {
+			continue
+		}
 		rbps := cmn.B2S(cache.diskRBps[disk], 0)
 		wbps := cmn.B2S(cache.diskWBps[disk], 0)
 		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, cache.diskUtil[disk])
@@ -250,7 +296,7 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 		ctx.updateLock.Broadcast()
 		return statsCache
 	}
-	fetchedDiskStats := GetDiskStats(ctx.disk2mpath)
+	readDiskStats(ctx.disk2mpath, ctx.disk2sysfn, ctx.blockStats)
 
 	ctx.mpathLock.Lock()
 	ctx.cacheIdx++
@@ -269,11 +315,17 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 		ncache.mpathUtil[mpath] = 0
 		ncache.mpathQue[mpath] = 0
 	}
-
+	for disk := range ncache.diskIOms {
+		if _, ok := ctx.disk2mpath[disk]; !ok {
+			ncache = newIostatCache()
+			ctx.cacheHst[ctx.cacheIdx] = ncache
+		}
+	}
 	missingInfo := false
 	for disk, mpath := range ctx.disk2mpath {
-		stat, ok := fetchedDiskStats[disk]
+		stat, ok := ctx.blockStats[disk]
 		if !ok {
+			glog.Errorf("no stats for disk %s", disk) // TODO: remove
 			continue
 		}
 		ncache.diskIOms[disk] = stat.IOMs

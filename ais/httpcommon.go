@@ -1065,14 +1065,14 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 		res = h.call(callArgs)
 		if res.err == nil {
 			if !keepalive {
-				glog.Infof("%s: registered => %s/%s", h.si, url, path)
+				glog.Infof("%s: registered => %s[%s]", h.si, url, path)
 			}
 			return
 		}
 		if cmn.IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s/%s: connection refused)", h.si, url, path)
+			glog.Errorf("%s: (register => %s[%s]: connection refused)", h.si, url, path)
 		} else {
-			glog.Errorf("%s: (register => %s/%s: %v)", h.si, url, path, res.err)
+			glog.Errorf("%s: (register => %s[%s]: %v)", h.si, url, path, res.err)
 		}
 	}
 	return
