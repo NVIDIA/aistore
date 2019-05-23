@@ -30,6 +30,21 @@ const (
 	Gauge
 	// PersistentCounter is StatsD's gauge type which is increased every time by the value
 	PersistentCounter
+
+	get       = "get"
+	put       = "put"
+	getConfig = "getconfig"
+
+	throughput = "throughput"
+
+	latency          = "latency"
+	latencyProxy     = "latency.proxy"
+	latencyProxyConn = "latency.proxyconn"
+	minLatency       = "minlatency"
+	maxLatency       = "maxlatency"
+
+	pending = "pending"
+	count   = "count"
 )
 
 type (
@@ -185,6 +200,14 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	}
 }
 
+func NewStatsdMetrics(start time.Time) Metrics {
+	m := Metrics{}
+	m.Get.start = start
+	m.Put.start = start
+	m.Config.start = start
+	return m
+}
+
 func (ma *MetricAgg) Add(size int64, lat time.Duration) {
 	ma.cnt++
 	ma.latency += lat
@@ -208,11 +231,15 @@ func (ma *MetricAgg) AvgLatency() float64 {
 	return float64(ma.latency/time.Millisecond) / float64(ma.cnt)
 }
 
-func (ma *MetricAgg) Throughput() int64 {
+func (ma *MetricAgg) Throughput(end time.Time) int64 {
 	if ma.cnt == 0 {
 		return 0
 	}
-	return int64(float64(ma.bytes) / ma.latency.Seconds())
+	if end == ma.start {
+		return 0
+	}
+
+	return int64(float64(ma.bytes) / end.Sub(ma.start).Seconds())
 }
 
 func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
@@ -257,9 +284,10 @@ func (mcg *MetricConfigAgg) Add(lat, latProxy, latProxyConn time.Duration) {
 }
 
 func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt int64) {
+	endTime := time.Now()
 	c.Send(mType, 1, Metric{
 		Type:  Counter,
-		Name:  "count",
+		Name:  count,
 		Value: ma.cnt,
 	})
 
@@ -267,31 +295,31 @@ func (ma *MetricAgg) Send(c *Client, mType string, general []Metric, genAggCnt i
 	if ma.cnt != 0 {
 		c.Send(mType, ma.cnt, Metric{
 			Type:  Gauge,
-			Name:  "pending",
+			Name:  pending,
 			Value: ma.pending / ma.cnt,
 		})
 		c.Send(mType, ma.cnt,
 			Metric{
 				Type:  Timer,
-				Name:  "latency",
+				Name:  latency,
 				Value: ma.AvgLatency(),
 			},
 			Metric{
 				Type:  Timer,
-				Name:  "minlatency",
+				Name:  minLatency,
 				Value: float64(ma.minLatency / time.Millisecond),
 			},
 			Metric{
 				Type:  Timer,
-				Name:  "maxlatency",
+				Name:  maxLatency,
 				Value: float64(ma.maxLatency / time.Millisecond),
 			},
-			Metric{
-				Type:  Counter,
-				Name:  "throughput",
-				Value: ma.Throughput(),
-			},
 		)
+		c.Send(mType, ma.cnt, Metric{
+			Type:  Gauge,
+			Name:  throughput,
+			Value: ma.Throughput(endTime),
+		})
 	}
 
 	if len(general) != 0 {
@@ -305,26 +333,26 @@ func (mcg *MetricConfigAgg) Send(c *Client) {
 		return
 	}
 
-	c.Send("getconfig", 1,
+	c.Send(getConfig, 1,
 		Metric{
 			Type:  Counter,
-			Name:  "count",
+			Name:  count,
 			Value: mcg.cnt,
 		})
-	c.Send("getconfig", mcg.cnt,
+	c.Send(getConfig, mcg.cnt,
 		Metric{
 			Type:  Timer,
-			Name:  "latency",
+			Name:  latency,
 			Value: float64(mcg.latency/time.Millisecond) / float64(mcg.cnt),
 		},
 		Metric{
 			Type:  Timer,
-			Name:  "latency.proxyconn",
+			Name:  latencyProxyConn,
 			Value: float64(mcg.proxyConnLatency/time.Millisecond) / float64(mcg.cnt),
 		},
 		Metric{
 			Type:  Timer,
-			Name:  "latency.proxy",
+			Name:  latencyProxy,
 			Value: float64(mcg.proxyLatency/time.Millisecond) / float64(mcg.cnt),
 		},
 	)
@@ -343,7 +371,31 @@ func (m *Metrics) SendAll(c *Client) {
 		aggCnt = m.cnt
 	}
 
-	m.Get.Send(c, "get", generalMetrics, aggCnt)
-	m.Put.Send(c, "put", generalMetrics, aggCnt)
+	m.Get.Send(c, get, generalMetrics, aggCnt)
+	m.Put.Send(c, put, generalMetrics, aggCnt)
 	m.Config.Send(c)
+}
+
+func ResetMetricsGauges(c *Client) {
+	c.Send(get, 1,
+		Metric{
+			Type:  Gauge,
+			Name:  throughput,
+			Value: 0,
+		}, Metric{
+			Type:  Gauge,
+			Name:  pending,
+			Value: 0,
+		})
+
+	c.Send(put, 1,
+		Metric{
+			Type:  Gauge,
+			Name:  throughput,
+			Value: 0,
+		}, Metric{
+			Type:  Gauge,
+			Name:  pending,
+			Value: 0,
+		})
 }

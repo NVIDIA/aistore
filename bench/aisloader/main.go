@@ -571,6 +571,7 @@ func newStats(t time.Time) sts {
 		put:       stats.NewHTTPReq(t),
 		get:       stats.NewHTTPReq(t),
 		getConfig: stats.NewHTTPReq(t),
+		statsd:    statsd.NewStatsdMetrics(t),
 	}
 }
 
@@ -841,9 +842,7 @@ DONE:
 	}
 
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
-	accumulatedStats.aggregate(intervalStats)
-	writeStats(statsWriter, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
-	postWriteStats(statsWriter, runParams.jsonFormat)
+	finalizeStats(statsWriter)
 	if runParams.cleanUp.Val {
 		cleanUp()
 	}
@@ -970,6 +969,15 @@ func postWriteStats(to io.Writer, jsonFormat bool) {
 		fmt.Fprintln(to)
 		fmt.Fprintln(to, "]")
 	}
+}
+
+func finalizeStats(to io.Writer) {
+	accumulatedStats.aggregate(intervalStats)
+	writeStats(to, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
+	postWriteStats(to, runParams.jsonFormat)
+
+	// reset gauges, otherwise they would stay at last send value
+	statsd.ResetMetricsGauges(&statsdC)
 }
 
 func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {
