@@ -619,7 +619,7 @@ func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, err e
 	}
 	m.decrementRef(1)
 	if err != nil {
-		glog.Error(err)
+		m.abort(err)
 	}
 }
 
@@ -628,19 +628,14 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
 		if err = m.streams.response.SendV(hdr, nil, nil, node); err != nil {
-			glog.Error(err)
+			m.abort(err)
 		}
 	}
-
-	// TODO: error handling should be improved - we probably should abort on
-	// error in all cases because it means that something bad happened: either
-	// networking problems or some target went down (in the latter we will
-	// abort anyway).
 
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-			glog.Errorf("received damaged request: %s", err)
+			m.abort(fmt.Errorf("received damaged request: %s", err))
 			return
 		}
 
@@ -660,7 +655,6 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 		}
 
 		if m.aborted() {
-			glog.V(4).Info("dsort process was aborted")
 			return
 		}
 
@@ -683,7 +677,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 
 			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, fromNode); err != nil {
 				f.Close()
-				glog.Error(err)
+				m.abort(err)
 			}
 		case extract.SGLStoreType:
 			v, ok := m.recManager.RecordContents().Load(fullContentPath)
@@ -693,7 +687,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			respHdr.ObjAttrs.Size = sgl.Size()
 			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, fromNode); err != nil {
 				sgl.Free()
-				glog.Error(err)
+				m.abort(err)
 			}
 		case extract.DiskStoreType:
 			f, err := cmn.NewFileHandle(fullContentPath)
@@ -710,7 +704,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			respHdr.ObjAttrs.Size = fi.Size()
 			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, fromNode); err != nil {
 				f.Close()
-				glog.Error(err)
+				m.abort(err)
 			}
 		default:
 			cmn.Assert(false)
@@ -721,7 +715,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 func (m *Manager) makeRecvResponseFunc() transport.Receive {
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
-			glog.Error(err)
+			m.abort(err)
 			return
 		}
 
@@ -751,12 +745,11 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 func (m *Manager) makeRecvShardFunc() transport.Receive {
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
-			glog.Error(err)
+			m.abort(err)
 			return
 		}
 
 		if m.aborted() {
-			glog.V(4).Info("dsort process was aborted")
 			return
 		}
 
@@ -767,7 +760,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			_, errStr = lom.Load(true)
 		}
 		if errStr != "" {
-			glog.Error(errStr)
+			m.abort(errors.New(errStr))
 			return
 		}
 		if lom.Exists() {
@@ -784,7 +777,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		lom.SetAtimeUnix(started.UnixNano())
 		rc := ioutil.NopCloser(object)
 		if err := m.ctx.t.Receive(workFQN, rc, lom, cluster.WarmGet, nil, started); err != nil {
-			glog.Error(err)
+			m.abort(err)
 			return
 		}
 	}
@@ -1061,10 +1054,7 @@ func (m *Manager) react(reaction, msg string) error {
 		m.Metrics.unlock()
 		return nil
 	case cmn.AbortReaction:
-		m.Metrics.lock()
-		m.Metrics.Errors = append(m.Metrics.Errors, msg)
-		m.Metrics.unlock()
-		return errors.New(msg)
+		return errors.New(msg) // error will be reported on abort
 	default:
 		cmn.AssertMsg(false, reaction)
 		return nil

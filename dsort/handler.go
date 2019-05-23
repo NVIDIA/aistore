@@ -442,7 +442,11 @@ func (m *Manager) startDSort() {
 			// Self-abort: better do it before sending broadcast to avoid
 			// inconsistent state: other have aborted but we didn't due to some
 			// problem.
-			m.abort()
+			if isReportableError(err) {
+				m.abort(err)
+			} else {
+				m.abort()
+			}
 
 			glog.Warning("broadcasting abort to other targets")
 			path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, m.ManagerUUID)
