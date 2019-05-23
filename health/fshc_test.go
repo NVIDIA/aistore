@@ -24,6 +24,10 @@ func testCheckerMountPaths() *fs.MountedFS {
 	cmn.CreateDir(fsCheckerTmpDir + "/3")
 	cmn.CreateDir(fsCheckerTmpDir + "/4")
 
+	config := cmn.GCO.BeginUpdate()
+	config.TestFSP.Count = 1
+	cmn.GCO.CommitUpdate(config)
+
 	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {

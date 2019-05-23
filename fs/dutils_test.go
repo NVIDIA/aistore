@@ -76,6 +76,10 @@ func TestSearchWithNoMountPath(t *testing.T) {
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
+	config := cmn.GCO.BeginUpdate()
+	config.TestFSP.Count = 1
+	cmn.GCO.CommitUpdate(config)
+
 	Mountpaths = NewMountedFS()
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)

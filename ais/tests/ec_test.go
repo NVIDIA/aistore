@@ -56,14 +56,6 @@ var (
 	ecParitySliceCnt = 2
 )
 
-func init() {
-	fs.Mountpaths = fs.NewMountedFS()
-	_ = fs.Mountpaths.Add("/")
-	fs.Mountpaths.DisableFsIDCheck()
-	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
-}
-
 func defaultECBckProps() cmn.BucketProps {
 	return cmn.BucketProps{
 		Cksum: cmn.CksumConf{Type: "inherit"},
