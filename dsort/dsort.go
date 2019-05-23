@@ -167,7 +167,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		dur := time.Since(beforeExtraction)
 
 		// Inform concurrency adjuster about new calculation
-		m.createAdjuster.inform(extractedSize, dur, lom.ParsedFQN.MpathInfo)
+		m.extractAdjuster.inform(extractedSize, dur, lom.ParsedFQN.MpathInfo)
 
 		// Make sure that compression rate is updated before releasing
 		// next extractor goroutine.

@@ -32,7 +32,7 @@ import (
 //
 // There is mechanism which resets number of information required to make
 // decision. This mechanism is required in case throughput decreases
-// significantlly (resetRatio).
+// significantly (resetRatio).
 
 const (
 	// Default value of initial concurrency limit for functions - defined
