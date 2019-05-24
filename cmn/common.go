@@ -270,12 +270,12 @@ func ParseBool(s string) (value bool, err error) {
 	return strconv.ParseBool(s)
 }
 
-func ErrorToSentence(err error) string {
-	if err == nil {
+func StrToSentence(str string) string {
+	if str == "" {
 		return ""
 	}
 
-	capitalized := CapitalizeString(err.Error())
+	capitalized := CapitalizeString(str)
 
 	if !strings.HasSuffix(capitalized, ".") {
 		capitalized += "."

@@ -5,6 +5,8 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"net"
 	"net/http"
@@ -122,7 +124,7 @@ func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
 	if bucket == "" {
 		var ok bool
 		if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
-			return "", missingArgsMessage("bucket name")
+			return "", missingArgumentsError(c, "bucket name")
 		}
 	}
 
@@ -342,12 +344,46 @@ func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) err
 	return nil
 }
 
-func missingArgsMessage(args ...string) error {
-	if len(args) == 0 {
-		return nil
+func helpMessage(c *cli.Context) string {
+	var buf bytes.Buffer
+	w := bufio.NewWriter(&buf)
+
+	// Execute the template that generates command usage text
+	cli.HelpPrinter(w, cli.SubcommandHelpTemplate, c.App)
+	_ = w.Flush()
+
+	return buf.String()
+}
+
+type usageError struct {
+	context *cli.Context
+	message string
+}
+
+func (e *usageError) Error() string {
+	msg := helpMessage(e.context)
+	return fmt.Sprintf("Incorrect usage of %q: %s.\n\n%s", e.context.App.Name, e.message, msg)
+}
+
+func incorrectUsageError(c *cli.Context, err error) error {
+	cmn.Assert(err != nil)
+	return &usageError{
+		context: c,
+		message: err.Error(),
 	}
-	if len(args) == 1 {
-		return fmt.Errorf("missing argument: %s", args[0])
+}
+
+func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
+	cmn.Assert(len(missingArgs) > 0)
+	return &usageError{
+		context: c,
+		message: fmt.Sprintf("missing arguments: %s", strings.Join(missingArgs, ", ")),
 	}
-	return fmt.Errorf("missing arguments: %s", strings.Join(args, ", "))
+}
+
+func commandNotFoundError(c *cli.Context, cmd string) error {
+	return &usageError{
+		context: c,
+		message: fmt.Sprintf("unknown command %q", cmd),
+	}
 }

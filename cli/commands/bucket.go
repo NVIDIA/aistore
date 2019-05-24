@@ -500,7 +500,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		// First argument is a key-value pair -> bucket should be read from env variable
 		bucketEnv, ok := os.LookupEnv(aisBucketEnvVar)
 		if !ok {
-			return missingArgsMessage("bucket name")
+			return missingArgumentsError(c, "bucket name")
 		}
 		bucket = bucketEnv
 		propsArgs = c.Args()
@@ -658,9 +658,9 @@ func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err er
 	)
 
 	if argCount == 0 && envVarSet || (argCount == 1 && !envVarSet) {
-		return "", "", missingArgsMessage("new bucket name")
+		return "", "", missingArgumentsError(c, "new bucket name")
 	} else if argCount == 0 {
-		return "", "", missingArgsMessage("bucket name", "new bucket names")
+		return "", "", missingArgumentsError(c, "bucket name", "new bucket name")
 	}
 
 	if argCount == 1 {

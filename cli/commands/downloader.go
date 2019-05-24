@@ -183,7 +183,7 @@ func downloadAdminHandler(c *cli.Context) error {
 
 	if commandName != downloadList {
 		if c.NArg() < 1 {
-			return missingArgsMessage("download job ID")
+			return missingArgumentsError(c, "download job ID")
 		}
 		if id == "" {
 			return errors.New("download job ID can't be empty")

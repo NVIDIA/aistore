@@ -32,6 +32,6 @@ func main() {
 	}()
 
 	if err := aisCLI.Run(os.Args); err != nil {
-		cmn.ExitInfof("%s", cmn.ErrorToSentence(err))
+		cmn.ExitInfof("%s", err.Error())
 	}
 }

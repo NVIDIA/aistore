@@ -322,7 +322,7 @@ func dsortHandler(c *cli.Context) error {
 
 	if commandName == dsortStatus || commandName == dsortAbort || commandName == dsortRemove {
 		if c.NArg() < 1 {
-			return missingArgsMessage(cmn.DSortName + " job ID")
+			return missingArgumentsError(c, cmn.DSortName+" job ID")
 		}
 		if id == "" {
 			return errors.New(cmn.DSortName + " job ID can't be empty")

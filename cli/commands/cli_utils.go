@@ -5,6 +5,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,13 +98,23 @@ var helpCommand = cli.Command{
 	},
 }
 
-func New(build, version string) AISCLI {
-	aisCLI := AISCLI{app: cli.NewApp()}
-	aisCLI.Init(build, version)
-	return aisCLI
+func commandNotFoundHandler(c *cli.Context, cmd string) {
+	err := commandNotFoundError(c, cmd)
+	// The function has no return value (can't return an error), so it has to print the error here
+	fmt.Print(err.Error())
 }
 
-func (aisCLI AISCLI) Init(build, version string) {
+func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
+	return incorrectUsageError(c, err)
+}
+
+func New(build, version string) *AISCLI {
+	aisCLI := AISCLI{app: cli.NewApp()}
+	aisCLI.Init(build, version)
+	return &aisCLI
+}
+
+func (aisCLI *AISCLI) Init(build, version string) {
 	app := aisCLI.app
 
 	app.Name = cliName
@@ -112,6 +123,8 @@ func (aisCLI AISCLI) Init(build, version string) {
 	app.EnableBashCompletion = true
 	app.HideHelp = true
 	app.Flags = []cli.Flag{cli.HelpFlag}
+	app.CommandNotFound = commandNotFoundHandler
+	app.OnUsageError = incorrectUsageHandler
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
@@ -121,7 +134,7 @@ func (aisCLI AISCLI) Init(build, version string) {
 	aisCLI.setupCommands()
 }
 
-func (aisCLI AISCLI) setupCommands() {
+func (aisCLI *AISCLI) setupCommands() {
 	app := aisCLI.app
 
 	app.Commands = append(app.Commands, downloaderCmds...)
@@ -146,17 +159,19 @@ func setupCommandHelp(commands []cli.Command) {
 		// Need to set up the help flag manually when setting HideHelp = true
 		command.Flags = append(command.Flags, cli.HelpFlag)
 
+		command.OnUsageError = incorrectUsageHandler
+
 		setupCommandHelp(command.Subcommands)
 	}
 }
 
-func (aisCLI AISCLI) Run(input []string) error {
+func (aisCLI *AISCLI) Run(input []string) error {
 	if err := aisCLI.runOnce(input); err != nil {
 		// If the command failed, check if it failed because AIS is unreachable
 		if err := TestAISURL(); err != nil {
 			return err
 		}
-		return err
+		return aisCLI.handleCLIError(err)
 	}
 
 	rate, err := time.ParseDuration(refreshRate)
@@ -171,15 +186,15 @@ func (aisCLI AISCLI) Run(input []string) error {
 	return aisCLI.runNTimes(input, rate)
 }
 
-func (aisCLI AISCLI) runOnce(input []string) error {
+func (aisCLI *AISCLI) runOnce(input []string) error {
 	if err := aisCLI.app.Run(input); err != nil {
-		return handleCLIError(err)
+		return err
 	}
 
 	return nil
 }
 
-func (aisCLI AISCLI) runForever(input []string, rate time.Duration) error {
+func (aisCLI *AISCLI) runForever(input []string, rate time.Duration) error {
 	for {
 		time.Sleep(rate)
 
@@ -190,7 +205,7 @@ func (aisCLI AISCLI) runForever(input []string, rate time.Duration) error {
 	}
 }
 
-func (aisCLI AISCLI) runNTimes(input []string, rate time.Duration) error {
+func (aisCLI *AISCLI) runNTimes(input []string, rate time.Duration) error {
 	// Be careful - count is a global variable set by aisCLI.app.Run(), so a new variable is needed here
 	for runCount := count - 1; runCount > 0; runCount-- {
 		time.Sleep(rate)
@@ -203,13 +218,15 @@ func (aisCLI AISCLI) runNTimes(input []string, rate time.Duration) error {
 	return nil
 }
 
-// Formats the error message from HTTPErrors (see http.go)
-func handleCLIError(err error) error {
+// Formats the error message to a nice string
+func (aisCLI *AISCLI) handleCLIError(err error) error {
 	switch err := err.(type) {
 	case *cmn.HTTPError:
-		return fmt.Errorf("%s", err.Message)
-	default:
+		return errors.New(cmn.StrToSentence(err.Message))
+	case *usageError:
 		return err
+	default:
+		return errors.New(cmn.StrToSentence(err.Error()))
 	}
 }
 
