@@ -17,6 +17,17 @@ Creates a local bucket.
 
 Destroys a local bucket.
 
+### list
+
+`ais bucket ls`
+
+Returns the names of the buckets.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--regex` | string | pattern for bucket matching | `""` |
+| `--provider` | [Provider](../README.md#enums) | returns `local` or `cloud` buckets. If empty, returns all bucket names. | `""` or [default](../README.md#bucket-provider) |
+
 ### evict
 
 `ais bucket evict <bucket>`
@@ -29,9 +40,9 @@ Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
 Renames a local bucket.
 
-### list
+### objects
 
-`ais bucket list <bucket>`
+`ais bucket objects <bucket>`
 
 Lists all the objects along with some of the objects' properties. For the full list of properties, see [here](../../docs/bucket.md#list-bucket).
 
@@ -48,9 +59,9 @@ Lists all the objects along with some of the objects' properties. For the full l
 
 **Example:**
 
-* `ais bucket list mylocalbucket --prefix "mytestfolder/" --regex ".txt`
+* `ais bucket objects mylocalbucket --prefix "mytestfolder/" --regex ".txt`
 Returns all objects matching `.txt` under the `mytestfolder` directory from `mylocalbucket` bucket
-* `AIS_BUCKET=mylocalbucket ais bucket list --template="shard-{0..99}.tgz" --show-unmatched`
+* `AIS_BUCKET=mylocalbucket ais bucket objects --template="shard-{0..99}.tgz" --show-unmatched`
 Returns all objects with names from `shard-0.tgz` to `shard-99.tgz` from `mylocalbucket`.
 Also returns a separate list of objects that do not match the template.
 
@@ -65,20 +76,9 @@ Starts an extended action (xaction) to bring a given bucket to a certain redunda
 | `--copies` | int | number of copies | `1` |
 | `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
-### names
-
-`ais bucket names`
-
-Returns the names of the buckets.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--regex` | string | pattern for bucket matching | `""` |
-| `--provider` | [Provider](../README.md#enums) | returns `local` or `cloud` buckets. If empty, returns all bucket names. | `""` or [default](../README.md#bucket-provider) |
-
 ### props list
 
-`ais bucket props list <bucket>`
+`ais bucket props ls <bucket>`
 
 Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
@@ -209,7 +209,7 @@ Reset bucket properties to cluster default.
 | `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### Default `bucket` argument value
-If you set `AIS_BUCKET` environment variable you can omit the argument that represents the name of the bucket (`<bucket`) in 
+If you set `AIS_BUCKET` environment variable you can omit the argument that represents the name of the bucket (`<bucket`) in
 all of the commands above. For example, the following pairs of commands have the same effect:
  * `AIS_BUCKET=mybucket ais bucket create` and `ais bucket create mybucket`
  * `AIS_BUCKET=mybucket ais bucket rename mybucket1` and `ais bucket rename mybucket mybucket1`

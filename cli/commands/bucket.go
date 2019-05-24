@@ -25,13 +25,12 @@ import (
 const (
 	bucketCreate     = "create"
 	bucketDestroy    = "destroy"
-	bucketNames      = "names"
 	bucketNWayMirror = cmn.ActMakeNCopies
 	bucketEvict      = commandEvict
 	bucketSummary    = "summary"
+	bucketObjects    = "objects"
 
 	commandBucketProps = "props"
-	propsList          = "list"
 	propsSet           = "set"
 	propsReset         = "reset"
 
@@ -62,14 +61,14 @@ var (
 
 	bucketFlags = map[string][]cli.Flag{
 		bucketCreate: {},
-		bucketNames: {
+		commandList: {
 			regexFlag,
 			bckProviderFlag,
 			noHeaderFlag,
 		},
 		bucketDestroy: {},
 		commandRename: {},
-		commandList: append(
+		bucketObjects: append(
 			baseBucketFlags,
 			regexFlag,
 			templateFlag,
@@ -96,7 +95,7 @@ var (
 	}
 
 	bucketPropsFlags = map[string][]cli.Flag{
-		propsList: append(
+		commandList: append(
 			baseBucketFlags,
 			jsonFlag,
 		),
@@ -110,14 +109,14 @@ var (
 	bucketGenericText    = "%s bucket %s <bucket>"
 	bucketCreateText     = fmt.Sprintf(bucketGenericText, cliName, bucketCreate)
 	bucketDelText        = fmt.Sprintf(bucketGenericText, cliName, bucketDestroy)
-	bucketListText       = fmt.Sprintf(bucketGenericText, cliName, commandList)
+	bucketObjListText    = fmt.Sprintf(bucketGenericText, cliName, bucketObjects)
 	bucketEvictText      = fmt.Sprintf(bucketGenericText, cliName, bucketEvict)
-	bucketNamesText      = fmt.Sprintf("%s bucket %s", cliName, bucketNames)
+	bucketListText       = fmt.Sprintf("%s bucket %s", cliName, commandList)
 	bucketRenameText     = fmt.Sprintf("%s bucket %s <bucket> <new-bucket>", cliName, commandRename)
 	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s <bucket> --copies <value>", cliName, bucketNWayMirror)
 	bucketStatsText      = fmt.Sprintf(bucketGenericText, cliName, bucketSummary)
 
-	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, propsList)
+	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, commandList)
 	bucketSetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket> key=value ...", cliName, commandBucketProps, propsSet)
 	bucketResetPropsText = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, propsReset)
 
@@ -131,10 +130,10 @@ var (
 					Usage: "operate on bucket properties",
 					Subcommands: []cli.Command{
 						{
-							Name:         propsList,
+							Name:         commandList,
 							Usage:        "lists bucket properties",
 							UsageText:    bucketGetPropsText,
-							Flags:        bucketPropsFlags[propsList],
+							Flags:        bucketPropsFlags[commandList],
 							Action:       bucketPropsHandler,
 							BashComplete: bucketList([]cli.BashCompleteFunc{}),
 						},
@@ -181,18 +180,18 @@ var (
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
 				},
 				{
-					Name:         bucketNames,
+					Name:         commandList,
 					Usage:        "returns all bucket names",
-					UsageText:    bucketNamesText,
-					Flags:        bucketFlags[bucketNames],
+					UsageText:    bucketListText,
+					Flags:        bucketFlags[commandList],
 					Action:       bucketHandler,
 					BashComplete: flagList,
 				},
 				{
-					Name:         commandList,
+					Name:         bucketObjects,
 					Usage:        "returns all objects from bucket",
-					UsageText:    bucketListText,
-					Flags:        bucketFlags[commandList],
+					UsageText:    bucketObjListText,
+					Flags:        bucketFlags[bucketObjects],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}),
 				},
@@ -231,7 +230,7 @@ func bucketHandler(c *cli.Context) (err error) {
 
 	bucket, err := bucketFromArgsOrEnv(c)
 	// In case of commandRename validation will be done inside renameBucket
-	if err != nil && command != bucketNames && command != commandRename {
+	if err != nil && command != commandList && command != commandRename {
 		return err
 	}
 
@@ -244,9 +243,9 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = renameBucket(c, baseParams)
 	case bucketEvict:
 		err = evictBucket(baseParams, bucket)
-	case bucketNames:
-		err = listBucketNames(c, baseParams)
 	case commandList:
+		err = listBucketNames(c, baseParams)
+	case bucketObjects:
 		err = listBucketObj(c, baseParams, bucket)
 	case bucketNWayMirror:
 		err = configureNCopies(c, baseParams, bucket)
@@ -263,7 +262,7 @@ func bucketPropsHandler(c *cli.Context) (err error) {
 	command := c.Command.Name
 
 	switch command {
-	case propsList:
+	case commandList:
 		err = bucketProps(c, baseParams)
 	case propsSet:
 		err = setBucketProps(c, baseParams)

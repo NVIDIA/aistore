@@ -20,7 +20,7 @@ type AISCLI struct {
 
 const (
 	cliName       = "ais"
-	commandList   = "list"
+	commandList   = "ls"
 	commandRename = "rename"
 	commandEvict  = "evict"
 
