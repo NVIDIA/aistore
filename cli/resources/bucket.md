@@ -115,7 +115,7 @@ Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respe
 
 Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail.
 
-*
+* Setting **all** bucket attributes based on the provided JSON specification
 ```bash
 ais bucket props set mybucket --jsonspec '{
     "cloud_provider": "ais",
@@ -124,6 +124,7 @@ ais bucket props set mybucket --jsonspec '{
       "enabled": true,
       "validate_warm_get": false
     },
+    "tiering": {},
     "cksum": {
       "type": "xxhash",
       "validate_cold_get": true,
@@ -147,11 +148,55 @@ ais bucket props set mybucket --jsonspec '{
       "optimize_put": false,
       "enabled": false
     },
-    "aattrs": 18446744073709551615
+    "ec": {
+        "objsize_limit": 256000,
+        "data_slices": 2,
+        "parity_slices": 2,
+        "enabled": true
+    },
+    "aattrs": 255
 }'
 ```
+After which `ais bucket props list mybucket` results in:
+```
+ais bucket props list mybucket                      [14:36:58]
+Property	Value
+Provider	ais
+Access		GET,PUT,DELETE,HEAD,ColdGET
+Checksum	xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Mirror		Disabled
+EC		2:2 (250KiB)
+LRU		Watermarks: 20/80, do not evict time: 20m
+Versioning	(validation: WarmGET=no)
+Tiering		Disabled
 
-Sets **all** bucket attributes based on the provided JSON specification.
+```
+
+* If not all properties are mentioned in the JSON, the missing ones are also set to default values:
+```bash
+ais bucket props set mybucket --jsonspec '{
+    "cloud_provider": "ais",
+    "versioning": {
+      "type": "own",
+      "enabled": true,
+      "validate_warm_get": true
+    }
+}'
+```
+After which `ais bucket props list mybucket` results in:
+```
+Property        Value
+Provider        ais
+Access          No access
+Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Mirror          Disabled
+EC              Disabled
+LRU             Disabled
+Versioning      (validation: WarmGET=yes)
+Tiering         Disabled
+```
+
+To see the default values for each property, you can run `ais bucket props set mybucket --jsonspec '{}'`
 
 ### props reset
 
