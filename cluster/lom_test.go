@@ -40,6 +40,10 @@ var _ = Describe("LOM", func() {
 	_ = cmn.CreateDir(mpath)
 	_ = cmn.CreateDir(mpath2)
 
+	config := cmn.GCO.BeginUpdate()
+	config.TestFSP.Count = 1
+	cmn.GCO.CommitUpdate(config)
+
 	fs.Mountpaths = fs.NewMountedFS()
 	_ = fs.Mountpaths.Add(mpath)
 
