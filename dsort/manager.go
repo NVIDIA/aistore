@@ -36,6 +36,13 @@ const (
 	shardStreamNameFmt    = cmn.DSortNameLowercase + "-%s-shard"
 )
 
+// State of the cleans - see `cleanup` and `finalCleanup`
+const (
+	noCleanedState = iota
+	initiallyCleanedState
+	finallyCleanedState
+)
+
 var (
 	ctx dsortContext
 
@@ -72,7 +79,8 @@ type dsortContext struct {
 type progressState struct {
 	inProgress bool
 	aborted    bool
-	cleaned    atomic.Int32
+	cleaned    uint8      // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
+	cleanWait  *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
 	wg         *sync.WaitGroup
 	// doneCh is closed when the job is aborted so that goroutines know when
 	// they need to stop.
@@ -210,6 +218,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	m.setInProgressTo(true)
 	m.setAbortedTo(false)
+	m.state.cleanWait = sync.NewCond(&m.mu)
 
 	m.streamWriters.writers = make(map[string]*streamWriter, 10000)
 	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
@@ -336,23 +345,24 @@ func (m *Manager) cleanupStreams() error {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
-	if !m.state.cleaned.CAS(0, 1) {
+	m.lock()
+	if m.state.cleaned != noCleanedState {
+		m.unlock()
 		return // do not clean if already scheduled
 	}
 
-	m.lock()
 	m.mw.stop()
 	glog.Infof("%s %s has started a cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
 
 	defer func() {
+		m.state.cleaned = initiallyCleanedState
+		m.state.cleanWait.Signal()
 		m.unlock()
 		glog.Infof("%s %s cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
-	if m.inProgress() {
-		cmn.AssertMsg(false, fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
-	}
+	cmn.AssertMsg(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
 	m.streamWriters.writers = nil
 
@@ -370,14 +380,31 @@ func (m *Manager) cleanup() {
 // finalCleanup is invoked only when all the target confirmed finishing the
 // dSort operations. To ensure that finalCleanup is not invoked before regular
 // cleanup is finished, we also ack ourselves.
+//
+// finalCleanup can be invoked only after cleanup and this is ensured by
+// maintaining current state of the cleanliness and having conditional variable
+// on which finalCleanup will sleep if needed. Note that it is hard (or even
+// impossible) to ensure that cleanup and finalCleanup will be invoked in order
+// without having ordering mechanism since cleanup and finalCleanup are invoked
+// in goroutines (there is possibility that finalCleanup would start before
+// cleanup) - this cannot happen with current ordering mechanism.
 func (m *Manager) finalCleanup() {
-	if !m.state.cleaned.CAS(1, 2) {
-		return // do not clean if already scheduled
+	m.lock()
+	for m.state.cleaned != initiallyCleanedState {
+		if m.state.cleaned == finallyCleanedState {
+			m.unlock()
+			return // do not clean if already cleaned
+		} else if m.state.cleaned == noCleanedState {
+			m.state.cleanWait.Wait() // wait for wake up from `cleanup` or other `finalCleanup` method
+		}
 	}
 
 	glog.Infof("%s %s has started a final cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
 	defer func() {
+		m.state.cleaned = finallyCleanedState
+		m.state.cleanWait.Signal() // if there is another `finalCleanup` waiting it should be woken up to check the state and exit
+		m.unlock()
 		glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 	}()
 
