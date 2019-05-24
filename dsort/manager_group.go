@@ -6,7 +6,6 @@ package dsort
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	scribble "github.com/nanobox-io/golang-scribble"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -46,7 +46,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 	if _, exists := mg.managers[managerUUID]; exists {
-		return nil, fmt.Errorf("manager with given uuid %s already exists", managerUUID)
+		return nil, errors.Errorf("manager with given uuid %s already exists", managerUUID)
 	}
 	manager := &Manager{
 		ManagerUUID: managerUUID,
@@ -134,7 +134,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 	defer mg.mtx.Unlock()
 
 	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived {
-		return fmt.Errorf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID)
+		return errors.Errorf("%s process %s still in progress and cannot be removed", cmn.DSortName, managerUUID)
 	} else if ok {
 		delete(mg.managers, managerUUID)
 	}

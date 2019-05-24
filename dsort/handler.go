@@ -433,7 +433,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) startDSort() {
 	errHandler := func(err error) {
-		glog.Error(err)
+		glog.Errorf("%+v", err) // print error with stack trace
 
 		// If we were aborted by some other process this means that we do not
 		// broadcast abort (we assume that daemon aborted us, aborted also others).

@@ -10,7 +10,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -33,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -153,7 +153,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		if err != nil {
 			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			cluster.ObjectLocker.Unlock(lom.Uname(), false)
-			return fmt.Errorf("unable to open local file, err: %v", err)
+			return errors.Errorf("unable to open local file, err: %v", err)
 		}
 		var compressedSize int64
 		if m.extractCreator.UsingCompression() {
@@ -184,7 +184,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
 			f.Close()
-			return fmt.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
+			return errors.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
 		}
 		f.Close()
 
@@ -523,7 +523,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 			beforeSend := time.Now()
 			body, e := js.Marshal(m.recManager.Records)
 			if e != nil {
-				err = fmt.Errorf("failed to marshal into JSON, err: %v", e)
+				err = errors.Errorf("failed to marshal into JSON, err: %v", e)
 				return
 			}
 			sendTo := targetOrder[i+1]
@@ -535,7 +535,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 				cmn.URLParamTotalInputShardsExtracted, m.recManager.Records.Len(),
 			)
 			if _, e := m.doWithAbort(http.MethodPost, u, body, nil); e != nil {
-				err = fmt.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, e)
+				err = errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, e)
 				return
 			}
 
@@ -612,7 +612,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		name, hasNext := names()
 		if !hasNext {
 			// no more shard names are available
-			return nil, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+			return nil, errors.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
 		}
 		shard := &extract.Shard{
 			Name: name + m.rs.Extension,
@@ -808,7 +808,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
-		return fmt.Errorf("error while sending shards, err: %v", err)
+		return errors.Errorf("error while sending shards, err: %v", err)
 	}
 	glog.Infof("finished sending all shards")
 	return nil

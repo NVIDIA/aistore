@@ -6,12 +6,12 @@ package extract
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -201,9 +201,9 @@ func (r *Records) Swap(i, j int) { r.arr[i], r.arr[j] = r.arr[j], r.arr[i] }
 func (r *Records) Less(i, j int, formatType string) (bool, error) {
 	lhs, rhs := r.arr[i].Key, r.arr[j].Key
 	if lhs == nil {
-		return false, fmt.Errorf("key is missing for %q", r.arr[i].Name)
+		return false, errors.Errorf("key is missing for %q", r.arr[i].Name)
 	} else if rhs == nil {
-		return false, fmt.Errorf("key is missing for %q", r.arr[j].Name)
+		return false, errors.Errorf("key is missing for %q", r.arr[j].Name)
 	}
 
 	switch formatType {

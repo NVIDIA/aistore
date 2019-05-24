@@ -266,6 +266,14 @@
   version = "v1.4.2"
 
 [[projects]]
+  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
+
+[[projects]]
   branch = "master"
   digest = "1:fd539c4cfa0f70d9e1ec1973a71ee35b4f95b0ad653da8850155293c4edbcf9e"
   name = "github.com/seiflotfy/cuckoofilter"
@@ -552,6 +560,7 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
+    "github.com/pkg/errors",
     "github.com/seiflotfy/cuckoofilter",
     "github.com/teris-io/shortid",
     "github.com/urfave/cli",

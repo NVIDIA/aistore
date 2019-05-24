@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -167,7 +168,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 
 		sgl := mem.NewSGL(r.Size() + int64(len(args.metadata)))
 		if _, err = io.CopyBuffer(sgl, bytes.NewReader(args.metadata), args.buf); err != nil {
-			return 0, err
+			return 0, errors.WithStack(err)
 		}
 
 		var dst io.Writer = sgl
@@ -176,7 +177,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		}
 
 		if size, err = io.CopyBuffer(dst, r, args.buf); err != nil {
-			return size, err
+			return size, errors.WithStack(err)
 		}
 		rm.contents.Store(fullContentPath, sgl)
 	} else if args.extractMethod.Has(ExtractToDisk) && rm.extractCreator.SupportsOffset() {
@@ -193,7 +194,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 			}
 
 			if _, err := io.CopyBuffer(dst, args.r, args.buf); err != nil {
-				return 0, err
+				return 0, errors.WithStack(err)
 			}
 		}
 	} else if args.extractMethod.Has(ExtractToDisk) {
@@ -203,11 +204,11 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 
 		newF, err := cmn.CreateFile(fullContentPath)
 		if err != nil {
-			return size, err
+			return size, errors.WithStack(err)
 		}
 		if size, err = copyMetadataAndData(newF, r, args.metadata, args.buf); err != nil {
 			newF.Close()
-			return size, err
+			return size, errors.WithStack(err)
 		}
 		newF.Close()
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
@@ -217,7 +218,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 
 	key, err := rm.keyExtractor.ExtractKey(ske)
 	if err != nil {
-		return size, err
+		return size, errors.WithStack(err)
 	}
 
 	cmn.AssertMsg(contentPath != "", fmt.Sprintf("shardName: %s; recordName: %s", args.shardName, args.recordName))

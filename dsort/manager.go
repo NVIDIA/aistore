@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -259,7 +259,7 @@ func (m *Manager) initStreams() error {
 		Ntype:      cluster.Targets,
 	}
 	if _, err := transport.Register(reqNetwork, trname, m.makeRecvRequestFunc()); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
@@ -270,7 +270,7 @@ func (m *Manager) initStreams() error {
 		Ntype:      cluster.Targets,
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvResponseFunc()); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	trname = fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
@@ -281,7 +281,7 @@ func (m *Manager) initStreams() error {
 		Ntype:      cluster.Targets,
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	m.streams.request = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, reqSbArgs)
@@ -306,21 +306,21 @@ func (m *Manager) cleanupStreams() error {
 	if m.streams.request != nil {
 		trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(reqNetwork, trname); err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
 	if m.streams.response != nil {
 		trname := fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
 	if m.streams.shards != nil {
 		trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 		if err := transport.Unregister(respNetwork, trname); err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
@@ -466,7 +466,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	}
 
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	onDuplicatedRecords := func(msg string) error {
@@ -830,16 +830,16 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			case extract.OffsetStoreType:
 				f, err := os.Open(fullContentPath) // TODO: it should be open always
 				if err != nil {
-					return written, err
+					return written, errors.WithMessage(err, "(offset) open local content failed")
 				}
 				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
 				if err != nil {
 					f.Close()
-					return written, err
+					return written, errors.WithMessage(err, "(offset) seek local content failed")
 				}
 				if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
 					f.Close()
-					return written, err
+					return written, errors.WithMessage(err, "(offset) copy local content failed")
 				}
 				f.Close()
 			case extract.SGLStoreType:
@@ -849,17 +849,17 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				sgl := v.(*memsys.SGL)
 				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
 					sgl.Free()
-					return written, err
+					return written, errors.WithMessage(err, "(sgl) copy local content failed")
 				}
 				sgl.Free()
 			case extract.DiskStoreType:
 				f, err := os.Open(fullContentPath)
 				if err != nil {
-					return written, err
+					return written, errors.WithMessage(err, "(disk) open local content failed")
 				}
 				if n, err = io.CopyBuffer(w, f, buf); err != nil {
 					f.Close()
-					return written, err
+					return written, errors.WithMessage(err, "(disk) copy local content failed")
 				}
 				f.Close()
 			default:
@@ -885,7 +885,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			)
 
 			if toNode == nil {
-				return 0, fmt.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
+				return 0, errors.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
 			}
 
 			req := remoteRequest{
@@ -918,7 +918,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 
 			wg.Add(1)
 			if err := m.streams.request.SendV(hdr, nil, cb, nil /* cmpl ptr */, toNode); err != nil {
-				return 0, err
+				return 0, errors.WithStack(err)
 			}
 
 			// Send should be synchronous to make sure that 'wait timeout' is
@@ -926,7 +926,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			wg.Wait()
 
 			if cbErr != nil {
-				return 0, cbErr
+				return 0, errors.WithStack(cbErr)
 			}
 
 			if m.Metrics.extended {
@@ -963,9 +963,9 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				// We managed to pull the writer, we can safely return error.
 				var err error
 				if stopped {
-					err = fmt.Errorf("wait for remote content was aborted")
+					err = errors.Errorf("wait for remote content was aborted")
 				} else if timed {
-					err = fmt.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
+					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
 				} else {
 					cmn.AssertMsg(false, "pulled but not stopped or timed?!")
 				}
@@ -1038,7 +1038,7 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 	}
 
 	close(errCh)
-	return n, <-errCh
+	return n, errors.WithStack(<-errCh)
 }
 
 func (m *Manager) ListenSmapChanged(ch chan int64) {
@@ -1059,7 +1059,7 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 		// check if some target has been removed - abort in case it does
 		for sid := range m.smap.Tmap {
 			if newSmap.GetTarget(sid) == nil {
-				m.abort(fmt.Errorf("target %q was disconnected from the cluster", sid))
+				m.abort(errors.Errorf("target %q was disconnected from the cluster", sid))
 				// return from the listener as the whole manager is aborted
 				return
 			}
@@ -1081,7 +1081,7 @@ func (m *Manager) react(reaction, msg string) error {
 		m.Metrics.unlock()
 		return nil
 	case cmn.AbortReaction:
-		return errors.New(msg) // error will be reported on abort
+		return fmt.Errorf("%s", msg) // error will be reported on abort
 	default:
 		cmn.AssertMsg(false, reaction)
 		return nil

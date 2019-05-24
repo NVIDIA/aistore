@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -116,7 +117,7 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (interface{},
 	case FormatTypeString:
 		return key, nil
 	default:
-		return nil, fmt.Errorf("not implemented extractor type: %s", ke.ty)
+		return nil, errors.Errorf("not implemented extractor type: %s", ke.ty)
 	}
 }
 
