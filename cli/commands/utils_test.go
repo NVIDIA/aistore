@@ -5,9 +5,10 @@
 package commands
 
 import (
-	"github.com/NVIDIA/aistore/cmn"
 	"reflect"
 	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestParseSourceValidURIs(t *testing.T) {
@@ -103,12 +104,12 @@ func TestMakePairs(t *testing.T) {
 		input []string
 		nvs   cmn.SimpleKVs
 	}{
-		{ []string{"key1=value1", "key2=value2", "key3=value3"},
-			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
-		{ []string{"key1", "value1", "key2", "value2", "key3", "value3"},
-			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
-		{ []string{"key1=value1", "key2", "value2", "key3=value3"},
-			map[string]string{ "key1": "value1", "key2": "value2", "key3": "value3"}},
+		{[]string{"key1=value1", "key2=value2", "key3=value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
+		{[]string{"key1", "value1", "key2", "value2", "key3", "value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
+		{[]string{"key1=value1", "key2", "value2", "key3=value3"},
+			map[string]string{"key1": "value1", "key2": "value2", "key3": "value3"}},
 	}
 
 	for _, test := range makePairsTest {
@@ -124,12 +125,11 @@ func TestMakePairs(t *testing.T) {
 	}
 }
 
-
 func TestMakePairsErrors(t *testing.T) {
 	var makePairsTest = []struct {
 		input []string
 	}{
-		{ []string{"key1", "value1", "key2=value2", "key3"}},
+		{[]string{"key1", "value1", "key2=value2", "key3"}},
 	}
 
 	for _, test := range makePairsTest {

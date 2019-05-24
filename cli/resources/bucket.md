@@ -88,16 +88,17 @@ Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 ### props set
 
-`ais bucket props set <bucket> [list of key=value]`
+`ais bucket props set <bucket> <list of key=value | --jsonspec <json>>`
 
 Sets bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
+If `--jsonspec` is used **all** properties of the bucket are set based on the values in the JSON.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider)|
-| `--json` | bool | use json as input (need set all bucket props) | `false` |
+| `--jsonspec` | string | bucket properties in a JSON format | `` |
 
-When JSON is not used, some properties support user-friendly aliases
+When `--jsonspec` is not used, some properties support user-friendly aliases:
 
 | Property | Value alias | Description |
 | --- | --- | --- |
@@ -106,13 +107,51 @@ When JSON is not used, some properties support user-friendly aliases
 
 **Examples:**
 
-`ais bucket props set mybucket 'mirror.enabled=true' 'mirror.copies=2'`
+* `ais bucket props set mybucket 'mirror.enabled=true' 'mirror.copies=2'`
 
 Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively.
 
-`ais bucket props set mybucket 'aattrs=ro'`
+* `ais bucket props set mybucket 'aattrs=ro'`
 
 Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail.
+
+*
+```bash
+ais bucket props set mybucket --jsonspec '{
+    "cloud_provider": "ais",
+    "versioning": {
+      "type": "own",
+      "enabled": true,
+      "validate_warm_get": false
+    },
+    "cksum": {
+      "type": "xxhash",
+      "validate_cold_get": true,
+      "validate_warm_get": false,
+      "validate_obj_move": false,
+      "enable_read_range": false
+    },
+    "lru": {
+      "lowwm": 20,
+      "highwm": 80,
+      "out_of_space": 90,
+      "dont_evict_time": "20m",
+      "capacity_upd_time": "1m",
+      "local_buckets": false,
+      "enabled": true
+    },
+    "mirror": {
+      "copies": 0,
+      "burst_buffer": 0,
+      "util_thresh": 0,
+      "optimize_put": false,
+      "enabled": false
+    },
+    "aattrs": 18446744073709551615
+}'
+```
+
+Sets **all** bucket attributes based on the provided JSON specification.
 
 ### props reset
 

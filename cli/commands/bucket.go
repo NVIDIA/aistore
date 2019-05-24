@@ -54,6 +54,7 @@ var (
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
+	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
 
 	baseBucketFlags = []cli.Flag{
 		bckProviderFlag,
@@ -101,7 +102,7 @@ var (
 		),
 		propsSet: append(
 			baseBucketFlags,
-			jsonFlag,
+			jsonspecFlag,
 		),
 		propsReset: baseBucketFlags,
 	}
@@ -479,10 +480,19 @@ func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Va
 
 // Sets bucket properties
 func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	// For setting bucket props via action message
+	if flagIsSet(c, jsonspecFlag) {
+		return setBucketPropsJSON(c, baseParams)
+	}
+
 	var (
 		propsArgs = c.Args().Tail()
 		bucket    = c.Args().First()
 	)
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	if err != nil {
+		return
+	}
 
 	if strings.Contains(bucket, propsSetListDelimiter) {
 		// First argument is a key-value pair -> bucket should be read from env variable
@@ -498,28 +508,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return errors.New("expected at least one key-value pair")
 	}
 
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
-	if err != nil {
-		return
-	}
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
-
 	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
-		return
-	}
-
-	// For setting bucket props via action message
-	if flagIsSet(c, jsonFlag) {
-		props := cmn.BucketProps{}
-		inputProps := []byte(propsArgs[0])
-		if err = json.Unmarshal(inputProps, &props); err != nil {
-			return
-		}
-		if err = api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
-			return
-		}
-
-		fmt.Println()
 		return
 	}
 
@@ -528,6 +517,8 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err != nil {
 		return
 	}
+
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
 	if err = reformatBucketProps(baseParams, bucket, query, nvs); err != nil {
 		return
 	}
@@ -536,6 +527,31 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	}
 	fmt.Println()
 	return
+}
+
+func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
+	bucket, err := bucketFromArgsOrEnv(c)
+	if err != nil {
+		return err
+	}
+	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	if err != nil {
+		return err
+	}
+	inputProps := parseStrFlag(c, jsonspecFlag)
+
+	var props cmn.BucketProps
+	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
+		return err
+	}
+
+	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	if err := api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	return nil
 }
 
 // Resets bucket props
