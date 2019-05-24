@@ -159,7 +159,7 @@ ais bucket props set mybucket --jsonspec '{
 ```
 After which `ais bucket props list mybucket` results in:
 ```
-ais bucket props list mybucket                      [14:36:58]
+ais bucket props list mybucket
 Property	Value
 Provider	ais
 Access		GET,PUT,DELETE,HEAD,ColdGET
@@ -172,7 +172,7 @@ Tiering		Disabled
 
 ```
 
-* If not all properties are mentioned in the JSON, the missing ones are also set to default values:
+* If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty/false/nil):
 ```bash
 ais bucket props set mybucket --jsonspec '{
     "cloud_provider": "ais",
@@ -196,7 +196,7 @@ Versioning      (validation: WarmGET=yes)
 Tiering         Disabled
 ```
 
-To see the default values for each property, you can run `ais bucket props set mybucket --jsonspec '{}'`
+To see how setting zero values affect properties, you can run `ais bucket props set mybucket --jsonspec '{}'`
 
 ### props reset
 
