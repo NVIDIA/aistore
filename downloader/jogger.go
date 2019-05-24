@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -17,10 +16,12 @@ import (
 )
 
 type (
+	queueEntry = map[string]struct{}
+
 	queue struct {
 		sync.RWMutex
-		ch chan *task // for pending downloads
-		m  map[string]struct{}
+		ch chan *singleObjectTask // for pending downloads
+		m  map[string]queueEntry  // jobID -> set of request uid
 	}
 
 	// Each jogger corresponds to an mpath. All types of download requests
@@ -36,7 +37,7 @@ type (
 
 		sync.Mutex
 		// lock protected
-		task      *task // currently running download task
+		task      *singleObjectTask // currently running download task
 		stopAgent bool
 	}
 )
@@ -50,19 +51,14 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 	}
 }
 
-func (j *jogger) enqueue(task *task) (response, bool) {
+func (j *jogger) enqueue(task *singleObjectTask) error {
 	cmn.Assert(task != nil)
-	added, err, errCode := j.q.put(task)
-	if err != nil {
-		return response{
-			err:        err,
-			statusCode: errCode,
-		}, false
+	added, err := j.q.put(task)
+	if added {
+		j.parent.parent.IncPending()
 	}
 
-	return response{
-		resp: fmt.Sprintf("Download request %s added to queue", task),
-	}, added
+	return err
 }
 
 func (j *jogger) jog() {
@@ -117,31 +113,31 @@ func (j *jogger) stop() {
 
 func newQueue() *queue {
 	return &queue{
-		ch: make(chan *task, queueChSize),
-		m:  make(map[string]struct{}),
+		ch: make(chan *singleObjectTask, queueChSize),
+		m:  make(map[string]queueEntry),
 	}
 }
 
-func (q *queue) put(t *task) (added bool, err error, errCode int) {
+func (q *queue) put(t *singleObjectTask) (added bool, err error) {
 	q.Lock()
 	defer q.Unlock()
-	if _, exists := q.m[t.request.uid()]; exists {
+	if q.exists(t.request.id, t.request.uid()) {
 		// If request already exists we should just omit this
-		return false, nil, 0
+		return false, nil
 	}
 
 	select {
 	case q.ch <- t:
 		break
 	default:
-		return false, fmt.Errorf("error trying to process task %v: queue is full, try again later", t), http.StatusBadRequest
+		return false, fmt.Errorf("error trying to process task %v: queue is full, try again later", t)
 	}
-	q.m[t.request.uid()] = struct{}{}
-	return true, nil, 0
+	q.putToSet(t.id, t.request.uid())
+	return true, nil
 }
 
-// Get tries to find first task which was not yet aborted
-func (q *queue) get() (foundTask *task) {
+// Get tries to find first task which was not yet Aborted
+func (q *queue) get() (foundTask *singleObjectTask) {
 	for foundTask == nil {
 		t, ok := <-q.ch
 		if !ok {
@@ -150,9 +146,9 @@ func (q *queue) get() (foundTask *task) {
 		}
 
 		q.RLock()
-		if _, exists := q.m[t.request.uid()]; exists {
+		if q.exists(t.request.id, t.request.uid()) {
 			// NOTE: We do not delete task here but postpone it until the task
-			// has finished to prevent situation where we put task which is being
+			// has Finished to prevent situation where we put task which is being
 			// downloaded.
 			foundTask = t
 		}
@@ -172,17 +168,10 @@ func (q *queue) get() (foundTask *task) {
 	return
 }
 
-func (q *queue) exists(req *request) bool {
-	q.RLock()
-	_, exists := q.m[req.uid()]
-	q.RUnlock()
-	return exists
-}
-
 func (q *queue) delete(req *request) bool {
 	q.Lock()
-	_, exists := q.m[req.uid()]
-	delete(q.m, req.uid())
+	exists := q.exists(req.id, req.uid())
+	q.removeFromSet(req.id, req.uid())
 	q.Unlock()
 	return exists
 }
@@ -200,4 +189,41 @@ func (q *queue) cleanup() {
 	q.ch = nil
 	q.m = nil
 	q.Unlock()
+}
+
+// exists should be called under RLock()
+func (q *queue) exists(jobID, requestUID string) bool {
+	jobM, ok := q.m[jobID]
+
+	if !ok {
+		return false
+	}
+
+	_, ok = jobM[requestUID]
+	return ok
+}
+
+// putToSet should be called under Lock()
+func (q *queue) putToSet(jobID, requestUID string) {
+	if _, ok := q.m[jobID]; !ok {
+		q.m[jobID] = make(map[string]struct{})
+	}
+
+	q.m[jobID][requestUID] = struct{}{}
+}
+
+// removeFromSet should be called under Lock()
+func (q *queue) removeFromSet(jobID, requestUID string) {
+	jobM, ok := q.m[jobID]
+	if !ok {
+		return
+	}
+
+	if _, ok := jobM[requestUID]; ok {
+		delete(jobM, requestUID)
+
+		if len(jobM) == 0 {
+			delete(q.m, jobID)
+		}
+	}
 }

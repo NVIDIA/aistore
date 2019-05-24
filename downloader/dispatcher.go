@@ -11,8 +11,10 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 // Dispatcher serves as middle layer between receiving download requests
@@ -81,63 +83,97 @@ func (d *dispatcher) removeJogger(mpath string) {
  * dispatcher's dispatch methods (forwards request to jogger)
  */
 
-// TODO: these methods should be called as go routine in the future
-// for now, they're just synchronous calls, incremental steps...
+// TODO: methods below should be called as go routine in the future
 
-func (d *dispatcher) dispatchDownload(t *task) {
+// TODO: handle canceling job, removing mpaths, errors etc which happened in the middle of dispatchDownload
+// this should be taken care of especially when dispatchDownload will be run as goroutine
+// TODO: make this method smarter: don't just put everything into jogger, but wait until
+// it has resources to fulfill the request (meaning that there is space in jogger's download queue)
+func (d *dispatcher) dispatchDownload(job DownloadJob) {
+	for {
+		objs, ok := job.GenNext()
+		if !ok {
+			return
+		}
+
+		for _, obj := range objs {
+			if err := d.dispatchDownloadSingle(job, obj); err != nil {
+				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.Link, err.Error())
+				cmn.AssertNoErr(d.parent.db.setAborted(job.ID()))
+				return
+			}
+		}
+
+	}
+}
+
+func (d *dispatcher) dispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) error {
 	var (
-		resp      response
-		added, ok bool
-		j         *jogger
+		err error
+		ok  bool
+		j   *jogger
 	)
+
+	t := &singleObjectTask{
+		parent: d.parent,
+		request: &request{
+			action:      taskDownload,
+			id:          job.ID(),
+			obj:         obj,
+			bucket:      job.Bucket(),
+			bckProvider: job.BckProvider(),
+			timeout:     job.Timeout(),
+		},
+		finishedCh: make(chan error, 1),
+	}
+
 	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: t.bucket, Objname: t.obj.Objname, BucketProvider: t.bckProvider}.Init()
 	if errstr == "" {
 		_, errstr = lom.Load(true)
 	}
 	if errstr != "" {
-		resp.err, resp.statusCode = errors.New(errstr), http.StatusInternalServerError
+		err = errors.New(errstr)
 		goto finalize
 	}
 	if lom.Exists() { // FIXME: add versioning
-		resp.resp = fmt.Sprintf("object %q already exists - skipping", t.obj.Objname)
+		if glog.V(4) {
+			glog.Infof("object %q already exists - skipping", t.obj.Objname)
+		}
 		goto finalize
 	}
 	t.fqn = lom.FQN
 
 	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
+		err = fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
 		glog.Error(err.Error())
-		resp.err, resp.statusCode = err, http.StatusInternalServerError
 		goto finalize
 	}
 	j, ok = d.joggers[lom.ParsedFQN.MpathInfo.Path]
 	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
 
-	resp, added = j.enqueue(t)
+	err = j.enqueue(t)
 
 finalize:
-	t.write(resp.resp, resp.err, resp.statusCode)
+	if err != nil {
+		glog.Warningf("error in handling downloader request: %s", err.Error())
+		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-	// Following can happen:
-	//  * in case of error
-	//  * object already exists
-	//  * object already in queue
-	//
-	// In all of these cases we need to decrease pending since it was not added to the queue.
-	if !added {
-		d.parent.DecPending()
+		dbErr := t.parent.db.addError(t.id, t.obj.Objname, err.Error())
+		cmn.AssertNoErr(dbErr)
 	}
+
+	return err
 }
 
 func (d *dispatcher) dispatchRemove(req *request) {
-	body, err := d.parent.checkJob(req)
+	jInfo, err := d.parent.checkJob(req)
 	if err != nil {
 		return
 	}
 
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	if !d.parent.Aborted() && d.parent.getNumPending(body) != 0 {
-		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", body.ID), http.StatusBadRequest)
+	if !d.parent.Aborted() && d.parent.getNumPending(jInfo.ID) != 0 {
+		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", jInfo.ID), http.StatusBadRequest)
 		return
 	}
 
@@ -147,53 +183,27 @@ func (d *dispatcher) dispatchRemove(req *request) {
 }
 
 func (d *dispatcher) dispatchAbort(req *request) {
-	body, err := d.parent.checkJob(req)
+	_, err := d.parent.checkJob(req)
 	if err != nil {
 		return
 	}
 
-	errs := make([]response, 0, len(body.Objs))
 	for _, j := range d.joggers {
 		j.Lock()
-		for _, obj := range body.Objs {
-			req.obj = obj
-			req.bucket = body.Bucket
-			req.bckProvider = body.BckProvider
 
-			lom, errstr := cluster.LOM{T: d.parent.t, Bucket: req.bucket, Objname: req.obj.Objname}.Init()
-			if errstr == "" {
-				_, errstr = lom.Load(false)
-			}
-			if errstr != "" {
-				errs = append(errs, response{
-					err:        errors.New(errstr),
-					statusCode: http.StatusInternalServerError,
-				})
-				continue
-			}
-			if lom.Exists() {
-				continue
-			}
-
-			// Abort currently running task
-			if j.task != nil && j.task.request.equals(req) {
-				// Task is running
-				j.task.cancel()
-				continue
-			}
-
-			// If not running but in queue we need to decrease number of pending
-			if existed := j.q.delete(req); existed {
-				d.parent.DecPending()
-			}
+		// Abort currently running task, if belongs to a given job
+		if j.task != nil && j.task.request.id == req.id {
+			// Task is running
+			j.task.cancel()
 		}
-		j.Unlock()
-	}
 
-	if len(errs) > 0 {
-		r := errs[0] // TODO: we should probably print all errors
-		req.writeErrResp(r.err, r.statusCode)
-		return
+		// Remove all pending tasks from queue
+		if m, ok := j.q.m[req.id]; ok {
+			d.parent.SubPending(int64(len(m)))
+			delete(j.q.m, req.id)
+		}
+
+		j.Unlock()
 	}
 
 	err = d.parent.db.setAborted(req.id)
@@ -202,50 +212,8 @@ func (d *dispatcher) dispatchAbort(req *request) {
 }
 
 func (d *dispatcher) dispatchStatus(req *request) {
-	body, err := d.parent.checkJob(req)
-	if err != nil {
-		return
-	}
-
-	total := len(body.Objs)
-	finished := 0
-
-	errs := make([]response, 0, len(body.Objs))
-	for _, obj := range body.Objs {
-		lom, errstr := cluster.LOM{T: d.parent.t, Bucket: body.Bucket, Objname: obj.Objname, BucketProvider: body.BckProvider}.Init()
-		if errstr == "" {
-			_, errstr = lom.Load(true)
-		}
-		if errstr != "" {
-			errs = append(errs, response{
-				err:        errors.New(errstr),
-				statusCode: http.StatusInternalServerError,
-			})
-			continue
-		}
-		if lom.Exists() { // FIXME: checksum, etc.
-			finished++
-			continue
-		}
-
-		req.fqn = lom.FQN
-
-		if lom.ParsedFQN.MpathInfo == nil {
-			err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
-			glog.Error(err.Error())
-			errs = append(errs, response{
-				err:        err,
-				statusCode: http.StatusInternalServerError,
-			})
-			continue
-		}
-		_, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
-	}
-
-	if len(errs) > 0 {
-		r := errs[0] // TODO: we should probably print all errors
-		req.writeErrResp(r.err, r.statusCode)
+	jInfo, err := d.parent.checkJob(req)
+	if err != nil || jInfo == nil {
 		return
 	}
 
@@ -256,7 +224,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 		return
 	}
 
-	numPending := d.parent.getNumPending(body)
+	numPending := d.parent.getNumPending(jInfo.ID)
 
 	dlErrors, err := d.parent.db.getErrors(req.id)
 	if err != nil {
@@ -266,14 +234,14 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	sort.Sort(cmn.TaskErrByName(dlErrors))
 
 	req.writeResp(cmn.DlStatusResp{
-		Finished:      finished,
-		Total:         total,
+		Finished:      jInfo.Finished,
+		Total:         jInfo.Total,
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,
 
 		NumPending: numPending,
-		Aborted:    body.Aborted,
+		Aborted:    jInfo.Aborted,
 	})
 }
 
@@ -289,7 +257,7 @@ func (d *dispatcher) dispatchList(req *request) {
 		respMap[r.ID] = cmn.DlJobInfo{
 			ID:          r.ID,
 			Description: r.Description,
-			NumPending:  d.parent.getNumPending(&r),
+			NumPending:  d.parent.getNumPending(r.ID),
 			Aborted:     r.Aborted,
 		}
 	}

@@ -21,7 +21,7 @@ import (
 )
 
 type (
-	task struct {
+	singleObjectTask struct {
 		parent *Downloader
 		*request
 
@@ -37,7 +37,7 @@ type (
 	}
 )
 
-func (t *task) download() {
+func (t *singleObjectTask) download() {
 	var (
 		statusMsg string
 		err       error
@@ -73,6 +73,10 @@ func (t *task) download() {
 		return
 	}
 
+	if err := t.parent.db.incFinished(t.id); err != nil {
+		glog.Errorf(err.Error())
+	}
+
 	t.parent.stats.AddMany(
 		stats.NamedVal64{Name: stats.DownloadSize, Val: t.currentSize.Load()},
 		stats.NamedVal64{Name: stats.DownloadLatency, Val: int64(time.Since(t.started))},
@@ -82,7 +86,7 @@ func (t *task) download() {
 	t.finishedCh <- nil
 }
 
-func (t *task) downloadLocal(lom *cluster.LOM, started time.Time) (string, error) {
+func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (string, error) {
 	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 	// Create request
@@ -117,28 +121,28 @@ func (t *task) downloadLocal(lom *cluster.LOM, started time.Time) (string, error
 	return "", nil
 }
 
-func (t *task) setTotalSize(resp *http.Response) {
+func (t *singleObjectTask) setTotalSize(resp *http.Response) {
 	totalSize := resp.ContentLength
 	if totalSize > 0 {
 		t.totalSize = totalSize
 	}
 }
 
-func (t *task) downloadCloud(lom *cluster.LOM) (string, error) {
+func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) (string, error) {
 	if errstr, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); errstr != "" {
 		return internalErrorMessage(), errors.New(errstr)
 	}
 	return "", nil
 }
 
-func (t *task) cancel() {
+func (t *singleObjectTask) cancel() {
 	t.cancelFunc()
 }
 
-// TODO: this should also inform somehow downloader status about being aborted/canceled
+// TODO: this should also inform somehow downloader status about being Aborted/canceled
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
-func (t *task) abort(statusMsg string, err error) {
+func (t *singleObjectTask) abort(statusMsg string, err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 
 	dbErr := t.parent.db.addError(t.id, t.obj.Objname, statusMsg)
@@ -147,7 +151,7 @@ func (t *task) abort(statusMsg string, err error) {
 	t.finishedCh <- err
 }
 
-func (t *task) persist() {
+func (t *singleObjectTask) persist() {
 	t.parent.db.persistTask(t.id, cmn.TaskDlInfo{
 		Name:       t.obj.Objname,
 		Downloaded: t.currentSize.Load(),
@@ -160,10 +164,10 @@ func (t *task) persist() {
 	})
 }
 
-func (t *task) waitForFinish() <-chan error {
+func (t *singleObjectTask) waitForFinish() <-chan error {
 	return t.finishedCh
 }
 
-func (t *task) String() string {
+func (t *singleObjectTask) String() string {
 	return t.request.String()
 }

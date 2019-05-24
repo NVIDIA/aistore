@@ -164,6 +164,7 @@ func (r *XactDemandBase) ChanCheckTimeout() <-chan time.Time { return r.ticker.C
 func (r *XactDemandBase) Renew()                             { r.renew.Store(1) } // see Timeout()
 func (r *XactDemandBase) IncPending()                        { r.pending.Inc() }
 func (r *XactDemandBase) DecPending()                        { r.pending.Dec() }
+func (r *XactDemandBase) SubPending(n int64)                 { r.pending.Sub(n) }
 func (r *XactDemandBase) Pending() int64                     { return r.pending.Load() }
 
 func (r *XactDemandBase) Timeout() bool {

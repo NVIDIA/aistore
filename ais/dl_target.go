@@ -13,8 +13,10 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 )
 
 // NOTE: This request is internal so we can have asserts there.
@@ -31,7 +33,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		statusCode = http.StatusBadRequest
 	)
 
-	downloader, err := t.xactions.renewDownloader(t)
+	downloaderXact, err := t.xactions.renewDownloader(t)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -51,7 +53,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("Downloading: %s", payload)
 		}
-		response, respErr, statusCode = downloader.Download(payload)
+
+		dlJob := downloader.NewSliceDownloadJob(payload.ID, payload.Objs, payload.Bucket, payload.BckProvider, payload.Timeout, payload.Description)
+		response, respErr, statusCode = downloaderXact.Download(dlJob)
 
 	case http.MethodGet:
 		payload := &cmn.DlAdminBody{}
@@ -64,7 +68,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Getting status of download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.JobStatus(payload.ID)
+			response, respErr, statusCode = downloaderXact.JobStatus(payload.ID)
 		} else {
 			var regex *regexp.Regexp
 			if payload.Regex != "" {
@@ -76,7 +80,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Listing downloads")
 			}
-			response, respErr, statusCode = downloader.ListJobs(regex)
+			response, respErr, statusCode = downloaderXact.ListJobs(regex)
 		}
 
 	case http.MethodDelete:
@@ -94,12 +98,12 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Aborting download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.AbortJob(payload.ID)
+			response, respErr, statusCode = downloaderXact.AbortJob(payload.ID)
 		case cmn.Remove:
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Removing download: %s", payload)
 			}
-			response, respErr, statusCode = downloader.RemoveJob(payload.ID)
+			response, respErr, statusCode = downloaderXact.RemoveJob(payload.ID)
 		default:
 			cmn.AssertMsg(false, fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).", items[0], cmn.Abort, cmn.Remove))
 			return

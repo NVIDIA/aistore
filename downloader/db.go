@@ -44,21 +44,32 @@ func newDownloadDB() (*downloaderDB, error) {
 	return &downloaderDB{driver: driver}, nil
 }
 
-func (db *downloaderDB) getJob(id string) (body *cmn.DlBody, err error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
+func (db *downloaderDB) readJob(id string) (*DownloadJobInfo, error) {
+	var jInfo DownloadJobInfo
 
-	if err := db.driver.Read(downloaderCollection, id, &body); err != nil {
+	if err := db.driver.Read(downloaderCollection, id, &jInfo); err != nil {
 		if !os.IsNotExist(err) {
 			glog.Error(err)
 			return nil, err
 		}
 		return nil, errJobNotFound
 	}
-	return
+
+	return &jInfo, nil
 }
 
-func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]cmn.DlBody, error) {
+func (db *downloaderDB) writeJob(id string, jInfo *DownloadJobInfo) error {
+	return db.driver.Write(downloaderCollection, id, &jInfo)
+}
+
+func (db *downloaderDB) getJob(id string) (*DownloadJobInfo, error) {
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	return db.readJob(id)
+}
+
+func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]DownloadJobInfo, error) {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -72,51 +83,79 @@ func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]cmn.DlBody, error) 
 		return nil, nil
 	}
 
-	body := make([]cmn.DlBody, 0)
+	body := make([]DownloadJobInfo, 0)
 
 	for _, r := range records {
-		var dlb cmn.DlBody
-		if err := jsoniter.UnmarshalFromString(r, &dlb); err != nil {
+		var dji DownloadJobInfo
+		if err := jsoniter.UnmarshalFromString(r, &dji); err != nil {
 			glog.Error(err)
 			continue
 		}
-		if descRegex == nil || descRegex.MatchString(dlb.Description) {
-			body = append(body, dlb)
+		if descRegex == nil || descRegex.MatchString(dji.Description) {
+			body = append(body, dji)
 		}
 	}
 
 	return body, nil
 }
 
-func (db *downloaderDB) setJob(id string, body *cmn.DlBody) error {
+func (db *downloaderDB) setJob(id string, job DownloadJob) error {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	if err := db.driver.Write(downloaderCollection, id, body); err != nil {
+	jInfo := &DownloadJobInfo{
+		ID:          job.ID(),
+		Bucket:      job.Bucket(),
+		BckProvider: job.BckProvider(),
+		Total:       job.Len(),
+		Description: job.Description(),
+	}
+
+	if err := db.writeJob(id, jInfo); err != nil {
 		glog.Error(err)
 		return err
 	}
+
+	return nil
+}
+
+// FIXME: remove this part of db and keep DownloadJobInfo in a memory
+func (db *downloaderDB) incFinished(id string) error {
+
+	db.mtx.Lock()
+	defer db.mtx.Unlock()
+
+	jInfo, err := db.readJob(id)
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+
+	jInfo.Finished++
+
+	if err := db.writeJob(id, jInfo); err != nil {
+		glog.Error(err)
+		return err
+	}
+
 	return nil
 }
 
 func (db *downloaderDB) setAborted(id string) error {
-	var body cmn.DlBody
-
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
-	if err := db.driver.Read(downloaderCollection, id, &body); err != nil {
-		if !os.IsNotExist(err) {
-			glog.Error(err)
-			return err
-		}
-		return errJobNotFound
+	jInfo, err := db.readJob(id)
+	if err != nil {
+		glog.Error(err)
+		return err
 	}
-	if body.Aborted {
+
+	if jInfo.Aborted {
 		return nil
 	}
-	body.Aborted = true
-	if err := db.driver.Write(downloaderCollection, id, body); err != nil {
+	jInfo.Aborted = true
+	if err := db.writeJob(id, jInfo); err != nil {
 		glog.Error(err)
 		return err
 	}
@@ -129,11 +168,7 @@ func (db *downloaderDB) delJob(id string) error {
 	defer db.mtx.Unlock()
 
 	if err := db.driver.Delete(downloaderCollection, id); err != nil {
-		if !os.IsNotExist(err) {
-			glog.Error(err)
-			return err
-		}
-		return errJobNotFound
+		return err
 	}
 	return nil
 }

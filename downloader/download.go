@@ -137,7 +137,7 @@ type (
 
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
-		downloadCh chan *task
+		downloadCh chan DownloadJob
 
 		dispatcher *dispatcher
 
@@ -210,10 +210,6 @@ func (req *request) writeResp(resp interface{}) {
 	req.write(resp, nil, http.StatusOK)
 }
 
-func (req *request) equals(rhs *request) bool {
-	return req.uid() == rhs.uid()
-}
-
 // ========================== progressReader ===================================
 
 var _ io.ReadCloser = &progressReader{}
@@ -260,7 +256,7 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
-		downloadCh:     make(chan *task),
+		downloadCh:     make(chan DownloadJob),
 		db:             db,
 	}
 
@@ -292,8 +288,8 @@ Loop:
 			default:
 				cmn.AssertFmt(false, req, req.action)
 			}
-		case task := <-d.downloadCh:
-			d.dispatcher.dispatchDownload(task)
+		case job := <-d.downloadCh:
+			d.dispatcher.dispatchDownload(job)
 		case mpathRequest := <-d.mpathReqCh:
 			switch mpathRequest.Action {
 			case fs.Add:
@@ -328,47 +324,15 @@ func (d *Downloader) Stop(err error) {
  * Downloader's exposed methods
  */
 
-func (d *Downloader) Download(body *cmn.DlBody) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) Download(dJob DownloadJob) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
 
-	if err := d.db.setJob(body.ID, body); err != nil {
+	if err := d.db.setJob(dJob.ID(), dJob); err != nil {
 		return err.Error(), err, http.StatusInternalServerError
 	}
 
-	responses := make([]chan *response, 0, len(body.Objs))
-	for _, obj := range body.Objs {
-		// Invariant: either there was an error before adding to queue, or file
-		// was deleted from queue (on abort or successful run). In both cases
-		// we decrease pending.
-		d.IncPending()
-
-		rch := make(chan *response, 1)
-		responses = append(responses, rch)
-		t := &task{
-			parent: d,
-			request: &request{
-				action:      taskDownload,
-				id:          body.ID,
-				obj:         obj,
-				bucket:      body.Bucket,
-				bckProvider: body.BckProvider,
-				timeout:     body.Timeout,
-				responseCh:  rch,
-			},
-			finishedCh: make(chan error, 1),
-		}
-		d.downloadCh <- t
-	}
-
-	for _, response := range responses {
-		// Await the response
-		r := <-response
-		if r.err != nil {
-			d.AbortJob(body.ID) // Abort whole job
-			return r.resp, r.err, r.statusCode
-		}
-	}
+	d.downloadCh <- dJob
 	return nil, nil, http.StatusOK
 }
 
@@ -432,8 +396,8 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 	return r.resp, r.err, r.statusCode
 }
 
-func (d *Downloader) checkJob(req *request) (*cmn.DlBody, error) {
-	body, err := d.db.getJob(req.id)
+func (d *Downloader) checkJob(req *request) (*DownloadJobInfo, error) {
+	jInfo, err := d.db.getJob(req.id)
 	if err != nil {
 		if err == errJobNotFound {
 			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)
@@ -442,7 +406,7 @@ func (d *Downloader) checkJob(req *request) (*cmn.DlBody, error) {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return nil, err
 	}
-	return body, nil
+	return jInfo, nil
 }
 
 func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
@@ -474,20 +438,12 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 }
 
 // Gets the number of pending files of reqId
-func (d *Downloader) getNumPending(body *cmn.DlBody) int {
+func (d *Downloader) getNumPending(jobID string) int {
 	numPending := 0
 
 	for _, j := range d.dispatcher.joggers {
-		for _, obj := range body.Objs {
-			req := request{
-				id:          body.ID,
-				obj:         obj,
-				bucket:      body.Bucket,
-				bckProvider: body.BckProvider,
-			}
-			if j.q.exists(&req) {
-				numPending++
-			}
+		if tasks, ok := j.q.m[jobID]; ok {
+			numPending += len(tasks)
 		}
 	}
 
