@@ -30,7 +30,7 @@ type (
 	jogger struct {
 		mpath       string
 		terminateCh chan struct{} // synchronizes termination
-		parent      *Downloader
+		parent      *dispatcher
 
 		q *queue
 
@@ -41,7 +41,7 @@ type (
 	}
 )
 
-func newJogger(d *Downloader, mpath string) *jogger {
+func newJogger(d *dispatcher, mpath string) *jogger {
 	return &jogger{
 		mpath:       mpath,
 		parent:      d,
@@ -50,7 +50,7 @@ func newJogger(d *Downloader, mpath string) *jogger {
 	}
 }
 
-func (j *jogger) putIntoDownloadQueue(task *task) (response, bool) {
+func (j *jogger) enqueue(task *task) (response, bool) {
 	cmn.Assert(task != nil)
 	added, err, errCode := j.q.put(task)
 	if err != nil {
@@ -92,7 +92,7 @@ func (j *jogger) jog() {
 		j.task = nil
 		j.Unlock()
 		if exists := j.q.delete(t.request); exists {
-			j.parent.DecPending()
+			j.parent.parent.DecPending()
 		}
 	}
 

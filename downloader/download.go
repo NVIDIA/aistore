@@ -7,7 +7,6 @@ package downloader
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -139,7 +138,8 @@ type (
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
 		downloadCh chan *task
-		joggers    map[string]*jogger // mpath -> jogger
+
+		dispatcher *dispatcher
 
 		db *downloaderDB
 	}
@@ -245,32 +245,6 @@ func (d *Downloader) Description() string {
 	return "responsible for downloading objects into a bucket based on provided link"
 }
 
-func (d *Downloader) addJogger(mpath string) {
-	if _, ok := d.joggers[mpath]; ok {
-		glog.Warningf("Attempted to add an already existing mountpath %q", mpath)
-		return
-	}
-	mpathInfo, _ := d.mountpaths.Path2MpathInfo(mpath)
-	if mpathInfo == nil {
-		glog.Errorf("Attempted to add a mountpath %q with no corresponding filesystem", mpath)
-		return
-	}
-	j := newJogger(d, mpath)
-	go j.jog()
-	d.joggers[mpath] = j
-}
-
-func (d *Downloader) removeJogger(mpath string) {
-	jogger, ok := d.joggers[mpath]
-	if !ok {
-		glog.Errorf("Invalid mountpath %q", mpath)
-		return
-	}
-
-	delete(d.joggers, mpath)
-	jogger.stop()
-}
-
 /*
  * Downloader constructors
  */
@@ -279,7 +253,7 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 	if err != nil {
 		return nil, err
 	}
-	return &Downloader{
+	downloader := &Downloader{
 		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, false),
 		t:              t,
 		stats:          stats,
@@ -287,19 +261,15 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
 		downloadCh:     make(chan *task),
-		joggers:        make(map[string]*jogger, 8),
 		db:             db,
-	}, nil
+	}
+
+	downloader.dispatcher = newDispatcher(downloader)
+	return downloader, nil
 }
 
 func (d *Downloader) init() {
-	availablePaths, disabledPaths := d.mountpaths.Get()
-	for mpath := range availablePaths {
-		d.addJogger(mpath)
-	}
-	for mpath := range disabledPaths {
-		d.addJogger(mpath)
-	}
+	d.dispatcher.init()
 }
 
 func (d *Downloader) Run() error {
@@ -312,24 +282,24 @@ Loop:
 		case req := <-d.adminCh:
 			switch req.action {
 			case adminStatus:
-				d.dispatchStatus(req)
+				d.dispatcher.dispatchStatus(req)
 			case adminAbort:
-				d.dispatchAbort(req)
+				d.dispatcher.dispatchAbort(req)
 			case adminRemove:
-				d.dispatchRemove(req)
+				d.dispatcher.dispatchRemove(req)
 			case adminList:
-				d.dispatchList(req)
+				d.dispatcher.dispatchList(req)
 			default:
 				cmn.AssertFmt(false, req, req.action)
 			}
 		case task := <-d.downloadCh:
-			d.dispatchDownload(task)
+			d.dispatcher.dispatchDownload(task)
 		case mpathRequest := <-d.mpathReqCh:
 			switch mpathRequest.Action {
 			case fs.Add:
-				d.addJogger(mpathRequest.Path)
+				d.dispatcher.addJogger(mpathRequest.Path)
 			case fs.Remove:
-				d.removeJogger(mpathRequest.Path)
+				d.dispatcher.removeJogger(mpathRequest.Path)
 			}
 		case <-d.ChanCheckTimeout():
 			if d.Timeout() {
@@ -349,9 +319,7 @@ Loop:
 func (d *Downloader) Stop(err error) {
 	d.t.GetFSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
-	for _, jogger := range d.joggers {
-		jogger.stop()
-	}
+	d.dispatcher.stop()
 	d.EndTime(time.Now())
 	glog.Infof("Stopped %s", d.Getname())
 }
@@ -464,55 +432,6 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 	return r.resp, r.err, r.statusCode
 }
 
-/*
- * Downloader's dispatch methods (forwards request to jogger)
- */
-
-func (d *Downloader) dispatchDownload(t *task) {
-	var (
-		resp      response
-		added, ok bool
-		j         *jogger
-	)
-	lom, errstr := cluster.LOM{T: d.t, Bucket: t.bucket, Objname: t.obj.Objname, BucketProvider: t.bckProvider}.Init()
-	if errstr == "" {
-		_, errstr = lom.Load(true)
-	}
-	if errstr != "" {
-		resp.err, resp.statusCode = errors.New(errstr), http.StatusInternalServerError
-		goto finalize
-	}
-	if lom.Exists() { // FIXME: checksum, etc.
-		resp.resp = fmt.Sprintf("object %q already exists - skipping", t.obj.Objname)
-		goto finalize
-	}
-	t.fqn = lom.FQN
-
-	if lom.ParsedFQN.MpathInfo == nil {
-		err := fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
-		glog.Error(err.Error())
-		resp.err, resp.statusCode = err, http.StatusInternalServerError
-		goto finalize
-	}
-	j, ok = d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
-
-	resp, added = j.putIntoDownloadQueue(t)
-
-finalize:
-	t.write(resp.resp, resp.err, resp.statusCode)
-
-	// Following can happen:
-	//  * in case of error
-	//  * object already exists
-	//  * object already in queue
-	//
-	// In all of these cases we need to decrease pending since it was not added to the queue.
-	if !added {
-		d.DecPending()
-	}
-}
-
 func (d *Downloader) checkJob(req *request) (*cmn.DlBody, error) {
 	body, err := d.db.getJob(req.id)
 	if err != nil {
@@ -526,158 +445,10 @@ func (d *Downloader) checkJob(req *request) (*cmn.DlBody, error) {
 	return body, nil
 }
 
-func (d *Downloader) dispatchRemove(req *request) {
-	body, err := d.checkJob(req)
-	if err != nil {
-		return
-	}
-
-	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	if d.getNumPending(body) != 0 {
-		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", body.ID), http.StatusBadRequest)
-		return
-	}
-
-	err = d.db.delJob(req.id)
-	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
-	req.writeResp(nil)
-}
-
-func (d *Downloader) dispatchAbort(req *request) {
-	body, err := d.checkJob(req)
-	if err != nil {
-		return
-	}
-
-	errs := make([]response, 0, len(body.Objs))
-	for _, j := range d.joggers {
-		j.Lock()
-		for _, obj := range body.Objs {
-			req.obj = obj
-			req.bucket = body.Bucket
-			req.bckProvider = body.BckProvider
-
-			lom, errstr := cluster.LOM{T: d.t, Bucket: req.bucket, Objname: req.obj.Objname}.Init()
-			if errstr == "" {
-				_, errstr = lom.Load(false)
-			}
-			if errstr != "" {
-				errs = append(errs, response{
-					err:        errors.New(errstr),
-					statusCode: http.StatusInternalServerError,
-				})
-				continue
-			}
-			if lom.Exists() {
-				continue
-			}
-
-			// Abort currently running task
-			if j.task != nil && j.task.request.equals(req) {
-				// Task is running
-				j.task.cancel()
-				continue
-			}
-
-			// If not running but in queue we need to decrease number of pending
-			if existed := j.q.delete(req); existed {
-				d.DecPending()
-			}
-		}
-		j.Unlock()
-	}
-
-	if len(errs) > 0 {
-		r := errs[0] // TODO: we should probably print all errors
-		req.writeErrResp(r.err, r.statusCode)
-		return
-	}
-
-	err = d.db.setAborted(req.id)
-	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
-	req.writeResp(nil)
-}
-
-func (d *Downloader) dispatchStatus(req *request) {
-	body, err := d.checkJob(req)
-	if err != nil {
-		return
-	}
-
-	total := len(body.Objs)
-	finished := 0
-
-	errs := make([]response, 0, len(body.Objs))
-	for _, obj := range body.Objs {
-		lom, errstr := cluster.LOM{T: d.t, Bucket: body.Bucket, Objname: obj.Objname, BucketProvider: body.BckProvider}.Init()
-		if errstr == "" {
-			_, errstr = lom.Load(true)
-		}
-		if errstr != "" {
-			errs = append(errs, response{
-				err:        errors.New(errstr),
-				statusCode: http.StatusInternalServerError,
-			})
-			continue
-		}
-		if lom.Exists() { // FIXME: checksum, etc.
-			finished++
-			continue
-		}
-
-		req.fqn = lom.FQN
-
-		if lom.ParsedFQN.MpathInfo == nil {
-			err := fmt.Errorf("status request with %v failed. Failed to obtain mountpath for request's fqn %s", req, req.fqn)
-			glog.Error(err.Error())
-			errs = append(errs, response{
-				err:        err,
-				statusCode: http.StatusInternalServerError,
-			})
-			continue
-		}
-		_, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
-		cmn.AssertMsg(ok, fmt.Sprintf("status request with %v failed. No corresponding mpath exists", req))
-	}
-
-	if len(errs) > 0 {
-		r := errs[0] // TODO: we should probably print all errors
-		req.writeErrResp(r.err, r.statusCode)
-		return
-	}
-
-	currentTasks := d.activeTasks(req.id)
-	finishedTasks, err := d.db.getTasks(req.id)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
-	}
-
-	numPending := d.getNumPending(body)
-
-	dlErrors, err := d.db.getErrors(req.id)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
-	}
-	sort.Sort(cmn.TaskErrByName(dlErrors))
-
-	req.writeResp(cmn.DlStatusResp{
-		Finished:      finished,
-		Total:         total,
-		CurrentTasks:  currentTasks,
-		FinishedTasks: finishedTasks,
-		Errs:          dlErrors,
-
-		NumPending: numPending,
-		Aborted:    body.Aborted,
-	})
-}
-
 func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
-	currentTasks := make([]cmn.TaskDlInfo, 0, len(d.joggers))
+	currentTasks := make([]cmn.TaskDlInfo, 0, len(d.dispatcher.joggers))
 
-	for _, j := range d.joggers {
+	for _, j := range d.dispatcher.joggers {
 		j.Lock()
 
 		task := j.task
@@ -706,7 +477,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 func (d *Downloader) getNumPending(body *cmn.DlBody) int {
 	numPending := 0
 
-	for _, j := range d.joggers {
+	for _, j := range d.dispatcher.joggers {
 		for _, obj := range body.Objs {
 			req := request{
 				id:          body.ID,
@@ -721,25 +492,6 @@ func (d *Downloader) getNumPending(body *cmn.DlBody) int {
 	}
 
 	return numPending
-}
-
-func (d *Downloader) dispatchList(req *request) {
-	records, err := d.db.getList(req.regex)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
-	}
-
-	respMap := make(map[string]cmn.DlJobInfo)
-	for _, r := range records {
-		respMap[r.ID] = cmn.DlJobInfo{
-			ID:          r.ID,
-			Description: r.Description,
-			NumPending:  d.getNumPending(&r),
-			Aborted:     r.Aborted,
-		}
-	}
-	req.writeResp(respMap)
 }
 
 func internalErrorMessage() string {
