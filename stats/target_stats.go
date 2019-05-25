@@ -152,7 +152,7 @@ func (r *Trunner) log() (runlru bool) {
 	}
 
 	// 3. io stats
-	r.lines = fs.Mountpaths.Iostats.LogAppend(r.lines, now)
+	r.lines = fs.Mountpaths.Iostats.LogAppend(r.lines)
 
 	// 4. log
 	for _, ln := range r.lines {

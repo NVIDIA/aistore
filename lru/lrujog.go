@@ -199,7 +199,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 			if !lctx.mpathInfo.IsIdle(lctx.config, now) {
 				// throttle self
 				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedpct)
-				curr := fs.Mountpaths.Iostats.GetDiskUtil(lctx.mpathInfo.Path)
+				curr := fs.Mountpaths.Iostats.GetDiskUtil(lctx.mpathInfo.Path, now)
 				ratioUtilization := cmn.Ratio(lctx.config.Disk.DiskUtilHighWM, lctx.config.Disk.DiskUtilLowWM, curr)
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true

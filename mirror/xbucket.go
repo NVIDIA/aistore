@@ -156,7 +156,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	case <-j.stopCh:
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
 	default:
-		curr := fs.Mountpaths.Iostats.GetDiskUtil(j.mpathInfo.Path)
+		curr := fs.Mountpaths.Iostats.GetDiskUtil(j.mpathInfo.Path, time.Now())
 		if curr >= diskConf.DiskUtilHighWM {
 			time.Sleep(cmn.ThrottleSleepMin)
 		}

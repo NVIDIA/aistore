@@ -38,14 +38,14 @@ type (
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
+		disk2sector map[string]int64
 		sorted      []string
 		blockStats  diskBlockStats
 		disk2sysfn  cmn.SimpleKVs
 		cache       atomic.Pointer
-		updateLock  *sync.Cond
+		cacheLock   *sync.Mutex
 		cacheHst    [16]*ioStatCache // history TODO
 		cacheIdx    int
-		updating    bool
 	}
 	SelectedDiskStats struct {
 		RBps, WBps, Util int64
@@ -74,10 +74,11 @@ func NewIostatContext(fqnr FQNResolver) (ctx *IostatContext) {
 		fqnr:        fqnr,
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cmn.SimpleKVs, 10),
+		disk2sector: make(map[string]int64, 10),
 		sorted:      make([]string, 0, 10),
 		blockStats:  make(diskBlockStats, 10),
 		disk2sysfn:  make(cmn.SimpleKVs, 10),
-		updateLock:  sync.NewCond(&sync.Mutex{}),
+		cacheLock:   &sync.Mutex{},
 	}
 	for i := 0; i < len(ctx.cacheHst); i++ {
 		ctx.cacheHst[i] = newIostatCache()
@@ -112,22 +113,26 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 	defer ctx.mpathLock.Unlock()
 
 	config := cmn.GCO.Get()
-	disks := fs2disks(fs)
-	if len(disks) == 0 {
+	fsdisks := fs2disks(fs)
+	if len(fsdisks) == 0 {
 		return
 	}
 	if dd, ok := ctx.mpath2disks[mpath]; ok {
-		s := fmt.Sprintf("mountpath %s already added, disks %+v %+v", mpath, dd, disks)
+		s := fmt.Sprintf("mountpath %s already added, disks %+v %+v", mpath, dd, fsdisks)
 		cmn.AssertMsg(false, s)
 	}
-	ctx.mpath2disks[mpath] = disks
-	for disk := range disks {
+	ctx.mpath2disks[mpath] = fsdisks
+	for disk, sectorSize := range fsdisks {
 		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
 			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s", mp, fs, mpath, disk)
 			cmn.AssertMsg(false, s)
 			return
 		}
 		ctx.disk2mpath[disk] = mpath
+		ctx.disk2sector[disk] = sectorSize
+		if sectorSize != 512 {
+			glog.Infof("%s (fs %s): %d sector", disk, fs, sectorSize)
+		}
 	}
 	ctx.sorted = ctx.sorted[:0]
 	for disk := range ctx.disk2mpath {
@@ -163,6 +168,7 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 				cmn.AssertMsg(false, s)
 			}
 			delete(ctx.disk2mpath, disk)
+			delete(ctx.disk2sector, disk)
 		}
 	}
 	delete(ctx.mpath2disks, mpath)
@@ -182,7 +188,7 @@ func (ctx *IostatContext) GetRoundRobin(defaultFQN string, copyFQN []string) (fq
 		rrCountWrap  *atomic.Int64
 		ok           bool
 	)
-	cache := ctx.refreshIostatCache(time.Now())
+	cache := ctx.refreshIostatCache()
 	if rrCountWrap, ok = cache.mpathRR[mpath]; !ok {
 		fqnRRCount = int64(math.MaxInt64)
 	} else {
@@ -226,19 +232,13 @@ func (ctx *IostatContext) GetRoundRobin(defaultFQN string, copyFQN []string) (fq
 	return
 }
 
-func (ctx *IostatContext) GetDiskUtil(mpath string, timestamp ...time.Time) int64 {
-	var timestampVar time.Time
-	if len(timestamp) > 0 {
-		timestampVar = timestamp[0]
-	} else {
-		timestampVar = time.Now()
-	}
-	cache := ctx.refreshIostatCache(timestampVar)
+func (ctx *IostatContext) GetDiskUtil(mpath string, now time.Time) int64 {
+	cache := ctx.refreshIostatCache(now)
 	return cache.mpathUtil[mpath]
 }
 
 func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
-	var cache = ctx.refreshIostatCache(time.Now())
+	var cache = ctx.refreshIostatCache()
 	m = make(map[string]*SelectedDiskStats)
 	for disk := range cache.diskIOms {
 		m[disk] = &SelectedDiskStats{
@@ -249,8 +249,8 @@ func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStat
 	return
 }
 
-func (ctx *IostatContext) LogAppend(lines []string, timestamp time.Time) []string {
-	var cache = ctx.refreshIostatCache(timestamp)
+func (ctx *IostatContext) LogAppend(lines []string) []string {
+	var cache = ctx.refreshIostatCache()
 	for _, disk := range ctx.sorted {
 		if _, ok := cache.diskIOms[disk]; !ok {
 			glog.Errorf("no stats for disk %s", disk) // TODO: remove
@@ -262,7 +262,7 @@ func (ctx *IostatContext) LogAppend(lines []string, timestamp time.Time) []strin
 		}
 		rbps := cmn.B2S(cache.diskRBps[disk], 0)
 		wbps := cmn.B2S(cache.diskWBps[disk], 0)
-		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, cache.diskUtil[disk])
+		line := fmt.Sprintf("%s: %s/s, %s/s, %d%%", disk, rbps, wbps, util)
 		lines = append(lines, line)
 	}
 	return lines
@@ -274,40 +274,38 @@ func (ctx *IostatContext) LogAppend(lines []string, timestamp time.Time) []strin
 
 // helper function for fetching and updating the Iostat cache
 //  assumes that the timestamp passed in is close enough to the current time
-func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
+func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
+	var now time.Time
+	if len(nows) > 0 {
+		now = nows[0]
+	} else {
+		now = time.Now()
+	}
 	statsCache := ctx.getStatsCache()
-	if statsCache.expireTime.After(timestamp) {
+	if statsCache.expireTime.After(now) {
 		return statsCache
 	}
 
-	ctx.updateLock.L.Lock()
-	if ctx.updating {
-		ctx.updateLock.Wait()
-		ctx.updateLock.L.Unlock()
-		return ctx.getStatsCache()
-	}
-	ctx.updating = true
-	ctx.updateLock.L.Unlock()
-
-	// ensure update has the most recent everything
+	ctx.cacheLock.Lock()
 	statsCache = ctx.getStatsCache()
-	if statsCache.expireTime.After(timestamp) {
-		ctx.updateLock.L.Lock()
-		ctx.updating = false
-		ctx.updateLock.L.Unlock()
-		ctx.updateLock.Broadcast()
+	if statsCache.expireTime.After(now) {
+		ctx.cacheLock.Unlock()
 		return statsCache
 	}
+	//
+	// begin
+	//
+	ctx.mpathLock.Lock() // nested lock
+	now = time.Now()
 	readDiskStats(ctx.disk2mpath, ctx.disk2sysfn, ctx.blockStats)
 
-	ctx.mpathLock.Lock()
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
 	var (
 		ncache  = ctx.cacheHst[ctx.cacheIdx]
-		elapsed = int64(timestamp.Sub(statsCache.timestamp))
+		elapsed = int64(now.Sub(statsCache.timestamp))
 	)
-	ncache.timestamp = timestamp
+	ncache.timestamp = now
 	for mpath := range ctx.mpath2disks {
 		if rr, ok := ncache.mpathRR[mpath]; ok {
 			rr.Store(0)
@@ -325,6 +323,8 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 	}
 	missingInfo := false
 	for disk, mpath := range ctx.disk2mpath {
+		ncache.diskRBps[disk] = 0
+		ncache.diskWBps[disk] = 0
 		stat, ok := ctx.blockStats[disk]
 		if !ok {
 			glog.Errorf("no stats for disk %s", disk) // TODO: remove
@@ -332,24 +332,31 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 		}
 		ncache.diskIOms[disk] = stat.IOMs
 		ncache.diskUtil[disk] = (stat.IOMs - statsCache.diskIOms[disk]) * 100 * millis / elapsed
+		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
+
 		ncache.diskRms[disk] = stat.ReadMs
 		ncache.diskRSec[disk] = stat.ReadSectors
 		ncache.diskWms[disk] = stat.WriteMs
 		ncache.diskWSec[disk] = stat.WriteSectors
+
 		if _, ok := statsCache.diskIOms[disk]; !ok {
 			missingInfo = true
 			continue
 		}
 		var (
-			rque = (stat.ReadMs - statsCache.diskRms[disk]) * millis / elapsed
-			wque = (stat.WriteMs - statsCache.diskWms[disk]) * millis * writesPerRead / elapsed
+			rque       = (stat.ReadMs - statsCache.diskRms[disk]) * millis / elapsed
+			wque       = (stat.WriteMs - statsCache.diskWms[disk]) * millis * writesPerRead / elapsed
+			sectorSize = ctx.disk2sector[disk]
 		)
-		ncache.mpathUtil[mpath] += ncache.diskIOms[disk]
-		disks := ctx.mpath2disks[mpath]
-		if sectorSize, ok := disks[disk]; ok {
-			ncache.diskRBps[disk] = (ncache.diskRSec[disk] - statsCache.diskRSec[disk]) * sectorSize * second / elapsed
-			ncache.diskWBps[disk] = (ncache.diskWSec[disk] - statsCache.diskWSec[disk]) * sectorSize * second / elapsed
+		ncache.diskRBps[disk] = (ncache.diskRSec[disk] - statsCache.diskRSec[disk]) * sectorSize * second / elapsed
+		ncache.diskWBps[disk] = (ncache.diskWSec[disk] - statsCache.diskWSec[disk]) * sectorSize * second / elapsed
+		// DEBUG - remove
+		if ncache.diskRBps[disk] < 0 {
+			glog.Infof("%s: %d %d %d %v %v", disk, ncache.diskRSec[disk], statsCache.diskRSec[disk], sectorSize,
+				time.Duration(second), time.Duration(elapsed))
 		}
+		// end of DEBUG
+
 		// from https://www.kernel.org/doc/Documentation/block/stat.txt
 		// These values count the number of milliseconds that I/O requests have
 		// waited on this block device.  If there are multiple I/O requests waiting,
@@ -387,13 +394,9 @@ func (ctx *IostatContext) refreshIostatCache(timestamp time.Time) *ioStatCache {
 		utilRatio = (utilRatio + 5) / 10 * 10 // round to nearest tenth
 		expireTime = config.Disk.IostatTimeShort + time.Duration(delta*(100-utilRatio)/100)
 	}
-	ncache.expireTime = timestamp.Add(expireTime)
+	ncache.expireTime = now.Add(expireTime)
 	ctx.putStatsCache(ncache)
-
-	ctx.updateLock.L.Lock()
-	ctx.updating = false
-	ctx.updateLock.L.Unlock()
-	ctx.updateLock.Broadcast()
+	ctx.cacheLock.Unlock()
 
 	return ncache
 }

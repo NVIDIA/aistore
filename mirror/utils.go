@@ -6,6 +6,7 @@ package mirror
 
 import (
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -23,6 +24,7 @@ func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpath
 	var (
 		util int64 = 101
 		skip       = make(cmn.SimpleKVs)
+		now        = time.Now()
 	)
 loop:
 	for _, j := range mpathers {
@@ -48,7 +50,7 @@ loop:
 				}
 			}
 		}
-		if u := fs.Mountpaths.Iostats.GetDiskUtil(jpath); u < util {
+		if u := fs.Mountpaths.Iostats.GetDiskUtil(jpath, now); u < util {
 			out = j
 			util = u
 		}
