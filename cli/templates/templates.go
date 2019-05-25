@@ -99,8 +99,8 @@ const (
 	DiskStatsBody = "{{ $value.TargetID }}\t" +
 		"{{ $value.DiskName }}\t" +
 		"{{ $stat := $value.Stat }}" +
-		"{{ BToKB $stat.RBps }}kB/s\t" +
-		"{{ BToKB $stat.WBps }}kB/s\t" +
+		"{{ FormatBytesSigned $stat.RBps 2 }}/s\t" +
+		"{{ FormatBytesSigned $stat.WBps 2 }}/s\t" +
 		"{{ $stat.Util }}\n"
 
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
@@ -307,7 +307,6 @@ var (
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatDur":           fmtDuration,
-		"BToKB":               b2kB,
 	}
 )
 
@@ -351,10 +350,6 @@ func fmtDuration(d int64) string {
 	// Convert to nanoseconds
 	dNano := time.Duration(d * 1000)
 	return dNano.String()
-}
-
-func b2kB(b int64) string {
-	return fmt.Sprintf("%0.2f", float64(b)/cmn.KiB)
 }
 
 // Displays the output in either JSON or tabular form
