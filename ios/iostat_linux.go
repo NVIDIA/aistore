@@ -253,7 +253,6 @@ func (ctx *IostatContext) LogAppend(lines []string) []string {
 	var cache = ctx.refreshIostatCache()
 	for _, disk := range ctx.sorted {
 		if _, ok := cache.diskIOms[disk]; !ok {
-			glog.Errorf("no stats for disk %s", disk) // TODO: remove
 			continue
 		}
 		util := cache.diskUtil[disk]

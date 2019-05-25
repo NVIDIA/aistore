@@ -835,6 +835,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	time.Sleep(time.Second * 2)
 	m.puts()
 
 	// Start getting objects and enable mountpaths in parallel
