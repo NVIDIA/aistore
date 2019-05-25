@@ -1342,8 +1342,8 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 }
 
 func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
-	if true || testing.Short() {
-		t.Skip("FIXME: skipping temporarily" /*tutils.SkipMsg*/)
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
 	}
 
 	const newMountpath = "/tmp/ais/mountpath"

@@ -109,16 +109,6 @@ func (r *Record) TotalSize() int64 {
 	return size
 }
 
-func (r *Record) MemorySize() uint64 {
-	size := uint64(unsafe.Sizeof(*r))
-	size += uint64(len(r.DaemonID))
-	size += uint64(len(r.Name))
-	size += (uint64(unsafe.Sizeof(r.Objects)) +
-		uint64(len(r.Objects[0].Extension)) +
-		uint64(len(r.Objects[0].ContentPath))) * uint64(len(r.Objects))
-	return size
-}
-
 // NewRecords creates new instance of Records struct and allocates n places for
 // the actual Record's
 func NewRecords(n int) *Records {
@@ -242,6 +232,27 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 
 func (r *Records) objectCount() int {
 	return r.totalObjectCount
+}
+
+func (r *Records) RecordMemorySize() (size uint64) {
+	for _, record := range r.arr {
+		size = uint64(unsafe.Sizeof(*record))
+		size += uint64(len(record.DaemonID))
+		size += uint64(len(record.Name))
+
+		// If there is record which has at least 1 record object we should get
+		// the estimate of it and return the size. Some records might not have
+		// at least 1 record object because there were duplicated and in
+		// consequence were removed from the record.
+		if len(record.Objects) > 0 {
+			size += (uint64(unsafe.Sizeof(record.Objects)) +
+				uint64(len(record.Objects[0].Extension)) +
+				uint64(len(record.Objects[0].ContentPath))) * uint64(len(record.Objects))
+			return size
+		}
+	}
+
+	return
 }
 
 func (r *Records) MarshalJSON() ([]byte, error) {

@@ -194,7 +194,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			// will be required to keep all records in memory. One node
 			// will eventually have all records from all shards so we
 			// don't calculate estimates only for single node.
-			recordSize := int(m.recManager.Records.All()[0].MemorySize())
+			recordSize := int(m.recManager.Records.RecordMemorySize())
 			estimateTotalRecordsSize = uint64(metrics.TotalCnt * extractedCount * recordSize)
 			if estimateTotalRecordsSize > m.mw.freeMemory() {
 				warnPossibleOOM = true
