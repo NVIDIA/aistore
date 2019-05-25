@@ -609,6 +609,10 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	}
 
 	if newsmap != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			caller := r.Header.Get(cmn.HeaderCallerName)
+			glog.Infof("new Smap v%d from %s", newsmap.version(), caller)
+		}
 		errstr = p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */)
 		if errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
@@ -626,6 +630,10 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if newbmd != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			caller := r.Header.Get(cmn.HeaderCallerName)
+			glog.Infof("new BMD v%d from %s", newbmd.version(), caller)
+		}
 		if errstr = p.receiveBucketMD(newbmd, actionlb); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 			return

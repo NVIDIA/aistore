@@ -183,6 +183,10 @@ const (
 	HeaderObjPresent    = "ObjPresent"    // Is object present in the cluster
 	HeaderObjNumCopies  = "ObjNumCopies"  // Number of copies of the object
 	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
+
+	// intra-cluster comm
+	HeaderCallerID   = "caller.id"
+	HeaderCallerName = "caller.name"
 )
 
 // BucketPropList is a map bucket property <-> readonly, groupped by type

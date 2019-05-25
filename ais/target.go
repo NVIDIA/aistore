@@ -847,19 +847,19 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 
 	if lom.Cksum() != nil && !cksumRange {
 		cksumType, cksumValue := lom.Cksum().Get()
-		hdr.Add(cmn.HeaderObjCksumType, cksumType)
-		hdr.Add(cmn.HeaderObjCksumVal, cksumValue)
+		hdr.Set(cmn.HeaderObjCksumType, cksumType)
+		hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
 	}
 	if lom.Version() != "" {
-		hdr.Add(cmn.HeaderObjVersion, lom.Version())
+		hdr.Set(cmn.HeaderObjVersion, lom.Version())
 	}
-	hdr.Add(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
+	hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
 
 	timeInt := lom.Atime().UnixNano()
 	if lom.Atime().IsZero() {
 		timeInt = 0
 	}
-	hdr.Add(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+	hdr.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
 
 	// loopback if disk IO is disabled
 	if dryRun.disk {
@@ -905,8 +905,8 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 				return
 			}
 			reader = rangeReader
-			hdr.Add(cmn.HeaderObjCksumType, ckConf.Type)
-			hdr.Add(cmn.HeaderObjCksumVal, cksum)
+			hdr.Set(cmn.HeaderObjCksumType, ckConf.Type)
+			hdr.Set(cmn.HeaderObjCksumVal, cksum)
 		} else {
 			reader = io.NewSectionReader(file, rangeOff, rangeLen)
 		}
@@ -1282,7 +1282,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	hdr := w.Header()
 	for k, v := range bucketProps {
-		hdr.Add(k, v)
+		hdr.Set(k, v)
 	}
 
 	// include bucket's own config override
@@ -1300,34 +1300,34 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	// transfer bucket props via http header
 	// (it is ok for Cloud buckets not to have locally cached props)
-	hdr.Add(cmn.HeaderReadPolicy, props.Tiering.ReadPolicy)
-	hdr.Add(cmn.HeaderWritePolicy, props.Tiering.WritePolicy)
-	hdr.Add(cmn.HeaderBucketChecksumType, cksumConf.Type)
-	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
-	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
-	hdr.Add(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
-	hdr.Add(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
+	hdr.Set(cmn.HeaderReadPolicy, props.Tiering.ReadPolicy)
+	hdr.Set(cmn.HeaderWritePolicy, props.Tiering.WritePolicy)
+	hdr.Set(cmn.HeaderBucketChecksumType, cksumConf.Type)
+	hdr.Set(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumConf.ValidateColdGet))
+	hdr.Set(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
+	hdr.Set(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
+	hdr.Set(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
 
-	hdr.Add(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
-	hdr.Add(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
+	hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
+	hdr.Set(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
 
-	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
-	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
-	hdr.Add(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
-	hdr.Add(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
-	hdr.Add(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
-	hdr.Add(cmn.HeaderBucketMirrorThresh, strconv.FormatInt(props.Mirror.UtilThresh, 10))
-	hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRU.Enabled))
+	hdr.Set(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
+	hdr.Set(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
+	hdr.Set(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
+	hdr.Set(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
+	hdr.Set(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
+	hdr.Set(cmn.HeaderBucketMirrorThresh, strconv.FormatInt(props.Mirror.UtilThresh, 10))
+	hdr.Set(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRU.Enabled))
 	if props.Mirror.Enabled {
-		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.Mirror.Copies, 10))
+		hdr.Set(cmn.HeaderBucketCopies, strconv.FormatInt(props.Mirror.Copies, 10))
 	} else {
-		hdr.Add(cmn.HeaderBucketCopies, "0")
+		hdr.Set(cmn.HeaderBucketCopies, "0")
 	}
-	hdr.Add(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
-	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
-	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
-	hdr.Add(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
-	hdr.Add(cmn.HeaderBucketAccessAttrs, strconv.FormatUint(props.AccessAttrs, 10))
+	hdr.Set(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
+	hdr.Set(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
+	hdr.Set(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
+	hdr.Set(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
+	hdr.Set(cmn.HeaderBucketAccessAttrs, strconv.FormatUint(props.AccessAttrs, 10))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1408,7 +1408,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 	hdr := w.Header()
 	for k, v := range objmeta {
-		hdr.Add(k, v)
+		hdr.Set(k, v)
 	}
 }
 

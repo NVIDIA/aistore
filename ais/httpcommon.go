@@ -557,6 +557,8 @@ func (h *httprunner) call(args callArgs) callResult {
 			request.Header.Set("Content-Type", "application/json")
 		}
 	}
+	request.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
+	request.Header.Set(cmn.HeaderCallerName, h.si.Name())
 
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", args.req.method, url, err)
@@ -834,6 +836,9 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 //=================
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
+		msg += " from " + caller
+	}
 	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
 	h.statsif.AddErrorHTTP(r.Method, 1)
 }

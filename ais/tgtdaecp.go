@@ -932,6 +932,10 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if newsmap != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			caller := r.Header.Get(cmn.HeaderCallerName)
+			glog.Infof("new Smap v%d from %s", newsmap.version(), caller)
+		}
 		errstr = t.receiveSmap(newsmap, actionsmap)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -939,14 +943,18 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
+	newbmd, actionlb, errstr := t.extractbucketmd(payload)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
-	if newbucketmd != nil {
-		if errstr = t.receiveBucketMD(newbucketmd, actionlb, bucketMDReceive); errstr != "" {
+	if newbmd != nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			caller := r.Header.Get(cmn.HeaderCallerName)
+			glog.Infof("new BMD v%d from %s", newbmd.version(), caller)
+		}
+		if errstr = t.receiveBucketMD(newbmd, actionlb, bucketMDReceive); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
