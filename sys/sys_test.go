@@ -68,11 +68,7 @@ func TestMemoryStats(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	memCont, err := ContainerMem()
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t,
-		memOS.Total >= memCont.Total &&
-			memOS.Free >= memCont.Free &&
-			memOS.SwapTotal >= memCont.SwapTotal &&
-			memOS.SwapFree >= memCont.SwapFree,
+	tassert.Errorf(t, memOS.Total >= memCont.Total,
 		"Container's memory stats are greater than host's ones.\nOS: %+v\nContainer: %+v", memOS, memCont)
 	if memOS.SwapTotal == 0 && memOS.SwapFree == 0 {
 		// not a error(e.g, Jenkins VM has swap off) - just a warining
