@@ -28,6 +28,10 @@ const (
 	second = int64(time.Second)
 )
 
+// The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
+// (from https://www.kernel.org/doc/Documentation/block/stat.txt)
+const sectorSize = int64(512)
+
 type (
 	FQNResolver interface {
 		FQN2mountpath(fqn string) (mpath string)
@@ -38,7 +42,6 @@ type (
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
-		disk2sector map[string]int64
 		sorted      []string
 		blockStats  diskBlockStats
 		disk2sysfn  cmn.SimpleKVs
@@ -74,7 +77,6 @@ func NewIostatContext(fqnr FQNResolver) (ctx *IostatContext) {
 		fqnr:        fqnr,
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cmn.SimpleKVs, 10),
-		disk2sector: make(map[string]int64, 10),
 		sorted:      make([]string, 0, 10),
 		blockStats:  make(diskBlockStats, 10),
 		disk2sysfn:  make(cmn.SimpleKVs, 10),
@@ -122,17 +124,13 @@ func (ctx *IostatContext) AddMpath(mpath, fs string) {
 		cmn.AssertMsg(false, s)
 	}
 	ctx.mpath2disks[mpath] = fsdisks
-	for disk, sectorSize := range fsdisks {
+	for disk := range fsdisks {
 		if mp, ok := ctx.disk2mpath[disk]; ok && !config.TestingEnv() {
 			s := fmt.Sprintf("disk sharing is not permitted: mp %s, add fs %s mp %s, disk %s", mp, fs, mpath, disk)
 			cmn.AssertMsg(false, s)
 			return
 		}
 		ctx.disk2mpath[disk] = mpath
-		ctx.disk2sector[disk] = sectorSize
-		if sectorSize != 512 {
-			glog.Infof("%s (fs %s): %d sector", disk, fs, sectorSize)
-		}
 	}
 	ctx.sorted = ctx.sorted[:0]
 	for disk := range ctx.disk2mpath {
@@ -168,7 +166,6 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 				cmn.AssertMsg(false, s)
 			}
 			delete(ctx.disk2mpath, disk)
-			delete(ctx.disk2sector, disk)
 		}
 	}
 	delete(ctx.mpath2disks, mpath)
@@ -301,8 +298,10 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	ctx.cacheIdx++
 	ctx.cacheIdx %= len(ctx.cacheHst)
 	var (
-		ncache  = ctx.cacheHst[ctx.cacheIdx]
-		elapsed = int64(now.Sub(statsCache.timestamp))
+		ncache         = ctx.cacheHst[ctx.cacheIdx]
+		elapsed        = int64(now.Sub(statsCache.timestamp))
+		elapsedSeconds = cmn.DivRound(elapsed, second)
+		elapsedMillis  = cmn.DivRound(elapsed, millis)
 	)
 	ncache.timestamp = now
 	for mpath := range ctx.mpath2disks {
@@ -324,15 +323,13 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	for disk, mpath := range ctx.disk2mpath {
 		ncache.diskRBps[disk] = 0
 		ncache.diskWBps[disk] = 0
+		ncache.diskUtil[disk] = 0
 		stat, ok := ctx.blockStats[disk]
 		if !ok {
-			glog.Errorf("no stats for disk %s", disk) // TODO: remove
+			glog.Errorf("no block stats for disk %s", disk) // TODO: remove
 			continue
 		}
 		ncache.diskIOms[disk] = stat.IOMs
-		ncache.diskUtil[disk] = (stat.IOMs - statsCache.diskIOms[disk]) * 100 * millis / elapsed
-		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
-
 		ncache.diskRms[disk] = stat.ReadMs
 		ncache.diskRSec[disk] = stat.ReadSectors
 		ncache.diskWms[disk] = stat.WriteMs
@@ -342,36 +339,44 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 			missingInfo = true
 			continue
 		}
+		// deltas
 		var (
-			rque       = (stat.ReadMs - statsCache.diskRms[disk]) * millis / elapsed
-			wque       = (stat.WriteMs - statsCache.diskWms[disk]) * millis * writesPerRead / elapsed
-			sectorSize = ctx.disk2sector[disk]
+			ioms   = stat.IOMs - statsCache.diskIOms[disk]
+			rqms   = stat.ReadMs - statsCache.diskRms[disk]
+			wqms   = stat.WriteMs - statsCache.diskWms[disk]
+			rdsect = stat.ReadSectors - statsCache.diskRSec[disk]
+			wdsect = stat.WriteSectors - statsCache.diskWSec[disk]
 		)
-		ncache.diskRBps[disk] = (ncache.diskRSec[disk] - statsCache.diskRSec[disk]) * sectorSize * second / elapsed
-		ncache.diskWBps[disk] = (ncache.diskWSec[disk] - statsCache.diskWSec[disk]) * sectorSize * second / elapsed
-		// DEBUG - remove
-		if ncache.diskRBps[disk] < 0 {
-			glog.Infof("%s: %d %d %d %v %v", disk, ncache.diskRSec[disk], statsCache.diskRSec[disk], sectorSize,
-				time.Duration(second), time.Duration(elapsed))
+		if elapsedMillis > 0 {
+			ncache.diskUtil[disk] = cmn.DivRound(ioms*100, elapsedMillis)
+		} else {
+			ncache.diskUtil[disk] = statsCache.diskUtil[disk]
 		}
-		// end of DEBUG
-
-		// from https://www.kernel.org/doc/Documentation/block/stat.txt
+		ncache.mpathUtil[mpath] += ncache.diskUtil[disk]
+		if elapsedSeconds > 0 {
+			ncache.diskRBps[disk] = cmn.DivRound(rdsect*sectorSize, elapsedSeconds)
+			ncache.diskWBps[disk] = cmn.DivRound(wdsect*sectorSize, elapsedSeconds)
+		} else {
+			ncache.diskRBps[disk] = statsCache.diskRBps[disk]
+			ncache.diskWBps[disk] = statsCache.diskWBps[disk]
+		}
 		// These values count the number of milliseconds that I/O requests have
 		// waited on this block device.  If there are multiple I/O requests waiting,
 		// these values will increase at a rate greater than 1000/second; for
 		// example, if 60 read requests wait for an average of 30 ms, the read_ticks
 		// field will increase by 60*30 = 1800
-		ncache.mpathQue[mpath] += rque + wque
+		// (from https://www.kernel.org/doc/Documentation/block/stat.txt)
+		if elapsedMillis > 0 {
+			ncache.mpathQue[mpath] += cmn.DivRound(rqms, elapsedMillis) + cmn.DivRound(wqms*writesPerRead, elapsedMillis)
+		} else {
+			ncache.mpathQue[mpath] += statsCache.mpathQue[mpath]
+		}
 	}
 
 	// average and max
 	var maxUtil int64
 	for mpath, disks := range ctx.mpath2disks {
 		numDisk := int64(len(disks))
-		if numDisk == 0 {
-			continue
-		}
 		ncache.mpathUtil[mpath] /= numDisk
 		maxUtil = cmn.MaxI64(maxUtil, ncache.mpathUtil[mpath])
 		ncache.mpathQue[mpath] /= numDisk
@@ -383,7 +388,7 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	var expireTime time.Duration
 	if missingInfo {
 		expireTime = config.Disk.IostatTimeShort
-	} else { // use the maximum utilization to determine next refresh time
+	} else { // use the maximum utilization to determine expiration time
 		var (
 			lowWM     = cmn.MaxI64(config.Disk.DiskUtilLowWM, 1)
 			highWM    = cmn.MinI64(config.Disk.DiskUtilHighWM, 100)

@@ -136,6 +136,17 @@ func DivCeil(a, b int64) int64 {
 	return d
 }
 
+func DivRound(a, b int64) int64 { return (a + b/2) / b }
+
+// CailAlign returns smallest number bigger or equal to val, which is divisible by align
+func CeilAlign(val, align uint) uint {
+	mod := val % align
+	if mod != 0 {
+		val += align - mod
+	}
+	return val
+}
+
 // FastLog2 returns floor(log2(c))
 func FastLog2(c uint64) uint {
 	for i := uint(0); ; {
@@ -151,13 +162,4 @@ func FastLog2Ceil(c uint64) uint {
 		return 0
 	}
 	return FastLog2(c-1) + 1
-}
-
-// CailAlign returns smallest number bigger or equal to val, which is divisible by align
-func CeilAlign(val, align uint) uint {
-	mod := val % align
-	if mod != 0 {
-		val += align - mod
-	}
-	return val
 }
