@@ -696,7 +696,6 @@ func main() {
 	if !runParams.getConfig {
 		err = bootStrap()
 		if err != nil {
-			fmt.Println("Failed to boot strap, err = ", err)
 			return
 		}
 
@@ -1335,6 +1334,11 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
+	if err != nil {
+		fmt.Printf("Failed to list bucket %s(%s), proxy %s, err: %v\n",
+			runParams.bucket, runParams.bckProvider, runParams.proxyURL, err)
+		return err
+	}
 
 	if runParams.subDir != "" {
 		filteredNames := names[:0]

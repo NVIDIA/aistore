@@ -96,10 +96,10 @@ Example rebalance stats response:
       "status": "InProgress",
       "count": 0,
       "ext": {
-        "num_sent_files": 0,
-        "num_sent_bytes": 0,
-        "num_recv_files": 0,
-        "num_recv_bytes": 0
+        "tx.n": 0,
+        "tx.size": 0,
+        "rx.n": 0,
+        "rx.size": 0
       }
     }
 ]

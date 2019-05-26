@@ -140,7 +140,7 @@ const (
 		" Stats Time: {{$obj.StatsTimeStr}}\n" +
 		" Retry Sync Time: {{$obj.RetrySyncTimeStr}}\n"
 	TimeoutConfTmpl = "\n{{$obj := .Timeout}}Timeout Config\n" +
-		" Default Timout: {{$obj.DefaultStr}}\n" +
+		" Default Timeout: {{$obj.DefaultStr}}\n" +
 		" Default Long Timeout: {{$obj.DefaultLongStr}}\n" +
 		" Max Keep Alive: {{$obj.MaxKeepaliveStr}}\n" +
 		" Proxy Ping: {{$obj.ProxyPingStr}}\n" +
