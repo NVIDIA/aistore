@@ -124,7 +124,8 @@ func init() {
 	// config itself and its command line overrides
 	flag.StringVar(&clivars.config.ConfFile, "config", "", "config filename: local file that stores this daemon's configuration")
 	flag.StringVar(&clivars.config.LogLevel, "loglevel", "", "log verbosity level (2 - minimal, 3 - default, 4 - super-verbose)")
-	flag.DurationVar(&clivars.config.StatsTime, "statstime", 0, "stats reporting (logging) interval")
+	flag.DurationVar(&clivars.config.StatsTime, "stats_time", 0, "stats reporting (logging) interval")
+	flag.DurationVar(&clivars.config.ListBucketTime, "list_time", 0, "list bucket timeout")
 	flag.StringVar(&clivars.config.ProxyURL, "proxyurl", "", "primary proxy/gateway URL to override local configuration")
 	flag.StringVar(&clivars.confjson, "confjson", "", "JSON formatted \"{name: value, ...}\" string to override selected knob(s)")
 	flag.BoolVar(&clivars.persist, "persist", false, "true: apply command-line args to the configuration and save the latter to disk\nfalse: keep it transient (for this run only)")

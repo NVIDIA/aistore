@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -56,10 +57,13 @@ func (d *Snode) Digest() uint64 {
 
 const snodefmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
 
+func (d *Snode) _string() string {
+	return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
+		d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
+}
 func (d *Snode) String() string {
 	if glog.FastV(4, glog.SmoduleCluster) {
-		return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
-			d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
+		return d._string()
 	}
 	return d.DaemonID
 }
@@ -94,8 +98,14 @@ func (d *Snode) Name() string {
 }
 
 func (d *Snode) Validate() error {
+	if d == nil {
+		return errors.New("invalid Snode: nil")
+	}
+	if d.DaemonID == "" {
+		return errors.New("invalid Snode: missing node ID " + d._string())
+	}
 	if d.DaemonType != cmn.Proxy && d.DaemonType != cmn.Target {
-		return fmt.Errorf("daemon_type is invalid: %q, expected one of [%s, %s]", d.DaemonType, cmn.Proxy, cmn.Target)
+		return errors.New("invalid Snode: unexpected type " + d._string())
 	}
 	return nil
 }

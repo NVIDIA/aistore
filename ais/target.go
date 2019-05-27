@@ -224,6 +224,9 @@ func (t *targetrunner) Run() error {
 	smap.Tmap[t.si.DaemonID] = t.si
 	t.smapowner.put(smap)
 
+	if err := t.si.Validate(); err != nil {
+		cmn.ExitLogf("%s", err)
+	}
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {

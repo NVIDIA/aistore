@@ -33,8 +33,10 @@ AIS proxy and AIS target (executables) both support the following command-line a
         false: keep it transient (for this run only)
   -proxyurl string
         primary proxy/gateway URL (can be used to override local configuration)
-  -statstime duration
+  -stats_time duration
         stats reporting (logging) interval
+  -list_time duration
+        list bucket timeout
   -stderrthreshold value
         logs at or above this threshold go to stderr
   -vmodule value

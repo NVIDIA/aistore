@@ -78,8 +78,8 @@ var XactKind = XactKindType{
 // ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown     = "shutdown"
-	ActGlobalReb    = "globalrebalance" // global cluster-wide rebalance
-	ActLocalReb     = "localrebalance"  // local rebalance
+	ActGlobalReb    = "rebalance" // global cluster-wide rebalance
+	ActLocalReb     = "resilver"  // local rebalance aka resilver
 	ActLRU          = "lru"
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
@@ -214,8 +214,6 @@ const (
 	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
 	URLParamRegex       = "regex"        // param for only returning dsort/downloader processes where the description contains regex
 	// internal use
-	URLParamFromID           = "fid" // source target ID
-	URLParamToID             = "tid" // destination target ID
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
 	URLParamCached           = "cho" // true: return cached objects (names & metadata); false: list Cloud bucket

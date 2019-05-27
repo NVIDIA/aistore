@@ -16,7 +16,7 @@ git reset --hard origin/master
 git status
 git log | head -5
 
-setup/deploy.sh -loglevel=3 -statstime=10s <<< $'4\n4\n4\n1'
+setup/deploy.sh -loglevel=3 -stats_time=10s <<< $'4\n4\n4\n1'
 
 echo sleep 10 seconds before checking AIStore process
 sleep 10

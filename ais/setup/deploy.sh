@@ -2,7 +2,7 @@
 
 ############################################
 #
-# Usage: deploy.sh [-loglevel=0|1|2|3] [-statstime=<DURATION>]
+# Usage: deploy.sh [-loglevel=0|1|2|3] [-stats_time=<DURATION>] [-list_time=<DURATION>]
 #
 # To deploy AIStore with code coverage enabled, set ENABLE_CODE_COVERAGE=1.
 # After runs, to collect code coverage data:

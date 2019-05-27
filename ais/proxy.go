@@ -1564,7 +1564,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 			query:  query,
 			body:   actionMsgBytes,
 		},
-		timeout: cmn.GCO.Get().Timeout.List,
+		timeout: cmn.GCO.Get().Timeout.ListBucket,
 	}
 	res := p.call(args)
 	if res.err != nil {
@@ -1992,7 +1992,7 @@ func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg,
 	cmn.AssertNoErr(err)
 
 	if wait {
-		timeout = cmn.GCO.Get().Timeout.List
+		timeout = cmn.GCO.Get().Timeout.ListBucket
 	} else {
 		timeout = defaultTimeout
 	}
@@ -3020,7 +3020,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-// '{"action": "globalrebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
+// '{"action": cmn.ActGlobalReb}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	var msg cmn.ActionMsg

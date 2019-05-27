@@ -364,17 +364,13 @@ func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config) (ok boo
 	var (
 		timeout = keepaliveTimeoutDuration(config)
 		retries = int(config.Rebalance.DestRetryTime / timeout)
-		query   = url.Values{}
 	)
-	query.Add(cmn.URLParamFromID, reb.t.si.DaemonID)
-
 	callArgs := callArgs{
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
-			query:  query,
 		},
 		timeout: timeout,
 	}

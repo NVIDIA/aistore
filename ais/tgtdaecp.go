@@ -1002,28 +1002,35 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 
 // GET /v1/health
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		callerID   = r.Header.Get(cmn.HeaderCallerID)
+		callerName = r.Header.Get(cmn.HeaderCallerName)
+		smap       = t.smapowner.get()
+	)
+	if callerID == "" || callerName == "" {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si.Name(), callerID, callerName))
+		return
+	}
+	if !smap.containsID(callerID) {
+		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si.Name(), callerID, callerName)
+	}
 	aborted, running := t.xactions.rebStatus(true)
 	if !aborted && !running {
 		aborted, running = t.xactions.rebStatus(false)
 	}
 	status := &thealthstatus{IsRebalancing: aborted || running}
-
 	jsbytes, err := jsoniter.Marshal(status)
 	cmn.AssertNoErr(err)
 	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
 		return
 	}
-
-	query := r.URL.Query()
-	from := query.Get(cmn.URLParamFromID)
-	smap := t.smapowner.get()
-	if smap.GetProxy(from) != nil {
+	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t.si.Name(), from)
+			glog.Infof("%s: health-ping from %s", t.si.Name(), callerName)
 		}
-		t.keepalive.heardFrom(from, false)
+		t.keepalive.heardFrom(callerID, false)
 	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t.si.Name(), smap.printname(from))
+		glog.Infof("%s: health-ping from %s", t.si.Name(), callerName)
 	}
 }
 

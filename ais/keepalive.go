@@ -7,7 +7,6 @@ package ais
 import (
 	"math"
 	"net/http"
-	"net/url"
 	"reflect"
 	"sync"
 	"time"
@@ -306,9 +305,6 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 }
 
 func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
-	query := url.Values{}
-	query.Add(cmn.URLParamFromID, pkr.p.si.DaemonID)
-
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
 	args := callArgs{
 		si: to,
@@ -316,7 +312,6 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 			method: http.MethodGet,
 			base:   to.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
-			query:  query,
 		},
 		timeout: timeout,
 	}
@@ -329,7 +324,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	if res.err == nil {
 		return true, false, delta
 	}
-	glog.Warningf("initial keepalive failed, err: %v, status: %d, polling again", res.err, res.status)
+	glog.Warningf("initial keepalive failed, err: %v(%d), retrying...", res.err, res.status)
 	ok, stopped = pkr.retry(to, args)
 	return ok, stopped, defaultTimeout
 }

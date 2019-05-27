@@ -185,10 +185,11 @@ type (
 	}
 	// selected config overrides via command line
 	ConfigCLI struct {
-		ConfFile  string        // config filename
-		LogLevel  string        // takes precedence over config.Log.Level
-		StatsTime time.Duration // overrides config.Periodic.StatsTime
-		ProxyURL  string        // primary proxy URL to override config.Proxy.PrimaryURL
+		ConfFile       string        // config filename
+		LogLevel       string        // takes precedence over config.Log.Level
+		StatsTime      time.Duration // overrides config.Periodic.StatsTime
+		ListBucketTime time.Duration // overrides config.Timeout.ListBucket
+		ProxyURL       string        // primary proxy URL to override config.Proxy.PrimaryURL
 	}
 )
 
@@ -369,8 +370,8 @@ type TimeoutConf struct {
 	SendFile           time.Duration `json:"-"` //
 	StartupStr         string        `json:"startup_time"`
 	Startup            time.Duration `json:"-"` //
-	ListStr            string        `json:"list_timeout"`
-	List               time.Duration `json:"-"` //
+	ListBucketStr      string        `json:"list_timeout"`
+	ListBucket         time.Duration `json:"-"` //
 }
 
 type ProxyConf struct {
@@ -627,6 +628,10 @@ func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error)
 		config.Periodic.StatsTime = clivars.StatsTime
 		changed = true
 	}
+	if clivars.ListBucketTime != 0 {
+		config.Timeout.ListBucket = clivars.ListBucketTime
+		changed = true
+	}
 	if clivars.ProxyURL != "" {
 		config.Proxy.PrimaryURL = clivars.ProxyURL
 		changed = true
@@ -821,8 +826,8 @@ func (c *TimeoutConf) Validate(_ *Config) (err error) {
 	if c.DefaultLong, err = time.ParseDuration(c.DefaultLongStr); err != nil {
 		return fmt.Errorf("bad timeout.default_long format %s, err %v", c.DefaultLongStr, err)
 	}
-	if c.List, err = time.ParseDuration(c.ListStr); err != nil {
-		return fmt.Errorf("bad timeout.list_timeout format %s, err %v", c.ListStr, err)
+	if c.ListBucket, err = time.ParseDuration(c.ListBucketStr); err != nil {
+		return fmt.Errorf("bad timeout.list_timeout format %s, err %v", c.ListBucketStr, err)
 	}
 	if c.MaxKeepalive, err = time.ParseDuration(c.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("bad timeout.max_keepalive format %s, err %v", c.MaxKeepaliveStr, err)
@@ -1159,18 +1164,22 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return nil, updateValue(&conf.Rebalance.Enabled)
 
 	// TIMEOUT
-	case "send_file_time", "timeout.send_file_time":
-		return &conf.Timeout, updateValue(&conf.Timeout.SendFileStr)
 	case "default_timeout", "timeout.default_timeout":
 		return &conf.Timeout, updateValue(&conf.Timeout.DefaultStr)
 	case "default_long_timeout", "timeout.default_long_timeout":
 		return &conf.Timeout, updateValue(&conf.Timeout.DefaultLongStr)
+	case "max_keepalive", "timeout.max_keepalive":
+		return &conf.Timeout, updateValue(&conf.Timeout.MaxKeepaliveStr)
 	case "proxy_ping", "timeout.proxy_ping":
 		return &conf.Timeout, updateValue(&conf.Timeout.ProxyPingStr)
 	case "cplane_operation", "timeout.cplane_operation":
 		return &conf.Timeout, updateValue(&conf.Timeout.CplaneOperationStr)
-	case "max_keepalive", "timeout.max_keepalive":
-		return &conf.Timeout, updateValue(&conf.Timeout.MaxKeepaliveStr)
+	case "send_file_time", "timeout.send_file_time":
+		return &conf.Timeout, updateValue(&conf.Timeout.SendFileStr)
+	case "startup_time", "timeout.startup_time":
+		return &conf.Timeout, updateValue(&conf.Timeout.StartupStr)
+	case "list_timeout", "timeout.list_timeout":
+		return &conf.Timeout, updateValue(&conf.Timeout.ListBucketStr)
 
 	// FSHC
 	case "fshc_enabled", "fshc.enabled":
