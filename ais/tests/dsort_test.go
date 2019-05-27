@@ -831,10 +831,6 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 	dsortFW.checkDSortList()
 }
 
-// NOTE: This test is flacky and running it multiple times one after another
-// can result in failures. It is because we relay on current memory measurement
-// which can be imprecise - targets may have some memory allocated which then
-// is reused what results in all shards to be extracted into memory.
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -847,9 +843,9 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		}
 		dsortFW = &dsortFramework{
 			m:                 m,
-			tarballCnt:        300,
+			tarballCnt:        500,
 			fileInTarballSize: cmn.MiB,
-			fileInTarballCnt:  2,
+			fileInTarballCnt:  5,
 			extension:         ".tar",
 		}
 	)
@@ -879,9 +875,9 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	// Get current memory
 	mem, err := sys.Mem()
 	tassert.CheckFatal(t, err)
-	dsortFW.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+600*cmn.MiB, 0)
+	dsortFW.maxMemUsage = cmn.UnsignedB2S(mem.ActualUsed+500*cmn.MiB, 2)
 
-	tutils.Logln("starting distributed sort with using memory and disk...")
+	tutils.Logf("starting distributed sort with using memory and disk (max mem usage: %s)...\n", dsortFW.maxMemUsage)
 	rs := dsortFW.gen()
 	managerUUID, err := api.StartDSort(baseParams, rs)
 	tassert.CheckFatal(t, err)
