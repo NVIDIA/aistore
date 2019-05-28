@@ -19,8 +19,6 @@ import (
 const (
 	configGet = "get"
 	configSet = "set"
-
-	keyAndValueSeparator = "="
 )
 
 var (
@@ -46,12 +44,15 @@ var (
 					BashComplete: daemonList,
 				},
 				{
-					Name:         configSet,
-					Usage:        "sets configuration of a daemon or whole cluster",
-					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID] key=value...", cliName, cmn.GetWhatConfig, cmn.ActSetConfig),
-					Action:       configHandler,
-					Flags:        configFlags[configSet],
-					BashComplete: daemonList,
+					Name:      configSet,
+					Usage:     "updates configuration of a single node or the entire cluster",
+					UsageText: fmt.Sprintf("%s %s %s [DAEMON_ID] key=value...", cliName, cmn.GetWhatConfig, cmn.ActSetConfig),
+					Action:    configHandler,
+					Flags:     configFlags[configSet],
+					BashComplete: func(c *cli.Context) {
+						daemonList(c)
+						configPropList(c)
+					},
 				},
 			},
 		},
@@ -114,7 +115,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 			return err
 		}
 
-		fmt.Printf("%d properties set for %s\n", len(nvs), cmn.Cluster)
+		fmt.Println()
 		return nil
 	}
 
@@ -127,7 +128,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	fmt.Printf("%d properties set for %q daemon\n", len(nvs), daemonID)
+	fmt.Println()
 	return nil
 }
 
@@ -140,8 +141,13 @@ func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err e
 	daemonID = args.First()
 	kvs := args.Tail()
 
-	// Case when DAEMON_ID is not provided by the user
-	if strings.Contains(args.First(), keyAndValueSeparator) {
+	// Case when DAEMON_ID is not provided by the user:
+	// 1. Key-value pair separated with '=': `ais set log.level=5`
+	// 2. Key-value pair separated with space: `ais set log.level 5`. In this case
+	//		it is required that the number of arguments is even and property
+	//      name contains a dot
+	if strings.Contains(args.First(), keyAndValueSeparator) ||
+		(len(args) > 0 && len(args)%2 == 0 && strings.Contains(args.First(), ".")) {
 		daemonID = ""
 		kvs = args
 	}
@@ -150,7 +156,7 @@ func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err e
 		return "", nil, errExpectedAtLeastOneKeyValuePair
 	}
 
-	nvs, err = makeKVS(kvs, keyAndValueSeparator)
+	nvs, err = makePairs(kvs)
 	if err != nil {
 		return "", nil, err
 	}

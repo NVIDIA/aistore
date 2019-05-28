@@ -22,6 +22,6 @@ Set configurations for a specific daemon or the entire cluster via key-value pai
 
 Example:
 
-`ais config set stats_time=10s disk_util_low_wm=40`
+`ais config set periodic.stats_time=10s disk.disk_util_low_wm=40`
 
-Sets the `stats_time` configuration to `10s` and `disk_util_low_wm` to `40` for the entire cluster.
+Sets the `periodic.stats_time` configuration to `10s` and `disk.disk_util_low_wm` to `40` for the entire cluster.

@@ -34,8 +34,6 @@ const (
 	propsSet           = "set"
 	propsReset         = "reset"
 
-	propsSetListDelimiter = "="
-
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
 
@@ -493,7 +491,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return
 	}
 
-	if strings.Contains(bucket, propsSetListDelimiter) {
+	if strings.Contains(bucket, keyAndValueSeparator) {
 		// First argument is a key-value pair -> bucket should be read from env variable
 		bucketEnv, ok := os.LookupEnv(aisBucketEnvVar)
 		if !ok {
@@ -512,7 +510,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	}
 
 	// For setting bucket props via URL query string
-	nvs, err := makePairs(propsArgs, propsSetListDelimiter)
+	nvs, err := makePairs(propsArgs)
 	if err != nil {
 		return
 	}

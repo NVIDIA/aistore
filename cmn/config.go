@@ -1083,7 +1083,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	//
 	// 1. TOP LEVEL CONFIG
 	//
-	case "vmodule":
+	case "vmodule", "vmodule.loglevel":
 		if err := SetGLogVModule(value); err != nil {
 			return nil, fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
@@ -1209,6 +1209,53 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
 	}
 	return nil, nil
+}
+
+// ConfigPropList is config property name <-> readonly
+var ConfigPropList = map[string]bool{
+	"vmodule.loglevel":                       false,
+	"log.level":                              false,
+	HeaderBucketLRUEnabled:                   false,
+	HeaderBucketLRULowWM:                     false,
+	HeaderBucketLRUHighWM:                    false,
+	HeaderBucketDontEvictTime:                false,
+	HeaderBucketCapUpdTime:                   true,
+	"lru.local_buckets":                      false,
+	HeaderBucketChecksumType:                 false,
+	HeaderBucketValidateColdGet:              false,
+	HeaderBucketValidateWarmGet:              false,
+	HeaderBucketValidateObjMove:              false,
+	HeaderBucketEnableReadRange:              false,
+	HeaderBucketVerEnabled:                   false,
+	HeaderBucketVerValidateWarm:              false,
+	HeaderBucketMirrorEnabled:                false,
+	"mirror.burst_buffer":                    true,
+	HeaderBucketMirrorThresh:                 false,
+	HeaderBucketCopies:                       false,
+	"periodic.stats_time":                    false,
+	"disk.disk_util_low_wm":                  false,
+	"disk.disk_util_high_wm":                 false,
+	"disk.iostat_time_long":                  false,
+	"disk.iostat_time_short":                 false,
+	"rebalance.dest_retry_time":              false,
+	"rebalance.enabled":                      false,
+	"timeout.default_timeout":                false,
+	"timeout.default_long_timeout":           false,
+	"timeout.max_keepalive":                  false,
+	"timeout.proxy_ping":                     false,
+	"timeout.cplane_operation":               false,
+	"timeout.send_file_time":                 false,
+	"timeout.startup_time":                   false,
+	"timeout.list_timeout":                   false,
+	"fshc.enabled":                           false,
+	"keepalivetracker.proxy.interval":        false,
+	"keepalivetracker.proxy.factor":          false,
+	"keepalivetracker.target.interval":       false,
+	"keepalivetracker.target.factor":         false,
+	"distributed_sort.duplicated_records":    false,
+	"distributed_sort.missing_shards":        false,
+	"distributed_sort.default_max_mem_usage": false,
+	"distributed_sort.call_timeout":          false,
 }
 
 func SetConfigMany(nvmap SimpleKVs) (err error) {

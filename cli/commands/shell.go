@@ -112,3 +112,11 @@ func propList(_ *cli.Context) {
 		}
 	}
 }
+
+func configPropList(_ *cli.Context) {
+	for prop, readonly := range cmn.ConfigPropList {
+		if !readonly {
+			fmt.Println(prop)
+		}
+	}
+}

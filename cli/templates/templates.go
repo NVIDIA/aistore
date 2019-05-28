@@ -145,6 +145,7 @@ const (
 		" Max Keep Alive: {{$obj.MaxKeepaliveStr}}\n" +
 		" Proxy Ping: {{$obj.ProxyPingStr}}\n" +
 		" Control Plane Operation: {{$obj.CplaneOperationStr}}\n" +
+		" List Time: {{$obj.ListBucketStr}}\n" +
 		" Send File Time: {{$obj.SendFileStr}}\n" +
 		" Startup Time: {{$obj.StartupStr}}\n"
 	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +

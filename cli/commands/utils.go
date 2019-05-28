@@ -41,6 +41,8 @@ const (
 
 	envVarURL       = "AIS_URL"
 	envVarNamespace = "AIS_NAMESPACE"
+
+	keyAndValueSeparator = "="
 )
 
 var (
@@ -236,25 +238,12 @@ func makeList(list, delimiter string) []string {
 	return cleanList
 }
 
-// Converts key=value to map
-func makeKVS(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
-	nvs = cmn.SimpleKVs{}
-	for _, ele := range args {
-		pairs := makeList(ele, delimiter)
-		if len(pairs) != 2 {
-			return nil, fmt.Errorf("Could not parse key value: %v", pairs)
-		}
-		nvs[pairs[0]] = pairs[1]
-	}
-	return
-}
-
 // Converts a list of "key value" and "key=value" into map
-func makePairs(args []string, delimiter string) (nvs cmn.SimpleKVs, err error) {
+func makePairs(args []string) (nvs cmn.SimpleKVs, err error) {
 	nvs = cmn.SimpleKVs{}
 	i := 0
 	for i < len(args) {
-		pairs := makeList(args[i], delimiter)
+		pairs := makeList(args[i], keyAndValueSeparator)
 		if len(pairs) != 1 {
 			// "key=value" case
 			nvs[pairs[0]] = pairs[1]
