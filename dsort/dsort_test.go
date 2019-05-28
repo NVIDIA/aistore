@@ -133,9 +133,9 @@ type testContext struct {
 }
 
 func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
-	// Initialize dsort manager
+	// Initialize dSort manager
 	rs := &ParsedRequestSpec{
-		Extension: extTar,
+		Extension: ExtTar,
 		Algorithm: &SortAlgorithm{
 			FormatType: extract.FormatTypeString,
 		},
@@ -427,7 +427,7 @@ var _ = Describe("Distributed Sort", func() {
 								Decreasing: true,
 								FormatType: extract.FormatTypeString,
 							},
-							Extension:   extTar,
+							Extension:   ExtTar,
 							MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
 						}
 						ctx.node = ctx.smap.Get().Tmap[target.daemonID]
@@ -503,7 +503,7 @@ var _ = Describe("Distributed Sort", func() {
 				tctx.setup()
 
 				rs = &ParsedRequestSpec{
-					Extension:         extTar,
+					Extension:         ExtTar,
 					Bucket:            testBucket,
 					OutputBucket:      testBucket,
 					BckProvider:       cmn.LocalBs,

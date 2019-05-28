@@ -9,6 +9,7 @@ package dsort
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -17,14 +18,14 @@ import (
 )
 
 const (
-	// extTar is tar files extension
-	extTar = ".tar"
-	// extTgz is short tar tgz files extension
-	extTgz = ".tgz"
-	// extTarTgz is tar tgz files extension
-	extTarTgz = ".tar.gz"
-	// extZip is zip files extension
-	extZip = ".zip"
+	// ExtTar is tar files extension
+	ExtTar = ".tar"
+	// ExtTgz is short tar tgz files extension
+	ExtTgz = ".tgz"
+	// ExtTarTgz is tar tgz files extension
+	ExtTarTgz = ".tar.gz"
+	// ExtZip is zip files extension
+	ExtZip = ".zip"
 
 	templBash = "bash"
 	templAt   = "@"
@@ -36,8 +37,9 @@ var (
 	errNegOutputShardSize       = errors.New("output shard size must be > 0")
 	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (limits will be calculated) or > 0")
 
-	errInvalidInputFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-	errInvalidOutputFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
+	errInvalidInputTemplateFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
+	errInvalidOutputTemplateFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
+	errInvalidOrderParam           = errors.New("could not parse order format, required URL")
 
 	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
 	errInvalidAlgorithmKind      = fmt.Errorf("invalid algorithm kind, should be one of: %+v", supportedAlgorithms)
@@ -46,8 +48,8 @@ var (
 )
 
 var (
-	// supportedExtensions is a list of supported extensions by dsort
-	supportedExtensions = []string{extTar, extTgz, extTarTgz, extZip}
+	// supportedExtensions is a list of supported extensions by dSort
+	supportedExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip}
 )
 
 // TODO: maybe this struct should be composed of `type` and `template` where
@@ -57,7 +59,7 @@ type parsedInputTemplate struct {
 	Type string `json:"type"`
 
 	// Used by 'bash' and 'at' template
-	Template cmn.ParsedTemplate
+	Template cmn.ParsedTemplate `json:"template"`
 
 	// Used by 'regex' template
 	Regex string `json:"regex"`
@@ -76,7 +78,7 @@ type RequestSpec struct {
 	// Required
 	Bucket          string `json:"bucket"`
 	Extension       string `json:"extension"`
-	IntputFormat    string `json:"input_format"`
+	InputFormat     string `json:"input_format"`
 	OutputFormat    string `json:"output_format"`
 	OutputShardSize string `json:"output_shard_size"`
 
@@ -84,6 +86,8 @@ type RequestSpec struct {
 	Description       string        `json:"description"`
 	OutputBucket      string        `json:"output_bucket"`             // Default: same as `bucket` field
 	Algorithm         SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
+	OrderFileURL      string        `json:"order_file"`                // Default: ""
+	OrderFileSep      string        `json:"order_file_sep"`            // Default: "\t"
 	MaxMemUsage       string        `json:"max_mem_usage"`             // Default: "80%"
 	BckProvider       string        `json:"bprovider"`                 // Default: "local"
 	OutputBckProvider string        `json:"output_bprovider"`          // Default: "local"
@@ -103,6 +107,8 @@ type ParsedRequestSpec struct {
 	InputFormat       *parsedInputTemplate  `json:"input_format"`
 	OutputFormat      *parsedOutputTemplate `json:"output_format"`
 	Algorithm         *SortAlgorithm        `json:"algorithm"`
+	OrderFileURL      string                `json:"order_file"`
+	OrderFileSep      string                `json:"order_file_sep"`
 	MaxMemUsage       cmn.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt   []byte                `json:"target_order_salt"`
 	ExtractConcLimit  int64                 `json:"extract_concurrency_limit"`
@@ -147,7 +153,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 
 	var err error
-	parsedRS.InputFormat, err = parseInputFormat(rs.IntputFormat)
+	parsedRS.InputFormat, err = parseInputFormat(rs.InputFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -165,14 +171,24 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, errNegOutputShardSize
 	}
 
-	parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat)
-	if err != nil {
-		return nil, err
-	}
-
 	parsedRS.Algorithm, err = parseAlgorithm(rs.Algorithm)
 	if err != nil {
 		return nil, errInvalidAlgorithm
+	}
+
+	if empty, valid := validateOrderFileURL(rs.OrderFileURL); !valid {
+		return nil, errInvalidOrderParam
+	} else if empty {
+		if parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat); err != nil {
+			return nil, err
+		}
+	} else { // valid and not empty
+		parsedRS.OrderFileURL = rs.OrderFileURL
+
+		parsedRS.OrderFileSep = rs.OrderFileSep
+		if parsedRS.OrderFileSep == "" {
+			parsedRS.OrderFileSep = "\t"
+		}
 	}
 
 	if rs.MaxMemUsage == "" {
@@ -204,32 +220,32 @@ func validateExtension(ext string) bool {
 
 // parseInputFormat checks if input format was specified correctly
 func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
+	pit = &parsedInputTemplate{}
 	template := strings.TrimSpace(inputFormat)
-	pt := &parsedInputTemplate{}
-	if pt.Template, err = cmn.ParseBashTemplate(template); err == nil {
-		pt.Type = templBash
-	} else if pt.Template, err = cmn.ParseAtTemplate(template); err == nil {
-		pt.Type = templAt
+	if pit.Template, err = cmn.ParseBashTemplate(template); err == nil {
+		pit.Type = templBash
+	} else if pit.Template, err = cmn.ParseAtTemplate(template); err == nil {
+		pit.Type = templAt
 	} else {
-		return nil, errInvalidInputFormat
+		return nil, errInvalidInputTemplateFormat
 	}
 
-	return pt, nil
+	return
 }
 
 // parseOutputFormat checks if output format was specified correctly
 func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
+	pot = &parsedOutputTemplate{}
 	template := strings.TrimSpace(outputFormat)
-	pt := &parsedOutputTemplate{}
-	if pt.Template, err = cmn.ParseBashTemplate(template); err == nil {
+	if pot.Template, err = cmn.ParseBashTemplate(template); err == nil {
 		// Pass
-	} else if pt.Template, err = cmn.ParseAtTemplate(template); err == nil {
+	} else if pot.Template, err = cmn.ParseAtTemplate(template); err == nil {
 		// Pass
 	} else {
-		return nil, errInvalidOutputFormat
+		return nil, errInvalidOutputTemplateFormat
 	}
 
-	return pt, nil
+	return
 }
 
 func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
@@ -261,4 +277,13 @@ func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
 	}
 
 	return &algo, nil
+}
+
+func validateOrderFileURL(orderURL string) (empty, valid bool) {
+	if orderURL == "" {
+		return true, true
+	}
+
+	_, err := url.ParseRequestURI(orderURL)
+	return false, err == nil
 }

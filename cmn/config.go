@@ -538,6 +538,8 @@ type DownloaderConf struct {
 type DSortConf struct {
 	DuplicatedRecords  string        `json:"duplicated_records"`
 	MissingShards      string        `json:"missing_shards"`
+	EKMMalformedLine   string        `json:"ekm_malformed_line"`
+	EKMMissingKey      string        `json:"ekm_missing_key"`
 	DefaultMaxMemUsage string        `json:"default_max_mem_usage"`
 	CallTimeoutStr     string        `json:"call_timeout"`
 	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
@@ -951,6 +953,12 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 	if !StringInSlice(c.MissingShards, SupportedReactions) {
 		return fmt.Errorf("bad distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
 	}
+	if !StringInSlice(c.EKMMalformedLine, SupportedReactions) {
+		return fmt.Errorf("bad distributed_sort.ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
+	}
+	if !StringInSlice(c.EKMMissingKey, SupportedReactions) {
+		return fmt.Errorf("bad distributed_sort.ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
+	}
 	if _, err := ParseQuantity(c.DefaultMaxMemUsage); err != nil {
 		return fmt.Errorf("bad distributed_sort.default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
 	}
@@ -1204,6 +1212,10 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.DSort, updateValue(&conf.DSort.DuplicatedRecords)
 	case "distributed_sort.missing_shards":
 		return &conf.DSort, updateValue(&conf.DSort.MissingShards)
+	case "distributed_sort.ekm_invalid_line":
+		return &conf.DSort, updateValue(&conf.DSort.EKMMalformedLine)
+	case "distributed_sort.ekm_missing_key":
+		return &conf.DSort, updateValue(&conf.DSort.EKMMissingKey)
 	case "distributed_sort.default_max_mem_usage":
 		return &conf.DSort, updateValue(&conf.DSort.DefaultMaxMemUsage)
 	case "distributed_sort.call_timeout":

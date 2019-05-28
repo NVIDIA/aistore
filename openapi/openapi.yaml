@@ -1097,6 +1097,14 @@ components:
               enum: [int, float, string]
               default: string
               description: Format type describes how the content of the file should be interpreted
+        order_file:
+          type: string
+          example: https://google.com/file.txt
+          description: URL to the file containing external key map (it should contains lines in format `record_key[sep]shard-%d-fmt`) 
+        order_file_sep:
+          type: string
+          default: "\t"
+          description: Separator used for splitting `record_key` and `shard-%d-fmt` in the lines in external key map
         max_mem_usage:
           type: string
           example: "10%"

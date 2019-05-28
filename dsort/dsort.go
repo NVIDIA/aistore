@@ -7,6 +7,7 @@
 package dsort
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -583,6 +585,139 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 	return true, err
 }
 
+func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, error) {
+	var (
+		n               = m.recManager.Records.Len()
+		names           = m.rs.OutputFormat.Template.Iter()
+		shardCount      = m.rs.OutputFormat.Template.Count()
+		start           int
+		curShardSize    int64
+		shards          = make([]*extract.Shard, 0)
+		numLocalRecords = make(map[string]int, m.smap.CountTargets())
+	)
+
+	if maxSize <= 0 {
+		// Heuristic: to count desired size of shard in case when maxSize is not
+		// specified
+		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
+	}
+
+	for i, r := range m.recManager.Records.All() {
+		numLocalRecords[r.DaemonID]++
+		curShardSize += r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
+		if curShardSize < maxSize && i < n-1 {
+			continue
+		}
+
+		name, hasNext := names()
+		if !hasNext {
+			// no more shard names are available
+			return nil, fmt.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
+		}
+		shard := &extract.Shard{
+			Name: name + m.rs.Extension,
+		}
+
+		shard.Size = curShardSize
+		shard.Records = m.recManager.Records.Slice(start, i+1)
+		shards = append(shards, shard)
+
+		start = i + 1
+		curShardSize = 0
+		for k := range numLocalRecords {
+			numLocalRecords[k] = 0
+		}
+	}
+
+	return shards, nil
+}
+
+func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shard, error) {
+	var (
+		cfg            = cmn.GCO.Get().DSort
+		shards         = make([]*extract.Shard, 0)
+		externalKeyMap = make(map[string]string)
+		shardsBuilder  = make(map[string][]*extract.Shard)
+	)
+
+	if maxSize <= 0 {
+		return nil, errors.New("invalid max size of shard was specified when using external key map")
+	}
+
+	resp, err := http.Get(m.rs.OrderFileURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// TODO: handle very large files > GB - in case the file is very big we
+	// need to save file to the disk and operate on the file directly rather
+	// than keeping everything in memory.
+	var (
+		lineReader = bufio.NewReader(resp.Body)
+	)
+	for idx := 0; ; idx++ {
+		l, _, err := lineReader.ReadLine()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		line := strings.TrimSpace(string(l))
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, m.rs.OrderFileSep)
+		if len(parts) != 2 {
+			msg := fmt.Sprintf("malformed line (%d) in external key map: %s", idx, line)
+			if err := m.react(cfg.EKMMalformedLine, msg); err != nil {
+				return nil, err
+			}
+		}
+
+		recordKey, shardNameFmt := parts[0], parts[1]
+		externalKeyMap[recordKey] = shardNameFmt
+	}
+
+	for _, r := range m.recManager.Records.All() {
+		key := fmt.Sprintf("%v", r.Key)
+		shardNameFmt, ok := externalKeyMap[key]
+		if !ok {
+			msg := fmt.Sprintf("extracted record %q which does not belong in external key map", key)
+			if err := m.react(cfg.EKMMissingKey, msg); err != nil {
+				return nil, err
+			}
+		}
+
+		shards := shardsBuilder[shardNameFmt]
+		recordSize := r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
+		shardCount := len(shards)
+		if shardCount == 0 || shards[shardCount-1].Size > maxSize {
+			shard := &extract.Shard{
+				Name:    fmt.Sprintf(shardNameFmt, shardCount),
+				Size:    recordSize,
+				Records: extract.NewRecords(1),
+			}
+			shard.Records.Insert(r)
+			shardsBuilder[shardNameFmt] = append(shardsBuilder[shardNameFmt], shard)
+		} else {
+			// Append records
+			lastShard := shards[shardCount-1]
+			lastShard.Size += recordSize
+			lastShard.Records.Insert(r)
+		}
+	}
+
+	for _, s := range shardsBuilder {
+		shards = append(shards, s...)
+	}
+
+	return shards, nil
+}
+
 // distributeShardRecords creates Shard structs in the order of
 // dsortManager.Records corresponding to a maximum size maxSize. Each Shard is
 // sent in an HTTP request to the appropriate target to create the actual file
@@ -600,87 +735,64 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 //      sent to it already).
 func (m *Manager) distributeShardRecords(maxSize int64) error {
 	var (
-		n               = m.recManager.Records.Len()
-		names           = m.rs.OutputFormat.Template.Iter()
-		shardCount      = m.rs.OutputFormat.Template.Count()
-		start           int
-		curShardSize    int64
-		wg              = &sync.WaitGroup{}
-		errCh           = make(chan error, m.smap.CountTargets())
-		shardsToTarget  = make(map[string][]*extract.Shard, m.smap.CountTargets())
-		numLocalRecords = make(map[string]int, m.smap.CountTargets())
+		shards []*extract.Shard
+		err    error
+
+		wg             = &sync.WaitGroup{}
+		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountTargets())
+		errCh          = make(chan error, m.smap.CountTargets())
 	)
 
-	if maxSize <= 0 {
-		// Heuristic: to count desired size of shard in case when maxSize is not
-		// specified
-		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
-	}
-
 	for _, d := range m.smap.Tmap {
-		numLocalRecords[d.URL(cmn.NetworkIntraData)] = 0
-		shardsToTarget[d.URL(cmn.NetworkIntraData)] = nil
+		shardsToTarget[d] = nil
 	}
-	for i, r := range m.recManager.Records.All() {
-		numLocalRecords[r.DaemonID]++
-		curShardSize += r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
-		if curShardSize < maxSize && i < n-1 {
-			continue
-		}
 
-		name, hasNext := names()
-		if !hasNext {
-			// no more shard names are available
-			return fmt.Errorf("number of shards to be created exceeds number of expected shards (%d)", shardCount)
-		}
-		shard := &extract.Shard{
-			Name: name + m.rs.Extension,
-		}
+	if m.rs.OrderFileURL != "" {
+		shards, err = m.generateShardsWithOrderingFile(maxSize)
+	} else {
+		shards, err = m.generateShardsWithTemplate(maxSize)
+	}
 
-		// TODO: Following heuristic doesn't seem to be working correctly in
-		// all cases. When there is not much shards at each disk (like 1-5)
-		// then it may happen that some target will have more shards than other
-		// targets and will "win" all output shards what will result in enormous
-		// skew and result in slow creation phase (single target will be
-		// responsible for creating all shards).
-		//
-		// if m.extractCreator.UsingCompression() {
-		// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
-		// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
-		// } else {
-		// 	// If output shards are not compressed, there will always be less
-		// 	// data sent over the network if the shard is constructed on the
-		// 	// correct HRW target as opposed to constructing it on the target
-		// 	// with optimal file content locality and then sent to the correct
-		// 	// target.
-		// }
+	if err != nil {
+		return err
+	}
 
-		si, errStr := cluster.HrwTarget(m.rs.OutputBucket, shard.Name, m.smap)
+	// TODO: Following heuristic doesn't seem to be working correctly in
+	// all cases. When there is not much shards at each disk (like 1-5)
+	// then it may happen that some target will have more shards than other
+	// targets and will "win" all output shards what will result in enormous
+	// skew and result in slow creation phase (single target will be
+	// responsible for creating all shards).
+	//
+	// if m.extractCreator.UsingCompression() {
+	// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
+	// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetworkIntraData)
+	// } else {
+	// 	// If output shards are not compressed, there will always be less
+	// 	// data sent over the network if the shard is constructed on the
+	// 	// correct HRW target as opposed to constructing it on the target
+	// 	// with optimal file content locality and then sent to the correct
+	// 	// target.
+	// }
+
+	for _, s := range shards {
+		si, errStr := cluster.HrwTarget(m.rs.OutputBucket, s.Name, m.smap)
 		cmn.AssertMsg(si != nil, errStr)
-		baseURL := si.URL(cmn.NetworkIntraData)
-
-		shard.Size = curShardSize
-		shard.Records = m.recManager.Records.Slice(start, i+1)
-		shardsToTarget[baseURL] = append(shardsToTarget[baseURL], shard)
-
-		start = i + 1
-		curShardSize = 0
-		for k := range numLocalRecords {
-			numLocalRecords[k] = 0
-		}
+		shardsToTarget[si] = append(shardsToTarget[si], s)
 	}
 
 	m.recManager.Records.Drain()
 
-	for u, s := range shardsToTarget {
+	for si, s := range shardsToTarget {
 		wg.Add(1)
-		go func(u string, s []*extract.Shard) {
+		go func(si *cluster.Snode, s []*extract.Shard) {
 			defer wg.Done()
 			body, err := js.Marshal(s)
 			if err != nil {
 				errCh <- err
 				return
 			}
+			u := si.URL(cmn.NetworkIntraData)
 			u += fmt.Sprintf(
 				"%s?%s=%s",
 				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
@@ -690,7 +802,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				errCh <- err
 				return
 			}
-		}(u, s)
+		}(si, s)
 	}
 
 	wg.Wait()

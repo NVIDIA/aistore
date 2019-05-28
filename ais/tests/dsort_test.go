@@ -37,32 +37,40 @@ var (
 	dsortDescCurPrefix = fmt.Sprintf("%s-%d-", dsortDescAllPrefix, os.Getpid())
 )
 
-type dsortFramework struct {
-	m *metadata
+type (
+	dsortFramework struct {
+		m *metadata
 
-	outputBucket string
-	inputPrefix  string
-	outputPrefix string
+		outputBucket string
+		inputPrefix  string
+		outputPrefix string
 
-	inputTempl            string
-	outputTempl           string
-	tarballCnt            int
-	tarballCntToSkip      int
-	fileInTarballCnt      int
-	fileInTarballSize     int
-	tarballSize           int
-	outputShardCnt        int
-	recordDuplicationsCnt int
+		inputTempl            string
+		outputTempl           string
+		orderFileURL          string
+		tarballCnt            int
+		tarballCntToSkip      int
+		fileInTarballCnt      int
+		fileInTarballSize     int
+		tarballSize           int
+		outputShardCnt        int
+		recordDuplicationsCnt int
 
-	extension       string
-	algorithm       *dsort.SortAlgorithm
-	missingKeys     bool
-	outputShardSize string
-	maxMemUsage     string
+		extension       string
+		algorithm       *dsort.SortAlgorithm
+		missingKeys     bool
+		outputShardSize string
+		maxMemUsage     string
 
-	baseParams  *api.BaseParams
-	managerUUID string
-}
+		baseParams  *api.BaseParams
+		managerUUID string
+	}
+
+	shardRecords struct {
+		name        string
+		recordNames []string
+	}
+)
 
 func generateDSortDesc() string {
 	return dsortDescCurPrefix + time.Now().Format(time.RFC3339Nano)
@@ -74,6 +82,9 @@ func (df *dsortFramework) init() {
 	}
 	if df.outputTempl == "" {
 		df.outputTempl = "output-{00000..10000}"
+	}
+	if df.extension == "" {
+		df.extension = dsort.ExtTar
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -100,13 +111,14 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:      generateDSortDesc(),
 		Bucket:           df.m.bucket,
+		BckProvider:      cmn.LocalBs,
 		OutputBucket:     df.outputBucket,
 		Extension:        df.extension,
-		IntputFormat:     df.inputTempl,
+		InputFormat:      df.inputTempl,
 		OutputFormat:     df.outputTempl,
 		OutputShardSize:  df.outputShardSize,
 		Algorithm:        *df.algorithm,
-		BckProvider:      cmn.LocalBs,
+		OrderFileURL:     df.orderFileURL,
 		ExtractConcLimit: 10,
 		CreateConcLimit:  10,
 		MaxMemUsage:      df.maxMemUsage,
@@ -139,11 +151,11 @@ func (df *dsortFramework) createInputShards() {
 			path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tutils.CreateTarWithCustomFiles(path, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
-			} else if df.extension == ".tar" {
+			} else if df.extension == dsort.ExtTar {
 				err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize, duplication)
-			} else if df.extension == ".tar.gz" {
+			} else if df.extension == dsort.ExtTarTgz {
 				err = tutils.CreateTarWithRandomFiles(path, true, df.fileInTarballCnt, df.fileInTarballSize, duplication)
-			} else if df.extension == ".zip" {
+			} else if df.extension == dsort.ExtZip {
 				err = tutils.CreateZipWithRandomFiles(path, df.fileInTarballCnt, df.fileInTarballSize)
 			} else {
 				df.m.t.Fail()
@@ -174,7 +186,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	var lastValue interface{}
 
 	gzipped := false
-	if df.extension != ".tar" {
+	if df.extension != dsort.ExtTar {
 		gzipped = true
 	}
 
@@ -246,9 +258,9 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				files []os.FileInfo
 			)
 
-			if df.extension == ".tar" || df.extension == ".tar.gz" {
+			if df.extension == dsort.ExtTar || df.extension == dsort.ExtTarTgz {
 				files, err = tutils.GetFileInfosFromTarBuffer(buffer, gzipped)
-			} else if df.extension == ".zip" {
+			} else if df.extension == dsort.ExtZip {
 				files, err = tutils.GetFileInfosFromZipBuffer(buffer)
 			}
 
@@ -326,6 +338,42 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 			df.m.t.Error("expected errors on abort, got nothing")
 		}
 	}
+}
+
+func (df *dsortFramework) getRecordNames(bucket string) []shardRecords {
+	var (
+		allShardRecords = make([]shardRecords, 0, 10)
+	)
+
+	list, err := api.ListBucketFast(df.baseParams, bucket, nil)
+	tassert.CheckFatal(df.m.t, err)
+
+	if len(list.Entries) == 0 {
+		df.m.t.Errorf("number of objects in bucket %q is 0", bucket)
+	}
+
+	for _, obj := range list.Entries {
+		var buffer bytes.Buffer
+		getOptions := api.GetObjectInput{
+			Writer: &buffer,
+		}
+		_, err := api.GetObject(df.baseParams, bucket, obj.Name, getOptions)
+		tassert.CheckFatal(df.m.t, err)
+
+		files, err := tutils.GetFileInfosFromTarBuffer(buffer, false)
+		tassert.CheckFatal(df.m.t, err)
+
+		shard := shardRecords{
+			name:        obj.Name,
+			recordNames: make([]string, len(files)),
+		}
+		for idx, file := range files {
+			shard.recordNames[idx] = file.Name()
+		}
+		allShardRecords = append(allShardRecords, shard)
+	}
+
+	return allShardRecords
 }
 
 func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metrics {
@@ -409,7 +457,6 @@ func dispatchDSortJob(m *metadata, i int) {
 			outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
 			tarballCnt:       1000,
 			fileInTarballCnt: 50,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -476,7 +523,6 @@ func TestDistributedSort(t *testing.T) {
 			m:                m,
 			tarballCnt:       1000,
 			fileInTarballCnt: 100,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -518,7 +564,6 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			outputBucket:     t.Name() + "output",
 			tarballCnt:       1000,
 			fileInTarballCnt: 100,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -570,7 +615,6 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 			outputBucket:     t.Name() + "output",
 			tarballCnt:       1000,
 			fileInTarballCnt: 100,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -690,7 +734,6 @@ func TestDistributedSortShuffle(t *testing.T) {
 			algorithm:        &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
 			tarballCnt:       1000,
 			fileInTarballCnt: 10,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -733,7 +776,6 @@ func TestDistributedSortWithDisk(t *testing.T) {
 			outputTempl:      "output-{0..1000}",
 			tarballCnt:       100,
 			fileInTarballCnt: 10,
-			extension:        ".tar",
 			maxMemUsage:      "1KB",
 		}
 	)
@@ -781,7 +823,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 			m:                m,
 			tarballCnt:       200,
 			fileInTarballCnt: 50,
-			extension:        ".tar.gz",
+			extension:        dsort.ExtTarTgz,
 			maxMemUsage:      "1KB",
 		}
 	)
@@ -827,7 +869,6 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 			tarballCnt:        500,
 			fileInTarballSize: cmn.MiB,
 			fileInTarballCnt:  5,
-			extension:         ".tar",
 		}
 	)
 
@@ -1009,7 +1050,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 			m:                m,
 			tarballCnt:       1000,
 			fileInTarballCnt: 50,
-			extension:        ".tar.gz",
+			extension:        dsort.ExtTarTgz,
 			maxMemUsage:      "60%",
 		}
 	)
@@ -1079,7 +1120,6 @@ func TestDistributedSortWithContent(t *testing.T) {
 					missingKeys:      entry.missingKeys,
 					tarballCnt:       1000,
 					fileInTarballCnt: 100,
-					extension:        ".tar",
 					maxMemUsage:      "90%",
 				}
 			)
@@ -1139,7 +1179,6 @@ func TestDistributedSortAbort(t *testing.T) {
 			m:                m,
 			tarballCnt:       1000,
 			fileInTarballCnt: 10,
-			extension:        ".tar",
 			maxMemUsage:      "60%",
 		}
 	)
@@ -1189,7 +1228,6 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 					m:                m,
 					tarballCnt:       1000,
 					fileInTarballCnt: 200,
-					extension:        ".tar",
 					maxMemUsage:      "40%",
 				}
 			)
@@ -1244,7 +1282,6 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					outputTempl:      "output-{0..100000}",
 					tarballCnt:       1000,
 					fileInTarballCnt: 200,
-					extension:        ".tar",
 					maxMemUsage:      "40%",
 				}
 			)
@@ -1337,7 +1374,6 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					outputTempl:      "output-{0..100000}",
 					tarballCnt:       2000,
 					fileInTarballCnt: 200,
-					extension:        ".tar",
 					maxMemUsage:      "1%",
 				}
 
@@ -1442,7 +1478,6 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			outputTempl:      "output-{0..100000}",
 			tarballCnt:       1000,
 			fileInTarballCnt: 100,
-			extension:        ".tar",
 			maxMemUsage:      "40%",
 		}
 	)
@@ -1504,7 +1539,6 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			outputTempl:      "output-{0..1000}",
 			tarballCnt:       50,
 			fileInTarballCnt: 10,
-			extension:        ".tar",
 			maxMemUsage:      "40%",
 		}
 	)
@@ -1551,7 +1585,6 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			m:                m,
 			tarballCnt:       1000,
 			fileInTarballCnt: 100,
-			extension:        ".tar",
 			maxMemUsage:      "99%",
 		}
 	)
@@ -1595,7 +1628,6 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			m:                 m,
 			fileInTarballCnt:  200,
 			fileInTarballSize: 10 * cmn.MiB,
-			extension:         ".tar",
 			maxMemUsage:       "80%",
 		}
 	)
@@ -1685,7 +1717,6 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 		})
 	}
-
 }
 
 func TestDistributedSortDuplications(t *testing.T) {
@@ -1738,4 +1769,100 @@ func TestDistributedSortDuplications(t *testing.T) {
 			df.checkDSortList()
 		})
 	}
+}
+
+func TestDistributedSortOrderFile(t *testing.T) {
+	var (
+		err error
+		m   = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dsortFW = &dsortFramework{
+			m:                m,
+			outputBucket:     t.Name() + "output",
+			tarballCnt:       100,
+			fileInTarballCnt: 10,
+			maxMemUsage:      "40%",
+		}
+
+		orderFileName = "orderFileName"
+		ekm           = make(map[string]string, 10)
+		shardFmts     = []string{
+			"shard-%d-suf",
+			"input-%d-pref",
+			"smth-%d",
+		}
+	)
+
+	// Initialize metadata
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	// Set URL for order file (points to the object in cluster)
+	dsortFW.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bucket, orderFileName)
+
+	dsortFW.init()
+	dsortFW.clearDSortList()
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Create local output bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+
+	dsortFW.createInputShards()
+
+	// Generate content for the orderFile
+	tutils.Logln("generating and putting order file into cluster...")
+	var (
+		buffer       bytes.Buffer
+		shardRecords = dsortFW.getRecordNames(m.bucket)
+	)
+	for _, shard := range shardRecords {
+		for idx, recordName := range shard.recordNames {
+			buffer.WriteString(fmt.Sprintf("%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)]))
+			ekm[recordName] = shardFmts[idx%len(shardFmts)]
+		}
+	}
+	args := api.PutObjectArgs{BaseParams: baseParams, Bucket: m.bucket, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
+	err = api.PutObject(args)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logln("starting distributed sort...")
+	rs := dsortFW.gen()
+	managerUUID, err := api.StartDSort(baseParams, rs)
+	tassert.CheckFatal(t, err)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+	tassert.CheckFatal(t, err)
+	if len(allMetrics) != m.originalTargetCount {
+		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+	}
+
+	tutils.Logln("checking if all records are in specified shards...")
+	shardRecords = dsortFW.getRecordNames(dsortFW.outputBucket)
+	for _, shard := range shardRecords {
+		for _, recordName := range shard.recordNames {
+			match := false
+			// Some shard with specified format contains the record
+			for i := 0; i < 30; i++ {
+				match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
+			}
+			if !match {
+				t.Errorf("record %q was not part of any shard with format %q but was in shard %q", recordName, ekm[recordName], shard.name)
+			}
+		}
+	}
+
+	dsortFW.checkDSortList()
 }
