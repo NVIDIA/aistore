@@ -106,18 +106,6 @@ const (
 	DiskStatBodyTmpl  = "{{ range $key, $value := . }}" + DiskStatsBody + "{{ end }}"
 	DiskStatsFullTmpl = DiskStatsHeader + DiskStatBodyTmpl
 
-	// Object stat
-	ObjStatHeader = "Local\tPresent\tSize\tVersion\tAtime\tCopies\tChecksum\n"
-	ObjStatBody   = "{{ .BucketLocal }}\t" +
-		"{{ .Present }}\t" +
-		"{{ FormatBytesSigned .Size 2 }}\t" +
-		"{{ .Version }}\t" +
-		"{{ if IsUnsetTime .Atime }}-{{else}}{{ FormatTime .Atime }}{{end}}\t" +
-		"{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t" +
-		"{{ if .Checksum }}{{ .Checksum }}{{else}}-{{end}}\n"
-
-	ObjStatTmpl = ObjStatHeader + ObjStatBody
-
 	// Config
 	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +
 		" Copies: {{$obj.Copies}}\n" +
@@ -286,7 +274,7 @@ var (
 	// ObjectPropsMap matches BucketEntry field
 	ObjectPropsMap = map[string]string{
 		"name":      "{{$obj.Name}}\t",
-		"size":      "{{$obj.Size}}\t",
+		"size":      "{{FormatBytesSigned $obj.Size 2}}\t",
 		"ctime":     "{{$obj.Ctime}}\t",
 		"checksum":  "{{$obj.Checksum}}\t",
 		"type":      "{{$obj.Type}}\t",
@@ -299,6 +287,16 @@ var (
 		"iscached":  "{{$obj.IsCached}}\t",
 	}
 
+	ObjStatMap = map[string]string{
+		"local":    "{{ .BucketLocal }}\t",
+		"iscached": "{{ .Present }}\t",
+		"size":     "{{ FormatBytesSigned .Size 2 }}\t",
+		"version":  "{{ .Version }}\t",
+		"atime":    "{{ if IsUnsetTime .Atime }}-{{else}}{{ FormatObjTime .Atime }}{{end}}\t",
+		"copies":   "{{ if .NumCopies }}{{ .NumCopies }}{{else}}-{{end}}\t",
+		"checksum": "{{ if .Checksum }}{{ .Checksum }}{{else}}-{{end}}\t",
+	}
+
 	funcMap = template.FuncMap{
 		"ExtractStat":         extractStat,
 		"FormatBytesSigned":   cmn.B2S,
@@ -306,6 +304,7 @@ var (
 		"CalcAvg":             calcAvg,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
+		"FormatObjTime":       fmtObjTime,
 		"FormatDur":           fmtDuration,
 	}
 )
@@ -344,6 +343,10 @@ func isUnsetTime(t time.Time) bool {
 
 func fmtTime(t time.Time) string {
 	return t.Format("01-02 15:04:05.000")
+}
+
+func fmtObjTime(t time.Time) string {
+	return t.Format(time.RFC822)
 }
 
 func fmtDuration(d int64) string {

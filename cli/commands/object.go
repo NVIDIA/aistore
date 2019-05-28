@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -86,6 +87,8 @@ var (
 		),
 		objStat: append(
 			baseObjectFlags,
+			objPropsFlag,
+			noHeaderFlag,
 			jsonFlag,
 		),
 		objPrefetch: append(
@@ -345,19 +348,57 @@ func objectDelete(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvide
 	return errors.New(c.Command.UsageText)
 }
 
+func buildObjStatTemplate(props string, showHeaders bool) string {
+	var (
+		headSb strings.Builder
+		bodySb strings.Builder
+
+		propsList = makeList(props, ",")
+	)
+	for _, field := range propsList {
+		if _, ok := templates.ObjStatMap[field]; !ok {
+			// just skip invalid props for now - here a prop string
+			// from `bucket objects` can be used and how HEAD and LIST
+			// request have different set of properties
+			continue
+		}
+		headSb.WriteString(strings.Title(field) + "\t")
+		bodySb.WriteString(templates.ObjStatMap[field])
+	}
+	headSb.WriteString("\n")
+	bodySb.WriteString("\n")
+
+	if showHeaders {
+		return headSb.String() + bodySb.String() + "\n"
+	}
+
+	return bodySb.String()
+}
+
 // Displays object properties
 func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
 	if err := checkFlags(c, nameFlag); err != nil {
 		return err
 	}
 
+	props, propsFlag := "local,", ""
+	if flagIsSet(c, objPropsFlag) {
+		propsFlag = parseStrFlag(c, objPropsFlag)
+	}
+	if propsFlag == "all" || propsFlag == "" {
+		props += strings.Join(cmn.GetPropsAll, ",")
+	} else {
+		props += parseStrFlag(c, objPropsFlag)
+	}
+
+	tmpl := buildObjStatTemplate(props, !flagIsSet(c, noHeaderFlag))
 	name := parseStrFlag(c, nameFlag)
-	props, err := api.HeadObject(baseParams, bucket, bckProvider, name)
+	objProps, err := api.HeadObject(baseParams, bucket, bckProvider, name)
 	if err != nil {
 		return handleObjHeadError(err, bucket, name)
 	}
 
-	return templates.DisplayOutput(props, templates.ObjStatTmpl, flagIsSet(c, jsonFlag))
+	return templates.DisplayOutput(objProps, tmpl, flagIsSet(c, jsonFlag))
 }
 
 // Prefetch operations

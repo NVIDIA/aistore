@@ -338,11 +338,16 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 
 	prefix := parseStrFlag(c, prefixFlag)
 	showUnmatched := flagIsSet(c, showUnmatchedFlag)
-	props := "name," + parseStrFlag(c, objPropsFlag)
-	if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
-		// If `all` flag is set print status of the file so that the output is easier to understand -
-		// there might be multiple files with the same name listed (e.g EC replicas)
-		props = fmt.Sprintf("%s,%s", props, "status")
+	props := "name,"
+	if parseStrFlag(c, objPropsFlag) == "all" {
+		props += strings.Join(cmn.GetPropsAll, ",")
+	} else {
+		props += parseStrFlag(c, objPropsFlag)
+		if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
+			// If `all` flag is set print status of the file so that the output is easier to understand -
+			// there might be multiple files with the same name listed (e.g EC replicas)
+			props += ",status"
+		}
 	}
 
 	query := url.Values{}

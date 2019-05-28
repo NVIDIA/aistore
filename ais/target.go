@@ -7,7 +7,6 @@ package ais
 import (
 	"context"
 	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -2050,7 +2049,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	}
 	if ci.needChkSum && lom.Cksum() != nil {
 		_, storedCksum := lom.Cksum().Get()
-		fileInfo.Checksum = hex.EncodeToString([]byte(storedCksum))
+		fileInfo.Checksum = storedCksum
 	}
 	if ci.needVersion {
 		fileInfo.Version = lom.Version()

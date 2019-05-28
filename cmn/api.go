@@ -344,6 +344,13 @@ const (
 	GetPropsCopies   = "copies"
 )
 
+// GetPropsAll is a list of all GetProps* options
+var GetPropsAll = []string{
+	GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsCtime,
+	GetPropsIsCached, GetPropsBucket, GetPropsVersion,
+	GetTargetURL, GetPropsStatus, GetPropsCopies,
+}
+
 // BucketEntry.Status
 const (
 	ObjStatusOK      = ""
