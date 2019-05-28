@@ -8,7 +8,8 @@
 - [Filesystem Health Checker](#filesystem-health-checker)
 - [Networking](#networking)
 - [Reverse proxy](#reverse-proxy)
-- [Examples](#examples)
+- [Curl examples](#curl-examples)
+- [CLI examples](#cli-examples)
 
 AIStore configuration is consolidated in a single [JSON file](/ais/setup/config.sh) where the configuration sections and the knobs within those sections must be self-explanatory, and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
 
@@ -178,7 +179,7 @@ All the 3 (three) networking options are enumerated [here](/cmn/network.go).
 
 AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. This functionality is limited to GET requests only and must be used with caution and consideration. Related [configuration variable](/ais/setup/config.sh) is called `rproxy` - see sub-section `http` of the section `net`. For further details, please refer to [this readme](/docs/rproxy.md).
 
-## Examples
+## Curl examples
 
 The following assumes that `G` and `T` are the (hostname:port) of one of the deployed gateways (in a given AIS cluster) and one of the targets, respectively.
 
@@ -211,3 +212,33 @@ or, same:
 
 # curl -i -X PUT 'http://G/v1/daemon/setconfig?vmodule=ais/targ*=1'
 ```
+
+## CLI examples
+
+[AIS CLI](../cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
+
+```shell
+# ais config get --json | grep time
+        "stats_time": "10s",
+        "retry_sync_time": "2s"
+    "timeout": {
+        "default_timeout": "10s",
+        "default_long_timeout": "30m",
+        "send_file_time": "5m",
+        "startup_time": "1m",
+        "list_timeout": "2m"
+        "dont_evict_time": "120m",
+        "capacity_upd_time": "10m",
+        "iostat_time_long": "2s",
+        "iostat_time_short": "100ms"
+        "dest_retry_time": "2m",
+        "timeout_factor": 3
+        "timeout": "1h"
+        "call_timeout": "10m"
+# ais config set list_timeout=5m
+
+# ais config get --json | grep list_timeout
+        "list_timeout": "5m"
+```
+
+The example above demonstrates cluster-wide configuration update but note: single-node updates are also supported.
