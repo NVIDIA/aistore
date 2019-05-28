@@ -36,12 +36,16 @@ var (
 			Flags: []cli.Flag{},
 			Subcommands: []cli.Command{
 				{
-					Name:         configGet,
-					Usage:        "displays configuration of a daemon",
-					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID]", cliName, cmn.GetWhatConfig, configGet),
-					Action:       configHandler,
-					Flags:        configFlags[configGet],
-					BashComplete: daemonList,
+					Name:      configGet,
+					Usage:     "displays configuration of a daemon",
+					UsageText: fmt.Sprintf("%s %s %s [DAEMON_ID]", cliName, cmn.GetWhatConfig, configGet),
+					Action:    configHandler,
+					Flags:     configFlags[configGet],
+					BashComplete: func(c *cli.Context) {
+						if c.NArg() == 0 {
+							daemonList(c)
+						}
+					},
 				},
 				{
 					Name:      configSet,
@@ -50,7 +54,9 @@ var (
 					Action:    configHandler,
 					Flags:     configFlags[configSet],
 					BashComplete: func(c *cli.Context) {
-						daemonList(c)
+						if c.NArg() == 0 {
+							daemonList(c)
+						}
 						configPropList(c)
 					},
 				},
@@ -144,10 +150,9 @@ func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err e
 	// Case when DAEMON_ID is not provided by the user:
 	// 1. Key-value pair separated with '=': `ais set log.level=5`
 	// 2. Key-value pair separated with space: `ais set log.level 5`. In this case
-	//		it is required that the number of arguments is even and property
-	//      name contains a dot
-	if strings.Contains(args.First(), keyAndValueSeparator) ||
-		(len(args) > 0 && len(args)%2 == 0 && strings.Contains(args.First(), ".")) {
+	//		the first word is looked up in cmn.ConfigPropList
+	_, isProperty := cmn.ConfigPropList[args.First()]
+	if isProperty || strings.Contains(args.First(), keyAndValueSeparator) {
 		daemonID = ""
 		kvs = args
 	}

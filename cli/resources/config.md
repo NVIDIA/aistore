@@ -20,8 +20,16 @@ Displays the configuration of `DAEMON_ID`. If `DAEMON_ID` is not set, it will re
 
 Set configurations for a specific daemon or the entire cluster via key-value pairs. To set configurations for the entire cluster, omit the `DEAMON_ID` argument. For the list of available runtime configurations, see [here](../../docs/configuration.md#runtime-configuration).
 
+Key and value can be separated with `=` character or with a space. The former case supports both short and full-qualified option names. The latter case requires the key to be full-qualified name.
+
 Example:
 
-`ais config set periodic.stats_time=10s disk.disk_util_low_wm=40`
+Short option names and equal sign as a separator:
 
-Sets the `periodic.stats_time` configuration to `10s` and `disk.disk_util_low_wm` to `40` for the entire cluster.
+`ais config set stats_time=10s disk_util_low_wm=40`
+
+The same command with a space as the separator:
+
+`ais config set periodic.stats_time 10s disk.disk_util_low_wm 40`
+
+Both commands sets the `periodic.stats_time` configuration to `10s` and `disk.disk_util_low_wm` to `40` for the entire cluster.

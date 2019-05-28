@@ -71,35 +71,40 @@ For more examples and for alternative ways to format configuration-updating requ
 
 Following is a table-summary that contains a *subset* of all *settable* knobs:
 
-| Option | Default value | Description |
-|---|---|---|
-| log.level | 3 | Set global logging level. The greater number the more verbose log output |
-| vmodule | "" | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
-| stats_time | 10s | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
-| dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
-| disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
-| disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
-| iostat_time_long | 2s | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
-| iostat_time_short | 100ms | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
-| capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
-| dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
-| send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
-| default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
-| default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |
-| lowwm | 75 | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
-| highwm | 90 | LRU starts immediately if a filesystem usage exceeds the value |
-| lru.enabled | true | Enables and disabled the LRU |
-| rebalance.enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
-| cksum.type | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| cksum.validate_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
-| cksum.validate_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
-| cksum.enable_read_range | false | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
-| versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
-| version.validate_warm_get | false | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
-| fshc.enabled | true | Enables and disables filesystem health checker (FSHC) |
-| mirror.enabled | false | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
-| mirror.burst_buffer | 512 | the maximum length of queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
-| mirror.util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
+| Option | Full-qualified name | Default value | Description |
+|---|---|---|---|
+| log.level | log.level | 3 | Set global logging level. The greater number the more verbose log output |
+| vmodule | vmodule |"" | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
+| stats_time | periodic.stats_time | 10s | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
+| dont_evict_time | lru.dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
+| disk_util_low_wm | disk.disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
+| disk_util_high_wm | disk.disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
+| iostat_time_long | disk.iostat_time_long | 2s | The interval that disk utilization is checked when disk utilization is below `disk_util_low_wm`. |
+| iostat_time_short | disk.iostat_time_short | 100ms | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
+| capacity_upd_time | lru.capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
+| dest_retry_time | rebalance.dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
+| send_file_time | timeout.send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
+| default_timeout | timeout.default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
+| default_long_timeout | timeout.default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |
+| lowwm | lru.lowwm | 75 | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
+| highwm | lru.highwm | 90 | LRU starts immediately if a filesystem usage exceeds the value |
+| lru.enabled | lru.enabled | true | Enables and disabled the LRU |
+| rebalance.enabled | rebalance.enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
+| checksum | cksum.type | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
+| validate_checksum_cold_get | cksum.validate_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
+| validate_checksum_warm_get | cksum.validate_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
+| enable_read_range_checksum | cksum.enable_read_range | false | Enables and disables checksum calculation for object slices. If enabled, it adds checksum to HTTP response header for the requested object byte range |
+| versioning_enabled or ver_enabled | ver.enabled | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
+| versioning_validate_warm_get or ver_validate_warm_get | ver.validate_warm_get | false | If false, a target returns a requested object immediately if it is cached. If true, a target fetches object's version(via HEAD request) from Cloud and if the received version mismatches locally cached one, the target redownloads the object and then returns it to a client |
+| fshc_enabled | fshc.enabled | true | Enables and disables filesystem health checker (FSHC) |
+| mirror_enabled | mirror.enabled | false | If true, for every object PUT a target creates object replica on another mountpath. Later, on object GET request, loadbalancer chooses a mountpath with lowest disk utilization and reads the object from it |
+| mirror_burst_buffer | mirror.burst_buffer | 512 | the maximum length of queue of objects to be mirrored. When the queue length exceeds the value, a target may skip creating replicas for new objects |
+| mirror_util_thresh | mirror.util_thresh | 20 | If mirroring is enabled, loadbalancer chooses an object replica to read but only if main object's mountpath utilization exceeds the replica' s mountpath utilization by this value. Main object's mountpath is the mountpath used to store the object when mirroring is disabled |
+| mirror_copies | mirror.copies | 1 | the number of local copies of an object |
+| distributed_sort.duplicated_records | distributed_sort.duplicated_records | "ignore" | what to do when duplicated records are found: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| distributed_sort.missing_shards | distributed_sort.missing_shards | "ignore" | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| distributed_sort.call_timeout | distributed_sort.call_timeout | "10m" | a maximum time a target waits for another target to respond |
+| distributed_sort.default_max_mem_usage | distributed_sort.default_max_mem_usage | "80%" | a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g `80%`) or as the number of bytes(e.g, `12G`) |
 
 ## Configuration persistence
 

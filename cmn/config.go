@@ -1083,7 +1083,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	//
 	// 1. TOP LEVEL CONFIG
 	//
-	case "vmodule", "vmodule.loglevel":
+	case "vmodule":
 		if err := SetGLogVModule(value); err != nil {
 			return nil, fmt.Errorf("failed to set vmodule = %s, err: %v", value, err)
 		}
@@ -1213,7 +1213,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 
 // ConfigPropList is config property name <-> readonly
 var ConfigPropList = map[string]bool{
-	"vmodule.loglevel":                       false,
+	"vmodule":                                false,
 	"log.level":                              false,
 	HeaderBucketLRUEnabled:                   false,
 	HeaderBucketLRULowWM:                     false,
