@@ -68,9 +68,12 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err erro
 		return
 	}
 
-	cpyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
-
-	if err = cmn.MvFile(workFQN, cpyFQN); err != nil {
+	// TODO: the lock here should be exclusive but it isn't. This can result
+	// in errors where we check that the file exist but it has not yet metadata
+	// persisted. On the other hand, taking an exclusive lock on original
+	// object will prevent from GETs from happening.
+	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+	if err = cmn.MvFile(workFQN, copyFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
 			glog.Errorf("Failed to remove %s, err: %v", workFQN, errRemove)
 		}
@@ -78,10 +81,10 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err erro
 	}
 
 	// Append copyFQN to FQNs of existing copies
-	lom.AddXcopy(cpyFQN)
+	lom.AddXcopy(copyFQN)
 
 	if err = lom.Persist(); err == nil {
-		copyLOM := lom.Clone(cpyFQN)
+		copyLOM := lom.Clone(copyFQN)
 		copyLOM.SetCopyFQN([]string{lom.FQN})
 		if err = copyLOM.Persist(); err == nil {
 			lom.ReCache()
@@ -91,7 +94,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err erro
 
 	// on error
 	// FIXME: add rollback which restores lom's metadata in case of failure
-	if err := os.Remove(cpyFQN); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(copyFQN); err != nil && !os.IsNotExist(err) {
 		lom.T.FSHC(err, lom.FQN)
 	}
 

@@ -88,7 +88,6 @@ func newInitLRU(t cluster.Target) *InitLRU {
 	xlru := &Xaction{}
 	return &InitLRU{
 		Xlru:                xlru,
-		Namelocker:          &nameLockerMock{},
 		Statsif:             &statsLRUMock{},
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
@@ -284,14 +283,6 @@ var _ = Describe("LRU tests", func() {
 })
 
 // MOCK TYPES
-
-type nameLockerMock struct{}
-
-func (n nameLockerMock) TryLock(uname string, exclusive bool) bool { return true }
-func (n nameLockerMock) Lock(uname string, exclusive bool)         {}
-func (n nameLockerMock) DowngradeLock(uname string)                {}
-func (n nameLockerMock) Unlock(uname string, exclusive bool)       {}
-
 // TODO: Maybe this should be in stats_mock.go
 
 type statsLRUMock struct{}

@@ -35,7 +35,6 @@ var (
 	// Used as a compile-time check for correct interface implementation.
 	_ extract.ExtractCreator = &extractCreatorMock{}
 	_ cluster.SmapListeners  = &testSmapListeners{}
-	_ cluster.NameLocker     = &nameLockerMock{}
 )
 
 //
@@ -101,13 +100,6 @@ func (tm *testSmap) Listeners() cluster.SmapListeners {
 //
 // MOCKS
 //
-type nameLockerMock struct{}
-
-func (n *nameLockerMock) TryLock(uname string, exclusive bool) bool { return true }
-func (n *nameLockerMock) Lock(uname string, exclusive bool)         {}
-func (n *nameLockerMock) DowngradeLock(uname string)                {}
-func (n *nameLockerMock) Unlock(uname string, exclusive bool)       {}
-
 type extractCreatorMock struct {
 	useCompression bool
 	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
@@ -261,7 +253,6 @@ func (tctx *testContext) setup() {
 
 	ctx.smap = smap
 	ctx.t = cluster.NewTargetMock(cluster.NewBaseBownerMock(testBucket))
-	ctx.nameLocker = &nameLockerMock{}
 	tctx.smap = smap
 	tctx.targets = targets
 }

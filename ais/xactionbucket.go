@@ -193,7 +193,7 @@ type mncEntry struct {
 
 func (e *mncEntry) Start(id int64) error {
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, e.t.rtnamemap, slab, e.copies, e.bckIsLocal)
+	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, slab, e.copies, e.bckIsLocal)
 	go xmnc.Run()
 	e.xact = xmnc
 	return nil
@@ -237,13 +237,12 @@ func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target,
 type putLocReplicasEntry struct {
 	baseBckEntry
 	lom  *cluster.LOM
-	nl   cluster.NameLocker
 	xact *mirror.XactPutLRepl
 }
 
 func (e *putLocReplicasEntry) Start(id int64) error {
 	slab := gmem2.SelectSlab2(cmn.MiB) // TODO: estimate
-	x, err := mirror.RunXactPutLRepl(id, e.lom, e.nl, slab)
+	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
 
 	if err != nil {
 		glog.Error(err)
@@ -256,9 +255,9 @@ func (e *putLocReplicasEntry) Start(id int64) error {
 func (e *putLocReplicasEntry) Get() cmn.Xact { return e.xact }
 func (*putLocReplicasEntry) Kind() string    { return cmn.ActPutCopies }
 
-func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM, nl cluster.NameLocker) *mirror.XactPutLRepl {
+func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPutLRepl {
 	b := r.bucketsXacts(lom.Bucket)
-	e := &putLocReplicasEntry{lom: lom, nl: nl, baseBckEntry: baseBckEntry{bckName: lom.Bucket}}
+	e := &putLocReplicasEntry{lom: lom, baseBckEntry: baseBckEntry{bckName: lom.Bucket}}
 
 	if err := b.renewBucketXaction(e); err != nil {
 		return nil

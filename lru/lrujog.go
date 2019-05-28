@@ -212,7 +212,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 }
 
 func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
-	lctx.ini.Namelocker.Lock(fi.lom.Uname(), true)
+	cluster.ObjectLocker.Lock(fi.lom.Uname(), true)
 	// local replica must be go with the object; the replica, however, is
 	// located in a different local FS and belongs, therefore, to a different LRU jogger
 	// (hence, precise size accounting TODO)
@@ -229,7 +229,7 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 	} else {
 		glog.Errorf("Failed to evict %s, err: %v", fi.lom, err)
 	}
-	lctx.ini.Namelocker.Unlock(fi.lom.Uname(), true)
+	cluster.ObjectLocker.Unlock(fi.lom.Uname(), true)
 	return
 }
 

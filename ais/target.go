@@ -143,7 +143,6 @@ type (
 		httprunner
 		cloudif        cloudif // multi-cloud backend
 		uxprocess      *uxprocess
-		rtnamemap      *rtnamemap
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
 		clusterStarted atomic.Bool
@@ -214,8 +213,6 @@ func (t *targetrunner) Run() error {
 	t.httprunner.keepalive = gettargetkeepalive()
 
 	dryinit()
-
-	t.rtnamemap = newrtnamemap()
 
 	bmd := newBucketMD()
 	t.bmdowner.put(bmd)
@@ -326,7 +323,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t, t.rtnamemap)
+	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -467,7 +464,6 @@ func (t *targetrunner) RunLRU() {
 	}
 	ini := lru.InitLRU{
 		Xlru:                xlru,
-		Namelocker:          t.rtnamemap,
 		Statsif:             t.statsif,
 		T:                   t,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
@@ -649,7 +645,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. under lock: lom init, restore from cluster
-	t.rtnamemap.Lock(lom.Uname(), false)
+	cluster.ObjectLocker.Lock(lom.Uname(), false)
 do:
 	// all the next checks work with disks - skip all if dryRun.disk=true
 	coldGet := false
@@ -659,7 +655,7 @@ do:
 
 	fromCache, errstr = lom.Load(true)
 	if errstr != "" {
-		t.rtnamemap.Unlock(lom.Uname(), false)
+		cluster.ObjectLocker.Unlock(lom.Uname(), false)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -668,7 +664,7 @@ do:
 	if coldGet && lom.BckIsLocal {
 		// does not exist in the local bucket: restore from neighbors
 		if errstr, errcode = t.restoreObjLBNeigh(lom, r); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname(), false)
+			cluster.ObjectLocker.Unlock(lom.Uname(), false)
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
@@ -678,7 +674,7 @@ do:
 		if lom.Version() != "" && lom.VerConf().ValidateWarmGet {
 			if coldGet, errstr, errcode = t.checkCloudVersion(ct, lom); errstr != "" {
 				lom.Uncache()
-				t.rtnamemap.Unlock(lom.Uname(), false)
+				cluster.ObjectLocker.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr, errcode)
 				return
 			}
@@ -700,13 +696,13 @@ do:
 					if err := os.Remove(lom.FQN); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", errstr, err)
 					}
-					t.rtnamemap.Unlock(lom.Uname(), false)
+					cluster.ObjectLocker.Unlock(lom.Uname(), false)
 					t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 					return
 				}
 				coldGet = true
 			} else {
-				t.rtnamemap.Unlock(lom.Uname(), false)
+				cluster.ObjectLocker.Unlock(lom.Uname(), false)
 				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 			}
@@ -715,7 +711,7 @@ do:
 
 	// 3. coldget
 	if coldGet {
-		t.rtnamemap.Unlock(lom.Uname(), false)
+		cluster.ObjectLocker.Unlock(lom.Uname(), false)
 		if err = lom.AllowColdGET(); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -740,7 +736,7 @@ get:
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
-	t.rtnamemap.Unlock(lom.Uname(), false)
+	cluster.ObjectLocker.Unlock(lom.Uname(), false)
 }
 
 //
@@ -1366,8 +1362,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler(w, r, errstr)
 		return
 	}
-	t.rtnamemap.Lock(lom.Uname(), false)
-	defer t.rtnamemap.Unlock(lom.Uname(), false)
+	cluster.ObjectLocker.Lock(lom.Uname(), false)
+	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
 	if _, errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
 		invalidHandler(w, r, errstr)
@@ -1594,12 +1590,12 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 // FIXME: recomputes checksum if called with a bad one (optimize)
 func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
 	if prefetch {
-		if !t.rtnamemap.TryLock(lom.Uname(), true) {
+		if !cluster.ObjectLocker.TryLock(lom.Uname(), true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
 			return "skip", 0
 		}
 	} else {
-		t.rtnamemap.Lock(lom.Uname(), true) // one cold-GET at a time
+		cluster.ObjectLocker.Lock(lom.Uname(), true) // one cold-GET at a time
 	}
 	var (
 		err             error
@@ -1608,12 +1604,12 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	)
 	if err, errcode = getcloudif().getobj(ct, workFQN, lom); err != nil {
 		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
-		t.rtnamemap.Unlock(lom.Uname(), true)
+		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 		return
 	}
 	defer func() {
 		if errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname(), true)
+			cluster.ObjectLocker.Unlock(lom.Uname(), true)
 			if errRemove := os.Remove(workFQN); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, workFQN, errRemove)
 				t.fshc(errRemove, workFQN)
@@ -1633,7 +1629,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 
 	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
 	if prefetch {
-		t.rtnamemap.Unlock(lom.Uname(), true)
+		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	} else {
 		if vchanged {
 			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1},
@@ -1643,7 +1639,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		} else if !crace {
 			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, lom.Size()})
 		}
-		t.rtnamemap.DowngradeLock(lom.Uname())
+		cluster.ObjectLocker.DowngradeLock(lom.Uname())
 	}
 	return
 }
@@ -2254,8 +2250,8 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 		lom.SetVersion(ver)
 	}
 
-	roi.t.rtnamemap.Lock(lom.Uname(), true)
-	defer roi.t.rtnamemap.Unlock(lom.Uname(), true)
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
 	if lom.BckIsLocal && lom.VerConf().Enabled {
 		if ver, errstr = lom.IncObjectVersion(); errstr != "" {
@@ -2292,7 +2288,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		return
 	}
 	if t.xputlrep == nil || t.xputlrep.Finished() || !t.xputlrep.SameBucket(lom) {
-		t.xputlrep = t.xactions.renewPutLocReplicas(lom, t.rtnamemap)
+		t.xputlrep = t.xactions.renewPutLocReplicas(lom)
 	}
 	if t.xputlrep == nil {
 		return
@@ -2300,7 +2296,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	err := t.xputlrep.Repl(lom)
 	// retry upon race vs (just finished/timedout)
 	if _, ok := err.(*cmn.ErrXpired); ok {
-		t.xputlrep = t.xactions.renewPutLocReplicas(lom, t.rtnamemap)
+		t.xputlrep = t.xactions.renewPutLocReplicas(lom)
 		if t.xputlrep != nil {
 			err = t.xputlrep.Repl(lom)
 		}
@@ -2316,8 +2312,8 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 		errRet   error
 	)
 
-	t.rtnamemap.Lock(lom.Uname(), true)
-	defer t.rtnamemap.Unlock(lom.Uname(), true)
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
 	if _, errstr := lom.Load(false); errstr != "" {
@@ -2370,12 +2366,12 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 	objnameTo := msg.Name
 	uname := cluster.Bo2Uname(bucket, objnameFrom)
-	t.rtnamemap.Lock(uname, true)
+	cluster.ObjectLocker.Lock(uname, true)
 
 	if errstr := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
-	t.rtnamemap.Unlock(uname, true)
+	cluster.ObjectLocker.Unlock(uname, true)
 }
 
 func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo,

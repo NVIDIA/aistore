@@ -146,11 +146,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return errors.New("out of space")
 		}
 
-		m.ctx.nameLocker.Lock(lom.Uname(), false)
+		cluster.ObjectLocker.Lock(lom.Uname(), false)
 		f, err := os.Open(lom.FQN)
 		if err != nil {
 			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			m.ctx.nameLocker.Unlock(lom.Uname(), false)
+			cluster.ObjectLocker.Unlock(lom.Uname(), false)
 			return fmt.Errorf("unable to open local file, err: %v", err)
 		}
 		var compressedSize int64
@@ -177,7 +177,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		}
 
 		m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-		m.ctx.nameLocker.Unlock(lom.Uname(), false)
+		cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
 		m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
@@ -358,8 +358,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
 	if si.DaemonID != m.ctx.node.DaemonID {
-		m.ctx.nameLocker.Lock(lom.Uname(), false)
-		defer m.ctx.nameLocker.Unlock(lom.Uname(), false)
+		cluster.ObjectLocker.Lock(lom.Uname(), false)
+		defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
 		file, err := cmn.NewFileHandle(lom.FQN)
 		if err != nil {

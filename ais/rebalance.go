@@ -464,13 +464,13 @@ func (reb *rebManager) recvRebalanceAck(w http.ResponseWriter, hdr transport.Hea
 
 	// TODO: support configurable delay
 	// TODO: rebalancing stats and error counts
-	reb.t.rtnamemap.Lock(lom.Uname(), true)
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	lom.Uncache()
 	_ = lom.DelAllCopies()
 	if err = os.Remove(lom.FQN); err != nil && !os.IsNotExist(err) {
 		glog.Errorf("%s: error removing %s, err: %v", reb.t.si.Name(), lom, err)
 	}
-	reb.t.rtnamemap.Unlock(lom.Uname(), true)
+	cluster.ObjectLocker.Unlock(lom.Uname(), true)
 }
 
 //
@@ -492,7 +492,7 @@ func (rj *globalRebJogger) jog() {
 
 func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
 	var lom = (*cluster.LOM)(lomptr)
-	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
+	cluster.ObjectLocker.Unlock(lom.Uname(), false)
 	rj.wg.Done()
 
 	if err != nil {
@@ -563,7 +563,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
 	}
-	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in objSentCallback()
+	cluster.ObjectLocker.Lock(uname, false) // NOTE: unlock in objSentCallback()
 
 	_, errstr = lom.Load(false)
 	if errstr != "" || !lom.Exists() || lom.IsCopy() {
@@ -597,7 +597,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 	return nil
 rerr:
-	rj.m.t.rtnamemap.Unlock(uname, false)
+	cluster.ObjectLocker.Unlock(uname, false)
 	if errstr != "" {
 		err = errors.New(errstr)
 	}
@@ -733,13 +733,21 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 
-	rj.m.t.rtnamemap.Lock(lom.Uname(), true)
+	// TODO: we take exclusive lock because the source and destination have
+	// the same uname and we need to have exclusive lock on destination. If
+	// we won't have exclusive we can end up with state where we read the
+	// object but metadata is not yet persisted and it results in error - reproducible.
+	// But taking exclusive lock on source is not a good idea since it will
+	// prevent GETs from happening. Therefore, we need to think of better idea
+	// to lock both source and destination but with different locks - probably
+	// including mpath (whole string or some short hash) to uname, would be a good idea.
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	dst, erc := lom.CopyObject(lom.HrwFQN, rj.buf)
 	if erc == nil {
 		erc = dst.Persist()
 	}
 	if erc != nil {
-		rj.m.t.rtnamemap.Unlock(lom.Uname(), true)
+		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 		if !os.IsNotExist(erc) {
 			rj.xreb.Abort()
 			rj.m.t.fshc(erc, lom.HrwFQN)
@@ -755,6 +763,6 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if err = os.Remove(lom.FQN); err != nil && !os.IsNotExist(err) {
 		glog.Errorf("%s: error removing %s, err: %v", rj.m.t.si.Name(), lom, err)
 	}
-	rj.m.t.rtnamemap.Unlock(lom.Uname(), true)
+	cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	return nil
 }

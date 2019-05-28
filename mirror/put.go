@@ -27,7 +27,6 @@ type (
 		// init
 		mirror         cmn.MirrorConf
 		slab           *memsys.Slab2
-		namelocker     cluster.NameLocker
 		wg             *sync.WaitGroup
 		total, dropped int64
 	}
@@ -44,13 +43,11 @@ type (
 // public methods
 //
 
-func RunXactPutLRepl(id int64,
-	lom *cluster.LOM, nl cluster.NameLocker, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
+func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
 	r = &XactPutLRepl{
 		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket, lom.BckIsLocal),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
-		namelocker:     nl,
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	l := len(availablePaths)
@@ -224,8 +221,8 @@ loop:
 }
 
 func (j *xputJogger) addCopy(lom *cluster.LOM) {
-	j.parent.namelocker.Lock(lom.Uname(), false)
-	defer j.parent.namelocker.Unlock(lom.Uname(), false)
+	cluster.ObjectLocker.Lock(lom.Uname(), false)
+	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
 	if err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)

@@ -29,9 +29,8 @@ const (
 type (
 	XactBckMakeNCopies struct {
 		xactBckBase
-		namelocker cluster.NameLocker
-		slab       *memsys.Slab2
-		copies     int
+		slab   *memsys.Slab2
+		copies int
 	}
 	xcopyJogger struct { // one per mountpath
 		joggerBckBase
@@ -44,11 +43,9 @@ type (
 // public methods
 //
 
-func NewXactMNC(id int64, bucket string, t cluster.Target, nl cluster.NameLocker,
-	slab *memsys.Slab2, copies int, local bool) *XactBckMakeNCopies {
+func NewXactMNC(id int64, bucket string, t cluster.Target, slab *memsys.Slab2, copies int, local bool) *XactBckMakeNCopies {
 	return &XactBckMakeNCopies{
 		xactBckBase: *newXactBckBase(id, cmn.ActMakeNCopies, bucket, t, local),
-		namelocker:  nl,
 		slab:        slab,
 		copies:      copies,
 	}
@@ -156,7 +153,7 @@ func (j *xcopyJogger) delAddCopies(lom *cluster.LOM) (err error) {
 }
 
 func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
-	j.parent.namelocker.Lock(lom.Uname(), true)
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	if j.parent.copies == 1 {
 		size += lom.Size() * int64(lom.NumCopies()-1)
 		if errstr := lom.DelAllCopies(); errstr != "" {
@@ -181,24 +178,24 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 		}
 	}
 	lom.ReCache()
-	j.parent.namelocker.Unlock(lom.Uname(), true)
+	cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	return
 }
 
 func (j *xcopyJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
-			j.parent.namelocker.Lock(lom.Uname(), false)
+			cluster.ObjectLocker.Lock(lom.Uname(), false)
 			if err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
-				j.parent.namelocker.Unlock(lom.Uname(), false)
+				cluster.ObjectLocker.Unlock(lom.Uname(), false)
 				return
 			}
 			size += lom.Size()
 			if glog.V(4) {
 				glog.Infof("%s: %s=>%s", lom, lom.ParsedFQN.MpathInfo, mpather.mountpathInfo())
 			}
-			j.parent.namelocker.Unlock(lom.Uname(), false)
+			cluster.ObjectLocker.Unlock(lom.Uname(), false)
 		} else {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return

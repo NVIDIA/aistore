@@ -45,7 +45,6 @@ const (
 type (
 	InitLRU struct {
 		Xlru                *Xaction
-		Namelocker          cluster.NameLocker
 		Statsif             stats.Tracker
 		T                   cluster.Target
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
