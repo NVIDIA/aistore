@@ -728,7 +728,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, numPuts int,
 	errCh chan error, objsPutCh chan string, sgl *memsys.SGL) {
 
-	var fnlen = 10
+	var fnlen = 16
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	objList := make([]string, 0, numPuts)
 	for i := 0; i < numPuts; i++ {
