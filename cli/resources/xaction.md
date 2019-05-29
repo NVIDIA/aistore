@@ -34,3 +34,5 @@ Returns the stats of `<value>` xaction. If the value is `empty`, return all xact
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json` | bool | Output the stats in JSON format | `false` |
+| `--bucket` | string | Name of the bucket to start the xaction | `""` |
+| `--all` | bool | If set, additionally displays old, finished xactions | `false` |

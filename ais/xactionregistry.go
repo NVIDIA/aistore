@@ -259,7 +259,7 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 	return !entry.Get().Finished()
 }
 
-func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, error) {
+func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if _, ok := cmn.ValidXact(kind); !ok {
 		return nil, errors.New("unrecognized xaction " + kind)
 	}
@@ -269,7 +269,13 @@ func (r *xactionsRegistry) globalXactStats(kind string) ([]stats.XactStats, erro
 		return nil, cmn.NewXactionNotFoundError(kind + " has not started yet")
 	}
 
-	return []stats.XactStats{entry.Stats()}, nil
+	if onlyRecent {
+		return map[int64]stats.XactStats{entry.Get().ID(): entry.Stats()}, nil
+	}
+
+	return r.matchingXactsStats(func(xact cmn.Xact) bool {
+		return xact.Kind() == kind || xact.ID() == entry.Get().ID()
+	}), nil
 }
 
 func (r *xactionsRegistry) abortGlobalXact(kind string) {
@@ -284,37 +290,73 @@ func (r *xactionsRegistry) abortGlobalXact(kind string) {
 }
 
 // Returns stats of xaction with given 'kind' on a given bucket
-func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string) ([]stats.XactStats, error) {
-	bucketXats, ok := r.getBucketsXacts(bucket)
-	if !ok {
-		return nil, cmn.NewXactionNotFoundError("xactions for bucket " + bucket + " don't exist; bucket might have been removed or not created")
+func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
+	if onlyRecent {
+		bucketXats, ok := r.getBucketsXacts(bucket)
+		if !ok {
+			return nil, cmn.NewXactionNotFoundError("xactions for bucket " + bucket + " don't exist; bucket might have been removed or not created")
+		}
+
+		entry := bucketXats.GetL(kind)
+		if entry == nil {
+			return nil, cmn.NewXactionNotFoundError(kind + " not found for bucket " + bucket + "; xaction might have not been started")
+		}
+
+		return map[int64]stats.XactStats{entry.Get().ID(): entry.Stats()}, nil
 	}
 
-	entry := bucketXats.GetL(kind)
-	if entry == nil {
-		return nil, cmn.NewXactionNotFoundError(kind + " not found for bucket " + bucket + "; xaction might have not been started")
-	}
-
-	return []stats.XactStats{entry.Stats()}, nil
+	return r.matchingXactsStats(func(xact cmn.Xact) bool {
+		return xact.Bucket() == bucket && xact.Kind() == kind
+	}), nil
 }
 
 // Returns stats of all present xactions
-func (r *xactionsRegistry) allXactsStats() []stats.XactStats {
-	sts := make([]stats.XactStats, 0, 20)
+func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactStats {
+	if !onlyRecent {
+		return r.matchingXactsStats(func(_ cmn.Xact) bool { return true })
+	}
+
+	matching := make(map[int64]stats.XactStats)
+
+	// add these xactions which are the most recent ones, even if they are finished
+	r.RLock()
+	for _, stat := range r.globalXacts {
+		matching[stat.Get().ID()] = stat.Stats()
+	}
+	r.RUnlock()
+
+	r.bucketXacts.Range(func(_, val interface{}) bool {
+		bckXactions := val.(*bucketXactions)
+
+		for _, stat := range bckXactions.Stats() {
+			matching[stat.ID()] = stat
+		}
+		return true
+	})
+
+	return matching
+}
+
+func (r *xactionsRegistry) matchingXactsStats(xactMatches func(xact cmn.Xact) bool) map[int64]stats.XactStats {
+	sts := make(map[int64]stats.XactStats, 20)
 
 	r.byID.Range(func(_, value interface{}) bool {
 		entry := value.(xactionEntry)
-		sts = append(sts, entry.Stats())
+		if !xactMatches(entry.Get()) {
+			return true
+		}
+
+		sts[entry.Get().ID()] = entry.Stats()
 		return true
 	})
 
 	return sts
 }
 
-func (r *xactionsRegistry) getNonBucketSpecificStats(kind string) ([]stats.XactStats, error) {
+func (r *xactionsRegistry) getNonBucketSpecificStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	// no bucket and no kind - request for all xactions
 	if kind == "" {
-		return r.allXactsStats(), nil
+		return r.allXactsStats(onlyRecent), nil
 	}
 
 	global, err := cmn.XactKind.IsGlobalKind(kind)
@@ -324,36 +366,43 @@ func (r *xactionsRegistry) getNonBucketSpecificStats(kind string) ([]stats.XactS
 	}
 
 	if global {
-		return r.globalXactStats(kind)
+		return r.globalXactStats(kind, onlyRecent)
 	}
 
 	return nil, fmt.Errorf("xaction %s is not a global xaction", kind)
 }
 
 // Returns stats of all xactions of a given bucket
-func (r *xactionsRegistry) bucketAllXactsStats(bucket string) ([]stats.XactStats, error) {
+func (r *xactionsRegistry) bucketAllXactsStats(bucket string, onlyRecent bool) map[int64]stats.XactStats {
 	bucketsXacts, ok := r.getBucketsXacts(bucket)
 
+	// bucketsXacts is not present, bucket might have never existed
+	// or has been removed, return empty result
 	if !ok {
-		return nil, fmt.Errorf("xactions for %s bucket not found", bucket)
+		if onlyRecent {
+			return map[int64]stats.XactStats{}
+		}
+		return r.matchingXactsStats(func(xact cmn.Xact) bool {
+			return xact.Bucket() == bucket
+		})
 	}
 
-	return bucketsXacts.Stats(), nil
+	return bucketsXacts.Stats()
 }
 
-func (r *xactionsRegistry) getStats(kind, bucket string) ([]stats.XactStats, error) {
+func (r *xactionsRegistry) getStats(kind, bucket string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if bucket == "" {
 		// no bucket - either all xactions or a global xaction
-		return r.getNonBucketSpecificStats(kind)
+		return r.getNonBucketSpecificStats(kind, onlyRecent)
 	}
 
 	// both bucket and kind present - request for specific bucket's xaction
 	if kind != "" {
-		return r.bucketSingleXactStats(kind, bucket)
+		return r.bucketSingleXactStats(kind, bucket, onlyRecent)
 	}
 
 	// bucket present and no kind - request for all available bucket's xactions
-	return r.bucketAllXactsStats(bucket)
+	return r.bucketAllXactsStats(bucket, onlyRecent), nil
 }
 
 func (r *xactionsRegistry) doAbort(kind, bucket string) {

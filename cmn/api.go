@@ -294,6 +294,7 @@ type MountpathList struct {
 type XactionExtMsg struct {
 	Target string `json:"target,omitempty"`
 	Bucket string `json:"bucket,omitempty"`
+	All    bool   `json:"all,omitempty"`
 }
 
 //===================

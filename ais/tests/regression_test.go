@@ -1367,7 +1367,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 }
 
 func getXactionGlobalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
-	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "")
+	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -1375,7 +1375,7 @@ func getXactionGlobalRebalance(baseParams *api.BaseParams) (map[string][]*stats.
 }
 
 func getXactionLocalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
-	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActLocalReb, cmn.ActXactStats, "")
+	rebalanceStats, err := api.GetXactStatusStats(baseParams, cmn.ActLocalReb, cmn.ActXactStats, "", true)
 	if err != nil {
 		return nil, err
 	}

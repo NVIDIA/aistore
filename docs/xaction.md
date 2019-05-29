@@ -104,3 +104,6 @@ Example rebalance stats response:
     }
 ]
 ```
+
+If flag `--all` is provided, stats command will display old, finished xactions, along with currently running ones. If `--all` is not set (default), only  
+the most recent xactions will be displayed, for each bucket, kind or (bucket, kind)

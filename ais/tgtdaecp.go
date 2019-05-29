@@ -266,11 +266,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		kind, bucket := msg.Name, xactMsg.Bucket
+		kind, bucket, onlyRecent := msg.Name, xactMsg.Bucket, !xactMsg.All
 
 		switch msg.Action {
 		case cmn.ActXactStats:
-			jsbytes, err = t.xactStatsRequest(kind, bucket)
+			jsbytes, err = t.xactStatsRequest(kind, bucket, onlyRecent)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -338,11 +338,18 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) xactStatsRequest(kind, bucket string) ([]byte, error) {
-	xactStats, err := t.xactions.getStats(kind, bucket)
-
+func (t *targetrunner) xactStatsRequest(kind, bucket string, onlyRecent bool) ([]byte, error) {
+	xactStatsMap, err := t.xactions.getStats(kind, bucket, onlyRecent)
 	if err != nil {
 		return nil, err
+	}
+
+	xactStats := make([]stats.XactStats, 0, len(xactStatsMap))
+	for _, stat := range xactStatsMap {
+		if stat == nil {
+			continue
+		}
+		xactStats = append(xactStats, stat)
 	}
 
 	return jsoniter.Marshal(xactStats)

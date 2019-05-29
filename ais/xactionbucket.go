@@ -82,14 +82,12 @@ func (b *bucketXactions) renewBucketXaction(e xactionBucketEntry) (err error) {
 	return b.Update(e)
 }
 
-func (b *bucketXactions) Stats() []stats.XactStats {
+func (b *bucketXactions) Stats() map[int64]stats.XactStats {
+	statsList := make(map[int64]stats.XactStats, len(b.entries))
 	b.RLock()
-	statsList := make([]stats.XactStats, 0, len(b.entries))
-
 	for _, e := range b.entries {
-		statsList = append(statsList, e.Stats())
+		statsList[e.Get().ID()] = e.Stats()
 	}
-
 	b.RUnlock()
 	return statsList
 }

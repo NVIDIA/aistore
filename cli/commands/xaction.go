@@ -22,18 +22,19 @@ const (
 )
 
 var (
-	baseXactFlag = []cli.Flag{bucketFlag}
+	allFlagXact   = cli.BoolFlag{Name: "all", Usage: "show all (even old) xactions"}
+	baseXactFlags = []cli.Flag{bucketFlag, allFlagXact}
 
 	xactFlags = map[string][]cli.Flag{
-		xactStart: baseXactFlag,
-		xactStop:  baseXactFlag,
-		xactStats: {jsonFlag},
+		xactStart: baseXactFlags,
+		xactStop:  baseXactFlags,
+		xactStats: append(baseXactFlags, jsonFlag),
 	}
 
 	xactGeneric    = "%s xaction %s [<kind>] --bucket <value>"
 	xactStartUsage = fmt.Sprintf(xactGeneric, cliName, xactStart)
 	xactStopUsage  = fmt.Sprintf(xactGeneric, cliName, xactStop)
-	xactStatsUsage = fmt.Sprintf("%s xaction %s", cliName, xactStats)
+	xactStatsUsage = fmt.Sprintf("%s xaction %s --all", cliName, xactStats)
 
 	xactKindsMsg = buildXactKindsMsg()
 
@@ -88,7 +89,7 @@ func xactHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	}
 
-	xactStatsMap, err := api.GetXactStatusStats(baseParams, xaction, command, bucket)
+	xactStatsMap, err := api.GetXactStatusStats(baseParams, xaction, command, bucket, flagIsSet(c, allFlagXact))
 	if err != nil {
 		return err
 	}

@@ -90,7 +90,7 @@ func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsLocal bool
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bucket() string             { Assert(xact.bucket != ""); return xact.bucket }
+func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) BckIsLocal() bool           { return xact.bckIsLocal }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
