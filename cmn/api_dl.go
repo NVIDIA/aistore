@@ -68,6 +68,14 @@ func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
 	j.NumPending += rhs.NumPending
 }
 
+func (j *DlJobInfo) IsRunning() bool {
+	return !j.Aborted && j.NumPending > 0
+}
+
+func (j *DlJobInfo) IsFinished() bool {
+	return !j.IsRunning()
+}
+
 func (j *DlJobInfo) String() string {
 	var sb strings.Builder
 

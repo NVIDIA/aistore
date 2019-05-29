@@ -79,7 +79,7 @@ var (
 					UsageText:    downloadStatusUsage,
 					Flags:        downloadFlags[downloadStatus],
 					Action:       downloadAdminHandler,
-					BashComplete: flagList,
+					BashComplete: downloadIDListAll,
 				},
 				{
 					Name:         downloadAbort,
@@ -87,7 +87,7 @@ var (
 					UsageText:    downloadAbortUsage,
 					Flags:        downloadFlags[downloadAbort],
 					Action:       downloadAdminHandler,
-					BashComplete: flagList,
+					BashComplete: downloadIDListRunning,
 				},
 				{
 					Name:         downloadRemove,
@@ -95,7 +95,7 @@ var (
 					UsageText:    downloadRemoveUsage,
 					Flags:        downloadFlags[downloadRemove],
 					Action:       downloadAdminHandler,
-					BashComplete: flagList,
+					BashComplete: downloadIDListFinished,
 				},
 				{
 					Name:         downloadList,

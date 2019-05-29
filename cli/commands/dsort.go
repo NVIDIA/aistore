@@ -110,7 +110,7 @@ var (
 					UsageText:    dsortStatusUsage,
 					Flags:        dsortFlags[dsortStatus],
 					Action:       dsortHandler,
-					BashComplete: flagList,
+					BashComplete: dsortIDListAll,
 				},
 				{
 					Name:         dsortAbort,
@@ -118,7 +118,7 @@ var (
 					UsageText:    dsortAbortUsage,
 					Flags:        dsortFlags[dsortAbort],
 					Action:       dsortHandler,
-					BashComplete: flagList,
+					BashComplete: dsortIDListRunning,
 				},
 				{
 					Name:         dsortRemove,
@@ -126,7 +126,7 @@ var (
 					UsageText:    dsortRemoveUsage,
 					Flags:        dsortFlags[dsortRemove],
 					Action:       dsortHandler,
-					BashComplete: flagList,
+					BashComplete: dsortIDListFinished,
 				},
 				{
 					Name:         dsortList,

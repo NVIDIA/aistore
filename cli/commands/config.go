@@ -36,29 +36,20 @@ var (
 			Flags: []cli.Flag{},
 			Subcommands: []cli.Command{
 				{
-					Name:      configGet,
-					Usage:     "displays configuration of a daemon",
-					UsageText: fmt.Sprintf("%s %s %s [DAEMON_ID]", cliName, cmn.GetWhatConfig, configGet),
-					Action:    configHandler,
-					Flags:     configFlags[configGet],
-					BashComplete: func(c *cli.Context) {
-						if c.NArg() == 0 {
-							daemonList(c)
-						}
-					},
+					Name:         configGet,
+					Usage:        "displays configuration of a daemon",
+					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID]", cliName, cmn.GetWhatConfig, configGet),
+					Action:       configHandler,
+					Flags:        configFlags[configGet],
+					BashComplete: daemonList,
 				},
 				{
-					Name:      configSet,
-					Usage:     "updates configuration of a single node or the entire cluster",
-					UsageText: fmt.Sprintf("%s %s %s [DAEMON_ID] key=value...", cliName, cmn.GetWhatConfig, cmn.ActSetConfig),
-					Action:    configHandler,
-					Flags:     configFlags[configSet],
-					BashComplete: func(c *cli.Context) {
-						if c.NArg() == 0 {
-							daemonList(c)
-						}
-						configPropList(c)
-					},
+					Name:         configSet,
+					Usage:        "updates configuration of a single node or the entire cluster",
+					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID] key=value...", cliName, cmn.GetWhatConfig, cmn.ActSetConfig),
+					Action:       configHandler,
+					Flags:        configFlags[configSet],
+					BashComplete: configSetCompletions,
 				},
 			},
 		},

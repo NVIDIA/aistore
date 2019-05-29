@@ -136,7 +136,7 @@ func (d *dispatcher) dispatchRemove(req *request) {
 	}
 
 	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
-	if d.parent.getNumPending(body) != 0 {
+	if !d.parent.Aborted() && d.parent.getNumPending(body) != 0 {
 		req.writeErrResp(fmt.Errorf("download job with id = %s is still running", body.ID), http.StatusBadRequest)
 		return
 	}

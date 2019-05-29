@@ -11,11 +11,17 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
 
 // Bash Completion
-func daemonList(_ *cli.Context) {
+func daemonList(c *cli.Context) {
+	if c.NArg() > 0 {
+		flagList(c)
+		return
+	}
+
 	baseParams := cliAPIParams(ClusterURL)
 	smap, _ := api.GetClusterMap(baseParams)
 
@@ -27,7 +33,12 @@ func daemonList(_ *cli.Context) {
 	}
 }
 
-func targetList(_ *cli.Context) {
+func targetList(c *cli.Context) {
+	if c.NArg() > 0 {
+		flagList(c)
+		return
+	}
+
 	baseParams := cliAPIParams(ClusterURL)
 	smap, _ := api.GetClusterMap(baseParams)
 
@@ -113,10 +124,75 @@ func propList(_ *cli.Context) {
 	}
 }
 
+func configSetCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		daemonList(c)
+	}
+	configPropList(c)
+}
+
 func configPropList(_ *cli.Context) {
 	for prop, readonly := range cmn.ConfigPropList {
 		if !readonly {
 			fmt.Println(prop)
+		}
+	}
+}
+
+func downloadIDListAll(c *cli.Context) {
+	downloadIDList(c, func(*cmn.DlJobInfo) bool { return true })
+}
+
+func downloadIDListRunning(c *cli.Context) {
+	downloadIDList(c, (*cmn.DlJobInfo).IsRunning)
+}
+
+func downloadIDListFinished(c *cli.Context) {
+	downloadIDList(c, (*cmn.DlJobInfo).IsFinished)
+}
+
+func downloadIDList(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
+	if c.NArg() > 0 {
+		flagList(c)
+		return
+	}
+
+	baseParams := cliAPIParams(ClusterURL)
+
+	list, _ := api.DownloadGetList(baseParams, "")
+
+	for _, job := range list {
+		if filter(&job) {
+			fmt.Println(job.ID)
+		}
+	}
+}
+
+func dsortIDListAll(c *cli.Context) {
+	dsortIDList(c, func(*dsort.JobInfo) bool { return true })
+}
+
+func dsortIDListRunning(c *cli.Context) {
+	dsortIDList(c, (*dsort.JobInfo).IsRunning)
+}
+
+func dsortIDListFinished(c *cli.Context) {
+	dsortIDList(c, (*dsort.JobInfo).IsFinished)
+}
+
+func dsortIDList(c *cli.Context, filter func(*dsort.JobInfo) bool) {
+	if c.NArg() > 0 {
+		flagList(c)
+		return
+	}
+
+	baseParams := cliAPIParams(ClusterURL)
+
+	list, _ := api.ListDSort(baseParams, "")
+
+	for _, job := range list {
+		if filter(job) {
+			fmt.Println(job.ID)
 		}
 	}
 }

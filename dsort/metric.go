@@ -287,16 +287,24 @@ func (m *Metrics) ToJobInfo(id string) JobInfo {
 	}
 }
 
-func (lhs *JobInfo) Aggregate(rhs JobInfo) {
-	lhs.StartedTime = startTime(lhs.StartedTime, rhs.StartedTime)
-	lhs.FinishTime = stopTime(lhs.FinishTime, rhs.FinishTime)
+func (j *JobInfo) Aggregate(other JobInfo) {
+	j.StartedTime = startTime(j.StartedTime, other.StartedTime)
+	j.FinishTime = stopTime(j.FinishTime, other.FinishTime)
 
-	lhs.ExtractedDuration = cmn.MaxDuration(lhs.ExtractedDuration, rhs.ExtractedDuration)
-	lhs.SortingDuration = cmn.MaxDuration(lhs.SortingDuration, rhs.SortingDuration)
-	lhs.CreationDuration = cmn.MaxDuration(lhs.CreationDuration, rhs.CreationDuration)
+	j.ExtractedDuration = cmn.MaxDuration(j.ExtractedDuration, other.ExtractedDuration)
+	j.SortingDuration = cmn.MaxDuration(j.SortingDuration, other.SortingDuration)
+	j.CreationDuration = cmn.MaxDuration(j.CreationDuration, other.CreationDuration)
 
-	lhs.Aborted = lhs.Aborted || rhs.Aborted
-	lhs.Archived = lhs.Archived && rhs.Archived
+	j.Aborted = j.Aborted || other.Aborted
+	j.Archived = j.Archived && other.Archived
+}
+
+func (j *JobInfo) IsRunning() bool {
+	return !j.Aborted && !j.Archived
+}
+
+func (j *JobInfo) IsFinished() bool {
+	return !j.IsRunning()
 }
 
 // startTime returns the start time of a,b. If either is zero, the other takes precedence.
