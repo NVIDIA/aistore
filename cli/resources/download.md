@@ -12,19 +12,19 @@
 
 ### start
 
-`ais download start <source> <dest>`
+`ais download start SOURCE DESTINATION`
 
-Downloads the object(s) from `source` location and saves it as specified in `dest` location.
-`source` location can be link to single or range download:
+Downloads the object(s) from `SOURCE` location and saves it as specified in `DESTINATION` location.
+`SOURCE` location can be link to single or range download:
 * `gs://lpr-vision/imagenet/imagenet_train-000000.tgz`
 * `gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz`
 
-Currently, the schemas supported for `source` location are:
+Currently, the schemas supported for `SOURCE` location are:
 * `gs://` - refers to Google Cloud Storage, eg. `gs://bucket/sub_folder/object_name.tar`
 * `s3://` - refers to Amazon Web Services S3 storage, eg. `s3://bucket/sub_folder/object_name.tar`
 * `http://` or `https://` - refers to external link somewhere on the web, eg. `http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso`
 
-As for `dest` location, the only supported schema is `ais://` and the link should be constructed as follows: `ais://bucket/sub_folder/object_name.tar`, where:
+As for `DESTINATION` location, the only supported schema is `ais://` and the link should be constructed as follows: `ais://bucket/sub_folder/object_name.tar`, where:
 * `ais://` - schema, specifying that the destination is AIS cluster
 * `bucket` - bucket name where the object(s) will be stored
 * `sub_folder/object_name.tar` - in case of downloading a single file, this will be the name of the object saved in AIS cluster.
@@ -46,27 +46,27 @@ The same result can be obtained with  `ais download start http://releases.ubuntu
 
 ### abort
 
-`ais download abort <id>`
+`ais download abort ID`
 
-Aborts download job given its id.
+Aborts download job given its `ID`.
 
 Examples:
 * `ais download abort 5JjIuGemR` aborts the download job
 
 ### rm
 
-`ais download rm <id>`
+`ais download rm ID`
 
-Removes finished download job from the list given its id.
+Removes finished download job from the list given its `ID`.
 
 Examples:
 * `ais download rm 5JjIuGemR` removes the download job
 
 ### status
 
-`ais download status <id>`
+`ais download status ID`
 
-Retrieves status of the download with provided `id` which is returned upon creation of every download job.
+Retrieves status of the download with provided `ID` which is returned upon creation of every download job.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

@@ -47,6 +47,10 @@ const (
 	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
 
 	metadata = "md"
+
+	idArgumentText                      = "ID"
+	noArgumentsText                     = " "
+	atLeastOneKeyValuePairArgumentsText = "KEY=VALUE [KEY=VALUE...]"
 )
 
 var (
@@ -82,6 +86,35 @@ COMMANDS:{{ range .VisibleCategories }}{{ if .Name }}
 GLOBAL OPTIONS:
    {{ range $index, $option := .VisibleFlags }}{{ if $index }}
    {{end}}{{ $option }}{{end}}
+`
+
+var AISCommandHelpTemplate = `NAME:
+   {{.HelpName}} - {{.Usage}}
+
+USAGE:
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [OPTIONS]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Description}}
+
+DESCRIPTION:
+   {{.Description}}{{end}}{{if .VisibleFlags}}
+
+OPTIONS:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}{{end}}
+`
+
+var AISSubcommandHelpTemplate = `NAME:
+   {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
+
+USAGE:
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} COMMAND{{if .VisibleFlags}} [COMMAND OPTIONS]{{end}}{{end}}
+
+COMMANDS:{{range .VisibleCategories}}{{if .Name}}
+   {{.Name}}:{{end}}{{range .VisibleCommands}}
+     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}
+{{end}}{{if .VisibleFlags}}
+OPTIONS:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}{{end}}
 `
 
 // This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
@@ -136,6 +169,8 @@ func (aisCLI *AISCLI) Init(build, version string) {
 		Usage: "print only the version",
 	}
 	cli.AppHelpTemplate = AISHelpTemplate
+	cli.CommandHelpTemplate = AISCommandHelpTemplate
+	cli.SubcommandHelpTemplate = AISSubcommandHelpTemplate
 
 	aisCLI.setupCommands()
 }

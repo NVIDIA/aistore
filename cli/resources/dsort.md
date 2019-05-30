@@ -35,9 +35,9 @@ Examples:
 
 ### start
 
-`ais dsort start <json_specification>`
+`ais dsort start JSON_SPECIFICATION`
 
-Starts new dSort job with provided specification. Upon creation, `id` of the 
+Starts new dSort job with provided specification. Upon creation, `ID` of the 
 job is returned - it can then be used to abort it or retrieve metrics. Following
 table describes json keys which can be used in specification.
 
@@ -83,9 +83,9 @@ ais dsort start '{
 
 ### status
 
-`ais dsort status <id>`
+`ais dsort status ID`
 
-Retrieves status of the dSort with provided `id` which is returned upon creation.
+Retrieves status of the dSort with provided `ID` which is returned upon creation.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -101,18 +101,18 @@ Examples:
 
 ### abort
 
-`ais dsort abort <id>`
+`ais dsort abort ID`
 
-Aborts dSort job given its id.
+Aborts dSort job given its `ID`.
 
 Examples:
 * `ais dsort abort 5JjIuGemR` aborts the dSort job
 
 ### rm
 
-`ais dsort rm <id>`
+`ais dsort rm ID`
 
-Removes finished dSort job from the list given its id.
+Removes finished dSort job from the list given its `ID`.
 
 Examples:
 * `ais dsort rm 5JjIuGemR` removes the dSort job

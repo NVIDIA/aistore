@@ -39,6 +39,8 @@ const (
 	dsortAbort  = "abort"
 	dsortRemove = "rm"
 	dsortList   = "ls"
+
+	jsonSpecificationArgumentText = "JSON_SPECIFICATION"
 )
 
 var (
@@ -76,13 +78,6 @@ var (
 		},
 	}
 
-	dsortGenUsage    = fmt.Sprintf("%s %s %s [FLAGS...]", cliName, cmn.DSortNameLowercase, dsortGen)
-	dsortStartUsage  = fmt.Sprintf("%s %s %s <json_specification>", cliName, cmn.DSortNameLowercase, dsortStart)
-	dsortStatusUsage = fmt.Sprintf("%s %s %s <id> [STATUS FLAGS...]", cliName, cmn.DSortNameLowercase, dsortStatus)
-	dsortAbortUsage  = fmt.Sprintf("%s %s %s <id>", cliName, cmn.DSortNameLowercase, dsortAbort)
-	dsortRemoveUsage = fmt.Sprintf("%s %s %s <id>", cliName, cmn.DSortNameLowercase, dsortRemove)
-	dsortListUsage   = fmt.Sprintf("%s %s %s --regex <value>", cmn.DSortNameLowercase, cliName, dsortList)
-
 	dSortCmds = []cli.Command{
 		{
 			Name:  cmn.DSortNameLowercase,
@@ -91,7 +86,7 @@ var (
 				{
 					Name:         dsortGen,
 					Usage:        fmt.Sprintf("put randomly generated shards which then can be used for %s testing", cmn.DSortName),
-					UsageText:    dsortGenUsage,
+					ArgsUsage:    noArgumentsText,
 					Flags:        dsortFlags[dsortGen],
 					Action:       dsortHandler,
 					BashComplete: flagList,
@@ -99,7 +94,7 @@ var (
 				{
 					Name:         dsortStart,
 					Usage:        fmt.Sprintf("start new %s job with provided specification", cmn.DSortName),
-					UsageText:    dsortStartUsage,
+					ArgsUsage:    jsonSpecificationArgumentText,
 					Flags:        dsortFlags[dsortStart],
 					Action:       dsortHandler,
 					BashComplete: flagList,
@@ -107,7 +102,7 @@ var (
 				{
 					Name:         dsortStatus,
 					Usage:        fmt.Sprintf("retrieve statistics and metrics of currently running %s job", cmn.DSortName),
-					UsageText:    dsortStatusUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        dsortFlags[dsortStatus],
 					Action:       dsortHandler,
 					BashComplete: dsortIDListAll,
@@ -115,7 +110,7 @@ var (
 				{
 					Name:         dsortAbort,
 					Usage:        fmt.Sprintf("abort currently running %s job", cmn.DSortName),
-					UsageText:    dsortAbortUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        dsortFlags[dsortAbort],
 					Action:       dsortHandler,
 					BashComplete: dsortIDListRunning,
@@ -123,7 +118,7 @@ var (
 				{
 					Name:         dsortRemove,
 					Usage:        fmt.Sprintf("remove finished %s job from the list", cmn.DSortName),
-					UsageText:    dsortRemoveUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        dsortFlags[dsortRemove],
 					Action:       dsortHandler,
 					BashComplete: dsortIDListFinished,
@@ -131,7 +126,7 @@ var (
 				{
 					Name:         dsortList,
 					Usage:        fmt.Sprintf("list all %s jobs and their states", cmn.DSortName),
-					UsageText:    dsortListUsage,
+					ArgsUsage:    noArgumentsText,
 					Flags:        dsortFlags[dsortList],
 					Action:       dsortHandler,
 					BashComplete: flagList,
@@ -334,7 +329,7 @@ func dsortHandler(c *cli.Context) error {
 		return dsortGenHandler(c, baseParams)
 	case dsortStart:
 		if c.NArg() == 0 {
-			return fmt.Errorf("starting %s job requires specification in JSON format", cmn.DSortName)
+			return missingArgumentsError(c, "job specification")
 		}
 
 		var rs dsort.RequestSpec

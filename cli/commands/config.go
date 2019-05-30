@@ -19,6 +19,9 @@ import (
 const (
 	configGet = "get"
 	configSet = "set"
+
+	daemonIDArgumentText  = "[DAEMON_ID]"
+	configSetArgumentText = daemonIDArgumentText + " " + atLeastOneKeyValuePairArgumentsText
 )
 
 var (
@@ -38,7 +41,7 @@ var (
 				{
 					Name:         configGet,
 					Usage:        "displays configuration of a daemon",
-					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID]", cliName, cmn.GetWhatConfig, configGet),
+					ArgsUsage:    daemonIDArgumentText,
 					Action:       configHandler,
 					Flags:        configFlags[configGet],
 					BashComplete: daemonList,
@@ -46,7 +49,7 @@ var (
 				{
 					Name:         configSet,
 					Usage:        "updates configuration of a single node or the entire cluster",
-					UsageText:    fmt.Sprintf("%s %s %s [DAEMON_ID] key=value...", cliName, cmn.GetWhatConfig, cmn.ActSetConfig),
+					ArgsUsage:    configSetArgumentText,
 					Action:       configHandler,
 					Flags:        configFlags[configSet],
 					BashComplete: configSetCompletions,

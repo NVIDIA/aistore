@@ -4,9 +4,9 @@ The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
 
 ### start
 
-`ais xaction start <value>`
+`ais xaction start XACTION_NAME`
 
-Starts xaction(s). `<value>` is the name of the xaction to start.
+Starts xaction(s).
 
 > Some xactions require a bucket to execute.
 
@@ -16,9 +16,9 @@ Starts xaction(s). `<value>` is the name of the xaction to start.
 
 ### stop
 
-`ais xaction stop <value>`
+`ais xaction stop [XACTION_NAME]`
 
-Stops xaction(s). `<value>` is the xaction to start. If the value is `empty`, stop all xactions.
+Stops xaction(s). If `XACTION_NAME` is not provided, all xactions are stopped.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -26,9 +26,9 @@ Stops xaction(s). `<value>` is the xaction to start. If the value is `empty`, st
 
 ### stats
 
-`ais xaction stats <value>`
+`ais xaction stats [XACTION_NAME]`
 
-Returns the stats of `<value>` xaction. If the value is `empty`, return all xaction stats.
+Returns the stats of `XACTION_NAME` xaction. If `XACTION_NAME` is not provided, displays stats of all xactions.
 
 
 | Flag | Type | Description | Default |

@@ -39,6 +39,10 @@ const (
 
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = time.Second * 10
+
+	bucketArgumentText       = "BUCKET_NAME"
+	bucketRenameArgumentText = bucketArgumentText + " NEW_NAME"
+	bucketPropsArgumentText  = bucketArgumentText + " " + atLeastOneKeyValuePairArgumentsText
 )
 
 var (
@@ -104,20 +108,6 @@ var (
 		propsReset: baseBucketFlags,
 	}
 
-	bucketGenericText    = "%s bucket %s <bucket>"
-	bucketCreateText     = fmt.Sprintf(bucketGenericText, cliName, bucketCreate)
-	bucketDelText        = fmt.Sprintf(bucketGenericText, cliName, bucketDestroy)
-	bucketObjListText    = fmt.Sprintf(bucketGenericText, cliName, bucketObjects)
-	bucketEvictText      = fmt.Sprintf(bucketGenericText, cliName, bucketEvict)
-	bucketListText       = fmt.Sprintf("%s bucket %s", cliName, commandList)
-	bucketRenameText     = fmt.Sprintf("%s bucket %s <bucket> <new-bucket>", cliName, commandRename)
-	bucketNWayMirrorText = fmt.Sprintf("%s bucket %s <bucket> --copies <value>", cliName, bucketNWayMirror)
-	bucketStatsText      = fmt.Sprintf(bucketGenericText, cliName, bucketSummary)
-
-	bucketGetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, commandList)
-	bucketSetPropsText   = fmt.Sprintf("%s bucket %s %s <bucket> key=value ...", cliName, commandBucketProps, propsSet)
-	bucketResetPropsText = fmt.Sprintf("%s bucket %s %s <bucket>", cliName, commandBucketProps, propsReset)
-
 	bucketCmds = []cli.Command{
 		{
 			Name:  cmn.URLParamBucket,
@@ -130,7 +120,7 @@ var (
 						{
 							Name:         commandList,
 							Usage:        "lists bucket properties",
-							UsageText:    bucketGetPropsText,
+							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[commandList],
 							Action:       bucketPropsHandler,
 							BashComplete: bucketList([]cli.BashCompleteFunc{}),
@@ -138,7 +128,7 @@ var (
 						{
 							Name:         propsSet,
 							Usage:        "sets bucket properties",
-							UsageText:    bucketSetPropsText,
+							ArgsUsage:    bucketPropsArgumentText,
 							Flags:        bucketPropsFlags[propsSet],
 							Action:       bucketPropsHandler,
 							BashComplete: bucketList([]cli.BashCompleteFunc{propList}),
@@ -146,7 +136,7 @@ var (
 						{
 							Name:         propsReset,
 							Usage:        "resets bucket properties",
-							UsageText:    bucketResetPropsText,
+							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[propsReset],
 							Action:       bucketPropsHandler,
 							BashComplete: bucketList([]cli.BashCompleteFunc{}),
@@ -156,7 +146,7 @@ var (
 				{
 					Name:         bucketCreate,
 					Usage:        "creates the local bucket",
-					UsageText:    bucketCreateText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketCreate],
 					Action:       bucketHandler,
 					BashComplete: flagList,
@@ -164,7 +154,7 @@ var (
 				{
 					Name:         bucketDestroy,
 					Usage:        "destroys the local bucket",
-					UsageText:    bucketDelText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketDestroy],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
@@ -172,7 +162,7 @@ var (
 				{
 					Name:         commandRename,
 					Usage:        "renames the local bucket",
-					UsageText:    bucketRenameText,
+					ArgsUsage:    bucketRenameArgumentText,
 					Flags:        bucketFlags[commandRename],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
@@ -180,7 +170,7 @@ var (
 				{
 					Name:         commandList,
 					Usage:        "returns all bucket names",
-					UsageText:    bucketListText,
+					ArgsUsage:    noArgumentsText,
 					Flags:        bucketFlags[commandList],
 					Action:       bucketHandler,
 					BashComplete: flagList,
@@ -188,7 +178,7 @@ var (
 				{
 					Name:         bucketObjects,
 					Usage:        "returns all objects from bucket",
-					UsageText:    bucketObjListText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketObjects],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}),
@@ -196,7 +186,7 @@ var (
 				{
 					Name:         bucketNWayMirror,
 					Usage:        "configures the bucket for n-way mirroring",
-					UsageText:    bucketNWayMirrorText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketNWayMirror],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}),
@@ -204,7 +194,7 @@ var (
 				{
 					Name:         bucketEvict,
 					Usage:        "evicts a cloud bucket",
-					UsageText:    bucketEvictText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketEvict],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.CloudBs),
@@ -212,7 +202,7 @@ var (
 				{
 					Name:         bucketSummary,
 					Usage:        "displays bucket stats",
-					UsageText:    bucketStatsText,
+					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketSummary],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}),

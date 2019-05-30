@@ -20,6 +20,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	daemonTypeArgumentText = "[DAEMON_TYPE]"
+	targetIDArgumentText   = "[TARGET_ID]"
+)
+
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
@@ -39,6 +44,7 @@ var (
 		{
 			Name:         cmn.GetWhatSmap,
 			Usage:        "displays cluster map",
+			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatSmap],
 			BashComplete: daemonList,
@@ -46,6 +52,7 @@ var (
 		{
 			Name:         cmn.GetWhatDaemonStatus,
 			Usage:        "displays status of daemon",
+			ArgsUsage:    daemonTypeArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatDaemonStatus],
 			BashComplete: daemonList,
@@ -53,6 +60,7 @@ var (
 		{
 			Name:         cmn.GetWhatStats,
 			Usage:        "displays stats of daemon",
+			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatStats],
 			BashComplete: daemonList,
@@ -60,6 +68,7 @@ var (
 		{
 			Name:         cmn.GetWhatDiskStats,
 			Usage:        "displays disk stats of targets",
+			ArgsUsage:    targetIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[cmn.GetWhatDiskStats],
 			BashComplete: targetList,

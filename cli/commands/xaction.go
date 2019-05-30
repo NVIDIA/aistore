@@ -19,6 +19,9 @@ const (
 	xactStart = cmn.ActXactStart
 	xactStop  = cmn.ActXactStop
 	xactStats = cmn.ActXactStats
+
+	xactionNameArgumentText         = "XACTION_NAME"
+	xactionNameOptionalArgumentText = "[XACTION_NAME]"
 )
 
 var (
@@ -31,11 +34,6 @@ var (
 		xactStats: append(baseXactFlags, jsonFlag),
 	}
 
-	xactGeneric    = "%s xaction %s [<kind>] --bucket <value>"
-	xactStartUsage = fmt.Sprintf(xactGeneric, cliName, xactStart)
-	xactStopUsage  = fmt.Sprintf(xactGeneric, cliName, xactStop)
-	xactStatsUsage = fmt.Sprintf("%s xaction %s --all", cliName, xactStats)
-
 	xactKindsMsg = buildXactKindsMsg()
 
 	xactCmds = []cli.Command{
@@ -46,7 +44,7 @@ var (
 				{
 					Name:         xactStart,
 					Usage:        "starts the extended action",
-					UsageText:    xactStartUsage,
+					ArgsUsage:    xactionNameArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStart],
 					Action:       xactHandler,
@@ -55,7 +53,7 @@ var (
 				{
 					Name:         xactStop,
 					Usage:        "stops the extended action",
-					UsageText:    xactStopUsage,
+					ArgsUsage:    xactionNameOptionalArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStop],
 					Action:       xactHandler,
@@ -64,7 +62,7 @@ var (
 				{
 					Name:         xactStats,
 					Usage:        "returns the stats of the extended action",
-					UsageText:    xactStatsUsage,
+					ArgsUsage:    xactionNameOptionalArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStats],
 					Action:       xactHandler,
@@ -123,5 +121,5 @@ func buildXactKindsMsg() string {
 		xactKinds = append(xactKinds, kind)
 	}
 
-	return fmt.Sprintf("<kind> can be one of: %s", strings.Join(xactKinds, ", "))
+	return fmt.Sprintf("%s can be one of: %s", xactionNameArgumentText, strings.Join(xactKinds, ", "))
 }

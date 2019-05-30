@@ -340,12 +340,12 @@ func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) err
 	return nil
 }
 
-func helpMessage(c *cli.Context) string {
+func helpMessage(template string, data interface{}) string {
 	var buf bytes.Buffer
 	w := bufio.NewWriter(&buf)
 
 	// Execute the template that generates command usage text
-	cli.HelpPrinter(w, cli.SubcommandHelpTemplate, c.App)
+	cli.HelpPrinter(w, template, data)
 	_ = w.Flush()
 
 	return buf.String()
@@ -354,32 +354,41 @@ func helpMessage(c *cli.Context) string {
 type usageError struct {
 	context *cli.Context
 	message string
+
+	helpData     interface{}
+	helpTemplate string
 }
 
 func (e *usageError) Error() string {
-	msg := helpMessage(e.context)
+	msg := helpMessage(e.helpTemplate, e.helpData)
 	return fmt.Sprintf("Incorrect usage of %q: %s.\n\n%s", e.context.App.Name, e.message, msg)
 }
 
 func incorrectUsageError(c *cli.Context, err error) error {
 	cmn.Assert(err != nil)
 	return &usageError{
-		context: c,
-		message: err.Error(),
+		context:      c,
+		message:      err.Error(),
+		helpData:     c.Command,
+		helpTemplate: cli.CommandHelpTemplate,
 	}
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	cmn.Assert(len(missingArgs) > 0)
 	return &usageError{
-		context: c,
-		message: fmt.Sprintf("missing arguments: %s", strings.Join(missingArgs, ", ")),
+		context:      c,
+		message:      fmt.Sprintf("missing arguments: %s", strings.Join(missingArgs, ", ")),
+		helpData:     c.Command,
+		helpTemplate: cli.CommandHelpTemplate,
 	}
 }
 
 func commandNotFoundError(c *cli.Context, cmd string) error {
 	return &usageError{
-		context: c,
-		message: fmt.Sprintf("unknown command %q", cmd),
+		context:      c,
+		message:      fmt.Sprintf("unknown command %q", cmd),
+		helpData:     c.App,
+		helpTemplate: cli.SubcommandHelpTemplate,
 	}
 }

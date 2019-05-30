@@ -29,6 +29,8 @@ const (
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048
 	progressBarWidth      = 64
+
+	downloadStartArgumentText = "SOURCE DESTINATION"
 )
 
 var (
@@ -54,12 +56,6 @@ var (
 		},
 	}
 
-	downloadStartUsage  = fmt.Sprintf("%s download %s <source> <dest>", cliName, downloadStart)
-	downloadStatusUsage = fmt.Sprintf("%s download %s <id> [STATUS FLAGS...]", cliName, downloadStatus)
-	downloadAbortUsage  = fmt.Sprintf("%s download %s <id>", cliName, downloadAbort)
-	downloadRemoveUsage = fmt.Sprintf("%s download %s <id>", cliName, downloadRemove)
-	downloadListUsage   = fmt.Sprintf("%s download %s --regex <value>", cliName, downloadList)
-
 	downloaderCmds = []cli.Command{
 		{
 			Name:  "download",
@@ -68,7 +64,7 @@ var (
 				{
 					Name:         downloadStart,
 					Usage:        "download objects from external source",
-					UsageText:    downloadStartUsage,
+					ArgsUsage:    downloadStartArgumentText,
 					Flags:        downloadFlags[downloadStart],
 					Action:       downloadStartHandler,
 					BashComplete: flagList,
@@ -76,7 +72,7 @@ var (
 				{
 					Name:         downloadStatus,
 					Usage:        "fetch status of download job with given id",
-					UsageText:    downloadStatusUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        downloadFlags[downloadStatus],
 					Action:       downloadAdminHandler,
 					BashComplete: downloadIDListAll,
@@ -84,7 +80,7 @@ var (
 				{
 					Name:         downloadAbort,
 					Usage:        "abort download job with given id",
-					UsageText:    downloadAbortUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        downloadFlags[downloadAbort],
 					Action:       downloadAdminHandler,
 					BashComplete: downloadIDListRunning,
@@ -92,7 +88,7 @@ var (
 				{
 					Name:         downloadRemove,
 					Usage:        "remove download job with given id from the list",
-					UsageText:    downloadRemoveUsage,
+					ArgsUsage:    idArgumentText,
 					Flags:        downloadFlags[downloadRemove],
 					Action:       downloadAdminHandler,
 					BashComplete: downloadIDListFinished,
@@ -100,7 +96,7 @@ var (
 				{
 					Name:         downloadList,
 					Usage:        "list all download jobs which match provided regex",
-					UsageText:    downloadListUsage,
+					ArgsUsage:    noArgumentsText,
 					Flags:        downloadFlags[downloadList],
 					Action:       downloadAdminHandler,
 					BashComplete: flagList,
@@ -130,9 +126,13 @@ func downloadStartHandler(c *cli.Context) error {
 		Description: description,
 	}
 
-	if c.NArg() != 2 {
-		return fmt.Errorf("expected two arguments: source and destination, got %d", c.NArg())
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "source", "destination")
 	}
+	if c.NArg() == 1 {
+		return missingArgumentsError(c, "destination")
+	}
+
 	source, dest := c.Args().Get(0), c.Args().Get(1)
 	link, err := parseSource(source)
 	if err != nil {
