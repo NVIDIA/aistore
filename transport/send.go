@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -117,9 +118,9 @@ type (
 	// object header
 	Header struct {
 		Bucket, Objname string      // uname at the destination
+		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
 		IsLocal         bool        // determines if the bucket is local
 		Opaque          []byte      // custom control (optional)
-		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
 	}
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
@@ -128,7 +129,7 @@ type (
 	// (i.e., non-nil), the stream callback is ignored/skipped.
 	//
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	SendCallback func(Header, io.ReadCloser, error)
+	SendCallback func(Header, io.ReadCloser, unsafe.Pointer, error)
 
 	StreamCollector struct {
 		cmn.Named
@@ -138,10 +139,11 @@ type (
 // internal
 type (
 	obj struct {
-		hdr      Header        // object header
-		reader   io.ReadCloser // reader, to read the object, and close when done
-		callback SendCallback  // callback fired when sending is done OR when the stream terminates (see term.reason)
-		prc      *atomic.Int64 // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
+		hdr      Header         // object header
+		reader   io.ReadCloser  // reader, to read the object, and close when done
+		callback SendCallback   // callback fired when sending is done OR when the stream terminates (see term.reason)
+		cmplPtr  unsafe.Pointer // local pointer that gets returned to the caller via Send completion callback
+		prc      *atomic.Int64  // optional refcount; if present, SendCallback gets called if and when *prc reaches zero
 	}
 	sendoff struct {
 		obj obj
@@ -422,7 +424,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 // stream(s).
 //
 // ---------------------------------------------------------------------------------------
-func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, prc ...*atomic.Int64) (err error) {
+func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, cmplPtr unsafe.Pointer, prc ...*atomic.Int64) (err error) {
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
 			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
@@ -441,7 +443,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 		cmn.Assert(hdr.IsHeaderOnly())
 		reader = nopRC
 	}
-	obj := obj{hdr: hdr, reader: reader, callback: callback}
+	obj := obj{hdr: hdr, reader: reader, callback: callback, cmplPtr: cmplPtr}
 	if len(prc) > 0 {
 		obj.prc = prc[0]
 	}
@@ -454,7 +456,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 
 func (s *Stream) Fin() {
 	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-	_ = s.Send(hdr, nil, nil)
+	_ = s.Send(hdr, nil, nil, nil)
 	s.wg.Wait()
 }
 func (s *Stream) Stop()               { s.stopCh.Close() }
@@ -571,9 +573,9 @@ func (s *Stream) objDone(obj *obj, err error) {
 	// SCQ completion callback
 	if rc == 0 {
 		if obj.callback != nil {
-			obj.callback(obj.hdr, obj.reader, err)
+			obj.callback(obj.hdr, obj.reader, obj.cmplPtr, err)
 		} else if s.callback != nil {
-			s.callback(obj.hdr, obj.reader, err)
+			s.callback(obj.hdr, obj.reader, obj.cmplPtr, err)
 		}
 	}
 	if obj.reader != nil {

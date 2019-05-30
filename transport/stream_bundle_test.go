@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -72,7 +73,7 @@ func Test_Bundle(t *testing.T) {
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
-	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
+	callback := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		numCompleted.Inc()
 	}
 
@@ -96,10 +97,10 @@ func Test_Bundle(t *testing.T) {
 		hdr := genRandomHeader(random)
 		if num%7 == 0 {
 			hdr.ObjAttrs.Size = 0
-			err = sb.SendV(hdr, nil, callback)
+			err = sb.SendV(hdr, nil, callback, nil)
 		} else {
 			reader := newRandReader(random, hdr, slab)
-			err = sb.SendV(hdr, reader, callback)
+			err = sb.SendV(hdr, reader, callback, nil)
 		}
 		if err != nil {
 			t.Fatalf("%s: exiting with err [%v]\n", sb, err)

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -187,7 +188,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 	r.ObjectsInc()
 	r.BytesAdd(lom.Size())
 
-	cb := func(hdr transport.Header, c io.ReadCloser, err error) {
+	cb := func(hdr transport.Header, c io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s: %v", hdr.Bucket, hdr.Objname, err)
 		}
@@ -225,9 +226,9 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 
 	var err error
 	if isRequest {
-		err = r.reqBundle.Send(hdr, reader, cb, nodes)
+		err = r.reqBundle.Send(hdr, reader, cb, nil /* cmpl ptr */, nodes)
 	} else {
-		err = r.respBundle.Send(hdr, reader, cb, nodes)
+		err = r.respBundle.Send(hdr, reader, cb, nil /* cmpl ptr */, nodes)
 	}
 	return err
 }
@@ -346,7 +347,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	if cb == nil && src.obj != nil {
 		obj := src.obj
-		cb = func(hdr transport.Header, reader io.ReadCloser, err error) {
+		cb = func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 			if obj != nil {
 				obj.release()
 			}

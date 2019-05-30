@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -30,74 +31,383 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	localRebType = iota
-	globalRebType
-)
-
-const (
-	NeighborRebalanceStartDelay = 10 * time.Second
-	// time between requests to targets to check if they received and saved
-	// transferred via transport objects
-	objTransferInterval = 500 * time.Millisecond
-)
-
 type (
-	rebJoggerBase struct {
-		m            *rebManager
-		xreb         *xactRebBase
-		mpath        string
-		wg           *sync.WaitGroup
-		objectsMoved atomic.Int64
-		bytesMoved   atomic.Int64
+	rebManager struct {
+		t         *targetrunner
+		streams   *transport.StreamBundle
+		acks      *transport.StreamBundle
+		filterGFN *filter.Filter
+		lomacks   [fs.LomCacheMask + 1]*LomAcks
+		smap      atomic.Pointer // new smap which will be soon live
 	}
-	// structure to track the last object transferred to the other target
-	movedObj struct {
-		bucket  string
-		objname string
-		// when transport.SendV was called
-		tm time.Time
-		// determines if the other target has the object received.
-		// Used only in final phase of global rebalance.
-		// Why separate field for this: instead of deleting from the map - that
-		// needs synchronization - every goroutine works with its own struct safely
-		found bool
+	rebJoggerBase struct {
+		m     *rebManager
+		xreb  *xactRebBase
+		mpath string
+		wg    *sync.WaitGroup
 	}
 	globalRebJogger struct {
 		rebJoggerBase
-		smap      *smapX   // cluster.Smap?
-		lastMoved sync.Map // last transferred object: daemonID <-> info about moved object
+		smap *smapX // cluster.Smap?
 	}
 	localRebJogger struct {
 		rebJoggerBase
 		slab *memsys.Slab2
 		buf  []byte
 	}
-	rebManager struct {
-		t           *targetrunner
-		streams     *transport.StreamBundle
-		objectsSent *filter.Filter
+	LomAcks struct {
+		mu *sync.Mutex
+		q  map[string]*cluster.LOM
 	}
 )
 
 // persistent mark indicating rebalancing in progress
-func persistentMarker(rebType int) string {
-	switch rebType {
-	case localRebType:
-		return filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebMarker)
-	case globalRebType:
-		return filepath.Join(cmn.GCO.Get().Confdir, cmn.GlobalRebMarker)
+func persistentMarker(kind string) (pm string) {
+	switch kind {
+	case cmn.ActLocalReb:
+		pm = filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebMarker)
+	case cmn.ActGlobalReb:
+		pm = filepath.Join(cmn.GCO.Get().Confdir, cmn.GlobalRebMarker)
+	default:
+		cmn.Assert(false)
+	}
+	return
+}
+
+//
+// rebManager
+//
+
+// NOTE: 9 (nine) steps
+func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
+	var (
+		wg       = &sync.WaitGroup{}
+		cancelCh = make(chan *cluster.Snode, smap.CountTargets()-1)
+		ver      = smap.version()
+		config   = cmn.GCO.Get()
+	)
+	glog.Infof("%s: Smap v%d, newTargetID=%s", reb.t.si.Name(), ver, newTargetID)
+	// 1. check whether other targets are up and running
+	for _, si := range smap.Tmap {
+		if si.DaemonID == reb.t.si.DaemonID {
+			continue
+		}
+		wg.Add(1)
+		go func(si *cluster.Snode) {
+			ok := reb.pingTarget(si, config)
+			if !ok {
+				cancelCh <- si
+			}
+			wg.Done()
+		}(si)
+	}
+	wg.Wait()
+	close(cancelCh)
+	if len(cancelCh) > 0 {
+		for si := range cancelCh {
+			glog.Errorf("%s: skipping rebalance: %s offline, Smap v%d", reb.t.si.Name(), si.Name(), ver)
+		}
+		return
 	}
 
-	cmn.Assert(false)
-	return ""
+	// 2. abort in-progress xaction if exists and if its Smap version is lower
+	//    start new xaction unless the one for the current version is already in progress
+	availablePaths, _ := fs.Mountpaths.Get()
+	runnerCnt := len(availablePaths) * 2
+	xreb := reb.t.xactions.renewGlobalReb(ver, runnerCnt)
+	if xreb == nil {
+		return
+	}
+
+	// 3. init streams and data structures
+	reb.streams.Resync()
+	reb.acks.Resync()
+
+	reb.filterGFN.Reset() // start with empty filters
+	acks := reb.lomAcks()
+	for i := 0; i < len(acks); i++ { // init lom acks
+		acks[i] = &LomAcks{mu: &sync.Mutex{}, q: make(map[string]*cluster.LOM, 64)}
+	}
+
+	// 4. create persistent mark
+	pmarker := persistentMarker(cmn.ActGlobalReb)
+
+	file, err := cmn.CreateFile(pmarker)
+	if err != nil {
+		glog.Errorln("Failed to create", pmarker, err)
+		pmarker = ""
+	} else {
+		_ = file.Close()
+	}
+
+	// 5. ready - can receive objects
+	reb.smap.Store(unsafe.Pointer(smap))
+	glog.Infoln(xreb.String())
+
+	wg = &sync.WaitGroup{}
+
+	// 6. start mpath joggers
+	// TODO: currently supporting a single content-type: Object
+	// TODO: multiply joggers per mpath
+	for _, mpathInfo := range availablePaths {
+		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap}
+		wg.Add(1)
+		go rc.jog()
+
+		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*local*/)
+		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap}
+		wg.Add(1)
+		go rl.jog()
+	}
+	wg.Wait()
+
+	if pmarker != "" {
+		if !xreb.Aborted() {
+			if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
+				glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.t.si.Name(), pmarker, err)
+			}
+		}
+	}
+	// 7. wait for ACKs
+	var (
+		sleep = config.Timeout.CplaneOperation
+		maxwt = config.Rebalance.DestRetryTime + time.Duration(int64(time.Minute)*int64(smap.CountTargets()/10))
+		curwt time.Duration
+		cnt   int
+	)
+	maxwt = cmn.MinDur(maxwt, config.Rebalance.DestRetryTime*2)
+	for curwt < maxwt {
+		cnt = 0
+		for _, lomack := range reb.lomAcks() {
+			lomack.mu.Lock()
+			if l := len(lomack.q); l > 0 {
+				cnt += l
+				for _, lom := range lomack.q {
+					glog.Infof("waiting for %s ...", lom)
+					break
+				}
+			}
+			lomack.mu.Unlock()
+		}
+		if cnt == 0 {
+			break
+		}
+		glog.Infof("waiting for %d acks", cnt)
+		time.Sleep(sleep)
+		curwt += sleep
+	}
+	if cnt > 0 {
+		glog.Warningf("timed-out waiting for %d acks", cnt)
+	}
+
+	// 8. synchronize with the cluster
+	// TODO: remove the `if`, synchronize on TBD rebalancing status: "received all ACKs"
+	if newTargetID == reb.t.si.DaemonID {
+		glog.Infof("%s: poll other targets for completion", reb.t.si.Name())
+		reb.pollRebalancingAll(smap)
+	}
+
+	xreb.EndTime(time.Now())
+
+	// 9. finally, deactivate GFN
+	reb.t.gfn.global.deactivate()
 }
+
+func (reb *rebManager) pollRebalancingAll(newSmap *smapX) {
+	wg := &sync.WaitGroup{}
+	wg.Add(len(newSmap.Tmap) - 1)
+	for _, si := range newSmap.Tmap {
+		if si.DaemonID == reb.t.si.DaemonID {
+			continue
+		}
+		go func(si *cluster.Snode) {
+			reb.pollReb(si, newSmap.version())
+			wg.Done()
+		}(si)
+	}
+	wg.Wait()
+}
+
+// pollReb waits for the target (neighbor) to complete its current rebalancing operation
+func (reb *rebManager) pollReb(tsi *cluster.Snode, rebalanceVersion int64) {
+	var (
+		tver       int64
+		query      = url.Values{}
+		config     = cmn.GCO.Get()
+		sleep      = config.Timeout.CplaneOperation
+		sleepRetry = keepaliveRetryDuration(config)
+		maxwt      = config.Rebalance.DestRetryTime
+		curwt      time.Duration
+		args       = callArgs{
+			si: tsi,
+			req: reqArgs{
+				method: http.MethodGet,
+				base:   tsi.IntraControlNet.DirectURL,
+				path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				query:  query,
+			},
+			timeout: defaultTimeout,
+		}
+	)
+	// check if neighbor's Smap is at least our version
+	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
+	for curwt < maxwt {
+		res := reb.t.call(args)
+		if res.err == context.DeadlineExceeded {
+			time.Sleep(sleepRetry)
+			args.timeout = sleepRetry
+			res = reb.t.call(args) // retry once
+		}
+		if res.err != nil {
+			glog.Errorf("%s: failed to call %s, err: %v", reb.t.si.Name(), tsi.Name(), res.err)
+			return
+		}
+		tsmap := &smapX{}
+		err := jsoniter.Unmarshal(res.outjson, tsmap)
+		if err != nil {
+			glog.Errorf("Unexpected: failed to unmarshal response, err: %v [%v]", err, string(res.outjson))
+			return
+		}
+		if tver = tsmap.version(); tver >= rebalanceVersion {
+			break
+		}
+		time.Sleep(sleep)
+	}
+	if tver < rebalanceVersion {
+		glog.Errorf("%s: failed to validate %s (neighbor's) Smap v%d", reb.t.si.Name(), tsi.Name(), tver)
+		return
+	}
+	// wait until the neighbor finishes rebalancing
+	args = callArgs{
+		si: tsi,
+		req: reqArgs{
+			method: http.MethodGet,
+			base:   tsi.IntraControlNet.DirectURL,
+			path:   cmn.URLPath(cmn.Version, cmn.Health),
+		},
+		timeout: defaultTimeout,
+	}
+	time.Sleep(sleep * 2) // TODO: remove
+	for {
+		time.Sleep(sleep)
+		res := reb.t.call(args)
+		if res.err != nil {
+			glog.Errorf("%s: failed to call %s, err: %v", reb.t.si.Name(), tsi.Name(), res.err)
+			break
+		}
+		status := &thealthstatus{}
+		err := jsoniter.Unmarshal(res.outjson, status)
+		if err != nil {
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", tsi.Name(), err, string(res.outjson))
+			break
+		}
+		if !status.IsRebalancing {
+			break
+		}
+		glog.Infof("%s: waiting for %s to complete rebalancing...", reb.t.si.Name(), tsi.Name())
+	}
+}
+
+// pingTarget pings target to check if it is running. After DestRetryTime it
+// assumes that target is dead. Returns true if target is healthy and running,
+// false otherwise.
+func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config) (ok bool) {
+	var (
+		maxwt      = config.Rebalance.DestRetryTime
+		sleep      = config.Timeout.CplaneOperation
+		sleepRetry = keepaliveRetryDuration(config)
+		curwt      time.Duration
+		args       = callArgs{
+			si: si,
+			req: reqArgs{
+				method: http.MethodGet,
+				base:   si.IntraControlNet.DirectURL,
+				path:   cmn.URLPath(cmn.Version, cmn.Health),
+			},
+			timeout: config.Timeout.CplaneOperation,
+		}
+	)
+	for curwt < maxwt {
+		res := reb.t.call(args)
+		if res.err == nil {
+			if curwt > 0 {
+				glog.Infof("%s: %s is online", reb.t.si.Name(), si.Name())
+			}
+			return true
+		}
+		args.timeout = sleepRetry
+		glog.Warningf("%s: waiting for %s, err %v", reb.t.si.Name(), si.Name(), res.err)
+		time.Sleep(sleep)
+		curwt += sleep
+	}
+	glog.Errorf("%s: timed out waiting for %s", reb.t.si.Name(), si.Name())
+	return
+}
+
+func (reb *rebManager) abortGlobalReb() {
+	globalRebRunning := reb.t.xactions.globalXactRunning(cmn.ActGlobalReb)
+	if !globalRebRunning {
+		glog.Infof("not running, nothing to abort")
+		return
+	}
+	reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb)
+
+	pmarker := persistentMarker(cmn.ActGlobalReb)
+	if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
+		glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.t.si.Name(), pmarker, err)
+	}
+}
+
+func (reb *rebManager) lomAcks() *[fs.LomCacheMask + 1]*LomAcks { return &reb.lomacks }
 
 func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	if err != nil {
 		glog.Error(err)
 		return
 	}
+	smap := (*smapX)(reb.smap.Load())
+	if smap == nil {
+		var (
+			config = cmn.GCO.Get()
+			sleep  = config.Timeout.CplaneOperation
+			maxwt  = config.Rebalance.DestRetryTime
+			curwt  time.Duration
+		)
+		maxwt = cmn.MinDur(maxwt, config.Timeout.SendFile/3)
+		glog.Warningf("%s: waiting to start...", reb.t.si.Name())
+		time.Sleep(sleep)
+		for curwt < maxwt {
+			smap = (*smapX)(reb.smap.Load())
+			if smap != nil {
+				break
+			}
+			time.Sleep(sleep)
+			curwt += sleep
+		}
+		if curwt >= maxwt {
+			glog.Errorf("%s: timed-out waiting to start, dropping %s/%s", reb.t.si.Name(), hdr.Bucket, hdr.Objname)
+			return
+		}
+	}
+	// validate
+	tsid := string(hdr.Opaque) // the sender
+	tsi := smap.GetTarget(tsid)
+	if tsi == nil {
+		ver := smap.version()
+		glog.Warningf("%s: unknown src target %s, Smap v%d, resync...", reb.t.si.Name(), tsid, ver)
+		smap = reb.t.smapowner.get()
+		reb.smap.Store(unsafe.Pointer(smap))
+		tsi = smap.GetTarget(tsid)
+		if tsi == nil {
+			glog.Errorf("%s: unknown src target %s", reb.t.si.Name(), tsid)
+			return
+		}
+		glog.Infof("resync Smap v%d => v%d", ver, smap.version())
+		reb.streams.Resync()
+		reb.acks.Resync()
+	}
+	// Rx
 	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init()
 	if errstr != "" {
 		glog.Error(errstr)
@@ -114,20 +424,56 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		migrated:     true,
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
-	}
-
 	if err, _ := roi.recv(); err != nil {
 		glog.Error(err)
 		return
 	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: from %s %s", reb.t.si.Name(), tsi, roi.lom)
+	}
 
+	// ACK
+	hdr.Opaque = []byte(reb.t.si.DaemonID) // self == src
+	hdr.ObjAttrs.Size = 0
+	if err := reb.acks.SendV(hdr, nil /* reader */, nil /* sent cb */, nil /* cmpl ptr */, tsi); err != nil {
+		glog.Error(err)
+		return
+	}
 	reb.t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, hdr.ObjAttrs.Size})
 }
 
+func (reb *rebManager) recvRebalanceAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init()
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
+	}
+	if errstr != "" {
+		glog.Errorln(errstr)
+		return
+	}
+	_, idx := lom.Hkey()
+	lomack := reb.lomAcks()[idx]
+	lomack.mu.Lock()
+	delete(lomack.q, lom.Uname())
+	lomack.mu.Unlock()
+
+	// TODO: support configurable delay
+	// TODO: rebalancing stats and error counts
+	reb.t.rtnamemap.Lock(lom.Uname(), true)
+	lom.Uncache()
+	_ = lom.DelAllCopies()
+	if err = os.Remove(lom.FQN); err != nil && !os.IsNotExist(err) {
+		glog.Errorf("%s: error removing %s, err: %v", reb.t.si.Name(), lom, err)
+	}
+	reb.t.rtnamemap.Unlock(lom.Uname(), true)
+}
+
 //
-// GLOBAL REBALANCE
+// globalRebJogger
 //
 
 func (rj *globalRebJogger) jog() {
@@ -135,7 +481,7 @@ func (rj *globalRebJogger) jog() {
 		if rj.xreb.Aborted() {
 			glog.Infof("Aborting %s traversal", rj.mpath)
 		} else {
-			glog.Errorf("Failed to traverse %s, err: %v", rj.mpath, err)
+			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.si.Name(), rj.mpath, err)
 		}
 	}
 
@@ -143,21 +489,20 @@ func (rj *globalRebJogger) jog() {
 	rj.wg.Done()
 }
 
-func (rj *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadCloser, err error) {
-	uname := cluster.Bo2Uname(hdr.Bucket, hdr.Objname)
-	rj.m.t.rtnamemap.Unlock(uname, false)
+func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
+	var lom = (*cluster.LOM)(lomptr)
+	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
+	rj.wg.Done()
 
 	if err != nil {
-		glog.Errorf("failed to send obj rebalance: %s/%s, err: %v", hdr.Bucket, hdr.Objname, err)
-	} else {
-		rj.objectsMoved.Inc()
-		rj.bytesMoved.Add(hdr.ObjAttrs.Size)
-		// when sending an object via transport, Opaque contains DaemonID of
-		// a sender (see globalRebJogger.walk -> SendV)
-		rj.lastMoved.Store(string(hdr.Opaque), &movedObj{hdr.Bucket, hdr.Objname, time.Now(), false})
+		glog.Errorf("%s: failed to send o[%s/%s], err: %v", rj.m.t.si.Name(), hdr.Bucket, hdr.Objname, err)
+		return
 	}
-
-	rj.wg.Done()
+	_, idx := lom.Hkey()
+	lomack := rj.m.lomAcks()[idx]
+	lomack.mu.Lock()
+	lomack.q[lom.Uname()] = lom
+	lomack.mu.Unlock()
 }
 
 // the walking callback is executed by the LRU xaction
@@ -201,19 +546,19 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 		return nil
 	}
 
-	// Skip objects that were already sent via GFN (due to probabilistic filtering
+	// skip objects that were already sent via GFN (due to probabilistic filtering
 	// false-positives, albeit rare, are still possible)
 	uname := lom.Uname()
-	if rj.m.objectsSent.Lookup([]byte(uname)) {
-		rj.m.objectsSent.Delete([]byte(uname)) // it will not be used anymore
+	if rj.m.filterGFN.Lookup([]byte(uname)) {
+		rj.m.filterGFN.Delete([]byte(uname)) // it will not be used anymore
 		return nil
 	}
 
-	// LOCK & rebalance
+	// lock & transfer
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
 	}
-	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in rebalanceObjCallback()
+	rj.m.t.rtnamemap.Lock(uname, false) // NOTE: unlock in objSentCallback()
 
 	_, errstr = lom.Load(false)
 	if errstr != "" || !lom.Exists() || lom.IsCopy() {
@@ -230,7 +575,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
 		IsLocal: lom.BckIsLocal,
-		Opaque:  []byte(si.DaemonID),
+		Opaque:  []byte(rj.m.t.si.DaemonID), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       fi.Size(),
 			Atime:      lom.Atime().UnixNano(),
@@ -240,8 +585,8 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 		},
 	}
 
-	rj.wg.Add(1) // NOTE: wg.Done() in rebalanceObjCallback()
-	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.rebalanceObjCallback, si); err != nil {
+	rj.wg.Add(1) // NOTE: wg.Done() in objSentCallback()
+	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.objSentCallback, unsafe.Pointer(lom) /* cmpl ptr */, si); err != nil {
 		rj.wg.Done()
 		goto rerr
 	}
@@ -260,7 +605,56 @@ rerr:
 }
 
 //
-// LOCAL REBALANCE
+// rebManager -- local
+//
+
+func (reb *rebManager) runLocalReb() {
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		runnerCnt         = len(availablePaths) * 2
+		xreb              = reb.t.xactions.renewLocalReb(runnerCnt)
+		pmarker           = persistentMarker(cmn.ActLocalReb)
+		file, err         = cmn.CreateFile(pmarker)
+	)
+	// deactivate local GFN
+	reb.t.gfn.local.deactivate()
+
+	if err != nil {
+		glog.Errorln("Failed to create", pmarker, err)
+		pmarker = ""
+	} else {
+		_ = file.Close()
+	}
+	wg := &sync.WaitGroup{}
+	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
+	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
+
+	// TODO: support non-object content types
+	for _, mpathInfo := range availablePaths {
+		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, slab: slab}
+		wg.Add(1)
+		go jogger.jog()
+
+		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
+		jogger = &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, slab: slab}
+		wg.Add(1)
+		go jogger.jog()
+	}
+	wg.Wait()
+
+	if pmarker != "" {
+		if !xreb.Aborted() {
+			if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
+				glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.t.si.Name(), pmarker, err)
+			}
+		}
+	}
+	xreb.EndTime(time.Now())
+}
+
+//
+// localRebJogger
 //
 
 func (rj *localRebJogger) jog() {
@@ -273,7 +667,6 @@ func (rj *localRebJogger) jog() {
 			glog.Errorf("Failed to traverse %s, err: %v", rj.mpath, err)
 		}
 	}
-
 	rj.xreb.confirmCh <- struct{}{}
 	rj.slab.Free(rj.buf)
 	rj.wg.Done()
@@ -308,7 +701,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
-	// local rebalance: skip local copies
+	// skip local copies
 	if !lom.Exists() || lom.IsCopy() {
 		return nil
 	}
@@ -335,14 +728,13 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 
-	rj.m.t.rtnamemap.Lock(lom.Uname(), false)
+	rj.m.t.rtnamemap.Lock(lom.Uname(), true)
 	dst, erc := lom.CopyObject(lom.HrwFQN, rj.buf)
 	if erc == nil {
 		erc = dst.Persist()
 	}
-
 	if erc != nil {
-		rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
+		rj.m.t.rtnamemap.Unlock(lom.Uname(), true)
 		if !os.IsNotExist(erc) {
 			rj.xreb.Abort()
 			rj.m.t.fshc(erc, lom.HrwFQN)
@@ -350,412 +742,14 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
+	lom.Uncache()
 	dst.Load(true)
-	rj.m.t.rtnamemap.Unlock(lom.Uname(), false)
-	rj.objectsMoved.Inc()
-	rj.bytesMoved.Add(fileInfo.Size())
+	// TODO: support configurable delay
+	// TODO: rebalancing stats and error counts
+	// TODO: local migration of locally mirrored objects
+	if err = os.Remove(lom.FQN); err != nil && !os.IsNotExist(err) {
+		glog.Errorf("%s: error removing %s, err: %v", rj.m.t.si.Name(), lom, err)
+	}
+	rj.m.t.rtnamemap.Unlock(lom.Uname(), true)
 	return nil
-}
-
-// pingTarget pings target to check if it is running. After DestRetryTime it
-// assumes that target is dead. Returns true if target is healthy and running,
-// false otherwise.
-func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config) (ok bool) {
-	var (
-		timeout = keepaliveTimeoutDuration(config)
-		retries = int(config.Rebalance.DestRetryTime / timeout)
-	)
-	callArgs := callArgs{
-		si: si,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   si.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Health),
-		},
-		timeout: timeout,
-	}
-	for i := 1; i <= retries; i++ {
-		res := reb.t.call(callArgs)
-		if res.err == nil {
-			ok = true
-			glog.Infof("%s: %s is online", reb.t.si.Name(), si.Name())
-			break
-		}
-		s := fmt.Sprintf("retry #%d: %s is offline, err: %v", i, si.Name(), res.err)
-		if res.status > 0 {
-			glog.Infof("%s, status=%d", s, res.status)
-		} else {
-			glog.Infoln(s)
-		}
-		callArgs.timeout += callArgs.timeout / 2
-		if callArgs.timeout > config.Timeout.MaxKeepalive {
-			callArgs.timeout = config.Timeout.MaxKeepalive
-		}
-		time.Sleep(keepaliveRetryDuration(config))
-	}
-	return
-}
-
-// waitForRebalanceFinish waits for a target (neighbor) to complete its current rebalancing operation
-func (reb *rebManager) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersion int64) {
-	// 1: Check if Smap is at least our version
-	query := url.Values{}
-	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
-	args := callArgs{
-		si: si,
-		req: reqArgs{
-			method: http.MethodGet,
-			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			query:  query,
-		},
-		timeout: defaultTimeout,
-	}
-
-	config := cmn.GCO.Get()
-	for {
-		res := reb.t.call(args)
-		// retry once
-		if res.err == context.DeadlineExceeded {
-			args.timeout = keepaliveTimeoutDuration(config) * 2
-			res = reb.t.call(args)
-		}
-
-		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.Name(), res.err)
-			return
-		}
-
-		tsmap := &smapX{}
-		err := jsoniter.Unmarshal(res.outjson, tsmap)
-		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal response, err: %v [%v]", err, string(res.outjson))
-			return
-		}
-
-		if tsmap.version() >= rebalanceVersion {
-			break
-		}
-
-		time.Sleep(keepaliveRetryDuration(config))
-	}
-
-	// 2: Sleep a bit for the neighbor's rebalancing to kick in
-	time.Sleep(NeighborRebalanceStartDelay)
-
-	// 3: Call thy neighbor to check whether it is still rebalancing, and wait some more if it is
-	args = callArgs{
-		si: si,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   si.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Health),
-		},
-		timeout: defaultTimeout,
-	}
-	for {
-		res := reb.t.call(args)
-		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.Name(), res.err)
-			break
-		}
-		status := &thealthstatus{}
-		err := jsoniter.Unmarshal(res.outjson, status)
-		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.Name(), err, string(res.outjson))
-			break
-		}
-		if !status.IsRebalancing {
-			break
-		}
-		glog.Infof("waiting for %s to complete rebalancing...", si.Name())
-		time.Sleep(keepaliveRetryDuration(config))
-	}
-}
-
-func (reb *rebManager) abortGlobalReb() {
-	globalRebRunning := reb.t.xactions.globalXactRunning(cmn.ActGlobalReb)
-	if !globalRebRunning {
-		glog.Infof("not running, nothing to abort")
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Error("Global rebalance is aborting...")
-	}
-	reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb)
-
-	pmarker := persistentMarker(globalRebType)
-	if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
-		glog.Errorf("failed to remove in-progress mark %s, err: %v", pmarker, err)
-	}
-}
-
-func (reb *rebManager) reqTgt(snode *cluster.Snode, moved *movedObj, wg *sync.WaitGroup) {
-	query := make(url.Values)
-	query.Add(cmn.URLParamCached, "true")
-	query.Add(cmn.URLParamSilent, "true")
-	args := callArgs{
-		req: reqArgs{
-			method: http.MethodHead,
-			query:  query,
-			base:   snode.URL(cmn.NetworkIntraData),
-			path:   cmn.URLPath(cmn.Version, cmn.Objects, moved.bucket, moved.objname),
-		},
-		si: snode,
-	}
-
-	// HEAD object request with param cached=true checks only if a
-	// file corresponding to a object exists on the destination
-	res := reb.t.call(args)
-	if res.err == nil && res.status < http.StatusBadRequest {
-		moved.found = true
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s/%s is still not transferred", moved.bucket, moved.objname)
-	}
-	wg.Done()
-}
-
-func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
-	var (
-		wg       = &sync.WaitGroup{}
-		cnt      = smap.CountTargets() - 1
-		cancelCh = make(chan *cluster.Snode, cnt)
-		ver      = smap.version()
-		config   = cmn.GCO.Get()
-	)
-	glog.Infof("%s: Smap v%d, newTargetID=%s", reb.t.si.Name(), ver, newTargetID)
-	// first, check whether all the Smap-ed targets are up and running
-	for _, si := range smap.Tmap {
-		if si.DaemonID == reb.t.si.DaemonID {
-			continue
-		}
-		wg.Add(1)
-		go func(si *cluster.Snode) {
-			ok := reb.pingTarget(si, config)
-			if !ok {
-				cancelCh <- si
-			}
-			wg.Done()
-		}(si)
-	}
-	wg.Wait()
-
-	close(cancelCh)
-	if len(cancelCh) > 0 {
-		for si := range cancelCh {
-			glog.Errorf("Not starting rebalancing: %s appears to be offline, Smap v%d", si.Name(), ver)
-		}
-		return
-	}
-
-	// abort in-progress xaction if exists and if its Smap version is lower
-	// start new xaction unless the one for the current version is already in progress
-	availablePaths, _ := fs.Mountpaths.Get()
-	runnerCnt := len(availablePaths) * 2
-	xreb := reb.t.xactions.renewGlobalReb(ver, runnerCnt)
-	if xreb == nil {
-		return
-	}
-
-	// Establish connections with nodes, as they are not created on change of smap
-	reb.streams.Resync()
-
-	reb.objectsSent.Reset() // start with empty filters
-
-	pmarker := persistentMarker(globalRebType)
-
-	file, err := cmn.CreateFile(pmarker)
-	if err != nil {
-		glog.Errorln("Failed to create", pmarker, err)
-		pmarker = ""
-	} else {
-		_ = file.Close()
-	}
-
-	glog.Infoln(xreb.String())
-	wg = &sync.WaitGroup{}
-
-	joggers := make([]*globalRebJogger, 0, runnerCnt)
-	// TODO: currently supporting a single content-type: Object
-	for _, mpathInfo := range availablePaths {
-		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap}
-		wg.Add(1)
-		joggers = append(joggers, rc)
-		go rc.jog()
-
-		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap}
-		wg.Add(1)
-		joggers = append(joggers, rl)
-		go rl.jog()
-	}
-	wg.Wait()
-
-	lastObjs := make(map[*cluster.Snode]*movedObj, len(smap.Tmap))
-	if pmarker != "" {
-		var (
-			totalObjectsMoved, totalBytesMoved int64
-		)
-		for _, jogger := range joggers {
-			totalObjectsMoved += jogger.objectsMoved.Load()
-			totalBytesMoved += jogger.bytesMoved.Load()
-
-			// detect which object was the last transferred one to each target
-			jogger.lastMoved.Range(func(k, v interface{}) bool {
-				id := k.(string)
-				mv := v.(*movedObj)
-				si := smap.GetTarget(id)
-				cmn.Assert(si != nil)
-				lastMV, ok := lastObjs[si]
-				if !ok || lastMV.tm.Before(mv.tm) {
-					lastObjs[si] = mv
-				}
-				return true
-			})
-		}
-		if !xreb.Aborted() {
-			if err := os.Remove(pmarker); err != nil {
-				glog.Errorf("failed to remove in-progress mark %s, err: %v", pmarker, err)
-			}
-		}
-		if totalObjectsMoved > 0 {
-			reb.t.statsif.Add(stats.RebGlobalCount, totalObjectsMoved)
-			reb.t.statsif.Add(stats.RebGlobalSize, totalBytesMoved)
-		}
-	}
-	if newTargetID == reb.t.si.DaemonID {
-		glog.Infof("rebalance %s(self)", reb.t.si.Name())
-		reb.pollRebalancingDone(smap) // until the cluster is fully rebalanced - see t.httpobjget
-	}
-
-	// time to wait until all objects sent via transport should be created on
-	// the destination after global rebalance finishes
-	targetBasedTimeout := time.Minute*2 + time.Duration(int(time.Minute)*smap.CountTargets()/10)
-	objTransferTimeout := cmn.MinDur(targetBasedTimeout, time.Minute*6)
-	deadline := time.Now().Add(objTransferTimeout)
-
-	if len(lastObjs) == 0 {
-		goto done
-	}
-
-	// wait until all objects appear on the correct targets
-	glog.Info("Wait for all objects are transferred to correct targets...")
-	wg = &sync.WaitGroup{}
-
-	for {
-		if time.Now().After(deadline) {
-			glog.Warningf("rebalance did not transfer objects within timeout (%s)", objTransferTimeout)
-			break
-		}
-
-		for si, mv := range lastObjs {
-			wg.Add(1)
-			// TODO: add single HEAD request for multiple objects
-			go reb.reqTgt(si, mv, wg)
-		}
-		wg.Wait()
-
-		// clean up transferred objects
-		for si, mv := range lastObjs {
-			if mv.found {
-				delete(lastObjs, si)
-				// if some object was successfully transferred, we reset the counter
-				// and wait another objTransferTimeout for a new state change
-				deadline = time.Now().Add(objTransferTimeout)
-			}
-		}
-		// check length and break here instead of in "for" declaration to avoid redundant sleep
-		if len(lastObjs) == 0 {
-			break
-		}
-		time.Sleep(objTransferInterval)
-	}
-	glog.Info("Waiting for all objects are transferred to correct targets ended")
-
-done:
-	xreb.EndTime(time.Now())
-
-	// if we deactivate GFN in the beginning, there is a very tiny 0.1-0.2s gap
-	// between GFN is off and rebalance logs that it has started
-	// So, move deactivating GFN to the point after rebalance is done
-	reb.t.gfn.global.deactivate()
-}
-
-func (reb *rebManager) pollRebalancingDone(newSmap *smapX) {
-	wg := &sync.WaitGroup{}
-	wg.Add(len(newSmap.Tmap) - 1)
-
-	for _, si := range newSmap.Tmap {
-		if si.DaemonID == reb.t.si.DaemonID {
-			continue
-		}
-
-		go func(si *cluster.Snode) {
-			reb.waitForRebalanceFinish(si, newSmap.version())
-			wg.Done()
-		}(si)
-	}
-
-	wg.Wait()
-}
-
-func (reb *rebManager) runLocalReb() {
-	var (
-		availablePaths, _ = fs.Mountpaths.Get()
-		runnerCnt         = len(availablePaths) * 2
-		joggers           = make([]*localRebJogger, 0, runnerCnt)
-
-		xreb      = reb.t.xactions.renewLocalReb(runnerCnt)
-		pmarker   = persistentMarker(localRebType)
-		file, err = cmn.CreateFile(pmarker)
-	)
-
-	// Rebalance has started so we can disable custom GFN lookup - GFN will still
-	// happen but because of running rebalance.
-	reb.t.gfn.local.deactivate()
-
-	if err != nil {
-		glog.Errorln("Failed to create", pmarker, err)
-		pmarker = ""
-	} else {
-		_ = file.Close()
-	}
-	wg := &sync.WaitGroup{}
-	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
-	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-
-	// TODO: currently supporting a single content-type: Object
-	for _, mpathInfo := range availablePaths {
-		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, slab: slab}
-		wg.Add(1)
-		joggers = append(joggers, jogger)
-		go jogger.jog()
-
-		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		jogger = &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, slab: slab}
-		wg.Add(1)
-		joggers = append(joggers, jogger)
-		go jogger.jog()
-	}
-	wg.Wait()
-
-	if pmarker != "" {
-		totalObjectsMoved, totalBytesMoved := int64(0), int64(0)
-		for _, jogger := range joggers {
-			totalObjectsMoved += jogger.objectsMoved.Load()
-			totalBytesMoved += jogger.bytesMoved.Load()
-		}
-		if !xreb.Aborted() {
-			if err := os.Remove(pmarker); err != nil {
-				glog.Errorf("Failed to remove rebalance-in-progress mark %s, err: %v", pmarker, err)
-			}
-		}
-		if totalObjectsMoved > 0 {
-			reb.t.statsif.Add(stats.RebLocalCount, totalObjectsMoved)
-			reb.t.statsif.Add(stats.RebLocalSize, totalBytesMoved)
-		}
-	}
-
-	xreb.EndTime(time.Now())
 }

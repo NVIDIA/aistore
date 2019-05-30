@@ -13,6 +13,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -167,7 +168,7 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	// _ io.ReadCloser: pass copyMisssingReplicas reader argument(memsys.SGL type)
 	// instead of callback's reader argument(memsys.Reader type) to freeObject
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
-	cb := func(hdr transport.Header, _ io.ReadCloser, err error) {
+	cb := func(hdr transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket, lom.Objname, daemons, err)
 		}
@@ -725,7 +726,7 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 
 		// every slice's SGL must be freed on transfer completion
 		cb := func(daemonID string, s *slice) transport.SendCallback {
-			return func(hdr transport.Header, reader io.ReadCloser, err error) {
+			return func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					glog.Errorf("Failed to send %s/%s to %v: %v", req.LOM.Bucket, req.LOM.Objname, daemonID, err)
 				}
@@ -909,7 +910,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	}
 
 	// broadcase the request to every target and wait for them to respond
-	if err := c.parent.reqBundle.SendV(hdr, nil, nil); err != nil {
+	if err := c.parent.reqBundle.SendV(hdr, nil, nil /* cmpl ptr */, nil); err != nil {
 		glog.Errorf("Failed to request metafile for %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
 		for _, wr := range writers {
 			if wr != nil && wr.writer != nil {

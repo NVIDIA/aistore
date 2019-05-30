@@ -37,6 +37,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -117,20 +118,21 @@ func Example_headers() {
 
 	sendText(stream, text1, text2)
 	stream.Fin()
+
 	// Output:
-	// {Bucket:abc Objname:X IsLocal:false Opaque:[] ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2}} (96)
-	// {Bucket:abracadabra Objname:p/q/s IsLocal:true Opaque:[49 50 51] ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2}} (111)
+	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} IsLocal:false Opaque:[]} (96)
+	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} IsLocal:true Opaque:[49 50 51]} (111)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	var wg sync.WaitGroup
-	cb := func(transport.Header, io.ReadCloser, error) {
+	cb := func(transport.Header, io.ReadCloser, unsafe.Pointer, error) {
 		wg.Done()
 	}
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	hdr := transport.Header{
-		"abc", "X", false, nil,
+		"abc", "X",
 		transport.ObjectAttrs{
 			Size:       sgl1.Size(),
 			Atime:      663346294,
@@ -138,15 +140,16 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			CksumValue: "hash",
 			Version:    "2",
 		},
+		false, nil,
 	}
 	wg.Add(1)
-	stream.Send(hdr, sgl1, cb)
+	stream.Send(hdr, sgl1, cb, nil)
 	wg.Wait()
 
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	hdr = transport.Header{
-		"abracadabra", "p/q/s", true, []byte{'1', '2', '3'},
+		"abracadabra", "p/q/s",
 		transport.ObjectAttrs{
 			Size:       sgl2.Size(),
 			Atime:      663346294,
@@ -154,9 +157,10 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			CksumValue: "hash",
 			Version:    "2",
 		},
+		true, []byte{'1', '2', '3'},
 	}
 	wg.Add(1)
-	stream.Send(hdr, sgl2, cb)
+	stream.Send(hdr, sgl2, cb, nil)
 	wg.Wait()
 }
 
@@ -259,7 +263,7 @@ func Test_CancelStream(t *testing.T) {
 		hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
 		reader := newRandReader(random, hdr, slab)
-		stream.Send(hdr, reader, nil)
+		stream.Send(hdr, reader, nil, nil)
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
@@ -362,7 +366,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.Send(hdr, reader, nil)
+		stream.Send(hdr, reader, nil, nil)
 		totalSend += hdr.ObjAttrs.Size
 	}
 
@@ -410,7 +414,7 @@ func Test_OnSendCallback(t *testing.T) {
 		posted[idx] = rr
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
-		stream.Send(hdr, rr, rrc.sentCallback)
+		stream.Send(hdr, rr, rrc.sentCallback, nil)
 		totalSend += hdr.ObjAttrs.Size
 	}
 	stream.Fin()
@@ -487,7 +491,7 @@ func Test_ObjAttrs(t *testing.T) {
 		}
 		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
 		reader := newRandReader(random, hdr, slab)
-		if err := stream.Send(hdr, reader, nil); err != nil {
+		if err := stream.Send(hdr, reader, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -523,7 +527,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	size, num, prevsize := int64(0), 0, int64(0)
 	for time.Since(now) < duration {
 		hdr, reader := makeRandReader()
-		stream.Send(hdr, reader, nil)
+		stream.Send(hdr, reader, nil, nil)
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
@@ -677,7 +681,7 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 	if err != nil {
 		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bucket, hdr.Objname, err)
 	}

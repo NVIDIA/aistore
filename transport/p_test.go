@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -64,11 +65,11 @@ func Test_OneStream10G(t *testing.T) {
 		hdr := genStaticHeader()
 		if num%3 == 0 { // every so often send header-only
 			hdr.ObjAttrs.Size = 0
-			stream.Send(hdr, nil, nil)
+			stream.Send(hdr, nil, nil, nil)
 			numhdr++
 		} else {
 			reader := newRandReader(random, hdr, slab)
-			stream.Send(hdr, reader, nil)
+			stream.Send(hdr, reader, nil, nil)
 		}
 		num++
 		size += hdr.ObjAttrs.Size
@@ -100,7 +101,7 @@ func Test_DryRunTB(t *testing.T) {
 
 	for size < cmn.TiB {
 		reader := newRandReader(random, hdr, slab)
-		stream.Send(hdr, reader, nil)
+		stream.Send(hdr, reader, nil, nil)
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*100 {
@@ -130,7 +131,7 @@ func Test_CompletionCount(t *testing.T) {
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
-	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
+	callback := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
 		numCompleted.Inc()
 	}
 
@@ -153,11 +154,11 @@ func Test_CompletionCount(t *testing.T) {
 			hdr := genStaticHeader()
 			hdr.ObjAttrs.Size = 0
 			hdr.Opaque = []byte(strconv.FormatInt(104729*int64(idx), 10))
-			stream.Send(hdr, nil, callback)
+			stream.Send(hdr, nil, callback, nil)
 			rem = random.Int63() % 13
 		} else {
 			hdr, rr := makeRandReader()
-			stream.Send(hdr, rr, callback)
+			stream.Send(hdr, rr, callback, nil)
 		}
 		numSent++
 		if numSent > 5000 && rem == 3 {

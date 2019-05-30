@@ -110,16 +110,6 @@ func keepaliveRetryDuration(cs ...*cmn.Config) time.Duration {
 	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
 }
 
-func keepaliveTimeoutDuration(cs ...*cmn.Config) time.Duration {
-	var c *cmn.Config
-	if len(cs) > 0 {
-		c = cs[0]
-	} else {
-		c = cmn.GCO.Get()
-	}
-	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.TimeoutFactor)
-}
-
 func newTargetKeepaliveRunner(t *targetrunner) *targetKeepaliveRunner {
 	config := cmn.GCO.Get()
 

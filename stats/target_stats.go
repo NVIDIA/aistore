@@ -42,14 +42,12 @@ const (
 	RebLocalCount    = "reb.local.n"
 	RebGlobalSize    = "reb.global.size"
 	RebLocalSize     = "reb.local.size"
-	ReplPutCount     = "repl.n"
 	DownloadSize     = "dl.size"
 
 	// KindLatency
 	PutLatency      = "put.µs"
 	GetRedirLatency = "get.redir.µs"
 	PutRedirLatency = "put.redir.µs"
-	ReplPutLatency  = "repl.µs"
 	DownloadLatency = "dl.µs"
 
 	// KindThroughput

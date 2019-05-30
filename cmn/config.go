@@ -71,7 +71,7 @@ const (
 	BucketmdBackupFile  = "bucket-metadata" // base name of the config file; not to confuse with config.Localbuckets mpath
 	MountpathBackupFile = "mpaths"          // base name to persist fs.Mountpaths
 	GlobalRebMarker     = ".global_rebalancing"
-	LocalRebMarker      = ".local_rebalancing"
+	LocalRebMarker      = ".resilvering"
 )
 
 const (

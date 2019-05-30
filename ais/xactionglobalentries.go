@@ -5,8 +5,6 @@
 package ais
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
@@ -64,7 +62,7 @@ type globalRebEntry struct {
 
 func (e *globalRebEntry) Start(id int64) error {
 	xGlobalReb := &xactGlobalReb{
-		xactRebBase: makeXactRebBase(id, globalRebType, e.runnerCnt),
+		xactRebBase: makeXactRebBase(id, cmn.ActGlobalReb, e.runnerCnt),
 		smapVersion: e.smapVersion,
 	}
 
@@ -115,7 +113,7 @@ type localRebEntry struct {
 
 func (e *localRebEntry) Start(id int64) error {
 	xLocalReb := &xactLocalReb{
-		xactRebBase: makeXactRebBase(id, localRebType, e.runnerCnt),
+		xactRebBase: makeXactRebBase(id, cmn.ActLocalReb, e.runnerCnt),
 	}
 	e.xact = xLocalReb
 	return nil
@@ -225,17 +223,7 @@ func (b *baseGlobalEntry) ActOnPrevious(entry xactionGlobalEntry) {
 
 // HELPERS
 
-func makeXactRebBase(id int64, rebType int, runnerCnt int) xactRebBase {
-	kind := ""
-	switch rebType {
-	case localRebType:
-		kind = cmn.ActLocalReb
-	case globalRebType:
-		kind = cmn.ActGlobalReb
-	default:
-		cmn.AssertMsg(false, fmt.Sprintf("unknown rebalance type: %d", rebType))
-	}
-
+func makeXactRebBase(id int64, kind string, runnerCnt int) xactRebBase {
 	return xactRebBase{
 		XactBase:  *cmn.NewXactBase(id, kind),
 		runnerCnt: runnerCnt,

@@ -54,6 +54,7 @@ const (
 	getFromNeighAfterJoin = time.Second * 30
 
 	rebalanceStreamName = "rebalance"
+	rebalanceAcksName   = "remwack" // TODO -- FIXME -- TODO: make it generic remote-write-acknowledgment
 
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
@@ -305,7 +306,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	if err := t.setupRebalanceManager(); err != nil {
+	if err := t.setupRebalanceManager(config); err != nil {
 		cmn.ExitLogf("%s", err)
 	}
 
@@ -334,36 +335,48 @@ func (t *targetrunner) Run() error {
 	return nil
 }
 
-func (t *targetrunner) setupRebalanceManager() error {
-	var (
-		network = cmn.NetworkIntraData
-	)
-
-	// fallback to network public if intra data is not available
-	if !cmn.GCO.Get().Net.UseIntraData {
-		network = cmn.NetworkPublic
+func (t *targetrunner) setupRebalanceManager(config *cmn.Config) error {
+	t.rebManager = &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	netd, netc := cmn.NetworkPublic, cmn.NetworkPublic
+	if config.Net.UseIntraData {
+		netd = cmn.NetworkIntraData
 	}
-
-	t.rebManager = &rebManager{
-		t:           t,
-		objectsSent: filter.NewDefaultFilter(),
+	if config.Net.UseIntraControl {
+		netc = cmn.NetworkIntraControl
 	}
-
-	if _, err := transport.Register(network, rebalanceStreamName, t.rebManager.recvRebalanceObj); err != nil {
+	//
+	// objects
+	//
+	if _, err := transport.Register(netd, rebalanceStreamName, t.rebManager.recvRebalanceObj); err != nil {
 		return err
 	}
-
-	client := transport.NewDefaultClient()
-
-	// TODO: stream bundle multiplier (currently default) should be adjustable at runtime (#253)
+	client := cmn.NewClient(cmn.ClientArgs{
+		DialTimeout: config.Timeout.SendFile,
+		Timeout:     config.Timeout.SendFile,
+	})
+	// TODO: make stream bundle multiplier adjustable at runtime (#253)
 	sbArgs := transport.SBArgs{
 		ManualResync: true,
 		Multiplier:   4,
-		Network:      network,
+		Network:      netd,
 		Trname:       rebalanceStreamName,
 	}
-
 	t.rebManager.streams = transport.NewStreamBundle(t.smapowner, t.si, client, sbArgs)
+
+	//
+	// ACKs
+	//
+	if _, err := transport.Register(netc, rebalanceAcksName, t.rebManager.recvRebalanceAck); err != nil {
+		return err
+	}
+	// NOTE - attn: use the same client (above) for ACKs
+	sbArgs = transport.SBArgs{
+		ManualResync: true,
+		Network:      netc,
+		Trname:       rebalanceAcksName,
+	}
+	t.rebManager.acks = transport.NewStreamBundle(t.smapowner, t.si, client, sbArgs)
+
 	return nil
 }
 
@@ -388,17 +401,14 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.ErrMetadataCount, stats.KindCounter)
 	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
 	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
-	// rebalance
-	t.statsif.Register(stats.RebGlobalCount, stats.KindCounter)
-	t.statsif.Register(stats.RebLocalCount, stats.KindCounter)
-	t.statsif.Register(stats.RebGlobalSize, stats.KindCounter)
-	t.statsif.Register(stats.RebLocalSize, stats.KindCounter)
-	// replication
-	t.statsif.Register(stats.ReplPutCount, stats.KindCounter)
-	t.statsif.Register(stats.ReplPutLatency, stats.KindLatency)
 	// download
 	t.statsif.Register(stats.DownloadSize, stats.KindCounter)
 	t.statsif.Register(stats.DownloadLatency, stats.KindLatency)
+	// TODO: rebalance
+	// t.statsif.Register(stats.RebGlobalCount, stats.KindCounter)
+	// t.statsif.Register(stats.RebLocalCount, stats.KindCounter)
+	// t.statsif.Register(stats.RebGlobalSize, stats.KindCounter)
+	// t.statsif.Register(stats.RebLocalSize, stats.KindCounter)
 }
 
 // stop gracefully
@@ -933,7 +943,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	// have to resend them in global rebalance. In case of race between rebalance
 	// and GFN, the former wins and it will result in double send.
 	if isGFNRequest {
-		t.rebManager.objectsSent.Insert([]byte(lom.Uname()))
+		t.rebManager.filterGFN.Insert([]byte(lom.Uname()))
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -2451,12 +2461,12 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	cb := func(hdr transport.Header, r io.ReadCloser, cbErr error) {
+	cb := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, cbErr error) {
 		err = cbErr
 		wg.Done()
 	}
 	t.rebManager.streams.Resync()
-	if err := t.rebManager.streams.SendV(hdr, file, cb, si); err != nil {
+	if err := t.rebManager.streams.SendV(hdr, file, cb, nil /* cmpl ptr */, si); err != nil {
 		glog.Errorf("failed to migrate: %s, err: %v", lom.FQN, err)
 		return err.Error()
 	}

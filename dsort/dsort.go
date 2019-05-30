@@ -20,6 +20,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
@@ -385,10 +386,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
 		streamWg.Add(1)
-		err = m.streams.shards.SendV(hdr, file, func(_ transport.Header, _ io.ReadCloser, err error) {
+		err = m.streams.shards.SendV(hdr, file, func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, err error) {
 			errCh <- err
 			streamWg.Done()
-		}, si)
+		}, nil, si)
 		if err != nil {
 			return err
 		}

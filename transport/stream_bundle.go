@@ -126,11 +126,13 @@ func (sb *StreamBundle) Close(gracefully bool) {
 //   or use Send() with a slice of nodes for destinations.
 //
 
-func (sb *StreamBundle) SendV(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback, nodes ...*cluster.Snode) (err error) {
-	return sb.Send(hdr, reader, cb, nodes)
+func (sb *StreamBundle) SendV(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
+	cmplPtr unsafe.Pointer, nodes ...*cluster.Snode) (err error) {
+	return sb.Send(hdr, reader, cb, cmplPtr, nodes)
 }
 
-func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback, nodes []*cluster.Snode) (err error) {
+func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
+	cmplPtr unsafe.Pointer, nodes []*cluster.Snode) (err error) {
 	var (
 		prc     *atomic.Int64 // completion refcount (optional)
 		streams = sb.get()
@@ -155,7 +157,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 		//
 		reopen := false
 		for _, robin := range streams {
-			if err = sb.sendOne(robin, hdr, reader, cb, prc, reopen); err != nil {
+			if err = sb.sendOne(robin, hdr, reader, cb, cmplPtr, prc, reopen); err != nil {
 				return
 			}
 			reopen = true
@@ -175,7 +177,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 		reopen := false
 		for _, di := range nodes {
 			robin := streams[di.DaemonID]
-			if err = sb.sendOne(robin, hdr, reader, cb, prc, reopen); err != nil {
+			if err = sb.sendOne(robin, hdr, reader, cb, cmplPtr, prc, reopen); err != nil {
 				return
 			}
 			reopen = true
@@ -261,8 +263,8 @@ func (sb *StreamBundle) get() (bun bundle) {
 	return
 }
 
-func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenCloser,
-	cb SendCallback, prc *atomic.Int64, reopen bool) (err error) {
+func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenCloser, cb SendCallback,
+	cmplPtr unsafe.Pointer, prc *atomic.Int64, reopen bool) (err error) {
 	var (
 		i       int
 		reader2 io.ReadCloser = reader
@@ -277,7 +279,7 @@ func (sb *StreamBundle) sendOne(robin *robin, hdr Header, reader cmn.ReadOpenClo
 		i = int(robin.i.Inc()) % len(robin.stsdest)
 	}
 	s := robin.stsdest[i]
-	err = s.Send(hdr, reader2, cb, prc)
+	err = s.Send(hdr, reader2, cb, cmplPtr, prc)
 	return
 }
 

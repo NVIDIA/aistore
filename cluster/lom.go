@@ -518,7 +518,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 //
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
-func (lom *LOM) hkey() (string, int) {
+func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName) // DEBUG
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
 }
@@ -535,7 +535,7 @@ func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
 
 func (lom *LOM) IsLoaded() (ok bool) {
 	var (
-		hkey, idx = lom.hkey()
+		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
 	_, ok = cache.M.Load(hkey)
@@ -545,7 +545,7 @@ func (lom *LOM) IsLoaded() (ok bool) {
 func (lom *LOM) Load(add bool) (fromCache bool, errstr string) {
 	// fast path
 	var (
-		hkey, idx = lom.hkey()
+		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
 	lom.loaded = true
@@ -590,7 +590,7 @@ func (lom *LOM) existsInBucket() bool {
 
 func (lom *LOM) ReCache() {
 	var (
-		hkey, idx = lom.hkey()
+		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 		md        = &lmeta{}
 	)
@@ -602,7 +602,7 @@ func (lom *LOM) ReCache() {
 
 func (lom *LOM) Uncache() {
 	var (
-		hkey, idx = lom.hkey()
+		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
 	cache.M.Delete(hkey)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -199,7 +200,7 @@ func (c *putJogger) cleanup(req *Request) error {
 			Size: 0,
 		},
 	}
-	return c.parent.reqBundle.SendV(hdr, nil, nil)
+	return c.parent.reqBundle.SendV(hdr, nil, nil /* cmpl ptr */, nil)
 }
 
 // Sends object replicas to targets that must have replicas after the client
@@ -229,7 +230,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	}
 
 	// broadcast the replica to the targets
-	cb := func(hdr transport.Header, reader io.ReadCloser, err error) {
+	cb := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("Failed to to %v: %v", nodes, err)
 		}

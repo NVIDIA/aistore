@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sync"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -91,7 +92,7 @@ func newECM(t *targetrunner) *ecManager {
 func (mgr *ecManager) initECBundles() {
 	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
 
-	cbReq := func(hdr transport.Header, reader io.ReadCloser, err error) {
+	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
 		if err != nil {
 			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.Objname, err)
 		}

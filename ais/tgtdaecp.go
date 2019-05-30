@@ -730,7 +730,8 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 			case cmn.RebAbort:
 				t.rebManager.abortGlobalReb()
 			default:
-				errstr = fmt.Sprintf("Expecting %q or %q in the action message value, getting %s", cmn.RebStart, cmn.RebAbort, cmd)
+				errstr = fmt.Sprintf("Expecting %q or %q in the action message value, getting %s",
+					cmn.RebStart, cmn.RebAbort, cmd)
 			}
 			return
 		}

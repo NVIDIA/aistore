@@ -188,14 +188,11 @@ func (r *xactionsRegistry) abortAll() bool {
 }
 
 func (r *xactionsRegistry) rebStatus(global bool) (aborted, running bool) {
-	rebType := localRebType
 	xactKind := cmn.ActLocalReb
 	if global {
-		rebType = globalRebType
 		xactKind = cmn.ActGlobalReb
 	}
-
-	pmarker := persistentMarker(rebType)
+	pmarker := persistentMarker(xactKind)
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true

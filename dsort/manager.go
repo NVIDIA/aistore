@@ -13,6 +13,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -645,7 +646,7 @@ func (m *Manager) pullStreamWriter(objName string) *streamWriter {
 	return writer
 }
 
-func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, err error) {
+func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, _ unsafe.Pointer, err error) {
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
@@ -659,7 +660,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 	errHandler := func(err error, hdr transport.Header, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
 		hdr.ObjAttrs.Size = 0
-		if err = m.streams.response.SendV(hdr, nil, nil, node); err != nil {
+		if err = m.streams.response.SendV(hdr, nil, nil, nil /* cmpl ptr */, node); err != nil {
 			m.abort(err)
 		}
 	}
@@ -707,7 +708,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 
-			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
 				f.Close()
 				m.abort(err)
 			}
@@ -717,7 +718,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
-			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
 				sgl.Free()
 				m.abort(err)
 			}
@@ -734,7 +735,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
-			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
 				f.Close()
 				m.abort(err)
 			}
@@ -909,7 +910,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				beforeSend = time.Now()
 			}
 
-			cb := func(hdr transport.Header, r io.ReadCloser, err error) {
+			cb := func(hdr transport.Header, r io.ReadCloser, _ unsafe.Pointer, err error) {
 				if err != nil {
 					cbErr = err
 				}
@@ -922,7 +923,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}
 
 			wg.Add(1)
-			if err := m.streams.request.SendV(hdr, nil, cb, toNode); err != nil {
+			if err := m.streams.request.SendV(hdr, nil, cb, nil /* cmpl ptr */, toNode); err != nil {
 				return 0, err
 			}
 

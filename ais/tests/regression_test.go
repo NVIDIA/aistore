@@ -26,7 +26,6 @@ import (
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
-	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -1310,7 +1309,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	tutils.Logf("Waiting for global and local rebalance to complete\n")
 
 	start := time.Now()
-	time.Sleep(ais.NeighborRebalanceStartDelay)
+	time.Sleep(time.Second * 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	ch := make(chan string, 2)

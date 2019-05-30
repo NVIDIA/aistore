@@ -126,7 +126,7 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 	return mi
 }
 
-func (mi *MountpathInfo) LomCache(idx int) *LomCache { return &mi.lomcaches[idx] }
+func (mi *MountpathInfo) LomCache(idx int) *LomCache { x := &mi.lomcaches; return &x[idx] }
 
 // FastRemoveDir removes directory in steps:
 // 1. Synchronously gets temporary directory name
