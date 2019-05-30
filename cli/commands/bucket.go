@@ -56,6 +56,9 @@ var (
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
+	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
+	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
+	markerFlag        = cli.StringFlag{Name: "marker", Usage: "start listing bucket objects starting from the object that follows the marker(alphabetically), ignored in fast mode"}
 
 	baseBucketFlags = []cli.Flag{
 		bckProviderFlag,
@@ -82,6 +85,9 @@ var (
 			allFlag,
 			fastFlag,
 			noHeaderFlag,
+			pagedFlag,
+			maxPagesFlag,
+			markerFlag,
 		),
 		bucketNWayMirror: append(
 			baseBucketFlags,
@@ -355,6 +361,9 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
+	if flagIsSet(c, markerFlag) {
+		msg.PageMarker = parseStrFlag(c, markerFlag)
+	}
 	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
 	if err != nil {
 		return err
@@ -363,7 +372,56 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	if err != nil {
 		return err
 	}
+
+	// set page size to limit if limit is less than page size
 	msg.PageSize = pagesize
+	if limit > 0 && (limit < pagesize || (limit < 1000 && pagesize == 0)) {
+		msg.PageSize = limit
+	}
+
+	// retrieve the bucket content page by page and print on the fly
+	if flagIsSet(c, pagedFlag) {
+		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
+		for {
+			objList, err := api.ListBucketPage(baseParams, bucket, msg, query)
+			if err != nil {
+				return err
+			}
+
+			// print exact number of objects if it is `limit`ed: in case of
+			// limit > page size, the last page is printed partially
+			var toPrint []*cmn.BucketEntry
+			if limit > 0 && toShow < len(objList.Entries) {
+				toPrint = objList.Entries[:toShow]
+			} else {
+				toPrint = objList.Entries
+			}
+			err = printObjectProps(c, toPrint, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
+			if err != nil {
+				return err
+			}
+
+			// interrupt the loop if:
+			// 1. the last page is printed
+			// 2. maximum pages are printed
+			// 3. printed `limit` number of objects
+			if msg.PageMarker == "" {
+				return nil
+			}
+			pageCounter++
+			if maxPages > 0 && pageCounter >= maxPages {
+				return nil
+			}
+			if limit > 0 {
+				toShow -= len(objList.Entries)
+				if toShow <= 0 {
+					return nil
+				}
+			}
+		}
+	}
+
+	// retrieve the entire bucket list and print it
 	objList, err := api.ListBucket(baseParams, bucket, msg, limit, query)
 	if err != nil {
 		return err

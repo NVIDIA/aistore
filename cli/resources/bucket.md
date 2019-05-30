@@ -56,6 +56,9 @@ Lists all the objects along with some of the objects' properties. For the full l
 | `--limit` | string | limit of object count | `0` (unlimited) |
 | `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 | `--show-unmatched` | bool | also return objects that did not match the filters (`regex`, `template`) | false |
+| `--paged` | bool | fetch objects page by page and print the next page immediately after it is received. Can be useful to quick check the bucket content. Ignored in fast mode | false |
+| `--max-pages` | int | limit the number or displayed pages in paged mode, 0 - display all pages | 0 |
+| `--marker` | string | start listing bucket objects from the object that follows the marker(in alphabetical order). Can be useful if used with limit flag to quick list a few objects starting from a given object. Ignored in fast mode | "" |
 
 **Example:**
 
@@ -64,6 +67,12 @@ Returns all objects matching `.txt` under the `mytestfolder` directory from `myl
 * `AIS_BUCKET=mylocalbucket ais bucket objects --template="shard-{0..99}.tgz" --show-unmatched`
 Returns all objects with names from `shard-0.tgz` to `shard-99.tgz` from `mylocalbucket`.
 Also returns a separate list of objects that do not match the template.
+* `ais bucket objects mylocalbucket --limit 10`
+Displays first 10 objects of `mylocalbucket`
+* `ais bucket objects mylocalbucket --limit 10 --marker "imageset/object0100"`
+Displays the next 10 objects of bucket `mylocalbucket` that follow alphabetically object `"imageset/object0100"`: `imageset/object0101`, `imageset/object0102` etc
+* `ais bucket objects mylocalbucket --paged --props=all -H`
+Prints out the entire list of bucket objects with all properties page by page. Every page is displayed immediately after it is fetched. Header is off(`-H`) that makes the output easy to parse with scripts. Press Ctrl+C to interrupt.
 
 ### makencopies
 

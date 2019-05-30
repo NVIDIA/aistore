@@ -439,6 +439,42 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 	return reslist, nil
 }
 
+// ListBucketPage returns the first page of bucket objects
+// On success the function updates msg.PageMarker, so a client can reuse
+// the message to fetch the next page
+func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, query ...url.Values) (*cmn.BucketList, error) {
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	q := url.Values{}
+	if len(query) > 0 {
+		q = query[0]
+	}
+
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
+	if err != nil {
+		return nil, err
+	}
+
+	optParams := OptionalParams{
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		Query: q,
+	}
+	respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
+	if err != nil {
+		return nil, err
+	}
+
+	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
+	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
+	}
+	msg.PageMarker = reslist.PageMarker
+
+	return reslist, nil
+}
+
 // ListBucketFast returns list of objects in a bucket.
 // Build an object list with minimal set of properties: name and size.
 // All SelectMsg fields except prefix do not work and are skipped.
