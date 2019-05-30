@@ -7,7 +7,7 @@ package templates
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"text/tabwriter"
 	"text/template"
 	"time"
@@ -356,7 +356,7 @@ func fmtDuration(d int64) string {
 }
 
 // Displays the output in either JSON or tabular form
-func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool) error {
+func DisplayOutput(object interface{}, writer io.Writer, outputTemplate string, formatJSON ...bool) error {
 	useJSON := false
 	if len(formatJSON) > 0 {
 		useJSON = formatJSON[0]
@@ -367,8 +367,8 @@ func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(out))
-		return nil
+		_, err = fmt.Fprintln(writer, string(out))
+		return err
 	}
 
 	// Template
@@ -376,10 +376,10 @@ func DisplayOutput(object interface{}, outputTemplate string, formatJSON ...bool
 	if err != nil {
 		return err
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', 0)
+	w := tabwriter.NewWriter(writer, 0, 8, 1, '\t', 0)
 	if err := tmpl.Execute(w, object); err != nil {
 		return err
 	}
-	w.Flush()
-	return nil
+
+	return w.Flush()
 }

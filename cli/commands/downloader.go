@@ -169,7 +169,7 @@ func downloadStartHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	fmt.Println(id)
+	_, _ = fmt.Fprintln(c.App.Writer, id)
 	return nil
 }
 
@@ -204,7 +204,7 @@ func downloadAdminHandler(c *cli.Context) error {
 				return err
 			}
 
-			fmt.Println(downloadingResult)
+			_, _ = fmt.Fprintln(c.App.Writer, downloadingResult)
 		} else {
 			resp, err := api.DownloadStatus(baseParams, id)
 			if err != nil {
@@ -212,25 +212,25 @@ func downloadAdminHandler(c *cli.Context) error {
 			}
 
 			verbose := flagIsSet(c, verboseFlag)
-			fmt.Println(resp.Print(verbose))
+			_, _ = fmt.Fprintln(c.App.Writer, resp.Print(verbose))
 		}
 	case downloadAbort:
 		if err := api.DownloadAbort(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("download aborted: %s\n", id)
+		_, _ = fmt.Fprintf(c.App.Writer, "download aborted: %s\n", id)
 	case downloadRemove:
 		if err := api.DownloadRemove(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("download removed: %s\n", id)
+		_, _ = fmt.Fprintf(c.App.Writer, "download removed: %s\n", id)
 	case downloadList:
 		list, err := api.DownloadGetList(baseParams, regex)
 		if err != nil {
 			return err
 		}
 
-		err = templates.DisplayOutput(list, templates.DownloadListTmpl)
+		err = templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
 		if err != nil {
 			return err
 		}

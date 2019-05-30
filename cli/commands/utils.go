@@ -50,10 +50,6 @@ const (
 var (
 	ClusterURL string
 
-	// Global variables set by daemon command handler
-	refreshRate = "1s"
-	count       = countDefault
-
 	transport = &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout: 60 * time.Second,

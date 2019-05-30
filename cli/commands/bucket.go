@@ -234,13 +234,13 @@ func bucketHandler(c *cli.Context) (err error) {
 
 	switch command {
 	case bucketCreate:
-		err = createBucket(baseParams, bucket)
+		err = createBucket(c, baseParams, bucket)
 	case bucketDestroy:
-		err = destroyBucket(baseParams, bucket)
+		err = destroyBucket(c, baseParams, bucket)
 	case commandRename:
 		err = renameBucket(c, baseParams)
 	case bucketEvict:
-		err = evictBucket(baseParams, bucket)
+		err = evictBucket(c, baseParams, bucket)
 	case commandList:
 		err = listBucketNames(c, baseParams)
 	case bucketObjects:
@@ -274,20 +274,20 @@ func bucketPropsHandler(c *cli.Context) (err error) {
 }
 
 // Creates new local bucket
-func createBucket(baseParams *api.BaseParams, bucket string) (err error) {
+func createBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
 		return
 	}
-	fmt.Printf("%s bucket created\n", bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket created\n", bucket)
 	return
 }
 
 // Destroy local bucket
-func destroyBucket(baseParams *api.BaseParams, bucket string) (err error) {
+func destroyBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	if err = api.DestroyLocalBucket(baseParams, bucket); err != nil {
 		return
 	}
-	fmt.Printf("%s bucket destroyed\n", bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bucket)
 	return
 }
 
@@ -301,17 +301,17 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
-	fmt.Printf("%s bucket renamed to %s\n", bucket, newBucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket renamed to %s\n", bucket, newBucket)
 	return
 }
 
 // Evict a cloud bucket
-func evictBucket(baseParams *api.BaseParams, bucket string) (err error) {
+func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
 	query := url.Values{cmn.URLParamBckProvider: []string{cmn.CloudBs}}
 	if err = api.EvictCloudBucket(baseParams, bucket, query); err != nil {
 		return
 	}
-	fmt.Printf("%s bucket evicted\n", bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket evicted\n", bucket)
 	return
 }
 
@@ -325,7 +325,7 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err != nil {
 		return
 	}
-	printBucketNames(bucketNames, parseStrFlag(c, regexFlag), bckProvider, !flagIsSet(c, noHeaderFlag))
+	printBucketNames(c, bucketNames, parseStrFlag(c, regexFlag), bckProvider, !flagIsSet(c, noHeaderFlag))
 	return
 }
 
@@ -362,7 +362,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 			return err
 		}
 
-		return printObjectNames(objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
+		return printObjectNames(c, objList.Entries, objectListFilter, showUnmatched, !flagIsSet(c, noHeaderFlag))
 	}
 
 	pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
@@ -379,7 +379,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 		return err
 	}
 
-	return printObjectProps(objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
+	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
 // show bucket statistics
@@ -450,7 +450,7 @@ func statsBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket string) 
 		{"Object size", cmn.B2S(totalSz, 2), cmn.B2S(dataSz, 2), cmn.B2S(localSz, 2)},
 	}
 
-	return templates.DisplayOutput(statList, templates.BucketStatTmpl)
+	return templates.DisplayOutput(statList, c.App.Writer, templates.BucketStatTmpl)
 }
 
 // replace user-friendly properties like `access=ro` with real values
@@ -527,7 +527,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
 		return
 	}
-	fmt.Println()
+	_, _ = fmt.Fprintln(c.App.Writer)
 	return
 }
 
@@ -552,7 +552,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	fmt.Println()
+	_, _ = fmt.Fprintln(c.App.Writer)
 	return nil
 }
 
@@ -576,7 +576,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return
 	}
 
-	fmt.Printf("Reset %s bucket properties\n", bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "Reset %s bucket properties\n", bucket)
 	return
 }
 
@@ -598,13 +598,13 @@ func bucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	}
 
 	if flagIsSet(c, jsonFlag) {
-		return templates.DisplayOutput(bckProps, templates.BucketPropsTmpl, true)
+		return templates.DisplayOutput(bckProps, c.App.Writer, templates.BucketPropsTmpl, true)
 	}
 
-	return printBckHeadTable(bckProps)
+	return printBckHeadTable(c, bckProps)
 }
 
-func printBckHeadTable(props *cmn.BucketProps) error {
+func printBckHeadTable(c *cli.Context, props *cmn.BucketProps) error {
 	// List instead of map to keep properties in the same order always.
 	// All names are one word ones - for easier parsing
 	propList := []struct {
@@ -621,7 +621,7 @@ func printBckHeadTable(props *cmn.BucketProps) error {
 		{"Tiering", props.Tiering.String()},
 	}
 
-	return templates.DisplayOutput(propList, templates.BucketPropsSimpleTmpl)
+	return templates.DisplayOutput(propList, c.App.Writer, templates.BucketPropsSimpleTmpl)
 }
 
 // Configure bucket as n-way mirror
@@ -640,7 +640,7 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 	if err = api.MakeNCopies(baseParams, bucket, copies); err != nil {
 		return
 	}
-	fmt.Printf("Configured %s to replicate %d copies of its objects\n", bucket, copies)
+	_, _ = fmt.Fprintf(c.App.Writer, "Configured %s to replicate %d copies of its objects\n", bucket, copies)
 	return
 }
 
@@ -674,29 +674,29 @@ func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err er
 	return bucket, newBucket, nil
 }
 
-func printBucketNames(bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
+func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
 	if bckProvider == cmn.LocalBs || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)
 		if showHeaders {
-			fmt.Printf("Local Buckets (%d)\n", len(localBuckets))
+			_, _ = fmt.Fprintf(c.App.Writer, "Local Buckets (%d)\n", len(localBuckets))
 		}
 		for _, bucket := range localBuckets {
-			fmt.Println(bucket)
+			_, _ = fmt.Fprintln(c.App.Writer, bucket)
 		}
 		if bckProvider == cmn.LocalBs {
 			return
 		}
 		if showHeaders {
-			fmt.Println()
+			_, _ = fmt.Fprintln(c.App.Writer)
 		}
 	}
 
 	cloudBuckets := regexFilter(regex, bucketNames.Cloud)
 	if showHeaders {
-		fmt.Printf("Cloud Buckets (%d)\n", len(cloudBuckets))
+		_, _ = fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n", len(cloudBuckets))
 	}
 	for _, bucket := range cloudBuckets {
-		fmt.Println(bucket)
+		_, _ = fmt.Fprintln(c.App.Writer, bucket)
 	}
 }
 
@@ -726,7 +726,7 @@ func buildOutputTemplate(props string, showHeaders bool) (string, error) {
 	return bodySb.String(), nil
 }
 
-func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched, showHeaders bool) error {
+func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, props string, showUnmatched, showHeaders bool) error {
 	outputTemplate, err := buildOutputTemplate(props, showHeaders)
 	if err != nil {
 		return err
@@ -734,34 +734,34 @@ func printObjectProps(entries []*cmn.BucketEntry, objectFilter *objectListFilter
 
 	matchingEntries, rest := objectFilter.filter(entries)
 
-	err = templates.DisplayOutput(matchingEntries, outputTemplate)
+	err = templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
 	if err != nil {
 		return err
 	}
 
 	if showHeaders && showUnmatched {
 		outputTemplate = "Unmatched objects:\n" + outputTemplate
-		err = templates.DisplayOutput(rest, outputTemplate)
+		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
 	}
 
 	return err
 }
 
-func printObjectNames(entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched, showHeaders bool) error {
+func printObjectNames(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched, showHeaders bool) error {
 	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
 	if !showHeaders {
 		outputTemplate = "{{range $obj := .}}{{$obj.Name}}\n{{end}}"
 	}
 	matchingEntries, rest := objectFilter.filter(entries)
 
-	err := templates.DisplayOutput(matchingEntries, outputTemplate)
+	err := templates.DisplayOutput(matchingEntries, c.App.Writer, outputTemplate)
 	if err != nil {
 		return err
 	}
 
 	if showHeaders && showUnmatched {
 		outputTemplate = "Unmatched objects:\n" + outputTemplate
-		err = templates.DisplayOutput(rest, outputTemplate)
+		err = templates.DisplayOutput(rest, c.App.Writer, outputTemplate)
 	}
 
 	return err

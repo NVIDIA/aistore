@@ -97,7 +97,7 @@ func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	return templates.DisplayOutput(body, templates.ConfigTmpl, useJSON)
+	return templates.DisplayOutput(body, c.App.Writer, templates.ConfigTmpl, useJSON)
 }
 
 // Sets config of specific daemon or cluster
@@ -112,7 +112,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 			return err
 		}
 
-		fmt.Println()
+		_, _ = fmt.Fprintln(c.App.Writer)
 		return nil
 	}
 
@@ -125,7 +125,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	fmt.Println()
+	_, _ = fmt.Fprintln(c.App.Writer)
 	return nil
 }
 

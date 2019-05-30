@@ -347,7 +347,7 @@ func dsortHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(id)
+		_, _ = fmt.Fprintln(c.App.Writer, id)
 	case dsortStatus:
 		showProgressBar := flagIsSet(c, progressBarFlag)
 		if showProgressBar {
@@ -360,7 +360,7 @@ func dsortHandler(c *cli.Context) error {
 				return err
 			}
 
-			fmt.Println(dsortResult)
+			_, _ = fmt.Fprintln(c.App.Writer, dsortResult)
 		} else {
 			if !flagIsSet(c, refreshFlag) {
 				// show metrics just once
@@ -399,26 +399,26 @@ func dsortHandler(c *cli.Context) error {
 					time.Sleep(rate)
 				}
 
-				fmt.Printf("%s has finished.", cmn.DSortName)
+				_, _ = fmt.Fprintf(c.App.Writer, "%s has finished.", cmn.DSortName)
 			}
 		}
 	case dsortAbort:
 		if err := api.AbortDSort(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("%s job aborted: %s\n", cmn.DSortName, id)
+		_, _ = fmt.Fprintf(c.App.Writer, "%s job aborted: %s\n", cmn.DSortName, id)
 	case dsortRemove:
 		if err := api.RemoveDSort(baseParams, id); err != nil {
 			return err
 		}
-		fmt.Printf("%s job removed: %s\n", cmn.DSortName, id)
+		_, _ = fmt.Fprintf(c.App.Writer, "%s job removed: %s\n", cmn.DSortName, id)
 	case dsortList:
 		list, err := api.ListDSort(baseParams, regex)
 		if err != nil {
 			return err
 		}
 
-		err = templates.DisplayOutput(list, templates.DSortListTmpl)
+		err = templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
 		if err != nil {
 			return err
 		}

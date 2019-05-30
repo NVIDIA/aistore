@@ -7,6 +7,8 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +19,12 @@ import (
 
 type AISCLI struct {
 	app *cli.App
+
+	outWriter io.Writer
+	errWriter io.Writer
+
+	count   int
+	refresh time.Duration
 }
 
 const (
@@ -33,10 +41,12 @@ const (
 	refreshRateDefault = 1 * time.Second
 	refreshRateMin     = 500 * time.Millisecond
 
-	durationParseErrorFmt = "could not convert %q to time duration: %v"
+	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
 
 	aisBucketEnvVar         = "AIS_BUCKET"
 	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
+
+	metadata = "md"
 )
 
 var (
@@ -59,27 +69,19 @@ var (
 )
 
 var AISHelpTemplate = `DESCRIPTION:
-  {{.Name}}{{if .Usage}} - {{.Usage}}{{end}} 
-  Ver. {{if .Version}}{{if not .HideVersion}}{{.Version}}{{end}}{{end}}
-  {{if .Description}}{{.Description}}{{end}}{{if len .Authors}}
+   {{ .Name }}{{ if .Usage }} - {{ .Usage }}{{end}}
+   Ver. {{ if .Version }}{{ if not .HideVersion }}{{ .Version }}{{end}}{{end}}
 
 USAGE:
-{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}
+   {{ .Name }} [GLOBAL OPTIONS] COMMAND
 
-AUTHOR{{with $length := len .Authors}}{{if ne 1 $length}}S{{end}}{{end}}:
-{{range $index, $author := .Authors}}{{if $index}}
-{{end}}{{$author}}{{end}}{{end}}{{if .VisibleCommands}}
-
-COMMANDS:{{range .VisibleCategories}}{{if .Name}}
-{{.Name}}:{{end}}{{range .VisibleCommands}}
-  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
+COMMANDS:{{ range .VisibleCategories }}{{ if .Name }}
+   {{ .Name }}:{{end}}{{ range .VisibleCommands }}
+     {{ join .Names ", " }}{{ "\t" }}{{ .Usage }}{{end}}{{end}}
 
 GLOBAL OPTIONS:
-{{range $index, $option := .VisibleFlags}}{{if $index}}
-{{end}}{{$option}}{{end}}{{end}}{{if .Copyright}}
-
-COPYRIGHT:
-{{.Copyright}}{{end}}
+   {{ range $index, $option := .VisibleFlags }}{{ if $index }}
+   {{end}}{{ $option }}{{end}}
 `
 
 // This is a copy-paste from urfave/cli/help.go. It is done to remove the 'h' alias of the 'help' command
@@ -101,7 +103,7 @@ var helpCommand = cli.Command{
 func commandNotFoundHandler(c *cli.Context, cmd string) {
 	err := commandNotFoundError(c, cmd)
 	// The function has no return value (can't return an error), so it has to print the error here
-	fmt.Print(err.Error())
+	_, _ = fmt.Fprintf(c.App.ErrWriter, err.Error())
 }
 
 func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
@@ -109,7 +111,7 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 }
 
 func New(build, version string) *AISCLI {
-	aisCLI := AISCLI{app: cli.NewApp()}
+	aisCLI := AISCLI{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr}
 	aisCLI.Init(build, version)
 	return &aisCLI
 }
@@ -125,6 +127,10 @@ func (aisCLI *AISCLI) Init(build, version string) {
 	app.Flags = []cli.Flag{cli.HelpFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = incorrectUsageHandler
+	app.Metadata = map[string]interface{}{metadata: aisCLI}
+	app.Writer = aisCLI.outWriter
+	app.ErrWriter = aisCLI.errWriter
+
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version, V",
 		Usage: "print only the version",
@@ -174,16 +180,11 @@ func (aisCLI *AISCLI) Run(input []string) error {
 		return aisCLI.handleCLIError(err)
 	}
 
-	rate, err := time.ParseDuration(refreshRate)
-	if err != nil {
-		return fmt.Errorf(durationParseErrorFmt, refreshRate, err)
+	if aisCLI.count == Infinity {
+		return aisCLI.runForever(input, aisCLI.refresh)
 	}
 
-	if count == Infinity {
-		return aisCLI.runForever(input, rate)
-	}
-
-	return aisCLI.runNTimes(input, rate)
+	return aisCLI.runNTimes(input, aisCLI.count-1, aisCLI.refresh)
 }
 
 func (aisCLI *AISCLI) runOnce(input []string) error {
@@ -198,19 +199,18 @@ func (aisCLI *AISCLI) runForever(input []string, rate time.Duration) error {
 	for {
 		time.Sleep(rate)
 
-		fmt.Println()
+		_, _ = fmt.Fprintln(aisCLI.outWriter)
 		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}
 	}
 }
 
-func (aisCLI *AISCLI) runNTimes(input []string, rate time.Duration) error {
-	// Be careful - count is a global variable set by aisCLI.app.Run(), so a new variable is needed here
-	for runCount := count - 1; runCount > 0; runCount-- {
+func (aisCLI *AISCLI) runNTimes(input []string, n int, rate time.Duration) error {
+	for ; n > 0; n-- {
 		time.Sleep(rate)
 
-		fmt.Println()
+		_, _ = fmt.Fprintln(aisCLI.outWriter)
 		if err := aisCLI.runOnce(input); err != nil {
 			return err
 		}

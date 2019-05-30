@@ -8,6 +8,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/NVIDIA/aistore/ios"
 
@@ -66,21 +67,30 @@ var (
 	}
 )
 
-func updateLongRunVariables(c *cli.Context) {
+func updateLongRunVariables(c *cli.Context) error {
+	aisCLI := c.App.Metadata[metadata].(*AISCLI)
+
 	if flagIsSet(c, refreshFlag) {
-		refreshRate = parseStrFlag(c, refreshFlag)
+		rateStr := parseStrFlag(c, refreshFlag)
+		rate, err := time.ParseDuration(rateStr)
+		if err != nil {
+			return fmt.Errorf(durationParseErrorFmt, rateStr, err)
+		}
+		aisCLI.refresh = rate
 		// Run forever unless `count` is also specified
-		count = Infinity
+		aisCLI.count = Infinity
 	}
 
 	if flagIsSet(c, countFlag) {
-		count = parseIntFlag(c, countFlag)
-		if count <= 0 {
-			fmt.Printf("Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
-				countFlag.Name, count, countFlag.Name, countDefault)
-			count = countDefault
+		aisCLI.count = parseIntFlag(c, countFlag)
+		if aisCLI.count <= 0 {
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
+				countFlag.Name, aisCLI.count, countFlag.Name, countDefault)
+			aisCLI.count = countDefault
 		}
 	}
+
+	return nil
 }
 
 // Querying information
@@ -88,7 +98,10 @@ func queryHandler(c *cli.Context) (err error) {
 	if err := fillMap(ClusterURL); err != nil {
 		return err
 	}
-	updateLongRunVariables(c)
+
+	if err := updateLongRunVariables(c); err != nil {
+		return err
+	}
 
 	var (
 		useJSON    = flagIsSet(c, jsonFlag)
@@ -100,13 +113,13 @@ func queryHandler(c *cli.Context) (err error) {
 
 	switch req {
 	case cmn.GetWhatSmap:
-		err = daecluSmap(baseParams, daemonID, useJSON)
+		err = daecluSmap(c, baseParams, daemonID, useJSON)
 	case cmn.GetWhatStats:
-		err = daecluStats(baseParams, daemonID, useJSON)
+		err = daecluStats(c, baseParams, daemonID, useJSON)
 	case cmn.GetWhatDiskStats:
-		err = daecluDiskStats(baseParams, daemonID, useJSON, hideHeader)
+		err = daecluDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
 	case cmn.GetWhatDaemonStatus:
-		err = daecluStatus(daemonID, useJSON, hideHeader)
+		err = daecluStatus(c, daemonID, useJSON, hideHeader)
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
@@ -114,7 +127,7 @@ func queryHandler(c *cli.Context) (err error) {
 }
 
 // Displays smap of single daemon
-func daecluSmap(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func daecluSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	newURL, err := daemonDirectURL(daemonID)
 	if err != nil {
 		return err
@@ -125,27 +138,27 @@ func daecluSmap(baseParams *api.BaseParams, daemonID string, useJSON bool) error
 	if err != nil {
 		return err
 	}
-	return templates.DisplayOutput(body, templates.SmapTmpl, useJSON)
+	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, useJSON)
 }
 
 // Displays the stats of a daemon
-func daecluStats(baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func daecluStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	if res, ok := proxy[daemonID]; ok {
-		return templates.DisplayOutput(res, templates.ProxyStatsTmpl, useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, templates.ProxyStatsTmpl, useJSON)
 	} else if res, ok := target[daemonID]; ok {
-		return templates.DisplayOutput(res, templates.TargetStatsTmpl, useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, templates.TargetStatsTmpl, useJSON)
 	} else if daemonID == "" {
 		body, err := api.GetClusterStats(baseParams)
 		if err != nil {
 			return err
 		}
-		return templates.DisplayOutput(body, templates.StatsTmpl, useJSON)
+		return templates.DisplayOutput(body, c.App.Writer, templates.StatsTmpl, useJSON)
 	}
 	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
 // Displays the disk stats of a target
-func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
+func daecluDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
 		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, cmn.GetWhatDiskStats)
 	}
@@ -164,7 +177,7 @@ func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON, hideH
 	}
 
 	template := chooseTmpl(templates.DiskStatBodyTmpl, templates.DiskStatsFullTmpl, hideHeader)
-	err = templates.DisplayOutput(diskStats, template, useJSON)
+	err = templates.DisplayOutput(diskStats, c.App.Writer, template, useJSON)
 	if err != nil {
 		return err
 	}
@@ -173,24 +186,24 @@ func daecluDiskStats(baseParams *api.BaseParams, daemonID string, useJSON, hideH
 }
 
 // Displays the status of the cluster or daemon
-func daecluStatus(daemonID string, useJSON, hideHeader bool) (err error) {
+func daecluStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (err error) {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
-		err = templates.DisplayOutput(res, template, useJSON)
+		err = templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
 		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
-		err = templates.DisplayOutput(res, template, useJSON)
+		err = templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Proxy {
 		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
-		err = templates.DisplayOutput(proxy, template, useJSON)
+		err = templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Target {
 		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
-		err = templates.DisplayOutput(target, template, useJSON)
+		err = templates.DisplayOutput(target, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
-		if err := templates.DisplayOutput(proxy, templates.ProxyInfoTmpl, useJSON); err != nil {
+		if err := templates.DisplayOutput(proxy, c.App.Writer, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
-		err = templates.DisplayOutput(target, templates.TargetInfoTmpl, useJSON)
+		err = templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON)
 	} else {
 		return fmt.Errorf(invalidDaemonMsg, daemonID)
 	}

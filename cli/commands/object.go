@@ -268,10 +268,10 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	}
 
 	if flagIsSet(c, lengthFlag) {
-		_, _ = fmt.Fprintf(os.Stderr, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		_, _ = fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
 		return err
 	}
-	_, _ = fmt.Fprintf(os.Stderr, "%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
+	_, _ = fmt.Fprintf(c.App.ErrWriter, "%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
 	return err
 }
 
@@ -281,13 +281,13 @@ func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckPr
 	_, err := api.HeadObject(baseParams, bucket, bckProvider, object, true)
 	if err != nil {
 		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
-			fmt.Printf("Cached: %v\n", false)
+			_, _ = fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
 			return nil
 		}
 		return err
 	}
 
-	fmt.Printf("Cached: %v\n", true)
+	_, _ = fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)
 	return nil
 }
 
@@ -319,7 +319,7 @@ func objectPut(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider s
 		return err
 	}
 
-	fmt.Printf("%s put into %s bucket\n", objName, bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
 	return nil
 }
 
@@ -335,7 +335,7 @@ func objectDelete(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvide
 		if err = api.DeleteObject(baseParams, bucket, obj, bckProvider); err != nil {
 			return
 		}
-		fmt.Printf("%s deleted from %s bucket\n", obj, bucket)
+		_, _ = fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", obj, bucket)
 		return
 	} else if flagIsSet(c, listFlag) {
 		// List Delete
@@ -398,7 +398,7 @@ func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider 
 		return handleObjHeadError(err, bucket, name)
 	}
 
-	return templates.DisplayOutput(objProps, tmpl, flagIsSet(c, jsonFlag))
+	return templates.DisplayOutput(objProps, c.App.Writer, tmpl, flagIsSet(c, jsonFlag))
 }
 
 // Prefetch operations
@@ -422,7 +422,7 @@ func objectEvict(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider
 		if err := api.EvictObject(baseParams, bucket, name); err != nil {
 			return err
 		}
-		fmt.Printf("%s evicted from %s bucket\n", name, bucket)
+		_, _ = fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", name, bucket)
 		return
 	} else if flagIsSet(c, listFlag) {
 		// List evict
@@ -446,7 +446,7 @@ func objectRename(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 		return
 	}
 
-	fmt.Printf("%s renamed to %s\n", obj, newName)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s renamed to %s\n", obj, newName)
 	return
 }
 
@@ -476,7 +476,7 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckProv
 	if err != nil {
 		return
 	}
-	fmt.Printf("%s %s from %s bucket\n", fileList, command, bucket)
+	_, _ = fmt.Fprintf(c.App.Writer, "%s %s from %s bucket\n", fileList, command, bucket)
 	return
 }
 
@@ -510,7 +510,7 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckPro
 	if err != nil {
 		return
 	}
-	fmt.Printf("%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
+	_, _ = fmt.Fprintf(c.App.Writer, "%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
 		command, prefix, regex, rangeStr, bucket)
 	return
 }

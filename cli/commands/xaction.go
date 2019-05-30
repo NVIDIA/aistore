@@ -95,12 +95,12 @@ func xactHandler(c *cli.Context) (err error) {
 
 	switch command {
 	case xactStart:
-		fmt.Printf("started %q xaction\n", xaction)
+		_, _ = fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
 	case xactStop:
 		if xaction == "" {
-			fmt.Println("stopped all xactions")
+			_, _ = fmt.Fprintln(c.App.Writer, "stopped all xactions")
 		} else {
-			fmt.Printf("stopped %q xaction\n", xaction)
+			_, _ = fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xaction)
 		}
 	case xactStats:
 		for key, val := range xactStatsMap {
@@ -108,7 +108,7 @@ func xactHandler(c *cli.Context) (err error) {
 				delete(xactStatsMap, key)
 			}
 		}
-		err = templates.DisplayOutput(xactStatsMap, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
+		err = templates.DisplayOutput(xactStatsMap, c.App.Writer, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
