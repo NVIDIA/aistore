@@ -87,7 +87,7 @@ func xactHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	}
 
-	xactStatsMap, err := api.GetXactStatusStats(baseParams, xaction, command, bucket, flagIsSet(c, allFlagXact))
+	xactStatsMap, err := api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlagXact))
 	if err != nil {
 		return err
 	}
