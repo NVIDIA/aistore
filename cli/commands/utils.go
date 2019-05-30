@@ -384,11 +384,17 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	}
 }
 
-func missingFlagsError(c *cli.Context, missingFlags []string) error {
+func missingFlagsError(c *cli.Context, missingFlags []string, message ...string) error {
 	cmn.Assert(len(missingFlags) > 0)
+
+	fullMessage := fmt.Sprintf("missing required flags: %s", strings.Join(missingFlags, ", "))
+	if len(message) > 0 {
+		fullMessage += " - " + message[0]
+	}
+
 	return &usageError{
 		context:      c,
-		message:      fmt.Sprintf("missing required flags: %s", strings.Join(missingFlags, ", ")),
+		message:      fullMessage,
 		helpData:     c.Command,
 		helpTemplate: cli.CommandHelpTemplate,
 	}

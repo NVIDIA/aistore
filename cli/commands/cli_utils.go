@@ -310,7 +310,7 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 	return b, nil
 }
 
-func checkFlags(c *cli.Context, flag []cli.Flag) error {
+func checkFlags(c *cli.Context, flag []cli.Flag, message ...string) error {
 	missingFlags := make([]string, 0)
 
 	for _, f := range flag {
@@ -322,7 +322,7 @@ func checkFlags(c *cli.Context, flag []cli.Flag) error {
 	missingFlagCount := len(missingFlags)
 
 	if missingFlagCount >= 1 {
-		return missingFlagsError(c, missingFlags)
+		return missingFlagsError(c, missingFlags, message...)
 	}
 
 	return nil

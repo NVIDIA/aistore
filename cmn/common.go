@@ -145,6 +145,11 @@ func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
 	return kvs
 }
 
+func (s StringSet) Contains(key string) bool {
+	_, ok := s[key]
+	return ok
+}
+
 //
 // PairF32
 //
@@ -348,6 +353,15 @@ func DassertMsg(cond bool, msg, pkg string) {
 func StringInSlice(s string, arr []string) bool {
 	for _, el := range arr {
 		if el == s {
+			return true
+		}
+	}
+	return false
+}
+
+func AnyHasPrefixInSlice(prefix string, arr []string) bool {
+	for _, el := range arr {
+		if strings.HasPrefix(el, prefix) {
 			return true
 		}
 	}

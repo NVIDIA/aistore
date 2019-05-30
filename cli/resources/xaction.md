@@ -34,5 +34,5 @@ Returns the stats of `XACTION_NAME` xaction. If `XACTION_NAME` is not provided, 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--json` | bool | Output the stats in JSON format | `false` |
-| `--bucket` | string | Name of the bucket to start the xaction | `""` |
+| `--bucket` | string | Name of the bucket on which the xaction operates | `""` |
 | `--all` | bool | If set, additionally displays old, finished xactions | `false` |

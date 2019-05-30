@@ -49,8 +49,25 @@ func targetList(c *cli.Context) {
 
 // Returns flags for command
 func flagList(c *cli.Context) {
+	listFlags(c)
+}
+
+func flagListNoBucket(c *cli.Context) {
+	listFlags(c, bucketFlag.Name)
+}
+
+func listFlags(c *cli.Context, flagsToSkip ...string) {
 	for _, flag := range c.Command.Flags {
-		fmt.Printf("--%s\n", cleanFlag(flag.GetName()))
+		flagName := cleanFlag(flag.GetName())
+
+		if c.IsSet(flagName) {
+			continue
+		}
+		if cmn.StringInSlice(flagName, flagsToSkip) {
+			continue
+		}
+
+		fmt.Printf("--%s\n", flagName)
 	}
 }
 
@@ -109,16 +126,45 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string
 	}
 }
 
-// Xaction list
 func xactList(_ *cli.Context) {
 	for key := range cmn.XactKind {
 		fmt.Println(key)
 	}
 }
 
-func propList(_ *cli.Context) {
+func xactStartCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		xactList(c)
+		return
+	}
+
+	xactFlagsBasedOnXactType(c)
+}
+
+func xactStopStatsCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		xactList(c)
+		flagListNoBucket(c)
+		return
+	}
+
+	xactFlagsBasedOnXactType(c)
+}
+
+func xactFlagsBasedOnXactType(c *cli.Context) {
+	xactName := c.Args().First()
+	if bucketXactions.Contains(xactName) {
+		flagList(c)
+		return
+	}
+
+	// If this is not a bucket xaction then don't suggest `--bucket` flag
+	flagListNoBucket(c)
+}
+
+func propList(c *cli.Context) {
 	for prop, readonly := range cmn.BucketPropList {
-		if !readonly {
+		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}
@@ -131,9 +177,9 @@ func configSetCompletions(c *cli.Context) {
 	configPropList(c)
 }
 
-func configPropList(_ *cli.Context) {
+func configPropList(c *cli.Context) {
 	for prop, readonly := range cmn.ConfigPropList {
-		if !readonly {
+		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}
 	}

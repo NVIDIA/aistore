@@ -26,15 +26,16 @@ const (
 
 var (
 	allFlagXact   = cli.BoolFlag{Name: "all", Usage: "show all (even old) xactions"}
-	baseXactFlags = []cli.Flag{bucketFlag, allFlagXact}
+	baseXactFlags = []cli.Flag{bucketFlag}
 
 	xactFlags = map[string][]cli.Flag{
 		xactStart: baseXactFlags,
 		xactStop:  baseXactFlags,
-		xactStats: append(baseXactFlags, jsonFlag),
+		xactStats: append(baseXactFlags, jsonFlag, allFlagXact),
 	}
 
-	xactKindsMsg = buildXactKindsMsg()
+	bucketXactions = bucketXactionNames()
+	xactKindsMsg   = buildXactKindsMsg()
 
 	xactCmds = []cli.Command{
 		{
@@ -48,7 +49,7 @@ var (
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStart],
 					Action:       xactHandler,
-					BashComplete: xactList,
+					BashComplete: xactStartCompletions,
 				},
 				{
 					Name:         xactStop,
@@ -57,7 +58,7 @@ var (
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStop],
 					Action:       xactHandler,
-					BashComplete: xactList,
+					BashComplete: xactStopStatsCompletions,
 				},
 				{
 					Name:         xactStats,
@@ -66,7 +67,7 @@ var (
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStats],
 					Action:       xactHandler,
-					BashComplete: xactList,
+					BashComplete: xactStopStatsCompletions,
 				},
 			},
 		},
@@ -80,6 +81,22 @@ func xactHandler(c *cli.Context) (err error) {
 		bucket     = parseStrFlag(c, bucketFlag)
 		xaction    = c.Args().First()
 	)
+
+	if command == xactStart {
+		if c.NArg() == 0 {
+			return missingArgumentsError(c, "xaction name")
+		}
+		if !bucketXactions.Contains(xaction) && flagIsSet(c, bucketFlag) {
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, but bucket name provided. Ignoring the bucket name.\n", xaction)
+			bucket = ""
+		}
+	}
+
+	if c.NArg() > 0 && bucketXactions.Contains(xaction) {
+		if err := checkFlags(c, []cli.Flag{bucketFlag}, fmt.Sprintf("%s is xaction that operates on buckets", xaction)); err != nil {
+			return err
+		}
+	}
 
 	_, ok := cmn.ValidXact(xaction)
 
@@ -111,6 +128,7 @@ func xactHandler(c *cli.Context) (err error) {
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
+
 	return err
 }
 
@@ -122,4 +140,16 @@ func buildXactKindsMsg() string {
 	}
 
 	return fmt.Sprintf("%s can be one of: %s", xactionNameArgumentText, strings.Join(xactKinds, ", "))
+}
+
+func bucketXactionNames() cmn.StringSet {
+	result := make(cmn.StringSet)
+
+	for name, meta := range cmn.XactKind {
+		if !meta.IsGlobal {
+			result[name] = struct{}{}
+		}
+	}
+
+	return result
 }
