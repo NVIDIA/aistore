@@ -41,7 +41,7 @@ type NetInfo struct {
 //==================================================================
 type Snode struct {
 	DaemonID        string  `json:"daemon_id"`
-	DaemonType      string  `json:"daemon_type"`
+	DaemonType      string  `json:"daemon_type"`       // enum: "target" or "proxy"
 	PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
 	IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
 	IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
@@ -59,10 +59,10 @@ func (d *Snode) ID() string {
 	return d.DaemonID
 }
 
-const snodefmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
+const snodeFmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
 
 func (d *Snode) _string() string {
-	return fmt.Sprintf(snodefmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
+	return fmt.Sprintf(snodeFmt, d.DaemonID, d.DaemonType, d.PublicNet.DirectURL,
 		d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
 }
 func (d *Snode) String() string {
@@ -113,6 +113,9 @@ func (d *Snode) Validate() error {
 	}
 	return nil
 }
+
+func (d *Snode) IsProxy() bool  { return d.DaemonType == cmn.Proxy }
+func (d *Snode) IsTarget() bool { return d.DaemonType == cmn.Target }
 
 //===============================================================
 //

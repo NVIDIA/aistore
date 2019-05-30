@@ -192,13 +192,13 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 		if cmn.GCO.Get().Proxy.NonElectable {
 			query := url.Values{}
 			query.Add(cmn.URLParamNonElectable, "true")
-			res = p.join(true, query)
+			res = p.join(query)
 		} else {
-			res = p.join(true, nil)
+			res = p.join(nil)
 		}
 	} else { // keepalive
 		url, psi := p.getPrimaryURLAndSI()
-		res = p.registerToURL(url, psi, timeout, true, nil, keepalive)
+		res = p.registerToURL(url, psi, timeout, nil, keepalive)
 	}
 	return res.status, res.err
 }
@@ -2360,7 +2360,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	// notify metasync to cancel all pending sync requests
 	p.metasyncer.becomeNonPrimary()
 	p.smapowner.put(newSmap)
-	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, defaultTimeout, true, nil, false)
+	res := p.registerToURL(newSmap.ProxySI.IntraControlNet.DirectURL, newSmap.ProxySI, defaultTimeout, nil, false)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.err.Error())
 		return
@@ -2797,45 +2797,56 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 // register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		regReq              targetRegMeta
-		nsi                 *cluster.Snode
-		msg                 *cmn.ActionMsg
-		s                   string
-		keepalive, register bool
-		nonElectable        bool
+		regReq                            targetRegMeta
+		keepalive, register, selfRegister bool
+		nonElectable                      bool
 	)
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster)
 	if err != nil {
 		return
 	}
-	if cmn.ReadJSON(w, r, &regReq) != nil {
+
+	switch apiItems[0] {
+	case cmn.Register: // manual by user (API)
+		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
+			return
+		}
+		register = true
+	case cmn.Keepalive:
+		if cmn.ReadJSON(w, r, &regReq) != nil {
+			return
+		}
+		keepalive = true
+	case cmn.AutoRegister: // node self-register
+		if cmn.ReadJSON(w, r, &regReq) != nil {
+			return
+		}
+		selfRegister = true
+	default:
+		p.invalmsghdlr(w, r, fmt.Sprintf("invalid path specified: %q", apiItems[0]))
 		return
 	}
-	nsi = regReq.SI
+
+	nsi := regReq.SI
 	if err := nsi.Validate(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	isProxy := nsi.DaemonType == cmn.Proxy
 	if regReq.BMD != nil && glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Received %s from %s(%s) on registering:\n%s]",
 			bmdTermName, nsi.DaemonID, nsi.DaemonType, regReq.BMD.Dump())
 	}
-	if len(apitems) > 0 {
-		keepalive = apitems[0] == cmn.Keepalive
-		register = apitems[0] == cmn.Register // user via REST API
-		if isProxy {
-			if len(apitems) > 1 {
-				keepalive = apitems[1] == cmn.Keepalive
-			}
-			s := r.URL.Query().Get(cmn.URLParamNonElectable)
-			if nonElectable, err = cmn.ParseBool(s); err != nil {
-				glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
-			}
+
+	isProxy := nsi.IsProxy()
+	if isProxy {
+		s := r.URL.Query().Get(cmn.URLParamNonElectable)
+		if nonElectable, err = cmn.ParseBool(s); err != nil {
+			glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
 		}
 	}
-	s = fmt.Sprintf("register %s (keepalive=%t)", nsi, keepalive)
-	msg = &cmn.ActionMsg{Action: cmn.ActRegTarget}
+
+	s := fmt.Sprintf("register %s (keepalive=%t, register=%t, self-register=%t)", nsi, keepalive, register, selfRegister)
+	msg := &cmn.ActionMsg{Action: cmn.ActRegTarget}
 	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
 	}
@@ -2898,10 +2909,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.smapowner.Unlock()
-	if !isProxy && !register { // case: self-registering target
+
+	// Return current metadata to registering target
+	if !isProxy && selfRegister { // case: self-registering target
 		bmd := p.bmdowner.get()
-		meta := targetRegMeta{smap, bmd, p.si}
-		body := cmn.MustMarshal(&meta)
+		meta := &targetRegMeta{smap, bmd, p.si}
+		body := cmn.MustMarshal(meta)
 		p.writeJSON(w, r, body, path.Join(cmn.ActRegTarget, nsi.DaemonID) /* tag */)
 	}
 

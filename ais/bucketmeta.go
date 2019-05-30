@@ -178,7 +178,14 @@ func (m *bucketMD) MarshalXattr() []byte {
 
 // Selects a mountpath with highest weight and reads xattr of the
 // directory where mountpath is mounted
-func (m *bucketMD) Load(buf []byte) error {
+func (m *bucketMD) LoadFromFS() error {
+	slab, err := gmem2.GetSlab2(maxBMDXattrSize)
+	if err != nil {
+		return err
+	}
+	buf := slab.Alloc()
+	defer slab.Free(buf)
+
 	mpath, err := fs.Mountpaths.MpathForXattr()
 	if err != nil {
 		return err

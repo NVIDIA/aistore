@@ -978,16 +978,16 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
+func (h *httprunner) join(query url.Values) (res callResult) {
 	url, psi := h.getPrimaryURLAndSI()
-	res = h.registerToURL(url, psi, defaultTimeout, isproxy, query, false)
+	res = h.registerToURL(url, psi, defaultTimeout, query, false)
 	if res.err == nil {
 		return
 	}
 	config := cmn.GCO.Get()
 	if config.Proxy.DiscoveryURL != "" && config.Proxy.DiscoveryURL != url {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, defaultTimeout, isproxy, query, false)
+		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, defaultTimeout, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -996,7 +996,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
 		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, defaultTimeout, isproxy, query, false)
+		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, defaultTimeout, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -1005,35 +1005,24 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, isproxy bool, query url.Values,
-	keepalive bool) (res callResult) {
-
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, query url.Values, keepalive bool) (res callResult) {
 	req := targetRegMeta{SI: h.si}
-	if !isproxy && !keepalive {
+	if h.si.IsTarget() && !keepalive {
 		xBMD := &bucketMD{}
-		slab, err := gmem2.GetSlab2(maxBMDXattrSize)
-		if err == nil {
-			buf := slab.Alloc()
-			errBMD := xBMD.Load(buf)
-			if errBMD == nil && xBMD.Version != 0 {
-				glog.Infof("Target %s is joining cluster and sending xattr %s version %d", h.si.DaemonID, bmdTermName, xBMD.Version)
-				req.BMD = xBMD
-			}
-			slab.Free(buf)
-		} else {
-			// not critical - do not fail the registration process, only log it
-			glog.Errorf("Failed to allocate memory to read %s from xattrs", bmdTermName)
+		err := xBMD.LoadFromFS()
+		if err == nil && xBMD.Version != 0 {
+			glog.Infof("Target %s is joining cluster and sending xattr %s version %d", h.si.DaemonID, bmdTermName, xBMD.Version)
+			req.BMD = xBMD
 		}
 	}
 
 	info := cmn.MustMarshal(req)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
-	if isproxy {
-		path += cmn.URLPath(cmn.Proxy)
-	}
 	if keepalive {
 		path += cmn.URLPath(cmn.Keepalive)
+	} else {
+		path += cmn.URLPath(cmn.AutoRegister)
 	}
 
 	callArgs := callArgs{

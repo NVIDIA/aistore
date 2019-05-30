@@ -1604,19 +1604,10 @@ func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Sn
 
 func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) {
 	bmdXattr := &bucketMD{}
-	slab, err := gmem2.GetSlab2(maxBMDXattrSize)
-	if err != nil {
-		t.invalmsghdlr(w, r, "Failed to read BMD from xattrs: "+err.Error())
-		return
-	}
-
-	buf := slab.Alloc()
-	if err := bmdXattr.Load(buf); err != nil {
-		slab.Free(buf)
+	if err := bmdXattr.LoadFromFS(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	slab.Free(buf)
 
 	body := cmn.MustMarshal(bmdXattr)
 	t.writeJSON(w, r, body, "getbucketsxattr")

@@ -76,7 +76,7 @@ func (m *smapX) isPrimary(self *cluster.Snode) bool {
 }
 
 func (m *smapX) isPresent(si *cluster.Snode) bool {
-	if si.DaemonType == cmn.Proxy {
+	if si.IsProxy() {
 		psi := m.GetProxy(si.DaemonID)
 		return psi != nil
 	}
@@ -139,7 +139,7 @@ func (m *smapX) delProxy(pid string) {
 
 func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 	id := nsi.DaemonID
-	if nsi.DaemonType == cmn.Proxy {
+	if nsi.IsProxy() {
 		if m.GetProxy(id) != nil {
 			m.delProxy(id)
 		}
@@ -152,7 +152,7 @@ func (m *smapX) putNode(nsi *cluster.Snode, nonElectable bool) {
 			glog.Infof("joined %s (num proxies %d)", nsi.Name(), m.CountProxies())
 		}
 	} else {
-		cmn.Assert(nsi.DaemonType == cmn.Target)
+		cmn.Assert(nsi.IsTarget())
 		if m.GetTarget(id) != nil { // ditto
 			m.delTarget(id)
 		}

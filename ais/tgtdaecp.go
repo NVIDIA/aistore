@@ -33,10 +33,10 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 		meta targetRegMeta
 	)
 	if !keepalive {
-		res = t.join(false, nil)
+		res = t.join(nil)
 	} else { // keepalive
 		url, psi := t.getPrimaryURLAndSI()
-		res = t.registerToURL(url, psi, timeout, false, nil, keepalive)
+		res = t.registerToURL(url, psi, timeout, nil, keepalive)
 	}
 	if res.err != nil {
 		return res.status, res.err

@@ -19,13 +19,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// type compatible with internal `registerRequest`
-// Required by API RegisterTarget - a client does not need to
-// send any BMD, so it hides BMD from the client
-type targetRegReq struct {
-	SI *cluster.Snode `json:"si"`
-}
-
 // GetClusterMap API
 //
 // GetClusterMap retrieves AIStore cluster map
@@ -140,8 +133,7 @@ func GetTargetDiskStats(baseParams *BaseParams) (map[string]*ios.SelectedDiskSta
 //
 // Registers an existing target to the clustermap.
 func RegisterTarget(baseParams *BaseParams, targetInfo *cluster.Snode) error {
-	req := targetRegReq{SI: targetInfo}
-	targetJSON, err := jsoniter.Marshal(req)
+	targetJSON, err := jsoniter.Marshal(targetInfo)
 	if err != nil {
 		return err
 	}

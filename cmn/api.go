@@ -429,15 +429,16 @@ const (
 	Vote      = "vote"
 	Transport = "transport"
 	// l3
-	SyncSmap   = "syncsmap"
-	Keepalive  = "keepalive"
-	Register   = "register"
-	Unregister = "unregister"
-	Proxy      = "proxy"
-	Voteres    = "result"
-	VoteInit   = "init"
-	Mountpaths = "mountpaths"
-	ListAll    = "*"
+	SyncSmap     = "syncsmap"
+	Keepalive    = "keepalive"
+	Register     = "register" // node register by admin (manual)
+	AutoRegister = "autoreg"  // node register itself into the primary proxy (automatic)
+	Unregister   = "unregister"
+	Proxy        = "proxy"
+	Voteres      = "result"
+	VoteInit     = "init"
+	Mountpaths   = "mountpaths"
+	ListAll      = "*"
 
 	// dSort and downloader
 	Init        = "init"
