@@ -404,11 +404,6 @@ func (t *targetrunner) registerStats() {
 	// download
 	t.statsif.Register(stats.DownloadSize, stats.KindCounter)
 	t.statsif.Register(stats.DownloadLatency, stats.KindLatency)
-	// TODO: rebalance
-	// t.statsif.Register(stats.RebGlobalCount, stats.KindCounter)
-	// t.statsif.Register(stats.RebLocalCount, stats.KindCounter)
-	// t.statsif.Register(stats.RebGlobalSize, stats.KindCounter)
-	// t.statsif.Register(stats.RebLocalSize, stats.KindCounter)
 }
 
 // stop gracefully

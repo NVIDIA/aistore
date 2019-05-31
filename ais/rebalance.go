@@ -438,6 +438,7 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 	hdr.Opaque = []byte(reb.t.si.DaemonID) // self == src
 	hdr.ObjAttrs.Size = 0
 	if err := reb.acks.SendV(hdr, nil /* reader */, nil /* sent cb */, nil /* cmpl ptr */, tsi); err != nil {
+		// TODO: collapse same-type errors e.g.: "src-id=>network: destination mismatch: stream => dst-id does not exist"
 		glog.Error(err)
 	}
 }

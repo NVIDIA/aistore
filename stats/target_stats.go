@@ -38,10 +38,6 @@ const (
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
 	ErrMetadataCount = "err.md.n"
-	RebGlobalCount   = "reb.global.n"
-	RebLocalCount    = "reb.local.n"
-	RebGlobalSize    = "reb.global.size"
-	RebLocalSize     = "reb.local.size"
 	DownloadSize     = "dl.size"
 
 	// KindLatency
