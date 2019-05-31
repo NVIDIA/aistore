@@ -22,6 +22,8 @@ Examples:
 * `ais status proxy --count 5 --refresh 10s` - displays 5 reports with statuses of all proxies in the cluster with 10s interval between each report
 * `ais status target --refresh 2s` - displays a continuous report with statuses of all targets in the cluster with 2s interval between each report
 
+Note: more detailed information about target's status can be retreived by [`ais xaction`](./xaction.md) command.
+
 ### smap
 
 `ais smap [DAEMON_ID]`

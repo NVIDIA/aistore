@@ -87,12 +87,17 @@ type (
 		statsTime time.Duration
 	}
 
+	TargetStatus struct {
+		GlobalRebalanceStats *RebalanceTargetStats `json:"rebalance_stats,omitempty"`
+	}
+
 	DaemonStatus struct {
 		Snode       *cluster.Snode         `json:"snode"`
 		Stats       *CoreStats             `json:"daemon_stats"`
 		Capacity    map[string]*fscapacity `json:"capacity"`
 		SysInfo     cmn.SysInfo            `json:"sys_info"`
 		SmapVersion int64                  `json:"smap_version"`
+		TStatus     *TargetStatus          `json:"target,omitempty"`
 	}
 )
 

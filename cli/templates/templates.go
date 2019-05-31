@@ -46,12 +46,12 @@ const (
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
 
 	// Target Info
-	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Throughput\n"
+	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
 	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
 		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
-		"{{$statVal := ExtractStat $value.Stats `get.bps` }}{{FormatBytesSigned $statVal 2}}/s\n"
+		"{{FormatXactStatus $value.TStatus }}\n"
 
 	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
 	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
@@ -306,6 +306,7 @@ var (
 		"FormatTime":          fmtTime,
 		"FormatObjTime":       fmtObjTime,
 		"FormatDur":           fmtDuration,
+		"FormatXactStatus":    fmtXactStatus,
 	}
 )
 
@@ -335,6 +336,21 @@ func calcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
 		}
 	}
 	return total / uint64(len(daemon.Capacity))
+}
+
+func fmtXactStatus(tStatus *stats.TargetStatus) string {
+	if tStatus == nil || tStatus.GlobalRebalanceStats == nil {
+		return "not started"
+	}
+
+	tStats := tStatus.GlobalRebalanceStats
+	if tStats.Aborted() {
+		return fmt.Sprintf("aborted; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+	}
+	if tStats.EndTime().IsZero() {
+		return fmt.Sprintf("running; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+	}
+	return fmt.Sprintf("finished; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 }
 
 func isUnsetTime(t time.Time) bool {

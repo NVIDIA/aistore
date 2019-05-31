@@ -318,13 +318,24 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, jsbytes, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
 		tstats := getstorstatsrunner()
+
+		var globalRebStats *stats.RebalanceTargetStats
+		entry := t.xactions.GetL(cmn.ActGlobalReb)
+		if entry != nil && entry.Get() != nil {
+			var ok bool
+			globalRebStats, ok = entry.Stats().(*stats.RebalanceTargetStats)
+			cmn.AssertMsg(ok, "Expected global rebalance stats to be of type stast.RebalanceTargetStats")
+		}
+
 		msg := &stats.DaemonStatus{
 			Snode:       t.httprunner.si,
 			SmapVersion: t.smapowner.get().Version,
 			SysInfo:     gmem2.FetchSysInfo(),
 			Stats:       tstats.Core,
 			Capacity:    tstats.Capacity,
+			TStatus:     &stats.TargetStatus{GlobalRebalanceStats: globalRebStats},
 		}
+
 		jsbytes, err := jsoniter.Marshal(msg)
 		cmn.AssertNoErr(err)
 		t.writeJSON(w, r, jsbytes, httpdaeWhat)
