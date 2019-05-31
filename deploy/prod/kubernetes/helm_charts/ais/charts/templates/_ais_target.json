@@ -60,6 +60,7 @@
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",
+		"multiplier":	{{ .Values.common_config.rebalance.multiplier }},
 		"enabled":			true
 	},
 	"cksum": {

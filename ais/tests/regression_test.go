@@ -92,7 +92,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl, true)
 	selectErr(errCh, "put", t, true)
 	close(filenameCh)
 	close(errCh)
@@ -167,7 +167,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	sgl = tutils.Mem2.NewSGL(fileSize)
 	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bucketName, SmokeDir, readerType, prefix, fileSize, numberOfFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bucketName, SmokeDir, readerType, prefix, fileSize, numberOfFiles, errCh, fileNameCh, sgl, true)
 	selectErr(errCh, "put", t, true)
 	close(fileNameCh)
 	close(errCh)
@@ -1318,11 +1318,11 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-
+	sleep := time.Second * 10
 	go func() {
 		defer wg.Done()
 		for {
-			time.Sleep(3 * time.Second)
+			time.Sleep(sleep)
 			globalRebalanceStats, err := getXactionGlobalRebalance(baseParams)
 			checkXactAPIErr(t, err)
 
@@ -1340,7 +1340,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	go func() {
 		defer wg.Done()
 		for {
-			time.Sleep(time.Second * 3)
+			time.Sleep(sleep)
 			localRebalanceStats, err := getXactionLocalRebalance(baseParams)
 			checkXactAPIErr(t, err)
 

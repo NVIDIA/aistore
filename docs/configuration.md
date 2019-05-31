@@ -83,6 +83,7 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | iostat_time_short | disk.iostat_time_short | 100ms | Used instead of `iostat_time_long` when disk utilization reaches `disk_util_high_wm`. If disk utilization is between `disk_util_high_wm` and `disk_util_low_wm`, a proportional value between `iostat_time_short` and `iostat_time_long` is used. |
 | capacity_upd_time | lru.capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
 | dest_retry_time | rebalance.dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
+| rebalance.multiplier | rebalance.multiplier | 4 | A tunable that can be adjusted to optimize cluster rebalancing time (advanced usage only) |
 | send_file_time | timeout.send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
 | default_timeout | timeout.default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
 | default_long_timeout | timeout.default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |

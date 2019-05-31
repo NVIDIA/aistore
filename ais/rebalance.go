@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -48,7 +47,9 @@ type (
 	}
 	globalRebJogger struct {
 		rebJoggerBase
-		smap *smapX // cluster.Smap?
+		smap  *smapX // cluster.Smap?
+		sema  chan struct{}
+		errCh chan error
 	}
 	localRebJogger struct {
 		rebJoggerBase
@@ -145,18 +146,22 @@ func (reb *rebManager) runGlobalReb(smap *smapX, newTargetID string) {
 	glog.Infoln(xreb.String())
 
 	wg = &sync.WaitGroup{}
-
-	// 6. start mpath joggers
-	// TODO: currently supporting a single content-type: Object
-	// TODO: multiply joggers per mpath
+	// 6. start mpath joggers // TODO: currently supporting a single content-type: Object
 	for _, mpathInfo := range availablePaths {
+		var sema chan struct{}
 		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap}
+		if config.Rebalance.Multiplier > 1 {
+			sema = make(chan struct{}, config.Rebalance.Multiplier)
+		}
+		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: xreb, wg: wg}, smap: smap, sema: sema}
 		wg.Add(1)
 		go rc.jog()
 
 		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*local*/)
-		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap}
+		if config.Rebalance.Multiplier > 1 {
+			sema = make(chan struct{}, config.Rebalance.Multiplier)
+		}
+		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: xreb, wg: wg}, smap: smap, sema: sema}
 		wg.Add(1)
 		go rl.jog()
 	}
@@ -478,6 +483,9 @@ func (reb *rebManager) recvRebalanceAck(w http.ResponseWriter, hdr transport.Hea
 //
 
 func (rj *globalRebJogger) jog() {
+	if rj.sema != nil {
+		rj.errCh = make(chan error, cap(rj.sema)+1)
+	}
 	if err := filepath.Walk(rj.mpath, rj.walk); err != nil {
 		if rj.xreb.Aborted() {
 			glog.Infof("Aborting %s traversal", rj.mpath)
@@ -485,7 +493,6 @@ func (rj *globalRebJogger) jog() {
 			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.si.Name(), rj.mpath, err)
 		}
 	}
-
 	rj.xreb.confirmCh <- struct{}{}
 	rj.wg.Done()
 }
@@ -493,13 +500,12 @@ func (rj *globalRebJogger) jog() {
 func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
 	var lom = (*cluster.LOM)(lomptr)
 	cluster.ObjectLocker.Unlock(lom.Uname(), false)
-	rj.wg.Done()
 
 	if err != nil {
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", rj.m.t.si.Name(), hdr.Bucket, hdr.Objname, err)
 		return
 	}
-	cmn.Assert(hdr.ObjAttrs.Size == lom.Size())
+	cmn.AssertMsg(hdr.ObjAttrs.Size == lom.Size(), lom.String()) // TODO: remove
 	rj.m.t.statsif.AddMany(
 		stats.NamedVal64{stats.TxRebCount, 1},
 		stats.NamedVal64{stats.TxRebSize, hdr.ObjAttrs.Size})
@@ -513,16 +519,15 @@ func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 // the walking callback is executed by the LRU xaction
 func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err error) {
 	var (
-		file                  *cmn.FileHandle
-		lom                   *cluster.LOM
-		si                    *cluster.Snode
-		errstr                string
-		hdr                   transport.Header
-		cksum                 cmn.Cksummer
-		cksumType, cksumValue string
+		lom    *cluster.LOM
+		tsi    *cluster.Snode
+		errstr string
 	)
 	if rj.xreb.Aborted() {
 		return fmt.Errorf("%s: aborted, path %s", rj.xreb, rj.mpath)
+	}
+	if inerr == nil && len(rj.errCh) > 0 {
+		inerr = <-rj.errCh
 	}
 	if inerr != nil {
 		if errstr = cmn.PathWalkErr(inerr); errstr != "" {
@@ -543,26 +548,49 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 
 	// rebalance, maybe
-	si, errstr = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
+	tsi, errstr = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
-	if si.DaemonID == rj.m.t.si.DaemonID {
+	if tsi.DaemonID == rj.m.t.si.DaemonID {
 		return nil
 	}
 
 	// skip objects that were already sent via GFN (due to probabilistic filtering
 	// false-positives, albeit rare, are still possible)
-	uname := lom.Uname()
-	if rj.m.filterGFN.Lookup([]byte(uname)) {
-		rj.m.filterGFN.Delete([]byte(uname)) // it will not be used anymore
+	uname := []byte(lom.Uname())
+	if rj.m.filterGFN.Lookup(uname) {
+		rj.m.filterGFN.Delete(uname) // it will not be used anymore
 		return nil
 	}
 
-	// lock & transfer
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), si.Name())
+		glog.Infof("%s %s => %s", lom, rj.m.t.si.Name(), tsi.Name())
 	}
+	if rj.sema == nil { // rebalance.multiplier == 1
+		err = rj.send(lom, tsi, fi.Size())
+	} else { // // rebalance.multiplier > 1
+		rj.sema <- struct{}{}
+		go func() {
+			ers := rj.send(lom, tsi, fi.Size())
+			<-rj.sema
+			if ers != nil {
+				rj.errCh <- ers
+			}
+		}()
+	}
+	return
+}
+
+func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64) (err error) {
+	var (
+		file                  *cmn.FileHandle
+		errstr                string
+		hdr                   transport.Header
+		cksum                 cmn.Cksummer
+		cksumType, cksumValue string
+	)
+	uname := lom.Uname()
 	cluster.ObjectLocker.Lock(uname, false) // NOTE: unlock in objSentCallback()
 
 	_, errstr = lom.Load(false)
@@ -576,23 +604,21 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		goto rerr
 	}
+	cmn.AssertMsg(lom.Size() == size, lom.String()) // TODO: remove
 	hdr = transport.Header{
 		Bucket:  lom.Bucket,
 		Objname: lom.Objname,
 		IsLocal: lom.BckIsLocal,
 		Opaque:  []byte(rj.m.t.si.DaemonID), // self == src
 		ObjAttrs: transport.ObjectAttrs{
-			Size:       fi.Size(),
+			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),
 			CksumType:  cksumType,
 			CksumValue: cksumValue,
 			Version:    lom.Version(),
 		},
 	}
-
-	rj.wg.Add(1) // NOTE: wg.Done() in objSentCallback()
-	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.objSentCallback, unsafe.Pointer(lom) /* cmpl ptr */, si); err != nil {
-		rj.wg.Done()
+	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.objSentCallback, unsafe.Pointer(lom) /* cmpl ptr */, tsi); err != nil {
 		goto rerr
 	}
 	return nil
@@ -665,11 +691,10 @@ func (reb *rebManager) runLocalReb() {
 func (rj *localRebJogger) jog() {
 	rj.buf = rj.slab.Alloc()
 	if err := filepath.Walk(rj.mpath, rj.walk); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %s traversal due to: %s", rj.mpath, s)
+		if rj.xreb.Aborted() {
+			glog.Infof("Aborting %s traversal", rj.mpath)
 		} else {
-			glog.Errorf("Failed to traverse %s, err: %v", rj.mpath, err)
+			glog.Errorf("%s: failed to traverse %s, err: %v", rj.m.t.si.Name(), rj.mpath, err)
 		}
 	}
 	rj.xreb.confirmCh <- struct{}{}

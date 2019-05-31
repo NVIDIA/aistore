@@ -341,6 +341,11 @@ func (t *targetrunner) setupRebalanceManager(config *cmn.Config) error {
 	if config.Net.UseIntraControl {
 		netc = cmn.NetworkIntraControl
 	}
+	if config.Rebalance.Multiplier == 0 {
+		config.Rebalance.Multiplier = 1
+	} else if config.Rebalance.Multiplier > 8 {
+		glog.Errorf("%s: stream-and-mp-jogger multiplier=%d - misconfigured?", t.si.Name(), config.Rebalance.Multiplier)
+	}
 	//
 	// objects
 	//
@@ -354,7 +359,7 @@ func (t *targetrunner) setupRebalanceManager(config *cmn.Config) error {
 	// TODO: make stream bundle multiplier adjustable at runtime (#253)
 	sbArgs := transport.SBArgs{
 		ManualResync: true,
-		Multiplier:   4,
+		Multiplier:   int(config.Rebalance.Multiplier),
 		Network:      netd,
 		Trname:       rebalanceStreamName,
 	}

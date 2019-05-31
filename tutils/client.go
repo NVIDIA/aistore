@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -683,7 +684,7 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 }
 
 func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, objList []string,
-	errCh chan error, objsPutCh chan string, sgl *memsys.SGL) {
+	errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 	var (
 		wg         = &sync.WaitGroup{}
 		objCh      = make(chan string, len(objList))
@@ -713,7 +714,13 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 			sgli = sgls[i]
 		}
 		go func(sgli *memsys.SGL) {
-			putObjs(proxyURL, bucket, readerPath, readerType, objPath, objSize, sgli, errCh, objCh, objsPutCh)
+			size := objSize
+			// randomize sizes
+			if len(fixedSize) == 0 || !fixedSize[0] {
+				x := uintptr(unsafe.Pointer(sgli)) & 0xfff
+				size = objSize + uint64(x)
+			}
+			putObjs(proxyURL, bucket, readerPath, readerType, objPath, size, sgli, errCh, objCh, objsPutCh)
 			wg.Done()
 		}(sgli)
 	}
@@ -726,7 +733,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 }
 
 func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, numPuts int,
-	errCh chan error, objsPutCh chan string, sgl *memsys.SGL) {
+	errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 
 	var fnlen = 16
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -735,7 +742,7 @@ func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSi
 		fname := FastRandomFilename(random, fnlen)
 		objList = append(objList, fname)
 	}
-	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl)
+	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl, fixedSize...)
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET

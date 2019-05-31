@@ -58,8 +58,9 @@ cat > $CONFFILE <<EOL
 	    "disk_util_high_wm": 80
 	},
 	"rebalance": {
-		"enabled":         true,
-		"dest_retry_time": "2m"
+		"dest_retry_time":	"2m",
+		"multiplier":		${REBALANCE_MULTIPLIER:-4},
+		"enabled":		true
 	},
 	"cksum": {
 		"type":			"xxhash",

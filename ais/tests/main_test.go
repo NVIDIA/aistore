@@ -1513,7 +1513,7 @@ func TestRangeRead(t *testing.T) {
 	sgl := tutils.Mem2.NewSGL(fileSize)
 	defer sgl.Free()
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-	tutils.PutRandObjs(proxyURL, bucketName, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl)
+	tutils.PutRandObjs(proxyURL, bucketName, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl, true)
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
@@ -1641,7 +1641,7 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 		t.Errorf("Bytes length mismatch. Expected bytes: [%d]. Actual bytes: [%d]", len(expectedBytes), len(outputBytes))
 	}
 	if int64(len(outputBytes)) != expectedLength {
-		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]", length, len(outputBytes))
+		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]", expectedLength, len(outputBytes))
 	}
 	for i := 0; i < len(expectedBytes); i++ {
 		if expectedBytes[i] != outputBytes[i] {

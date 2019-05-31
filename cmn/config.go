@@ -427,9 +427,10 @@ type DiskConf struct {
 }
 
 type RebalanceConf struct {
-	DestRetryTimeStr string        `json:"dest_retry_time"`
-	DestRetryTime    time.Duration `json:"-"` //
-	Enabled          bool          `json:"enabled"`
+	DestRetryTimeStr string        `json:"dest_retry_time"` // max time to wait for ACKs and for neighbors to complete
+	DestRetryTime    time.Duration `json:"-"`               // (runtime)
+	Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
+	Enabled          bool          `json:"enabled"`         // true: auto-rebalance, false: manual rebalancing
 }
 
 type ReplicationConf struct {
@@ -483,12 +484,12 @@ type NetConf struct {
 }
 
 type L4Conf struct {
-	Proto               string `json:"proto"` // tcp, udp
-	PortStr             string `json:"port"`  // listening port
-	Port                int    `json:"-"`
+	Proto               string `json:"proto"`              // tcp, udp
+	PortStr             string `json:"port"`               // listening port
+	Port                int    `json:"-"`                  // (runtime)
 	PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
-	PortIntraControl    int    `json:"-"`
-	PortIntraDataStr    string `json:"port_intra_data"` // listening port for intra data network
+	PortIntraControl    int    `json:"-"`                  // (runtime)
+	PortIntraDataStr    string `json:"port_intra_data"`    // listening port for intra data network
 	PortIntraData       int    `json:"-"`
 }
 
@@ -517,9 +518,9 @@ type AuthConf struct {
 // all type of trackers share the same struct, not all fields are used by all trackers
 type KeepaliveTrackerConf struct {
 	IntervalStr string        `json:"interval"` // keepalives are sent(target)/checked(promary proxy) every interval
-	Interval    time.Duration `json:"-"`
-	Name        string        `json:"name"`   // "heartbeat", "average"
-	Factor      uint8         `json:"factor"` // only average
+	Interval    time.Duration `json:"-"`        // (runtime)
+	Name        string        `json:"name"`     // "heartbeat", "average"
+	Factor      uint8         `json:"factor"`   // only average
 }
 
 type KeepaliveConf struct {
@@ -944,7 +945,8 @@ func (c *DownloaderConf) Validate(_ *Config) (err error) {
 
 func (c *DSortConf) Validate(_ *Config) (err error) {
 	if !StringInSlice(c.DuplicatedRecords, SupportedReactions) {
-		return fmt.Errorf("bad distributed_sort.duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
+		return fmt.Errorf("bad distributed_sort.duplicated_records: %s (expecting one of: %s)",
+			c.DuplicatedRecords, SupportedReactions)
 	}
 	if !StringInSlice(c.MissingShards, SupportedReactions) {
 		return fmt.Errorf("bad distributed_sort.missing_records: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
@@ -1160,8 +1162,10 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	// REBALANCE
 	case "dest_retry_time", "rebalance.dest_retry_time":
 		return &conf.Rebalance, updateValue(&conf.Rebalance.DestRetryTimeStr)
+	case "rebalance_multiplier", "rebalance.multiplier":
+		return &conf.Rebalance, updateValue(&conf.Rebalance.Multiplier)
 	case "rebalance_enabled", "rebalance.enabled":
-		return nil, updateValue(&conf.Rebalance.Enabled)
+		return &conf.Rebalance, updateValue(&conf.Rebalance.Enabled)
 
 	// TIMEOUT
 	case "default_timeout", "timeout.default_timeout":
@@ -1238,6 +1242,7 @@ var ConfigPropList = map[string]bool{
 	"disk.iostat_time_long":                  false,
 	"disk.iostat_time_short":                 false,
 	"rebalance.dest_retry_time":              false,
+	"rebalance.multiplier":                   false,
 	"rebalance.enabled":                      false,
 	"timeout.default_timeout":                false,
 	"timeout.default_long_timeout":           false,
