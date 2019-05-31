@@ -20,11 +20,11 @@ import (
 )
 
 const (
-	downloadStart  = "start"
-	downloadStatus = "status"
-	downloadAbort  = "abort"
-	downloadRemove = "rm"
-	downloadList   = "ls"
+	downloadStart  = commandStart
+	downloadStatus = commandStatus
+	downloadAbort  = commandAbort
+	downloadRemove = commandRemove
+	downloadList   = commandList
 
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048

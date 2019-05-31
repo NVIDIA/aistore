@@ -178,7 +178,7 @@ var (
 )
 
 func objectHandler(c *cli.Context) (err error) {
-	if err = checkFlags(c, bucketFlag); err != nil {
+	if err = checkFlags(c, []cli.Flag{bucketFlag}); err != nil {
 		return
 	}
 
@@ -220,7 +220,7 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 		return objectCheckCached(c, baseParams, bucket, bckProvider)
 	}
 
-	if err := checkFlags(c, nameFlag, outFileFlag); err != nil {
+	if err := checkFlags(c, []cli.Flag{nameFlag, outFileFlag}); err != nil {
 		return err
 	}
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
@@ -293,7 +293,7 @@ func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckPr
 
 // Put object into bucket
 func objectPut(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
-	if err := checkFlags(c, fileFlag); err != nil {
+	if err := checkFlags(c, []cli.Flag{fileFlag}); err != nil {
 		return err
 	}
 
@@ -377,7 +377,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 
 // Displays object properties
 func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
-	if err := checkFlags(c, nameFlag); err != nil {
+	if err := checkFlags(c, []cli.Flag{nameFlag}); err != nil {
 		return err
 	}
 
@@ -437,7 +437,7 @@ func objectEvict(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider
 
 // Renames object
 func objectRename(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = checkFlags(c, nameFlag, newNameFlag); err != nil {
+	if err = checkFlags(c, []cli.Flag{nameFlag, newNameFlag}); err != nil {
 		return
 	}
 	obj := parseStrFlag(c, nameFlag)

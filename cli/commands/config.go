@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -25,8 +24,6 @@ const (
 )
 
 var (
-	errExpectedAtLeastOneKeyValuePair = errors.New("expected at least one key-value pair")
-
 	configFlags = map[string][]cli.Flag{
 		configGet: {jsonFlag},
 		configSet: {},
@@ -134,7 +131,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 
 func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
 	if c.NArg() == 0 {
-		return "", nil, errExpectedAtLeastOneKeyValuePair
+		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
 	}
 
 	args := c.Args()
@@ -152,7 +149,7 @@ func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err e
 	}
 
 	if len(kvs) == 0 {
-		return "", nil, errExpectedAtLeastOneKeyValuePair
+		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
 	}
 
 	nvs, err = makePairs(kvs)

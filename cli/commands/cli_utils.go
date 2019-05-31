@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -28,17 +27,22 @@ type AISCLI struct {
 }
 
 const (
-	cliName       = "ais"
-	commandList   = "ls"
+	cliName = "ais"
+
 	commandRename = "rename"
 	commandEvict  = "evict"
+	commandStart  = "start"
+	commandStatus = "status"
+	commandAbort  = "abort"
+	commandRemove = "remove"
+	commandList   = "ls"
 
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
 
 	countDefault = 1
 
-	refreshRateDefault = 1 * time.Second
+	refreshRateDefault = time.Second
 	refreshRateMin     = 500 * time.Millisecond
 
 	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
@@ -144,7 +148,13 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 }
 
 func New(build, version string) *AISCLI {
-	aisCLI := AISCLI{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr}
+	aisCLI := AISCLI{
+		app:       cli.NewApp(),
+		outWriter: os.Stdout,
+		errWriter: os.Stderr,
+		count:     countDefault,
+		refresh:   refreshRateDefault,
+	}
 	aisCLI.Init(build, version)
 	return &aisCLI
 }
@@ -299,7 +309,7 @@ func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
 	return b, nil
 }
 
-func checkFlags(c *cli.Context, flag ...cli.Flag) error {
+func checkFlags(c *cli.Context, flag []cli.Flag) error {
 	missingFlags := make([]string, 0)
 
 	for _, f := range flag {
@@ -310,11 +320,8 @@ func checkFlags(c *cli.Context, flag ...cli.Flag) error {
 
 	missingFlagCount := len(missingFlags)
 
-	if missingFlagCount == 1 {
-		return fmt.Errorf("required flag %q is not set", missingFlags[0])
-	}
-	if missingFlagCount > 1 {
-		return fmt.Errorf("required flags %q are not set", strings.Join(missingFlags, ", "))
+	if missingFlagCount >= 1 {
+		return missingFlagsError(c, missingFlags)
 	}
 
 	return nil

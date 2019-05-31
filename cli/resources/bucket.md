@@ -6,14 +6,14 @@ The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS
 
 ### create
 
-`ais bucket create <bucket>`
+`ais bucket create BUCKET`
 
 Creates a local bucket.
 
 
 ### destroy
 
-`ais bucket destroy <bucket>`
+`ais bucket destroy BUCKET`
 
 Destroys a local bucket.
 
@@ -30,19 +30,19 @@ Returns the names of the buckets.
 
 ### evict
 
-`ais bucket evict <bucket>`
+`ais bucket evict BUCKET`
 
 Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
 ### rename
 
-`ais bucket rename <bucket> <new-bucket>`
+`ais bucket rename BUCKET NEW_BUCKET`
 
 Renames a local bucket.
 
 ### objects
 
-`ais bucket objects <bucket>`
+`ais bucket objects BUCKET`
 
 Lists all the objects along with some of the objects' properties. For the full list of properties, see [here](../../docs/bucket.md#list-bucket).
 
@@ -74,9 +74,21 @@ Displays the next 10 objects of bucket `mylocalbucket` that follow alphabeticall
 * `ais bucket objects mylocalbucket --paged --props=all -H`
 Prints out the entire list of bucket objects with all properties page by page. Every page is displayed immediately after it is fetched. Header is off(`-H`) that makes the output easy to parse with scripts. Press Ctrl+C to interrupt.
 
+### summary
+
+`ais bucket summary BUCKET`
+
+Displays aggregated information about objects in the `BUCKET`.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--regex` | string | pattern for names of objects used for aggregation | `""` |
+| `--prefix` | string | prefix for named of objects used for aggregation | `""` |
+| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
+
 ### makencopies
 
-`ais bucket makencopies <bucket> --copies <value>`
+`ais bucket makencopies BUCKET --copies <value>`
 
 Starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
 
@@ -87,7 +99,7 @@ Starts an extended action (xaction) to bring a given bucket to a certain redunda
 
 ### props list
 
-`ais bucket props ls <bucket>`
+`ais bucket props ls BUCKET`
 
 Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
@@ -97,7 +109,7 @@ Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 ### props set
 
-`ais bucket props set <bucket> <list of key=value | --jsonspec <json>>`
+`ais bucket props set BUCKET <list of key=value | --jsonspec <json>>`
 
 Sets bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
 If `--jsonspec` is used **all** properties of the bucket are set based on the values in the JSON.
@@ -209,7 +221,7 @@ To see how setting zero values affect properties, you can run `ais bucket props 
 
 ### props reset
 
-`ais bucket props reset <bucket>`
+`ais bucket props reset BUCKET`
 
 Reset bucket properties to cluster default.
 
@@ -218,7 +230,7 @@ Reset bucket properties to cluster default.
 | `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### Default `bucket` argument value
-If you set `AIS_BUCKET` environment variable you can omit the argument that represents the name of the bucket (`<bucket`) in
+If you set `AIS_BUCKET` environment variable you can omit the argument that represents the name of the bucket (`BUCKET`) in
 all of the commands above. For example, the following pairs of commands have the same effect:
  * `AIS_BUCKET=mybucket ais bucket create` and `ais bucket create mybucket`
  * `AIS_BUCKET=mybucket ais bucket rename mybucket1` and `ais bucket rename mybucket mybucket1`

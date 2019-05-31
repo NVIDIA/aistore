@@ -34,11 +34,11 @@ import (
 
 const (
 	dsortGen    = "gen"
-	dsortStart  = "start"
-	dsortStatus = "status"
-	dsortAbort  = "abort"
-	dsortRemove = "rm"
-	dsortList   = "ls"
+	dsortStart  = commandStart
+	dsortStatus = commandStatus
+	dsortAbort  = commandAbort
+	dsortRemove = commandRemove
+	dsortList   = commandList
 
 	jsonSpecificationArgumentText = "JSON_SPECIFICATION"
 )

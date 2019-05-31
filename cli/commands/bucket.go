@@ -7,7 +7,6 @@ package commands
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -448,14 +447,7 @@ func statsBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket string) 
 	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
 
-	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
-	if flagIsSet(c, pageSizeFlag) {
-		pagesize, err := strconv.Atoi(parseStrFlag(c, pageSizeFlag))
-		if err != nil {
-			return err
-		}
-		msg.PageSize = pagesize
-	}
+	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, PageSize: cmn.DefaultPageSize}
 	objList, err := api.ListBucket(baseParams, bucket, msg, 0, query)
 	if err != nil {
 		return err
@@ -555,7 +547,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	}
 
 	if len(propsArgs) == 0 {
-		return errors.New("expected at least one key-value pair")
+		return missingArgumentsError(c, "property key-value pairs")
 	}
 
 	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
@@ -678,7 +670,7 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 	if err != nil {
 		return
 	}
-	if err = checkFlags(c, copiesFlag); err != nil {
+	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
 		return
 	}
 	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
