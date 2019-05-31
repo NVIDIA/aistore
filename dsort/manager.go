@@ -328,13 +328,10 @@ func (m *Manager) cleanupStreams() error {
 
 	for _, streamBundle := range []*transport.StreamBundle{m.streams.request, m.streams.response, m.streams.shards} {
 		if streamBundle != nil {
-			streamBundle.Close(true)
+			streamBundle.Close(false)
 		}
 	}
 
-	m.streams.request = nil
-	m.streams.response = nil
-	m.streams.shards = nil
 	return nil
 }
 
@@ -400,12 +397,6 @@ func (m *Manager) finalCleanup() {
 
 	glog.Infof("%s %s has started a final cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
-	defer func() {
-		m.state.cleaned = finallyCleanedState
-		m.state.cleanWait.Signal() // if there is another `finalCleanup` waiting it should be woken up to check the state and exit
-		m.unlock()
-		glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
-	}()
 
 	if err := m.cleanupStreams(); err != nil {
 		glog.Error(err)
@@ -418,7 +409,14 @@ func (m *Manager) finalCleanup() {
 	extract.FreeMemory()
 
 	m.finishedAck.m = nil
+
+	// Update clean state
+	m.state.cleaned = finallyCleanedState
+	m.state.cleanWait.Signal() // if there is another `finalCleanup` waiting it should be woken up to check the state and exit
+	m.unlock()
+
 	Managers.persist(m.ManagerUUID)
+	glog.Infof("%s %s final cleanup has been finished in %v", cmn.DSortName, m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
