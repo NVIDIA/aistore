@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 
@@ -19,22 +21,32 @@ import (
 
 // Dispatcher serves as middle layer between receiving download requests
 // and serving them to joggers which actually download objects from a cloud.
-// At the moment this layer is unnecessary, but soon it will become important
-// It's purpose will be to asynchronously feed joggers with new objects
-// to download, when joggers have available resources, instead of flooding them
-// with multiple tasks, as it's done at the moment
 
 type (
 	dispatcher struct {
-		parent  *Downloader
-		joggers map[string]*jogger // mpath -> jogger
+		parent *Downloader
+
+		// TODO: #422, remove locking
+		joggers  map[string]*jogger       // mpath -> jogger
+		abortJob map[string]chan struct{} //jobID -> abort job chan
+
+		dispatchDownloadCh chan DownloadJob
+
+		stopCh cmn.StopCh
+		sync.RWMutex
 	}
 )
+
+const queueFullInterval = 200 * time.Millisecond
 
 func newDispatcher(parent *Downloader) *dispatcher {
 	return &dispatcher{
 		parent:  parent,
 		joggers: make(map[string]*jogger, 8),
+
+		dispatchDownloadCh: make(chan DownloadJob, jobsChSize),
+		stopCh:             cmn.NewStopCh(),
+		abortJob:           make(map[string]chan struct{}, jobsChSize),
 	}
 }
 
@@ -43,10 +55,32 @@ func (d *dispatcher) init() {
 	for mpath := range availablePaths {
 		d.addJogger(mpath)
 	}
+
+	go d.run()
 }
 
-// TODO: in future add stopping all go routines
-// which are still in progress
+func (d *dispatcher) run() {
+	for {
+		select {
+		case job := <-d.dispatchDownloadCh:
+			if !d.dispatchDownload(job) {
+				// stop dispatcher if aborted
+				d.stop()
+				return
+			}
+		case <-d.stopCh.Listen():
+			d.stop()
+			return
+		}
+	}
+}
+
+func (d *dispatcher) Abort() {
+	d.stopCh.Close()
+}
+
+// stop running joggers
+// no need to cleanup maps, dispatcher should not be used after stop()
 func (d *dispatcher) stop() {
 	for _, jogger := range d.joggers {
 		jogger.stop()
@@ -68,41 +102,117 @@ func (d *dispatcher) addJogger(mpath string) {
 	d.joggers[mpath] = j
 }
 
+func (d *dispatcher) cleanUpAborted(jobID string) {
+	d.Lock()
+	delete(d.abortJob, jobID)
+	d.Unlock()
+}
+
+func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
+	d.Lock()
+	d.abortJob[job.ID()] = make(chan struct{}, 1)
+	d.Unlock()
+
+	d.dispatchDownloadCh <- job
+}
+
 /*
  * dispatcher's dispatch methods (forwards request to jogger)
  */
 
-// TODO: methods below should be called as go routine in the future
+func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
+	defer func() {
+		d.cleanUpAborted(job.ID())
+	}()
 
-// TODO: handle canceling job, removing mpaths, errors etc which happened in the middle of dispatchDownload
-// this should be taken care of especially when dispatchDownload will be run as goroutine
-// TODO: make this method smarter: don't just put everything into jogger, but wait until
-// it has resources to fulfill the request (meaning that there is space in jogger's download queue)
-func (d *dispatcher) dispatchDownload(job DownloadJob) {
+	if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
+		return !aborted
+	}
+
 	for {
 		objs, ok := job.GenNext()
 		if !ok {
-			return
+			return true
 		}
 
 		for _, obj := range objs {
-			if err := d.dispatchDownloadSingle(job, obj); err != nil {
+			if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
+				return !aborted
+			}
+
+			err, ok := d.blockingDispatchDownloadSingle(job, obj)
+			if err != nil {
 				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.Link, err.Error())
 				cmn.AssertNoErr(d.parent.db.setAborted(job.ID()))
-				return
+				return ok
+			}
+			if !ok {
+				return false
 			}
 		}
 
 	}
 }
 
-func (d *dispatcher) dispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) error {
-	var (
-		err error
-		ok  bool
-		j   *jogger
-	)
+func (d *dispatcher) jobAbortedCh(jobID string) <-chan struct{} {
+	d.RLock()
+	defer d.RUnlock()
+	if abCh, ok := d.abortJob[jobID]; ok {
+		return abCh
+	}
 
+	// chanel always sending something
+	// if entry in the map is missing
+	abCh := make(chan struct{})
+	close(abCh)
+	return abCh
+}
+
+func (d *dispatcher) checkAbortedJob(job DownloadJob) bool {
+	select {
+	case <-d.jobAbortedCh(job.ID()):
+		return true
+	default:
+		return false
+	}
+}
+
+func (d *dispatcher) checkAborted() bool {
+	select {
+	case <-d.stopCh.Listen():
+		return true
+	default:
+		return false
+	}
+}
+
+func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LOM, error) {
+	var err error
+
+	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname, BucketProvider: job.BckProvider()}.Init()
+	if errstr == "" {
+		_, errstr = lom.Load(true)
+	}
+	if errstr != "" {
+		return nil, errors.New(errstr)
+	}
+	if lom.Exists() { // FIXME: add versioning
+		if glog.V(4) {
+			glog.Infof("object %q already exists - skipping", obj.Objname)
+		}
+		return nil, nil
+	}
+
+	if lom.ParsedFQN.MpathInfo == nil {
+		err = fmt.Errorf("download task for %s failed. Failed to get mountpath for the request's fqn %s", obj.Link, lom.FQN)
+		glog.Error(err.Error())
+		return nil, err
+	}
+
+	return lom, nil
+}
+
+func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectTask, *jogger, error) {
 	t := &singleObjectTask{
 		parent: d.parent,
 		request: &request{
@@ -116,42 +226,60 @@ func (d *dispatcher) dispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) erro
 		finishedCh: make(chan error, 1),
 	}
 
-	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: t.bucket, Objname: t.obj.Objname, BucketProvider: t.bckProvider}.Init()
-	if errstr == "" {
-		_, errstr = lom.Load(true)
-	}
-	if errstr != "" {
-		err = errors.New(errstr)
-		goto finalize
-	}
-	if lom.Exists() { // FIXME: add versioning
-		if glog.V(4) {
-			glog.Infof("object %q already exists - skipping", t.obj.Objname)
-		}
-		goto finalize
-	}
-	t.fqn = lom.FQN
-
-	if lom.ParsedFQN.MpathInfo == nil {
-		err = fmt.Errorf("download task with %v failed. Failed to get mountpath for the request's fqn %s", t, t.fqn)
-		glog.Error(err.Error())
-		goto finalize
-	}
-	j, ok = d.joggers[lom.ParsedFQN.MpathInfo.Path]
-	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
-
-	err = j.enqueue(t)
-
-finalize:
+	lom, err := d.createTasksLom(job, obj)
 	if err != nil {
 		glog.Warningf("error in handling downloader request: %s", err.Error())
 		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
 		dbErr := t.parent.db.addError(t.id, t.obj.Objname, err.Error())
 		cmn.AssertNoErr(dbErr)
+		return nil, nil, err
 	}
 
-	return err
+	if lom == nil {
+		// object already exists
+		return nil, nil, nil
+	}
+
+	t.fqn = lom.FQN
+	j, ok := d.joggers[lom.ParsedFQN.MpathInfo.Path]
+	cmn.AssertMsg(ok, fmt.Sprintf("no mpath exists for %v", t))
+	return t, j, nil
+}
+
+// returns false if dispatcher was aborted in the meantime, true otherwise
+func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) (err error, ok bool) {
+	task, jogger, err := d.prepareTask(job, obj)
+	if err != nil {
+		return err, true
+	}
+	if task == nil || jogger == nil {
+		return nil, true
+	}
+
+	if jogger.enqueue(task) {
+		return nil, true
+	}
+
+	// queue is full, we have to wait until it we can put something there
+	ticker := time.NewTicker(queueFullInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// TODO: stops downloading all of the objects, even if only this task's jogger
+			// is full. On average it should not be a problem, as HRW should evenly distribute
+			// tasks between mpaths, hence between joggers
+			if jogger.enqueue(task) {
+				return nil, true
+			}
+		case <-d.jobAbortedCh(job.ID()):
+			return nil, true
+		case <-d.stopCh.Listen():
+			return nil, false
+		}
+	}
 }
 
 func (d *dispatcher) dispatchRemove(req *request) {

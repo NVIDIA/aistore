@@ -110,9 +110,7 @@ const (
 	adminList    = "LIST"
 	taskDownload = "DOWNLOAD"
 
-	// Very big, because at the moment all requests (representing files to be downloaded) are stored in the queue
-	// TODO: make it smaller and generate requests on demand
-	queueChSize = 100000
+	jobsChSize = 1000
 )
 
 var (
@@ -256,7 +254,7 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
-		downloadCh:     make(chan DownloadJob),
+		downloadCh:     make(chan DownloadJob, jobsChSize),
 		db:             db,
 	}
 
@@ -289,7 +287,7 @@ Loop:
 				cmn.AssertFmt(false, req, req.action)
 			}
 		case job := <-d.downloadCh:
-			d.dispatcher.dispatchDownload(job)
+			d.dispatcher.ScheduleForDownload(job)
 		case req := <-d.mpathReqCh:
 			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
 			break Loop
@@ -311,7 +309,7 @@ Loop:
 func (d *Downloader) Stop(err error) {
 	d.t.GetFSPRG().Unreg(d)
 	d.XactDemandBase.Stop()
-	d.dispatcher.stop()
+	d.dispatcher.Abort()
 	d.EndTime(time.Now())
 	glog.Infof("Stopped %s", d.Getname())
 	if err != nil {
@@ -322,7 +320,6 @@ func (d *Downloader) Stop(err error) {
 /*
  * Downloader's exposed methods
  */
-
 func (d *Downloader) Download(dJob DownloadJob) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
@@ -331,8 +328,12 @@ func (d *Downloader) Download(dJob DownloadJob) (resp interface{}, err error, st
 		return err.Error(), err, http.StatusInternalServerError
 	}
 
-	d.downloadCh <- dJob
-	return nil, nil, http.StatusOK
+	select {
+	case d.downloadCh <- dJob:
+		return nil, nil, http.StatusOK
+	default:
+		return "downloader job queue is full", nil, http.StatusTooManyRequests
+	}
 }
 
 func (d *Downloader) AbortJob(id string) (resp interface{}, err error, statusCode int) {
@@ -409,8 +410,8 @@ func (d *Downloader) checkJob(req *request) (*DownloadJobInfo, error) {
 }
 
 func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
+	d.dispatcher.RLock()
 	currentTasks := make([]cmn.TaskDlInfo, 0, len(d.dispatcher.joggers))
-
 	for _, j := range d.dispatcher.joggers {
 		j.Lock()
 
@@ -431,6 +432,7 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 
 		j.Unlock()
 	}
+	d.dispatcher.RUnlock()
 
 	sort.Sort(cmn.TaskInfoByName(currentTasks))
 	return currentTasks
@@ -440,11 +442,13 @@ func (d *Downloader) activeTasks(reqID string) []cmn.TaskDlInfo {
 func (d *Downloader) getNumPending(jobID string) int {
 	numPending := 0
 
+	d.dispatcher.RLock()
 	for _, j := range d.dispatcher.joggers {
 		if tasks, ok := j.q.m[jobID]; ok {
 			numPending += len(tasks)
 		}
 	}
+	d.dispatcher.RUnlock()
 
 	return numPending
 }

@@ -7,13 +7,14 @@ package downloader
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
+
+const queueChSize = 1000
 
 type (
 	queueEntry = map[string]struct{}
@@ -51,14 +52,15 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 	}
 }
 
-func (j *jogger) enqueue(task *singleObjectTask) error {
+func (j *jogger) enqueue(task *singleObjectTask) (ok bool) {
 	cmn.Assert(task != nil)
-	added, err := j.q.put(task)
+	added, full := j.q.put(task)
 	if added {
 		j.parent.parent.IncPending()
+		return true
 	}
 
-	return err
+	return !full
 }
 
 func (j *jogger) jog() {
@@ -118,22 +120,22 @@ func newQueue() *queue {
 	}
 }
 
-func (q *queue) put(t *singleObjectTask) (added bool, err error) {
+func (q *queue) put(t *singleObjectTask) (added, full bool) {
 	q.Lock()
 	defer q.Unlock()
 	if q.exists(t.request.id, t.request.uid()) {
 		// If request already exists we should just omit this
-		return false, nil
+		return false, false
 	}
 
 	select {
 	case q.ch <- t:
 		break
 	default:
-		return false, fmt.Errorf("error trying to process task %v: queue is full, try again later", t)
+		return false, true
 	}
 	q.putToSet(t.id, t.request.uid())
-	return true, nil
+	return true, false
 }
 
 // Get tries to find first task which was not yet Aborted
