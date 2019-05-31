@@ -20,11 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	daemonTypeArgumentText = "[DAEMON_TYPE]"
-	targetIDArgumentText   = "[TARGET_ID]"
-)
-
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
@@ -33,44 +28,44 @@ var (
 	daecluBaseFlags = []cli.Flag{jsonFlag}
 
 	daecluFlags = map[string][]cli.Flag{
-		cmn.GetWhatSmap:         daecluBaseFlags,
-		cmn.GetWhatDaemonStatus: append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
-		cmn.GetWhatStats:        append(daecluBaseFlags, longRunFlags...),
-		cmn.GetWhatDiskStats:    append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
+		daecluSmap:      daecluBaseFlags,
+		daecluStatus:    append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
+		daecluStats:     append(daecluBaseFlags, longRunFlags...),
+		daecluDiskStats: append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
 	}
 
 	// DaeCluCmds tracks available AIS API Information/Query Commands
 	daeCluCmds = []cli.Command{
 		{
-			Name:         cmn.GetWhatSmap,
+			Name:         daecluSmap,
 			Usage:        "displays cluster map",
 			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
-			Flags:        daecluFlags[cmn.GetWhatSmap],
+			Flags:        daecluFlags[daecluSmap],
 			BashComplete: daemonList,
 		},
 		{
-			Name:         cmn.GetWhatDaemonStatus,
+			Name:         daecluStatus,
 			Usage:        "displays status of daemon",
 			ArgsUsage:    daemonTypeArgumentText,
 			Action:       queryHandler,
-			Flags:        daecluFlags[cmn.GetWhatDaemonStatus],
+			Flags:        daecluFlags[daecluStatus],
 			BashComplete: daemonList,
 		},
 		{
-			Name:         cmn.GetWhatStats,
+			Name:         daecluStats,
 			Usage:        "displays stats of daemon",
 			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
-			Flags:        daecluFlags[cmn.GetWhatStats],
+			Flags:        daecluFlags[daecluStats],
 			BashComplete: daemonList,
 		},
 		{
-			Name:         cmn.GetWhatDiskStats,
+			Name:         daecluDiskStats,
 			Usage:        "displays disk stats of targets",
 			ArgsUsage:    targetIDArgumentText,
 			Action:       queryHandler,
-			Flags:        daecluFlags[cmn.GetWhatDiskStats],
+			Flags:        daecluFlags[daecluDiskStats],
 			BashComplete: targetList,
 		},
 	}
@@ -121,14 +116,14 @@ func queryHandler(c *cli.Context) (err error) {
 	)
 
 	switch req {
-	case cmn.GetWhatSmap:
-		err = daecluSmap(c, baseParams, daemonID, useJSON)
-	case cmn.GetWhatStats:
-		err = daecluStats(c, baseParams, daemonID, useJSON)
-	case cmn.GetWhatDiskStats:
-		err = daecluDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
-	case cmn.GetWhatDaemonStatus:
-		err = daecluStatus(c, daemonID, useJSON, hideHeader)
+	case daecluSmap:
+		err = clusterSmap(c, baseParams, daemonID, useJSON)
+	case daecluStats:
+		err = daemonStats(c, baseParams, daemonID, useJSON)
+	case daecluDiskStats:
+		err = daemonDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
+	case daecluStatus:
+		err = daemonStatus(c, daemonID, useJSON, hideHeader)
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
@@ -136,7 +131,7 @@ func queryHandler(c *cli.Context) (err error) {
 }
 
 // Displays smap of single daemon
-func daecluSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func clusterSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	newURL, err := daemonDirectURL(daemonID)
 	if err != nil {
 		return err
@@ -151,7 +146,7 @@ func daecluSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, use
 }
 
 // Displays the stats of a daemon
-func daecluStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	if res, ok := proxy[daemonID]; ok {
 		return templates.DisplayOutput(res, c.App.Writer, templates.ProxyStatsTmpl, useJSON)
 	} else if res, ok := target[daemonID]; ok {
@@ -167,9 +162,9 @@ func daecluStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, us
 }
 
 // Displays the disk stats of a target
-func daecluDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
+func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, cmn.GetWhatDiskStats)
+		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, daecluDiskStats)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
 		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)
@@ -195,7 +190,7 @@ func daecluDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 }
 
 // Displays the status of the cluster or daemon
-func daecluStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (err error) {
+func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (err error) {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
 		err = templates.DisplayOutput(res, c.App.Writer, template, useJSON)

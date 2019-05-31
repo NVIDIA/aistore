@@ -15,14 +15,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	configGet = "get"
-	configSet = "set"
-
-	daemonIDArgumentText  = "[DAEMON_ID]"
-	configSetArgumentText = daemonIDArgumentText + " " + atLeastOneKeyValuePairArgumentsText
-)
-
 var (
 	configFlags = map[string][]cli.Flag{
 		configGet: {jsonFlag},
@@ -31,7 +23,7 @@ var (
 
 	configCmds = []cli.Command{
 		{
-			Name:  cmn.GetWhatConfig,
+			Name:  commandConfig,
 			Usage: "interact with daemon configs",
 			Flags: []cli.Flag{},
 			Subcommands: []cli.Command{

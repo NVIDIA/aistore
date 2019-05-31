@@ -22,56 +22,27 @@ import (
 )
 
 const (
-	bucketCreate     = "create"
-	bucketDestroy    = "destroy"
-	bucketNWayMirror = cmn.ActMakeNCopies
-	bucketEvict      = commandEvict
-	bucketSummary    = "summary"
-	bucketObjects    = "objects"
-
-	commandBucketProps = "props"
-	propsSet           = "set"
-	propsReset         = "reset"
-
 	readonlyBucketAccess  = "ro"
 	readwriteBucketAccess = "rw"
 
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = time.Second * 10
-
-	bucketArgumentText       = "BUCKET_NAME"
-	bucketRenameArgumentText = bucketArgumentText + " NEW_NAME"
-	bucketPropsArgumentText  = bucketArgumentText + " " + atLeastOneKeyValuePairArgumentsText
 )
 
 var (
-	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
-	allFlag           = cli.BoolTFlag{Name: "all", Usage: "list all objects in a bucket and their details; include EC replicas"}
-	propsFlag         = cli.BoolFlag{Name: "props", Usage: "properties of a bucket"}
-	pageSizeFlag      = cli.StringFlag{Name: "page-size", Usage: "maximum number of entries by list bucket call", Value: "1000"}
-	objPropsFlag      = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
-	objLimitFlag      = cli.StringFlag{Name: "limit", Usage: "limit object count", Value: "0"}
-	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
-	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
-	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
-	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
-	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
-	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	markerFlag        = cli.StringFlag{Name: "marker", Usage: "start listing bucket objects starting from the object that follows the marker(alphabetically), ignored in fast mode"}
-
 	baseBucketFlags = []cli.Flag{
 		bckProviderFlag,
 	}
 
 	bucketFlags = map[string][]cli.Flag{
 		bucketCreate: {},
-		commandList: {
+		propsList: {
 			regexFlag,
 			bckProviderFlag,
 			noHeaderFlag,
 		},
-		bucketDestroy: {},
-		commandRename: {},
+		bucketDestroy:    {},
+		subcommandRename: {},
 		bucketObjects: append(
 			baseBucketFlags,
 			regexFlag,
@@ -102,7 +73,7 @@ var (
 	}
 
 	bucketPropsFlags = map[string][]cli.Flag{
-		commandList: append(
+		propsList: append(
 			baseBucketFlags,
 			jsonFlag,
 		),
@@ -115,7 +86,7 @@ var (
 
 	bucketCmds = []cli.Command{
 		{
-			Name:  cmn.URLParamBucket,
+			Name:  commandBucket,
 			Usage: "operate on buckets",
 			Subcommands: []cli.Command{
 				{
@@ -123,10 +94,10 @@ var (
 					Usage: "operate on bucket properties",
 					Subcommands: []cli.Command{
 						{
-							Name:         commandList,
+							Name:         propsList,
 							Usage:        "lists bucket properties",
 							ArgsUsage:    bucketArgumentText,
-							Flags:        bucketPropsFlags[commandList],
+							Flags:        bucketPropsFlags[propsList],
 							Action:       bucketPropsHandler,
 							BashComplete: bucketList([]cli.BashCompleteFunc{}),
 						},
@@ -165,18 +136,18 @@ var (
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
 				},
 				{
-					Name:         commandRename,
+					Name:         subcommandRename,
 					Usage:        "renames the local bucket",
 					ArgsUsage:    bucketRenameArgumentText,
-					Flags:        bucketFlags[commandRename],
+					Flags:        bucketFlags[subcommandRename],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
 				},
 				{
-					Name:         commandList,
+					Name:         propsList,
 					Usage:        "returns all bucket names",
 					ArgsUsage:    noArgumentsText,
-					Flags:        bucketFlags[commandList],
+					Flags:        bucketFlags[propsList],
 					Action:       bucketHandler,
 					BashComplete: flagList,
 				},
@@ -222,8 +193,8 @@ func bucketHandler(c *cli.Context) (err error) {
 	command := c.Command.Name
 
 	bucket, err := bucketFromArgsOrEnv(c)
-	// In case of commandRename validation will be done inside renameBucket
-	if err != nil && command != commandList && command != commandRename {
+	// In case of subcommandRename validation will be done inside renameBucket
+	if err != nil && command != propsList && command != subcommandRename {
 		return err
 	}
 
@@ -232,11 +203,11 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = createBucket(c, baseParams, bucket)
 	case bucketDestroy:
 		err = destroyBucket(c, baseParams, bucket)
-	case commandRename:
+	case subcommandRename:
 		err = renameBucket(c, baseParams)
 	case bucketEvict:
 		err = evictBucket(c, baseParams, bucket)
-	case commandList:
+	case propsList:
 		err = listBucketNames(c, baseParams)
 	case bucketObjects:
 		err = listBucketObj(c, baseParams, bucket)
@@ -255,8 +226,8 @@ func bucketPropsHandler(c *cli.Context) (err error) {
 	command := c.Command.Name
 
 	switch command {
-	case commandList:
-		err = bucketProps(c, baseParams)
+	case propsList:
+		err = listBucketProps(c, baseParams)
 	case propsSet:
 		err = setBucketProps(c, baseParams)
 	case propsReset:
@@ -621,7 +592,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 }
 
 // Get bucket props
-func bucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	bucket, err := bucketFromArgsOrEnv(c)
 	if err != nil {
 		return err

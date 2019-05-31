@@ -20,24 +20,12 @@ import (
 )
 
 const (
-	downloadStart  = commandStart
-	downloadStatus = commandStatus
-	downloadAbort  = commandAbort
-	downloadRemove = commandRemove
-	downloadList   = commandList
-
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048
 	progressBarWidth      = 64
-
-	downloadStartArgumentText = "SOURCE DESTINATION"
 )
 
 var (
-	timeoutFlag     = cli.StringFlag{Name: cmn.URLParamTimeout, Usage: "timeout for request to external resource, eg. '30m'"}
-	descriptionFlag = cli.StringFlag{Name: cmn.URLParamDescription + ",desc", Usage: "description of the job - can be useful when listing all downloads"}
-	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-
 	downloadFlags = map[string][]cli.Flag{
 		downloadStart: {
 			bckProviderFlag,
@@ -58,7 +46,7 @@ var (
 
 	downloaderCmds = []cli.Command{
 		{
-			Name:  "download",
+			Name:  commandDownload,
 			Usage: "command that manages downloading files from external sources",
 			Subcommands: []cli.Command{
 				{

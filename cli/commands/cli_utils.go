@@ -29,51 +29,15 @@ type AISCLI struct {
 const (
 	cliName = "ais"
 
-	commandRename = "rename"
-	commandEvict  = "evict"
-	commandStart  = "start"
-	commandStatus = "status"
-	commandAbort  = "abort"
-	commandRemove = "remove"
-	commandList   = "ls"
-
 	invalidCmdMsg    = "invalid command name '%s'"
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
 
-	countDefault = 1
-
-	refreshRateDefault = time.Second
-	refreshRateMin     = 500 * time.Millisecond
+	countDefault   = 1
+	refreshRateMin = 500 * time.Millisecond
 
 	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
 
-	aisBucketEnvVar         = "AIS_BUCKET"
-	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
-
 	metadata = "md"
-
-	idArgumentText                      = "ID"
-	noArgumentsText                     = " "
-	atLeastOneKeyValuePairArgumentsText = "KEY=VALUE [KEY=VALUE...]"
-)
-
-var (
-	// Common Flags
-	refreshFlag = cli.StringFlag{Name: "refresh", Usage: "refresh period", Value: refreshRateDefault.String()}
-	countFlag   = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
-
-	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
-	verboseFlag  = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
-	checksumFlag = cli.BoolFlag{Name: cmn.GetPropsChecksum, Usage: "validate checksum"}
-	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
-
-	bucketFlag      = cli.StringFlag{Name: cmn.URLParamBucket, Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
-	bckProviderFlag = cli.StringFlag{Name: "provider",
-		Usage:  "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically",
-		EnvVar: aisBucketProviderEnvVar,
-	}
-	regexFlag    = cli.StringFlag{Name: cmn.URLParamRegex, Usage: "regex pattern for matching"}
-	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 )
 
 var AISHelpTemplate = `DESCRIPTION:

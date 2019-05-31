@@ -15,23 +15,13 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	xactStart = cmn.ActXactStart
-	xactStop  = cmn.ActXactStop
-	xactStats = cmn.ActXactStats
-
-	xactionNameArgumentText         = "XACTION_NAME"
-	xactionNameOptionalArgumentText = "[XACTION_NAME]"
-)
-
 var (
-	allFlagXact   = cli.BoolFlag{Name: "all", Usage: "show all (even old) xactions"}
 	baseXactFlags = []cli.Flag{bucketFlag}
 
 	xactFlags = map[string][]cli.Flag{
 		xactStart: baseXactFlags,
 		xactStop:  baseXactFlags,
-		xactStats: append(baseXactFlags, jsonFlag, allFlagXact),
+		xactStats: append(baseXactFlags, jsonFlag, allFlag),
 	}
 
 	bucketXactions = bucketXactionNames()
@@ -39,7 +29,7 @@ var (
 
 	xactCmds = []cli.Command{
 		{
-			Name:  cmn.GetWhatXaction,
+			Name:  commandXaction,
 			Usage: "interacts with extended actions (xactions)",
 			Subcommands: []cli.Command{
 				{
@@ -104,7 +94,7 @@ func xactHandler(c *cli.Context) (err error) {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	}
 
-	xactStatsMap, err := api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlagXact))
+	xactStatsMap, err := api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlag))
 	if err != nil {
 		return err
 	}

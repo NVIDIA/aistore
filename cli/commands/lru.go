@@ -15,16 +15,10 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	lruStart  = cmn.ActXactStart
-	lruStop   = cmn.ActXactStop
-	lruStatus = "status"
-)
-
 var (
 	lruCmds = []cli.Command{
 		{
-			Name:  cmn.ActLRU,
+			Name:  commandLRU,
 			Usage: "manages LRU",
 			Subcommands: []cli.Command{
 				{

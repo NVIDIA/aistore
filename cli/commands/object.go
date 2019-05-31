@@ -24,29 +24,10 @@ import (
 )
 
 const (
-	objGet      = "get"
-	objPut      = "put"
-	objDel      = "delete"
-	objStat     = "stat"
-	objPrefetch = cmn.ActPrefetch
-	objEvict    = commandEvict
-
 	outFileStdout = "-"
 )
 
 var (
-	nameFlag     = cli.StringFlag{Name: "name", Usage: "name of object"}
-	outFileFlag  = cli.StringFlag{Name: "out-file", Usage: "name of the file where the contents will be saved"}
-	fileFlag     = cli.StringFlag{Name: "file", Usage: "filepath for content of the object"}
-	newNameFlag  = cli.StringFlag{Name: "new-name", Usage: "new name of object"}
-	offsetFlag   = cli.StringFlag{Name: cmn.URLParamOffset, Usage: "object read offset"}
-	lengthFlag   = cli.StringFlag{Name: cmn.URLParamLength, Usage: "object read length"}
-	prefixFlag   = cli.StringFlag{Name: cmn.URLParamPrefix, Usage: "prefix for string matching"}
-	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
-	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
-	cachedFlag   = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
-
 	baseObjectFlags = []cli.Flag{
 		bucketFlag,
 		nameFlag,
@@ -76,7 +57,7 @@ var (
 			propsFlag,
 			cachedFlag,
 		),
-		commandRename: {
+		subcommandRename: {
 			nameFlag,
 			newNameFlag,
 			bucketFlag,
@@ -107,13 +88,13 @@ var (
 	objectDelUsage       = fmt.Sprintf(objectBasicUsageText, cliName, objDel)
 	objectStatUsage      = fmt.Sprintf(objectBasicUsageText, cliName, objStat)
 	objectPutUsage       = fmt.Sprintf("%s object %s --bucket <value> --name <value> --file <value>", cliName, objPut)
-	objectRenameUsage    = fmt.Sprintf("%s object %s --bucket <value> --name <value> --new-name <value> ", cliName, commandRename)
+	objectRenameUsage    = fmt.Sprintf("%s object %s --bucket <value> --name <value> --new-name <value> ", cliName, subcommandRename)
 	objectPrefetchUsage  = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objPrefetch)
 	objectEvictUsage     = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objEvict)
 
 	objectCmds = []cli.Command{
 		{
-			Name:  "object",
+			Name:  commandObject,
 			Usage: "interact with objects",
 			Subcommands: []cli.Command{
 				{
@@ -149,10 +130,10 @@ var (
 					BashComplete: flagList,
 				},
 				{
-					Name:         commandRename,
+					Name:         subcommandRename,
 					Usage:        "renames the local object",
 					UsageText:    objectRenameUsage,
-					Flags:        objectFlags[commandRename],
+					Flags:        objectFlags[subcommandRename],
 					Action:       objectHandler,
 					BashComplete: flagList,
 				},
@@ -202,7 +183,7 @@ func objectHandler(c *cli.Context) (err error) {
 		err = objectDelete(c, baseParams, bucket, bckProvider)
 	case objStat:
 		err = objectStat(c, baseParams, bucket, bckProvider)
-	case commandRename:
+	case subcommandRename:
 		err = objectRename(c, baseParams, bucket)
 	case objPrefetch:
 		err = objectPrefetch(c, baseParams, bucket, bckProvider)

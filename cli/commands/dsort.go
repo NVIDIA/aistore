@@ -32,28 +32,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	dsortGen    = "gen"
-	dsortStart  = commandStart
-	dsortStatus = commandStatus
-	dsortAbort  = commandAbort
-	dsortRemove = commandRemove
-	dsortList   = commandList
-
-	jsonSpecificationArgumentText = "JSON_SPECIFICATION"
-)
-
 var (
 	phasesOrdered = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
-
-	logFlag           = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	extFlag           = cli.StringFlag{Name: "ext", Value: ".tar", Usage: "extension for shards (either '.tar' or '.tgz')"}
-	dsortBucketFlag   = cli.StringFlag{Name: "bucket", Value: cmn.DSortNameLowercase + "-testing", Usage: "bucket where shards will be put"}
-	dsortTemplateFlag = cli.StringFlag{Name: "template", Value: "shard-{0..9}", Usage: "template of input shard name"}
-	fileSizeFlag      = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "single file size inside the shard"}
-	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
-	cleanupFlag       = cli.BoolFlag{Name: "cleanup", Usage: "when set, the old bucket will be deleted and created again"}
-	concurrencyFlag   = cli.IntFlag{Name: "conc", Value: 10, Usage: "limits number of concurrent put requests and number of concurrent shards created"}
 
 	dsortFlags = map[string][]cli.Flag{
 		dsortGen: {
@@ -80,7 +60,7 @@ var (
 
 	dSortCmds = []cli.Command{
 		{
-			Name:  cmn.DSortNameLowercase,
+			Name:  commandDsort,
 			Usage: "command that manages distributed sort jobs",
 			Subcommands: []cli.Command{
 				{
@@ -94,7 +74,7 @@ var (
 				{
 					Name:         dsortStart,
 					Usage:        fmt.Sprintf("start new %s job with provided specification", cmn.DSortName),
-					ArgsUsage:    jsonSpecificationArgumentText,
+					ArgsUsage:    jsonSpecArgumentText,
 					Flags:        dsortFlags[dsortStart],
 					Action:       dsortHandler,
 					BashComplete: flagList,
