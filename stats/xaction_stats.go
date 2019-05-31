@@ -67,25 +67,25 @@ type RebalanceTargetStats struct {
 }
 
 type ExtRebalanceStats struct {
-	TxCount int64 `json:"tx.n"`
-	TxSize  int64 `json:"tx.size"`
-	RxCount int64 `json:"rx.n"`
-	RxSize  int64 `json:"rx.size"`
+	TxRebCount int64 `json:"tx.reb.n"`
+	TxRebSize  int64 `json:"tx.reb.size"`
+	RxRebCount int64 `json:"rx.reb.n"`
+	RxRebSize  int64 `json:"rx.reb.size"`
 }
 
 func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {
-	vr := r.Core.Tracker[RxCount]
-	vt := r.Core.Tracker[TxCount]
+	vr := r.Core.Tracker[RxRebCount]
+	vt := r.Core.Tracker[TxRebCount]
 	vr.RLock()
 	vt.RLock()
 
-	s.Ext.RxSize = r.Core.Tracker[RxSize].Value
-	s.Ext.RxCount = r.Core.Tracker[RxCount].Value
-	s.Ext.TxSize = r.Core.Tracker[TxSize].Value
-	s.Ext.TxCount = r.Core.Tracker[TxCount].Value
+	s.Ext.RxRebSize = r.Core.Tracker[RxRebSize].Value
+	s.Ext.RxRebCount = r.Core.Tracker[RxRebCount].Value
+	s.Ext.TxRebSize = r.Core.Tracker[TxRebSize].Value
+	s.Ext.TxRebCount = r.Core.Tracker[TxRebCount].Value
 
-	s.ObjCountX = s.Ext.RxCount + s.Ext.TxCount
-	s.BytesCountX = s.Ext.RxSize + s.Ext.TxSize
+	s.ObjCountX = s.Ext.RxRebCount + s.Ext.TxRebCount
+	s.BytesCountX = s.Ext.RxRebSize + s.Ext.TxRebSize
 
 	vt.RUnlock()
 	vr.RUnlock()

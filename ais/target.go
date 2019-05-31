@@ -388,10 +388,10 @@ func (t *targetrunner) registerStats() {
 	t.statsif.Register(stats.GetThroughput, stats.KindThroughput)
 	t.statsif.Register(stats.LruEvictSize, stats.KindCounter)
 	t.statsif.Register(stats.LruEvictCount, stats.KindCounter)
-	t.statsif.Register(stats.TxCount, stats.KindCounter)
-	t.statsif.Register(stats.TxSize, stats.KindCounter)
-	t.statsif.Register(stats.RxCount, stats.KindCounter)
-	t.statsif.Register(stats.RxSize, stats.KindCounter)
+	t.statsif.Register(stats.TxRebCount, stats.KindCounter)
+	t.statsif.Register(stats.TxRebSize, stats.KindCounter)
+	t.statsif.Register(stats.RxRebCount, stats.KindCounter)
+	t.statsif.Register(stats.RxRebSize, stats.KindCounter)
 	t.statsif.Register(stats.PrefetchCount, stats.KindCounter)
 	t.statsif.Register(stats.PrefetchSize, stats.KindCounter)
 	t.statsif.Register(stats.VerChangeCount, stats.KindCounter)
@@ -2475,8 +2475,6 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if err != nil {
 		return err.Error()
 	}
-
-	t.statsif.AddMany(stats.NamedVal64{stats.TxCount, 1}, stats.NamedVal64{stats.TxSize, fi.Size()})
 	return
 }
 

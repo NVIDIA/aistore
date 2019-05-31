@@ -431,15 +431,15 @@ func (reb *rebManager) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: from %s %s", reb.t.si.Name(), tsi, roi.lom)
 	}
-
+	reb.t.statsif.AddMany(
+		stats.NamedVal64{stats.RxRebCount, 1},
+		stats.NamedVal64{stats.RxRebSize, hdr.ObjAttrs.Size})
 	// ACK
 	hdr.Opaque = []byte(reb.t.si.DaemonID) // self == src
 	hdr.ObjAttrs.Size = 0
 	if err := reb.acks.SendV(hdr, nil /* reader */, nil /* sent cb */, nil /* cmpl ptr */, tsi); err != nil {
 		glog.Error(err)
-		return
 	}
-	reb.t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, hdr.ObjAttrs.Size})
 }
 
 func (reb *rebManager) recvRebalanceAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -498,6 +498,10 @@ func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", rj.m.t.si.Name(), hdr.Bucket, hdr.Objname, err)
 		return
 	}
+	cmn.Assert(hdr.ObjAttrs.Size == lom.Size())
+	rj.m.t.statsif.AddMany(
+		stats.NamedVal64{stats.TxRebCount, 1},
+		stats.NamedVal64{stats.TxRebSize, hdr.ObjAttrs.Size})
 	_, idx := lom.Hkey()
 	lomack := rj.m.lomAcks()[idx]
 	lomack.mu.Lock()
