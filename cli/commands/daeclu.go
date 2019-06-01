@@ -8,7 +8,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/aistore/ios"
 
@@ -70,32 +69,6 @@ var (
 		},
 	}
 )
-
-func updateLongRunVariables(c *cli.Context) error {
-	aisCLI := c.App.Metadata[metadata].(*AISCLI)
-
-	if flagIsSet(c, refreshFlag) {
-		rateStr := parseStrFlag(c, refreshFlag)
-		rate, err := time.ParseDuration(rateStr)
-		if err != nil {
-			return fmt.Errorf(durationParseErrorFmt, rateStr, err)
-		}
-		aisCLI.refresh = rate
-		// Run forever unless `count` is also specified
-		aisCLI.count = Infinity
-	}
-
-	if flagIsSet(c, countFlag) {
-		aisCLI.count = parseIntFlag(c, countFlag)
-		if aisCLI.count <= 0 {
-			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
-				countFlag.Name, aisCLI.count, countFlag.Name, countDefault)
-			aisCLI.count = countDefault
-		}
-	}
-
-	return nil
-}
 
 // Querying information
 func queryHandler(c *cli.Context) (err error) {

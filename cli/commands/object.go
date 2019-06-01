@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -507,17 +506,4 @@ func handleObjHeadError(err error, bucket, object string) error {
 	}
 
 	return err
-}
-
-// Returns a string containing the value of the `flag` in bytes, used for `offset` and `length` flags
-func getByteFlagValue(c *cli.Context, flag cli.Flag) (string, error) {
-	if flagIsSet(c, flag) {
-		offsetInt, err := parseByteFlagToInt(c, flag)
-		if err != nil {
-			return "", err
-		}
-		return strconv.FormatInt(offsetInt, 10), nil
-	}
-
-	return "", nil
 }
