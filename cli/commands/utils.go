@@ -380,8 +380,28 @@ func calcRefreshRate(c *cli.Context) (time.Duration, error) {
 	return refreshRate, nil
 }
 
-func updateLongRunVariables(c *cli.Context) error {
-	aisCLI := c.App.Metadata[metadata].(*AISCLI)
+//
+// Long run parameters
+//
+
+type longRunParams struct {
+	count       int
+	refreshRate time.Duration
+}
+
+func defaultLongRunParams() *longRunParams {
+	return &longRunParams{
+		count:       countDefault,
+		refreshRate: refreshRateDefault,
+	}
+}
+
+func (p *longRunParams) isInfiniteRun() bool {
+	return p.count == Infinity
+}
+
+func updateLongRunParams(c *cli.Context) error {
+	params := c.App.Metadata[metadata].(*longRunParams)
 
 	if flagIsSet(c, refreshFlag) {
 		rateStr := parseStrFlag(c, refreshFlag)
@@ -389,17 +409,17 @@ func updateLongRunVariables(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf(durationParseErrorFmt, rateStr, err)
 		}
-		aisCLI.refresh = rate
+		params.refreshRate = rate
 		// Run forever unless `count` is also specified
-		aisCLI.count = Infinity
+		params.count = Infinity
 	}
 
 	if flagIsSet(c, countFlag) {
-		aisCLI.count = parseIntFlag(c, countFlag)
-		if aisCLI.count <= 0 {
+		params.count = parseIntFlag(c, countFlag)
+		if params.count <= 0 {
 			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: '%s' set to %d, but expected value >= 1. Assuming '%s' = %d.\n",
-				countFlag.Name, aisCLI.count, countFlag.Name, countDefault)
-			aisCLI.count = countDefault
+				countFlag.Name, params.count, countFlag.Name, countDefault)
+			params.count = countDefault
 		}
 	}
 

@@ -28,17 +28,15 @@ type AISCLI struct {
 	outWriter io.Writer
 	errWriter io.Writer
 
-	count   int
-	refresh time.Duration
+	longRunParams *longRunParams
 }
 
 func New(build, version string) *AISCLI {
 	aisCLI := AISCLI{
-		app:       cli.NewApp(),
-		outWriter: os.Stdout,
-		errWriter: os.Stderr,
-		count:     countDefault,
-		refresh:   refreshRateDefault,
+		app:           cli.NewApp(),
+		outWriter:     os.Stdout,
+		errWriter:     os.Stderr,
+		longRunParams: defaultLongRunParams(),
 	}
 	aisCLI.init(build, version)
 	return &aisCLI
@@ -53,11 +51,11 @@ func (aisCLI *AISCLI) Run(input []string) error {
 		return aisCLI.handleCLIError(err)
 	}
 
-	if aisCLI.count == Infinity {
-		return aisCLI.runForever(input, aisCLI.refresh)
+	if aisCLI.longRunParams.isInfiniteRun() {
+		return aisCLI.runForever(input)
 	}
 
-	return aisCLI.runNTimes(input, aisCLI.count-1, aisCLI.refresh)
+	return aisCLI.runNTimes(input)
 }
 
 func (aisCLI *AISCLI) runOnce(input []string) error {
@@ -68,7 +66,9 @@ func (aisCLI *AISCLI) runOnce(input []string) error {
 	return nil
 }
 
-func (aisCLI *AISCLI) runForever(input []string, rate time.Duration) error {
+func (aisCLI *AISCLI) runForever(input []string) error {
+	rate := aisCLI.longRunParams.refreshRate
+
 	for {
 		time.Sleep(rate)
 
@@ -79,7 +79,10 @@ func (aisCLI *AISCLI) runForever(input []string, rate time.Duration) error {
 	}
 }
 
-func (aisCLI *AISCLI) runNTimes(input []string, n int, rate time.Duration) error {
+func (aisCLI *AISCLI) runNTimes(input []string) error {
+	n := aisCLI.longRunParams.count - 1
+	rate := aisCLI.longRunParams.refreshRate
+
 	for ; n > 0; n-- {
 		time.Sleep(rate)
 
@@ -114,7 +117,7 @@ func (aisCLI *AISCLI) init(build, version string) {
 	app.Flags = []cli.Flag{cli.HelpFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = incorrectUsageHandler
-	app.Metadata = map[string]interface{}{metadata: aisCLI}
+	app.Metadata = map[string]interface{}{metadata: aisCLI.longRunParams}
 	app.Writer = aisCLI.outWriter
 	app.ErrWriter = aisCLI.errWriter
 

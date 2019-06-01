@@ -76,7 +76,7 @@ func queryHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if err := updateLongRunVariables(c); err != nil {
+	if err := updateLongRunParams(c); err != nil {
 		return err
 	}
 
