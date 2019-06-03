@@ -731,7 +731,7 @@ func buildOutputTemplate(props string, showHeaders bool) (string, error) {
 	bodySb.WriteString("\n{{end}}")
 
 	if showHeaders {
-		return headSb.String() + bodySb.String() + "\n", nil
+		return headSb.String() + bodySb.String(), nil
 	}
 
 	return bodySb.String(), nil
@@ -759,7 +759,7 @@ func printObjectProps(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *
 }
 
 func printObjectNames(c *cli.Context, entries []*cmn.BucketEntry, objectFilter *objectListFilter, showUnmatched, showHeaders bool) error {
-	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}\n"
+	outputTemplate := "Name\n{{range $obj := .}}{{$obj.Name}}\n{{end}}"
 	if !showHeaders {
 		outputTemplate = "{{range $obj := .}}{{$obj.Name}}\n{{end}}"
 	}
