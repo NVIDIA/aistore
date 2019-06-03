@@ -27,7 +27,6 @@ package memsys_test
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -69,7 +68,7 @@ func Test_Sleep(t *testing.T) {
 	go mem.Run()
 
 	wg := &sync.WaitGroup{}
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := cmn.NowRand()
 	for i := 0; i < 100; i++ {
 		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
@@ -107,7 +106,7 @@ func Test_NoSleep(t *testing.T) {
 	go printstats(mem)
 
 	wg := &sync.WaitGroup{}
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := cmn.NowRand()
 	for i := 0; i < 500; i++ {
 		siz := random.Int63n(cmn.MiB) + cmn.KiB
 		tot := random.Int63n(cmn.DivCeil(cmn.MiB*10, siz))*siz + cmn.KiB

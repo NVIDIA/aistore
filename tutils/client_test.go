@@ -9,13 +9,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -47,7 +45,7 @@ func TestPutSG(t *testing.T) {
 }
 
 func putFile(size int64, withHash bool) error {
-	fn := "ais-client-test-" + tutils.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
+	fn := "ais-client-test-" + tutils.FastRandomFilename(cmn.NowRand(), 32)
 	dir := "/tmp"
 	r, err := tutils.NewFileReader(dir, fn, size, withHash)
 	if err != nil {

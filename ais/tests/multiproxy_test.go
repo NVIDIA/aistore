@@ -754,7 +754,7 @@ func proxyStress(t *testing.T) {
 		go putGetDelWorker(proxyURL, bs, stopchs[i], proxyurlchs[i], errChs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
-		n := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(999)
+		n := cmn.NowRand().Intn(999)
 		time.Sleep(time.Duration(n+1) * time.Millisecond)
 		bs++
 	}

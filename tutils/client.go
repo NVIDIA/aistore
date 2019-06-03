@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -24,6 +23,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/NVIDIA/aistore/stats"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -647,8 +648,7 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 			return
 		}
 		if size == 0 {
-			random := rand.New(rand.NewSource(time.Now().UnixNano()))
-			size = uint64(random.Intn(1024)+1) * 1024
+			size = uint64(cmn.NowRand().Intn(1024)+1) * 1024
 		}
 		reader, err = determineReaderType(sgl, readerPath, readerType, objName, size)
 		if err != nil {
@@ -736,7 +736,7 @@ func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSi
 	errCh chan error, objsPutCh chan string, sgl *memsys.SGL, fixedSize ...bool) {
 
 	var fnlen = 16
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := cmn.NowRand()
 	objList := make([]string, 0, numPuts)
 	for i := 0; i < numPuts; i++ {
 		fname := FastRandomFilename(random, fnlen)
@@ -873,4 +873,13 @@ func EvictObjects(t *testing.T, proxyURL string, fileslist []string, bucket stri
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bucket, err)
 	}
+}
+
+func GetXactionStats(baseParams *api.BaseParams, kind string, buckets ...string) (map[string][]*stats.BaseXactStatsExt, error) {
+	bucket := ""
+	if len(buckets) > 0 {
+		bucket = buckets[0]
+	}
+
+	return api.MakeXactGetRequest(baseParams, kind, cmn.ActXactStats, bucket, true)
 }

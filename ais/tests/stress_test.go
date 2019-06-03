@@ -5,7 +5,6 @@
 package ais_test
 
 import (
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -25,7 +24,7 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		bucket               = t.Name() + "Bucket"
 		proxyURL             = getPrimaryURL(t, proxyURLReadOnly)
 		wg                   = &sync.WaitGroup{}
-		random               = rand.New(rand.NewSource(time.Now().UnixNano()))
+		random               = cmn.NowRand()
 	)
 
 	if testing.Short() {
@@ -66,7 +65,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		bucket   = t.Name() + "Bucket"
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		wg       = &sync.WaitGroup{}
-		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
+		random   = cmn.NowRand()
 	)
 
 	if testing.Short() {

@@ -9,14 +9,16 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 const (
@@ -80,7 +82,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 
 		all := true
 		if resp, err := api.DownloadStatus(tutils.DefaultBaseAPIParams(t), id); err == nil {
-			if resp.Finished+len(resp.Errs) != resp.Total {
+			if resp.Finished+len(resp.Errs) != resp.Total && !resp.Aborted {
 				all = false
 			}
 		}
@@ -90,6 +92,63 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+}
+
+// if targetID == "", checks if all targets have completed download xaction
+func downloaderCompleted(t *testing.T, targetID string, targetsStats map[string][]*stats.BaseXactStatsExt) bool {
+	exists := false
+
+	for target, downloaderStat := range targetsStats {
+		if targetID != "" && !strings.Contains(target, targetID) {
+			continue
+		}
+		exists = true
+		for _, xaction := range downloaderStat {
+			if xaction.Running() {
+				tutils.Logf("%s(%d) still in progress for target %s; started %s\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
+				return false
+			}
+		}
+	}
+
+	tassert.Fatalf(t, exists, "target %s not found in downloader stats", targetID)
+	return true
+}
+
+// if targetID == "", waits until all targets have completed the downloader xaction
+// NOTE: this NOT the same as completing the job, downloader xaction might be running much longer
+func waitForDownloaderToFinish(t *testing.T, baseParams *api.BaseParams, targetID string, timeouts ...time.Duration) {
+	start := time.Now()
+	timeout := time.Duration(0)
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+
+	if targetID != "" {
+		tutils.Logf("Waiting for %s for downloader to finish on target %s \n", timeout, targetID)
+	} else {
+		tutils.Logf("Waiting for downloader to finish on all targets for %s\n", timeout, targetID)
+	}
+	// additional sleep before querying targets
+	time.Sleep(time.Second * 2)
+
+	sleep := time.Second * 1
+	for {
+		time.Sleep(sleep)
+		downloaderStats, err := tutils.GetXactionStats(baseParams, cmn.ActDownload)
+		checkXactAPIErr(t, err)
+
+		if downloaderCompleted(t, targetID, downloaderStats) {
+			tutils.Logf("downloader has finished\n")
+			return
+		}
+
+		if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
+			tassert.Fatalf(t, false, "downloader has not finished before %s", timeout)
+			return
+		}
+	}
+
 }
 
 func TestDownloadSingle(t *testing.T) {
@@ -644,4 +703,68 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	if httpErr.Status != http.StatusBadRequest {
 		t.Errorf("Expected status: %d, got: %d.", http.StatusBadRequest, httpErr.Status)
 	}
+}
+
+func TestDownloadMpathEvents(t *testing.T) {
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		bucket   = TestLocalBucketName
+		objsCnt  = 100
+
+		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000050}.tgz"
+		m        = make(map[string]string, objsCnt)
+	)
+
+	// prepare objects to be downloaded to targets. Multiple objects to make sure that at least
+	// one of them gets into target with disabled mountpath
+	for i := 0; i < objsCnt; i++ {
+		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
+	}
+
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+
+	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
+	tassert.CheckFatal(t, err)
+	tutils.Logf("Started large download job %s, meant to be aborted\n", id)
+
+	smap := getClusterMap(t, proxyURL)
+	removeTarget := tutils.ExtractTargetNodes(smap)[0]
+	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
+
+	mpathList, err := api.GetMountpaths(tgtParams)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(mpathList.Available) >= 2, "%s requires 2 or more mountpaths", t.Name())
+
+	mpathID := cmn.NowRand().Intn(len(mpathList.Available))
+	removeMpath := mpathList.Available[mpathID]
+	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
+	err = api.DisableMountpath(tgtParams, removeMpath)
+	tassert.CheckFatal(t, err)
+
+	defer func() {
+		// Enable mountpah
+		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
+		err = api.EnableMountpath(tgtParams, removeMpath)
+		tassert.CheckFatal(t, err)
+	}()
+
+	// wait until downloader is aborted
+	waitForDownloaderToFinish(t, tutils.DefaultBaseAPIParams(t), removeTarget.DaemonID, time.Second*30)
+	// downloader finished on required target, safe to abort the rest
+	tutils.Logf("Aborting download job %s\n", id)
+	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id)
+
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	tassert.CheckError(t, err)
+	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
+
+	id, err = api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
+	tassert.CheckFatal(t, err)
+	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
+
+	waitForDownload(t, id, 2*time.Minute)
+	objs, err = tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	tassert.CheckError(t, err)
+	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
 }

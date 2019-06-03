@@ -129,7 +129,7 @@ type (
 	Downloader struct {
 		cmn.NamedID
 		cmn.XactDemandBase
-		cmn.NonmountpathXact
+		cmn.MountpathXact
 
 		t          cluster.Target
 		mountpaths *fs.MountedFS
@@ -268,7 +268,7 @@ func (d *Downloader) init() {
 	d.dispatcher.init()
 }
 
-func (d *Downloader) Run() error {
+func (d *Downloader) Run() (err error) {
 	glog.Infof("Starting %s", d.Getname())
 	d.t.GetFSPRG().Reg(d)
 	d.init()
@@ -290,13 +290,9 @@ Loop:
 			}
 		case job := <-d.downloadCh:
 			d.dispatcher.dispatchDownload(job)
-		case mpathRequest := <-d.mpathReqCh:
-			switch mpathRequest.Action {
-			case fs.Add:
-				d.dispatcher.addJogger(mpathRequest.Path)
-			case fs.Remove:
-				d.dispatcher.removeJogger(mpathRequest.Path)
-			}
+		case req := <-d.mpathReqCh:
+			err = fmt.Errorf("mountpaths have changed when downloader was running; %s: %s; aborting", req.Action, req.Path)
+			break Loop
 		case <-d.ChanCheckTimeout():
 			if d.Timeout() {
 				glog.Infof("%s has timed out. Exiting...", d.Getname())
@@ -307,7 +303,7 @@ Loop:
 			break Loop
 		}
 	}
-	d.Stop(nil)
+	d.Stop(err)
 	return nil
 }
 
@@ -318,6 +314,9 @@ func (d *Downloader) Stop(err error) {
 	d.dispatcher.stop()
 	d.EndTime(time.Now())
 	glog.Infof("Stopped %s", d.Getname())
+	if err != nil {
+		glog.Errorf("stopping downloader; %s", err.Error())
+	}
 }
 
 /*

@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -124,7 +123,7 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 	var (
 		gzw       *gzip.Writer
 		tw        *tar.Writer
-		random    = rand.New(rand.NewSource(time.Now().UnixNano()))
+		random    = cmn.NowRand()
 		buf       = make([]byte, fileSize)
 		randBytes = make([]byte, 10)
 	)

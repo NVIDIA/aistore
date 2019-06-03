@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"math"
+	"math/rand"
 	"time"
 )
 
@@ -170,3 +171,7 @@ func (b *Bits) Set(flag Bits)      { x := *b; x |= flag; *b = x }
 func (b *Bits) Clear(flag Bits)    { x := *b; x &^= flag; *b = x }
 func (b *Bits) Toggle(flag Bits)   { x := *b; x ^= flag; *b = x }
 func (b *Bits) Has(flag Bits) bool { return *b&flag != 0 }
+
+func NowRand() *rand.Rand {
+	return rand.New(rand.NewSource(time.Now().UnixNano()))
+}

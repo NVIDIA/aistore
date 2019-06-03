@@ -6,7 +6,6 @@ package ais_test
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -97,7 +96,7 @@ func TestListObjects(t *testing.T) {
 		bucket   = t.Name() + "Bucket"
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		wg       = &sync.WaitGroup{}
-		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
+		random   = cmn.NowRand()
 	)
 
 	if testing.Short() {

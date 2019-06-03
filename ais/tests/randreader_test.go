@@ -5,16 +5,14 @@
 package ais_test
 
 import (
-	"math/rand"
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestRandomReaderPutStress(t *testing.T) {
@@ -41,7 +39,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 }
 
 func putRR(t *testing.T, reader tutils.Reader, bucket, dir string, numobjects int) {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := cmn.NowRand()
 	for i := 0; i < numobjects; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		objname := filepath.Join(dir, fname)

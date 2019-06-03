@@ -89,7 +89,7 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix, bucketName string
 
 func GenerateNonexistentBucketName(prefix string, baseParams *api.BaseParams) (string, error) {
 	for i := 0; i < 100; i++ {
-		name := prefix + FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 8)
+		name := prefix + FastRandomFilename(cmn.NowRand(), 8)
 		_, err := api.HeadBucket(baseParams, name)
 		if err == nil {
 			continue

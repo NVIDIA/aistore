@@ -68,17 +68,6 @@ func (d *dispatcher) addJogger(mpath string) {
 	d.joggers[mpath] = j
 }
 
-func (d *dispatcher) removeJogger(mpath string) {
-	jogger, ok := d.joggers[mpath]
-	if !ok {
-		glog.Errorf("Invalid mountpath %q", mpath)
-		return
-	}
-
-	delete(d.joggers, mpath)
-	jogger.stop()
-}
-
 /*
  * dispatcher's dispatch methods (forwards request to jogger)
  */

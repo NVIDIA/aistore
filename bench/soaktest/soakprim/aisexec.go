@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -67,8 +66,7 @@ func init() {
 }
 
 func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWorkers int, params *AISLoaderExecParams) {
-	randomSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
-	filebasename := tutils.FastRandomFilename(randomSrc, 13)
+	filebasename := tutils.FastRandomFilename(cmn.NowRand(), 13)
 	filename := path.Join(soaktestDirname, filebasename+".json")
 	defer os.Remove(filename)
 

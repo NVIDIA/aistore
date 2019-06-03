@@ -1583,9 +1583,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
 	seed := time.Now().UnixNano()
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	baseParams := tutils.BaseAPIParams(proxyURL)
-
 	bckProps := defaultECBckProps()
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
@@ -1600,7 +1598,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		}()
 
 		start := time.Now()
-		totalCnt, objSize, sliceSize, doEC := randObjectSize(rnd, idx, smallEvery)
+		totalCnt, objSize, sliceSize, doEC := randObjectSize(cmn.NowRand(), idx, smallEvery)
 		objPath := ecTestDir + objName
 		ecStr := "-"
 		if doEC {

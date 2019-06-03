@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -1074,7 +1073,7 @@ func group(objs []*cmn.BucketEntry, prefix string) []os.FileInfo {
 // localFileName returns a full path of a temporary file used while a AIStore object is opened for read or write
 func (fs *FileSystem) localFileName() string {
 	return filepath.Join(fs.localDir,
-		tutils.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32 /* length */))
+		tutils.FastRandomFilename(cmn.NowRand(), 32 /* length */))
 }
 
 type fiSortByName []os.FileInfo

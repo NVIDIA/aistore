@@ -5,14 +5,12 @@ package test
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 	"testing"
-	"time"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 // Running these benchmarks with different objNamesSize returns different results
@@ -32,7 +30,7 @@ func init() {
 
 func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueNameGetter{}
-	ng.Init(objnames, rand.New(rand.NewSource(time.Now().UnixNano())))
+	ng.Init(objnames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -41,7 +39,7 @@ func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 
 func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueIterNameGetter{}
-	ng.Init(objnames, rand.New(rand.NewSource(time.Now().UnixNano())))
+	ng.Init(objnames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -50,7 +48,7 @@ func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 
 func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueNameGetter{}
-	ng.Init(objnames, rand.New(rand.NewSource(time.Now().UnixNano())))
+	ng.Init(objnames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -59,7 +57,7 @@ func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
-	ng.Init(objnames, rand.New(rand.NewSource(time.Now().UnixNano())))
+	ng.Init(objnames, cmn.NowRand())
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		ng.ObjName()
@@ -95,7 +93,7 @@ func TestPermutationUniqueImprovedNameGetter(t *testing.T) {
 }
 
 func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
-	getter.Init(objnames, rand.New(rand.NewSource(time.Now().UnixNano())))
+	getter.Init(objnames, cmn.NowRand())
 	m := make(map[string]struct{})
 
 	// Should visit every objectName once
@@ -117,7 +115,7 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter
 	s1 := make([]string, smallSampleSize)
 	s2 := make([]string, smallSampleSize)
 
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rnd := cmn.NowRand()
 
 	getter.Init(objnames, rnd)
 	for i := 0; i < smallSampleSize; i++ {

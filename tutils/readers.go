@@ -207,7 +207,6 @@ func (r *fileReader) Description() string {
 
 // NewFileReader creates/opens the file, populates it with random data, closes it and returns a new fileReader
 func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	fn := path.Join(filepath, name)
 
 	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
@@ -216,7 +215,7 @@ func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, er
 	}
 	defer f.Close()
 
-	hash, err := copyRandWithHash(f, size, withHash, rnd)
+	hash, err := copyRandWithHash(f, size, withHash, cmn.NowRand())
 	if err != nil {
 		return nil, err
 	}
@@ -270,9 +269,8 @@ func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (Reader, error) {
 		hash string
 		err  error
 	)
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	if size > 0 {
-		hash, err = copyRandWithHash(sgl, size, withHash, rnd)
+		hash, err = copyRandWithHash(sgl, size, withHash, cmn.NowRand())
 		if err != nil {
 			return nil, err
 		}

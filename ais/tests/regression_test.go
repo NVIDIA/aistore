@@ -1323,7 +1323,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
-			globalRebalanceStats, err := getXactionGlobalRebalance(baseParams)
+			globalRebalanceStats, err := tutils.GetXactionStats(baseParams, cmn.ActGlobalReb)
 			checkXactAPIErr(t, err)
 
 			if allCompleted(globalRebalanceStats) {
@@ -1341,7 +1341,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
-			localRebalanceStats, err := getXactionLocalRebalance(baseParams)
+			localRebalanceStats, err := tutils.GetXactionStats(baseParams, cmn.ActLocalReb)
 			checkXactAPIErr(t, err)
 
 			if allCompleted(localRebalanceStats) {
@@ -1363,22 +1363,6 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	}
 
 	tutils.Logf("global and local rebalance completed\n")
-}
-
-func getXactionGlobalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
-	rebalanceStats, err := api.MakeXactGetRequest(baseParams, cmn.ActGlobalReb, cmn.ActXactStats, "", true)
-	if err != nil {
-		return nil, err
-	}
-	return rebalanceStats, nil
-}
-
-func getXactionLocalRebalance(baseParams *api.BaseParams) (map[string][]*stats.BaseXactStatsExt, error) {
-	rebalanceStats, err := api.MakeXactGetRequest(baseParams, cmn.ActLocalReb, cmn.ActXactStats, "", true)
-	if err != nil {
-		return nil, err
-	}
-	return rebalanceStats, nil
 }
 
 func waitProgressBar(prefix string, wait time.Duration) {

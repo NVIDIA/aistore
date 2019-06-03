@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // =============Preamble================
@@ -198,12 +199,11 @@ func createNodeList(size int) (nodeList []node) {
 
 // Creates a list of keys (int)
 func createList(nodeList []node, size int) (keys []int) {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nodeLen := len(nodeList)
 	keys = make([]int, 0, size)
 
 	for i := 0; i < size; i++ {
-		keys = append(keys, random.Intn(nodeLen))
+		keys = append(keys, cmn.NowRand().Intn(nodeLen))
 	}
 	return
 }
