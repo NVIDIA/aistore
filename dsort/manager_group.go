@@ -63,7 +63,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
 	jobInfoMap := make(map[string]JobInfo, len(mg.managers))
 
 	for k, v := range mg.managers {
-		if descRegex == nil || descRegex.MatchString(v.Description) {
+		if descRegex == nil || descRegex.MatchString(v.Metrics.Description) {
 			jobInfoMap[k] = v.Metrics.ToJobInfo(v.ManagerUUID)
 		}
 	}
@@ -88,7 +88,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
 			glog.Error(err)
 			continue
 		}
-		if descRegex == nil || descRegex.MatchString(m.Description) {
+		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
 			jobInfoMap[m.ManagerUUID] = m.Metrics.ToJobInfo(m.ManagerUUID)
 		}
 	}

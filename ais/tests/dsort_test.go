@@ -98,7 +98,7 @@ func (df *dsortFramework) init() {
 
 func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
-		ProcDescription:  generateDSortDesc(),
+		Description:      generateDSortDesc(),
 		Bucket:           df.m.bucket,
 		OutputBucket:     df.outputBucket,
 		Extension:        df.extension,

@@ -191,7 +191,7 @@ type Metrics struct {
 }
 
 // newMetrics creates new Metrics instance.
-func newMetrics(extended bool) *Metrics {
+func newMetrics(description string, extended bool) *Metrics {
 	extraction := &LocalExtraction{}
 	sorting := &MetaSorting{}
 	creation := &ShardCreation{}
@@ -209,6 +209,8 @@ func newMetrics(extended bool) *Metrics {
 
 	return &Metrics{
 		extended: extended,
+
+		Description: description,
 
 		Extraction: extraction,
 		Sorting:    sorting,

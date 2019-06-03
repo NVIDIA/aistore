@@ -81,7 +81,7 @@ type RequestSpec struct {
 	OutputShardSize string `json:"output_shard_size"`
 
 	// Optional
-	ProcDescription   string        `json:"description"`
+	Description       string        `json:"description"`
 	OutputBucket      string        `json:"output_bucket"`             // Default: same as `bucket` field
 	Algorithm         SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
 	MaxMemUsage       string        `json:"max_mem_usage"`             // Default: "80%"
@@ -94,7 +94,7 @@ type RequestSpec struct {
 
 type ParsedRequestSpec struct {
 	Bucket            string                `json:"bucket"`
-	ProcDescription   string                `json:"description"`
+	Description       string                `json:"description"`
 	OutputBucket      string                `json:"output_bucket"`
 	BckProvider       string                `json:"bprovider"`
 	OutputBckProvider string                `json:"output_bprovider"`
@@ -131,7 +131,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if rs.Bucket == "" {
 		return parsedRS, errMissingBucket
 	}
-	parsedRS.ProcDescription = rs.ProcDescription
+	parsedRS.Description = rs.Description
 	parsedRS.Bucket = rs.Bucket
 	parsedRS.OutputBucket = rs.OutputBucket
 	if parsedRS.OutputBucket == "" {
