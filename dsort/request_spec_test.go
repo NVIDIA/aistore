@@ -29,7 +29,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111..2}-suffix",
 				OutputFormat:    "prefix-{10..111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
@@ -64,7 +64,7 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputShardSize).To(BeEquivalentTo(100000))
+			Expect(parsed.OutputShardSize).To(BeEquivalentTo(10 * cmn.KiB))
 
 			Expect(parsed.MaxMemUsage.Type).To(Equal(cmn.QuantityPercent))
 			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80))
@@ -79,7 +79,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:         extTar,
 				IntputFormat:      "prefix-{0010..0111..2}-suffix",
 				OutputFormat:      "prefix-{10..111}-suffix",
-				OutputShardSize:   100000,
+				OutputShardSize:   "10KB",
 				MaxMemUsage:       "80%",
 				Algorithm:         SortAlgorithm{Kind: SortKindNone},
 			}
@@ -98,7 +98,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				MaxMemUsage:     "80 GB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
@@ -115,7 +115,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTgz,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
@@ -130,7 +130,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTarTgz,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
@@ -145,7 +145,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extZip,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
@@ -160,7 +160,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTgz,
 				IntputFormat:    "prefix@0111-suffix",
 				OutputFormat:    "prefix-@000111-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
@@ -197,7 +197,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:        extTar,
 				IntputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:     "prefix-{0010..0111}-suffix",
-				OutputShardSize:  10,
+				OutputShardSize:  "10KB",
 				CreateConcLimit:  0,
 				ExtractConcLimit: 0,
 				Algorithm:        SortAlgorithm{Kind: SortKindNone},
@@ -214,7 +214,7 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to missing bucket property", func() {
 			rs := RequestSpec{
 				Extension:       ".txt",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
@@ -226,7 +226,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
 				Extension:       extTar,
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				IntputFormat:    "prefix-{0112..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -240,7 +240,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
 				Extension:       extTar,
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0112..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -254,7 +254,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bucket:          "test",
 				Extension:       extTar,
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				IntputFormat:    "prefix-}{0001..0111}-suffix",
 				OutputFormat:    "prefix-}{0010..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -270,7 +270,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       ".jpg",
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
@@ -284,7 +284,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				MaxMemUsage:     "80",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
@@ -299,7 +299,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				MaxMemUsage:     "120%",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
@@ -314,7 +314,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				MaxMemUsage:     "-1 GB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
@@ -329,7 +329,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:        extTar,
 				IntputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:     "prefix-{0010..0111}-suffix",
-				OutputShardSize:  100000,
+				OutputShardSize:  "10KB",
 				ExtractConcLimit: -1,
 				Algorithm:        SortAlgorithm{Kind: SortKindNone},
 			}
@@ -344,7 +344,7 @@ var _ = Describe("RequestSpec", func() {
 				Extension:       extTar,
 				IntputFormat:    "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				OutputShardSize: 100000,
+				OutputShardSize: "10KB",
 				CreateConcLimit: -1,
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}

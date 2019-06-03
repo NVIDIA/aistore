@@ -78,7 +78,7 @@ type RequestSpec struct {
 	Extension       string `json:"extension"`
 	IntputFormat    string `json:"input_format"`
 	OutputFormat    string `json:"output_format"`
-	OutputShardSize int64  `json:"shard_size"`
+	OutputShardSize string `json:"output_shard_size"`
 
 	// Optional
 	ProcDescription   string        `json:"description"`
@@ -99,7 +99,7 @@ type ParsedRequestSpec struct {
 	BckProvider       string                `json:"bprovider"`
 	OutputBckProvider string                `json:"output_bprovider"`
 	Extension         string                `json:"extension"`
-	OutputShardSize   int64                 `json:"shard_size"`
+	OutputShardSize   int64                 `json:"output_shard_size"`
 	InputFormat       *parsedInputTemplate  `json:"input_format"`
 	OutputFormat      *parsedOutputTemplate `json:"output_format"`
 	Algorithm         *SortAlgorithm        `json:"algorithm"`
@@ -157,10 +157,13 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.Extension = rs.Extension
 
-	if rs.OutputShardSize <= 0 {
+	parsedRS.OutputShardSize, err = cmn.S2B(rs.OutputShardSize)
+	if err != nil {
+		return nil, err
+	}
+	if parsedRS.OutputShardSize <= 0 {
 		return nil, errNegOutputShardSize
 	}
-	parsedRS.OutputShardSize = rs.OutputShardSize
 
 	parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat)
 	if err != nil {

@@ -57,7 +57,7 @@ type dsortFramework struct {
 	extension       string
 	algorithm       *dsort.SortAlgorithm
 	missingKeys     bool
-	outputShardSize int64
+	outputShardSize string
 	maxMemUsage     string
 
 	baseParams  *api.BaseParams
@@ -85,8 +85,9 @@ func (df *dsortFramework) init() {
 	}
 
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
-	df.outputShardSize = int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
-	df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(df.outputShardSize)
+	outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
+	df.outputShardSize = cmn.B2S(outputShardSize, 0)
+	df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(outputShardSize)
 
 	if df.algorithm == nil {
 		df.algorithm = &dsort.SortAlgorithm{}

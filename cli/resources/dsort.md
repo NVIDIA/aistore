@@ -51,7 +51,7 @@ table describes json keys which can be used in specification.
 | `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` field |
 | `output_bprovider` | `string` | describes if the output bucket is local or cloud | no | same as `bpovider` field |
 | `description` | `string` | description of dsort job | no | `""` |
-| `shard_size` | `int` | size of output of shard | yes | |
+| `output_shard_size` | `string` | size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB` | yes | |
 | `algorithm.kind` | `string` | determines which algorithm should be during dSort job, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |
 | `algorithm.decreasing` | `bool` | determines if the algorithm should sort the records in decreasing or increasing order, used for `kind=alphanumeric` or `kind=content` | no | `false` |
 | `algorithm.seed` | `string` | seed provided to random generator, used when `kind=shuffle` | no | `""` - `time.Now()` is used |
@@ -70,7 +70,7 @@ ais dsort start '{
     "bucket": "dsort-testing",
     "input_format": "shard-{0..9}",
     "output_format": "new-shard-{0000..1000}",
-    "shard_size": 10240,
+    "output_shard_size": "10KB",
     "description": "sort shards from 0 to 9",
     "algorithm": {
         "kind": "alphanumeric"

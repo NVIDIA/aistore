@@ -75,7 +75,7 @@ class TestSortApi(unittest.TestCase):
             bucket=self.BUCKET_NAME,
             bprovider="local",
             extension=".tar",
-            shard_size=1024,
+            output_shard_size="1024",
             input_format=self.PREFIX+'{0..'+str(self.SHARDS-1)+'}',
             output_format=output_prefix+'{0000..10000}',
         )
@@ -111,7 +111,7 @@ class TestSortApi(unittest.TestCase):
             bucket=self.BUCKET_NAME,
             bprovider="local",
             extension=".tar",
-            shard_size=1024,
+            output_shard_size="1024",
             input_format=self.PREFIX+'{0..'+str(self.SHARDS-1)+'}',
             output_format=output_prefix+'{0000..10000}',
         )

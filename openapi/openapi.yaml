@@ -1067,9 +1067,10 @@ components:
         extension:
           type: string
           example: ".tar"
-        shard_size:
-          type: integer
-          format: int64
+        output_shard_size:
+          type: string
+          example: "10KB"
+          description: Size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB`
         input_format:
           $ref: '#/components/schemas/NameTemplate'
         output_format:
