@@ -339,13 +339,13 @@ func dsortHandler(c *cli.Context) error {
 		} else {
 			if !flagIsSet(c, refreshFlag) {
 				// show metrics just once
-				if _, err := showMetrics(baseParams, id, os.Stdout); err != nil {
+				if _, _, err := showMetrics(baseParams, id, c.App.Writer); err != nil {
 					return err
 				}
 			} else {
 				// show metrics once in a while
 				var (
-					w = os.Stdout
+					w = c.App.Writer
 				)
 
 				rate, err := calcRefreshRate(c)
@@ -362,19 +362,28 @@ func dsortHandler(c *cli.Context) error {
 					defer file.Close()
 				}
 
+				var (
+					aborted  bool
+					finished bool
+				)
+
 				for {
-					finished, err := showMetrics(baseParams, id, w)
+					aborted, finished, err = showMetrics(baseParams, id, w)
 					if err != nil {
 						return err
 					}
-					if finished {
+					if aborted || finished {
 						break
 					}
 
 					time.Sleep(rate)
 				}
 
-				_, _ = fmt.Fprintf(c.App.Writer, "%s has finished.", cmn.DSortName)
+				if aborted {
+					_, _ = fmt.Fprintf(c.App.Writer, "\nDSort job was aborted. Check metrics for encountered errors.\n")
+				} else { // finished == true
+					_, _ = fmt.Fprintf(c.App.Writer, "\nDSort job has finished successfully.\n")
+				}
 			}
 		}
 	case dsortAbort:
@@ -604,25 +613,24 @@ func (b *dsortProgressBar) result() dsortResult {
 	}
 }
 
-func showMetrics(baseParams *api.BaseParams, id string, w io.Writer) (bool, error) {
+func showMetrics(baseParams *api.BaseParams, id string, w io.Writer) (aborted, finished bool, err error) {
 	resp, err := api.MetricsDSort(baseParams, id)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
-	finished := true
+	aborted = false
+	finished = true
 	for _, targetMetrics := range resp {
+		aborted = aborted || targetMetrics.Aborted
 		finished = finished && targetMetrics.Creation.Finished
 	}
 
 	b, err := json.MarshalIndent(resp, "", "\t")
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 
 	_, err = fmt.Fprintf(w, "%s\n", string(b))
-	if err != nil {
-		return false, err
-	}
-	return finished, nil
+	return
 }
