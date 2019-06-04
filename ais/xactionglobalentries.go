@@ -211,6 +211,7 @@ type (
 )
 
 func (*baseGlobalEntry) IsGlobal() bool                             { return true }
+func (*baseGlobalEntry) IsTask() bool                               { return false }
 func (b *baseGlobalEntry) CleanupPrevious(entry xactionGlobalEntry) {}
 func (b *baseGlobalEntry) EndRenewOnPrevious(entry xactionGlobalEntry) (end bool) {
 	return !entry.Get().Finished()

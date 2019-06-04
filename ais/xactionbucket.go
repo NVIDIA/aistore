@@ -275,6 +275,7 @@ type baseBckEntry struct {
 }
 
 func (*baseBckEntry) IsGlobal() bool  { return false }
+func (*baseBckEntry) IsTask() bool    { return false }
 func (b *baseBckEntry) IsEmpty() bool { return b == nil }
 func (b *baseBckEntry) EndRenewOnPrevious(entry xactionBucketEntry) (end bool) {
 	return !entry.Get().Finished()

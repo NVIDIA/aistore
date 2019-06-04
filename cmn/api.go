@@ -73,6 +73,7 @@ var XactKind = XactKindType{
 	ActECRespond:   {},
 	ActMakeNCopies: {},
 	ActPutCopies:   {},
+	ActAsyncTask:   {},
 }
 
 // ActionMsg.Action enum (includes xactions)
@@ -112,6 +113,7 @@ const (
 	ActECRespond    = "ecresp" // respond to other targets' EC requests
 	ActStartGFN     = "metasync-start-gfn"
 	ActRecoverBck   = "recoverbck"
+	ActAsyncTask    = "task"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -227,6 +229,8 @@ const (
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get From Neighbor request
 	URLParamSilent           = "sln" // true: destination should not log errors(HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
+	URLParamTaskID           = "tsk" // ID of a task to return its state/result
+	URLParamTaskAction       = "tac" // "start", "status", "result"
 
 	// dsort
 	URLParamTotalCompressedSize       = "tcs"
@@ -250,17 +254,24 @@ const (
 	RebAbort = "abort"
 )
 
+const (
+	ListTaskStart  = "start"
+	ListTaskStatus = "status"
+	ListTaskResult = "result"
+)
+
 // SelectMsg represents properties and options for requests which fetch entities
 // Note: if Fast is `true` then paging is disabled - all items are returned
 //       in one response. The result list is unsorted and contains only object
 //       names: even field `Status` is filled with zero value
 type SelectMsg struct {
-	Props      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
-	TimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
-	Prefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
-	PageMarker string `json:"pagemarker"`  // marker - the last object in previous page
-	PageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
-	Fast       bool   `json:"fast"`        // performs a fast traversal of the bucket contents (returns only names)
+	Props      string `json:"props"`         // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
+	TimeFormat string `json:"time_format"`   // "RFC822" default - see the enum above
+	Prefix     string `json:"prefix"`        // object name filter: return only objects which name starts with prefix
+	PageMarker string `json:"pagemarker"`    // marker - the last object in previous page
+	PageSize   int    `json:"pagesize"`      // maximum number of entries returned by list bucket call
+	TaskID     int64  `json:"taskid,string"` // task ID for long running requests
+	Fast       bool   `json:"fast"`          // performs a fast traversal of the bucket contents (returns only names)
 }
 
 // ListRangeMsgBase contains fields common to Range and List operations

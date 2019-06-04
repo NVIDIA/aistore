@@ -261,6 +261,9 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	//       where this test is running from, because it searches a local file system)
 	var fName string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return err
+		}
 		if info.IsDir() && info.Name() == "cloud" {
 			return filepath.SkipDir
 		}

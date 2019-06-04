@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -50,12 +51,26 @@ type (
 		vr          *VoteRecord
 	}
 
+	taskState struct {
+		Err    error       `json:"error"`
+		Result interface{} `json:"res"`
+	}
+	xactBckListTask struct {
+		cmn.XactBase
+		res     atomic.Pointer
+		t       *targetrunner
+		bucket  string
+		msg     *cmn.SelectMsg
+		isLocal bool
+	}
+
 	xactionEntry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
 		Stats() stats.XactStats
 		IsGlobal() bool
+		IsTask() bool
 	}
 )
 
@@ -71,6 +86,9 @@ func (xact *xactEvictDelete) Description() string {
 }
 func (xact *xactElection) Description() string {
 	return "responsible for election of a new primary proxy in case of failure of previous one"
+}
+func (xact *xactBckListTask) Description() string {
+	return "asynchronous bucket list task"
 }
 
 func (xact *xactPrefetch) ObjectsCnt() int64 {
@@ -101,8 +119,8 @@ const entriesSizeLW = 100
 
 type xactionsRegistry struct {
 	sync.RWMutex
-	nextid      atomic.Int64
 	globalXacts map[string]xactionGlobalEntry
+	taskXacts   sync.Map // map[string]xactionEntry
 	bucketXacts sync.Map // map[string]*bucketXactions
 	byID        sync.Map // map[int64]xactionEntry
 	byIDSize    *atomic.Int64
@@ -202,7 +220,9 @@ func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
 }
 
 func (r *xactionsRegistry) uniqueID() int64 {
-	return r.nextid.Inc()
+	n, err := cmn.GenUUID64()
+	cmn.AssertNoErr(err)
+	return n
 }
 
 func (r *xactionsRegistry) stopMountpathXactions() {
@@ -326,6 +346,15 @@ func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactSt
 		return true
 	})
 
+	r.taskXacts.Range(func(_, val interface{}) bool {
+		taskXact := val.(*bckListTaskEntry)
+
+		stat := &stats.BaseXactStats{}
+		stat.FromXact(taskXact.xact, "")
+		matching[taskXact.xact.ID()] = stat
+		return true
+	})
+
 	return matching
 }
 
@@ -439,6 +468,15 @@ func (r *xactionsRegistry) bucketsXacts(bucket string) *bucketXactions {
 }
 
 // GLOBAL RENEW METHODS
+
+func (r *xactionsRegistry) GetTaskXact(id int64) xactionEntry {
+	val, loaded := r.byID.Load(id)
+
+	if loaded {
+		return val.(xactionEntry)
+	}
+	return nil
+}
 
 func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
 	r.RLock()
@@ -563,6 +601,22 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
+func (r *xactionsRegistry) renewBckListXact(t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg) *xactBckListTask {
+	id := msg.TaskID
+	e := &bckListTaskEntry{id: id, t: t, bucket: bucket, isLocal: isLocal, msg: msg}
+	// TODO: duplicated ID - what to do? Just replace old one?
+	_, ok := r.byID.Load(e.id)
+	cmn.Assert(!ok)
+
+	if err := e.Start(id); err != nil {
+		return nil
+	}
+
+	r.taskXacts.Store(e.Kind(), e)
+	r.storeByID(e.Get().ID(), e)
+	return e.xact
+}
+
 func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 	r.byID.Store(id, entry)
 	r.byIDSize.Inc()
@@ -599,14 +653,20 @@ func (r *xactionsRegistry) cleanUpFinished() {
 
 			if entry.IsGlobal() {
 				currentEntry := r.GetL(entry.Get().Kind())
-				if currentEntry.Get().ID() == entry.Get().ID() {
+				if currentEntry != nil && currentEntry.Get().ID() == entry.Get().ID() {
 					return true
 				}
+			} else if entry.IsTask() {
+				// No additional checks - cleanup all finished task Xactions,
+				// old and recent ones, since task xActions may take up much memory
+				// for their results
 			} else {
 				bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
-				currentEntry := bXact.GetL(entry.Get().Kind())
-				if currentEntry.Get().ID() == entry.Get().ID() {
-					return true
+				if bXact != nil {
+					currentEntry := bXact.GetL(entry.Get().Kind())
+					if currentEntry.Get().ID() == entry.Get().ID() {
+						return true
+					}
 				}
 			}
 
@@ -620,4 +680,19 @@ func (r *xactionsRegistry) cleanUpFinished() {
 			return true
 		})
 	}(startTime)
+}
+
+func (r *xactBckListTask) IsGlobal() bool        { return false }
+func (r *xactBckListTask) IsTask() bool          { return true }
+func (r *xactBckListTask) IsMountpathXact() bool { return false }
+func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
+	res := &taskState{Err: err}
+	if err == nil {
+		res.Result = result
+	}
+	r.res.Store(unsafe.Pointer(res))
+	r.EndTime(time.Now())
+}
+func (r *xactBckListTask) Run() {
+	r.UpdateResult(r.t.prepareLocalObjectList(r.bucket, r.msg, r.isLocal))
 }

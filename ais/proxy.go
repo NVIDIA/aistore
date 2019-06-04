@@ -864,6 +864,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		msg     = cmn.SelectMsg{}
 		bckList *cmn.BucketList
 		query   = r.URL.Query()
+		taskID  int64
 	)
 
 	listMsgJSON, err := jsoniter.Marshal(actionMsg.Value)
@@ -886,8 +887,26 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		msg.Prefix = prefix
 	}
 
-	if bckList, err = p.listBucket(r, bucket, bckProvider, msg); err != nil {
+	idstr := r.URL.Query().Get(cmn.URLParamTaskID)
+	if idstr != "" {
+		id, err := strconv.ParseInt(idstr, 10, 64)
+		if err != nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid task id: %s", idstr))
+			return
+		}
+		msg.TaskID = id
+	}
+
+	if bckList, taskID, err = p.listBucket(r, bucket, bckProvider, msg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	// taskID == 0 means that async runner has completed and the result is available
+	// otherwise it is an ID of a still running task
+	if taskID != 0 {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(strconv.FormatInt(taskID, 10)))
 		return
 	}
 
@@ -1752,71 +1771,121 @@ func (p *proxyrunner) collectCachedFileList(bucket, bckProvider string, fileList
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.SelectMsg) (allEntries *cmn.BucketList, err error) {
-	type targetReply struct {
-		resp *bucketResp
-		err  error
-	}
-	const (
-		cachedObjs = false
-	)
+func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, headerID string) (allEntries *cmn.BucketList, code int64, err error) {
 	pageSize := cmn.DefaultPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
 	}
 
-	if pageSize > maxPageSize {
-		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.PageSize, bucket, maxPageSize)
+	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
+	// it is a request to start a new async task
+	isNew := headerID == "" && msg.TaskID == 0
+	q := url.Values{}
+	if isNew {
+		msg.TaskID, _ = cmn.GenUUID64()
+		q.Set(cmn.URLParamTaskAction, cmn.ListTaskStart)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("proxy: starting new async task %d", msg.TaskID)
+		}
+	} else {
+		// make both msg and headers to have the same taskID
+		if msg.TaskID == 0 {
+			n, err := strconv.ParseInt(headerID, 10, 64)
+			if err != nil {
+				return nil, 0, err
+			}
+			msg.TaskID = n
+		}
+		// first request is always 'Status' to avoid wasting gigabytes of
+		// traffic in case when few targets have finished their tasks
+		q.Set(cmn.URLParamTaskAction, cmn.ListTaskStatus)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("proxy: reading async task %d result", msg.TaskID)
+		}
 	}
 
 	smap := p.smapowner.get()
-	targetResults := make(chan *targetReply, len(smap.Tmap))
-	wg := &sync.WaitGroup{}
+	reqTimeout := cmn.GCO.Get().Timeout.CplaneOperation
+	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	method := http.MethodPost
+	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
+	msgBytes, err := jsoniter.Marshal(msgInt)
+	cmn.AssertNoErr(err)
+	results := p.broadcastTo(
+		urlPath,
+		q,
+		method,
+		msgBytes,
+		smap,
+		reqTimeout,
+		cmn.NetworkPublic,
+		cluster.Targets,
+	)
 
-	targetCallFn := func(si *cluster.Snode) {
-		resp, err := p.targetListBucket(nil, bucket, bckProvider, si, &msg, cachedObjs)
-		targetResults <- &targetReply{resp, err}
-		wg.Done()
+	// check response codes of all targets
+	// Target that has completed its async task returns 200, and 202 otherwise
+	allOK, allNotFound := true, true
+	for result := range results {
+		if result.status == http.StatusNotFound {
+			continue
+		}
+		allNotFound = false
+		if result.err != nil {
+			return nil, 0, result.err
+		}
+		if result.status != http.StatusOK {
+			allOK = false
+			break
+		}
 	}
-	smap = p.smapowner.get()
-	for _, si := range smap.Tmap {
-		wg.Add(1)
-		go func(d *cluster.Snode) {
-			targetCallFn(d)
-		}(si)
+
+	if allNotFound {
+		return nil, 0, fmt.Errorf("Task %d %s", msg.TaskID, cmn.DoesNotExist)
 	}
-	wg.Wait()
-	close(targetResults)
+
+	// some targets are still executing their tasks or it is request to start
+	// an async task. The proxy returns only taskID to a caller
+	if !allOK || isNew {
+		return nil, msg.TaskID, nil
+	}
+
+	// all targets are ready, prepare the final result
+	q = url.Values{}
+	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
+	results = p.broadcastTo(
+		urlPath,
+		q,
+		method,
+		msgBytes,
+		smap,
+		reqTimeout,
+		cmn.NetworkPublic,
+		cluster.Targets,
+	)
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-	bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-	for r := range targetResults {
-		if r.err != nil {
-			err = r.err
-			return
+	for resp := range results {
+		if resp.err != nil {
+			return nil, 0, resp.err
 		}
-		if r.resp.outjson == nil || len(r.resp.outjson) == 0 {
+		if len(resp.outjson) == 0 {
 			continue
 		}
-
-		// a small performance boost: preallocate memory either for the page
-		// or for the size of allocated for previous target. When object are
-		// evenly distributed the latter can help to avoid reallocations
-		bucketList.Entries = make([]*cmn.BucketEntry, 0, cmn.Max(pageSize, len(bucketList.Entries)))
-		if err = jsoniter.Unmarshal(r.resp.outjson, &bucketList); err != nil {
+		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+		if err = jsoniter.Unmarshal(resp.outjson, &bucketList); err != nil {
 			return
 		}
-		r.resp.outjson = nil
+		resp.outjson = nil
 
 		if len(bucketList.Entries) == 0 {
 			continue
 		}
 
 		allEntries.Entries = append(allEntries.Entries, bucketList.Entries...)
+		bucketList.Entries = nil
+		bucketList = nil
 	}
-	bucketList.Entries = nil
-	bucketList = nil
 
 	// For regular object list request:
 	//   - return the list always sorted in alphabetical order
@@ -1848,7 +1917,8 @@ func (p *proxyrunner) getLocalBucketObjects(bucket, bckProvider string, msg cmn.
 		}
 	}
 
-	return allEntries, nil
+	// no active tasks - return TaskID=0
+	return allEntries, 0, nil
 }
 
 func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (allentries *cmn.BucketList, err error) {
@@ -1909,12 +1979,15 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, bckProvider
 //   - if iscached or atime property is requested it does extra steps:
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
-//   - returns the list
-func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (bckList *cmn.BucketList, err error) {
+//   - returns:
+//      * the list of objects if the aync task finished (taskID is 0 in this case)
+//      * non-zero taskID if the task is still running
+//      * error
+func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (bckList *cmn.BucketList, taskID int64, err error) {
 	if bckProvider == cmn.CloudBs || !p.bmdowner.get().IsLocal(bucket) {
 		bckList, err = p.getCloudBucketObjects(r, bucket, bckProvider, msg)
 	} else {
-		bckList, err = p.getLocalBucketObjects(bucket, bckProvider, msg)
+		bckList, taskID, err = p.getLocalBucketObjects(bucket, msg, r.URL.Query().Get(cmn.URLParamTaskID))
 	}
 	return
 }

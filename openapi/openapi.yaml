@@ -375,6 +375,12 @@ paths:
             schema:
               $ref: '#/components/schemas/InputParameters'
       responses:
+        '202':
+          description: Asynchronous task is running
+          content:
+            text/plain:
+              schema:
+                type: int64
         '200':
           description: Operation on bucket-name succeeded
           content:
@@ -1329,6 +1335,8 @@ components:
           type: string
         pagesize:
           type: string
+        taskid:
+          type: int64
     ObjectProperties:
       type: object
       properties:

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -227,7 +226,7 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 			targetLBNames, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 			tassert.CheckFatal(m.t, err)
 			// T3
-			if reflect.DeepEqual(proxyLBNames.Local, targetLBNames.Local) {
+			if cmn.StrSlicesEqual(proxyLBNames.Local, targetLBNames.Local) {
 				tutils.Logf("T3: re-registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
 				return
 			}
@@ -282,14 +281,16 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	// Step 4.
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
 	go func() {
+		// without defer, if gets crashes Done is not called resulting in test hangs
+		defer m.wg.Done()
 		m.gets()
-		m.wg.Done()
 	}()
 
 	time.Sleep(time.Second * 3) // give gets some room to breathe
 	go func() {
+		// without defer, if reregister crashes Done is not called resulting in test hangs
+		defer m.wg.Done()
 		m.reregisterTarget(target)
-		m.wg.Done()
 	}()
 
 	m.wg.Wait()

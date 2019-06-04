@@ -538,3 +538,26 @@ func ensurePathNotExists(t *testing.T, path string) {
 		t.Error(err)
 	}
 }
+
+func TestSlicesEqual(t *testing.T) {
+	tests := []struct {
+		lhs []string
+		rhs []string
+		res bool
+	}{
+		{[]string{}, []string{}, true},
+		{[]string{"one"}, []string{}, false},
+		{[]string{}, []string{"one"}, false},
+		{[]string{"one"}, []string{"one"}, true},
+		{[]string{"one", "two", "three"}, []string{"one", "two", "three"}, true},
+		{[]string{"one", "three", "two"}, []string{"one", "two", "three"}, true},
+		{[]string{"two", "three", "one"}, []string{"one", "two", "three"}, true},
+		{[]string{"two", "three", "four"}, []string{"one", "two", "three"}, false},
+		{[]string{"two", "three", "one"}, []string{"four", "two", "three"}, false},
+	}
+	for _, c := range tests {
+		if cmn.StrSlicesEqual(c.lhs, c.rhs) != c.res {
+			t.Errorf("%v == %v != %v", c.lhs, c.rhs, c.res)
+		}
+	}
+}

@@ -7,6 +7,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,6 +15,11 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	initialPollInterval = 200 * time.Millisecond
+	maxPollInterval     = 10 * time.Second
 )
 
 // SetBucketPropsMsg API
@@ -372,6 +378,83 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 	return err
 }
 
+// Polling:
+// 1. The function sends the requests as is (msg.taskID should be 0) to initiate
+//    asynchronous task. The destination returns ID of a newly created task
+// 2. Starts polling: request destination with received taskID in a loop while
+//    the destination returns StatusAccepted=task is still running
+//	  Time between requests is dynamic: it starts at 200ms and increases
+//	  by half after every "not-StatusOK" request. It is limited with 10 seconds
+// 3. Breaks loop on error
+// 4. If the destination returns status code StatusOK, it means the response
+//    contains the real data and the function returns the response to the caller
+func waitForAsyncReqComplete(baseParams *BaseParams, path string, origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: origMsg})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, b, optParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("Invalid response code: %d", resp.StatusCode)
+	}
+
+	var id int64
+	// the destination started async task and returned its ID
+	if resp.StatusCode == http.StatusAccepted {
+		respBody, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		idstr := string(respBody)
+		id, err = strconv.ParseInt(idstr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		if origMsg != nil {
+			msg := cmn.SelectMsg{}
+			msg = *origMsg
+			msg.TaskID = id
+			b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	sleep := initialPollInterval
+	optParams.Query.Set(cmn.URLParamTaskID, strconv.FormatInt(id, 10))
+	defer optParams.Query.Del(cmn.URLParamTaskID)
+
+	// poll the task status until it completes
+	for resp.StatusCode != http.StatusOK {
+		resp, err = doHTTPRequestGetResp(baseParams, path, b, optParams)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		resp.Body.Close()
+		time.Sleep(sleep)
+		if sleep < maxPollInterval {
+			sleep += sleep / 2
+		}
+	}
+
+	// now resp should contain the real data returned by the destination
+	return resp, err
+}
+
 // ListBucket API
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
@@ -391,6 +474,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 	// decreases toRead by the number of received objects. When toRead gets less
 	// than pageSize, the loop does the final request with reduced pageSize
 	toRead := numObjects
+	msg.TaskID = 0
 	for {
 		if toRead != 0 {
 			if (msg.PageSize == 0 && toRead < cmn.DefaultPageSize) ||
@@ -408,7 +492,14 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 			"Content-Type": []string{"application/json"},
 		},
 			Query: q}
-		respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
+
+		resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+		if err != nil {
+			return nil, err
+		}
+
+		respBody, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -450,25 +541,26 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		q = query[0]
 	}
 
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
-	if err != nil {
-		return nil, err
-	}
-
 	optParams := OptionalParams{
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},
 		},
 		Query: q,
 	}
-	respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
+
+	resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
 
 	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
 	if err = jsoniter.Unmarshal(respBody, reslist); err != nil {
-		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(respBody))
 	}
 	msg.PageMarker = reslist.PageMarker
 
@@ -498,11 +590,16 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		q = query[0]
 	}
 
-	optParams := OptionalParams{Header: http.Header{
-		"Content-Type": []string{"application/json"},
-	},
-		Query: q}
-	respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
+	optParams := OptionalParams{
+		Header: http.Header{"Content-Type": []string{"application/json"}},
+		Query:  q,
+	}
+	resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

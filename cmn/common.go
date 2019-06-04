@@ -39,8 +39,9 @@ const (
 	DefaultBufSize = 32 * KiB
 
 	// Constant seeds for UUID generator
-	uuidWorker = 1
-	uuidSeed   = 17
+	uuidWorker  = 1
+	u64idWorker = 2
+	uuidSeed    = 17
 	// Alphabet for generating UUIDs - similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
 	uuidABC = "5nZJDft6LuzsjGNpPwY7r_Qa3-9vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk"
@@ -111,10 +112,14 @@ type (
 	}
 )
 
-var rtie atomic.Int32
+var (
+	rtie  atomic.Int32
+	sid64 *shortid.Shortid
+)
 
 func init() {
 	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
+	sid64 = shortid.MustNew(u64idWorker, uuidABC, uuidSeed)
 	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
 	// should fork it and change it to the newer date?
 	shortid.SetDefault(sid)
@@ -175,6 +180,21 @@ func (fpair PairF32) String() string {
 
 func GenUUID() (string, error) {
 	return shortid.Generate()
+}
+
+func GenUUID64() (int64, error) {
+	s, err := sid64.Generate()
+	if err != nil {
+		return 0, err
+	}
+
+	n := uint64(0)
+	for _, c := range s {
+		idx := strings.IndexRune(uuidABC, c)
+		n = (n << 6) + uint64(idx)
+	}
+
+	return int64(n), err
 }
 
 func S2B(s string) (int64, error) {
@@ -357,6 +377,30 @@ func StringInSlice(s string, arr []string) bool {
 		}
 	}
 	return false
+}
+
+// StrSlicesEqual compares content of two string slices. It is replacement for
+// reflect.DeepEqual because the latter returns false if slices have the same
+// values but in different order.
+func StrSlicesEqual(lhs, rhs []string) bool {
+	if len(lhs) == 0 && len(rhs) == 0 {
+		return true
+	}
+	if len(lhs) != len(rhs) {
+		return false
+	}
+	total := make(map[string]bool, len(lhs))
+	for _, item := range lhs {
+		total[item] = true
+	}
+	for _, item := range rhs {
+		if _, ok := total[item]; ok {
+			delete(total, item)
+			continue
+		}
+		total[item] = true
+	}
+	return len(total) == 0
 }
 
 func AnyHasPrefixInSlice(prefix string, arr []string) bool {
