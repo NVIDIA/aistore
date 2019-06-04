@@ -10,10 +10,8 @@ import (
 	"net/http"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
@@ -36,8 +34,6 @@ type (
 		sync.RWMutex
 	}
 )
-
-const queueFullInterval = 200 * time.Millisecond
 
 func newDispatcher(parent *Downloader) *dispatcher {
 	return &dispatcher{
@@ -257,28 +253,13 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlO
 		return nil, true
 	}
 
-	if jogger.enqueue(task) {
+	select {
+	case jogger.putCh(task) <- task:
 		return nil, true
-	}
-
-	// queue is full, we have to wait until it we can put something there
-	ticker := time.NewTicker(queueFullInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// TODO: stops downloading all of the objects, even if only this task's jogger
-			// is full. On average it should not be a problem, as HRW should evenly distribute
-			// tasks between mpaths, hence between joggers
-			if jogger.enqueue(task) {
-				return nil, true
-			}
-		case <-d.jobAbortedCh(job.ID()):
-			return nil, true
-		case <-d.stopCh.Listen():
-			return nil, false
-		}
+	case <-d.jobAbortedCh(job.ID()):
+		return nil, true
+	case <-d.stopCh.Listen():
+		return nil, false
 	}
 }
 

@@ -52,17 +52,6 @@ func newJogger(d *dispatcher, mpath string) *jogger {
 	}
 }
 
-func (j *jogger) enqueue(task *singleObjectTask) (ok bool) {
-	cmn.Assert(task != nil)
-	added, full := j.q.put(task)
-	if added {
-		j.parent.parent.IncPending()
-		return true
-	}
-
-	return !full
-}
-
 func (j *jogger) jog() {
 	glog.Infof("Starting jogger for mpath %q.", j.mpath)
 	for {
@@ -113,6 +102,15 @@ func (j *jogger) stop() {
 	<-j.terminateCh
 }
 
+// returns chanel which task should be put into
+func (j *jogger) putCh(t *singleObjectTask) chan<- *singleObjectTask {
+	ok, ch := j.q.putCh(t)
+	if ok {
+		j.parent.parent.IncPending()
+	}
+	return ch
+}
+
 func newQueue() *queue {
 	return &queue{
 		ch: make(chan *singleObjectTask, queueChSize),
@@ -120,22 +118,18 @@ func newQueue() *queue {
 	}
 }
 
-func (q *queue) put(t *singleObjectTask) (added, full bool) {
+func (q *queue) putCh(t *singleObjectTask) (ok bool, ch chan<- *singleObjectTask) {
 	q.Lock()
-	defer q.Unlock()
 	if q.exists(t.request.id, t.request.uid()) {
-		// If request already exists we should just omit this
-		return false, false
-	}
-
-	select {
-	case q.ch <- t:
-		break
-	default:
-		return false, true
+		// If task already exists we should just omit it
+		// hence return chanel which immediately accepts and omits the task
+		q.Unlock()
+		return false, make(chan *singleObjectTask, 1)
 	}
 	q.putToSet(t.id, t.request.uid())
-	return true, false
+	q.Unlock()
+
+	return true, q.ch
 }
 
 // Get tries to find first task which was not yet Aborted
