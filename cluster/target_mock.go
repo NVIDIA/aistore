@@ -45,7 +45,10 @@ func (*TargetMock) GetMem2() *memsys.Mem2                                       
 func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int) {
 	return "", http.StatusOK
 }
-func (*TargetMock) Receive(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ cmn.Cksummer, _ time.Time) error {
+func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ cmn.Cksummer, _ time.Time) error {
+	return nil
+}
+func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error {
 	return nil
 }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup { return nil }

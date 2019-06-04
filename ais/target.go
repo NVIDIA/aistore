@@ -6,10 +6,8 @@ package ais
 
 import (
 	"context"
-	"crypto/md5"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -35,7 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -69,27 +66,6 @@ type (
 	regstate struct {
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
-	}
-	recvObjInfo struct {
-		started time.Time // started time of receiving - used to calculate the recv duration
-		t       *targetrunner
-		lom     *cluster.LOM
-		// Reader with the content of the object.
-		r io.ReadCloser
-		// Checksum which needs to be checked on receive. It is only checked
-		// on specific occasions: see `writeToFile` method.
-		cksumToCheck cmn.Cksummer
-		// Context used when receiving object which is contained in cloud bucket.
-		// It usually contains credentials to access the cloud.
-		ctx context.Context
-		// FQN which is used only temporarily for receiving file. After
-		// successful receive is renamed to actual FQN.
-		workFQN string
-		// Determines if the object was already in cluster and was received
-		// because some kind of migration.
-		migrated bool
-		// Determines if the recv is cold recv: either from another cluster or cloud.
-		cold bool
 	}
 
 	// The state that may influence GET logic when mountpath is added/enabled
@@ -546,25 +522,18 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		lom       *cluster.LOM
-		started   time.Time
-		config    = cmn.GCO.Get()
-		ct        = t.contextWithAuth(r.Header)
-		query     = r.URL.Query()
-		errcode   int
-		retried   bool
-		fromCache bool
+		config          = cmn.GCO.Get()
+		query           = r.URL.Query()
+		isGFNRequest, _ = cmn.ParseBool(query.Get(cmn.URLParamIsGFNRequest))
 	)
-	//
-	// 1. start, init lom, ...readahead
-	//
-	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+
+	apiItems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apiItems[0], apiItems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	started = time.Now()
+	started := time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
 	}
@@ -573,7 +542,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	lom, errstr = cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init(config)
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objName, BucketProvider: bckProvider}.Init(config)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -583,99 +552,20 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. under lock: lom init, restore from cluster
-	cluster.ObjectLocker.Lock(lom.Uname(), false)
-do:
-	// all the next checks work with disks - skip all if dryRun.disk=true
-	coldGet := false
-	if dryRun.disk {
-		goto get
+	goi := &getObjInfo{
+		started: started,
+		t:       t,
+		lom:     lom,
+		w:       w,
+		ctx:     t.contextWithAuth(r.Header),
+		offset:  rangeOff,
+		length:  rangeLen,
+		gfn:     isGFNRequest,
 	}
-
-	fromCache, errstr = lom.Load(true)
-	if errstr != "" {
-		cluster.ObjectLocker.Unlock(lom.Uname(), false)
-		t.invalmsghdlr(w, r, errstr)
+	if err, errCode := goi.recv(); err != nil {
+		t.invalmsghdlr(w, r, err.Error(), errCode)
 		return
 	}
-
-	coldGet = !lom.Exists()
-	if coldGet && lom.BckIsLocal {
-		// does not exist in the local bucket: restore from neighbors
-		if errstr, errcode = t.restoreObjLBNeigh(lom, r); errstr != "" {
-			cluster.ObjectLocker.Unlock(lom.Uname(), false)
-			t.invalmsghdlr(w, r, errstr, errcode)
-			return
-		}
-		goto get
-	}
-	if !coldGet && !lom.BckIsLocal { // exists && cloud-bucket : check ver if requested
-		if lom.Version() != "" && lom.VerConf().ValidateWarmGet {
-			if coldGet, errstr, errcode = t.checkCloudVersion(ct, lom); errstr != "" {
-				lom.Uncache()
-				cluster.ObjectLocker.Unlock(lom.Uname(), false)
-				t.invalmsghdlr(w, r, errstr, errcode)
-				return
-			}
-		}
-	}
-
-	// checksum validation, if requested
-	if !coldGet && lom.CksumConf().ValidateWarmGet {
-		if fromCache {
-			errstr = lom.ValidateChecksum(true)
-		} else {
-			errstr = lom.ValidateDiskChecksum()
-		}
-
-		if errstr != "" {
-			if lom.BadCksum {
-				glog.Errorln(errstr)
-				if lom.BckIsLocal {
-					if err := os.Remove(lom.FQN); err != nil {
-						glog.Warningf("%s - failed to remove, err: %v", errstr, err)
-					}
-					cluster.ObjectLocker.Unlock(lom.Uname(), false)
-					t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-					return
-				}
-				coldGet = true
-			} else {
-				cluster.ObjectLocker.Unlock(lom.Uname(), false)
-				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-				return
-			}
-		}
-	}
-
-	// 3. coldget
-	if coldGet {
-		cluster.ObjectLocker.Unlock(lom.Uname(), false)
-		if err = lom.AllowColdGET(); err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		lom.SetAtimeUnix(started.UnixNano())
-		if errstr, errcode := t.GetCold(ct, lom, false); errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errcode)
-			return
-		}
-		t.putMirror(lom)
-	}
-
-	// 4. get locally and stream back
-get:
-	retry, errstr := t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, coldGet)
-	if retry && !retried {
-		glog.Warningf("GET %s: uncaching and retrying...", lom)
-		retried = true
-		lom.Uncache()
-		goto do
-	}
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-	}
-	cluster.ObjectLocker.Unlock(lom.Uname(), false)
 }
 
 //
@@ -684,7 +574,7 @@ get:
 //		targets using erasure coding(if it is on)
 // FIXME: must be done => (getfqn, and under write lock)
 //
-func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
+func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode int) {
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.isRebalancing(cmn.ActLocalReb)
 	gfnActive := t.gfn.local.active()
@@ -716,7 +606,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 		}
 		// retry in case the object is being moved right now
 		for retry := 0; retry < getFromNeighRetries; retry++ {
-			if err := t.getFromNeighbor(r, lom); err != nil {
+			if err := t.getFromNeighbor(lom); err != nil {
 				time.Sleep(getFromNeighSleep)
 				continue
 			}
@@ -734,156 +624,18 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 		lom.Load(true)
 		return
 	} else if ecErr != ec.ErrorECDisabled {
-		errstr = fmt.Sprintf("%s: failed to EC-recover %s: %v", t.si.Name(), lom, ecErr)
+		err = fmt.Errorf("%s: failed to EC-recover %s: %v", t.si.Name(), lom, ecErr)
 	}
 
 	s := fmt.Sprintf("GET local: %s(%s) %s", lom, lom.FQN, cmn.DoesNotExist)
-	if errstr != "" {
-		errstr = s + " => [" + errstr + "]"
-	} else {
-		errstr = s
-	}
-	if errcode == 0 {
-		errcode = http.StatusNotFound
-	}
-	return
-}
-
-//
-// 4. read local, write http (note: coldGet() keeps the read lock if successful)
-//
-func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lom *cluster.LOM, started time.Time,
-	rangeOff, rangeLen int64, coldGet bool) (retry bool, errstr string) {
-	var (
-		file            *os.File
-		sgl             *memsys.SGL
-		slab            *memsys.Slab2
-		buf             []byte
-		rangeReader     io.ReadSeeker
-		reader          io.Reader
-		written         int64
-		err             error
-		isGFNRequest, _ = cmn.ParseBool(r.URL.Query().Get(cmn.URLParamIsGFNRequest))
-	)
-	defer func() {
-		// rahfcacher.got()
-		if file != nil {
-			file.Close()
-		}
-		if buf != nil {
-			slab.Free(buf)
-		}
-		if sgl != nil {
-			sgl.Free()
-		}
-	}()
-	ckConf := lom.CksumConf()
-	cksumRange := ckConf.Type != cmn.ChecksumNone && rangeLen > 0 && ckConf.EnableReadRange
-	hdr := w.Header()
-
-	if lom.Cksum() != nil && !cksumRange {
-		cksumType, cksumValue := lom.Cksum().Get()
-		hdr.Set(cmn.HeaderObjCksumType, cksumType)
-		hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
-	}
-	if lom.Version() != "" {
-		hdr.Set(cmn.HeaderObjVersion, lom.Version())
-	}
-	hdr.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size(), 10))
-
-	timeInt := lom.Atime().UnixNano()
-	if lom.Atime().IsZero() {
-		timeInt = 0
-	}
-	hdr.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
-
-	// loopback if disk IO is disabled
-	if dryRun.disk {
-		rd := newDryReader(dryRun.size)
-		if _, err = io.Copy(w, rd); err != nil {
-			// NOTE: Cannot call invalid handler because it would be double header write
-			errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
-			glog.Error(errstr)
-			t.statsif.Add(stats.ErrGetCount, 1)
-			return
-		}
-		delta := time.Since(started)
-		t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
-		return
-	}
-
-	if lom.Size() == 0 {
-		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
-		return
-	}
-	fqn := lom.LoadBalanceGET() // coldGet => len(CopyFQN) == 0
-	file, err = os.Open(fqn)
 	if err != nil {
-		if os.IsNotExist(err) {
-			errstr = err.Error()
-			retry = true // (!lom.BckIsLocal || lom.ECEnabled() || GFN...)
-		} else {
-			t.fshc(err, fqn)
-			errstr = fmt.Sprintf("%s: err: %v", lom, err)
-		}
-		return
-	}
-	if rangeLen == 0 {
-		reader = file
-		buf, slab = gmem2.AllocFromSlab2(lom.Size())
-		// hdr.Set("Content-Length", strconv.FormatInt(lom.Size(), 10)) // TODO: optimize
+		err = fmt.Errorf("%s => [%v]", s, err)
 	} else {
-		buf, slab = gmem2.AllocFromSlab2(rangeLen)
-		if cksumRange {
-			var cksum string
-			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
-			if errstr != "" {
-				return
-			}
-			reader = rangeReader
-			hdr.Set(cmn.HeaderObjCksumType, ckConf.Type)
-			hdr.Set(cmn.HeaderObjCksumVal, cksum)
-		} else {
-			reader = io.NewSectionReader(file, rangeOff, rangeLen)
-		}
+		err = errors.New(s)
 	}
-
-	w.WriteHeader(http.StatusOK)
-	written, err = io.CopyBuffer(w, reader, buf)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)
-		glog.Error(errstr)
-		t.fshc(err, fqn)
-		t.statsif.Add(stats.ErrGetCount, 1)
-		return
+	if errCode == 0 {
+		errCode = http.StatusNotFound
 	}
-
-	// GFN: atime must be already set
-	if !coldGet && !isGFNRequest {
-		lom.SetAtimeUnix(started.UnixNano())
-		lom.ReCache() // GFN and cold GETs already did this
-	}
-
-	// Update objects which were sent during GFN. Thanks to this we will not
-	// have to resend them in global rebalance. In case of race between rebalance
-	// and GFN, the former wins and it will result in double send.
-	if isGFNRequest {
-		t.rebManager.filterGFN.Insert([]byte(lom.Uname()))
-	}
-
-	if glog.FastV(4, glog.SmoduleAIS) {
-		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
-		if coldGet {
-			s += " (cold)"
-		}
-		glog.Infoln(s)
-	}
-	delta := time.Since(started)
-	t.statsif.AddMany(
-		stats.NamedVal64{Name: stats.GetThroughput, Val: written},
-		stats.NamedVal64{Name: stats.GetLatency, Val: int64(delta)},
-		stats.NamedVal64{Name: stats.GetCount, Val: 1},
-	)
 	return
 }
 
@@ -1424,14 +1176,14 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
 // should be called only if the local copy exists
-func (t *targetrunner) checkCloudVersion(ct context.Context, lom *cluster.LOM) (vchanged bool, errstr string, errcode int) {
-	var objmeta cmn.SimpleKVs
-	objmeta, err, errcode := t.cloudif.headobject(ct, lom)
+func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
+	var objMeta cmn.SimpleKVs
+	objMeta, err, errCode = t.cloudif.headobject(ctx, lom)
 	if err != nil {
-		errstr = fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
+		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
 	}
-	if cloudVersion, ok := objmeta[cmn.HeaderObjVersion]; ok {
+	if cloudVersion, ok := objMeta[cmn.HeaderObjVersion]; ok {
 		if lom.Version() != cloudVersion {
 			glog.Infof("%s: version changed from %s to %s", lom, lom.Version(), cloudVersion)
 			vchanged = true
@@ -1440,7 +1192,7 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, lom *cluster.LOM) (
 	return
 }
 
-func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (err error) {
+func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
 	smap := t.smapowner.get()
 	neighsi := t.lookupRemotely(lom, smap)
 	if neighsi == nil {
@@ -1457,7 +1209,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (err e
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   neighsi.URL(cmn.NetworkIntraData),
-		Path:   r.URL.Path,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
 		Query:  query,
 	}
 
@@ -1467,17 +1219,17 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (err e
 	}
 	defer cancel()
 
-	response, err := t.httpclientLongTimeout.Do(req)
+	resp, err := t.httpclientLongTimeout.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to GET redirect URL %q, err: %v", reqArgs.URL(), err)
 	}
 	var (
-		cksumValue = response.Header.Get(cmn.HeaderObjCksumVal)
-		cksumType  = response.Header.Get(cmn.HeaderObjCksumType)
+		cksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
+		cksumType  = resp.Header.Get(cmn.HeaderObjCksumType)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
-		version    = response.Header.Get(cmn.HeaderObjVersion)
+		version    = resp.Header.Get(cmn.HeaderObjVersion)
 		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
-		atimeStr   = response.Header.Get(cmn.HeaderObjAtime)
+		atimeStr   = resp.Header.Get(cmn.HeaderObjAtime)
 	)
 
 	// The string in the header is an int represented as a string, NOT a formatted date string.
@@ -1488,14 +1240,14 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (err e
 	lom.SetCksum(cksum)
 	lom.SetVersion(version)
 	lom.SetAtimeUnix(atime)
-	roi := &recvObjInfo{
+	poi := &putObjInfo{
 		t:        t,
 		lom:      lom,
 		workFQN:  workFQN,
-		r:        response.Body,
+		r:        resp.Body,
 		migrated: true,
 	}
-	if err = roi.writeToFile(); err != nil {
+	if err = poi.writeToFile(); err != nil {
 		return
 	}
 	// commit
@@ -1644,7 +1396,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		cksumValue = header.Get(cmn.HeaderObjCksumVal)
 		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
-	roi := &recvObjInfo{
+	poi := &putObjInfo{
 		started:      started,
 		t:            t,
 		lom:          lom,
@@ -1653,124 +1405,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		ctx:          t.contextWithAuth(header),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
-	return roi.recv()
-}
-
-// slight variation vs t.doPut() above
-func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM,
-	recvType cluster.RecvType, cksum cmn.Cksummer, started time.Time) error {
-	roi := &recvObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		r:       reader,
-		workFQN: workFQN,
-		ctx:     context.Background(),
-	}
-	if recvType == cluster.ColdGet {
-		roi.cold = true
-		roi.cksumToCheck = cksum
-	}
-	err, _ := roi.recv()
-	return err
-}
-
-func (roi *recvObjInfo) recv() (err error, errCode int) {
-	lom := roi.lom
-	// optimize out if the checksums do match
-	if roi.cksumToCheck != nil {
-		if cmn.EqCksum(lom.Cksum(), roi.cksumToCheck) {
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s is valid %s: PUT is a no-op", lom, roi.cksumToCheck)
-			}
-			io.Copy(ioutil.Discard, roi.r) // drain the reader
-			return nil, 0
-		}
-	}
-
-	if !dryRun.disk {
-		if err := roi.writeToFile(); err != nil {
-			return err, http.StatusInternalServerError
-		}
-
-		if errstr, errCode := roi.commit(); errstr != "" {
-			return errors.New(errstr), errCode
-		}
-	}
-
-	delta := time.Since(roi.started)
-	roi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s: %d µs", lom, int64(delta/time.Microsecond))
-	}
-	return nil, 0
-}
-
-func (roi *recvObjInfo) commit() (errstr string, errCode int) {
-	if errstr, errCode = roi.tryCommit(); errstr != "" {
-		if _, err := os.Stat(roi.workFQN); err == nil || !os.IsNotExist(err) {
-			if err == nil {
-				err = errors.New(errstr)
-			}
-			roi.t.fshc(err, roi.workFQN)
-			if err = os.Remove(roi.workFQN); err != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, roi.workFQN, err)
-			}
-		}
-		roi.lom.Uncache()
-		return
-	}
-	if err := roi.t.ecmanager.EncodeObject(roi.lom); err != nil && err != ec.ErrorECDisabled {
-		errstr = err.Error()
-	}
-	roi.t.putMirror(roi.lom)
-	return
-}
-
-func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
-	var (
-		ver string
-		lom = roi.lom
-	)
-	if !lom.BckIsLocal && !roi.migrated {
-		file, err := os.Open(roi.workFQN)
-		if err != nil {
-			errstr = fmt.Sprintf("failed to open %s err: %v", roi.workFQN, err)
-			return
-		}
-		cmn.Assert(lom.Cksum() != nil)
-		ver, err, errCode = getcloudif().putobj(roi.ctx, file, lom)
-		file.Close()
-		if err != nil {
-			errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
-			return
-		}
-		lom.SetVersion(ver)
-	}
-
-	cluster.ObjectLocker.Lock(lom.Uname(), true)
-	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
-
-	if lom.BckIsLocal && lom.VerConf().Enabled {
-		if ver, errstr = lom.IncObjectVersion(); errstr != "" {
-			return
-		}
-		lom.SetVersion(ver)
-	}
-	// Don't persist meta, it will be persisted after move
-	if errstr = lom.DelAllCopies(); errstr != "" {
-		return
-	}
-	if err := cmn.MvFile(roi.workFQN, lom.FQN); err != nil {
-		errstr = fmt.Sprintf("MvFile failed => %s: %v", lom, err)
-		return
-	}
-	if err := lom.Persist(); err != nil {
-		errstr = err.Error()
-		glog.Errorf("failed to persist %s: %s", lom, errstr)
-	}
-	lom.ReCache()
-	return
+	return poi.recv()
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
@@ -1974,113 +1609,6 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 // xxhash is always preferred over md5
 //
 //==============================================================================================
-
-// NOTE: LOM is updated on the end of the call with proper size and checksum.
-// NOTE: `roi.r` is closed on the end of the call.
-func (roi *recvObjInfo) writeToFile() (err error) {
-	var (
-		file   *os.File
-		reader = roi.r
-	)
-
-	if dryRun.disk {
-		return
-	}
-
-	if file, err = cmn.CreateFile(roi.workFQN); err != nil {
-		roi.t.fshc(err, roi.workFQN)
-		return fmt.Errorf("failed to create %s, err: %s", roi.workFQN, err)
-	}
-
-	buf, slab := gmem2.AllocFromSlab2(0)
-	defer func() { // free & cleanup on err
-		slab.Free(buf)
-		reader.Close()
-
-		if err != nil {
-			if nestedErr := file.Close(); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, roi.workFQN, nestedErr)
-			}
-			if nestedErr := os.Remove(roi.workFQN); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, roi.workFQN, nestedErr)
-			}
-		}
-	}()
-
-	// receive and checksum
-	var (
-		written int64
-
-		checkCksumType      string
-		expectedCksum       cmn.Cksummer
-		saveHash, checkHash hash.Hash
-		hashes              []hash.Hash
-	)
-
-	roiCkConf := roi.lom.CksumConf()
-	if !roi.cold && roiCkConf.Type != cmn.ChecksumNone {
-		checkCksumType = roiCkConf.Type
-		cmn.AssertMsg(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
-
-		if !roi.migrated || roiCkConf.ValidateObjMove {
-			saveHash = xxhash.New64()
-			hashes = []hash.Hash{saveHash}
-
-			// if sender provided checksum we need to ensure that it is correct
-			if expectedCksum = roi.cksumToCheck; expectedCksum != nil {
-				checkHash = saveHash
-			}
-		} else {
-			// if migration validation is not configured we can just take
-			// the checksum that has arrived with the object (and compute it if not present)
-			roi.lom.SetCksum(roi.cksumToCheck)
-			if roi.cksumToCheck == nil {
-				saveHash = xxhash.New64()
-				hashes = []hash.Hash{saveHash}
-			}
-		}
-	} else if roi.cold {
-		// compute xxhash (the default checksum) and save it as part of the object metadata
-		saveHash = xxhash.New64()
-		hashes = []hash.Hash{saveHash}
-
-		// if validate-cold-get and the cksum is provied we should also check md5 hash (aws, gcp)
-		if roiCkConf.ValidateColdGet && roi.cksumToCheck != nil {
-			expectedCksum = roi.cksumToCheck
-			checkCksumType, _ = expectedCksum.Get()
-			cmn.AssertMsg(checkCksumType == cmn.ChecksumMD5 || checkCksumType == cmn.ChecksumCRC32C, checkCksumType)
-
-			checkHash = md5.New()
-			if checkCksumType == cmn.ChecksumCRC32C {
-				checkHash = cmn.NewCRC32C()
-			}
-
-			hashes = append(hashes, checkHash)
-		}
-	}
-
-	if written, err = cmn.ReceiveAndChecksum(file, reader, buf, hashes...); err != nil {
-		return
-	}
-
-	if checkHash != nil {
-		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
-		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			s := cmn.BadCksum(expectedCksum, computedCksum) + ", " + roi.lom.StringEx() + "[" + roi.workFQN + "]"
-			err = fmt.Errorf(s)
-			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
-			return
-		}
-	}
-	roi.lom.SetSize(written)
-	if saveHash != nil {
-		roi.lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash)))
-	}
-	if err = file.Close(); err != nil {
-		return fmt.Errorf("failed to close received file %s, err: %v", roi.workFQN, err)
-	}
-	return nil
-}
 
 func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (redelta int64) {
 	s := query.Get(cmn.URLParamUnixTime)

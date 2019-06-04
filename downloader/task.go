@@ -115,7 +115,7 @@ func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (s
 	t.setTotalSize(response)
 
 	cksum := getCksum(t.obj.Link, response)
-	if err := t.parent.t.Receive(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
+	if err := t.parent.t.PutObject(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
 		return internalErrorMessage(), err
 	}
 	return "", nil

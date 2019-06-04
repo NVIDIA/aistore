@@ -528,7 +528,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 	}
 	lom.SetAtimeUnix(hdr.ObjAttrs.Atime)
 	lom.SetVersion(hdr.ObjAttrs.Version)
-	roi := &recvObjInfo{
+	poi := &putObjInfo{
 		started:      time.Now(),
 		t:            reb.t,
 		lom:          lom,
@@ -537,7 +537,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		migrated:     true,
 	}
-	if err, _ := roi.recv(); err != nil {
+	if err, _ := poi.recv(); err != nil {
 		glog.Error(err)
 		return
 	}

@@ -160,6 +160,7 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, bc
 
 func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckProvider string) {
 	var (
+		err               error
 		errstr            string
 		vchanged, coldGet bool
 	)
@@ -180,7 +181,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		return
 	}
 	if !coldGet && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
-		if coldGet, errstr, _ = t.checkCloudVersion(ct, lom); errstr != "" {
+		if coldGet, err, _ = t.checkCloudVersion(ct, lom); err != nil {
 			return
 		}
 	}

@@ -362,7 +362,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 	if obj.VersionId != nil {
 		lom.SetVersion(*obj.VersionId)
 	}
-	roi := &recvObjInfo{
+	poi := &putObjInfo{
 		t:            awsimpl.t,
 		lom:          lom,
 		r:            obj.Body,
@@ -370,7 +370,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		workFQN:      workFQN,
 		cold:         true,
 	}
-	if err = roi.writeToFile(); err != nil {
+	if err = poi.writeToFile(); err != nil {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

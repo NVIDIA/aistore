@@ -29,13 +29,14 @@ type Target interface {
 	FSHC(err error, path string)
 	GetBowner() Bowner
 	GetCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error)
-	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	GetFSPRG() fs.PathRunGroup
 	GetMem2() *memsys.Mem2
 	HRWTarget(bucket, objname string) (si *Snode, errstr string)
 	IsRebalancing() bool
 	Prefetch()
 	PrefetchQueueLen() int
-	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
+	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
+	GetObject(w io.Writer, lom *LOM, started time.Time) error
+	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	RunLRU()
 }

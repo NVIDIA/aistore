@@ -313,7 +313,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	r, w := io.Pipe()
 	wg.Add(2)
 	go func() {
-		err := m.ctx.t.Receive(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
+		err := m.ctx.t.PutObject(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
 		errCh <- err
 		wg.Done()
 	}()

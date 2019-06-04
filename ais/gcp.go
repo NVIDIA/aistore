@@ -362,7 +362,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, lom *cluster.
 	}
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
-	roi := &recvObjInfo{
+	poi := &putObjInfo{
 		t:            gcpimpl.t,
 		cold:         true,
 		r:            rc,
@@ -371,7 +371,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, lom *cluster.
 		workFQN:      workFQN,
 	}
 
-	if err = roi.writeToFile(); err != nil {
+	if err = poi.writeToFile(); err != nil {
 		errstr = err.Error()
 		return
 	}

@@ -803,7 +803,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())
 		rc := ioutil.NopCloser(object)
-		if err := m.ctx.t.Receive(workFQN, rc, lom, cluster.WarmGet, nil, started); err != nil {
+		if err := m.ctx.t.PutObject(workFQN, rc, lom, cluster.WarmGet, nil, started); err != nil {
 			m.abort(err)
 			return
 		}
