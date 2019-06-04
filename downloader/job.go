@@ -5,6 +5,7 @@
 package downloader
 
 import (
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -42,10 +43,14 @@ type (
 		ID          string `json:"id"`
 		Bucket      string `json:"bck"`
 		BckProvider string `json:"bckprovider"`
-		Finished    int    `json:"finished"`
-		Aborted     bool   `json:"aborted"`
-		Total       int    `json:"total"`
 		Description string `json:"description"`
+
+		FinishedCnt  *atomic.Int32 `json:"finished"`
+		ScheduledCnt *atomic.Int32 `json:"scheduled"`
+		Total        int           `json:"total"`
+
+		Aborted       *atomic.Bool `json:"aborted"`
+		AllDispatched *atomic.Bool `json:"all_dispatched"`
 	}
 )
 

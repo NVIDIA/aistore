@@ -24,7 +24,6 @@ type (
 	dispatcher struct {
 		parent *Downloader
 
-		// TODO: #422, remove locking
 		joggers  map[string]*jogger       // mpath -> jogger
 		abortJob map[string]chan struct{} //jobID -> abort job chan
 
@@ -128,6 +127,7 @@ func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 	for {
 		objs, ok := job.GenNext()
 		if !ok {
+			_ = d.parent.infoStore.setAllDispatched(job.ID(), true)
 			return true
 		}
 
@@ -139,7 +139,7 @@ func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 			err, ok := d.blockingDispatchDownloadSingle(job, obj)
 			if err != nil {
 				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.Link, err.Error())
-				cmn.AssertNoErr(d.parent.db.setAborted(job.ID()))
+				cmn.AssertNoErr(d.parent.infoStore.setAborted(job.ID()))
 				return ok
 			}
 			if !ok {
@@ -227,7 +227,7 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 		glog.Warningf("error in handling downloader request: %s", err.Error())
 		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-		dbErr := t.parent.db.addError(t.id, t.obj.Objname, err.Error())
+		dbErr := t.parent.infoStore.addError(t.id, t.obj.Objname, err.Error())
 		cmn.AssertNoErr(dbErr)
 		return nil, nil, err
 	}
@@ -245,11 +245,13 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 
 // returns false if dispatcher was aborted in the meantime, true otherwise
 func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) (err error, ok bool) {
+	_ = d.parent.infoStore.incScheduled(job.ID())
 	task, jogger, err := d.prepareTask(job, obj)
 	if err != nil {
 		return err, true
 	}
 	if task == nil || jogger == nil {
+		d.parent.infoStore.incFinished(job.ID())
 		return nil, true
 	}
 
@@ -275,8 +277,7 @@ func (d *dispatcher) dispatchRemove(req *request) {
 		return
 	}
 
-	err = d.parent.db.delJob(req.id)
-	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
+	d.parent.infoStore.delJob(req.id)
 	req.writeResp(nil)
 }
 
@@ -304,7 +305,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 		j.Unlock()
 	}
 
-	err = d.parent.db.setAborted(req.id)
+	err = d.parent.infoStore.setAborted(req.id)
 	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
 	req.writeResp(nil)
 }
@@ -316,7 +317,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	}
 
 	currentTasks := d.parent.activeTasks(req.id)
-	finishedTasks, err := d.parent.db.getTasks(req.id)
+	finishedTasks, err := d.parent.infoStore.getTasks(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
@@ -324,7 +325,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 
 	numPending := d.parent.getNumPending(jInfo.ID)
 
-	dlErrors, err := d.parent.db.getErrors(req.id)
+	dlErrors, err := d.parent.infoStore.getErrors(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
@@ -332,31 +333,28 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	sort.Sort(cmn.TaskErrByName(dlErrors))
 
 	req.writeResp(cmn.DlStatusResp{
-		Finished:      jInfo.Finished,
+		Finished:      int(jInfo.FinishedCnt.Load()),
 		Total:         jInfo.Total,
 		CurrentTasks:  currentTasks,
 		FinishedTasks: finishedTasks,
 		Errs:          dlErrors,
 
-		NumPending: numPending,
-		Aborted:    jInfo.Aborted,
+		Pending:       numPending,
+		Aborted:       jInfo.Aborted.Load(),
+		AllDispatched: jInfo.AllDispatched.Load(),
+		Scheduled:     int(jInfo.ScheduledCnt.Load()),
 	})
 }
 
 func (d *dispatcher) dispatchList(req *request) {
-	records, err := d.parent.db.getList(req.regex)
-	if err != nil {
-		req.writeErrResp(err, http.StatusInternalServerError)
-		return
-	}
-
+	records := d.parent.infoStore.getList(req.regex)
 	respMap := make(map[string]cmn.DlJobInfo)
 	for _, r := range records {
 		respMap[r.ID] = cmn.DlJobInfo{
 			ID:          r.ID,
 			Description: r.Description,
 			NumPending:  d.parent.getNumPending(r.ID),
-			Aborted:     r.Aborted,
+			Aborted:     r.Aborted.Load(),
 		}
 	}
 	req.writeResp(respMap)

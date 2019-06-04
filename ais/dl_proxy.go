@@ -153,16 +153,24 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 			cmn.AssertNoErr(err)
 		}
 
-		finished, total, numPending := 0, 0, 0
+		finished, total, numPending, scheduled := 0, 0, 0, 0
+		allDispatchedCnt := 0
 		aborted := false
+
 		currTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		finishedTasks := make([]cmn.TaskDlInfo, 0, len(stats))
 		downloadErrs := make([]cmn.TaskErrInfo, 0)
 		for _, stat := range stats {
 			finished += stat.Finished
 			total += stat.Total
-			numPending += stat.NumPending
+			numPending += stat.Pending
+			scheduled += stat.Scheduled
+
 			aborted = aborted || stat.Aborted
+			if stat.AllDispatched {
+				allDispatchedCnt++
+			}
+
 			currTasks = append(currTasks, stat.CurrentTasks...)
 			finishedTasks = append(finishedTasks, stat.FinishedTasks...)
 			downloadErrs = append(downloadErrs, stat.Errs...)
@@ -174,8 +182,10 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 			CurrentTasks:  currTasks,
 			FinishedTasks: finishedTasks,
 			Aborted:       aborted,
-			NumPending:    numPending,
+			Pending:       numPending,
 			Errs:          downloadErrs,
+			AllDispatched: allDispatchedCnt == len(stats),
+			Scheduled:     scheduled,
 		}
 
 		respJSON, err := jsoniter.Marshal(resp)

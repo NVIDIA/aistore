@@ -271,10 +271,12 @@ type progressBar struct {
 	p        *mpb.Progress
 	totalBar *mpb.Bar
 
-	totalFiles    int
-	finishedFiles int
+	totalFiles     int
+	finishedFiles  int
+	scheduledFiles int
 
-	aborted bool
+	aborted       bool
+	allDispatched bool
 
 	errors map[string]string
 }
@@ -300,7 +302,7 @@ func (b *progressBar) run() (downloadingResult, error) {
 	}
 
 	// All files = finished ones + ones that had downloading errors
-	for b.finishedFiles+len(b.errors) < b.totalFiles {
+	for !b.jobFinished() {
 		time.Sleep(b.refreshTime)
 
 		resp, err := api.DownloadStatus(b.params, b.id)
@@ -328,19 +330,28 @@ func (b *progressBar) start() (bool, error) {
 	}
 
 	b.updateDownloadingErrors(resp.Errs)
+
 	b.finishedFiles = resp.Finished
 	b.totalFiles = resp.Total
+	b.scheduledFiles = resp.Scheduled
+
+	b.allDispatched = resp.AllDispatched
 	b.aborted = resp.Aborted
 
-	if b.finishedFiles+len(b.errors) == b.totalFiles || b.aborted {
+	if b.jobFinished() {
 		return true, err
 	}
 
+	barText := totalBarText
+	if b.totalFilesCnt() != b.totalFiles {
+		barText += " (total estimated)"
+	}
+
 	b.totalBar = b.p.AddBar(
-		int64(b.totalFiles),
+		int64(b.totalFilesCnt()),
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
-			decor.Name(totalBarText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
+			decor.Name(barText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
 			decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
 		),
 		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
@@ -368,7 +379,7 @@ func (b *progressBar) updateBars(downloadStatus cmn.DlStatusResp) {
 		b.updateFileBar(newState, oldState)
 	}
 
-	b.updateTotalBar(downloadStatus.Finished + len(downloadStatus.Errs))
+	b.updateTotalBar(downloadStatus.Finished+len(downloadStatus.Errs), downloadStatus.TotalCnt())
 }
 
 func (b *progressBar) updateFinishedFiles(fileStates []cmn.TaskDlInfo) {
@@ -430,13 +441,14 @@ func (b *progressBar) updateFileBar(newState cmn.TaskDlInfo, state *fileDownload
 	}
 }
 
-func (b *progressBar) updateTotalBar(newFinished int) {
+func (b *progressBar) updateTotalBar(newFinished, total int) {
 	progress := newFinished - b.finishedFiles
 
 	if progress > 0 {
 		b.totalBar.IncrBy(progress)
 	}
 
+	b.totalBar.SetTotal(int64(total), false)
 	b.finishedFiles = newFinished
 }
 
@@ -459,4 +471,18 @@ func (b *progressBar) cleanBars() {
 
 func (b *progressBar) result() downloadingResult {
 	return downloadingResult{totalFiles: b.totalFiles, finishedFiles: b.finishedFiles, downloadingErrors: b.errors, aborted: b.aborted}
+}
+
+func (b *progressBar) jobFinished() bool {
+	return b.aborted || (b.allDispatched && b.scheduledFiles == b.finishedFiles+len(b.errors))
+}
+
+func (b *progressBar) totalFilesCnt() int {
+	if b.totalFiles <= 0 {
+		// totalFiles <= 0 - we don't know exact number of files to be downloaded
+		// we show as total number of files, number of files which were scheduled to be downloaded
+		// still, the new ones might be discovered
+		return b.scheduledFiles
+	}
+	return b.totalFiles
 }

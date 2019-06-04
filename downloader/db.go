@@ -8,10 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
-
-	jsoniter "github.com/json-iterator/go"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,7 +17,6 @@ import (
 
 const (
 	persistDownloaderJobsPath = "downloader_jobs.db" // base name to persist downloader jobs' file
-	downloaderCollection      = "jobs"
 	downloaderErrors          = "errors"
 	downloaderTasks           = "tasks"
 )
@@ -42,135 +38,6 @@ func newDownloadDB() (*downloaderDB, error) {
 	}
 
 	return &downloaderDB{driver: driver}, nil
-}
-
-func (db *downloaderDB) readJob(id string) (*DownloadJobInfo, error) {
-	var jInfo DownloadJobInfo
-
-	if err := db.driver.Read(downloaderCollection, id, &jInfo); err != nil {
-		if !os.IsNotExist(err) {
-			glog.Error(err)
-			return nil, err
-		}
-		return nil, errJobNotFound
-	}
-
-	return &jInfo, nil
-}
-
-func (db *downloaderDB) writeJob(id string, jInfo *DownloadJobInfo) error {
-	return db.driver.Write(downloaderCollection, id, &jInfo)
-}
-
-func (db *downloaderDB) getJob(id string) (*DownloadJobInfo, error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	return db.readJob(id)
-}
-
-func (db *downloaderDB) getList(descRegex *regexp.Regexp) ([]DownloadJobInfo, error) {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	records, err := db.driver.ReadAll(downloaderCollection)
-
-	if err != nil {
-		if !os.IsNotExist(err) {
-			glog.Error(err)
-			return nil, err
-		}
-		return nil, nil
-	}
-
-	body := make([]DownloadJobInfo, 0)
-
-	for _, r := range records {
-		var dji DownloadJobInfo
-		if err := jsoniter.UnmarshalFromString(r, &dji); err != nil {
-			glog.Error(err)
-			continue
-		}
-		if descRegex == nil || descRegex.MatchString(dji.Description) {
-			body = append(body, dji)
-		}
-	}
-
-	return body, nil
-}
-
-func (db *downloaderDB) setJob(id string, job DownloadJob) error {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	jInfo := &DownloadJobInfo{
-		ID:          job.ID(),
-		Bucket:      job.Bucket(),
-		BckProvider: job.BckProvider(),
-		Total:       job.Len(),
-		Description: job.Description(),
-	}
-
-	if err := db.writeJob(id, jInfo); err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	return nil
-}
-
-// FIXME: remove this part of db and keep DownloadJobInfo in a memory
-func (db *downloaderDB) incFinished(id string) error {
-
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	jInfo, err := db.readJob(id)
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	jInfo.Finished++
-
-	if err := db.writeJob(id, jInfo); err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	return nil
-}
-
-func (db *downloaderDB) setAborted(id string) error {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	jInfo, err := db.readJob(id)
-	if err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	if jInfo.Aborted {
-		return nil
-	}
-	jInfo.Aborted = true
-	if err := db.writeJob(id, jInfo); err != nil {
-		glog.Error(err)
-		return err
-	}
-
-	return nil
-}
-
-func (db *downloaderDB) delJob(id string) error {
-	db.mtx.Lock()
-	defer db.mtx.Unlock()
-
-	if err := db.driver.Delete(downloaderCollection, id); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (db *downloaderDB) getErrors(id string) (errors []cmn.TaskErrInfo, err error) {

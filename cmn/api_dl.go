@@ -20,11 +20,13 @@ type DlPostResp struct {
 }
 
 type DlStatusResp struct {
-	Finished int `json:"finished"`
-	Total    int `json:"total"`
+	Finished  int `json:"finished"`
+	Scheduled int `json:"scheduled"` // tasks being processed or already processed by dispatched
+	Total     int `json:"total"`     // total number of tasks, negative if unknown
 
-	Aborted    bool `json:"aborted"`
-	NumPending int  `json:"num_pending"`
+	Aborted       bool `json:"aborted"`
+	AllDispatched bool `json:"all_dispatched"` // if true, dispatcher has already scheduled all tasks for given job
+	Pending       int  `json:"num_pending"`    // tasks currently in download queue
 
 	CurrentTasks  []TaskDlInfo  `json:"current_tasks,omitempty"`
 	FinishedTasks []TaskDlInfo  `json:"finished_tasks,omitempty"`
@@ -36,10 +38,14 @@ func (d *DlStatusResp) Print(verbose bool) string {
 		return "Download was aborted."
 	}
 
+	if d.JobFinished() {
+		return fmt.Sprintf("Download has finished. %d files downloaded, %d errors", d.Finished, len(d.Errs))
+	}
+
 	var sb strings.Builder
 
 	realFinished := d.Finished + len(d.Errs)
-	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.Total, 100*float64(realFinished)/float64(d.Total)))
+	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt())))
 	if !verbose {
 		return sb.String()
 	}
@@ -53,6 +59,17 @@ func (d *DlStatusResp) Print(verbose bool) string {
 	}
 
 	return sb.String()
+}
+
+func (d *DlStatusResp) JobFinished() bool {
+	return d.Aborted || (d.AllDispatched && d.Scheduled == d.Finished+len(d.Errs))
+}
+
+func (d *DlStatusResp) TotalCnt() int {
+	if d.Total > 0 {
+		return d.Total
+	}
+	return d.Scheduled
 }
 
 // Summary info of the download job

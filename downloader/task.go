@@ -73,7 +73,7 @@ func (t *singleObjectTask) download() {
 		return
 	}
 
-	if err := t.parent.db.incFinished(t.id); err != nil {
+	if err := t.parent.infoStore.incFinished(t.id); err != nil {
 		glog.Errorf(err.Error())
 	}
 
@@ -145,14 +145,14 @@ func (t *singleObjectTask) cancel() {
 func (t *singleObjectTask) abort(statusMsg string, err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-	dbErr := t.parent.db.addError(t.id, t.obj.Objname, statusMsg)
+	dbErr := t.parent.infoStore.addError(t.id, t.obj.Objname, statusMsg)
 	cmn.AssertNoErr(dbErr)
 
 	t.finishedCh <- err
 }
 
 func (t *singleObjectTask) persist() {
-	t.parent.db.persistTask(t.id, cmn.TaskDlInfo{
+	_ = t.parent.infoStore.persistTask(t.id, cmn.TaskDlInfo{
 		Name:       t.obj.Objname,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize,
