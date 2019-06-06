@@ -266,6 +266,8 @@ func (d *Downloader) init() {
 	d.dispatcher.init()
 }
 
+// TODO: Downloader doesn't necessarily has to be a go routine
+// all it does is forwards the requests to dispatcher
 func (d *Downloader) Run() (err error) {
 	glog.Infof("Starting %s", d.Getname())
 	d.t.GetFSPRG().Reg(d)

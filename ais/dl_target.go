@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
-	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	jsoniter "github.com/json-iterator/go"
@@ -44,17 +43,16 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get(cmn.URLParamID)
 		cmn.Assert(id != "")
 
-		payload, err := t.parseStartDownloadRequest(r, id)
+		dlJob, err := t.parseStartDownloadRequest(r, id)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Downloading: %s", payload)
+			glog.Infof("Downloading: %s", dlJob.ID())
 		}
 
-		dlJob := downloader.NewSliceDownloadJob(payload.ID, payload.Objs, payload.Bucket, payload.BckProvider, payload.Timeout, payload.Description)
 		response, respErr, statusCode = downloaderXact.Download(dlJob)
 
 	case http.MethodGet:
@@ -129,7 +127,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (*cmn.DlBody, error) {
+// parseStartDownloadRequest translates external http request into internal representation: DownloadJob interface
+// based on different type of request DownloadJob might of different type which implements the interface
+func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (downloader.DownloadJob, error) {
 	var (
 		// link -> objname
 		objects cmn.SimpleKVs
@@ -143,13 +143,11 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (*c
 		objectsPayload interface{}
 
 		description string
-		bucket      string
 		bckIsLocal  bool
 		fromCloud   bool
 	)
 
 	payload.InitWithQuery(query)
-	bucket = payload.Bucket
 
 	singlePayload.InitWithQuery(query)
 	rangePayload.InitWithQuery(query)
@@ -167,6 +165,12 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (*c
 		}
 		description = singlePayload.Describe()
 	} else if err := rangePayload.Validate(); err == nil {
+		// FIXME: rangePayload still evaluates all of the objects on this line
+		// it means that if range is 0-3mln, we will create 3mln objects right away
+		// this should not be the case and we should create them on the demand
+		// NOTE: size of objects to be downloaded by a target will be unknown
+		// So proxy won't be able to sum sizes from all targets when calculating total size
+		// This should be taken care of somehow, as total is easy to know from range template anyway
 		if objects, err = rangePayload.ExtractPayload(); err != nil {
 			return nil, err
 		}
@@ -181,20 +185,8 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (*c
 		}
 		description = multiPayload.Describe()
 	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
-		bckEntries, err := t.listCloudBucket(r.Header, bucket, cloudPayload.Prefix, cloudPayload.Suffix)
-		if err != nil {
-			return nil, err
-		}
-		if len(bckEntries) == 0 {
-			return nil, fmt.Errorf("input does not match any object in cloud bucket %s", bucket)
-		}
-
-		objects = make(cmn.SimpleKVs, len(bckEntries))
-		for _, entry := range bckEntries {
-			objects[entry] = ""
-		}
-		fromCloud = true
-		description = cloudPayload.Describe()
+		baseJob := downloader.NewBaseDownloadJob(id, cloudPayload.Bucket, cloudPayload.BckProvider, cloudPayload.Timeout, payload.Description)
+		return downloader.NewCloudBucketDownloadJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -203,78 +195,10 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (*c
 		payload.Description = description
 	}
 
-	return t.buildDownloaderInput(id, payload, objects, fromCloud)
-}
-
-func (t *targetrunner) buildDownloaderInput(id string, payload *cmn.DlBase, objects cmn.SimpleKVs, cloud bool) (*cmn.DlBody, error) {
-	var (
-		smap   = t.smapowner.get()
-		dlBody = &cmn.DlBody{ID: id}
-	)
-	dlBody.Bucket = payload.Bucket
-	dlBody.BckProvider = payload.BckProvider
-	dlBody.Timeout = payload.Timeout
-	dlBody.Description = payload.Description
-
-	// Filter out objects that will be handled by other targets
-	for objName, link := range objects {
-		// Make sure that objName doesn't contain "?query=smth" suffix.
-		objName, err := normalizeObjName(objName)
-		if err != nil {
-			return nil, err
-		}
-		// Make sure that link contains protocol (absence of protocol can result in errors).
-		link = cmn.PrependProtocol(link)
-
-		si, errstr := hrwTarget(payload.Bucket, objName, smap)
-		if errstr != "" {
-			return nil, fmt.Errorf(errstr)
-		}
-		if si.DaemonID != t.si.DaemonID {
-			continue
-		}
-
-		dlObj := cmn.DlObj{
-			Objname:   objName,
-			Link:      link,
-			FromCloud: cloud,
-		}
-		dlBody.Objs = append(dlBody.Objs, dlObj)
+	input, err := downloader.BuildDownloaderInput(t, id, payload, objects, fromCloud)
+	if err != nil {
+		return nil, err
 	}
 
-	return dlBody, nil
-}
-
-func (t *targetrunner) listCloudBucket(header http.Header, bucket, prefix, suffix string) ([]string, error) {
-	msg := cmn.SelectMsg{
-		Prefix:     prefix,
-		PageMarker: "",
-		Fast:       true,
-	}
-
-	objects := make([]string, 0, 1024)
-	for {
-		bytes, err, _ := getcloudif().listbucket(t.contextWithAuth(header), bucket, &msg)
-		if err != nil {
-			return nil, fmt.Errorf("error listing cloud bucket %s: %v", bucket, err)
-		}
-		curBckEntries := &cmn.BucketList{}
-		if err := jsoniter.Unmarshal(bytes, curBckEntries); err != nil {
-			return nil, fmt.Errorf("error unmarshalling BucketList: %v", err)
-		}
-
-		// Take only entries with matching suffix
-		for _, entry := range curBckEntries.Entries {
-			if strings.HasSuffix(entry.Name, suffix) {
-				objects = append(objects, entry.Name)
-			}
-		}
-
-		msg.PageMarker = curBckEntries.PageMarker
-		if msg.PageMarker == "" {
-			break
-		}
-	}
-
-	return objects, nil
+	return downloader.NewSliceDownloadJob(input.ID, input.Objs, payload.Bucket, payload.BckProvider, payload.Timeout, payload.Description), nil
 }

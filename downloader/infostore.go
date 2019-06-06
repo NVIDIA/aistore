@@ -9,14 +9,15 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
 type (
 	infoStore struct {
 		*downloaderDB
+
+		// FIXME: jobInfo is stored only in memory, should be persisted at some point
+		// in case, for instance, of target's powercycle
 		jobInfo map[string]*DownloadJobInfo
 		sync.RWMutex
 	}
@@ -61,15 +62,9 @@ func (is *infoStore) getList(descRegex *regexp.Regexp) []*DownloadJobInfo {
 
 func (is *infoStore) setJob(id string, job DownloadJob) {
 	jInfo := &DownloadJobInfo{
-		ID:            job.ID(),
-		Bucket:        job.Bucket(),
-		BckProvider:   job.BckProvider(),
-		Total:         job.Len(),
-		Description:   job.Description(),
-		Aborted:       atomic.NewBool(false),
-		AllDispatched: atomic.NewBool(false),
-		ScheduledCnt:  atomic.NewInt32(0),
-		FinishedCnt:   atomic.NewInt32(0),
+		ID:          job.ID(),
+		Total:       job.Len(),
+		Description: job.Description(),
 	}
 
 	is.Lock()

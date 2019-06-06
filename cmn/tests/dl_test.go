@@ -1,7 +1,12 @@
-package ais
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ */
+package tests
 
 import (
 	"testing"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestNormalizeObjName(t *testing.T) {
@@ -19,7 +24,7 @@ func TestNormalizeObjName(t *testing.T) {
 	}
 
 	for _, test := range normalizeObjTests {
-		actual, err := normalizeObjName(test.objName)
+		actual, err := cmn.NormalizeObjName(test.objName)
 
 		if err != nil {
 			t.Errorf("Unexpected error while normalizing %s: %v", test.objName, err)

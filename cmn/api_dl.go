@@ -469,3 +469,18 @@ func (b *DlCloudBody) AsQuery() url.Values {
 func (b *DlCloudBody) Describe() string {
 	return fmt.Sprintf("cloud prefetch -> %s", b.Bucket)
 }
+
+// Removes everything that goes after '?', eg. "?query=key..." so it will not
+// be part of final object name.
+func NormalizeObjName(objName string) (string, error) {
+	u, err := url.Parse(objName)
+	if err != nil {
+		return "", nil
+	}
+
+	if u.Path == "" {
+		return objName, nil
+	}
+
+	return url.PathUnescape(u.Path)
+}

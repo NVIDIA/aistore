@@ -9,9 +9,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 type RecvType int
@@ -24,14 +25,17 @@ const (
 // For implementations, please refer to ais/target.go
 type Target interface {
 	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
-	IsRebalancing() bool
-	RunLRU()
-	PrefetchQueueLen() int
-	Prefetch()
-	GetBowner() Bowner
+	Snode() *Snode
 	FSHC(err error, path string)
-	GetMem2() *memsys.Mem2
+	GetBowner() Bowner
+	GetCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error)
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
-	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
 	GetFSPRG() fs.PathRunGroup
+	GetMem2() *memsys.Mem2
+	HRWTarget(bucket, objname string) (si *Snode, errstr string)
+	IsRebalancing() bool
+	Prefetch()
+	PrefetchQueueLen() int
+	Receive(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
+	RunLRU()
 }

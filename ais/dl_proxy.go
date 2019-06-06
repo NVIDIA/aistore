@@ -25,21 +25,6 @@ type dlResponse struct {
 	err        error
 }
 
-// Removes everything that goes after '?', eg. "?query=key..." so it will not
-// be part of final object name.
-func normalizeObjName(objName string) (string, error) {
-	u, err := url.Parse(objName)
-	if err != nil {
-		return "", nil
-	}
-
-	if u.Path == "" {
-		return objName, nil
-	}
-
-	return url.PathUnescape(u.Path)
-}
-
 func (p *proxyrunner) targetDownloadRequest(method string, path string, body []byte, query url.Values, si *cluster.Snode) dlResponse {
 	fullQuery := url.Values{}
 	for k, vs := range query {

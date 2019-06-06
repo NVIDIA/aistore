@@ -2585,6 +2585,14 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	getfshealthchecker().OnErr(filepath)
 }
 
+func (t *targetrunner) HRWTarget(bucket, objname string) (si *cluster.Snode, errstr string) {
+	return hrwTarget(bucket, objname, t.smapowner.get())
+}
+
+func (t *targetrunner) Snode() *cluster.Snode {
+	return t.si
+}
+
 func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {

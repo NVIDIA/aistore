@@ -256,6 +256,8 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlO
 	}
 
 	select {
+	// FIXME: if this particular jogger is full, but others are available, dispatcher
+	// will wait with dispatching all of the requests anyway
 	case jogger.putCh(task) <- task:
 		return nil, true
 	case <-d.jobAbortedCh(job.ID()):
@@ -357,5 +359,6 @@ func (d *dispatcher) dispatchList(req *request) {
 			Aborted:     r.Aborted.Load(),
 		}
 	}
+
 	req.writeResp(respMap)
 }

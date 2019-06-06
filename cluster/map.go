@@ -55,6 +55,10 @@ func (d *Snode) Digest() uint64 {
 	return d.idDigest
 }
 
+func (d *Snode) ID() string {
+	return d.DaemonID
+}
+
 const snodefmt = "[\n\tDaemonID: %s,\n\tDaemonType: %s, \n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
 
 func (d *Snode) _string() string {
