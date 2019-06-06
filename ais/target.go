@@ -1461,28 +1461,25 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *
 		glog.Infof("Found %s at %s", lom, neighsi)
 	}
 
-	// FIXME: For now, need to re-translate lom.BckIsLocal to appropriate value ("local"|"cloud")
-	// FIXME: this code below looks like a general code for sending request
-	geturl := fmt.Sprintf("%s%s?%s=%s&%s=%s", neighsi.IntraDataNet.DirectURL,
-		r.URL.Path, cmn.URLParamBckProvider, lom.BucketProvider, cmn.URLParamIsGFNRequest, "true")
-	//
-	// http request
-	//
-	newr, err := http.NewRequest(http.MethodGet, geturl, nil)
-	if err != nil {
-		err = fmt.Errorf("unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
-		return
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, lom.BucketProvider)
+	query.Add(cmn.URLParamIsGFNRequest, "true")
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   neighsi.URL(cmn.NetworkIntraData),
+		Path:   r.URL.Path,
+		Query:  query,
 	}
 
-	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config().Timeout.SendFile)
-	defer cancel()
-	newrequest := newr.WithContext(contextwith)
-
-	response, err := t.httpclientLongTimeout.Do(newrequest)
+	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
 	if err != nil {
-		err = fmt.Errorf("failed to GET redirect URL %q, err: %v", geturl, err)
-		return
+		return fmt.Errorf("failed to create request, err: %v", err)
+	}
+	defer cancel()
+
+	response, err := t.httpclientLongTimeout.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to GET redirect URL %q, err: %v", reqArgs.URL(), err)
 	}
 	var (
 		cksumValue = response.Header.Get(cmn.HeaderObjCksumVal)
@@ -1930,8 +1927,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	cluster.ObjectLocker.Unlock(uname, true)
 }
 
-func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo,
-	objnameTo, pid string) (errstr string) {
+func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo, pid string) (errstr string) {
 	var (
 		file                  *cmn.FileHandle
 		si                    *cluster.Snode
@@ -1992,33 +1988,36 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		cksumType, cksumValue = lom.Cksum().Get()
 	}
 
-	path := cmn.URLPath(cmn.Version, cmn.Objects, bucketTo, objnameTo)
-	putURL := fmt.Sprintf("%s%s?%s=%s&%s=%s",
-		si.IntraDataNet.DirectURL, path, cmn.URLParamBckProvider, lom.BucketProvider, cmn.URLParamProxyID, pid)
-	//
-	// http PUT /v1/objects/bucket/objname
-	//
-	req, err := http.NewRequest(http.MethodPut, putURL, file)
+	// PUT object into different target
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, lom.BucketProvider)
+	query.Add(cmn.URLParamProxyID, pid)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   si.URL(cmn.NetworkIntraData),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucketTo, objnameTo),
+		Query:  query,
+		BodyR:  file,
+	}
+	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
 	if err != nil {
-		errstr = fmt.Sprintf("unexpected failure to create %s request %s, err: %v", http.MethodPut, putURL, err)
+		errstr = fmt.Sprintf("unexpected failure to create request, err: %v", err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), lom.Config().Timeout.SendFile)
 	defer cancel()
-	req = req.WithContext(ctx)
-	header := req.Header
-	header.Set(cmn.HeaderObjCksumType, cksumType)
-	header.Set(cmn.HeaderObjCksumVal, cksumValue)
-	header.Set(cmn.HeaderObjVersion, lom.Version())
+	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
+	req.Header.Set(cmn.HeaderObjCksumVal, cksumValue)
+	req.Header.Set(cmn.HeaderObjVersion, lom.Version())
+
 	timeInt := lom.Atime().UnixNano()
 	if lom.Atime().IsZero() {
 		timeInt = 0
 	}
-	header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+	req.Header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
 
 	_, err = t.httpclientLongTimeout.Do(req)
 	if err != nil {
-		errstr = fmt.Sprintf("failed to PUT URL %q, err: %v", putURL, err)
+		errstr = fmt.Sprintf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
 	}
 	return
 }

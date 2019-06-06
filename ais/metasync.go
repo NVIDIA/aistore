@@ -410,10 +410,10 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
 	config *cmn.Config, smap *smapX) {
 	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: method,
-			path:   urlPath,
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   urlPath,
+			Body:   body,
 		},
 		network: cmn.NetworkIntraControl,
 		timeout: config.Timeout.MaxKeepalive, // JSON config "max_keepalive"
@@ -497,10 +497,10 @@ func (y *metasyncer) handlePending() (cnt int) {
 
 	body := cmn.MustMarshal(payload)
 	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: http.MethodPut,
-			path:   cmn.URLPath(cmn.Version, cmn.Metasync),
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: http.MethodPut,
+			Path:   cmn.URLPath(cmn.Version, cmn.Metasync),
+			Body:   body,
 		},
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,

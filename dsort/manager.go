@@ -984,16 +984,15 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 
 // doWithAbort sends requests through client. If manager aborts during the call
 // request is canceled.
-func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64, error) {
-	req, _, cancel, err := cmn.ReqWithContext(method, u, body)
+func (m *Manager) doWithAbort(reqArgs *cmn.ReqArgs) error {
+	req, _, cancel, err := reqArgs.ReqWithCancel()
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	// Start request
 	doneCh := make(chan struct{}, 1)
 	errCh := make(chan error, 1)
-	n := int64(0)
 	go func() {
 		defer func() {
 			doneCh <- struct{}{}
@@ -1013,16 +1012,6 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 			}
 			return
 		}
-
-		if w != nil {
-			buf, slab := mem.AllocFromSlab2(cmn.MiB)
-			n, err = io.CopyBuffer(w, resp.Body, buf)
-			slab.Free(buf)
-			if err != nil {
-				errCh <- err
-				return
-			}
-		}
 	}()
 
 	// Wait for abort or request to finish
@@ -1030,13 +1019,13 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 	case <-m.listenAborted():
 		cancel()
 		<-doneCh
-		return n, newAbortError(m.ManagerUUID)
+		return newAbortError(m.ManagerUUID)
 	case <-doneCh:
 		break
 	}
 
 	close(errCh)
-	return n, errors.WithStack(<-errCh)
+	return errors.WithStack(<-errCh)
 }
 
 func (m *Manager) ListenSmapChanged(ch chan int64) {

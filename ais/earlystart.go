@@ -149,11 +149,11 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		query  = url.Values{}
 	)
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
-	req := reqArgs{
-		method: http.MethodGet,
-		base:   getSmapURL,
-		path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-		query:  query,
+	req := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   getSmapURL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+		Query:  query,
 	}
 	// get Smap
 	f := func() {

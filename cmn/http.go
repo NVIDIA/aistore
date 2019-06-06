@@ -13,24 +13,39 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	jsoniter "github.com/json-iterator/go"
 )
 
-// Error structure for HTTP errors
-type HTTPError struct {
-	Status     int    `json:"status"`
-	Message    string `json:"message"`
-	Method     string `json:"method"`
-	URLPath    string `json:"url_path"`
-	RemoteAddr string `json:"remote_addr"`
-	Trace      string `json:"trace"`
-}
+type (
+	// Error structure for HTTP errors
+	HTTPError struct {
+		Status     int    `json:"status"`
+		Message    string `json:"message"`
+		Method     string `json:"method"`
+		URLPath    string `json:"url_path"`
+		RemoteAddr string `json:"remote_addr"`
+		Trace      string `json:"trace"`
+	}
+
+	// ReqArgs specifies http request that we want to send
+	ReqArgs struct {
+		Method string      // GET, POST, ...
+		Header http.Header // request headers
+		Base   string      // base URL: http://xyz.abc
+		Path   string      // path URL: /x/y/z
+		Query  url.Values  // query: ?x=y&y=z
+		Body   []byte      // body for POST, PUT, ...
+		BodyR  io.Reader
+	}
+)
 
 // Eg: Bad Request: Bucket abc does not appear to be local or does not exist:
 //   DELETE /v1/buckets/abc from 127.0.0.1:54064| ([httpcommon.go, #840] <- [proxy.go, #484] <- [proxy.go, #264])
@@ -241,13 +256,51 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	return nil
 }
 
-// ReqWithContext executes request with ability to cancel it.
-func ReqWithContext(method, url string, body []byte) (*http.Request, context.Context, context.CancelFunc, error) {
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+// MustMarshal marshals v and panics if error occurs.
+func MustMarshal(v interface{}) []byte {
+	b, err := jsoniter.Marshal(v)
+	AssertNoErr(err)
+	return b
+}
+
+func (u *ReqArgs) URL() string {
+	url := strings.TrimSuffix(u.Base, "/")
+	if !strings.HasPrefix(u.Path, "/") {
+		url += "/"
+	}
+	url += u.Path
+	query := u.Query.Encode()
+	if query != "" {
+		url += "?" + query
+	}
+	return url
+}
+
+func (u *ReqArgs) Req() (*http.Request, error) {
+	r := u.BodyR
+	if r == nil && u.Body != nil {
+		r = bytes.NewBuffer(u.Body)
+	}
+
+	req, err := http.NewRequest(u.Method, u.URL(), r)
+	if err != nil {
+		return nil, err
+	}
+
+	if u.Header != nil {
+		copyHeaders(u.Header, &req.Header)
+	}
+
+	return req, nil
+}
+
+// ReqWithCancel creates request with ability to cancel it.
+func (u *ReqArgs) ReqWithCancel() (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := u.Req()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if method == http.MethodPost || method == http.MethodPut {
+	if u.Method == http.MethodPost || u.Method == http.MethodPut {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -255,9 +308,25 @@ func ReqWithContext(method, url string, body []byte) (*http.Request, context.Con
 	return req, ctx, cancel, nil
 }
 
-// MustMarshal marshals v and panics if error occurs.
-func MustMarshal(v interface{}) []byte {
-	b, err := jsoniter.Marshal(v)
-	AssertNoErr(err)
-	return b
+func (u *ReqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := u.Req()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if u.Method == http.MethodPost || u.Method == http.MethodPut {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	req = req.WithContext(ctx)
+	return req, ctx, cancel, nil
+}
+
+// Copies headers from original request(from client) to
+// a new one(inter-cluster call)
+func copyHeaders(src http.Header, dst *http.Header) {
+	for k, values := range src {
+		for _, v := range values {
+			dst.Set(k, v)
+		}
+	}
 }

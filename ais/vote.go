@@ -545,11 +545,11 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 
 	args := callArgs{
 		si: nextPrimaryProxy,
-		req: reqArgs{
-			method: http.MethodPut,
-			base:   nextPrimaryProxy.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Vote, cmn.VoteInit),
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: http.MethodPut,
+			Base:   nextPrimaryProxy.IntraControlNet.DirectURL,
+			Path:   cmn.URLPath(cmn.Version, cmn.Vote, cmn.VoteInit),
+			Body:   body,
 		},
 		timeout: defaultTimeout,
 	}
@@ -600,10 +600,10 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) (bool, error) {
 	args := callArgs{
 		si: si,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   si.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Health),
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   si.IntraControlNet.DirectURL,
+			Path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: timeout,
 	}

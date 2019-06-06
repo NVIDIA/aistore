@@ -207,9 +207,9 @@ func (p *proxyrunner) unregister() (int, error) {
 	smap := p.smapowner.get()
 	args := callArgs{
 		si: smap.ProxySI,
-		req: reqArgs{
-			method: http.MethodDelete,
-			path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, cmn.Proxy, p.si.DaemonID),
+		req: cmn.ReqArgs{
+			Method: http.MethodDelete,
+			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, cmn.Proxy, p.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -406,10 +406,10 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				url += "&" + cmn.URLParamReadahead + "=true"
 				args := callArgs{
 					si: nil, // already inside url
-					req: reqArgs{
-						method: r.Method,
-						header: r.Header,
-						base:   url,
+					req: cmn.ReqArgs{
+						Method: r.Method,
+						Base:   url,
+						Header: r.Header,
 					},
 					timeout: config.Timeout.ProxyPing,
 				}
@@ -1512,11 +1512,11 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 	}
 	args := callArgs{
 		si: si,
-		req: reqArgs{
-			method: r.Method,
-			header: r.Header,
-			path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
-			query:  r.URL.Query(),
+		req: cmn.ReqArgs{
+			Method: r.Method,
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
+			Query:  r.URL.Query(),
+			Header: r.Header,
 		},
 		timeout: defaultTimeout,
 	}
@@ -1564,13 +1564,13 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket, bckProvider stri
 
 	args := callArgs{
 		si: dinfo,
-		req: reqArgs{
-			method: http.MethodPost,
-			header: header,
-			base:   dinfo.URL(cmn.NetworkPublic),
-			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			query:  query,
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Header: header,
+			Base:   dinfo.URL(cmn.NetworkPublic),
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			Query:  query,
+			Body:   body,
 		},
 		timeout: cmn.GCO.Get().Timeout.ListBucket,
 	}
@@ -1596,10 +1596,10 @@ func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
 
 	args := callArgs{
 		si: si,
-		req: reqArgs{
-			method: http.MethodHead,
-			base:   si.URL(cmn.NetworkIntraData),
-			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+		req: cmn.ReqArgs{
+			Method: http.MethodHead,
+			Base:   si.URL(cmn.NetworkIntraData),
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		},
 		timeout: defaultTimeout,
 	}
@@ -2297,11 +2297,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
-	req := reqArgs{
-		method: http.MethodGet,
-		base:   baseURL,
-		path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-		query:  query,
+	req := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   baseURL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+		Query:  query,
 	}
 	args := callArgs{req: req, timeout: defaultTimeout}
 	res := p.call(args)
@@ -2875,9 +2875,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 			args := callArgs{
 				si: nsi,
-				req: reqArgs{
-					method: http.MethodPost,
-					path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
+				req: cmn.ReqArgs{
+					Method: http.MethodPost,
+					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
 				},
 				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 			}
@@ -3035,9 +3035,9 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		args := callArgs{
 			si: osi,
-			req: reqArgs{
-				method: http.MethodDelete,
-				path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
+			req: cmn.ReqArgs{
+				Method: http.MethodDelete,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
 			},
 			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		}
@@ -3238,10 +3238,10 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSnode)
 	args := callArgs{
 		si: osi,
-		req: reqArgs{
-			method: http.MethodGet,
-			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			query:  query,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Query:  query,
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}

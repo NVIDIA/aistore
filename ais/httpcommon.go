@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -39,6 +38,8 @@ import (
 const ( //  h.call(timeout)
 	defaultTimeout = time.Duration(-1)
 	longTimeout    = time.Duration(0)
+
+	unknownDaemonID = "unknown"
 )
 
 type (
@@ -53,26 +54,16 @@ type (
 		status  int
 	}
 
-	// reqArgs specifies http request that we want to send
-	reqArgs struct {
-		method string      // GET, POST, ...
-		header http.Header // request headers
-		base   string      // base URL: http://xyz.abc
-		path   string      // path URL: /x/y/z
-		query  url.Values  // query: ?x=y&y=z
-		body   []byte      // body for POST, PUT, ...
-	}
-
 	// callArgs contains arguments for a peer-to-peer control plane call
 	callArgs struct {
-		req     reqArgs
+		req     cmn.ReqArgs
 		timeout time.Duration
 		si      *cluster.Snode
 	}
 
 	// bcastCallArgs contains arguments for an intra-cluster broadcast call
 	bcastCallArgs struct {
-		req     reqArgs
+		req     cmn.ReqArgs
 		network string // on of the cmn.KnownNetworks
 		timeout time.Duration
 		nodes   []cluster.NodeMap
@@ -121,35 +112,6 @@ type cloudif interface {
 	getobj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errcode int)
 	putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int)
 	deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int)
-}
-
-func (u reqArgs) url() string {
-	url := strings.TrimSuffix(u.base, "/")
-	if !strings.HasPrefix(u.path, "/") {
-		url += "/"
-	}
-	url += u.path
-	query := u.query.Encode()
-	if query != "" {
-		url += "?" + query
-	}
-	return url
-}
-
-//===========
-//
-// generic bad-request http handler
-//
-//===========
-
-// Copies headers from original request(from client) to
-// a new one(inter-cluster call)
-func copyHeaders(src http.Header, dst *http.Header) {
-	for k, values := range src {
-		for _, v := range values {
-			dst.Add(k, v)
-		}
-	}
 }
 
 //===========================================================================
@@ -530,96 +492,106 @@ func (h *httprunner) stop(err error) {
 // optionally, include a json-encoded body
 func (h *httprunner) call(args callArgs) callResult {
 	var (
-		request  *http.Request
-		response *http.Response
-		sid      = "unknown"
-		outjson  []byte
-		err      error
-		errstr   string
-		status   int
+		req     *http.Request
+		sid     = unknownDaemonID
+		outjson []byte
+		err     error
+		errstr  string
+		status  int
+		client  *http.Client
 	)
 
 	if args.si != nil {
 		sid = args.si.DaemonID
 	}
 
-	cmn.Assert(args.si != nil || args.req.base != "") // either we have si or base
-	if args.req.base == "" && args.si != nil {
-		args.req.base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
+	cmn.Assert(args.si != nil || args.req.Base != "") // either we have si or base
+	if args.req.Base == "" && args.si != nil {
+		args.req.Base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
 	}
 
-	url := args.req.url()
-	if len(args.req.body) == 0 {
-		request, err = http.NewRequest(args.req.method, url, nil)
-	} else {
-		request, err = http.NewRequest(args.req.method, url, bytes.NewBuffer(args.req.body))
-		if err == nil {
-			request.Header.Set("Content-Type", "application/json")
+	if args.req.Header == nil {
+		args.req.Header = make(http.Header)
+	}
+
+	switch args.timeout {
+	case defaultTimeout:
+		req, err = args.req.Req()
+		if err != nil {
+			break
+		}
+
+		client = h.httpclient
+	case longTimeout:
+		req, err = args.req.Req()
+		if err != nil {
+			break
+		}
+
+		client = h.httpclientLongTimeout
+	default:
+		var cancel context.CancelFunc
+		req, _, cancel, err = args.req.ReqWithTimeout(args.timeout)
+		if err != nil {
+			break
+		}
+		defer cancel() // timeout => context.deadlineExceededError
+
+		if args.timeout > h.httpclient.Timeout {
+			client = h.httpclientLongTimeout
+		} else {
+			client = h.httpclient
 		}
 	}
-	request.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
-	request.Header.Set(cmn.HeaderCallerName, h.si.Name())
 
 	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", args.req.method, url, err)
+		errstr = fmt.Sprintf("Unexpected failure to create HTTP request %s %s, err: %v", args.req.Method, args.req.URL(), err)
 		return callResult{args.si, outjson, err, errstr, status}
 	}
 
-	copyHeaders(args.req.header, &request.Header)
-	switch args.timeout {
-	case defaultTimeout:
-		response, err = h.httpclient.Do(request)
-	case longTimeout:
-		response, err = h.httpclientLongTimeout.Do(request)
-	default:
-		contextwith, cancel := context.WithTimeout(context.Background(), args.timeout)
-		defer cancel() // timeout => context.deadlineExceededError
-		newRequest := request.WithContext(contextwith)
-		copyHeaders(args.req.header, &newRequest.Header)
-		if args.timeout > h.httpclient.Timeout {
-			response, err = h.httpclientLongTimeout.Do(newRequest)
-		} else {
-			response, err = h.httpclient.Do(newRequest)
-		}
-	}
+	req.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
+	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
+
+	resp, err := client.Do(req)
+
 	if err != nil {
-		if response != nil && response.StatusCode > 0 {
-			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, args.req.method, url, response.Status, err)
-			status = response.StatusCode
+		if resp != nil && resp.StatusCode > 0 {
+			errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v", sid, args.req.Method, args.req.URL(), resp.Status, err)
+			status = resp.StatusCode
 			return callResult{args.si, outjson, err, errstr, status}
 		}
 
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, args.req.method, url, err)
+		errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
 		return callResult{args.si, outjson, err, errstr, status}
 	}
 
-	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, args.req.method, url, err)
+	if outjson, err = ioutil.ReadAll(resp.Body); err != nil {
+		errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v", sid, args.req.Method, args.req.URL(), err)
 		if err == io.EOF {
-			trailer := response.Trailer.Get("Error")
+			trailer := resp.Trailer.Get("Error")
 			if trailer != "" {
-				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, args.req.method, url, err, trailer)
+				errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s", sid, args.req.Method, args.req.URL(), err, trailer)
 			}
 		}
 
-		response.Body.Close()
+		resp.Body.Close()
 		return callResult{args.si, outjson, err, errstr, status}
 	}
-	response.Body.Close()
+	resp.Body.Close()
 
-	// err == nil && bad status: response.Body contains the error message
-	if response.StatusCode >= http.StatusBadRequest {
+	// err == nil && bad status: resp.Body contains the error message
+	if resp.StatusCode >= http.StatusBadRequest {
 		err = fmt.Errorf("%s", outjson)
 		errstr = err.Error()
-		status = response.StatusCode
+		status = resp.StatusCode
 		return callResult{args.si, outjson, err, errstr, status}
 	}
 
-	if sid != "unknown" {
+	if sid != unknownDaemonID {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{args.si, outjson, err, errstr, response.StatusCode}
+	return callResult{args.si, outjson, err, errstr, resp.StatusCode}
 }
 
 //
@@ -644,11 +616,11 @@ func (h *httprunner) broadcastTo(path string, query url.Values, method string, b
 		cmn.AssertMsg(false, "unknown network '"+network+"'")
 	}
 	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: method,
-			path:   path,
-			query:  query,
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   path,
+			Query:  query,
+			Body:   body,
 		},
 		network: network,
 		timeout: timeout,
@@ -684,7 +656,7 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 					req:     bcastArgs.req,
 					timeout: bcastArgs.timeout,
 				}
-				args.req.base = di.URL(bcastArgs.network)
+				args.req.Base = di.URL(bcastArgs.network)
 
 				res := h.call(args)
 				ch <- res
@@ -1050,12 +1022,12 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 
 	callArgs := callArgs{
 		si: psi,
-		req: reqArgs{
-			method: http.MethodPost,
-			base:   url,
-			path:   path,
-			query:  query,
-			body:   info,
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Base:   url,
+			Path:   path,
+			Query:  query,
+			Body:   info,
 		},
 		timeout: timeout,
 	}

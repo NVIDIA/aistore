@@ -248,12 +248,16 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 	defer handle.Close()
 
-	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object)
-	var query = url.Values{}
+	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, args.BucketProvider)
-	reqURL := args.BaseParams.URL + path + "?" + query.Encode()
-
-	req, err := http.NewRequest(http.MethodPut, reqURL, handle)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   args.BaseParams.URL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object),
+		Query:  query,
+		BodyR:  handle,
+	}
+	req, err := reqArgs.Req()
 	if err != nil {
 		return fmt.Errorf("failed to create new HTTP request, err: %v", err)
 	}

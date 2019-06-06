@@ -78,9 +78,9 @@ func (t *targetrunner) unregister() (int, error) {
 	}
 	args := callArgs{
 		si: smap.ProxySI,
-		req: reqArgs{
-			method: http.MethodDelete,
-			path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.DaemonID),
+		req: cmn.ReqArgs{
+			Method: http.MethodDelete,
+			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, t.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -862,11 +862,11 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (errst
 	q.Add(cmn.URLParamWhat, what)
 	args := callArgs{
 		si: psi,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   psi.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
-			query:  q,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   psi.IntraControlNet.DirectURL,
+			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Query:  q,
 		},
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
@@ -1056,10 +1056,10 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 		psi := smap.ProxySI
 		args := callArgs{
 			si: psi,
-			req: reqArgs{
-				method: http.MethodGet,
-				base:   psi.IntraControlNet.DirectURL,
-				path:   cmn.URLPath(cmn.Version, cmn.Health),
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Base:   psi.IntraControlNet.DirectURL,
+				Path:   cmn.URLPath(cmn.Version, cmn.Health),
 			},
 			timeout: timeout,
 		}

@@ -37,11 +37,11 @@ func (p *proxyrunner) targetDownloadRequest(method string, path string, body []b
 
 	args := callArgs{
 		si: si,
-		req: reqArgs{
-			method: method,
-			path:   cmn.URLPath(cmn.Version, cmn.Download, path),
-			query:  fullQuery,
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   cmn.URLPath(cmn.Version, cmn.Download, path),
+			Query:  fullQuery,
+			Body:   body,
 		},
 		timeout: defaultTimeout,
 	}
@@ -364,10 +364,10 @@ func (p *proxyrunner) handleUnknownCB(bucket string) error {
 	body := cmn.MustMarshal(actionMsg)
 	args := callArgs{
 		si: smap.ProxySI,
-		req: reqArgs{
-			method: http.MethodPost,
-			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			body:   body,
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			Body:   body,
 		},
 		timeout: defaultTimeout,
 	}

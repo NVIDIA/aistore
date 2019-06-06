@@ -14,10 +14,12 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -527,14 +529,20 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 				return
 			}
 			sendTo := targetOrder[i+1]
-			u := sendTo.URL(cmn.NetworkIntraData) + fmt.Sprintf(
-				"%s?%s=%d&%s=%d&%s=%d",
-				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
-				cmn.URLParamTotalCompressedSize, m.totalCompressedSize(),
-				cmn.URLParamTotalUncompressedSize, m.totalUncompressedSize(),
-				cmn.URLParamTotalInputShardsExtracted, m.recManager.Records.Len(),
-			)
-			if _, e := m.doWithAbort(http.MethodPost, u, body, nil); e != nil {
+
+			query := url.Values{}
+			query.Add(cmn.URLParamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
+			query.Add(cmn.URLParamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
+			query.Add(cmn.URLParamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
+			reqArgs := &cmn.ReqArgs{
+				Method: http.MethodPost,
+				Base:   sendTo.URL(cmn.NetworkIntraData),
+				Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Records, m.ManagerUUID),
+				Query:  query,
+				Body:   body,
+			}
+
+			if e := m.doWithAbort(reqArgs); e != nil {
 				err = errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.DaemonID, e)
 				return
 			}
@@ -792,13 +800,17 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				errCh <- err
 				return
 			}
-			u := si.URL(cmn.NetworkIntraData)
-			u += fmt.Sprintf(
-				"%s?%s=%s",
-				cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
-				cmn.URLParamBckProvider, m.rs.BckProvider,
-			)
-			if _, err = m.doWithAbort(http.MethodPost, u, body, nil); err != nil {
+
+			query := url.Values{}
+			query.Add(cmn.URLParamBckProvider, m.rs.BckProvider)
+			reqArgs := &cmn.ReqArgs{
+				Method: http.MethodPost,
+				Base:   si.URL(cmn.NetworkIntraData),
+				Path:   cmn.URLPath(cmn.Version, cmn.Sort, cmn.Shards, m.ManagerUUID),
+				Query:  query,
+				Body:   body,
+			}
+			if err := m.doWithAbort(reqArgs); err != nil {
 				errCh <- err
 				return
 			}

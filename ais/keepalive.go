@@ -298,10 +298,10 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
 	args := callArgs{
 		si: to,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   to.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Health),
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   to.IntraControlNet.DirectURL,
+			Path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: timeout,
 	}

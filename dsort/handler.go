@@ -7,9 +7,7 @@
 package dsort
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -682,17 +680,14 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 	call := func(idx int, node *cluster.Snode) {
 		defer wg.Done()
 
-		var buffer io.Reader
-		if body != nil {
-			buffer = bytes.NewBuffer(body)
+		reqArgs := cmn.ReqArgs{
+			Method: method,
+			Base:   node.URL(cmn.NetworkIntraControl),
+			Path:   path,
+			Query:  urlParams,
+			Body:   body,
 		}
-
-		url := node.URL(cmn.NetworkIntraControl)
-		fullPath := url + path
-		if urlParams != nil {
-			fullPath += "?" + urlParams.Encode()
-		}
-		req, err := http.NewRequest(method, fullPath, buffer)
+		req, err := reqArgs.Req()
 		if err != nil {
 			responses[idx] = response{
 				si:         node,
@@ -702,9 +697,6 @@ func broadcast(method, path string, urlParams url.Values, body []byte, nodes clu
 			return
 		}
 
-		if body != nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
 		resp, err := client.Do(req)
 		if err != nil {
 			responses[idx] = response{

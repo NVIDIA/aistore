@@ -524,11 +524,11 @@ func (reb *rebManager) pollDone(tsi *cluster.Snode, ver int64, xreb *xactGlobalR
 	query.Add(cmn.URLParamRebStatus, "true")
 	args := callArgs{
 		si: tsi,
-		req: reqArgs{
-			method: http.MethodGet,
-			base:   tsi.IntraControlNet.DirectURL,
-			path:   cmn.URLPath(cmn.Version, cmn.Health),
-			query:  query,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Base:   tsi.URL(cmn.NetworkIntraControl),
+			Path:   cmn.URLPath(cmn.Version, cmn.Health),
+			Query:  query,
 		},
 		timeout: defaultTimeout,
 	}
@@ -624,10 +624,10 @@ func (reb *rebManager) pingTarget(si *cluster.Snode, config *cmn.Config, ver int
 		curwt      time.Duration
 		args       = callArgs{
 			si: si,
-			req: reqArgs{
-				method: http.MethodGet,
-				base:   si.IntraControlNet.DirectURL,
-				path:   cmn.URLPath(cmn.Version, cmn.Health),
+			req: cmn.ReqArgs{
+				Method: http.MethodGet,
+				Base:   si.IntraControlNet.DirectURL,
+				Path:   cmn.URLPath(cmn.Version, cmn.Health),
 			},
 			timeout: config.Timeout.CplaneOperation,
 		}
@@ -800,11 +800,11 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, config *cmn.Config) (cnt 
 			// HEAD obj
 			args := callArgs{
 				si: tsi,
-				req: reqArgs{
-					method: http.MethodHead,
-					base:   tsi.IntraControlNet.DirectURL,
-					path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
-					query:  query,
+				req: cmn.ReqArgs{
+					Method: http.MethodHead,
+					Base:   tsi.URL(cmn.NetworkIntraControl),
+					Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+					Query:  query,
 				},
 				timeout: config.Timeout.MaxKeepalive,
 			}
