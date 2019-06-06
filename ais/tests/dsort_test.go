@@ -1514,8 +1514,8 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	tutils.Logln("waiting for distributed sort to finish up...")
 	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(t, err)
-	if aborted {
-		t.Errorf("%s was aborted", cmn.DSortName)
+	if !aborted {
+		t.Errorf("%s was not aborted", cmn.DSortName)
 	}
 
 	tutils.Logln("checking metrics...")

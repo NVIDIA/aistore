@@ -1056,13 +1056,15 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 		}
 
 		newSmap := m.ctx.smap.Get()
-		// check if some target has been removed - abort in case it does
-		for sid := range m.smap.Tmap {
-			if newSmap.GetTarget(sid) == nil {
-				m.abort(errors.Errorf("target %q was disconnected from the cluster", sid))
-				// return from the listener as the whole manager is aborted
-				return
-			}
+		if newSmap.CountTargets() != m.smap.CountTargets() {
+			// Currently adding new target as well as removing one is not
+			// supported during the run.
+			//
+			// TODO: dSort should survive adding new target. For now it is
+			// not possible as rebalance deletes moved object - dSort needs
+			// to use `GetObject` method instead of relaying on simple `os.Open`
+			err := errors.Errorf("number of target has changed during dSort run, aborting due to possible errors")
+			m.abort(err)
 		}
 	}
 }
