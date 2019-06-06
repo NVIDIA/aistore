@@ -198,7 +198,7 @@ func handleObjectError(objErr error, bucket *storage.BucketHandle, gctx context.
 // bucket operations
 //
 //==================
-func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, err error, errcode int) {
+func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (body []byte, err error, errcode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -262,8 +262,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
-	jsbytes, err = jsoniter.Marshal(reslist)
-	cmn.AssertNoErr(err)
+	body = cmn.MustMarshal(reslist)
 	return
 }
 

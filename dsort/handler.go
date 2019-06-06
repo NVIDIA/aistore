@@ -204,12 +204,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := jsoniter.Marshal(resultList)
-	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	body := cmn.MustMarshal(resultList)
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be
@@ -618,12 +613,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := jsoniter.Marshal(Managers.List(regex))
-	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	body := cmn.MustMarshal(Managers.List(regex))
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be
@@ -653,12 +643,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dsortManager.Metrics.update()
-	body, err := jsoniter.Marshal(dsortManager.Metrics)
-	if err != nil {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	body := cmn.MustMarshal(dsortManager.Metrics)
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be

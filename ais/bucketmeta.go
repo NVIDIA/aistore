@@ -164,8 +164,7 @@ func (m *bucketMD) UnmarshalXattr(b []byte) error {
 // Marshals bucketMD into JSON, calculates JSON checksum and generates
 // a payload as [checksum] + "\n" + JSON
 func (m *bucketMD) MarshalXattr() []byte {
-	payload, err := jsoniter.Marshal(m)
-	cmn.Assert(err == nil)
+	payload := cmn.MustMarshal(m)
 	cksum := xxhash.Checksum64S(payload, 0)
 
 	bufLen := cmn.SizeofI64 + 1 + len(payload)

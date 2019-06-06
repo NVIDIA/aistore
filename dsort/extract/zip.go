@@ -125,10 +125,7 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 			Comment: header.Comment,
 		}
 
-		bmeta, err := jsoniter.Marshal(metadata)
-		if err != nil {
-			return extractedSize, extractedCount, err
-		}
+		bmeta := cmn.MustMarshal(metadata)
 
 		if f.FileInfo().IsDir() {
 			// We can safely ignore this case because we do `MkdirAll` anyway

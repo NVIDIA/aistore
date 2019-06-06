@@ -5,7 +5,6 @@
 package soakprim
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -166,8 +165,8 @@ func (rctx *RecipeContext) PostRecipe() error {
 
 	smap := fetchSmap("PostRecipe")
 	if len(rctx.origTargets) != smap.CountTargets() {
-		origTargStr, _ := json.Marshal(rctx.origTargets)
-		newTargStr, _ := json.Marshal(smap.Tmap)
+		origTargStr := cmn.MustMarshal(rctx.origTargets)
+		newTargStr := cmn.MustMarshal(smap.Tmap)
 
 		report.Writef(report.SummaryLevel,
 			"post recipe target count changed\n"+

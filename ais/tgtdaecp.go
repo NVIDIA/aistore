@@ -240,19 +240,17 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatSmap, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatSysInfo:
-		jsbytes, err := jsoniter.Marshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		body := cmn.MustMarshal(cmn.TSysInfo{SysInfo: gmem2.FetchSysInfo(), FSInfo: fs.Mountpaths.FetchFSInfo()})
+		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
-		jsbytes, err := rst.GetWhatStats()
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		body := rst.GetWhatStats()
+		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatXaction:
 		var (
-			jsbytes []byte
-			err     error
-			msg     cmn.ActionMsg
+			body []byte
+			err  error
+			msg  cmn.ActionMsg
 		)
 
 		if cmn.ReadJSON(w, r, &msg) != nil {
@@ -270,7 +268,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		switch msg.Action {
 		case cmn.ActXactStats:
-			jsbytes, err = t.xactStatsRequest(kind, bucket, onlyRecent)
+			body, err = t.xactStatsRequest(kind, bucket, onlyRecent)
 			if err != nil {
 				if _, ok := err.(cmn.XactionNotFoundError); ok {
 					t.invalmsghdlrsilent(w, r, err.Error(), http.StatusNotFound)
@@ -292,7 +290,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
 		availablePaths, disabledPaths := fs.Mountpaths.Get()
@@ -309,13 +307,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			mpList.Disabled[idx] = mpath
 			idx++
 		}
-		jsbytes, err := jsoniter.Marshal(&mpList)
-		if err != nil {
-			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		body := cmn.MustMarshal(&mpList)
+		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
 		tstats := getstorstatsrunner()
 
@@ -336,14 +329,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			TStatus:     &stats.TargetStatus{GlobalRebalanceStats: globalRebStats},
 		}
 
-		jsbytes, err := jsoniter.Marshal(msg)
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		body := cmn.MustMarshal(msg)
+		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
 		diskStats := fs.Mountpaths.Iostats.GetSelectedDiskStats()
-		jsbytes, err := jsoniter.Marshal(diskStats)
-		cmn.AssertNoErr(err)
-		t.writeJSON(w, r, jsbytes, httpdaeWhat)
+		body := cmn.MustMarshal(diskStats)
+		t.writeJSON(w, r, body, httpdaeWhat)
 	default:
 		t.httprunner.httpdaeget(w, r)
 	}
@@ -1040,9 +1031,8 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if getRebStatus {
 		status := &rebStatus{}
 		t.rebManager.fillinStatus(status)
-		jsbytes, err := jsoniter.Marshal(status)
-		cmn.AssertNoErr(err)
-		if ok := t.writeJSON(w, r, jsbytes, "rebalance-status"); !ok {
+		body := cmn.MustMarshal(status)
+		if ok := t.writeJSON(w, r, body, "rebalance-status"); !ok {
 			return
 		}
 	}

@@ -799,34 +799,28 @@ func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err er
 //==========================
 func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
-		jsbytes []byte
-		err     error
+		body    []byte
 		getWhat = r.URL.Query().Get(cmn.URLParamWhat)
 	)
 	switch getWhat {
 	case cmn.GetWhatConfig:
-		jsbytes, err = jsoniter.Marshal(cmn.GCO.Get())
-		cmn.AssertNoErr(err)
+		body = cmn.MustMarshal(cmn.GCO.Get())
 	case cmn.GetWhatSmap:
-		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
-		cmn.AssertNoErr(err)
+		body = cmn.MustMarshal(h.smapowner.get())
 	case cmn.GetWhatBucketMeta:
-		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
-		cmn.AssertNoErr(err)
+		body = cmn.MustMarshal(h.bmdowner.get())
 	case cmn.GetWhatSmapVote:
 		voteInProgress := h.xactions.globalXactRunning(cmn.ActElection)
 		msg := SmapVoteMsg{VoteInProgress: voteInProgress, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
-		jsbytes, err = jsoniter.Marshal(msg)
-		cmn.AssertNoErr(err)
+		body = cmn.MustMarshal(msg)
 	case cmn.GetWhatSnode:
-		jsbytes, err = jsoniter.Marshal(h.si)
-		cmn.AssertNoErr(err)
+		body = cmn.MustMarshal(h.si)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)
 		return
 	}
-	h.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+	h.writeJSON(w, r, body, "httpdaeget-"+getWhat)
 }
 
 //=================
@@ -1044,8 +1038,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 		}
 	}
 
-	info, err := jsoniter.Marshal(req)
-	cmn.AssertNoErr(err)
+	info := cmn.MustMarshal(req)
 
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	if isproxy {

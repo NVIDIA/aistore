@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
 
@@ -15,7 +14,7 @@ import (
 )
 
 func StartDSort(baseParams *BaseParams, rs dsort.RequestSpec) (string, error) {
-	msg, err := json.Marshal(rs)
+	msg, err := jsoniter.Marshal(rs)
 	if err != nil {
 		return "", err
 	}

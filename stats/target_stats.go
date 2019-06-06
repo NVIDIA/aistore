@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats/statsd"
-	jsoniter "github.com/json-iterator/go"
 )
 
 //
@@ -112,12 +111,12 @@ func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
 }
 
-func (r *Trunner) GetWhatStats() ([]byte, error) {
+func (r *Trunner) GetWhatStats() []byte {
 	ctracker := make(copyTracker, 48)
 	r.Core.copyCumulative(ctracker)
 
 	crunner := &copyRunner{Tracker: ctracker, Capacity: r.Capacity}
-	return jsonCompat.Marshal(crunner)
+	return cmn.MustMarshal(crunner)
 }
 
 func (r *Trunner) log() (runlru bool) {
@@ -127,10 +126,8 @@ func (r *Trunner) log() (runlru bool) {
 	r.Core.copyZeroReset(r.ctracker)
 
 	r.lines = r.lines[:0]
-	b, err := jsonCompat.Marshal(r.ctracker)
-	if err == nil {
-		r.lines = append(r.lines, string(b))
-	}
+	b := cmn.MustMarshal(r.ctracker)
+	r.lines = append(r.lines, string(b))
 
 	// 2. capacity
 	availableMountpaths, _ := fs.Mountpaths.Get()
@@ -139,10 +136,8 @@ func (r *Trunner) log() (runlru bool) {
 		runlru = r.UpdateCapacityOOS(availableMountpaths)
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
-			b, err := jsoniter.Marshal(fsCapacity)
-			if err == nil {
-				r.lines = append(r.lines, mpath+": "+string(b))
-			}
+			b := cmn.MustMarshal(fsCapacity)
+			r.lines = append(r.lines, mpath+": "+string(b))
 		}
 	}
 

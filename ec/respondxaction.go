@@ -226,19 +226,17 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		// save its metadata
 		metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
-		metaBuf, err := meta.marshal()
-		if err == nil {
-			metaLen := len(metaBuf)
-			_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
+		metaBuf := meta.marshal()
+		metaLen := len(metaBuf)
+		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
 
-			if err == nil {
-				lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init()
-				if errstr != "" {
-					err = errors.New(errstr)
-				} else {
-					lom.SetSize(int64(metaLen))
-					err = lom.Persist()
-				}
+		if err == nil {
+			lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init()
+			if errstr != "" {
+				err = errors.New(errstr)
+			} else {
+				lom.SetSize(int64(metaLen))
+				err = lom.Persist()
 			}
 		}
 

@@ -138,17 +138,13 @@ func (c *putJogger) encode(req *Request) error {
 			req.LOM.Bucket, req.LOM.Objname, reqTargets, targetCnt)
 	}
 
-	metabuf, err := meta.marshal()
-	if err != nil {
-		return err
-	}
-
 	// Save metadata before encoding the object
 	metaFQN, _, errstr := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
-	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metabuf), c.buffer, false); err != nil {
+	metaBuf := meta.marshal()
+	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false); err != nil {
 		return err
 	}
 
@@ -160,17 +156,15 @@ func (c *putJogger) encode(req *Request) error {
 		if err := c.createCopies(req, meta); err != nil {
 			c.cleanup(req)
 		}
-		return err
+		return nil
 	}
 
 	// big object is erasure encoded
-	slices, err := c.sendSlices(req, meta)
-	if err != nil {
+	if slices, err := c.sendSlices(req, meta); err != nil {
 		c.freeSGL(slices)
 		c.cleanup(req)
 	}
-
-	return err
+	return nil
 }
 
 // a client has deleted the main object and requested to cleanup all its
@@ -188,10 +182,7 @@ func (c *putJogger) cleanup(req *Request) error {
 		glog.Errorf("Error removing metafile %q", fqnMeta)
 	}
 
-	request, err := c.parent.newIntraReq(reqDel, nil).Marshal()
-	if err != nil {
-		return err
-	}
+	request := c.parent.newIntraReq(reqDel, nil).Marshal()
 	hdr := transport.Header{
 		Bucket:  req.LOM.Bucket,
 		Objname: req.LOM.Objname,

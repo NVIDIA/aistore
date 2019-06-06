@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // REVS tags
@@ -252,12 +251,10 @@ func (y *metasyncer) becomeNonPrimary() {
 // main method; see top of the file; returns number of "sync" failures
 func (y *metasyncer) doSync(pairs []revspair, revsReqType int) (cnt int) {
 	var (
-		jsbytes, jsmsg []byte
-		err            error
-		refused        cluster.NodeMap
-		pairsToSend    []revspair
-		newTargetID    string
-		method         string
+		refused     cluster.NodeMap
+		pairsToSend []revspair
+		newTargetID string
+		method      string
 		//
 		payload = make(cmn.SimpleKVs)
 		smap    = y.p.smapowner.get()
@@ -266,10 +263,10 @@ func (y *metasyncer) doSync(pairs []revspair, revsReqType int) (cnt int) {
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	for tag, revs := range y.last {
-		jsbytes, err = revs.marshal()
+		revJSON, err := revs.marshal()
 		cmn.AssertNoErr(err)
-		if cowcopy, ok := y.lastclone[tag]; ok {
-			if cowcopy != string(jsbytes) {
+		if cowCopy, ok := y.lastclone[tag]; ok {
+			if cowCopy != string(revJSON) {
 				s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
 					tag, revs.version())
 				cmn.AssertMsg(false, s)
@@ -325,30 +322,28 @@ outer:
 		glog.Infof("dosync: %s, action=%s, version=%d", tag, msgInt.Action, revs.version())
 
 		y.last[tag] = revs
-		jsbytes, err = revs.marshal()
+		revJSON, err := revs.marshal()
 		cmn.AssertNoErr(err)
-		y.lastclone[tag] = string(jsbytes)
-		jsmsg, err = jsoniter.Marshal(msgInt)
-		cmn.AssertNoErr(err)
+		y.lastclone[tag] = string(revJSON)
+		msgJSON := cmn.MustMarshal(msgInt)
 
 		action, id := msgInt.Action, msgInt.NewDaemonID
 		if action == cmn.ActRegTarget {
 			newTargetID = id
 		}
 
-		payload[tag] = string(jsbytes)         // payload
-		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
+		payload[tag] = string(revJSON)           // payload
+		payload[tag+actiontag] = string(msgJSON) // action message always on the wire even when empty
 	}
-	jsbytes, err = jsoniter.Marshal(payload)
-	cmn.AssertNoErr(err)
 
 	// step 3: b-cast
+	body := cmn.MustMarshal(payload)
 	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
 	res := y.p.broadcastTo(
 		urlPath,
 		nil, // query
 		method,
-		jsbytes,
+		body,
 		smap,
 		config.Timeout.CplaneOperation*2, // making exception for this critical op
 		cmn.NetworkIntraControl,
@@ -386,7 +381,7 @@ outer:
 			return
 		}
 
-		y.handleRefused(method, urlPath, jsbytes, refused, pairsToSend, config, smap)
+		y.handleRefused(method, urlPath, body, refused, pairsToSend, config, smap)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.smapowner.get()
@@ -491,8 +486,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	payload := make(cmn.SimpleKVs)
 	pairs := make([]revspair, 0, len(y.last))
 	msgInt := y.p.newActionMsgInternalStr("metasync: handle-pending", smap, nil) // the same action msg for all
-	jsmsg, err := jsoniter.Marshal(msgInt)
-	cmn.AssertNoErr(err)
+	jsmsg := cmn.MustMarshal(msgInt)
 	for tag, revs := range y.last {
 		body, err := revs.marshal()
 		cmn.AssertNoErr(err)
@@ -501,9 +495,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 		pairs = append(pairs, revspair{revs, msgInt})
 	}
 
-	body, err := jsoniter.Marshal(payload)
-	cmn.AssertNoErr(err)
-
+	body := cmn.MustMarshal(payload)
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,

@@ -165,10 +165,7 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 		}
 
 		metadata := newTarFileHeader(header)
-		bmeta, err := jsoniter.Marshal(metadata)
-		if err != nil {
-			return extractedSize, extractedCount, err
-		}
+		bmeta := cmn.MustMarshal(metadata)
 
 		offset += t.MetadataSize()
 

@@ -5,7 +5,6 @@
 package soakprim
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -59,8 +58,8 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 		}
 
 		if missing {
-			eStr, _ := json.Marshal(expBuckets)
-			aStr, _ := json.Marshal(actBuckets)
+			eStr := cmn.MustMarshal(expBuckets)
+			aStr := cmn.MustMarshal(actBuckets)
 			cmn.AssertNoErr(fmt.Errorf("missing buckets in pre, expected: %v, actual: %v", string(eStr), string(aStr)))
 		}
 

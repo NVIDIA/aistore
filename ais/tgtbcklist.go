@@ -191,7 +191,8 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string,
 	bckIsLocal bool, actionMsg *actionMsgInternal) (tag string, ok bool) {
 	var (
-		jsbytes []byte
+		err     error
+		body    []byte
 		errstr  string
 		errcode int
 	)
@@ -207,16 +208,9 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
-	getMsgJSON, err := jsoniter.Marshal(actionMsg.Value)
-	if err != nil {
-		errstr := fmt.Sprintf("Unable to marshal 'value' in request: %v", actionMsg.Value)
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
 	var msg cmn.SelectMsg
-	err = jsoniter.Unmarshal(getMsgJSON, &msg)
-	if err != nil {
+	getMsgJSON := cmn.MustMarshal(actionMsg.Value)
+	if err := jsoniter.Unmarshal(getMsgJSON, &msg); err != nil {
 		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -230,10 +224,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	msg.Fast = false // fast mode does not apply to Cloud buckets
 	if useCache {
 		tag = "cloud cached"
-		jsbytes, errstr = t.listCachedObjects(bucket, &msg, false /* local */)
+		body, errstr = t.listCachedObjects(bucket, &msg, false /* local */)
 	} else {
 		tag = "cloud"
-		jsbytes, err, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
+		body, err, errcode = getcloudif().listbucket(t.contextWithAuth(r.Header), bucket, &msg)
 		if err != nil {
 			errstr = fmt.Sprintf("error listing cloud bucket %s: %d(%v)", bucket, errcode, err)
 		}
@@ -242,22 +236,18 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	ok = t.writeJSON(w, r, jsbytes, "listbucket")
+	ok = t.writeJSON(w, r, body, "listbucket")
 	return
 }
 
 // should not be called for local buckets
-func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg,
-	bckIsLocal bool) (outbytes []byte, errstr string) {
-	reslist, err := t.prepareLocalObjectList(bucket, msg, bckIsLocal)
+func (t *targetrunner) listCachedObjects(bucket string, msg *cmn.SelectMsg, bckIsLocal bool) (body []byte, errstr string) {
+	objList, err := t.prepareLocalObjectList(bucket, msg, bckIsLocal)
 	if err != nil {
 		return nil, err.Error()
 	}
 
-	outbytes, err = jsoniter.Marshal(reslist)
-	if err != nil {
-		return nil, err.Error()
-	}
+	body = cmn.MustMarshal(objList)
 	return
 }
 
@@ -460,9 +450,8 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 
 	if taskAction == cmn.ListTaskResult {
 		// return the final result only if it is requested explicitly
-		jsbytes, err := jsoniter.Marshal(st.Result)
-		cmn.AssertNoErr(err)
-		return t.writeJSON(w, r, jsbytes, "listbucket")
+		body := cmn.MustMarshal(st.Result)
+		return t.writeJSON(w, r, body, "listbucket")
 	}
 
 	// default action: return task status 200 = successfully completed

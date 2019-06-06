@@ -26,10 +26,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		response interface{}
-		respErr  error
-
-		statusCode = http.StatusBadRequest
+		response   interface{}
+		respErr    error
+		statusCode int
 	)
 
 	downloaderXact, err := t.xactions.renewDownloader(t)
@@ -118,8 +117,7 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if response != nil {
-		b, err := jsoniter.Marshal(response)
-		cmn.AssertNoErr(err)
+		b := cmn.MustMarshal(response)
 		_, err = w.Write(b)
 		if err != nil {
 			glog.Errorf("Failed to write to http response: %s.", err.Error())

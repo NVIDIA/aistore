@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -71,10 +70,7 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 		}
 
 		metadata := newTarFileHeader(header)
-		bmeta, err := jsoniter.Marshal(metadata)
-		if err != nil {
-			return extractedSize, extractedCount, err
-		}
+		bmeta := cmn.MustMarshal(metadata)
 
 		if err := tw.WriteHeader(header); err != nil {
 			return extractedSize, extractedCount, err

@@ -893,9 +893,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 				Record:    rec,
 				RecordObj: obj,
 			}
-			opaque, err := jsoniter.Marshal(req)
-			cmn.AssertNoErr(err)
-
+			opaque := cmn.MustMarshal(req)
 			hdr := transport.Header{
 				Opaque: opaque,
 			}

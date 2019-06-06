@@ -40,7 +40,7 @@ func clearDownloadList(t *testing.T) {
 
 	for k, v := range listDownload {
 		if v.NumPending > 0 {
-			tutils.Logf("Cancelling: %v...\n", k)
+			tutils.Logf("Canceling: %v...\n", k)
 			err := api.DownloadAbort(tutils.DefaultBaseAPIParams(t), k)
 			tassert.CheckFatal(t, err)
 		}
@@ -198,7 +198,7 @@ func TestDownloadSingle(t *testing.T) {
 	}
 
 	if err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id); err != nil {
-		t.Errorf("got error when cancelling second time: %v", err)
+		t.Errorf("got error when canceling second time: %v", err)
 	}
 
 	if err = api.DownloadRemove(tutils.DefaultBaseAPIParams(t), id); err != nil {
@@ -454,7 +454,7 @@ func TestDownloadCloud(t *testing.T) {
 	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 	if !resp.Aborted {
-		t.Errorf("cancelled cloud download %v not marked", id)
+		t.Errorf("canceled cloud download %v not marked", id)
 	}
 
 	checkDownloadList(t, 2)

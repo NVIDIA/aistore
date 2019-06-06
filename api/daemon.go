@@ -37,7 +37,7 @@ func GetMountpaths(baseParams *BaseParams) (*cmn.MountpathList, error) {
 func AddMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountPath})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mountPath})
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func AddMountpath(baseParams *BaseParams, mountPath string) error {
 func RemoveMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountPath})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mountPath})
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func RemoveMountpath(baseParams *BaseParams, mountPath string) error {
 func EnableMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountPath})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mountPath})
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func EnableMountpath(baseParams *BaseParams, mountPath string) error {
 func DisableMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountPath})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mountPath})
 	if err != nil {
 		return err
 	}

@@ -1021,13 +1021,9 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 		Put: jsonStatsFromReq(s.put),
 		Cfg: jsonStatsFromReq(s.getConfig),
 	}
-	jsonOutput, err := json.Marshal(jStats)
-	if err != nil {
-		fmt.Fprint(os.Stderr, "Error during converting stats to json, skipping")
-	}
 
-	fmt.Fprintln(to)
-	fmt.Fprint(to, string(jsonOutput))
+	jsonOutput := cmn.MustMarshal(jStats)
+	fmt.Fprintf(to, "\n%s", string(jsonOutput))
 	// print comma by default
 	if len(withcomma) == 0 || withcomma[0] {
 		fmt.Fprint(to, ",")

@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 type Vote string
@@ -367,8 +366,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	resch := make(chan voteResult, chansize)
 
 	msg := VoteMessage{Record: *vr}
-	jsbytes, err := jsoniter.Marshal(&msg)
-	cmn.AssertNoErr(err)
+	body := cmn.MustMarshal(&msg)
 
 	q := url.Values{}
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
@@ -376,7 +374,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy),
 		q,
 		http.MethodGet,
-		jsbytes,
+		body,
 		smap,
 		cmn.GCO.Get().Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
@@ -404,7 +402,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 }
 
 func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
-	body, err := jsoniter.Marshal(&VoteResultMessage{
+	body := cmn.MustMarshal(&VoteResultMessage{
 		VoteResult{
 			Candidate: vr.Candidate,
 			Primary:   vr.Primary,
@@ -413,7 +411,6 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			Initiator: p.si.DaemonID,
 		},
 	})
-	cmn.AssertNoErr(err)
 
 	smap := p.smapowner.get()
 	res := p.broadcastTo(
@@ -544,8 +541,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) error {
 	msg := VoteInitiationMessage{Request: *vr}
-	body, err := jsoniter.Marshal(&msg)
-	cmn.AssertNoErr(err)
+	body := cmn.MustMarshal(&msg)
 
 	args := callArgs{
 		si: nextPrimaryProxy,

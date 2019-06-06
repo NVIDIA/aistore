@@ -1621,9 +1621,8 @@ func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) 
 	}
 	slab.Free(buf)
 
-	jsbytes, err := jsoniter.Marshal(bmdXattr)
-	cmn.AssertNoErr(err)
-	t.writeJSON(w, r, jsbytes, "getbucketsxattr")
+	body := cmn.MustMarshal(bmdXattr)
+	t.writeJSON(w, r, body, "getbucketsxattr")
 }
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
@@ -1649,9 +1648,8 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	}
 	bucketNames.Cloud = buckets
 
-	jsbytes, err := jsoniter.Marshal(bucketNames)
-	cmn.AssertNoErr(err)
-	t.writeJSON(w, r, jsbytes, "getbucketnames")
+	body := cmn.MustMarshal(bucketNames)
+	t.writeJSON(w, r, body, "getbucketnames")
 }
 
 func (t *targetrunner) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {

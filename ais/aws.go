@@ -22,7 +22,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -165,7 +164,7 @@ func awsIsVersionSet(version *string) bool {
 // bucket operations
 //
 //==================
-func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, err error, errcode int) {
+func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (body []byte, err error, errcode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -251,8 +250,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		reslist.PageMarker = reslist.Entries[len(reslist.Entries)-1].Name
 	}
 
-	jsbytes, err = jsoniter.Marshal(reslist)
-	cmn.AssertNoErr(err)
+	body = cmn.MustMarshal(reslist)
 	return
 }
 

@@ -229,8 +229,8 @@ msg := &api.ActionMsg{Action: ais.ActListObjects}
 fullbucketlist := &ais.BucketList{Entries: make([]*ais.BucketEntry, 0)}
 for {
     // 1. First, send the request
-    jsbytes, _ := json.Marshal(msg)
-    r, _ := http.DefaultClient.Post(url, "application/json", bytes.NewBuffer(jsbytes))
+    body, _ := json.Marshal(msg)
+    r, _ := http.DefaultClient.Post(url, "application/json", bytes.NewBuffer(body))
 
     defer func(r *http.Response){
         r.Body.Close()

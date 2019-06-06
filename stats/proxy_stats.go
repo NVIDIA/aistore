@@ -54,10 +54,10 @@ func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.Core.statsTime = newConf.Periodic.StatsTime
 }
 
-func (r *Prunner) GetWhatStats() ([]byte, error) {
+func (r *Prunner) GetWhatStats() []byte {
 	ctracker := make(copyTracker, 24)
 	r.Core.copyCumulative(ctracker)
-	return jsonCompat.Marshal(ctracker)
+	return cmn.MustMarshal(ctracker)
 }
 
 // statslogger interface impl
@@ -65,10 +65,8 @@ func (r *Prunner) log() (runlru bool) {
 	// copy stats values while skipping zeros; reset latency stats
 	r.Core.copyZeroReset(r.ctracker)
 
-	b, err := jsonCompat.Marshal(r.ctracker)
-	if err == nil {
-		glog.Infoln(string(b))
-	}
+	b := cmn.MustMarshal(r.ctracker)
+	glog.Infoln(string(b))
 	return
 }
 

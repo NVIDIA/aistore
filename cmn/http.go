@@ -254,3 +254,10 @@ func ReqWithContext(method, url string, body []byte) (*http.Request, context.Con
 	req = req.WithContext(ctx)
 	return req, ctx, cancel, nil
 }
+
+// MustMarshal marshals v and panics if error occurs.
+func MustMarshal(v interface{}) []byte {
+	b, err := jsoniter.Marshal(v)
+	AssertNoErr(err)
+	return b
+}

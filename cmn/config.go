@@ -546,7 +546,7 @@ type DSortConf struct {
 }
 
 type FSPathsConf struct {
-	Paths map[string]struct{}
+	Paths map[string]struct{} `json:"paths,omitempty"`
 }
 
 func SetLogLevel(config *Config, loglevel string) (err error) {
@@ -985,14 +985,14 @@ func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
+func (c *FSPathsConf) MarshalJSON() (data []byte) {
 	m := make(map[string]string)
 
 	for k := range c.Paths {
 		m[k] = " "
 	}
 
-	return jsoniter.Marshal(m)
+	return MustMarshal(m)
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {

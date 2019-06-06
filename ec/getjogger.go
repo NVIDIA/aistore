@@ -196,11 +196,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 	// try read a replica from targets one by one until the replica is got
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
-		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).Marshal()
-		if err != nil {
-			glog.Errorf("Failed to marshal %v", err)
-			continue
-		}
+		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w := mem2.NewSGL(cmn.KiB)
 		if err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
@@ -239,11 +235,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		return err
 	}
 
-	b, err := jsoniter.Marshal(meta)
-	if err != nil {
-		writer.Free()
-		return err
-	}
+	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
 		writer.Free()
@@ -266,11 +258,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 
 	for node := range nodes {
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
-		iReqBuf, err := c.parent.newIntraReq(reqGet, nil).Marshal()
-		if err != nil {
-			glog.Errorf("Failed to marshal %v", err)
-			continue
-		}
+		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
 		w, err := cmn.CreateFile(tmpFQN)
 		if err != nil {
@@ -305,10 +293,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		return err
 	}
 
-	b, err := jsoniter.Marshal(meta)
-	if err != nil {
-		return err
-	}
+	b := cmn.MustMarshal(meta)
 	metaFQN := fs.CSM.GenContentFQN(objFQN, MetaType, "")
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(b), buffer, false); err != nil {
 		<-c.diskCh
@@ -385,11 +370,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 
 	iReq := c.parent.newIntraReq(reqGet, meta)
 	iReq.IsSlice = true
-	request, err := iReq.Marshal()
-	if err != nil {
-		freeSlices(slices)
-		return nil, nil, err
-	}
+	request := iReq.Marshal()
 	hdr := transport.Header{
 		Bucket:  req.LOM.Bucket,
 		Objname: req.LOM.Objname,
@@ -621,11 +602,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	// save object's metadata locally
 	mainMeta := *meta
 	mainMeta.SliceID = 0
-	metaBuf, err := mainMeta.marshal()
+	metaBuf := mainMeta.marshal()
 	metaSize := len(metaBuf)
-	if err != nil {
-		return restored, err
-	}
+
 	metaFQN := fs.CSM.GenContentFQN(mainFQN, MetaType, "")
 	if glog.V(4) {
 		glog.Infof("Saving main meta %s/%s to %q", req.LOM.Bucket, req.LOM.Objname, metaFQN)
@@ -880,7 +859,7 @@ func (c *getJogger) restore(req *Request, toDisk bool, buffer []byte) error {
 // always use SGL. No `toDisk` check required
 func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]*Metadata, err error) {
 	metaWG := cmn.NewTimeoutGroup()
-	request, _ := c.parent.newIntraReq(ReqMeta, nil).Marshal()
+	request := c.parent.newIntraReq(ReqMeta, nil).Marshal()
 	hdr := transport.Header{
 		Bucket:  req.LOM.Bucket,
 		Objname: req.LOM.Objname,

@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -158,7 +157,7 @@ func parseCmdLine() {
 }
 
 func writeParams() {
-	b, _ := jsoniter.Marshal(soakcmn.Params)
+	b := cmn.MustMarshal(soakcmn.Params)
 	report.Writef(report.SummaryLevel, "----- Started Soak With Params -----\n")
 	report.Writef(report.SummaryLevel, "%s\n", string(b))
 	report.Writef(report.SummaryLevel, "----- Started Soak With Params -----\n")

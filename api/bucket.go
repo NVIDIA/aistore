@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -614,7 +613,7 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 // Handles the List/Range operations (delete, prefetch)
 func doListRangeRequest(baseParams *BaseParams, bucket, bckProvider, action, method string, listrangemsg interface{}) error {
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
-	b, err := json.Marshal(actionMsg)
+	b, err := jsoniter.Marshal(actionMsg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal cmn.ActionMsg, err: %v", err)
 	}

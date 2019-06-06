@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
 	jwt "github.com/dgrijalva/jwt-go"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -236,8 +235,8 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 	}
 
 	tokenList := ais.TokenList{Tokens: tokens}
-	injson, _ := jsoniter.Marshal(tokenList)
-	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, injson); err != nil {
+	body := cmn.MustMarshal(tokenList)
+	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, body); err != nil {
 		glog.Errorf("Failed to send token list: %v", err)
 	}
 }

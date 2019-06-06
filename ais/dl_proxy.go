@@ -82,11 +82,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body 
 }
 
 func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, msg *cmn.DlAdminBody) ([]byte, int, error) {
-	body, err := jsoniter.Marshal(msg)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
-	}
-
+	body := cmn.MustMarshal(msg)
 	responses := p.broadcastDownloadRequest(method, path, body, url.Values{})
 
 	notFoundCnt := 0
@@ -127,8 +123,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 				}
 			}
 
-			result, err := jsoniter.Marshal(listDownloads)
-			cmn.AssertNoErr(err)
+			result := cmn.MustMarshal(listDownloads)
 			return result, http.StatusOK, nil
 		}
 
@@ -173,11 +168,7 @@ func (p *proxyrunner) broadcastDownloadAdminRequest(method string, path string, 
 			Scheduled:     scheduled,
 		}
 
-		respJSON, err := jsoniter.Marshal(resp)
-		if err != nil {
-			return nil, http.StatusInternalServerError, err
-		}
-
+		respJSON := cmn.MustMarshal(resp)
 		return respJSON, http.StatusOK, nil
 	case http.MethodDelete:
 		response := responses[0]
@@ -292,7 +283,7 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.respondWithID(w, r, id)
+	p.respondWithID(w, id)
 }
 
 // Helper methods
@@ -330,20 +321,14 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	return true
 }
 
-func (p *proxyrunner) respondWithID(w http.ResponseWriter, r *http.Request, id string) {
+func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
 	resp := cmn.DlPostResp{
 		ID: id,
 	}
 
-	b, err := jsoniter.Marshal(resp)
-	if err != nil {
-		p.invalmsghdlr(w, r, "error marshalling response", http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(b)
-	if err != nil {
+	b := cmn.MustMarshal(resp)
+	if _, err := w.Write(b); err != nil {
 		glog.Errorf("Failed to write to http response: %v.", err)
 	}
 }
@@ -376,17 +361,13 @@ func (p *proxyrunner) handleUnknownCB(bucket string) error {
 
 	// This is not the primary proxy - call the primary to update the global CBmap
 
-	actionMsgBytes, err := jsoniter.Marshal(actionMsg)
-	if err != nil {
-		return fmt.Errorf("error marshalling ActionMsg: %v", err)
-	}
-
+	body := cmn.MustMarshal(actionMsg)
 	args := callArgs{
 		si: smap.ProxySI,
 		req: reqArgs{
 			method: http.MethodPost,
 			path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			body:   actionMsgBytes,
+			body:   body,
 		},
 		timeout: defaultTimeout,
 	}

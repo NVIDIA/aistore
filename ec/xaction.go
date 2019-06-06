@@ -178,12 +178,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 		Objname:  objname,
 		ObjAttrs: objAttrs,
 	}
-	if rHdr.Opaque, err = ireq.Marshal(); err != nil {
-		if fh != nil {
-			fh.Close()
-		}
-		return err
-	}
+	rHdr.Opaque = ireq.Marshal()
 
 	r.ObjectsInc()
 	r.BytesAdd(lom.Size())
@@ -327,10 +322,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	req := r.newIntraReq(src.reqType, src.metadata)
 	req.IsSlice = src.isSlice
 
-	putData, err := req.Marshal()
-	if err != nil {
-		return err
-	}
+	putData := req.Marshal()
 	objAttrs := transport.ObjectAttrs{
 		Size:    src.size,
 		Version: lom.Version(),

@@ -145,11 +145,6 @@ type (
 )
 
 //
-// globals
-//
-var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
-
-//
 // CoreStats
 //
 func (s *CoreStats) init(size int) {

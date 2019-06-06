@@ -5,7 +5,6 @@
 package report
 
 import (
-	"encoding/json"
 	"sync"
 	"time"
 
@@ -102,10 +101,8 @@ func (rctx *ReportContext) FlushRecipePhase() {
 		stat.RecipeName = rctx.currentRecipe
 		stat.RecipeNum = rctx.recipeNumber[stat.RecipeName]
 
-		b, err := json.Marshal(stat)
-		if err == nil {
-			Writef(DetailLevel, string(b))
-		}
+		b := cmn.MustMarshal(stat)
+		Writef(DetailLevel, string(b))
 
 		detailWriter.WriteStat(stat)
 

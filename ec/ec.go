@@ -248,21 +248,16 @@ func (s *slice) release() {
 	}
 }
 
-func (r *IntraReq) Marshal() ([]byte, error) {
-	return jsoniter.Marshal(r)
+func (r *IntraReq) Marshal() []byte {
+	return cmn.MustMarshal(r)
 }
 
 func (r *IntraReq) Unmarshal(b []byte) error {
 	return jsoniter.Unmarshal(b, r)
 }
 
-func (m *Metadata) marshal() ([]byte, error) {
-	return jsoniter.Marshal(m)
-}
-
-//nolint:unused
-func (m *Metadata) unmarshal(b []byte) error {
-	return jsoniter.Unmarshal(b, m)
+func (m *Metadata) marshal() []byte {
+	return cmn.MustMarshal(m)
 }
 
 var (
