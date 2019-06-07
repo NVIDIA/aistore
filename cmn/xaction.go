@@ -100,11 +100,11 @@ func (xact *XactBase) String() string {
 	stime := xact.StartTime()
 	stimestr := stime.Format(timeStampFormat)
 	if !xact.Finished() {
-		return fmt.Sprintf("%s:%d started %s", xact.Kind(), xact.ID(), stimestr)
+		return fmt.Sprintf("%s(%d) started %s", xact.Kind(), xact.ID(), stimestr)
 	}
 	etime := xact.EndTime()
 	d := etime.Sub(stime)
-	return fmt.Sprintf("%s:%d started %s ended %s (%v)", xact.Kind(), xact.ID(), stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s(%d) started %s ended %s (%v)", xact.Kind(), xact.ID(), stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {

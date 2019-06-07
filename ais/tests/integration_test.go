@@ -6,6 +6,7 @@ package ais_test
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
@@ -480,7 +481,6 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
-	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
 
 	// Register target (bring cluster to normal state)
 	m.reregisterTarget(target)
@@ -528,21 +528,19 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		tutils.Logf("Registering target: %s\n", targets[0].URL(cmn.NetworkPublic))
+		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
 		m.wg.Done()
-		tutils.Logf("Registered target %s again\n", targets[0].URL(cmn.NetworkPublic))
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		tutils.Logf("Unregistering target: %s\n", targets[1].URL(cmn.NetworkPublic))
+		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterTarget(m.proxyURL, targets[1].DaemonID)
 		tassert.CheckFatal(t, err)
 		m.wg.Done()
-		tutils.Logf("Unregistered target %s\n", targets[1].URL(cmn.NetworkPublic))
 	}()
 
 	// Wait for everything to end
@@ -561,7 +559,7 @@ func TestAckRebalance(t *testing.T) {
 	var (
 		md = metadata{
 			t:               t,
-			num:             100000,
+			num:             30000,
 			numGetsEachFile: 1,
 		}
 	)
@@ -590,7 +588,7 @@ func TestAckRebalance(t *testing.T) {
 	// Start putting files into bucket
 	md.puts()
 
-	tutils.Logf("Register target: %s\n", target.URL(cmn.NetworkPublic))
+	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.RegisterTarget(md.proxyURL, target, md.smap)
 	tassert.CheckFatal(t, err)
 
@@ -599,6 +597,79 @@ func TestAckRebalance(t *testing.T) {
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 	md.wg.Wait()
 
+	md.wg.Add(md.num * md.numGetsEachFile)
+	md.gets()
+	md.wg.Wait()
+
+	md.assertClusterState()
+}
+
+func TestStressRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := 1; i <= 3; i++ {
+		tutils.Logf("Test #%d ======\n", i)
+		testStressRebalance(t, rand, i == 1, i == 3)
+	}
+}
+func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool) {
+	var (
+		md = metadata{
+			t:               t,
+			num:             10000,
+			numGetsEachFile: 1,
+		}
+	)
+	md.saveClusterState()
+	if md.originalTargetCount < 4 {
+		t.Fatalf("Must have 4 or more targets in the cluster, have only %d", md.originalTargetCount)
+	}
+	tgts := tutils.ExtractTargetNodes(md.smap)
+	i1 := rand.Intn(len(tgts))
+	i2 := (i1 + 1) % len(tgts)
+	target1, target2 := tgts[i1], tgts[i2]
+
+	// Create local bucket
+	if createlb {
+		tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	}
+	if destroylb {
+		defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
+	}
+
+	// Unregister a target
+	tutils.Logf("Unregister targets: %s and %s\n", target1.URL(cmn.NetworkPublic), target2.URL(cmn.NetworkPublic))
+	err := tutils.UnregisterTarget(md.proxyURL, target1.DaemonID)
+	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
+	err = tutils.UnregisterTarget(md.proxyURL, target2.DaemonID)
+	tassert.CheckFatal(t, err)
+	n := len(getClusterMap(t, md.proxyURL).Tmap)
+	if n != md.originalTargetCount-2 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-2, n)
+	}
+
+	// Start putting files into bucket
+	md.puts()
+
+	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
+	err = tutils.RegisterTarget(md.proxyURL, target1, md.smap)
+	tassert.CheckFatal(t, err)
+
+	time.Sleep(time.Duration(rand.Intn(10))*time.Second + time.Millisecond*100)
+
+	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
+	err = tutils.RegisterTarget(md.proxyURL, target2, md.smap)
+	tassert.CheckFatal(t, err)
+
+	// wait
+	baseParams := tutils.BaseAPIParams(md.proxyURL)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	// read
 	md.wg.Add(md.num * md.numGetsEachFile)
 	md.gets()
 	md.wg.Wait()
@@ -644,21 +715,19 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		tutils.Logf("trying to register target: %s\n", targets[0].URL(cmn.NetworkPublic))
+		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
 		m.wg.Done()
-		tutils.Logf("registered target %s again\n", targets[0].URL(cmn.NetworkPublic))
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		tutils.Logf("trying to unregister target: %s\n", targets[1].URL(cmn.NetworkPublic))
+		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterTarget(m.proxyURL, targets[1].DaemonID)
 		tassert.CheckFatal(t, err)
 		m.wg.Done()
-		tutils.Logf("unregistered target %s\n", targets[1].URL(cmn.NetworkPublic))
 	}()
 
 	// Wait for everything to end
@@ -704,7 +773,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Unregister a target
-	tutils.Logf("Trying to unregister target: %s\n", target.URL(cmn.NetworkPublic))
+	tutils.Logf("Unregister target %s\n", target.URL(cmn.NetworkPublic))
 	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
@@ -717,11 +786,10 @@ func TestPutDuringRebalance(t *testing.T) {
 	go func() {
 		// sleep some time to wait for PUT operations to begin
 		time.Sleep(3 * time.Second)
-		tutils.Logf("Trying to register target: %s\n", target.URL(cmn.NetworkPublic))
+		tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
 		err = tutils.RegisterTarget(m.proxyURL, target, m.smap)
 		tassert.CheckFatal(t, err)
 		m.wg.Done()
-		tutils.Logf("Target %s is registered again.\n", target.URL(cmn.NetworkPublic))
 	}()
 
 	m.puts()
@@ -785,11 +853,12 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
+	tutils.Logf("Disable mountpath on target %s\n", targetURL)
 	err = api.DisableMountpath(baseParams, mpath)
 	tassert.CheckFatal(t, err)
 
-	// Unregister a target
-	tutils.Logf("Trying to unregister target: %s\n", killTarget.URL(cmn.NetworkPublic))
+	// Unregister another target
+	tutils.Logf("Unregister target %s\n", killTarget.URL(cmn.NetworkPublic))
 	err = tutils.UnregisterTarget(m.proxyURL, killTarget.DaemonID)
 	tassert.CheckFatal(t, err)
 	smap, err := tutils.WaitForPrimaryProxy(
@@ -961,7 +1030,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	md.wg.Add(md.num * md.numGetsEachFile)
 	md.gets()
 
-	tutils.Logf("Trying to register target: %s\n", target.URL(cmn.NetworkPublic))
+	tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
 	err = tutils.RegisterTarget(md.proxyURL, target, md.smap)
 	tassert.CheckFatal(t, err)
 
@@ -1516,7 +1585,6 @@ func TestAtimeRebalance(t *testing.T) {
 			num:             2000,
 			numGetsEachFile: 2,
 		}
-		bucketProps = defaultBucketProps()
 	)
 
 	// Initialize metadata
@@ -1529,21 +1597,12 @@ func TestAtimeRebalance(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
-	// Enable bucket level LRU properties
-	bucketProps.LRU.Enabled = true
-	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), m.bucket, bucketProps)
-	tassert.CheckFatal(t, err)
-
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 
 	// Unregister a target
-	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
+	tutils.Logf("Unregister target %s\n", target.URL(cmn.NetworkPublic))
+	err := tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
-	if n != m.originalTargetCount-1 {
-		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
-	}
-	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
 
 	// Put random files
 	m.puts()
@@ -1580,12 +1639,12 @@ func TestAtimeRebalance(t *testing.T) {
 	bucketListReb, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tassert.CheckFatal(t, err)
 
-	itemCount := 0
+	itemCount, itemCountOk := len(bucketListReb.Entries), 0
+	l := len(bucketList.Entries)
+	if itemCount != l {
+		t.Errorf("The number of objects mismatch: before %d, after %d", len(bucketList.Entries), itemCount)
+	}
 	for _, entry := range bucketListReb.Entries {
-		if entry.Status != cmn.ObjStatusOK {
-			continue
-		}
-		itemCount++
 		atime, ok := objNames[entry.Name]
 		if !ok {
 			t.Errorf("Object %q not found", entry.Name)
@@ -1594,10 +1653,12 @@ func TestAtimeRebalance(t *testing.T) {
 		if atime != entry.Atime {
 			t.Errorf("Atime mismatched for %s: before %q, after %q", entry.Name, atime, entry.Atime)
 		}
+		if entry.Status == cmn.ObjStatusOK {
+			itemCountOk++
+		}
 	}
-	if itemCount != len(bucketList.Entries) {
-		t.Errorf("The number of objects mismatch: before %d, after %d",
-			len(bucketList.Entries), itemCount)
+	if itemCountOk != l {
+		t.Errorf("Wrong number of objects with status OK: %d (expecting %d)", itemCountOk, l)
 	}
 }
 

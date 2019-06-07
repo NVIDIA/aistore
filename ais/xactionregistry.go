@@ -11,13 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/lru"
-
-	"github.com/NVIDIA/aistore/downloader"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/lru"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -30,7 +28,7 @@ type (
 	xactGlobalReb struct {
 		xactRebBase
 		cmn.NonmountpathXact
-		smapVersion int64 // smap version on which this rebalance has started
+		smapVersion int64 // Smap version on which this rebalance has started
 	}
 	xactLocalReb struct {
 		xactRebBase
@@ -126,12 +124,10 @@ func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...s
 		go func(b string) {
 			defer wg.Done()
 			val, ok := r.bucketXacts.Load(b)
-
 			if !ok {
-				glog.Warningf("Can't abort nonexistent xactions for bucket %s", b)
+				// nothing to abort
 				return
 			}
-
 			bXacts := val.(*bucketXactions)
 			bXacts.AbortAll()
 			if removeFromRegistry {
@@ -187,23 +183,21 @@ func (r *xactionsRegistry) abortAll() bool {
 	return sleep
 }
 
-func (r *xactionsRegistry) rebStatus(global bool) (aborted, running bool) {
-	xactKind := cmn.ActLocalReb
-	if global {
-		xactKind = cmn.ActGlobalReb
-	}
-	pmarker := persistentMarker(xactKind)
+func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
+	cmn.Assert(kind == cmn.ActGlobalReb || kind == cmn.ActLocalReb)
+	pmarker := persistentMarker(kind)
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
 	}
-
-	entry := r.GetL(xactKind)
+	entry := r.GetL(kind)
 	if entry == nil {
 		return
 	}
-
 	running = !entry.Get().Finished()
+	if running {
+		aborted = false
+	}
 	return
 }
 
@@ -275,15 +269,16 @@ func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[in
 	}), nil
 }
 
-func (r *xactionsRegistry) abortGlobalXact(kind string) {
+func (r *xactionsRegistry) abortGlobalXact(kind string) (aborted bool) {
 	entry := r.GetL(kind)
 	if entry == nil {
 		return
 	}
-
 	if !entry.Get().Finished() {
 		entry.Get().Abort()
+		aborted = true
 	}
+	return
 }
 
 // Returns stats of xaction with given 'kind' on a given bucket
@@ -512,7 +507,7 @@ func (r *xactionsRegistry) renewLRU() *lru.Xaction {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactRebBase {
+func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactGlobalReb {
 	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
 	stored, _ := r.RenewGlobalXact(e)
 	entry := r.GetL(e.Kind()).(*globalRebEntry)
@@ -521,11 +516,10 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xac
 		// previous global rebalance is still running
 		return nil
 	}
-
-	return &entry.xact.xactRebBase
+	return entry.xact
 }
 
-func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
+func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
 	e := &localRebEntry{runnerCnt: runnerCnt}
 	stored, _ := r.RenewGlobalXact(e)
 	entry := r.GetL(e.Kind()).(*localRebEntry)
@@ -534,8 +528,7 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactRebBase {
 		// previous local rebalance is still running
 		return nil
 	}
-
-	return &entry.xact.xactRebBase
+	return entry.xact
 }
 
 func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {

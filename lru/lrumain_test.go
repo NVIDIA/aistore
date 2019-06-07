@@ -288,6 +288,7 @@ var _ = Describe("LRU tests", func() {
 type statsLRUMock struct{}
 
 func (s *statsLRUMock) Add(name string, val int64)             {}
+func (s *statsLRUMock) Get(name string) int64                  { return 0 }
 func (s *statsLRUMock) AddErrorHTTP(method string, val int64)  {}
 func (s *statsLRUMock) AddMany(namedVal64 ...stats.NamedVal64) {}
 func (s *statsLRUMock) Register(name string, kind string)      {}

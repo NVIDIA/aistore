@@ -53,9 +53,6 @@ const (
 	getFromNeighSleep     = 300 * time.Millisecond
 	getFromNeighAfterJoin = time.Second * 30
 
-	rebalanceStreamName = "rebalance"
-	rebalanceAcksName   = "remwack" // TODO -- FIXME -- TODO: make it generic remote-write-acknowledgment
-
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
@@ -86,14 +83,11 @@ type (
 		spid      string
 		pid       int64
 	}
-	thealthstatus struct {
-		IsRebalancing bool `json:"is_rebalancing"`
-		// NOTE: include core stats and other info as needed
-	}
 	renamectx struct {
 		bucketFrom string
 		bucketTo   string
 		t          *targetrunner
+		pid        string
 	}
 	regstate struct {
 		sync.Mutex
@@ -222,7 +216,7 @@ func (t *targetrunner) Run() error {
 	t.smapowner.put(smap)
 
 	if err := t.si.Validate(); err != nil {
-		cmn.ExitLogf("%s", err)
+		cmn.ExitLogf("%v", err)
 	}
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
@@ -245,17 +239,17 @@ func (t *targetrunner) Run() error {
 
 	// register object type and workfile type
 	if err := fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		cmn.ExitLogf("%s", err)
+		cmn.ExitLogf("%v", err)
 	}
 	if err := fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		cmn.ExitLogf("%s", err)
+		cmn.ExitLogf("%v", err)
 	}
 
 	if err := fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
-		cmn.ExitLogf("%s", err)
+		cmn.ExitLogf("%v", err)
 	}
 	if err := fs.Mountpaths.CreateBucketDir(cmn.CloudBs); err != nil {
-		cmn.ExitLogf("%s", err)
+		cmn.ExitLogf("%v", err)
 	}
 	t.detectMpathChanges()
 
@@ -303,9 +297,8 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	if err := t.setupRebalanceManager(config); err != nil {
-		cmn.ExitLogf("%s", err)
-	}
+	// rebalance Rx endpoints
+	t.setupRebalanceRx(config)
 
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
@@ -315,7 +308,7 @@ func (t *targetrunner) Run() error {
 	ec.Init()
 	t.ecmanager = newECM(t)
 
-	aborted, _ := t.xactions.rebStatus(false)
+	aborted, _ := t.xactions.isRebalancing(cmn.ActLocalReb)
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")
@@ -332,54 +325,22 @@ func (t *targetrunner) Run() error {
 	return nil
 }
 
-func (t *targetrunner) setupRebalanceManager(config *cmn.Config) error {
-	t.rebManager = &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
-	netd, netc := cmn.NetworkPublic, cmn.NetworkPublic
+func (t *targetrunner) setupRebalanceRx(config *cmn.Config) {
+	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
-		netd = cmn.NetworkIntraData
+		reb.netd = cmn.NetworkIntraData
 	}
 	if config.Net.UseIntraControl {
-		netc = cmn.NetworkIntraControl
+		reb.netc = cmn.NetworkIntraControl
 	}
-	if config.Rebalance.Multiplier == 0 {
-		config.Rebalance.Multiplier = 1
-	} else if config.Rebalance.Multiplier > 8 {
-		glog.Errorf("%s: stream-and-mp-jogger multiplier=%d - misconfigured?", t.si.Name(), config.Rebalance.Multiplier)
+	if _, err := transport.Register(reb.netd, rebalanceStreamName, reb.recvObj); err != nil {
+		cmn.ExitLogf("%v", err)
 	}
-	//
-	// objects
-	//
-	if _, err := transport.Register(netd, rebalanceStreamName, t.rebManager.recvRebalanceObj); err != nil {
-		return err
+	if _, err := transport.Register(reb.netc, rebalanceAcksName, reb.recvAck); err != nil {
+		cmn.ExitLogf("%v", err)
 	}
-	client := cmn.NewClient(cmn.ClientArgs{
-		DialTimeout: config.Timeout.SendFile,
-		Timeout:     config.Timeout.SendFile,
-	})
-	// TODO: make stream bundle multiplier adjustable at runtime (#253)
-	sbArgs := transport.SBArgs{
-		ManualResync: true,
-		Multiplier:   int(config.Rebalance.Multiplier),
-		Network:      netd,
-		Trname:       rebalanceStreamName,
-	}
-	t.rebManager.streams = transport.NewStreamBundle(t.smapowner, t.si, client, sbArgs)
-
-	//
-	// ACKs
-	//
-	if _, err := transport.Register(netc, rebalanceAcksName, t.rebManager.recvRebalanceAck); err != nil {
-		return err
-	}
-	// NOTE - attn: use the same client (above) for ACKs
-	sbArgs = transport.SBArgs{
-		ManualResync: true,
-		Network:      netc,
-		Trname:       rebalanceAcksName,
-	}
-	t.rebManager.acks = transport.NewStreamBundle(t.smapowner, t.si, client, sbArgs)
-
-	return nil
+	t.rebManager = reb
 }
 
 // target-only stats
@@ -451,8 +412,8 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed
 }
 
 func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactions.rebStatus(true)
-	_, runningLocal := t.xactions.rebStatus(false)
+	_, running := t.xactions.isRebalancing(cmn.ActGlobalReb)
+	_, runningLocal := t.xactions.isRebalancing(cmn.ActLocalReb)
 	return running || runningLocal
 }
 
@@ -752,7 +713,7 @@ get:
 //
 func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
 	// check FS-wide if local rebalance is running
-	aborted, running := t.xactions.rebStatus(false)
+	aborted, running := t.xactions.isRebalancing(cmn.ActLocalReb)
 	gfnActive := t.gfn.local.active()
 	if aborted || running || gfnActive {
 		// FIXME: move this part to lom
@@ -774,7 +735,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= t.smapowner.Get().CountTargets()
 
 	// check cluster-wide ("ask neighbors")
-	aborted, running = t.xactions.rebStatus(true)
+	aborted, running = t.xactions.isRebalancing(cmn.ActGlobalReb)
 	gfnActive, smap := t.gfn.global.active()
 	if aborted || running || gfnActive || !enoughECRestoreTargets {
 		if !gfnActive {
@@ -1207,13 +1168,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-
-		t.bmdowner.Lock() // lock#2 begin
-		clone = t.bmdowner.get().clone()
-		clone.del(bucketFrom, true) // TODO: resolve conflicts
-		t.bmdowner.put(clone)
-		t.bmdowner.Unlock()
-
 		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
@@ -1249,7 +1203,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		t.renameObject(w, r, msg)
+		t.renameObject(w, r, msg, t.smapowner.get().ProxySI.DaemonID /*to force thru proxy-redirection check*/)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -1430,6 +1384,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
 	wg := &sync.WaitGroup{}
 
+	pid := t.smapowner.get().ProxySI.DaemonID
 	availablePaths, _ := fs.Mountpaths.Get()
 	ch := make(chan string, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
 	for contentType := range fs.CSM.RegisteredContentTypes {
@@ -1445,7 +1400,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 			fromDir := mpathInfo.MakePathBucket(contentType, bucketFrom, true /*bucket is local*/)
 			go func(fromDir string) {
 				time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
-				ch <- t.renameOne(fromDir, bucketFrom, bucketTo)
+				ch <- t.renameOne(fromDir, bucketFrom, bucketTo, pid)
 				wg.Done()
 			}(fromDir)
 		}
@@ -1457,12 +1412,11 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 			return
 		}
 	}
-	fs.Mountpaths.CreateDestroyLocalBuckets("rename", false /*false=destroy*/, bucketFrom)
 	return
 }
 
-func (t *targetrunner) renameOne(fromdir, bucketFrom, bucketTo string) (errstr string) {
-	renctx := &renamectx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t}
+func (t *targetrunner) renameOne(fromdir, bucketFrom, bucketTo, pid string) (errstr string) {
+	renctx := &renamectx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t, pid: pid}
 
 	if err := filepath.Walk(fromdir, renctx.walkf); err != nil {
 		errstr = fmt.Sprintf("Failed to rename %s, err: %v", fromdir, err)
@@ -1494,7 +1448,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	if errstr := renctx.t.renameBucketObject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
+	if errstr := renctx.t.renameBucketObject(contentType, bucket, objname, renctx.bucketTo, objname, renctx.pid); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -2359,7 +2313,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 	return errRet
 }
 
-func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg, pid string) {
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -2373,16 +2327,15 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	uname := cluster.Bo2Uname(bucket, objnameFrom)
 	cluster.ObjectLocker.Lock(uname, true)
 
-	if errstr := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo); errstr != "" {
+	if errstr := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo, pid); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
 	cluster.ObjectLocker.Unlock(uname, true)
 }
 
 func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo,
-	objnameTo string) (errstr string) {
+	objnameTo, pid string) (errstr string) {
 	var (
-		fi                    os.FileInfo
 		file                  *cmn.FileHandle
 		si                    *cluster.Snode
 		newFQN                string
@@ -2398,7 +2351,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if errstr != "" {
 		return
 	}
-	if fi, err = os.Stat(fqn); err != nil {
+	if _, err = os.Stat(fqn); err != nil {
 		errstr = fmt.Sprintf("failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
 		return
 	}
@@ -2426,7 +2379,6 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 			bucketFrom, objnameFrom, t.si.Name(), bucketTo, objnameTo, si.Name())
 	}
 
-	// TODO: fill and send should be general function in `rebManager`: from, to, object
 	if file, err = cmn.NewFileHandle(fqn); err != nil {
 		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
 	}
@@ -2442,34 +2394,34 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	if lom.Cksum() != nil {
 		cksumType, cksumValue = lom.Cksum().Get()
 	}
-	hdr := transport.Header{
-		Bucket:  bucketTo,
-		Objname: objnameTo,
-		IsLocal: lom.BckIsLocal,
-		Opaque:  []byte(t.si.DaemonID),
-		ObjAttrs: transport.ObjectAttrs{
-			Size:       fi.Size(),
-			Atime:      lom.Atime().UnixNano(),
-			CksumType:  cksumType,
-			CksumValue: cksumValue,
-			Version:    lom.Version(),
-		},
-	}
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	cb := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, cbErr error) {
-		err = cbErr
-		wg.Done()
-	}
-	t.rebManager.streams.Resync()
-	if err := t.rebManager.streams.SendV(hdr, file, cb, nil /* cmpl ptr */, si); err != nil {
-		glog.Errorf("failed to migrate: %s, err: %v", lom.FQN, err)
-		return err.Error()
-	}
-	wg.Wait()
 
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucketTo, objnameTo)
+	putURL := fmt.Sprintf("%s%s?%s=%s&%s=%s",
+		si.IntraDataNet.DirectURL, path, cmn.URLParamBckProvider, lom.BucketProvider, cmn.URLParamProxyID, pid)
+	//
+	// http PUT /v1/objects/bucket/objname
+	//
+	req, err := http.NewRequest(http.MethodPut, putURL, file)
 	if err != nil {
-		return err.Error()
+		errstr = fmt.Sprintf("unexpected failure to create %s request %s, err: %v", http.MethodPut, putURL, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), lom.Config().Timeout.SendFile)
+	defer cancel()
+	req = req.WithContext(ctx)
+	header := req.Header
+	header.Set(cmn.HeaderObjCksumType, cksumType)
+	header.Set(cmn.HeaderObjCksumVal, cksumValue)
+	header.Set(cmn.HeaderObjVersion, lom.Version())
+	timeInt := lom.Atime().UnixNano()
+	if lom.Atime().IsZero() {
+		timeInt = 0
+	}
+	header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
+
+	_, err = t.httpclientLongTimeout.Do(req)
+	if err != nil {
+		errstr = fmt.Sprintf("failed to PUT URL %q, err: %v", putURL, err)
 	}
 	return
 }

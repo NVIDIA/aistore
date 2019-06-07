@@ -378,7 +378,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLocalReb:
 			go t.rebManager.runLocalReb()
 		case cmn.ActGlobalReb:
-			go t.rebManager.runGlobalReb(t.smapowner.get(), t.si.DaemonID)
+			go t.rebManager.runGlobalReb(t.smapowner.get())
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
@@ -737,7 +737,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		if cmd, ok := msgInt.Value.(string); ok {
 			switch cmd {
 			case cmn.RebStart:
-				go t.rebManager.runGlobalReb(newsmap, newTargetID)
+				go t.rebManager.runGlobalReb(newsmap)
 			case cmn.RebAbort:
 				t.rebManager.abortGlobalReb()
 			default:
@@ -755,7 +755,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
-	go t.rebManager.runGlobalReb(newsmap, newTargetID)
+	go t.rebManager.runGlobalReb(newsmap)
 	return
 }
 
@@ -1019,13 +1019,17 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// GET /v1/health
+// GET /v1/health (cmn.Health)
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		callerID   = r.Header.Get(cmn.HeaderCallerID)
 		callerName = r.Header.Get(cmn.HeaderCallerName)
 		smap       = t.smapowner.get()
+		query      = r.URL.Query()
 	)
+	getRebStatus, err := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
+	cmn.Assert(err == nil) // TODO -- FIXME: remove
+
 	if callerID == "" || callerName == "" {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si.Name(), callerID, callerName))
 		return
@@ -1033,15 +1037,14 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !smap.containsID(callerID) {
 		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si.Name(), callerID, callerName)
 	}
-	aborted, running := t.xactions.rebStatus(true)
-	if !aborted && !running {
-		aborted, running = t.xactions.rebStatus(false)
-	}
-	status := &thealthstatus{IsRebalancing: aborted || running}
-	jsbytes, err := jsoniter.Marshal(status)
-	cmn.AssertNoErr(err)
-	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
-		return
+	if getRebStatus {
+		status := &rebStatus{}
+		t.rebManager.fillinStatus(status)
+		jsbytes, err := jsoniter.Marshal(status)
+		cmn.AssertNoErr(err)
+		if ok := t.writeJSON(w, r, jsbytes, "rebalance-status"); !ok {
+			return
+		}
 	}
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {

@@ -73,6 +73,7 @@ const (
 type (
 	Tracker interface {
 		Add(name string, val int64)
+		Get(name string) int64
 		AddErrorHTTP(method string, val int64)
 		AddMany(namedVal64 ...NamedVal64)
 		Register(name string, kind string)
@@ -365,6 +366,7 @@ func (r *statsRunner) Stop(err error) {
 // statslogger interface impl
 func (r *statsRunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
 func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
+func (r *statsRunner) Get(name string) int64             { cmn.Assert(false); return 0 }
 func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv

@@ -105,7 +105,7 @@ func downloaderCompleted(t *testing.T, targetID string, targetsStats map[string]
 		exists = true
 		for _, xaction := range downloaderStat {
 			if xaction.Running() {
-				tutils.Logf("%s(%d) still in progress for target %s; started %s\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
+				tutils.Logf("%s(%d) in progress for %s (started %s)\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
 				return false
 			}
 		}

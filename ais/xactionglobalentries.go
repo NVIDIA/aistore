@@ -41,8 +41,8 @@ func (e *lruEntry) Get() cmn.Xact { return e.xact }
 
 type prefetchEntry struct {
 	baseGlobalEntry
-	r    *stats.Trunner
 	xact *xactPrefetch
+	r    *stats.Trunner
 }
 
 func (e *prefetchEntry) Start(id int64) error {
@@ -54,10 +54,10 @@ func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
 
 type globalRebEntry struct {
 	baseGlobalEntry
+	xact        *xactGlobalReb
 	stats       stats.RebalanceTargetStats
 	smapVersion int64
 	runnerCnt   int
-	xact        *xactGlobalReb
 }
 
 func (e *globalRebEntry) Start(id int64) error {
@@ -107,8 +107,8 @@ func (e *globalRebEntry) CleanupPrevious(entry xactionGlobalEntry) {
 
 type localRebEntry struct {
 	baseGlobalEntry
-	runnerCnt int
 	xact      *xactLocalReb
+	runnerCnt int
 }
 
 func (e *localRebEntry) Start(id int64) error {
@@ -141,9 +141,9 @@ func (e *localRebEntry) CleanupPrevious(entry xactionGlobalEntry) {
 
 type electionEntry struct {
 	baseGlobalEntry
+	xact *xactElection
 	p    *proxyrunner
 	vr   *VoteRecord
-	xact *xactElection
 }
 
 func (e *electionEntry) Start(id int64) error {
@@ -160,8 +160,8 @@ func (e *electionEntry) Kind() string  { return cmn.ActElection }
 
 type evictDeleteEntry struct {
 	baseGlobalEntry
-	evict bool
 	xact  *xactEvictDelete
+	evict bool
 }
 
 func (e *evictDeleteEntry) Start(id int64) error {
@@ -181,8 +181,8 @@ func (e *evictDeleteEntry) ActOnPrevious(entry xactionGlobalEntry)              
 
 type downloaderEntry struct {
 	baseGlobalEntry
-	t    *targetrunner
 	xact *downloader.Downloader
+	t    *targetrunner
 }
 
 func (e *downloaderEntry) Start(id int64) error {

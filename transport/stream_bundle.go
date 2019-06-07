@@ -29,17 +29,18 @@ const (
 
 type (
 	StreamBundle struct {
-		sowner     cluster.Sowner
-		smap       *cluster.Smap // current Smap
-		smaplock   *sync.Mutex
-		lsnode     *cluster.Snode // local Snode
-		client     *http.Client
-		network    string
-		trname     string
-		streams    atomic.Pointer // points to bundle (below)
-		extra      Extra
-		rxNodeType int // receiving nodes: [Targets, ..., AllNodes ] enum above
-		multiplier int // optionally, greater than 1 number of streams per destination (with round-robin selection)
+		sowner       cluster.Sowner
+		smap         *cluster.Smap // current Smap
+		smaplock     *sync.Mutex
+		lsnode       *cluster.Snode // local Snode
+		client       *http.Client
+		network      string
+		trname       string
+		streams      atomic.Pointer // points to bundle (below)
+		extra        Extra
+		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
+		multiplier   int // optionally, greater than 1 number of streams per destination (with round-robin selection)
+		manualResync bool
 	}
 	BundleStats map[string]*Stats // by DaemonID
 	//
@@ -70,40 +71,33 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Clie
 	if !cmn.NetworkIsKnown(sbArgs.Network) {
 		glog.Errorf("Unknown network %s, expecting one of: %v", sbArgs.Network, cmn.KnownNetworks)
 	}
-
 	cmn.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &StreamBundle{
-		sowner:     sowner,
-		smap:       &cluster.Smap{},
-		smaplock:   &sync.Mutex{},
-		lsnode:     lsnode,
-		client:     cl,
-		network:    sbArgs.Network,
-		trname:     sbArgs.Trname,
-		rxNodeType: sbArgs.Ntype,
-		multiplier: sbArgs.Multiplier,
+		sowner:       sowner,
+		smap:         &cluster.Smap{},
+		smaplock:     &sync.Mutex{},
+		lsnode:       lsnode,
+		client:       cl,
+		network:      sbArgs.Network,
+		trname:       sbArgs.Trname,
+		rxNodeType:   sbArgs.Ntype,
+		multiplier:   sbArgs.Multiplier,
+		manualResync: sbArgs.ManualResync,
 	}
-
 	if sbArgs.Extra != nil {
 		sb.extra = *sbArgs.Extra
 	}
-
 	if sb.multiplier == 0 {
 		sb.multiplier = 1
 	}
-	cmn.Assert(sb.multiplier > 0 && sb.multiplier < 256)
-
-	//
-	// finish construction: establish streams and register this stream-bundle as Smap listener
-	//
+	// update streams when Smap changes
 	sb.Resync()
 
-	// update streams when smap changes
-	if !sbArgs.ManualResync {
+	// register this stream-bundle as Smap listener
+	if !sb.manualResync {
 		listeners.Reg(sb)
 	}
-
 	return
 }
 
@@ -115,8 +109,10 @@ func (sb *StreamBundle) Close(gracefully bool) {
 	} else {
 		sb.apply(closeStop)
 	}
-	listeners := sb.sowner.Listeners()
-	listeners.Unreg(sb)
+	if !sb.manualResync {
+		listeners := sb.sowner.Listeners()
+		listeners.Unreg(sb)
+	}
 }
 
 //

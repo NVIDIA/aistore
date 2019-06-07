@@ -1203,8 +1203,8 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	tassert.CheckFatal(t, err)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
-		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %d)",
-			rtd.numLocalBuckets, len(buckets.Local))
+		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %+v)",
+			rtd.numLocalBuckets, buckets.Local)
 	}
 
 	renamedBucketExists := false
@@ -1283,7 +1283,7 @@ func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
 	for target, targetStats := range targetsStats {
 		for _, xaction := range targetStats {
 			if xaction.Running() {
-				tutils.Logf("%s(%d) still in progress for target %s; started %s\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
+				tutils.Logf("%s(%d) in progress for %s (started %s)\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
 				return false
 			}
 		}
@@ -1306,8 +1306,6 @@ func checkXactAPIErr(t *testing.T, err error) {
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
 // the function ends with fatal
 func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeouts ...time.Duration) {
-	tutils.Logf("Waiting for global and local rebalance to complete\n")
-
 	start := time.Now()
 	time.Sleep(time.Second * 10)
 	wg := &sync.WaitGroup{}
@@ -1320,6 +1318,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	}
 	sleep := time.Second * 10
 	go func() {
+		var logged bool
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
@@ -1328,6 +1327,10 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 
 			if allCompleted(globalRebalanceStats) {
 				return
+			}
+			if !logged {
+				tutils.Logf("Wait for global rebalance to finish\n")
+				logged = true
 			}
 
 			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
@@ -1338,6 +1341,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	}()
 
 	go func() {
+		var logged bool
 		defer wg.Done()
 		for {
 			time.Sleep(sleep)
@@ -1346,6 +1350,10 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 
 			if allCompleted(localRebalanceStats) {
 				return
+			}
+			if !logged {
+				tutils.Logf("Wait for local rebalance to finish\n")
+				logged = true
 			}
 
 			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
@@ -1361,8 +1369,6 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	for errstr := range ch {
 		t.Fatalf(errstr)
 	}
-
-	tutils.Logf("global and local rebalance completed\n")
 }
 
 func waitProgressBar(prefix string, wait time.Duration) {
@@ -1430,6 +1436,7 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 
 func getClusterMap(t *testing.T, url string) cluster.Smap {
 	baseParams := tutils.BaseAPIParams(url)
+	time.Sleep(time.Second * 2)
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
 	return smap

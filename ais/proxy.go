@@ -1386,10 +1386,19 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 
 func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
 	actionMsg *cmn.ActionMsg, config *cmn.Config) bool {
+
 	smap4bcast := p.smapowner.get()
+	p.bmdowner.Lock()
+	clone.add(bucketTo, true, props)
+	if errstr := p.savebmdconf(clone, config); errstr != "" {
+		glog.Errorln(errstr)
+	}
+	p.bmdowner.put(clone)
+	p.bmdowner.Unlock()
 	msgInt := p.newActionMsgInternal(actionMsg, smap4bcast, clone)
 	jsbytes, err := jsoniter.Marshal(msgInt)
 	cmn.AssertNoErr(err)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
 
 	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom),

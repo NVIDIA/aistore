@@ -87,6 +87,7 @@ type (
 //
 
 func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
+func (r *Trunner) Get(name string) int64             { return r.Core.Tracker[name].Value }
 func (r *Trunner) Run() error                        { return r.runcommon(r) }
 
 func (r *Trunner) Init(daemonStr, daemonID string) {

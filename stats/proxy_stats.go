@@ -33,7 +33,8 @@ type (
 //
 // Prunner
 //
-func (r *Prunner) Run() error { return r.runcommon(r) }
+func (r *Prunner) Run() error            { return r.runcommon(r) }
+func (r *Prunner) Get(name string) int64 { return r.Core.Tracker[name].Value }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(daemonStr, daemonID string) {
