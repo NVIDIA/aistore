@@ -28,9 +28,9 @@ import (
 // Downloader is a long running task that provides a AIS a means to download
 // objects from the internet by providing a URL(referred to as a link) to the
 // server where the object exists. Downloader does not make the HTTP GET
-// requests to download the files itself- it purely manages the lifecycle of
-// joggers and dispatches any download related request to the correct jogger
-// instance.
+// requests to download the objects itself- it purely manages the lifecycle of
+// joggers. It translates requests to internal representation and forwards them
+// to the Dispatcher. Dispatcher then dispatches the request to correct jogger instance.
 //
 // ====== API ======
 //
@@ -41,22 +41,28 @@ import (
 //   * Abort       - to abort a previously requested download (currently queued or currently downloading)
 //   * Status      - to request the status of a previously requested download
 // The Download, Abort and Status requests are encapsulated into an internal
-// request object and added to a request queue and then are dispatched to the
-// correct jogger. The remaining operations are private to the Downloader and
-// are used only internally.
+// request object, added to a dispatcher's request queue and then are dispatched by dispatcher
+// to the correct jogger. The remaining operations are private to the Downloader and
+// are used only internally. Dispatcher is implemented as goroutine listening for
+// incoming requests from Downloader
 //
-// Each jogger, which corresponds to a mountpath, has a download channel
-// (downloadCh) where download request that are dispatched from Downloader are
+// Each jogger, which corresponds to one mountpath, has a download channel
+// (downloadCh) where download requests, that are dispatched from Dispatcher, are
 // queued. Thus, downloads occur on a per-mountpath basis and are handled one at
 // a time by jogger as they arrive.
 //
 // ====== Downloading ======
 //
-// After Downloader receives a download request, it adds it to the correct jogger's queue.
-// Downloads are represented as object of `task` type, and there is at
+// After Downloader received a download job, it sends the job to Dispatcher.
+// Dispatcher processes one job at the time, extracting objects to download
+// from job in batches. When joggers queues have available space for new objects
+// to download, dispatcher puts objects to download in these queues. If joggers
+// are currently full, dispatcher waits with dispatching next batch until they aren't.
+//
+// Single object's download is represented as object of `task` type, and there is at
 // most one active task assigned to any jogger at any given time. The
-// tasks are created when the jogger dequeues a download request from its
-// downloadCh and are destroyed when the download is aborted, finished or
+// tasks are created when dispatcher wants to schedule download of an object
+// for jogger and are destroyed when the download is aborted, finished or
 // fails.
 //
 // After a task is created, a separate goroutine is spun up to make the
@@ -66,7 +72,7 @@ import (
 //
 // ====== Aborting ======
 //
-// When Downloader receives an abort request, it aborts running task or
+// When Dispatcher receives an abort request, it aborts running task or
 // if the task is scheduled but is not yet processed, then it is removed
 // from queue (see: put, get). If the task is running, cancelFunc is
 // invoked to cancel task's request.
@@ -79,7 +85,7 @@ import (
 // response body from the HTTP GET request we make to to the link to download
 // the object.
 //
-// When Downloader receives a status update request, it dispatches to a separate
+// When Dispatcher receives a status update request, it dispatches to a separate
 // jogger goroutine that checks if the downloaded completed. Otherwise it checks
 // if it is currently being downloaded. If it is being currently downloaded, it
 // returns the progress. Otherwise, it returns that the object hasn't been
