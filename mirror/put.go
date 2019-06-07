@@ -202,11 +202,11 @@ func (j *xputJogger) stop() {
 // xputJogger - main
 //
 func (j *xputJogger) jog() {
-	glog.Infof("xputJogger[%s] started", j.mpathInfo)
-	j.parent.wg.Done()
 	j.workCh = make(chan *cluster.LOM, j.parent.mirror.Burst)
 	j.stopCh = make(chan struct{}, 1)
 	j.buf = j.parent.slab.Alloc()
+	j.parent.wg.Done()
+	glog.Infof("xputJogger[%s] started", j.mpathInfo)
 loop:
 	for {
 		select {
