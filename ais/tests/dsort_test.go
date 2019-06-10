@@ -1505,7 +1505,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	tutils.Logln("starting distributed sort...")
 	df.start()
 
-	waitForDSortPhase(t, m.proxyURL, df.managerUUID, "sorting", func() {
+	waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
 		// Reregister target 0
 		m.reregisterTarget(targets[0])
 		tutils.Logln("reregistering complete")
