@@ -475,8 +475,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	// TODO: we should probably support offset != 0 even if goi.length == 0
 	if goi.length == 0 {
 		reader = file
-		buf, slab = gmem2.AllocFromSlab2(lom.Size())
-		// hdr.Set("Content-Length", strconv.FormatInt(lom.Size(), 10)) // TODO: optimize
+		buf, slab = gmem2.AllocFromSlab2(goi.lom.Size())
+		// hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10)) // TODO: optimize
 	} else {
 		buf, slab = gmem2.AllocFromSlab2(goi.length)
 		if cksumRange {
@@ -494,7 +494,6 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
 	written, err = io.CopyBuffer(goi.w, reader, buf)
 	if err != nil {
 		goi.t.fshc(err, fqn)
