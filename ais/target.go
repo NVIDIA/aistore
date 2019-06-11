@@ -562,7 +562,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		length:  rangeLen,
 		gfn:     isGFNRequest,
 	}
-	if err, errCode := goi.recv(); err != nil {
+	if err, errCode := goi.getObject(); err != nil {
 		t.invalmsghdlr(w, r, err.Error(), errCode)
 		return
 	}
@@ -1405,7 +1405,7 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		ctx:          t.contextWithAuth(header),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
-	return poi.recv()
+	return poi.putObject()
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {

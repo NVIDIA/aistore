@@ -537,7 +537,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue),
 		migrated:     true,
 	}
-	if err, _ := poi.recv(); err != nil {
+	if err, _ := poi.putObject(); err != nil {
 		glog.Error(err)
 		return
 	}

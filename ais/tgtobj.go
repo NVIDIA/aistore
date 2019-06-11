@@ -72,7 +72,7 @@ type (
 // PUT OBJECT //
 ////////////////
 
-func (poi *putObjInfo) recv() (err error, errCode int) {
+func (poi *putObjInfo) putObject() (err error, errCode int) {
 	lom := poi.lom
 	// optimize out if the checksums do match
 	if poi.cksumToCheck != nil {
@@ -90,7 +90,7 @@ func (poi *putObjInfo) recv() (err error, errCode int) {
 			return err, http.StatusInternalServerError
 		}
 
-		if errstr, errCode := poi.commit(); errstr != "" {
+		if errstr, errCode := poi.finalize(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
 	}
@@ -103,8 +103,8 @@ func (poi *putObjInfo) recv() (err error, errCode int) {
 	return nil, 0
 }
 
-func (poi *putObjInfo) commit() (errstr string, errCode int) {
-	if errstr, errCode = poi.tryCommit(); errstr != "" {
+func (poi *putObjInfo) finalize() (errstr string, errCode int) {
+	if errstr, errCode = poi.tryFinalize(); errstr != "" {
 		if _, err := os.Stat(poi.workFQN); err == nil || !os.IsNotExist(err) {
 			if err == nil {
 				err = errors.New(errstr)
@@ -124,7 +124,7 @@ func (poi *putObjInfo) commit() (errstr string, errCode int) {
 	return
 }
 
-func (poi *putObjInfo) tryCommit() (errstr string, errCode int) {
+func (poi *putObjInfo) tryFinalize() (errstr string, errCode int) {
 	var (
 		ver string
 		lom = poi.lom
@@ -293,7 +293,7 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 		poi.cold = true
 		poi.cksumToCheck = cksum
 	}
-	err, _ := poi.recv()
+	err, _ := poi.putObject()
 	return err
 }
 
@@ -301,7 +301,7 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 // GET OBJECT //
 ////////////////
 
-func (goi *getObjInfo) recv() (err error, errCode int) {
+func (goi *getObjInfo) getObject() (err error, errCode int) {
 	var (
 		fromCache bool
 		retried   bool
@@ -378,7 +378,7 @@ do:
 
 	// 4. get locally and stream back
 get:
-	_, retry, err, errCode := goi.commit(coldGet)
+	_, retry, err, errCode := goi.finalize(coldGet)
 	if retry && !retried {
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
 		retried = true
@@ -392,7 +392,7 @@ get:
 	return
 }
 
-func (goi *getObjInfo) commit(coldGet bool) (written int64, retry bool, err error, errCode int) {
+func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err error, errCode int) {
 	var (
 		file   *os.File
 		sgl    *memsys.SGL
@@ -542,6 +542,6 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 		w:       w,
 		ctx:     context.Background(),
 	}
-	err, _ := goi.recv()
+	err, _ := goi.getObject()
 	return err
 }
