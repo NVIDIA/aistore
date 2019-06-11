@@ -957,7 +957,7 @@ func preWriteStats(to io.Writer, jsonFormat bool) {
 	fmt.Fprintln(to)
 	if !jsonFormat {
 		fmt.Fprintf(to, statsPrintHeader,
-			"Time", "OP", "Count", "Total Bytes", "Latency(min, avg, max)", "Throughput", "Error")
+			"Time", "OP", "Count", "Size (Total)", "Latency(min, avg, max)", "Throughput", "Errors (Total)")
 	} else {
 		fmt.Fprintln(to, "[")
 	}
@@ -1034,33 +1034,42 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
+	ps := prettySpeed
 	pl := prettyLatency
 	pt := prettyTimeStamp
 
 	workOrderResLen := int64(len(workOrderResults))
 	// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
+	errs := "-"
+	if t.put.TotalErrs() != 0 {
+		errs = pn(s.put.TotalErrs()) + "(" + pn(t.put.TotalErrs()) + ")"
+	}
 	if s.put.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "PUT",
 			pn(s.put.Total())+"("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(workOrderResLen)+")",
 			pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
 			pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
-			pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
-			pn(s.put.TotalErrs())+"("+pn(t.put.TotalErrs())+")")
+			ps(s.put.Throughput(s.put.Start(), time.Now()))+"("+ps(t.put.Throughput(t.put.Start(), time.Now()))+")",
+			errs)
+	}
+	errs = "-"
+	if t.get.TotalErrs() != 0 {
+		errs = pn(s.get.TotalErrs()) + "(" + pn(t.get.TotalErrs()) + ")"
 	}
 	if s.get.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "GET",
 			pn(s.get.Total())+"("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(workOrderResLen)+")",
 			pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
 			pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
-			pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
-			pn(s.get.TotalErrs())+"("+pn(t.get.TotalErrs())+")")
+			ps(s.get.Throughput(s.get.Start(), time.Now()))+"("+ps(t.get.Throughput(t.get.Start(), time.Now()))+")",
+			errs)
 	}
 	if s.getConfig.Total() != 0 {
 		p(to, statsPrintHeader, pt(), "CFG",
 			pn(s.getConfig.Total())+"("+pn(t.getConfig.Total())+")",
 			pb(s.getConfig.TotalBytes())+"("+pb(t.getConfig.TotalBytes())+")",
 			pl(s.getConfig.MinLatency(), s.getConfig.AvgLatency(), s.getConfig.MaxLatency()),
-			pb(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+"("+pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
+			ps(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+"("+ps(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
 			pn(s.getConfig.TotalErrs())+"("+pn(t.getConfig.TotalErrs())+")")
 	}
 }
