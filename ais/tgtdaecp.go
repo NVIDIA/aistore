@@ -1018,9 +1018,6 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		smap       = t.smapowner.get()
 		query      = r.URL.Query()
 	)
-	getRebStatus, err := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
-	cmn.Assert(err == nil) // TODO -- FIXME: remove
-
 	if callerID == "" || callerName == "" {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si.Name(), callerID, callerName))
 		return
@@ -1028,6 +1025,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !smap.containsID(callerID) {
 		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si.Name(), callerID, callerName)
 	}
+	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &rebStatus{}
 		t.rebManager.fillinStatus(status)

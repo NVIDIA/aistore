@@ -345,7 +345,7 @@ func (h *httprunner) initSI(daemonType string) {
 		glog.Fatalf("FATAL: %v", err)
 	}
 
-	ipAddr, err := getipv4addr(addrList, config.Net.IPv4)
+	ipAddr, err := getIPv4(addrList, config.Net.IPv4)
 	if err != nil {
 		glog.Fatalf("Failed to get PUBLIC IPv4/hostname: %v", err)
 	}
@@ -356,7 +356,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	ipAddrIntraControl := net.IP{}
 	if config.Net.UseIntraControl {
-		ipAddrIntraControl, err = getipv4addr(addrList, config.Net.IPv4IntraControl)
+		ipAddrIntraControl, err = getIPv4(addrList, config.Net.IPv4IntraControl)
 		if err != nil {
 			glog.Fatalf("Failed to get INTRA-CONTROL IPv4/hostname: %v", err)
 		}
@@ -369,7 +369,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	ipAddrIntraData := net.IP{}
 	if config.Net.UseIntraData {
-		ipAddrIntraData, err = getipv4addr(addrList, config.Net.IPv4IntraData)
+		ipAddrIntraData, err = getIPv4(addrList, config.Net.IPv4IntraData)
 		if err != nil {
 			glog.Fatalf("Failed to get INTRA-DATA IPv4/hostname: %v", err)
 		}
@@ -379,6 +379,19 @@ func (h *httprunner) initSI(daemonType string) {
 		}
 		glog.Infof("INTRA-DATA access: [%s:%d]%s", ipAddrIntraData, config.Net.L4.PortIntraData, s)
 	}
+
+	mustDiffer := func(ip1 net.IP, port1 int, use1 bool, ip2 net.IP, port2 int, use2 bool, tag string) {
+		if !use1 || !use2 {
+			return
+		}
+		if string(ip1) == string(ip2) && port1 == port2 {
+			glog.Fatalf("%s: cannot use the same IP:port (%s:%d) for two networks", tag, string(ip1), port1)
+		}
+	}
+	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "pub/ctl")
+	mustDiffer(ipAddr, config.Net.L4.Port, true, ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData, "pub/data")
+	mustDiffer(ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.UseIntraData,
+		ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.UseIntraControl, "ctl/data")
 
 	publicAddr := &net.TCPAddr{
 		IP:   ipAddr,

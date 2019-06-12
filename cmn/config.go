@@ -477,41 +477,41 @@ type NetConf struct {
 	IPv4             string   `json:"ipv4"`
 	IPv4IntraControl string   `json:"ipv4_intra_control"`
 	IPv4IntraData    string   `json:"ipv4_intra_data"`
-	UseIntraControl  bool     `json:"-"`
-	UseIntraData     bool     `json:"-"`
 	L4               L4Conf   `json:"l4"`
 	HTTP             HTTPConf `json:"http"`
+	UseIntraControl  bool     `json:"-"`
+	UseIntraData     bool     `json:"-"`
 }
 
 type L4Conf struct {
 	Proto               string `json:"proto"`              // tcp, udp
 	PortStr             string `json:"port"`               // listening port
-	Port                int    `json:"-"`                  // (runtime)
 	PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
-	PortIntraControl    int    `json:"-"`                  // (runtime)
 	PortIntraDataStr    string `json:"port_intra_data"`    // listening port for intra data network
+	Port                int    `json:"-"`                  // (runtime)
+	PortIntraControl    int    `json:"-"`                  // (runtime)
 	PortIntraData       int    `json:"-"`
 }
 
 type HTTPConf struct {
 	Proto         string `json:"proto"`              // http or https
 	RevProxy      string `json:"rproxy"`             // RevProxy* enum
-	RevProxyCache bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
 	Key           string `json:"server_key"`         // HTTPS: openssl key
+	RevProxyCache bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
 }
 
 type FSHCConf struct {
-	Enabled       bool `json:"enabled"`
 	TestFileCount int  `json:"test_files"`  // the number of files to read and write during a test
 	ErrorLimit    int  `json:"error_limit"` // max number of errors (exceeding any results in disabling mpath)
+	Enabled       bool `json:"enabled"`
 }
 
 type AuthConf struct {
 	Secret  string `json:"secret"`
-	Enabled bool   `json:"enabled"`
 	CredDir string `json:"creddir"`
+	Enabled bool   `json:"enabled"`
 }
 
 // config for one keepalive tracker
@@ -692,6 +692,28 @@ func ipv4ListsOverlap(alist, blist string) (overlap bool, addr string) {
 		}
 	}
 	return
+}
+
+func ipv4ListsEqual(alist, blist string) bool {
+	alistAddrs := strings.Split(alist, ",")
+	blistAddrs := strings.Split(blist, ",")
+	f := func(in []string) (out []string) {
+		out = make([]string, 0, len(in))
+		for _, i := range in {
+			i = strings.TrimSpace(i)
+			if i == "" {
+				continue
+			}
+			out = append(out, i)
+		}
+		return
+	}
+	al := f(alistAddrs)
+	bl := f(blistAddrs)
+	if len(al) == 0 || len(bl) == 0 || len(al) != len(bl) {
+		return false
+	}
+	return StrSlicesEqual(al, bl)
 }
 
 // validKeepaliveType returns true if the keepalive type is supported.
@@ -912,22 +934,18 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 	c.IPv4IntraData = strings.Replace(c.IPv4IntraData, " ", "", -1)
 
 	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraControl); overlap {
-		return fmt.Errorf(
-			"public and internal addresses overlap: %s (public: %s; internal: %s)",
-			addr, c.IPv4, c.IPv4IntraControl,
-		)
+		return fmt.Errorf("public (%s) and intra-cluster control (%s) IPv4 lists overlap: %s", c.IPv4, c.IPv4IntraControl, addr)
 	}
 	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraData); overlap {
-		return fmt.Errorf(
-			"public and replication addresses overlap: %s (public: %s; replication: %s)",
-			addr, c.IPv4, c.IPv4IntraData,
-		)
+		return fmt.Errorf("public (%s) and intra-cluster data (%s) IPv4 lists overlap: %s", c.IPv4, c.IPv4IntraData, addr)
 	}
 	if overlap, addr := ipv4ListsOverlap(c.IPv4IntraControl, c.IPv4IntraData); overlap {
-		return fmt.Errorf(
-			"internal and replication addresses overlap: %s (internal: %s; replication: %s)",
-			addr, c.IPv4IntraControl, c.IPv4IntraData,
-		)
+		if ipv4ListsEqual(c.IPv4IntraControl, c.IPv4IntraData) {
+			glog.Warningf("control and data share one intra-cluster network (%s)", c.IPv4IntraData)
+		} else {
+			glog.Warningf("intra-cluster control (%s) and data (%s) IPv4 lists overlap: %s",
+				c.IPv4IntraControl, c.IPv4IntraData, addr)
+		}
 	}
 	if c.HTTP.RevProxy != "" {
 		if c.HTTP.RevProxy != RevProxyCloud && c.HTTP.RevProxy != RevProxyTarget {

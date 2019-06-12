@@ -126,10 +126,10 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
 	return ip, nil
 }
 
-// getipv4addr returns an IPv4 for proxy/target to listen on it.
+// getIPv4 returns an IPv4 for proxy/target to listen on it.
 // 1. If there is an IPv4 in config - it tries to use it
 // 2. If config does not contain IPv4 - it chooses one of local IPv4s
-func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err error) {
+func getIPv4(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err error) {
 	if configuredIPv4s == "" {
 		return detectLocalIPv4(addrList)
 	}
