@@ -235,8 +235,11 @@ func parseSource(rawURL string) (link string, err error) {
 	case "https", "http":
 		break
 	case aisScheme:
-		err = fmt.Errorf("%q scheme cannot be used as source", aisScheme)
-		return
+		scheme = "http"
+		if !strings.Contains(host, ":") {
+			host += ":8080"
+		}
+		fullPath = path.Join(cmn.Version, cmn.Objects, fullPath)
 	default:
 		err = fmt.Errorf("invalid scheme: %s", scheme)
 		return

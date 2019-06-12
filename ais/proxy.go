@@ -1785,7 +1785,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, he
 	}
 
 	smap := p.smapowner.get()
-	reqTimeout := cmn.GCO.Get().Timeout.CplaneOperation
+	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
 	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	method := http.MethodPost
 	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)

@@ -38,6 +38,8 @@ func TestParseSourceValidURIs(t *testing.T) {
 		{"https://www.googleapis.com/storage/v1/b/lpr-vision/o/imagenet%2Fimagenet_train-{000000..000002}.tgz?alt=media",
 			"https://www.googleapis.com/storage/v1/b/lpr-vision/o/imagenet/imagenet_train-{000000..000002}.tgz?alt=media"},
 		{"gs://bucket/obj{00..10}.tgz", "https://storage.googleapis.com/bucket/obj{00..10}.tgz"},
+		{"ais://172.10.10.10/bucket", "http://172.10.10.10:8080/v1/objects/bucket"},
+		{"ais://172.10.10.10:4444/bucket", "http://172.10.10.10:4444/v1/objects/bucket"},
 	}
 
 	for _, test := range parseSourceTests {
