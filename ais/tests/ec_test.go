@@ -783,7 +783,7 @@ func putECFile(baseParams *api.BaseParams, bucket, objName string) error {
 	return api.PutObject(putArgs)
 }
 
-// Returns path to main object and map of all object's slices and metadata
+// Returns path to main object and map of all object's slices and ioContext
 func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams *api.BaseParams) (map[string]ecSliceMD, string) {
 	totalCnt := 2 + (ecDataSliceCnt+ecParitySliceCnt)*2
 	objSize := int64(ecMinBigSize * 2)

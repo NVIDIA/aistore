@@ -272,12 +272,12 @@ func (r *xactionsRegistry) globalXactRunning(kind string) bool {
 
 func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[int64]stats.XactStats, error) {
 	if _, ok := cmn.ValidXact(kind); !ok {
-		return nil, errors.New("unrecognized xaction " + kind)
+		return nil, errors.New("unknown xaction " + kind)
 	}
 
 	entry := r.GetL(kind)
 	if entry == nil {
-		return nil, cmn.NewXactionNotFoundError(kind + " has not started yet")
+		return nil, cmn.NewXactionNotFoundError(kind)
 	}
 
 	if onlyRecent {
@@ -306,12 +306,12 @@ func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string, onlyRecent
 	if onlyRecent {
 		bucketXats, ok := r.getBucketsXacts(bucket)
 		if !ok {
-			return nil, cmn.NewXactionNotFoundError("xactions for bucket " + bucket + " don't exist; bucket might have been removed or not created")
+			return nil, cmn.NewXactionNotFoundError("<any>, bucket=" + bucket)
 		}
 
 		entry := bucketXats.GetL(kind)
 		if entry == nil {
-			return nil, cmn.NewXactionNotFoundError(kind + " not found for bucket " + bucket + "; xaction might have not been started")
+			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bucket)
 		}
 
 		return map[int64]stats.XactStats{entry.Get().ID(): entry.Stats()}, nil

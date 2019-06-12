@@ -469,7 +469,7 @@ func TestDownloadStatus(t *testing.T) {
 		bucket        = TestLocalBucketName
 		params        = tutils.DefaultBaseAPIParams(t)
 		shortFileName = "shortFile"
-		m             = metadata{t: t}
+		m             = ioContext{t: t}
 	)
 
 	m.saveClusterState()

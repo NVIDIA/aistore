@@ -827,7 +827,6 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 
 func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
-	h.statsif.AddErrorHTTP(r.Method, 1)
 }
 
 //=====================

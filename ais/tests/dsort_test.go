@@ -39,7 +39,7 @@ var (
 
 type (
 	dsortFramework struct {
-		m *metadata
+		m *ioContext
 
 		outputBucket string
 		inputPrefix  string
@@ -449,7 +449,7 @@ func (df *dsortFramework) checkDSortList(expNumEntries ...int) {
 }
 
 // helper for dispatching i-th dSort job
-func dispatchDSortJob(m *metadata, i int) {
+func dispatchDSortJob(m *ioContext, i int) {
 	var (
 		df = &dsortFramework{
 			m:                m,
@@ -515,7 +515,7 @@ func TestDistributedSort(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -527,7 +527,7 @@ func TestDistributedSort(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -555,7 +555,7 @@ func TestDistributedSort(t *testing.T) {
 
 func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: t.Name() + "input",
 		}
@@ -568,7 +568,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -606,7 +606,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: t.Name() + "input",
 		}
@@ -619,7 +619,7 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -656,7 +656,7 @@ func TestDistributedSortParallel(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -664,7 +664,7 @@ func TestDistributedSortParallel(t *testing.T) {
 		dSortsCount = 5
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -696,7 +696,7 @@ func TestDistributedSortChain(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -704,7 +704,7 @@ func TestDistributedSortChain(t *testing.T) {
 		dSortsCount = 5
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -725,7 +725,7 @@ func TestDistributedSortChain(t *testing.T) {
 
 func TestDistributedSortShuffle(t *testing.T) {
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -738,7 +738,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -767,7 +767,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 func TestDistributedSortWithDisk(t *testing.T) {
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -780,7 +780,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -815,7 +815,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -828,7 +828,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -860,7 +860,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -872,7 +872,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -927,7 +927,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -940,7 +940,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -996,7 +996,7 @@ func TestDistributedSortZip(t *testing.T) {
 
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1009,7 +1009,7 @@ func TestDistributedSortZip(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1042,7 +1042,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1055,7 +1055,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1106,7 +1106,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 		test := fmt.Sprintf("%s-%v", entry.formatType, entry.missingKeys)
 		t.Run(test, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1124,7 +1124,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 				}
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1171,7 +1171,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 func TestDistributedSortAbort(t *testing.T) {
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1183,7 +1183,7 @@ func TestDistributedSortAbort(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1220,7 +1220,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 	for _, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
 		t.Run(phase, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1232,7 +1232,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 				}
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1273,7 +1273,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	for idx, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
 		t.Run(phase, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1286,7 +1286,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				}
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1365,7 +1365,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 		test := fmt.Sprintf("%s-%v", entry.phase, entry.adding)
 		t.Run(test, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1380,7 +1380,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 				mountpaths = make(map[*cluster.Snode]string)
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1469,7 +1469,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	}
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1482,7 +1482,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1530,7 +1530,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 
 func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1543,7 +1543,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1577,7 +1577,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 
 func TestDistributedSortSelfAbort(t *testing.T) {
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1589,7 +1589,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1620,7 +1620,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	t.Skip("test can take more than couple minutes, run it only when necessary")
 
 	var (
-		m = &metadata{
+		m = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1640,7 +1640,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	// is 80% so dSort should never go above this number in memory usage.
 	df.tarballCnt = int(float64(mem.ActualFree/uint64(df.fileInTarballSize)/uint64(df.fileInTarballCnt)) * 1.4)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1674,7 +1674,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 	for _, reaction := range cmn.SupportedReactions {
 		t.Run(reaction, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1689,7 +1689,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 				}
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1727,7 +1727,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 	for _, reaction := range cmn.SupportedReactions {
 		t.Run(reaction, func(t *testing.T) {
 			var (
-				m = &metadata{
+				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
@@ -1742,7 +1742,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 				}
 			)
 
-			// Initialize metadata
+			// Initialize ioContext
 			m.saveClusterState()
 			if m.originalTargetCount < 3 {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1774,7 +1774,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 func TestDistributedSortOrderFile(t *testing.T) {
 	var (
 		err error
-		m   = &metadata{
+		m   = &ioContext{
 			t:      t,
 			bucket: TestLocalBucketName,
 		}
@@ -1795,7 +1795,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)

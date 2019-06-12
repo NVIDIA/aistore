@@ -446,7 +446,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
@@ -657,7 +657,7 @@ func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached i
 
 func TestBucketReadOnly(t *testing.T) {
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10,
 			numGetsEachFile: 2,

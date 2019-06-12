@@ -53,11 +53,11 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 	err = jsoniter.Unmarshal(res.outjson, &meta)
 	cmn.AssertNoErr(err)
 
-	t.gfn.global.activate(meta.Smap)
+	t.gfn.global.activate()
 
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if errstr := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister); errstr != "" {
+	if errstr := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); errstr != "" {
 		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
 	} else {
 		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
@@ -423,7 +423,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 			// a) target joining existing cluster and b) cluster starting to rebalance itself
 			// The latter is driven by metasync (see metasync.go) distributing the new Smap.
 			// To handle incoming GETs within this window (which would typically take a few seconds or less)
-			t.gfn.global.activate(t.smapowner.get())
+			t.gfn.global.activate()
 
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
@@ -633,11 +633,15 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag string) (errstr string) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag, caller string) (errstr string) {
+	from := ""
+	if caller != "" {
+		from = " from " + caller
+	}
 	if msgInt.Action == "" {
-		glog.Infof("%s %s v%d", tag, bmdTermName, newbucketmd.version())
+		glog.Infof("%s: %s %s v%d%s", t.si.Name(), tag, bmdTermName, newbucketmd.version(), from)
 	} else {
-		glog.Infof("%s %s v%d, action %s", tag, bmdTermName, newbucketmd.version(), msgInt.Action)
+		glog.Infof("%s: %s %s v%d%s, action %s", t.si.Name(), tag, bmdTermName, newbucketmd.version(), from, msgInt.Action)
 	}
 	t.bmdowner.Lock()
 	bucketmd := t.bmdowner.get()
@@ -688,11 +692,14 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (errstr string) {
 	var (
-		newTargetID, s             string
+		newTargetID, s, from       string
 		iPresent, newTargetPresent bool
 	)
+	if caller != "" {
+		from = " from " + caller
+	}
 	// proxy => target control protocol (see p.httpclupost)
 	action, newDaemonID := msgInt.Action, msgInt.NewDaemonID
 	if action == cmn.ActRegTarget {
@@ -701,8 +708,8 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal) (e
 	} else if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("%s: receive Smap v%d, ntargets %d, primary %s%s",
-		t.si.Name(), newsmap.version(), newsmap.CountTargets(), newsmap.ProxySI.Name(), s)
+	glog.Infof("%s: receive Smap v%d%s, ntargets %d, primary %s%s",
+		t.si.Name(), newsmap.version(), from, newsmap.CountTargets(), newsmap.ProxySI.Name(), s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			iPresent = true
@@ -892,7 +899,7 @@ func (t *targetrunner) smapVersionFixup() {
 		return
 	}
 	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newsmap, nil)
-	t.receiveSmap(newsmap, msgInt)
+	t.receiveSmap(newsmap, msgInt, "")
 }
 
 func (t *targetrunner) bmdVersionFixup() {
@@ -903,7 +910,7 @@ func (t *targetrunner) bmdVersionFixup() {
 		return
 	}
 	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newbucketmd)
-	t.receiveBucketMD(newbucketmd, msgInt, bucketMDFixup)
+	t.receiveBucketMD(newbucketmd, msgInt, bucketMDFixup, "")
 }
 
 // handler for: /v1/tokens
@@ -942,11 +949,8 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if newsmap != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new Smap v%d from %s", newsmap.version(), caller)
-		}
-		errstr = t.receiveSmap(newsmap, actionsmap)
+		caller := r.Header.Get(cmn.HeaderCallerName)
+		errstr = t.receiveSmap(newsmap, actionsmap, caller)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
@@ -960,11 +964,8 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if newbmd != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new BMD v%d from %s", newbmd.version(), caller)
-		}
-		if errstr = t.receiveBucketMD(newbmd, actionlb, bucketMDReceive); errstr != "" {
+		caller := r.Header.Get(cmn.HeaderCallerName)
+		if errstr = t.receiveBucketMD(newbmd, actionlb, bucketMDReceive, caller); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -978,7 +979,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 				return
 			}
 			if err := bmd.Persist(); err != nil {
-				glog.Errorf("Error while saving new BMD: %v", err)
+				glog.Errorf("%s: %v", t.si.Name(), err)
 			}
 			t.bmdowner.Unlock()
 		}()
@@ -1006,7 +1007,7 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 	}
 
 	if newSmap != nil && msgInt.Action == cmn.ActStartGFN {
-		t.gfn.global.activate(newSmap)
+		t.gfn.global.activate()
 	}
 }
 

@@ -348,7 +348,7 @@ wack:
 term:
 	// 10. close streams, end xaction, deactivate GFN (FIXME: hardcoded (3, 10))
 	reb.stage.Store(rebStageFin)
-	maxwt, curwt = sleep*10, 0 // wait for ack cmpl refcount to zero out
+	maxwt, curwt = sleep*16, 0 // wait for ack cmpl refcount to zero out
 	quiescent := 0             // and stay zeroed out for a while
 	for curwt < maxwt {
 		if rc := reb.ackrc.Load(); rc <= 0 {
@@ -428,7 +428,7 @@ func (reb *rebManager) serialize(smap *smapX, config *cmn.Config) (newerSmap, al
 						tname, rebStage[reb.stage.Load()], ver, runningXreb.smapVersion)
 				}
 			} else {
-				glog.Warningf("%s %s: Smap v%d - waiting for %s...", tname, rebStage[reb.stage.Load()], ver,
+				glog.Warningf("%s %s: Smap v%d - waiting for %s", tname, rebStage[reb.stage.Load()], ver,
 					rebStage[rebStageDone])
 			}
 		} else {

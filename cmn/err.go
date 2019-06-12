@@ -147,7 +147,7 @@ func NewXactionNotFoundError(cause string) XactionNotFoundError {
 }
 
 func (e XactionNotFoundError) Error() string {
-	return "xaction not found; " + e.cause
+	return "xaction '" + e.cause + "' not found"
 }
 
 // ErrorOnce should be used to collect possible consecutive errors

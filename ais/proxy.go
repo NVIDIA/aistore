@@ -2662,7 +2662,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	results, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
+	results, ok := p.invokeHTTPSelectMsgOnTargets(w, r, true /*silent*/)
 	if !ok {
 		return false
 	}
@@ -2671,7 +2671,8 @@ func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Reques
 	return p.writeJSON(w, r, body, "getXaction")
 }
 
-func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
+func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request,
+	silent bool) (map[string]jsoniter.RawMessage, bool) {
 	smapX := p.smapowner.get()
 
 	var (
@@ -2702,7 +2703,11 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 	targetResults := make(map[string]jsoniter.RawMessage, smapX.CountTargets())
 	for result := range results {
 		if result.err != nil {
-			p.invalmsghdlr(w, r, result.errstr)
+			if silent {
+				p.invalmsghdlrsilent(w, r, result.errstr)
+			} else {
+				p.invalmsghdlr(w, r, result.errstr)
+			}
 			return nil, false
 		}
 		targetResults[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
@@ -2758,7 +2763,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 // FIXME: read-lock
 func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
-	targetStats, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
+	targetStats, ok := p.invokeHTTPSelectMsgOnTargets(w, r, false /*not silent*/)
 	if !ok {
 		errstr := fmt.Sprintf(
 			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]",
@@ -2778,7 +2783,7 @@ func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.R
 }
 
 func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
-	targetMountpaths, ok := p.invokeHTTPSelectMsgOnTargets(w, r)
+	targetMountpaths, ok := p.invokeHTTPSelectMsgOnTargets(w, r, false /*not silent*/)
 	if !ok {
 		errstr := fmt.Sprintf(
 			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]", r.URL.RawQuery)

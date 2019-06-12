@@ -167,14 +167,15 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, status int, silent bool) {
 	err, isHTTPError := NewHTTPError(r, msg, status)
 
-	if isHTTPError {
-		if !silent {
-			glog.Errorln(err.String())
-		}
+	if silent {
 		http.Error(w, err.Error(), status)
 		return
 	}
-
+	if isHTTPError {
+		glog.Errorln(err.String())
+		http.Error(w, err.Error(), status)
+		return
+	}
 	var errMsg bytes.Buffer
 	if !strings.Contains(msg, ".go, #") {
 		for i := 1; i < 4; i++ {
@@ -188,9 +189,7 @@ func invalidHandlerInternal(w http.ResponseWriter, r *http.Request, msg string, 
 		}
 	}
 	err.Trace = errMsg.String()
-	if !silent {
-		glog.Errorln(err.String())
-	}
+	glog.Errorln(err.String())
 	http.Error(w, err.Error(), status)
 }
 

@@ -35,7 +35,7 @@ type repFile struct {
 	filename    string
 }
 
-type metadata struct {
+type ioContext struct {
 	t                   *testing.T
 	smap                cluster.Smap
 	semaphore           chan struct{}
@@ -43,18 +43,19 @@ type metadata struct {
 	repFilenameCh       chan repFile
 	wg                  *sync.WaitGroup
 	bucket              string
+	fileSize            uint64
+	numGetErrs          atomic.Uint64
+	getsCompleted       atomic.Uint64
+	proxyURL            string
 	otherTasksToTrigger int
 	originalTargetCount int
 	originalProxyCount  int
 	num                 int
 	numGetsEachFile     int
-	fileSize            uint64
-	numGetErrs          atomic.Uint64
-	getsCompleted       atomic.Uint64
-	proxyURL            string
+	getErrIsFatal       bool
 }
 
-func (m *metadata) saveClusterState() {
+func (m *ioContext) saveClusterState() {
 	m.init()
 	m.smap = getClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
@@ -62,7 +63,7 @@ func (m *metadata) saveClusterState() {
 	tutils.Logf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
-func (m *metadata) init() {
+func (m *ioContext) init() {
 	m.proxyURL = getPrimaryURL(m.t, proxyURLReadOnly)
 	if m.fileSize == 0 {
 		m.fileSize = cmn.KiB
@@ -80,7 +81,7 @@ func (m *metadata) init() {
 	}
 }
 
-func (m *metadata) assertClusterState() {
+func (m *ioContext) assertClusterState() {
 	smap, err := tutils.WaitForPrimaryProxy(
 		m.proxyURL,
 		"to check cluster state",
@@ -102,7 +103,7 @@ func (m *metadata) assertClusterState() {
 	}
 }
 
-func (m *metadata) checkObjectDistribution(t *testing.T) {
+func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	var (
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
@@ -125,31 +126,27 @@ func (m *metadata) checkObjectDistribution(t *testing.T) {
 	}
 }
 
-func (m *metadata) puts(dontFail ...bool) int {
+func (m *ioContext) puts(dontFail ...bool) int {
 	sgl := tutils.Mem2.NewSGL(int64(m.fileSize))
 	defer sgl.Free()
 
-	// With the current design, there exists a brief period of time
-	// during which GET errors can occur - see the timeline comment below
 	filenameCh := make(chan string, m.num)
 	errCh := make(chan error, m.num)
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", m.num, m.bucket)
-	start := time.Now()
 	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, m.fileSize, m.num, errCh, filenameCh, sgl)
 	if len(dontFail) == 0 {
 		selectErr(errCh, "put", m.t, false)
 	}
 	close(filenameCh)
 	close(errCh)
-	tutils.Logf("PUT time: %v\n", time.Since(start))
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
 	return len(errCh)
 }
 
-func (m *metadata) gets() {
+func (m *ioContext) gets() {
 	for i := 0; i < 10; i++ {
 		m.semaphore <- struct{}{}
 	}
@@ -173,7 +170,13 @@ func (m *metadata) gets() {
 			}
 			_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
 			if err != nil {
+				if m.getErrIsFatal {
+					m.t.Error(err)
+				}
 				m.numGetErrs.Inc()
+			}
+			if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
+				return
 			}
 			g := m.getsCompleted.Inc()
 			if g%5000 == 0 {
@@ -190,13 +193,13 @@ func (m *metadata) gets() {
 	}
 }
 
-func (m *metadata) ensureNoErrors() {
+func (m *ioContext) ensureNoErrors() {
 	if m.numGetErrs.Load() > 0 {
 		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
 	}
 }
 
-func (m *metadata) reregisterTarget(target *cluster.Snode) {
+func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 	const (
 		timeout    = time.Second * 10
 		interval   = time.Millisecond * 10
@@ -227,13 +230,13 @@ func (m *metadata) reregisterTarget(target *cluster.Snode) {
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if cmn.StrSlicesEqual(proxyLBNames.Local, targetLBNames.Local) {
-				tutils.Logf("T3: re-registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
+				tutils.Logf("T3: re-registered target %s got updated with the new bucket-ioContext\n", target.DaemonID)
 				return
 			}
 		}
 	}
 
-	m.t.Fatalf("failed to reregister target %s. Either is not in the smap or did not receive bucket metadata", target.DaemonID)
+	m.t.Fatalf("failed to reregister target %s. Either is not in the smap or did not receive bucket ioContext", target.DaemonID)
 }
 
 // Intended for a deployment with multiple targets
@@ -247,7 +250,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             50000,
 			numGetsEachFile: 3,
@@ -311,7 +314,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:                   t,
 			otherTasksToTrigger: 1,
 			num:                 150000,
@@ -395,7 +398,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             20000,
 			numGetsEachFile: 5,
@@ -451,12 +454,12 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	var (
-		m = metadata{
+		m = ioContext{
 			t: t,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -494,13 +497,13 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:   t,
 			num: 10000,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -558,14 +561,15 @@ func TestAckRebalance(t *testing.T) {
 	}
 
 	var (
-		md = metadata{
+		md = ioContext{
 			t:               t,
 			num:             30000,
 			numGetsEachFile: 1,
+			getErrIsFatal:   true,
 		}
 	)
 
-	// Init. metadata
+	// Init. ioContext
 	md.saveClusterState()
 
 	if md.originalTargetCount < 3 {
@@ -602,6 +606,7 @@ func TestAckRebalance(t *testing.T) {
 	md.gets()
 	md.wg.Wait()
 
+	md.ensureNoErrors()
 	md.assertClusterState()
 }
 
@@ -610,18 +615,19 @@ func TestStressRebalance(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	for i := 1; i <= 3; i++ {
+	max := 3
+	for i := 1; i <= max; i++ {
 		tutils.Logf("Test #%d ======\n", i)
-		testStressRebalance(t, rand, i == 1, i == 3)
+		testStressRebalance(t, rand, i == 1, i == max)
 	}
 }
 func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool) {
 	var (
-		md = metadata{
+		md = ioContext{
 			t:               t,
-			num:             10000,
+			num:             50000,
 			numGetsEachFile: 1,
+			getErrIsFatal:   true,
 		}
 	)
 	md.saveClusterState()
@@ -656,25 +662,30 @@ func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool
 	// Start putting files into bucket
 	md.puts()
 
+	// read in parallel
+	md.wg.Add(md.num * md.numGetsEachFile)
+	md.gets() // TODO: add m.getAll() method to GET both already existing and recently added
+
+	// and join 2 targets in parallel
 	tutils.Logf("Register 1st target %s\n", target1.URL(cmn.NetworkPublic))
 	err = tutils.RegisterTarget(md.proxyURL, target1, md.smap)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(time.Duration(rand.Intn(10))*time.Second + time.Millisecond*100)
+	// random sleep between the first and the second join
+	time.Sleep(time.Duration(rand.Intn(8)) * time.Second)
 
 	tutils.Logf("Register 2nd target %s\n", target2.URL(cmn.NetworkPublic))
 	err = tutils.RegisterTarget(md.proxyURL, target2, md.smap)
 	tassert.CheckFatal(t, err)
 
-	// wait
+	// wait for the rebalance to finish
 	baseParams := tutils.BaseAPIParams(md.proxyURL)
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	// read
-	md.wg.Add(md.num * md.numGetsEachFile)
-	md.gets()
+	// wait for the reads to run out
 	md.wg.Wait()
 
+	md.ensureNoErrors()
 	md.assertClusterState()
 }
 
@@ -684,14 +695,14 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -755,14 +766,14 @@ func TestPutDuringRebalance(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
 	)
 
-	// Init. metadata
+	// Init. ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -815,16 +826,16 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
-			numGetsEachFile: 10,
+			numGetsEachFile: 3,
 		}
 		targetURL  string
 		killTarget *cluster.Snode
 	)
 
-	// Init. metadata
+	// Init. ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have at least 2 target in the cluster")
@@ -920,14 +931,14 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             20000,
 			numGetsEachFile: 1,
 		}
 	)
 
-	// Init. metadata
+	// Init. ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have at least 1 target in the cluster")
@@ -990,19 +1001,19 @@ func TestGetDuringRebalance(t *testing.T) {
 	}
 
 	var (
-		md = metadata{
+		md = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
-		mdAfterRebalance = metadata{
+		mdAfterRebalance = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 1,
 		}
 	)
 
-	// Init. metadata
+	// Init. ioContext
 	md.saveClusterState()
 	mdAfterRebalance.saveClusterState()
 
@@ -1060,13 +1071,13 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	)
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:  t,
 			wg: &sync.WaitGroup{},
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1112,13 +1123,13 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 		newTestLocalBucketName = TestLocalBucketName + "_new"
 	)
 	var (
-		m = metadata{
+		m = ioContext{
 			t:  t,
 			wg: &sync.WaitGroup{},
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1142,14 +1153,14 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	)
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             1000,
 			numGetsEachFile: 2,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1183,13 +1194,13 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 		newTestLocalBucketName = TestLocalBucketName + "_new"
 	)
 	var (
-		m = metadata{
+		m = ioContext{
 			t:  t,
 			wg: &sync.WaitGroup{},
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1243,14 +1254,14 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             5000,
 			numGetsEachFile: 2,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1309,14 +1320,14 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	const newMountpath = "/tmp/ais/mountpath"
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             5000,
 			numGetsEachFile: 2,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1380,14 +1391,14 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	)
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1459,14 +1470,14 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 func TestDisableAndEnableMountpath(t *testing.T) {
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             5000,
 			numGetsEachFile: 2,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 1 {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1531,7 +1542,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 func TestForwardCP(t *testing.T) {
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 2,
@@ -1581,14 +1592,14 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             2000,
 			numGetsEachFile: 2,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1789,14 +1800,14 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
@@ -1842,7 +1853,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	var (
-		m = metadata{
+		m = ioContext{
 			t:               t,
 			num:             10000,
 			fileSize:        1024,
@@ -1850,7 +1861,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		}
 	)
 
-	// Initialize metadata
+	// Initialize ioContext
 	m.saveClusterState()
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)

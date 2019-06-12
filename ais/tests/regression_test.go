@@ -1286,7 +1286,8 @@ func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
 	for target, targetStats := range targetsStats {
 		for _, xaction := range targetStats {
 			if xaction.Running() {
-				tutils.Logf("%s(%d) in progress for %s (started %s)\n", xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
+				tutils.Logf("%s(%d) in progress for %s (started %s)\n",
+					xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
 				return false
 			}
 		}

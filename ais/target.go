@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -102,8 +101,7 @@ type (
 	// The state that may influence GET logic when new target joins cluster
 	globalGFN struct {
 		lookup       atomic.Bool
-		stopDeadline atomic.Int64   // (reg-time + const) when we stop trying to GET from neighbors
-		smap         atomic.Pointer // new smap which will be soon live
+		stopDeadline atomic.Int64 // (reg-time + const) when we stop trying to GET from neighbors
 	}
 
 	capUsed struct {
@@ -147,23 +145,22 @@ func (gfn *localGFN) deactivate() {
 	glog.Infof("local GFN has been deactivated")
 }
 
-func (gfn *globalGFN) active() (bool, *smapX) {
+func (gfn *globalGFN) active() bool {
 	if !gfn.lookup.Load() {
-		return false, nil
+		return false
 	}
 
 	// Deadline exceeded - probably primary proxy notified about new smap
 	// but did not update it due to some failures.
 	if time.Now().UnixNano() > gfn.stopDeadline.Load() {
 		gfn.deactivate()
-		return false, nil
+		return false
 	}
 
-	return true, (*smapX)(gfn.smap.Load())
+	return true
 }
 
-func (gfn *globalGFN) activate(smap *smapX) {
-	gfn.smap.Store(unsafe.Pointer(smap))
+func (gfn *globalGFN) activate() {
 	gfn.stopDeadline.Store(time.Now().UnixNano() + getFromNeighAfterJoin.Nanoseconds())
 	gfn.lookup.Store(true)
 	glog.Infof("global GFN has been activated")
@@ -715,25 +712,19 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 
 	// check cluster-wide ("ask neighbors")
 	aborted, running = t.xactions.isRebalancing(cmn.ActGlobalReb)
-	gfnActive, smap := t.gfn.global.active()
+	gfnActive = t.gfn.global.active()
 	if aborted || running || gfnActive || !enoughECRestoreTargets {
-		if !gfnActive {
-			smap = t.smapowner.get()
-		}
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("neighbor lookup: aborted=%t, running=%t, lookup=%t", aborted, running, gfnActive)
+			glog.Infof("%s: GFN (aborted=%t, running=%t, active=%t)", t.si.Name(), aborted, running, gfnActive)
 		}
 		// retry in case the object is being moved right now
 		for retry := 0; retry < getFromNeighRetries; retry++ {
-			if err := t.getFromNeighbor(r, lom, smap); err != nil {
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("Unsuccessful GFN: %v.", err)
-				}
+			if err := t.getFromNeighbor(r, lom); err != nil {
 				time.Sleep(getFromNeighSleep)
 				continue
 			}
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("restored from a neighbor: %s (%s)", lom, cmn.B2S(lom.Size(), 1))
+				glog.Infof("%s: GFN restored %s (%s)", t.si.Name(), lom, cmn.B2S(lom.Size(), 1))
 			}
 			return
 		}
@@ -741,12 +732,12 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM, r *http.Request) (err
 	// restore from existing EC slices if possible
 	if ecErr := t.ecmanager.RestoreObject(lom); ecErr == nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s/%s is restored successfully", lom.Bucket, lom.Objname)
+			glog.Infof("%s: EC-recovered %s", t.si.Name(), lom)
 		}
 		lom.Load(true)
 		return
 	} else if ecErr != ec.ErrorECDisabled {
-		errstr = fmt.Sprintf("Failed to restore object %s/%s: %v", lom.Bucket, lom.Objname, ecErr)
+		errstr = fmt.Sprintf("%s: failed to EC-recover %s: %v", t.si.Name(), lom, ecErr)
 	}
 
 	s := fmt.Sprintf("GET local: %s(%s) %s", lom, lom.FQN, cmn.DoesNotExist)
@@ -869,7 +860,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		return
 	}
 
-	// GFN: atime must be already set by the getFromNeighbor
+	// GFN: atime must be already set
 	if !coldGet && !isGFNRequest {
 		lom.SetAtimeUnix(started.UnixNano())
 		lom.ReCache() // GFN and cold GETs already did this
@@ -1451,7 +1442,8 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, lom *cluster.LOM) (
 	return
 }
 
-func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM, smap *smapX) (err error) {
+func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (err error) {
+	smap := t.smapowner.get()
 	neighsi := t.lookupRemotely(lom, smap)
 	if neighsi == nil {
 		err = fmt.Errorf("failed cluster-wide lookup %s", lom)
