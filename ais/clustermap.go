@@ -59,6 +59,9 @@ func (m *smapX) version() int64                 { return m.Version }
 func (m *smapX) marshal() (b []byte, err error) { return jsonCompat.Marshal(m) } // jsoniter + sorting
 
 func (m *smapX) isValid() bool {
+	if m == nil {
+		return false
+	}
 	if m.ProxySI == nil {
 		return false
 	}

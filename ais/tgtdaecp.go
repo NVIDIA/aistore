@@ -1018,13 +1018,35 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 		smap       = t.smapowner.get()
 		query      = r.URL.Query()
 	)
-	if callerID == "" || callerName == "" {
+
+	if callerID == "" && callerName == "" {
+		// External call - eg. by user to check if target is alive or by kubernetes service.
+		//
+		// TODO: we most probably need to split the external API call and
+		// internal one. Same goes for proxy - in proxy we also send some stats
+		// which are most probably not relevant to the user as it only wants
+		// to get 200 in case everything is fine.
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: external health-ping from %s", t.si.Name(), r.RemoteAddr)
+		}
+		return
+	} else if callerID == "" || callerName == "" {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: health-ping missing(%s, %s)", t.si.Name(), callerID, callerName))
 		return
 	}
+
 	if !smap.containsID(callerID) {
 		glog.Warningf("%s: health-ping from a not-yet-registered (%s, %s)", t.si.Name(), callerID, callerName)
 	}
+
+	callerSmapVer, _ := strconv.ParseInt(r.Header.Get(cmn.HeaderCallerSmapVersion), 10, 64)
+	if smap.version() != callerSmapVer {
+		glog.Warningf(
+			"%s: health-ping from node (%s, %s) which has different smap version: our (%d), node's (%d)",
+			t.si.Name(), callerID, callerName, smap.version(), callerSmapVer,
+		)
+	}
+
 	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &rebStatus{}
@@ -1034,6 +1056,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	if smap.GetProxy(callerID) != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: health-ping from %s", t.si.Name(), callerName)

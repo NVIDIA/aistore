@@ -187,8 +187,9 @@ const (
 	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
 
 	// intra-cluster comm
-	HeaderCallerID   = "caller.id"
-	HeaderCallerName = "caller.name"
+	HeaderCallerID          = "caller.id"
+	HeaderCallerName        = "caller.name"
+	HeaderCallerSmapVersion = "caller.smap.ver"
 )
 
 // BucketPropList is a map bucket property <-> readonly, groupped by type

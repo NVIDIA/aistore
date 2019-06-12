@@ -564,6 +564,9 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
 	req.Header.Set(cmn.HeaderCallerName, h.si.Name())
+	if smap := h.smapowner.get(); smap.isValid() {
+		req.Header.Set(cmn.HeaderCallerSmapVersion, strconv.FormatInt(smap.version(), 10))
+	}
 
 	resp, err := client.Do(req)
 
