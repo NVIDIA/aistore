@@ -8,12 +8,13 @@ package commands
 import (
 	"context"
 	"fmt"
-
-	"github.com/NVIDIA/aistore/ios"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
@@ -31,6 +32,12 @@ var (
 		daecluStatus:    append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
 		daecluStats:     append(daecluBaseFlags, longRunFlags...),
 		daecluDiskStats: append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
+		daecluAddNode: []cli.Flag{
+			daemonTypeFlag,
+			daemonIDFlag,
+			publicAddrFlag,
+		},
+		daecluRemoveNode: []cli.Flag{},
 	}
 
 	// DaeCluCmds tracks available AIS API Information/Query Commands
@@ -67,6 +74,27 @@ var (
 			Flags:        daecluFlags[daecluDiskStats],
 			BashComplete: targetList,
 		},
+		{
+			Name:  commandNode,
+			Usage: "command that manages nodes",
+			Subcommands: []cli.Command{
+				{
+					Name:         daecluAddNode,
+					Usage:        "add node to the cluster manually",
+					Action:       queryHandler,
+					Flags:        daecluFlags[daecluAddNode],
+					BashComplete: flagList,
+				},
+				{
+					Name:         daecluRemoveNode,
+					Usage:        "remove node from the cluster",
+					ArgsUsage:    daemonIDArgumentText,
+					Action:       queryHandler,
+					Flags:        daecluFlags[daecluRemoveNode],
+					BashComplete: daemonList,
+				},
+			},
+		},
 	}
 )
 
@@ -97,6 +125,10 @@ func queryHandler(c *cli.Context) (err error) {
 		err = daemonDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
 	case daecluStatus:
 		err = daemonStatus(c, daemonID, useJSON, hideHeader)
+	case daecluAddNode:
+		err = clusterAddNode(c, baseParams)
+	case daecluRemoveNode:
+		err = clusterRemoveNode(c, baseParams, daemonID)
 	default:
 		return fmt.Errorf(invalidCmdMsg, req)
 	}
@@ -186,6 +218,45 @@ func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (er
 	}
 
 	return err
+}
+
+// Adds new node to the cluster.
+func clusterAddNode(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	daemonID := parseStrFlag(c, daemonIDFlag)
+	daemonType := parseStrFlag(c, daemonTypeFlag)
+	socketAddr := parseStrFlag(c, publicAddrFlag)
+	socketAddrParts := strings.Split(socketAddr, ":")
+	if len(socketAddrParts) != 2 {
+		return fmt.Errorf("Invalid socket address, should be in format: 'IP:PORT'")
+	}
+
+	ip, port := socketAddrParts[0], socketAddrParts[1]
+	netInfo := cluster.NetInfo{
+		NodeIPAddr: ip,
+		DaemonPort: port,
+		DirectURL:  "http://" + socketAddr,
+	}
+	nodeInfo := &cluster.Snode{
+		DaemonID:        daemonID,
+		DaemonType:      daemonType,
+		PublicNet:       netInfo,
+		IntraControlNet: netInfo,
+		IntraDataNet:    netInfo,
+	}
+	if err := api.RegisterNode(baseParams, nodeInfo); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(c.App.Writer, "%s has been added to the cluster successfully\n", daemonID)
+	return nil
+}
+
+// Removes existing node from the cluster.
+func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err error) {
+	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(c.App.Writer, "%s has been removed from the cluster successfully\n", daemonID)
+	return nil
 }
 
 type targetDiskStats struct {

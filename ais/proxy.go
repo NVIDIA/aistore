@@ -209,7 +209,7 @@ func (p *proxyrunner) unregister() (int, error) {
 		si: smap.ProxySI,
 		req: cmn.ReqArgs{
 			Method: http.MethodDelete,
-			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, cmn.Proxy, p.si.DaemonID),
+			Path:   cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, p.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -3001,22 +3001,27 @@ func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, ke
 
 // unregisters a target/proxy
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Cluster, cmn.Daemon)
+	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Cluster, cmn.Daemon)
 	if err != nil {
 		return
 	}
+
 	var (
-		isproxy bool
-		msg     *cmn.ActionMsg
-		osi     *cluster.Snode
-		psi     *cluster.Snode
-		sid     = apitems[0]
+		msg  *cmn.ActionMsg
+		sid  = apitems[0]
+		smap = p.smapowner.get()
+		node = smap.GetNode(sid)
 	)
+
+	if node == nil {
+		errstr := fmt.Sprintf("Unknown node %s", sid)
+		p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
+		return
+	}
+
 	msg = &cmn.ActionMsg{Action: cmn.ActUnregTarget}
-	if sid == cmn.Proxy {
+	if node.IsProxy() {
 		msg = &cmn.ActionMsg{Action: cmn.ActUnregProxy}
-		isproxy = true
-		sid = apitems[1]
 	}
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
@@ -3024,35 +3029,27 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 	p.smapowner.Lock()
 
-	smap := p.smapowner.get()
+	smap = p.smapowner.get()
 	clone := smap.clone()
+	node = smap.GetNode(sid)
+	if node == nil {
+		errstr := fmt.Sprintf("Unknown node %s", sid)
+		p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
+		return
+	}
 
-	if isproxy {
-		psi = clone.GetProxy(sid)
-		if psi == nil {
-			p.smapowner.Unlock()
-			errstr := fmt.Sprintf("Unknown proxy %s", sid)
-			p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
-			return
-		}
+	if node.IsProxy() {
 		clone.delProxy(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered %s (num proxies %d)", psi.Name(), clone.CountProxies())
+			glog.Infof("unregistered %s (num proxies %d)", node.Name(), clone.CountProxies())
 		}
 	} else {
-		osi = clone.GetTarget(sid)
-		if osi == nil {
-			p.smapowner.Unlock()
-			errstr := fmt.Sprintf("Unknown target %s", sid)
-			p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
-			return
-		}
 		clone.delTarget(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered %s (num targets %d)", osi.Name(), clone.CountTargets())
+			glog.Infof("unregistered %s (num targets %d)", node.Name(), clone.CountTargets())
 		}
 		args := callArgs{
-			si: osi,
+			si: node,
 			req: cmn.ReqArgs{
 				Method: http.MethodDelete,
 				Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
@@ -3061,7 +3058,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		res := p.call(args)
 		if res.err != nil {
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", osi.Name(), res.err, res.errstr)
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.errstr)
 		}
 	}
 	if !p.startedUp.Load() {

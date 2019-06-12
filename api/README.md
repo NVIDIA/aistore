@@ -54,29 +54,29 @@ Given key-value pairs of configuration parameters, this operation sets the clust
 Error from AIStore in completing the request
 ___
 
-#### RegisterTarget
-Registers an existing target to the clustermap.
+#### RegisterNode
+Registers an existing node to the clustermap.
 
 ##### Parameters
 | Name       | Type           | Description                                                                           |
 |------------|----------------|---------------------------------------------------------------------------------------|
 | httpClient |  *http.Client  | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL   | string         | URL of the proxy to which the HTTP Request is sent                                    |
-| targetInfo | *cluster.Snode | Pointer to a cluster.Snode struct containing details of the new Target                |
+| nodeInfo   | *cluster.Snode | Pointer to a cluster.Snode struct containing details of the new node                  |
 
 ##### Return
 Error from AIStore in completing the request
 ___
 
-#### UnregisterTarget
-Unregisters an existing target from the clustermap.
+#### UnregisterNode
+Unregisters an existing node from the clustermap.
 
 ##### Parameters
 | Name          | Type         | Description                                                                           |
 |---------------|--------------|---------------------------------------------------------------------------------------|
 | httpClient    | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL      | string       | URL of the proxy to which the HTTP Request is sent                                    |
-| unregisterSID | string       | DaemonID of the Target to be unregistered                                             |
+| unregisterSID | string       | DaemonID of the node to be unregistered                                               |
 
 ##### Return
 Error from AIStore in completing the request
@@ -86,6 +86,7 @@ ___
 
 #### GetMountpaths
 Given the direct public URL of a target, `GetMountpaths` returns its mountpaths
+
 ##### Parameters
 | Name       | Type         | Description                                                                           |
 |------------|--------------|---------------------------------------------------------------------------------------|

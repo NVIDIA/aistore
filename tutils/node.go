@@ -16,10 +16,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func RegisterTarget(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
+func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
 	_, ok := smap.Tmap[targetNode.DaemonID]
 	baseParams := BaseAPIParams(proxyURL)
-	if err := api.RegisterTarget(baseParams, targetNode); err != nil {
+	if err := api.RegisterNode(baseParams, targetNode); err != nil {
 		return err
 	}
 
@@ -34,7 +34,7 @@ func RegisterTarget(proxyURL string, targetNode *cluster.Snode, smap cluster.Sma
 func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
 	Logf("Removing a target: %s\n", removeTarget.DaemonID)
-	err := UnregisterTarget(proxyURL, removeTarget.DaemonID)
+	err := UnregisterNode(proxyURL, removeTarget.DaemonID)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,
@@ -50,7 +50,7 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 
 func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
 	Logf("Reregistering target %s...\n", target)
-	err := RegisterTarget(proxyURL, target, smap)
+	err := RegisterNode(proxyURL, target, smap)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
 		proxyURL,

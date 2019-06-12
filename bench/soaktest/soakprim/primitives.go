@@ -169,7 +169,7 @@ func (rctx *RecipeContext) RemoveTarget(conds *PostConds, delay time.Duration) {
 		rctx.targetMutex.Lock()
 		smap := fetchSmap("RestoreTarget")
 		for _, v := range smap.Tmap {
-			err := tutils.UnregisterTarget(primaryURL, v.DaemonID)
+			err := tutils.UnregisterNode(primaryURL, v.DaemonID)
 			rctx.targetMutex.Unlock()
 			cmn.AssertNoErr(err)
 			return
@@ -193,7 +193,7 @@ func (rctx *RecipeContext) RestoreTarget(conds *PostConds, delay time.Duration) 
 		for k, v := range rctx.origTargets {
 			_, ok := smap.Tmap[k]
 			if !ok {
-				err := tutils.RegisterTarget(primaryURL, v, *smap)
+				err := tutils.RegisterNode(primaryURL, v, *smap)
 				rctx.targetMutex.Unlock()
 				cmn.AssertNoErr(err)
 				return

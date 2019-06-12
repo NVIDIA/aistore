@@ -525,7 +525,7 @@ func TestRebalance(t *testing.T) {
 	}
 	randomTarget = tutils.ExtractTargetNodes(smap)[0]
 
-	err := tutils.UnregisterTarget(proxyURL, randomTarget.DaemonID)
+	err := tutils.UnregisterNode(proxyURL, randomTarget.DaemonID)
 	tassert.CheckFatal(t, err)
 	tutils.Logf("Unregistered %s: cluster size = %d (targets)\n", randomTarget.DaemonID, l-1)
 	//
@@ -539,7 +539,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 4. register back
 	//
-	err = tutils.RegisterTarget(proxyURL, randomTarget, smap)
+	err = tutils.RegisterNode(proxyURL, randomTarget, smap)
 	tassert.CheckFatal(t, err)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)

@@ -28,7 +28,7 @@ Puts randomly generated shards which then can be used for dSort testing.
 | `--conc` | `int` | limits number of concurrent put requests and number of concurrent shards created | `10` |
 
 
-Examples:
+#### Examples:
 * `ais dsort gen --fsize 262144 --fcount 100` generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. 
 * `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`. 
 
@@ -64,7 +64,7 @@ table describes json keys which can be used in specification.
 | `create_concurrency_limit` | `string` | limits number of concurrent shards created per disk | no | same as in `config.sh` |
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
-Examples:
+#### Examples:
 * starts (alphanumeric) sorting dSort job with extended metrics for shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. Each of output shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ... 
 ```bash
 ais dsort start '{
@@ -95,7 +95,7 @@ Retrieves status of the dSort with provided `ID` which is returned upon creation
 | `--refresh` | `int` | refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
 | `--log` | `string` | path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
-Examples:
+#### Examples:
 * `ais dsort status 5JjIuGemR` returns the metrics of the dSort job
 * `ais dsort status 5JjIuGemR --progress --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
 * `ais dsort status 5JjIuGemR --refresh 500` every `500` milliseconds returns newly fetched metrics of the dSort job
@@ -107,7 +107,7 @@ Examples:
 
 Aborts dSort job given its `ID`.
 
-Examples:
+#### Examples:
 * `ais dsort abort 5JjIuGemR` aborts the dSort job
 
 ### rm
@@ -116,7 +116,7 @@ Examples:
 
 Removes finished dSort job from the list given its `ID`.
 
-Examples:
+#### Examples:
 * `ais dsort rm 5JjIuGemR` removes the dSort job
 
 ### ls
@@ -129,7 +129,7 @@ Lists dSort jobs whose descriptions match given `regex`.
 | --- | --- | --- | --- |
 | `--regex` | `string` | regex for the description of dSort jobs | `""` |
 
-Examples:
+#### Examples:
 * `ais dsort ls` lists all dSorts jobs
 * `ais dsort ls --regex "^dsort-(.*)"` lists all dSorts jobs which description starts with `dsort-` prefix
 

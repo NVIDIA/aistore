@@ -165,6 +165,13 @@ func (m *Smap) GetProxy(pid string) *Snode {
 	return pi
 }
 
+func (m *Smap) GetNode(id string) *Snode {
+	if node := m.GetTarget(id); node != nil {
+		return node
+	}
+	return m.GetProxy(id)
+}
+
 func (a *Smap) Equals(b *Smap) bool {
 	if a.Version != b.Version {
 		return false

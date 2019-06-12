@@ -59,7 +59,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	err = tutils.UnregisterTarget(proxyURL, mockDaemonID)
+	err = tutils.UnregisterNode(proxyURL, mockDaemonID)
 	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }

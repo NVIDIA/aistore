@@ -113,7 +113,7 @@ func (rctx *RecipeContext) restoreTargets() {
 			if _, ok := smap.Tmap[k]; ok {
 				continue
 			}
-			if err := tutils.RegisterTarget(primaryURL, v, *smap); err != nil {
+			if err := tutils.RegisterNode(primaryURL, v, *smap); err != nil {
 				report.Writef(report.SummaryLevel, "got error while re-registering %s: %v", v.DaemonID, err)
 			}
 			missingOne = true

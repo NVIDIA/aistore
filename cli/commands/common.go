@@ -22,6 +22,7 @@ const (
 	commandLRU      = "lru"
 	commandObject   = "object"
 	commandXaction  = "xaction"
+	commandNode     = "node"
 )
 
 // Subcommand names
@@ -56,10 +57,12 @@ const (
 	configSet = subcommandSet
 
 	// Daeclu
-	daecluSmap      = cmn.GetWhatSmap
-	daecluStats     = cmn.GetWhatStats
-	daecluDiskStats = cmn.GetWhatDiskStats
-	daecluStatus    = cmn.GetWhatDaemonStatus
+	daecluSmap       = cmn.GetWhatSmap
+	daecluStats      = cmn.GetWhatStats
+	daecluDiskStats  = cmn.GetWhatDiskStats
+	daecluStatus     = cmn.GetWhatDaemonStatus
+	daecluAddNode    = "add"
+	daecluRemoveNode = "remove"
 
 	// Download
 	downloadStart  = subcommandStart
@@ -136,7 +139,10 @@ var (
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
 
 	// Daeclu
-	countFlag = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
+	countFlag      = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}
+	daemonIDFlag   = cli.StringFlag{Name: "daemon-id", Usage: "specifies the unique name for node"}
+	daemonTypeFlag = cli.StringFlag{Name: "daemon-type", Usage: "type of the node, either 'proxy' or 'target'", Value: "target"}
+	publicAddrFlag = cli.StringFlag{Name: "public-addr", Usage: "public socket address to communicate with the node, needs to be in format: 'IP:PORT'"}
 
 	// Download
 	descriptionFlag = cli.StringFlag{Name: "description,desc", Usage: "description of the job - can be useful when listing all downloads"}

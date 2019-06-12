@@ -1307,7 +1307,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
 				tutils.Logln("killing target...")
-				err := tutils.UnregisterTarget(m.proxyURL, targets[idx].DaemonID)
+				err := tutils.UnregisterNode(m.proxyURL, targets[idx].DaemonID)
 				tassert.CheckFatal(t, err)
 			})
 
@@ -1493,7 +1493,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	df.clearDSortList()
 
 	tutils.Logln("killing target...")
-	err := tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
+	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 	tassert.CheckFatal(t, err)
 
 	// Create local bucket

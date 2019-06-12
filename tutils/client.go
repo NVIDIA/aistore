@@ -556,7 +556,7 @@ func GetWhatRawQuery(getWhat string, getProps string) string {
 	return q.Encode()
 }
 
-func UnregisterTarget(proxyURL, sid string) error {
+func UnregisterNode(proxyURL, sid string) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
@@ -568,7 +568,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if ok {
 		idsToIgnore = []string{target.DaemonID}
 	}
-	if err := api.UnregisterTarget(baseParams, sid); err != nil {
+	if err := api.UnregisterNode(baseParams, sid); err != nil {
 		return err
 	}
 

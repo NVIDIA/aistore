@@ -129,24 +129,24 @@ func GetTargetDiskStats(baseParams *BaseParams) (map[string]*ios.SelectedDiskSta
 	return diskStats, nil
 }
 
-// RegisterTarget API
+// RegisterNode API
 //
-// Registers an existing target to the clustermap.
-func RegisterTarget(baseParams *BaseParams, targetInfo *cluster.Snode) error {
-	targetJSON, err := jsoniter.Marshal(targetInfo)
+// Registers an existing node to the clustermap.
+func RegisterNode(baseParams *BaseParams, nodeInfo *cluster.Snode) error {
+	nodeJSON, err := jsoniter.Marshal(nodeInfo)
 	if err != nil {
 		return err
 	}
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
-	_, err = DoHTTPRequest(baseParams, path, targetJSON)
+	_, err = DoHTTPRequest(baseParams, path, nodeJSON)
 	return err
 }
 
-// UnregisterTarget API
+// UnregisterNode API
 //
-// Unregisters an existing target to the clustermap.
-func UnregisterTarget(baseParams *BaseParams, unregisterSID string) error {
+// Unregisters an existing node from the clustermap.
+func UnregisterNode(baseParams *BaseParams, unregisterSID string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
 	_, err := DoHTTPRequest(baseParams, path, nil)
