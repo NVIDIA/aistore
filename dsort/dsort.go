@@ -16,8 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -98,8 +96,7 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.

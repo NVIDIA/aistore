@@ -10,8 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime"
-	"runtime/debug"
 	"testing"
 	"time"
 
@@ -72,8 +70,7 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions & start b-timer
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -119,8 +116,7 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions & start b-timer
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 	buf := make([]byte, cmn.KiB*128)
 	b.ResetTimer()
 
@@ -170,8 +166,7 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 	}
 
 	// reset initial conditions
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 	l := cmn.KiB * 128
 	buf := make([]byte, l)
 
@@ -227,8 +222,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	}
 
 	// reset initial conditions
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 
 	file, err := ioutil.TempFile("/tmp", "")
 	if err != nil {

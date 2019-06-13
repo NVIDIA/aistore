@@ -112,15 +112,21 @@ func (xact *xactPrefetch) Description() string {
 	return "responsible for prefetching a flexibly-defined list or range of objects from any given Cloud bucket"
 }
 
-// how often cleanup is called
-const cleanupInterval = 10 * time.Minute
+const (
+	// how often cleanup is called
+	cleanupInterval = 10 * time.Second //time.Minute
 
-// how long xaction had to finish to be considered to be removed
-const entryOldAge = 30 * time.Second
+	// how long xaction had to finish to be considered to be removed
+	entryOldAge = 30 * time.Second
 
-// watermarks for entries size
-const entriesSizeHW = 200
-const entriesSizeLW = 100
+	// watermarks for entries size
+	entriesSizeHW = 200
+	entriesSizeLW = 100
+)
+const (
+	registryStateIdle = iota
+	registryStateCleanup
+)
 
 type xactionsRegistry struct {
 	sync.RWMutex
@@ -130,6 +136,7 @@ type xactionsRegistry struct {
 	byID        sync.Map // map[int64]xactionEntry
 	byIDSize    *atomic.Int64
 	lastCleanup *atomic.Int64
+	state       *atomic.Int32
 }
 
 func newXactions() *xactionsRegistry {
@@ -137,6 +144,7 @@ func newXactions() *xactionsRegistry {
 		globalXacts: make(map[string]xactionGlobalEntry),
 		lastCleanup: atomic.NewInt64(time.Now().UnixNano()),
 		byIDSize:    atomic.NewInt64(0),
+		state:       atomic.NewInt32(registryStateIdle),
 	}
 }
 
@@ -642,20 +650,17 @@ func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 // cleanup is made when size of r.byID is bigger then entriesSizeHW
 // but not more often than cleanupInterval
 func (r *xactionsRegistry) cleanUpFinished() {
-	if r.byIDSize.Load() < entriesSizeHW {
+	if !r.state.CAS(registryStateIdle, registryStateCleanup) {
+		// cleanup is running already
 		return
 	}
 
+	aboveHW := r.byIDSize.Load() > entriesSizeHW
 	last := r.lastCleanup.Load()
 	startTime := time.Now()
-	// last cleanup was earlier than cleanupInterval
-	if time.Unix(0, last).Add(cleanupInterval).After(startTime) {
-		return
-	}
-
-	if !r.lastCleanup.CAS(last, startTime.UnixNano()) {
-		return
-	}
+	nextCleanup := time.Unix(0, last).Add(cleanupInterval)
+	isCleanupTime := nextCleanup.Before(startTime) || aboveHW
+	anyTaskDeleted := false
 
 	go func(startTime time.Time) {
 		r.byID.Range(func(k, v interface{}) bool {
@@ -666,16 +671,20 @@ func (r *xactionsRegistry) cleanUpFinished() {
 
 			eID := entry.Get().ID()
 			eKind := entry.Get().Kind()
+			// skip xAction if it is not of Task type and the size of registry
+			// is below watermark or it is not time to cleanup yet
+			if !entry.IsTask() && (!isCleanupTime || r.byIDSize.Load() < entriesSizeLW) {
+				return true
+			}
+
+			// if IsTask == true the task must be cleaned up always - no extra checks
+			// besides it is finished at least entryOldAge ago
 			if entry.IsGlobal() {
 				currentEntry := r.GetL(eKind)
 				if currentEntry != nil && currentEntry.Get().ID() == eID {
 					return true
 				}
-			} else if entry.IsTask() {
-				// No additional checks - cleanup all finished task Xactions,
-				// old and recent ones, since task xActions may take up much memory
-				// for their results
-			} else {
+			} else if !entry.IsTask() {
 				bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
 				if bXact != nil {
 					currentEntry := bXact.GetL(eKind)
@@ -686,15 +695,26 @@ func (r *xactionsRegistry) cleanUpFinished() {
 			}
 
 			if entry.Get().EndTime().Add(entryOldAge).Before(startTime) {
-				// xaction has finished more then cleanupInterval ago
+				// xaction has finished more than entryOldAge ago
 				r.byID.Delete(k)
 				r.byIDSize.Dec()
-				// stop loop if we reached LW
-				return r.byIDSize.Load() < entriesSizeLW
+				if entry.IsTask() {
+					anyTaskDeleted = true
+				}
+				return true
 			}
 			return true
 		})
 	}(startTime)
+
+	// free all memory taken by cleaned up tasks
+	// Tasks like ListBucket ones may take up huge amount of memory, so they
+	// must be cleaned up as soon as possible
+	if anyTaskDeleted {
+		go cmn.FreeMemToOS(time.Second)
+	}
+	r.lastCleanup.Store(startTime.UnixNano())
+	r.state.CAS(registryStateCleanup, registryStateIdle)
 }
 
 func (r *xactBckListTask) IsGlobal() bool        { return false }

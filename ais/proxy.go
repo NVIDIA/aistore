@@ -890,8 +890,11 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 
 	b := cmn.MustMarshal(bckList)
 	pageMarker := bckList.PageMarker
+	// free memory allocated for temporary slice immediately as it can take up to a few GB
+	bckList.Entries = bckList.Entries[:0]
 	bckList.Entries = nil
 	bckList = nil
+	go cmn.FreeMemToOS(time.Second)
 
 	if p.writeJSON(w, r, b, "listbucket") {
 		delta := time.Since(started)

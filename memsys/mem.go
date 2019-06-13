@@ -12,7 +12,6 @@ import (
 	"hash"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"sync"
@@ -753,8 +752,7 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 		)
 		if force || swapping { // Heu #4
 			glog.Warningf("%s - freeing memory to the OS...", str)
-			runtime.GC()
-			debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
+			cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
 		} else { // Heu #5
 			glog.Infof(str)
 			runtime.GC()

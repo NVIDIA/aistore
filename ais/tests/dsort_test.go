@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -887,8 +885,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 	time.Sleep(time.Second)
 
 	// Get current memory
@@ -955,8 +952,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	runtime.GC()
-	debug.FreeOSMemory()
+	cmn.FreeMemToOS()
 	time.Sleep(time.Second)
 
 	// Get current memory
