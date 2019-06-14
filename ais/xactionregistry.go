@@ -651,9 +651,11 @@ func (r *xactionsRegistry) cleanUpFinished() {
 				return true
 			}
 
+			eID := entry.Get().ID()
+			eKind := entry.Get().Kind()
 			if entry.IsGlobal() {
-				currentEntry := r.GetL(entry.Get().Kind())
-				if currentEntry != nil && currentEntry.Get().ID() == entry.Get().ID() {
+				currentEntry := r.GetL(eKind)
+				if currentEntry != nil && currentEntry.Get().ID() == eID {
 					return true
 				}
 			} else if entry.IsTask() {
@@ -663,8 +665,8 @@ func (r *xactionsRegistry) cleanUpFinished() {
 			} else {
 				bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
 				if bXact != nil {
-					currentEntry := bXact.GetL(entry.Get().Kind())
-					if currentEntry.Get().ID() == entry.Get().ID() {
+					currentEntry := bXact.GetL(eKind)
+					if currentEntry != nil && currentEntry.Get().ID() == eID {
 						return true
 					}
 				}
