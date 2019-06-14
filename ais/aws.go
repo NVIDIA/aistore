@@ -208,7 +208,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 			return
 		}
 
-		versions = make(map[string]*string, initialBucketListSize)
+		versions = make(map[string]*string, InitialBucketListSize)
 		for _, vers := range verResp.Versions {
 			if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
 				versions[*(vers.Key)] = vers.VersionId
@@ -217,7 +217,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 	}
 
 	// var msg cmn.SelectMsg
-	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
 		entry.Name = *(key.Key)

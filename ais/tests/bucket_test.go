@@ -194,7 +194,6 @@ func TestListObjectFast(t *testing.T) {
 			e.Checksum != empty.Checksum ||
 			e.Size != empty.Size ||
 			e.Type != empty.Type ||
-			e.Bucket != empty.Bucket ||
 			e.Atime != empty.Atime ||
 			e.Version != empty.Version ||
 			e.TargetURL != empty.TargetURL ||

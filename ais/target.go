@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -1140,12 +1139,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
-		tag, ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt)
+		ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt)
 		if ok {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("LIST %s: %s, %d µs", tag, bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
+				glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
 			}
 		}
 	case cmn.ActMakeNCopies:
@@ -1631,42 +1630,6 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	t.writeJSON(w, r, body, "getbucketnames")
 }
 
-func (t *targetrunner) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
-	// Marker is always a file name, so we need to strip filename from path
-	markerDir := ""
-	if msg.PageMarker != "" {
-		markerDir = filepath.Dir(msg.PageMarker)
-	}
-
-	// A small optimization: set boolean variables need* to avoid
-	// doing string search(strings.Contains) for every entry.
-	ci := &allfinfos{
-		t:            t, // targetrunner
-		files:        make([]*cmn.BucketEntry, 0, cmn.DefaultPageSize),
-		prefix:       msg.Prefix,
-		marker:       msg.PageMarker,
-		markerDir:    markerDir,
-		msg:          msg,
-		lastFilePath: "",
-		bucket:       bucket,
-		fileCount:    0,
-		rootLength:   0,
-		limit:        cmn.DefaultPageSize, // maximum number files to return
-		needAtime:    strings.Contains(msg.Props, cmn.GetPropsAtime),
-		needCtime:    strings.Contains(msg.Props, cmn.GetPropsCtime),
-		needChkSum:   strings.Contains(msg.Props, cmn.GetPropsChecksum),
-		needVersion:  strings.Contains(msg.Props, cmn.GetPropsVersion),
-		needStatus:   strings.Contains(msg.Props, cmn.GetPropsStatus),
-		needCopies:   strings.Contains(msg.Props, cmn.GetPropsCopies),
-	}
-
-	if msg.PageSize != 0 {
-		ci.limit = msg.PageSize
-	}
-
-	return ci
-}
-
 // After putting a new version it updates xattr attributes for the object
 // Local bucket:
 //  - if bucket versioning is enable("all" or "local") then the version is autoincremented
@@ -2000,17 +1963,6 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	_, err = t.httpclientLongTimeout.Do(req)
 	if err != nil {
 		errstr = fmt.Sprintf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
-	}
-	return
-}
-
-func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
-	useCacheStr := r.URL.Query().Get(cmn.URLParamCached)
-	var err error
-	if useCache, err = cmn.ParseBool(useCacheStr); err != nil {
-		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
-			cmn.URLParamCached, useCacheStr)
-		errcode = http.StatusInternalServerError
 	}
 	return
 }

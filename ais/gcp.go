@@ -229,16 +229,13 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		return
 	}
 
-	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
 	reslist.PageMarker = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name
 		if strings.Contains(msg.Props, cmn.GetPropsSize) {
 			entry.Size = attrs.Size
-		}
-		if strings.Contains(msg.Props, cmn.GetPropsBucket) {
-			entry.Bucket = attrs.Bucket
 		}
 		if strings.Contains(msg.Props, cmn.GetPropsCtime) {
 			t := attrs.Created

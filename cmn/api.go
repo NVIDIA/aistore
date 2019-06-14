@@ -351,7 +351,6 @@ const (
 	GetPropsAtime    = "atime"
 	GetPropsCtime    = "ctime"
 	GetPropsIsCached = "iscached"
-	GetPropsBucket   = "bucket"
 	GetPropsVersion  = "version"
 	GetTargetURL     = "targetURL"
 	GetPropsStatus   = "status"
@@ -360,8 +359,8 @@ const (
 
 // GetPropsAll is a list of all GetProps* options
 var GetPropsAll = []string{
-	GetPropsChecksum, GetPropsSize, GetPropsAtime, GetPropsCtime,
-	GetPropsIsCached, GetPropsBucket, GetPropsVersion,
+	GetPropsChecksum, GetPropsSize, GetPropsAtime,
+	GetPropsIsCached, GetPropsVersion,
 	GetTargetURL, GetPropsStatus, GetPropsCopies,
 }
 
@@ -371,6 +370,21 @@ const (
 	ObjStatusMoved   = "moved"
 	ObjStatusDeleted = "deleted"
 )
+
+// NeedLocalData returns true if ListBucket for a cloud bucket needs
+// to return object properties that can be retrieved only from local caches
+func (msg *SelectMsg) NeedLocalData() bool {
+	return strings.Contains(msg.Props, GetPropsAtime) ||
+		strings.Contains(msg.Props, GetPropsStatus) ||
+		strings.Contains(msg.Props, GetPropsCopies) ||
+		strings.Contains(msg.Props, GetPropsIsCached)
+}
+
+// WantProp returns true if msg request requires to return propName property
+func (msg *SelectMsg) WantProp(propName string) bool {
+	return strings.Contains(msg.Props, propName)
+
+}
 
 //===================
 //
@@ -387,7 +401,6 @@ type BucketEntry struct {
 	Checksum  string `json:"checksum,omitempty"`  // checksum
 	Type      string `json:"type,omitempty"`      // "file" OR "directory"
 	Atime     string `json:"atime,omitempty"`     // formatted as per SelectMsg.TimeFormat
-	Bucket    string `json:"bucket,omitempty"`    // parent bucket name
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc

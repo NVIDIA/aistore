@@ -98,7 +98,11 @@ type (
 // interfaces
 //
 //===========
-const initialBucketListSize = 128
+
+//nolint:unused, deadcode
+const (
+	InitialBucketListSize = 128 // nolint did not work, so it is public now
+)
 
 type cloudif interface {
 	listbucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, err error, errcode int)

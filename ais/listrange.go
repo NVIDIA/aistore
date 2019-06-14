@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -456,7 +457,8 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 	for {
 		if bckIsLocal {
-			bucketListPage, err = t.prepareLocalObjectList(bucket, msg, bckIsLocal)
+			walk := objwalk.NewWalk(context.TODO(), bucket, bckIsLocal, msg, t)
+			bucketListPage, err = walk.LocalObjPage()
 		} else {
 			bucketListPage, err = t.GetCloudBucketPage(ct, bucket, msg)
 		}

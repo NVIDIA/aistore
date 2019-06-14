@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -61,7 +63,9 @@ type (
 		t       *targetrunner
 		bucket  string
 		msg     *cmn.SelectMsg
+		ctx     context.Context
 		isLocal bool
+		cached  bool
 	}
 
 	xactionEntry interface {
@@ -602,9 +606,17 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg) *xactBckListTask {
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg, cached bool) *xactBckListTask {
 	id := msg.TaskID
-	e := &bckListTaskEntry{id: id, t: t, bucket: bucket, isLocal: isLocal, msg: msg}
+	e := &bckListTaskEntry{
+		id:      id,
+		t:       t,
+		bucket:  bucket,
+		isLocal: isLocal,
+		msg:     msg,
+		ctx:     ctx,
+		cached:  cached,
+	}
 	// TODO: duplicated ID - what to do? Just replace old one?
 	_, ok := r.byID.Load(e.id)
 	cmn.Assert(!ok)
@@ -697,5 +709,10 @@ func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	r.EndTime(time.Now())
 }
 func (r *xactBckListTask) Run() {
-	r.UpdateResult(r.t.prepareLocalObjectList(r.bucket, r.msg, r.isLocal))
+	walk := objwalk.NewWalk(r.ctx, r.bucket, r.isLocal, r.msg, r.t)
+	if r.isLocal {
+		r.UpdateResult(walk.LocalObjPage())
+	} else {
+		r.UpdateResult(walk.CloudObjPage(r.cached))
+	}
 }

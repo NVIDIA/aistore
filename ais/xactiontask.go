@@ -5,6 +5,8 @@
 package ais
 
 import (
+	"context"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -17,6 +19,8 @@ type bckListTaskEntry struct {
 	msg     *cmn.SelectMsg
 	bucket  string
 	isLocal bool
+	ctx     context.Context
+	cached  bool
 }
 
 func (e *bckListTaskEntry) Start(_ int64) error {
@@ -26,6 +30,8 @@ func (e *bckListTaskEntry) Start(_ int64) error {
 		msg:      e.msg,
 		bucket:   e.bucket,
 		isLocal:  e.isLocal,
+		ctx:      e.ctx,
+		cached:   e.cached,
 	}
 	e.xact = xact
 	go xact.Run()
