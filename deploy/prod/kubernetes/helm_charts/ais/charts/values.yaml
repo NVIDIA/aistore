@@ -9,7 +9,7 @@ image:
   kubectl:
     repository: quay.io/nvidia/ais-kubectl
     tag: stable
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   pullSecretNames:  # 
     - ais-pull-secret
 
@@ -120,6 +120,9 @@ target:
     test_fspaths:
       count         : 0
       instance      : 0
+    nodiskio:
+      enabled: false
+      dryobjsize: "8M"
     net:
       ipv4          : ""
       l4_port       : 8081
@@ -129,6 +132,7 @@ target:
       l4_port_intra_data: ""
       http:
         use_https   : false
+        chunked_transfer: false
   service:
     port: 8081
   nodeSelector:
@@ -142,7 +146,7 @@ target:
     hostPath: /tmp/
     podPath:  /var/ais_env
   mountPaths:
-    #- /tmp
+    # XXX should require these via helm install - dangerous default?
     - /ais/sda
     - /ais/sdb
     - /ais/sdc

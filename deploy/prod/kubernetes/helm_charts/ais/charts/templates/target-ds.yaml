@@ -61,6 +61,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: AIS_NODISKIO
+              value: {{ .Values.target.config.nodiskio.enabled | quote }}
+            - name: AIS_DRYOBJSIZE
+              value: {{ .Values.target.config.nodiskio.dryobjsize | quote }}
             - name: PRIMARY_PROXY_SERVICE_HOSTNAME
               value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
@@ -87,6 +91,7 @@ spec:
             initialDelaySeconds: 120
             periodSeconds: 5
             failureThreshold: 3
+            timeoutSeconds: 10
           readinessProbe:
             httpGet:
               path: /v1/health
@@ -94,6 +99,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10 
             failureThreshold: 3
+            timeoutSeconds: 10
           resources:
 {{ toYaml .Values.target.resources | indent 12 }}
       securityContext:

@@ -104,7 +104,8 @@
 			"rproxy_cache":		true,
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
-			"use_https":		{{ .Values.target.config.net.http.use_https }}
+			"use_https":		{{ .Values.target.config.net.http.use_https }},
+			"chunked_transfer": {{ .Values.target.config.net.http.chunked_transfer }}
 		}
 	},
 	"fshc": {

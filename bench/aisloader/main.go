@@ -140,6 +140,7 @@ type (
 		readLen           int64 // read length
 		loaderCnt         uint64
 		maxputs           uint64
+		putShards         uint64
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
@@ -333,6 +334,7 @@ func parseCmdLine() (params, error) {
 	f.BoolVar(&p.randomObjName, "randomname", true,
 		"true: generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.StringVar(&p.subDir, "subdir", "", "Virtual destination directory for all aisloader-generated objects")
+	f.Uint64Var(&p.putShards, "putshards", 0, "Spread generated objects over this many subdirectories (max 100k)")
 	f.BoolVar(&p.uniqueGETs, "uniquegets", true, "true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others")
 
 	//
@@ -472,6 +474,10 @@ func parseCmdLine() (params, error) {
 		if p.subDir[0] == '/' {
 			return params{}, fmt.Errorf("object name prefix can't start with /")
 		}
+	}
+
+	if p.putShards > 100000 {
+		return params{}, fmt.Errorf("putshards should not exceed 100000")
 	}
 
 	if p.bPropsStr != "" {
@@ -1147,20 +1153,32 @@ func putObjectname() (string, error) {
 		return "", fmt.Errorf("number of PUT objects reached maxputs limit (%d)", runParams.maxputs)
 	}
 
-	var baseObjName string
+	var (
+		comps [3]string
+		idx   = 0
+	)
+
+	if runParams.subDir != "" {
+		comps[idx] = runParams.subDir
+		idx++
+	}
+
+	if runParams.putShards != 0 {
+		comps[idx] = fmt.Sprintf("%05x", cnt%runParams.putShards)
+		idx++
+	}
 
 	if useRandomObjName {
-		baseObjName = tutils.FastRandomFilename(rnd, randomObjNameLen)
+		comps[idx] = tutils.FastRandomFilename(rnd, randomObjNameLen)
+		idx++
 	} else {
 		objectNumber := (cnt - 1) << suffixIDMaskLen
 		objectNumber |= suffixID
-		baseObjName = strconv.FormatUint(objectNumber, 16)
+		comps[idx] = strconv.FormatUint(objectNumber, 16)
+		idx++
 	}
 
-	if runParams.subDir == "" {
-		return baseObjName, nil
-	}
-	return path.Join(runParams.subDir, baseObjName), nil
+	return path.Join(comps[0:idx]...), nil
 }
 
 func newGetWorkOrder() *workOrder {

@@ -61,10 +61,16 @@ aisloaderArg:
     default: "fromhostip"
     specific: []
   statsinterval:
-    default: 60
+    default: "60"
     specific: []
   uniquegets:
     default: "true"
+    specific: []
+  putshards:
+    default: "0"
+    specific: []
+  maxputs:
+    default: "0"
     specific: []
 
 resources: {}

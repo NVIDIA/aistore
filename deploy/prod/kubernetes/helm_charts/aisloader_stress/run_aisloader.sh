@@ -56,6 +56,12 @@ DURATION=${DURATION:=15}
 PCTPUT=${PCTPUT:=0}
 #PCTPUT=100
 
+# Max numbers of puts (unlimited if 0)
+MAXPUTS=${MAXPUTS:=0}
+
+# Shard generated objects into this number of sub-prefixes (0 means do no shard)
+PUTSHARDS=${PUTSHARDS:=1000}
+
 # iostat period
 IOSTAT_PERIOD=10
 
@@ -77,12 +83,12 @@ EOM
 IOSTAT_REPEAT=$(( $DURATION * 60 / $IOSTAT_PERIOD + 6 ))
 
 echo "Grab load averages ..."
-ansible -i $HOME/hosts.ini k8s-cluster -m shell -a 'uptime' > $OUTDIR/load-avg.out 2>&1
+ansible -f 50 -i $HOME/hosts.ini k8s-cluster -m shell -a 'uptime' > $OUTDIR/load-avg.out 2>&1
 
 
 
 echo "Dropping caches .."
-ansible -i $HOME/hosts.ini cpu-worker-node -m shell -a 'sync; echo 3 > /proc/sys/vm/drop_caches' --become
+ansible -f 50 -i $HOME/hosts.ini cpu-worker-node -m shell -a 'sync; echo 3 > /proc/sys/vm/drop_caches' --become
 sleep 5
 
 OUTPUT=$OUTDIR/iostat-xc.all.out.$DATESTAMP
@@ -90,6 +96,8 @@ echo "Start iostat on all cpu nodes, to $OUTPUT ..."
 ansible -f 50 -i $HOME/hosts.ini cpu-worker-node -m shell -a "iostat -xc $IOSTAT_PERIOD $IOSTAT_REPEAT" > $OUTPUT 2>&1 &
 ANSPID=$!
 sleep 5
+
+# Note: --set-string on maxputs otherwise Helm renders as things like 1.7e+07 instead of 17000000
 
 echo "Performing helm install"
 helm install \
@@ -99,6 +107,8 @@ helm install \
 	--set image.pullSecret=gmaltby-pull-secret \
 	--set aisloaderArg.bucket.default=$BUCKETSPEC \
 	--set aisloaderArg.pctput.default=$PCTPUT \
+	--set-string aisloaderArg.maxputs.default=$MAXPUTS \
+	--set aisloaderArg.putshards.default=$PUTSHARDS \
 	--set aisloaderArg.duration.default=${DURATION}m \
 	--set aisloaderArg.minsize.default=$MINOBJ \
 	--set aisloaderArg.maxsize.default=$MAXOBJ \
