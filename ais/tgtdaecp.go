@@ -464,7 +464,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		return
 	case cmn.Unregister:
 		if glog.V(3) {
-			glog.Infoln("Sending unregister signal to target keepalive control channel")
+			glog.Infoln("Sending unregister on target keepalive control channel")
 		}
 		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
 		return

@@ -296,8 +296,6 @@ func (t *targetrunner) Run() error {
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
-	glog.Infof("%s is ready to handle requests", t.si.Name())
-	glog.Flush()
 	return nil
 }
 

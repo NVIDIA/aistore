@@ -74,9 +74,10 @@ type (
 	}
 )
 
-func (xact *xactRebBase) Description() string { return "base for rebalance xactions" }
-func (xact *xactGlobalReb) Description() string {
-	return "responsible for cluster-wide balance on the cluster-grow and cluster-shrink events"
+func (xact *xactRebBase) Description() string   { return "base for rebalance xactions" }
+func (xact *xactGlobalReb) Description() string { return "responsible for cluster-wide rebalancing" }
+func (xact *xactGlobalReb) String() string {
+	return fmt.Sprintf("%s, Smap v%d", xact.xactRebBase.String(), xact.smapVersion)
 }
 func (xact *xactLocalReb) Description() string {
 	return "responsible for the mountpath-added and mountpath-enabled events that are handled locally within (and by) each storage target"
