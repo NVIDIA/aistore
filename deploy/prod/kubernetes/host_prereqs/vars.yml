@@ -195,6 +195,12 @@ blkdevtune:
   queue/max_sectors_kb: 8192
 
 #
+# Local ntp servers to use - applied only if running the ais_ntp.yml playbook
+#
+ntp_pools:
+  - pool-ntp-3.nvidiangn.net
+
+#
 # Ethtool tweaks to apply on boot to interfaces with matching driver names.
 # These are applied by the rc.local service.
 #

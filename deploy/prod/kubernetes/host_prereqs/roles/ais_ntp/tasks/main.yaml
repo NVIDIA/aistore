@@ -1,0 +1,38 @@
+---
+
+#
+# Replace standard Ubuntu NTP servers, and perform an initial sync before restarting.
+# The ntp package is already installed by ais_host_config_common.
+#
+
+- name: Remove stock Ubuntu NTP pool servers
+  replace:
+    path: /etc/ntp.conf
+    regexp: '^\s*(pool.*ubuntu)'
+    replace: '# \1'
+  register: pool_removed
+
+- name: List our nominated server(s)
+  lineinfile:
+    path: /etc/ntp.conf
+    insertafter: EOF
+    line: 'pool {{ item }}'
+  with_items:
+    - "{{ ntp_pools }}"
+  register: pool_added
+
+- name: Stop ntp
+  service:
+    name: ntp
+    state: stopped
+  when: pool_removed.changed or pool_added.changed
+
+- name: Perform initial, possibly large, resync
+  command: ntpd -gq
+  when: pool_removed.changed or pool_added.changed
+
+- name: Start ntp
+  service:
+    name: ntp
+    state: started
+  when: pool_removed.changed or pool_added.changed
