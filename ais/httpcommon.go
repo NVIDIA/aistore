@@ -31,8 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 const ( //  h.call(timeout)
@@ -220,9 +218,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 			}
 		}
 	} else {
-		// Support for h2c is transparent using h2c.NewHandler, which implements a lightweight
-		// wrapper around server.mux.ServeHTTP to check for an h2c connection.
-		server.s = &http.Server{Addr: addr, Handler: h2c.NewHandler(httpHandler, &http2.Server{}), ErrorLog: logger}
+		server.s = &http.Server{Addr: addr, Handler: httpHandler, ErrorLog: logger}
 		if err := server.s.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)
