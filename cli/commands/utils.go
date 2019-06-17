@@ -72,7 +72,10 @@ type usageError struct {
 
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
-	return fmt.Sprintf("Incorrect usage of %q: %s.\n\n%s", e.context.App.Name, e.message, msg)
+	if e.context.Command.Name != "" {
+		return fmt.Sprintf("Incorrect usage of \"%s %s\": %s.\n\n%s", e.context.App.Name, e.context.Command.Name, e.message, msg)
+	}
+	return fmt.Sprintf("Incorrect usage of \"%s\": %s.\n\n%s", e.context.App.Name, e.message, msg)
 }
 
 func helpMessage(template string, data interface{}) string {
@@ -100,7 +103,7 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 	cmn.Assert(len(missingArgs) > 0)
 	return &usageError{
 		context:      c,
-		message:      fmt.Sprintf("missing arguments: %s", strings.Join(missingArgs, ", ")),
+		message:      fmt.Sprintf("missing arguments %q", strings.Join(missingArgs, ", ")),
 		helpData:     c.Command,
 		helpTemplate: cli.CommandHelpTemplate,
 	}
@@ -109,7 +112,7 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) error {
 func missingFlagsError(c *cli.Context, missingFlags []string, message ...string) error {
 	cmn.Assert(len(missingFlags) > 0)
 
-	fullMessage := fmt.Sprintf("missing required flags: %s", strings.Join(missingFlags, ", "))
+	fullMessage := fmt.Sprintf("missing required flags %q", strings.Join(missingFlags, ", "))
 	if len(message) > 0 {
 		fullMessage += " - " + message[0]
 	}

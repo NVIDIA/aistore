@@ -212,43 +212,46 @@ const (
    Ver. {{ if .Version }}{{ if not .HideVersion }}{{ .Version }}{{end}}{{end}}
 
 USAGE:
-   {{ .Name }} [GLOBAL OPTIONS] COMMAND
+   {{ .Name }} [GLOBAL OPTIONS...] COMMAND
 
 COMMANDS:{{ range .VisibleCategories }}{{ if .Name }}
    {{ .Name }}:{{end}}{{ range .VisibleCommands }}
      {{ join .Names ", " }}{{ "\t" }}{{ .Usage }}{{end}}{{end}}
 
 GLOBAL OPTIONS:
-   {{ range $index, $option := .VisibleFlags }}{{ if $index }}
-   {{end}}{{ $option }}{{end}}
+   {{- range .VisibleFlags }}
+   {{.}}
+   {{- end}}
 `
 
 	AISCommandHelpTemplate = `NAME:
    {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [OPTIONS]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Description}}
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [OPTIONS...]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Description}}
 
 DESCRIPTION:
    {{.Description}}{{end}}{{if .VisibleFlags}}
 
 OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-`
+   {{- range .VisibleFlags}}
+   {{.}}
+   {{- end}}
+{{end}}`
 
 	AISSubcommandHelpTemplate = `NAME:
    {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} COMMAND{{if .VisibleFlags}} [COMMAND OPTIONS]{{end}}{{end}}
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} COMMAND{{if .VisibleFlags}} [COMMAND OPTIONS...]{{end}}{{end}}
 
 COMMANDS:{{range .VisibleCategories}}{{if .Name}}
    {{.Name}}:{{end}}{{range .VisibleCommands}}
      {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}
 {{end}}{{if .VisibleFlags}}
 OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-`
+   {{- range .VisibleFlags}}
+   {{.}}
+   {{- end}}
+{{end}}`
 )
