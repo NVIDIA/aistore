@@ -194,81 +194,81 @@ Example output for single node:
 ```
 {
   "local_extraction": {
-    "started_time": "2019-04-30T15:48:27.38988387-07:00",
-    "end_time": "2019-04-30T15:48:28.597245399-07:00",
-    "elapsed": 1,
+    "started_time": "2019-06-17T12:27:25.102691781+02:00",
+    "end_time": "2019-06-17T12:28:04.982017787+02:00",
+    "elapsed": 39,
     "running": false,
     "finished": true,
     "total_count": 1000,
-    "extracted_count": 176,
-    "extracted_size": 2306867200,
-    "extracted_record_count": 7040,
-    "extracted_to_disk_count": 0,
-    "extracted_to_disk_size": 0,
+    "extracted_count": 182,
+    "extracted_size": 4771020800,
+    "extracted_record_count": 9100,
+    "extracted_to_disk_count": 4,
+    "extracted_to_disk_size": 104857600,
     "single_shard_stats": {
-      "total_ms": 114285,
-      "count": 176,
-      "min_ms": 34,
-      "max_ms": 649,
-      "avg_ms": 0,
-      "min_throughput": 11488655,
-      "max_throughput": 383883950,
-      "avg_throughput": 32929392
+      "total_ms": 251417,
+      "count": 182,
+      "min_ms": 30,
+      "max_ms": 2696,
+      "avg_ms": 1381,
+      "min_throughput": 9721724,
+      "max_throughput": 847903603,
+      "avg_throughput": 50169799
     }
   },
   "meta_sorting": {
-    "started_time": "2019-04-30T15:48:28.597259201-07:00",
-    "end_time": "2019-04-30T15:48:29.202754728-07:00",
+    "started_time": "2019-06-17T12:28:04.982041542+02:00",
+    "end_time": "2019-06-17T12:28:05.336979995+02:00",
     "elapsed": 0,
     "running": false,
     "finished": true,
     "sent_stats": {
-      "total_ms": 0,
-      "count": 0,
-      "min_ms": 9223372036854775807,
-      "max_ms": 0,
-      "avg_ms": 0
+      "total_ms": 99,
+      "count": 1,
+      "min_ms": 99,
+      "max_ms": 99,
+      "avg_ms": 99
     },
     "recv_stats": {
-      "total_ms": 573,
-      "count": 3,
-      "min_ms": 0,
-      "max_ms": 191,
-      "avg_ms": 0
+      "total_ms": 246,
+      "count": 1,
+      "min_ms": 246,
+      "max_ms": 246,
+      "avg_ms": 246
     }
   },
   "shard_creation": {
-    "started_time": "2019-04-30T15:48:29.547443298-07:00",
-    "end_time": "2019-04-30T15:48:50.042338138-07:00",
-    "elapsed": 20,
+    "started_time": "2019-06-17T12:28:05.725630555+02:00",
+    "end_time": "2019-06-17T12:29:19.108651924+02:00",
+    "elapsed": 73,
     "running": false,
     "finished": true,
-    "to_create": 265,
-    "created_count": 265,
+    "to_create": 9988,
+    "created_count": 9988,
     "moved_shard_count": 0,
     "req_stats": {
-      "total_ms": 539,
-      "count": 7006,
+      "total_ms": 160,
+      "count": 8190,
       "min_ms": 0,
-      "max_ms": 0,
+      "max_ms": 20,
       "avg_ms": 0
     },
     "resp_stats": {
-      "total_ms": 349701,
-      "count": 7006,
+      "total_ms": 4323665,
+      "count": 8190,
       "min_ms": 0,
-      "max_ms": 49,
-      "avg_ms": 0
+      "max_ms": 6829,
+      "avg_ms": 527
     },
     "single_shard_stats": {
-      "total_ms": 1053756,
-      "count": 265,
-      "min_ms": 336,
-      "max_ms": 3976,
-      "avg_ms": 0,
-      "min_throughput": 1220900,
-      "max_throughput": 31229390,
-      "avg_throughput": 5780856
+      "total_ms": 4487385,
+      "count": 9988,
+      "min_ms": 0,
+      "max_ms": 6829,
+      "avg_ms": 449,
+      "min_throughput": 76989,
+      "max_throughput": 709852568,
+      "avg_throughput": 98584381
     }
   },
   "aborted": false,

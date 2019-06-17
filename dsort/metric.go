@@ -55,7 +55,7 @@ func (ts *TimeStats) updateTime(newTime time.Duration) {
 	ts.Count++
 	ts.MinMs = cmn.MinI64(ts.MinMs, t)
 	ts.MaxMs = cmn.MaxI64(ts.MaxMs, t)
-	ts.MaxMs = ts.Total / ts.Count
+	ts.AvgMs = ts.Total / ts.Count
 }
 
 func newThroughputStats() *ThroughputStats {
