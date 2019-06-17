@@ -831,10 +831,10 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}
 	if rangeLen == 0 {
 		reader = file
-		// No need to allocate buffer for whole object (it might be very large).
-		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(lom.Size(), 8*cmn.MiB))
+		buf, slab = gmem2.AllocFromSlab2(lom.Size())
+		// hdr.Set("Content-Length", strconv.FormatInt(lom.Size(), 10)) // TODO: optimize
 	} else {
-		buf, slab = gmem2.AllocFromSlab2(cmn.MinI64(rangeLen, 8*cmn.MiB))
+		buf, slab = gmem2.AllocFromSlab2(rangeLen)
 		if cksumRange {
 			var cksum string
 			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
@@ -849,6 +849,7 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		}
 	}
 
+	w.WriteHeader(http.StatusOK)
 	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)

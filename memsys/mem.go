@@ -245,7 +245,7 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ..
 		n    int64
 		sgl  [][]byte
 	)
-	r.assertReadyForUse()
+	r.assertInited()
 	if len(sbufSize) > 0 {
 		var err error
 		slab, err = r.GetSlab2(sbufSize[0])
@@ -391,7 +391,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 
 // on-demand memory freeing to the user-provided specification
 func (r *Mem2) Free(spec FreeSpec) {
-	r.assertReadyForUse()
+	r.assertInited()
 	var freed int64
 	if spec.Totally {
 		for _, s := range &r.rings {
@@ -509,7 +509,7 @@ func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
 }
 
 func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
-	r.assertReadyForUse()
+	r.assertInited()
 	if estimatedSize == 0 {
 		estimatedSize = minSizeUnknown
 	}
@@ -723,7 +723,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 			} else {
 				x := s.reduce(minDepth, true /* idle */, false /* force */)
 				freed += x
-				if x > 0 && (bool(glog.V(4)) || r.Debug) {
+				if x > 0 && (bool(glog.FastV(4, glog.SmoduleMemsys)) || r.Debug) {
 					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, cmn.B2S(x, 1))
 				}
 			}
@@ -784,12 +784,15 @@ func (r *Mem2) doStats() {
 	}
 }
 
-func (r *Mem2) assertReadyForUse() {
+func (r *Mem2) assertInited() {
+	if _, ok := cmn.CheckDebug(pkgName); !ok {
+		return
+	}
 	curLvl := r.usageLvl.Load()
 	if curLvl == Mem2Initialized || curLvl == Mem2Running {
 		return
 	}
-	cmn.DassertMsg(false, r.Name+" is not initialized nor running", pkgName)
+	cmn.Assert(false)
 }
 
 func (s *Slab2) _alloc() (buf []byte) {
@@ -831,7 +834,7 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 }
 
 func (s *Slab2) grow(cnt int) {
-	if bool(glog.V(4)) || s.debug {
+	if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
 		lput := len(s.put)
 		glog.Infof("%s: grow by %d => %d", s.tag, cnt, lput+cnt)
 	}
@@ -853,7 +856,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.V(4)) || s.debug {
+		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
 			glog.Infof("%s(f=%t, i=%t): reduce lput %d => %d", s.tag, force, isidle, lput, lput-cnt)
 		}
 		for ; cnt > 0; cnt-- {
@@ -876,7 +879,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 	}
 	if cnt > 0 {
-		if bool(glog.V(4)) || s.debug {
+		if bool(glog.FastV(4, glog.SmoduleMemsys)) || s.debug {
 			glog.Infof("%s(f=%t, i=%t): reduce lget %d => %d", s.tag, force, isidle, lget, lget-cnt)
 		}
 		for ; cnt > 0; cnt-- {
