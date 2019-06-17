@@ -235,7 +235,7 @@ func (li *limitInfo) recalc(newThroughput float64) (reset bool) {
 		li.increasing = !li.increasing
 
 		// If new throughput is significantly lower than previous one, request reset.
-		if li.throughput/newThroughput <= resetRatio {
+		if li.throughput/newThroughput > resetRatio {
 			reset = true
 		}
 	}
