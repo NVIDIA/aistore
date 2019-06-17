@@ -145,14 +145,14 @@ func (t *singleObjectTask) cancel() {
 func (t *singleObjectTask) abort(statusMsg string, err error) {
 	t.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-	dbErr := t.parent.infoStore.addError(t.id, t.obj.Objname, statusMsg)
+	dbErr := t.parent.infoStore.persistError(t.id, t.obj.Objname, statusMsg)
 	cmn.AssertNoErr(dbErr)
 
 	t.finishedCh <- err
 }
 
 func (t *singleObjectTask) persist() {
-	_ = t.parent.infoStore.persistTask(t.id, cmn.TaskDlInfo{
+	_ = t.parent.infoStore.persistTaskInfo(t.id, cmn.TaskDlInfo{
 		Name:       t.obj.Objname,
 		Downloaded: t.currentSize.Load(),
 		Total:      t.totalSize,

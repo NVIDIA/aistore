@@ -120,4 +120,5 @@ func (is *infoStore) setAborted(id string) error {
 
 func (is *infoStore) delJob(id string) {
 	delete(is.jobInfo, id)
+	is.downloaderDB.delete(id)
 }

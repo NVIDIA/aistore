@@ -117,6 +117,7 @@ func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
 
 func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 	defer func() {
+		d.parent.infoStore.flush(job.ID())
 		d.cleanUpAborted(job.ID())
 	}()
 
@@ -227,7 +228,7 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 		glog.Warningf("error in handling downloader request: %s", err.Error())
 		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-		dbErr := t.parent.infoStore.addError(t.id, t.obj.Objname, err.Error())
+		dbErr := t.parent.infoStore.persistError(t.id, t.obj.Objname, err.Error())
 		cmn.AssertNoErr(dbErr)
 		return nil, nil, err
 	}
