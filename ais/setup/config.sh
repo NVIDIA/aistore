@@ -97,7 +97,8 @@ cat > $CONFFILE <<EOL
 			"rproxy_cache":		true,
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
-			"use_https":		${USE_HTTPS:-false}
+			"use_https":		${USE_HTTPS:-false},
+			"chunked_transfer":	${CHUNKED_TRANSFER:-false}
 		}
 	},
 	"fshc": {

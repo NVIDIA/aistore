@@ -561,6 +561,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		offset:  rangeOff,
 		length:  rangeLen,
 		gfn:     isGFNRequest,
+		chunked: config.Net.HTTP.Chunked,
 	}
 	if err, errCode := goi.getObject(); err != nil {
 		t.invalmsghdlr(w, r, err.Error(), errCode)

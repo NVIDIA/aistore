@@ -65,6 +65,8 @@ type (
 		length int64
 		// Determines if it is GFN request
 		gfn bool
+		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
+		chunked bool
 	}
 )
 
@@ -481,8 +483,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	// TODO: we should probably support offset != 0 even if goi.length == 0
 	if goi.length == 0 {
 		reader = file
-		buf, slab = gmem2.AllocFromSlab2(goi.lom.Size())
-		// hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10)) // TODO: optimize
+		if goi.chunked {
+			buf, slab = gmem2.AllocFromSlab2(goi.lom.Size())
+		} else {
+			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
+		}
 	} else {
 		buf, slab = gmem2.AllocFromSlab2(goi.length)
 		if cksumRange {

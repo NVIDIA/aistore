@@ -500,6 +500,7 @@ type HTTPConf struct {
 	Key           string `json:"server_key"`         // HTTPS: openssl key
 	RevProxyCache bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
 	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
+	Chunked       bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
 }
 
 type FSHCConf struct {

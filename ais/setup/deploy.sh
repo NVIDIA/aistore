@@ -39,6 +39,7 @@ isCommandAvailable "df" "--version"
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 USE_HTTPS=false
+CHUNKED_TRANSFER=true
 if [ "$DEPLOY_AS_NEXT_TIER" == "" ]
 then
 	PORT=${PORT:-8080}
