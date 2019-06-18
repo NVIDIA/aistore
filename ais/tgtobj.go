@@ -310,7 +310,6 @@ func (goi *getObjInfo) getObject() (err error, errCode int) {
 
 	// under lock: lom init, restore from cluster
 	cluster.ObjectLocker.Lock(goi.lom.Uname(), false)
-	defer cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 do:
 	// all the next checks work with disks - skip all if dryRun.disk=true
 	coldGet := false
@@ -320,6 +319,7 @@ do:
 
 	fromCache, errstr = goi.lom.Load(true)
 	if errstr != "" {
+		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 		return errors.New(errstr), http.StatusInternalServerError
 	}
 
@@ -327,6 +327,7 @@ do:
 	if coldGet && goi.lom.BckIsLocal {
 		// does not exist in the local bucket: restore from neighbors
 		if err, errCode = goi.t.restoreObjLBNeigh(goi.lom); err != nil {
+			cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 			return
 		}
 		goto get
@@ -335,6 +336,7 @@ do:
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()
+				cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 				return
 			}
 		}
@@ -355,10 +357,12 @@ do:
 					if err := os.Remove(goi.lom.FQN); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", errstr, err)
 					}
+					cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 					return errors.New(errstr), http.StatusInternalServerError
 				}
 				coldGet = true
 			} else {
+				cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 				return errors.New(errstr), http.StatusInternalServerError
 			}
 		}
@@ -366,6 +370,7 @@ do:
 
 	// 3. coldget
 	if coldGet {
+		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false) // `GetCold` will lock again and return with object locked
 		if err := goi.lom.AllowColdGET(); err != nil {
 			return err, http.StatusBadRequest
 		}
@@ -389,6 +394,7 @@ get:
 	if err != nil {
 		return err, errCode
 	}
+	cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 	return
 }
 
