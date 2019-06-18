@@ -381,7 +381,29 @@ func dsortHandler(c *cli.Context) error {
 				if aborted {
 					_, _ = fmt.Fprintf(c.App.Writer, "\nDSort job was aborted. Check metrics for encountered errors.\n")
 				} else { // finished == true
-					_, _ = fmt.Fprintf(c.App.Writer, "\nDSort job has finished successfully.\n")
+					resp, err := api.MetricsDSort(baseParams, id)
+					if err != nil {
+						return err
+					}
+
+					var (
+						elapsedTime    time.Duration
+						extractionTime time.Duration
+						sortingTime    time.Duration
+						creationTime   time.Duration
+					)
+					for _, tm := range resp {
+						elapsedTime = cmn.MaxDuration(elapsedTime, tm.ElapsedTime())
+						extractionTime = cmn.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
+						sortingTime = cmn.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
+						creationTime = cmn.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
+					}
+
+					_, _ = fmt.Fprintf(
+						c.App.Writer,
+						"\nDSort job has finished successfully in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
+						elapsedTime, extractionTime, sortingTime, creationTime,
+					)
 				}
 			}
 		}

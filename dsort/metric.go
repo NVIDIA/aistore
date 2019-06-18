@@ -237,6 +237,10 @@ func (m *Metrics) unlock() {
 	m.Extraction.Unlock()
 }
 
+func (m *Metrics) ElapsedTime() time.Duration {
+	return m.Creation.End.Sub(m.Extraction.Start)
+}
+
 // update updates elapsed time for all the metrics.
 //
 // NOTE: This should be done every time Metrics are about to be marshaled and
