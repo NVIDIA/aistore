@@ -415,7 +415,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 				s := r.rings[i]
 				x := s.cleanup()
 				freed += x
-				if x > 0 {
+				if x > 0 && bool(glog.FastV(4, glog.SmoduleMemsys)) {
 					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
 				}
 			}
@@ -708,7 +708,7 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 		}
 	}
 	if reset {
-		if changed {
+		if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
 			glog.Infof("timer %v, free %s", r.time.d, cmn.B2S(int64(free), 1))
 		}
 		r.time.t.Reset(r.time.d)
@@ -728,7 +728,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 			if elapsed > freeIdleZero {
 				x := s.cleanup()
 				freed += x
-				if x > 0 {
+				if x > 0 && glog.FastV(4, glog.SmoduleMemsys) {
 					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
 				}
 			} else {
@@ -749,7 +749,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 // 3) on demand via Mem2.Free()
 func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
 	avg, err := sys.LoadAverage()
-	if err != nil {
+	if err != nil && glog.FastV(4, glog.SmoduleMemsys) {
 		glog.Errorf("Failed to load averages, err: %v", err)
 		avg.One = 999 // fall thru on purpose
 	}
@@ -766,7 +766,9 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 			glog.Warningf("%s - freeing memory to the OS...", str)
 			cmn.FreeMemToOS() // forces GC followed by an attempt to return memory to the OS
 		} else { // Heu #5
-			glog.Infof(str)
+			if glog.FastV(4, glog.SmoduleMemsys) {
+				glog.Infof(str)
+			}
 			runtime.GC()
 		}
 		gced = true

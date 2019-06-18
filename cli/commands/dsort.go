@@ -212,6 +212,7 @@ func dsortGenHandler(c *cli.Context, baseParams *api.BaseParams) error {
 	if err := mem.Init(false); err != nil {
 		return err
 	}
+	defer mem.Stop(nil)
 
 	pt, err := cmn.ParseBashTemplate(template)
 	if err != nil {
