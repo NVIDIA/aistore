@@ -421,9 +421,9 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket strin
 		} else {
 			for _, m := range reslist.Entries {
 				if len(m.Checksum) > 8 {
-					tutils.Logf("%s %d %s [%s] %s [%v - %s]\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...", m.IsCached, m.Atime)
+					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.IsCached, m.Atime)
 				} else {
-					tutils.Logf("%s %d %s [%s] %s [%v - %s]\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum, m.IsCached, m.Atime)
+					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.IsCached, m.Atime)
 				}
 			}
 			totalObjs += len(reslist.Entries)

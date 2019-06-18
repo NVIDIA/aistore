@@ -190,8 +190,7 @@ func TestListObjectFast(t *testing.T) {
 		if strings.Contains(e.Name, "q-") {
 			uniqueNames[e.Name] = true
 		}
-		if e.Ctime != empty.Ctime ||
-			e.Checksum != empty.Checksum ||
+		if e.Checksum != empty.Checksum ||
 			e.Size != empty.Size ||
 			e.Type != empty.Type ||
 			e.Atime != empty.Atime ||

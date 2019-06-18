@@ -1044,7 +1044,7 @@ func group(objs []*cmn.BucketEntry, prefix string) []os.FileInfo {
 
 		if len(parts) == 1 {
 			keys[parts[0]] = true
-			mTime, _ := time.Parse(time.RFC822, o.Ctime)
+			mTime, _ := time.Parse(time.RFC822, o.Atime)
 			mTime = mTime.UTC()
 			fis = append(fis, &fileInfo{
 				name:    parts[0],

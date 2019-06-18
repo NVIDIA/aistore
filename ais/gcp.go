@@ -237,13 +237,6 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		if strings.Contains(msg.Props, cmn.GetPropsSize) {
 			entry.Size = attrs.Size
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsCtime) {
-			t := attrs.Created
-			if !attrs.Updated.IsZero() {
-				t = attrs.Updated
-			}
-			entry.Ctime = cmn.FormatTime(t, msg.TimeFormat)
-		}
 		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
 			entry.Checksum = hex.EncodeToString(attrs.MD5)
 		}

@@ -224,10 +224,6 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		if strings.Contains(msg.Props, cmn.GetPropsSize) {
 			entry.Size = *(key.Size)
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsCtime) {
-			t := *(key.LastModified)
-			entry.Ctime = cmn.FormatTime(t, msg.TimeFormat)
-		}
 		if strings.Contains(msg.Props, cmn.GetPropsChecksum) {
 			omd5, _ := strconv.Unquote(*key.ETag)
 			entry.Checksum = omd5

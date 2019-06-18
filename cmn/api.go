@@ -349,7 +349,6 @@ const (
 	GetPropsChecksum = "checksum"
 	GetPropsSize     = "size"
 	GetPropsAtime    = "atime"
-	GetPropsCtime    = "ctime"
 	GetPropsIsCached = "iscached"
 	GetPropsVersion  = "version"
 	GetTargetURL     = "targetURL"
@@ -397,7 +396,6 @@ func (msg *SelectMsg) WantProp(propName string) bool {
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
 	Size      int64  `json:"size,omitempty"`      // size in bytes
-	Ctime     string `json:"ctime,omitempty"`     // formatted as per SelectMsg.TimeFormat
 	Checksum  string `json:"checksum,omitempty"`  // checksum
 	Type      string `json:"type,omitempty"`      // "file" OR "directory"
 	Atime     string `json:"atime,omitempty"`     // formatted as per SelectMsg.TimeFormat

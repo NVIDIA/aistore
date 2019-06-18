@@ -275,7 +275,6 @@ var (
 	ObjectPropsMap = map[string]string{
 		"name":      "{{$obj.Name}}\t",
 		"size":      "{{FormatBytesSigned $obj.Size 2}}\t",
-		"ctime":     "{{$obj.Ctime}}\t",
 		"checksum":  "{{$obj.Checksum}}\t",
 		"type":      "{{$obj.Type}}\t",
 		"atime":     "{{$obj.Atime}}\t",

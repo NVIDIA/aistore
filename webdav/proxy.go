@@ -77,7 +77,7 @@ func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, e
 	}
 
 	if entries[0].Name == prefix {
-		t, _ := time.Parse(time.RFC822, entries[0].Ctime)
+		t, _ := time.Parse(time.RFC822, entries[0].Atime)
 		return true, &fileInfo{size: entries[0].Size, modTime: t.UTC()}, nil
 	}
 

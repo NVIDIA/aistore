@@ -59,7 +59,6 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 		rootLength:   0,
 		limit:        cmn.DefaultPageSize, // maximum number files to return
 		needAtime:    msg.WantProp(cmn.GetPropsAtime),
-		needCtime:    msg.WantProp(cmn.GetPropsCtime),
 		needChkSum:   msg.WantProp(cmn.GetPropsChecksum),
 		needVersion:  msg.WantProp(cmn.GetPropsVersion),
 		needStatus:   msg.WantProp(cmn.GetPropsStatus),
@@ -206,6 +205,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 		if si.DaemonID != localID {
 			continue
 		}
+
 		if needURL {
 			e.TargetURL = localURL
 		}

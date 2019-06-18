@@ -30,7 +30,6 @@ type (
 		rootLength   int
 		limit        int
 		needAtime    bool
-		needCtime    bool
 		needChkSum   bool
 		needVersion  bool
 		needStatus   bool
@@ -94,9 +93,6 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	}
 	if ci.needAtime {
 		fileInfo.Atime = cmn.FormatTime(lom.Atime(), ci.msg.TimeFormat)
-	}
-	if ci.needCtime {
-		fileInfo.Ctime = cmn.FormatTime(osfi.ModTime(), ci.msg.TimeFormat)
 	}
 	if ci.needChkSum && lom.Cksum() != nil {
 		_, storedCksum := lom.Cksum().Get()
@@ -178,6 +174,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		if ci.t.Snode().DaemonID != si.DaemonID {
 			objStatus = cmn.ObjStatusMoved
 		}
+
 	}
 	return ci.lsObject(lom, osfi, objStatus)
 }
