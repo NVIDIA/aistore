@@ -22,13 +22,16 @@ const (
 	WarmGet
 )
 
+type CloudIf interface {
+	ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errcode int)
+}
+
 // For implementations, please refer to ais/target.go
 type Target interface {
 	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
 	Snode() *Snode
 	FSHC(err error, path string)
 	GetBowner() Bowner
-	GetCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error)
 	GetFSPRG() fs.PathRunGroup
 	GetMem2() *memsys.Mem2
 	HRWTarget(bucket, objname string) (si *Snode, errstr string)
@@ -39,4 +42,5 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	RunLRU()
+	CloudIntf() CloudIf
 }

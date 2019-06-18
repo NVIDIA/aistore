@@ -105,7 +105,7 @@ const (
 )
 
 type cloudif interface {
-	listbucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, err error, errcode int)
+	cluster.CloudIf
 	headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, err error, errcode int)
 	//

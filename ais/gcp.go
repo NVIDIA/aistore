@@ -198,7 +198,7 @@ func handleObjectError(objErr error, bucket *storage.BucketHandle, gctx context.
 // bucket operations
 //
 //==================
-func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (body []byte, err error, errcode int) {
+func (gcpimpl *gcpimpl) ListBucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (reslist *cmn.BucketList, err error, errcode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -229,7 +229,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		return
 	}
 
-	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
+	reslist = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
 	reslist.PageMarker = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
@@ -252,7 +252,6 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
-	body = cmn.MustMarshal(reslist)
 	return
 }
 

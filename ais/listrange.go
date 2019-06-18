@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -42,18 +41,6 @@ type filesWithDeadline struct {
 }
 
 type listf func(ct context.Context, objects []string, bucket, bckProvider string, deadline time.Duration, done chan struct{}) error
-
-func (*targetrunner) GetCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error) {
-	jsbytes, err, errcode := getcloudif().listbucket(ct, bucket, msg)
-	if err != nil {
-		return nil, fmt.Errorf("error listing cloud bucket %s: %d(%v)", bucket, errcode, err)
-	}
-	bucketList = &cmn.BucketList{}
-	if err := jsoniter.Unmarshal(jsbytes, bucketList); err != nil {
-		return nil, fmt.Errorf("error unmarshalling BucketList: %v", err)
-	}
-	return
-}
 
 func (t *targetrunner) getOpFromActionMsg(action string) listf {
 	switch action {
@@ -461,7 +448,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 			walk := objwalk.NewWalk(context.TODO(), bucket, bckIsLocal, msg, t)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
-			bucketListPage, err = t.GetCloudBucketPage(ct, bucket, msg)
+			bucketListPage, err, _ = t.CloudIntf().ListBucket(ct, bucket, msg)
 		}
 		if err != nil {
 			return err

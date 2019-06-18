@@ -164,7 +164,7 @@ func awsIsVersionSet(version *string) bool {
 // bucket operations
 //
 //==================
-func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (body []byte, err error, errcode int) {
+func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (reslist *cmn.BucketList, err error, errcode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -217,7 +217,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 	}
 
 	// var msg cmn.SelectMsg
-	var reslist = cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
+	reslist = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
 		entry.Name = *(key.Key)
@@ -246,7 +246,6 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *cmn.S
 		reslist.PageMarker = reslist.Entries[len(reslist.Entries)-1].Name
 	}
 
-	body = cmn.MustMarshal(reslist)
 	return
 }
 

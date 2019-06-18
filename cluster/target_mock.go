@@ -52,6 +52,4 @@ func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error {
 	return nil
 }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup { return nil }
-func (*TargetMock) GetCloudBucketPage(ct context.Context, bucket string, msg *cmn.SelectMsg) (bucketList *cmn.BucketList, err error) {
-	return nil, nil
-}
+func (*TargetMock) CloudIntf() CloudIf        { return nil }

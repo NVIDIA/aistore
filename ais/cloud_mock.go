@@ -26,8 +26,8 @@ var (
 
 func newEmptyCloud() *emptyCloud { return &emptyCloud{} }
 
-func (m *emptyCloud) listbucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (jsbytes []byte, err error, errcode int) {
-	return []byte{}, fmt.Errorf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
+func (m *emptyCloud) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errcode int) {
+	return nil, fmt.Errorf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound
 }
 func (m *emptyCloud) headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int) {
 	return cmn.SimpleKVs{}, fmt.Errorf(bucketDoesNotExist, bucket, cmn.DoesNotExist), http.StatusNotFound

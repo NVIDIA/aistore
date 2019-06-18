@@ -157,7 +157,7 @@ func (j *CloudBucketDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
 
 func (j *CloudBucketDownloadJob) GetNextObjs() error {
 	if j.pagesCnt > 0 && j.pageMarker == "" {
-		// GetCloudBucketPage returned empty pageMarker after at least one reqest
+		// Cloud ListBucket returned empty pageMarker after at least one reqest
 		// this means there are no more objects in to list
 		j.objs = []cmn.DlObj{}
 		return nil
@@ -171,7 +171,7 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 		PageSize:   cmn.DefaultPageSize,
 	}
 
-	bckList, err := j.t.GetCloudBucketPage(j.ctx, j.bucket, msg)
+	bckList, err, _ := j.t.CloudIntf().ListBucket(j.ctx, j.bucket, msg)
 	if err != nil {
 		return err
 	}
