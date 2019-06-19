@@ -32,6 +32,7 @@ type Target interface {
 	Snode() *Snode
 	FSHC(err error, path string)
 	GetBowner() Bowner
+	GetSmap() *Smap
 	GetFSPRG() fs.PathRunGroup
 	GetMem2() *memsys.Mem2
 	HRWTarget(bucket, objname string) (si *Snode, errstr string)

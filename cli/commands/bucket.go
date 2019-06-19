@@ -441,11 +441,11 @@ func statsBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket string) 
 
 		totalCnt++
 		totalSz += obj.Size
-		if obj.Status == cmn.ObjStatusOK {
+		if obj.IsStatusOK() {
 			dataCnt++
 			dataSz += obj.Size
 		}
-		if obj.IsCached {
+		if obj.IsCached() {
 			localCnt++
 			localSz += obj.Size
 		}
@@ -817,7 +817,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	// if fastFlag is enabled, allFlag is enabled automatically because obj.Status is unset
 	if !flagIsSet(c, allFlag) && !flagIsSet(c, fastFlag) {
 		// Filter out files with status different than OK
-		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.Status == cmn.ObjStatusOK })
+		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.IsStatusOK() })
 	}
 
 	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {

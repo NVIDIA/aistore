@@ -152,7 +152,7 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 	curr := 0
 
 	for i < len(lst) {
-		if lst[i].Status != cmn.ObjStatusOK {
+		if !lst[i].IsStatusOK() {
 			i++
 			continue
 		}
@@ -1452,7 +1452,7 @@ func TestECXattrs(t *testing.T) {
 	// check that all returned objects and their repicas have the same version
 	for _, e := range reslist.Entries {
 		if e.Version != finalVersion {
-			t.Errorf("%s[status=%s] must have version %s but it is %s\n", e.Name, e.Status, finalVersion, e.Version)
+			t.Errorf("%s[status=%d] must have version %s but it is %s\n", e.Name, e.Flags, finalVersion, e.Version)
 		}
 	}
 

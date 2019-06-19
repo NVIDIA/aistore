@@ -363,13 +363,6 @@ var GetPropsAll = []string{
 	GetTargetURL, GetPropsStatus, GetPropsCopies,
 }
 
-// BucketEntry.Status
-const (
-	ObjStatusOK      = ""
-	ObjStatusMoved   = "moved"
-	ObjStatusDeleted = "deleted"
-)
-
 // NeedLocalData returns true if ListBucket for a cloud bucket needs
 // to return object properties that can be retrieved only from local caches
 func (msg *SelectMsg) NeedLocalData() bool {
@@ -391,19 +384,45 @@ func (msg *SelectMsg) WantProp(propName string) bool {
 //
 //===================
 
+// BucketEntry.Status
+const (
+	ObjStatusOK = iota
+	ObjStatusMoved
+	ObjStatusDeleted
+)
+
+// BucketEntry Flags constants
+const (
+	EntryStatusBits = 5                          // N bits
+	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
+	EntryIsCached   = 1 << (EntryStatusBits + 1) // StatusMaskBits + 1
+)
+
 // BucketEntry corresponds to a single entry in the BucketList and
 // contains file and directory metadata as per the SelectMsg
+// Flags is a bit field:
+// 0-2: objects status, all statuses are mutually exclusive, so it can hold up
+//      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
+// 3:   IsCached (for cloud bucket it shows if the object in local cache)
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
 	Size      int64  `json:"size,omitempty"`      // size in bytes
 	Checksum  string `json:"checksum,omitempty"`  // checksum
-	Type      string `json:"type,omitempty"`      // "file" OR "directory"
 	Atime     string `json:"atime,omitempty"`     // formatted as per SelectMsg.TimeFormat
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
-	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc
 	Copies    int16  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
-	IsCached  bool   `json:"iscached,omitempty"`  // if the file is cached on one of targets
+	Flags     uint16 `json:"flags,omitempty"`     // object flags, like IsCached, IsMoved etc
+}
+
+func (be *BucketEntry) IsCached() bool {
+	return be.Flags&EntryIsCached != 0
+}
+func (be *BucketEntry) SetCached() {
+	be.Flags |= EntryIsCached
+}
+func (be *BucketEntry) IsStatusOK() bool {
+	return be.Flags&EntryStatusMask == 0
 }
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'

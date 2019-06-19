@@ -53,3 +53,4 @@ func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error {
 }
 func (*TargetMock) GetFSPRG() fs.PathRunGroup { return nil }
 func (*TargetMock) CloudIntf() CloudIf        { return nil }
+func (*TargetMock) GetSmap() *Smap            { return nil }

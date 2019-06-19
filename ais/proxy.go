@@ -1707,7 +1707,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, he
 	if !msg.Fast {
 		entryLess := func(i, j int) bool {
 			if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
-				return allEntries.Entries[i].Status < allEntries.Entries[j].Status
+				return allEntries.Entries[i].Flags&cmn.EntryStatusMask < allEntries.Entries[j].Flags&cmn.EntryStatusMask
 			}
 			return allEntries.Entries[i].Name < allEntries.Entries[j].Name
 		}

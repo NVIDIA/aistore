@@ -192,13 +192,11 @@ func TestListObjectFast(t *testing.T) {
 		}
 		if e.Checksum != empty.Checksum ||
 			e.Size != empty.Size ||
-			e.Type != empty.Type ||
 			e.Atime != empty.Atime ||
 			e.Version != empty.Version ||
 			e.TargetURL != empty.TargetURL ||
-			e.Status != empty.Status ||
-			e.Copies != empty.Copies ||
-			e.IsCached != empty.IsCached {
+			e.Flags != empty.Flags ||
+			e.Copies != empty.Copies {
 			t.Errorf("Some fields do not have default values: %#v", *e)
 		}
 	}
@@ -646,7 +644,7 @@ func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached i
 		} else if entry.Copies == 3 {
 			copies3++
 		}
-		if entry.IsCached {
+		if entry.IsCached() {
 			cached++
 		}
 	}

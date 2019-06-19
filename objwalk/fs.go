@@ -19,6 +19,7 @@ type (
 	// used to traverse local filesystem and collect objects info
 	allfinfos struct {
 		t            cluster.Target
+		smap         *cluster.Smap
 		objs         []*cmn.BucketEntry
 		prefix       string
 		marker       string
@@ -69,7 +70,7 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus string) error {
+func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus uint16) error {
 	relname := lom.FQN[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
@@ -85,11 +86,10 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus stri
 	// add the obj to the page
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
-		Name:     relname,
-		Atime:    "",
-		IsCached: true,
-		Status:   objStatus,
-		Copies:   1,
+		Name:   relname,
+		Atime:  "",
+		Flags:  objStatus | cmn.EntryIsCached,
+		Copies: 1,
 	}
 	if ci.needAtime {
 		fileInfo.Atime = cmn.FormatTime(lom.Atime(), ci.msg.TimeFormat)
@@ -125,8 +125,8 @@ func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
 	}
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
-		Name:   relname,
-		Status: cmn.ObjStatusOK,
+		Name:  relname,
+		Flags: cmn.ObjStatusOK,
 	}
 	ci.objs = append(ci.objs, fileInfo)
 	return nil
@@ -148,7 +148,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// FIXME: check the logic vs local/global rebalance
 	var (
-		objStatus = cmn.ObjStatusOK
+		objStatus uint16 = cmn.ObjStatusOK
 	)
 	lom, errstr := cluster.LOM{T: ci.t, FQN: fqn}.Init()
 	if errstr != "" {
@@ -167,7 +167,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		if errstr != "" {
 			glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
 		}
-		si, errstr := ci.t.HRWTarget(lom.Bucket, lom.Objname)
+		si, errstr := cluster.HrwTarget(lom.Bucket, lom.Objname, ci.smap)
 		if errstr != "" {
 			glog.Errorf("%s: %s", lom, errstr)
 		}

@@ -36,7 +36,7 @@ func ConcatObjLists(lists [][]*cmn.BucketEntry, maxSize int) (objs []*cmn.Bucket
 	// one(Status=moved) may get into the response
 	ifLess := func(i, j int) bool {
 		if objs[i].Name == objs[j].Name {
-			return objs[i].Status < objs[j].Status
+			return objs[i].Flags&cmn.EntryStatusMask < objs[j].Flags&cmn.EntryStatusMask
 		}
 		return objs[i].Name < objs[j].Name
 	}
@@ -84,7 +84,7 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 				entry.TargetURL = e.TargetURL
 			}
 			// detect which list contains real information about the object
-			if !entry.IsCached && e.IsCached {
+			if !entry.IsCached() && e.IsCached() {
 				objSet[e.Name] = e
 			}
 		}
@@ -99,7 +99,7 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 	// sort the result
 	ifLess := func(i, j int) bool {
 		if bckList.Entries[i].Name == bckList.Entries[j].Name {
-			return bckList.Entries[i].Status < bckList.Entries[j].Status
+			return bckList.Entries[i].Flags&cmn.EntryStatusMask < bckList.Entries[j].Flags&cmn.EntryStatusMask
 		}
 		return bckList.Entries[i].Name < bckList.Entries[j].Name
 	}

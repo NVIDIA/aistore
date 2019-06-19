@@ -48,6 +48,7 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 	// doing string search(strings.Contains) for every entry.
 	ci := &allfinfos{
 		t:            w.t, // targetrunner
+		smap:         w.t.GetSmap(),
 		objs:         make([]*cmn.BucketEntry, 0, cmn.DefaultPageSize),
 		prefix:       msg.Prefix,
 		marker:       msg.PageMarker,
@@ -200,8 +201,9 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 	config := cmn.GCO.Get()
 	localURL := w.t.Snode().URL(cmn.NetworkPublic)
 	localID := w.t.Snode().DaemonID
+	smap := w.t.GetSmap()
 	for _, e := range bucketList.Entries {
-		si, _ := w.t.HRWTarget(w.bucket, e.Name)
+		si, _ := cluster.HrwTarget(w.bucket, e.Name, smap)
 		if si.DaemonID != localID {
 			continue
 		}
@@ -219,7 +221,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			continue
 		}
 
-		e.IsCached = true
+		e.SetCached()
 		if needAtime {
 			e.Atime = cmn.FormatTime(lom.Atime(), w.msg.TimeFormat)
 		}

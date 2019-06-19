@@ -459,7 +459,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
 		for _, be := range bucketListPage.Entries {
-			if be.Status != cmn.ObjStatusOK {
+			if !be.IsStatusOK() {
 				continue
 			}
 			if !acceptRegexRange(be.Name, prefix, re, min, max) {

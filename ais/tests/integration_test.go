@@ -1665,7 +1665,7 @@ func TestAtimeRebalance(t *testing.T) {
 		if atime != entry.Atime {
 			t.Errorf("Atime mismatched for %s: before %q, after %q", entry.Name, atime, entry.Atime)
 		}
-		if entry.Status == cmn.ObjStatusOK {
+		if entry.IsStatusOK() {
 			itemCountOk++
 		}
 	}

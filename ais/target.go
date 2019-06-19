@@ -429,6 +429,7 @@ func (t *targetrunner) GetBowner() cluster.Bowner   { return t.bmdowner }
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
 func (t *targetrunner) GetMem2() *memsys.Mem2       { return gmem2 }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
+func (t *targetrunner) GetSmap() *cluster.Smap      { return t.smapowner.Get() }
 
 //===========================================================================================
 //
