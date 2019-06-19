@@ -68,6 +68,10 @@ type (
 		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
 		chunked bool
 	}
+
+	writerOnly struct {
+		io.Writer
+	}
 )
 
 ////////////////
@@ -481,9 +485,11 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	}
 
 	// TODO: we should probably support offset != 0 even if goi.length == 0
+	w := goi.w
 	if goi.length == 0 {
 		reader = file
 		if goi.chunked {
+			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
 			buf, slab = gmem2.AllocFromSlab2(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
@@ -505,7 +511,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		}
 	}
 
-	written, err = io.CopyBuffer(goi.w, reader, buf)
+	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
 		goi.t.fshc(err, fqn)
 		err = fmt.Errorf("Failed to GET %s, err: %v", fqn, err)

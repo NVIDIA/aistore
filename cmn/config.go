@@ -954,6 +954,9 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 				c.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
 		}
 	}
+	if !c.HTTP.Chunked {
+		glog.Warningln("disabled chunked transfer may cause a slow down (see also: Content-Length)")
+	}
 	return nil
 }
 

@@ -98,7 +98,7 @@ cat > $CONFFILE <<EOL
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
 			"use_https":		${USE_HTTPS:-false},
-			"chunked_transfer":	${CHUNKED_TRANSFER:-false}
+			"chunked_transfer":	${CHUNKED_TRANSFER:-true}
 		}
 	},
 	"fshc": {
