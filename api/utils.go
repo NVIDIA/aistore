@@ -27,6 +27,14 @@ type BaseParams struct {
 	Method string
 }
 
+func (bp *BaseParams) Copy() *BaseParams {
+	return &BaseParams{
+		Client: bp.Client,
+		URL:    bp.URL,
+		Method: bp.Method,
+	}
+}
+
 // OptionalParams is used in constructing client-side API requests to the AIStore.
 // Stores Query and Headers for providing arguments that are not used commonly in API requests
 type OptionalParams struct {

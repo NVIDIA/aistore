@@ -272,7 +272,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 	)
 
 	for targetID := range targets {
-		wg.Go(func(targetID string) func() error {
+		wg.Go(func(targetID string, baseParams *api.BaseParams) func() error {
 			return func() (err error) {
 				baseParams.URL, err = daemonDirectURL(targetID)
 				if err != nil {
@@ -287,7 +287,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 				statsCh <- targetDiskStats{stats: diskStats, targetID: targetID}
 				return nil
 			}
-		}(targetID))
+		}(targetID, baseParams.Copy()))
 	}
 
 	err := wg.Wait()
