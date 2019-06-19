@@ -450,10 +450,7 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 	//
 	// objects
 	//
-	client := cmn.NewClient(cmn.ClientArgs{
-		DialTimeout: config.Timeout.SendFile,
-		Timeout:     config.Timeout.SendFile,
-	})
+	client := transport.NewDefaultClient()
 	sbArgs := transport.SBArgs{
 		ManualResync: true,
 		Multiplier:   int(config.Rebalance.Multiplier),

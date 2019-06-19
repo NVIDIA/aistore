@@ -179,7 +179,8 @@ var (
 )
 
 // default HTTP client to be used with streams
-func NewDefaultClient() *http.Client { return cmn.NewClient(cmn.ClientArgs{IdleConnsPerHost: 1000}) }
+// resulting transport will have all defaults, dial timeout=30s, timeout=no-timeout
+func NewDefaultClient() *http.Client { return cmn.NewClient(cmn.ClientArgs{}) }
 
 //
 // Stream Collector - a singleton object with responsibilities that include:
