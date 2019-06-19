@@ -49,7 +49,7 @@ const (
 	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
 	TargetInfoBody   = "{{$value.Snode.DaemonID}}\t " +
 		"{{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t {{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t " +
-		"{{CalcAvg $value `percent` | printf `%d`}}\t {{$capacity := CalcAvg $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
+		"{{CalcCap $value `percent` | printf `%d`}}\t {{$capacity := CalcCap $value `capacity`}}{{FormatBytesUnsigned $capacity 3}}\t " +
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\n"
 
@@ -300,7 +300,7 @@ var (
 		"ExtractStat":         extractStat,
 		"FormatBytesSigned":   cmn.B2S,
 		"FormatBytesUnsigned": cmn.UnsignedB2S,
-		"CalcAvg":             calcAvg,
+		"CalcCap":             calcCap,
 		"IsUnsetTime":         isUnsetTime,
 		"FormatTime":          fmtTime,
 		"FormatObjTime":       fmtObjTime,
@@ -325,7 +325,7 @@ func extractStat(daemon *stats.CoreStats, statName string) int64 {
 	return daemon.Tracker[statName].Value
 }
 
-func calcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
+func calcCap(daemon *stats.DaemonStatus, option string) (total uint64) {
 	for _, fs := range daemon.Capacity {
 		switch option {
 		case "capacity":
@@ -334,7 +334,15 @@ func calcAvg(daemon *stats.DaemonStatus, option string) (total uint64) {
 			total += uint64(fs.Usedpct)
 		}
 	}
-	return total / uint64(len(daemon.Capacity))
+
+	switch option {
+	case "capacity":
+		return total
+	case "percent":
+		return total / uint64(len(daemon.Capacity))
+	}
+
+	return 0
 }
 
 func fmtXactStatus(tStatus *stats.TargetStatus) string {
