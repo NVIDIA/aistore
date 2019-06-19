@@ -104,10 +104,11 @@ type (
 	}
 
 	Metrics struct {
-		Put     MetricAgg
-		Get     MetricAgg
-		Config  MetricConfigAgg
-		General MetricLatsAgg
+		Put    MetricAgg
+		Get    MetricAgg
+		Config MetricConfigAgg
+		PutLat MetricLatsAgg
+		GetLat MetricLatsAgg
 	}
 )
 
@@ -359,20 +360,32 @@ func (mcg *MetricConfigAgg) Send(c *Client) {
 }
 
 func (m *Metrics) SendAll(c *Client) {
-	generalMetrics := make([]Metric, 0, len(m.General.metrics))
-	var aggCnt int64
-	for _, m := range m.General.metrics {
-		generalMetrics = append(generalMetrics, Metric{
+	generalMetricsGet := make([]Metric, 0, len(m.GetLat.metrics))
+	generalMetricsPut := make([]Metric, 0, len(m.PutLat.metrics))
+	var aggCntGet, aggCntPut int64
+
+	for _, m := range m.GetLat.metrics {
+		generalMetricsGet = append(generalMetricsGet, Metric{
 			Type:  Timer,
 			Name:  m.name,
 			Value: float64(m.latency/time.Millisecond) / float64(m.cnt),
 		})
 		// m.cnt is the same for all aggregated metrics
-		aggCnt = m.cnt
+		aggCntGet = m.cnt
+	}
+	for _, m := range m.PutLat.metrics {
+		generalMetricsPut = append(generalMetricsPut, Metric{
+			Type:  Timer,
+			Name:  m.name,
+			Value: float64(m.latency/time.Millisecond) / float64(m.cnt),
+		})
+		// m.cnt is the same for all aggregated metrics
+		aggCntPut = m.cnt
 	}
 
-	m.Get.Send(c, get, generalMetrics, aggCnt)
-	m.Put.Send(c, put, generalMetrics, aggCnt)
+	m.Get.Send(c, get, generalMetricsGet, aggCntGet)
+	m.Put.Send(c, put, generalMetricsPut, aggCntPut)
+
 	m.Config.Send(c)
 }
 

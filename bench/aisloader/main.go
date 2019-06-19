@@ -1237,17 +1237,26 @@ func completeWorkOrder(wo *workOrder) {
 	delta := cmn.TimeDelta(wo.end, wo.start)
 
 	if wo.err == nil {
-		intervalStats.statsd.General.Add("latency.proxyconn", wo.latencies.ProxyConn)
-		intervalStats.statsd.General.Add("latency.proxy", wo.latencies.Proxy)
-		intervalStats.statsd.General.Add("latency.targetconn", wo.latencies.TargetConn)
-		intervalStats.statsd.General.Add("latency.target", wo.latencies.Target)
-		intervalStats.statsd.General.Add("latency.posthttp", wo.latencies.PostHTTP)
-		intervalStats.statsd.General.Add("latency.proxyheader", wo.latencies.ProxyWroteHeader)
-		intervalStats.statsd.General.Add("latency.proxyrequest", wo.latencies.ProxyWroteRequest)
-		intervalStats.statsd.General.Add("latency.targetheader", wo.latencies.TargetWroteHeader)
-		intervalStats.statsd.General.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
-		intervalStats.statsd.General.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
-		intervalStats.statsd.General.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
+		var lat *statsd.MetricLatsAgg
+		switch wo.op {
+		case opGet:
+			lat = &intervalStats.statsd.GetLat
+		case opPut:
+			lat = &intervalStats.statsd.PutLat
+		}
+		if lat != nil {
+			lat.Add("latency.proxyconn", wo.latencies.ProxyConn)
+			lat.Add("latency.proxy", wo.latencies.Proxy)
+			lat.Add("latency.targetconn", wo.latencies.TargetConn)
+			lat.Add("latency.target", wo.latencies.Target)
+			lat.Add("latency.posthttp", wo.latencies.PostHTTP)
+			lat.Add("latency.proxyheader", wo.latencies.ProxyWroteHeader)
+			lat.Add("latency.proxyrequest", wo.latencies.ProxyWroteRequest)
+			lat.Add("latency.targetheader", wo.latencies.TargetWroteHeader)
+			lat.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
+			lat.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
+			lat.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
+		}
 	}
 
 	if err := validateWorkOrder(wo, delta); err != nil {
