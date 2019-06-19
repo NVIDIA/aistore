@@ -95,7 +95,7 @@ func (c *getJogger) ec(req *Request) {
 		c.jobMtx.Lock()
 		c.jobs[jobID] = restore
 		c.jobMtx.Unlock()
-		buffer, slab := mem2.AllocFromSlab2(cmn.MiB)
+		buffer, slab := mem2.AllocEstimated(cmn.MiB)
 		go func() {
 			restore(req, toDisk, buffer, cb)
 			slab.Free(buffer)
@@ -426,7 +426,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm cmn.Cksummer, wg *sync.WaitGr
 		return
 	}
 
-	buf, slab := mem2.AllocFromSlab2(cmn.MaxI64(sliceSize, 256*cmn.KiB))
+	buf, slab := mem2.AllocForSize(sliceSize)
 	actualCksm, errstr := cmn.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 

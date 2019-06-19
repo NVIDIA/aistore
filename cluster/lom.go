@@ -422,7 +422,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumstr, errstr string) 
 		errstr = fmt.Sprintf("%s, err: %v", fqn, err)
 		return
 	}
-	buf, slab := lom.T.GetMem2().AllocFromSlab2(size)
+	buf, slab := lom.T.GetMem2().AllocForSize(size)
 	cksumstr, errstr = cmn.ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)

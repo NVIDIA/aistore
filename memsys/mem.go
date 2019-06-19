@@ -69,7 +69,7 @@ import (
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator
 // (Mem2, for shortness) can be exercised via its public API that includes
-// GetSlab2(), SelectSlab2() and AllocFromSlab2().
+// GetSlab2(), SelectSlab2() and AllocEstimated().
 //
 // NOTE the difference between the first and the second:
 // - GetSlab2(memsys.MaxSlabSize) returns the Slab of MaxSlabSize buffers
@@ -104,7 +104,7 @@ import (
 
 const (
 	MaxSlabSize = 128 * cmn.KiB
-	NumSlabs    = MaxSlabSize / cmn.KiB / 4 // [4K - 256K] at 4K increments
+	NumSlabs    = MaxSlabSize / cmn.PageSize // [4K - 256K] at 4K increments
 
 	deadBEEF       = "DEADBEEF"
 	globalMem2Name = "GMem2"
@@ -373,7 +373,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	for i := range &r.rings {
 		slab := &Slab2{
 			m:       r,
-			bufSize: int64(cmn.KiB * 4 * (i + 1)),
+			bufSize: int64(cmn.PageSize * (i + 1)),
 			get:     make([][]byte, 0, minDepth),
 			put:     make([][]byte, 0, minDepth),
 		}
@@ -494,7 +494,7 @@ func (r *Mem2) stop() {
 }
 
 func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
-	a, b := bufSize/(cmn.KiB*4), bufSize%(cmn.KiB*4)
+	a, b := bufSize/cmn.PageSize, bufSize%cmn.PageSize
 	if b != 0 {
 		err = fmt.Errorf("buf_size %d must be multiple of 4K", bufSize)
 		return
@@ -521,8 +521,20 @@ func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
 	return r.rings[len(r.rings)-1]
 }
 
-func (r *Mem2) AllocFromSlab2(estimSize int64) (buf []byte, slab *Slab2) {
+func (r *Mem2) AllocEstimated(estimSize int64) (buf []byte, slab *Slab2) {
 	slab = r.SelectSlab2(estimSize)
+	buf = slab.Alloc()
+	return
+}
+func (r *Mem2) AllocForSize(size int64) (buf []byte, slab *Slab2) {
+	if size >= MaxSlabSize {
+		slab = r.rings[len(r.rings)-1]
+	} else if size <= cmn.PageSize {
+		slab = r.rings[0]
+	} else {
+		a := (size + cmn.PageSize - 1) / cmn.PageSize
+		slab = r.rings[a-1]
+	}
 	buf = slab.Alloc()
 	return
 }

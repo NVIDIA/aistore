@@ -392,7 +392,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 	gcpObj := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	buf, slab := gmem2.AllocFromSlab2(0)
+	buf, slab := gmem2.AllocEstimated(0)
 	written, err := io.CopyBuffer(wc, file, buf)
 	slab.Free(buf)
 	if err != nil {

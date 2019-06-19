@@ -189,7 +189,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 			return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 		}
 
-		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
+		buf, slab := Mem2.AllocEstimated(cmn.DefaultBufSize)
 		defer slab.Free(buf)
 		if validate {
 			length, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)

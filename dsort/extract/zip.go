@@ -43,7 +43,7 @@ type (
 
 func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = mem.AllocFromSlab2(cmn.KiB)
+	rd.metadataBuf, rd.slab = mem.AllocEstimated(cmn.KiB)
 	return rd
 }
 

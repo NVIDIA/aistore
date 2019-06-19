@@ -40,7 +40,7 @@ type putJogger struct {
 
 func (c *putJogger) run() {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
-	c.buffer, c.slab = mem2.AllocFromSlab2(cmn.MiB)
+	c.buffer, c.slab = mem2.AllocEstimated(cmn.MiB)
 
 	for {
 		select {
@@ -240,7 +240,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 // Fills slices with calculated checksums, reports errors to errCh
 func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan error, cksmReaders []io.Reader, sliceSize int64) {
 	defer wg.Done()
-	buf, slab := mem2.AllocFromSlab2(cmn.MaxI64(256*cmn.KiB, sliceSize))
+	buf, slab := mem2.AllocForSize(sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
 		cksm, errstr := cmn.ComputeXXHash(reader, buf)

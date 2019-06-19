@@ -193,7 +193,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		return fmt.Errorf("failed to create %s, err: %s", poi.workFQN, err)
 	}
 
-	buf, slab := gmem2.AllocFromSlab2(0)
+	buf, slab := gmem2.AllocEstimated(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		reader.Close()
@@ -490,12 +490,12 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		reader = file
 		if goi.chunked {
 			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = gmem2.AllocFromSlab2(goi.lom.Size())
+			buf, slab = gmem2.AllocForSize(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 		}
 	} else {
-		buf, slab = gmem2.AllocFromSlab2(goi.length)
+		buf, slab = gmem2.AllocForSize(goi.length)
 		if cksumRange {
 			var (
 				cksum, errstr string

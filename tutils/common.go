@@ -117,7 +117,7 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		shash string
 		h     *xxhash.XXHash64
 	)
-	buf, s := Mem2.AllocFromSlab2(cmn.MiB)
+	buf, s := Mem2.AllocEstimated(cmn.MiB)
 	blkSize := int64(len(buf))
 	defer s.Free(buf)
 
