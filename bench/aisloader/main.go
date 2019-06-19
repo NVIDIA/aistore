@@ -215,9 +215,11 @@ var (
 	statsdC          statsd.Client
 	getPending       int64
 	putPending       int64
+	skipLatSend      atomic.Bool
 
 	flagUsage   bool
 	flagVersion bool
+	noLatDetail bool
 
 	ip   string
 	port string
@@ -344,6 +346,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
+	f.BoolVar(&noLatDetail, "no-detailed-stats", false, "true: do not collect detailed HTTP latencies for PUT and GET")
 
 	f.Parse(os.Args[1:])
 
@@ -542,6 +545,8 @@ func parseCmdLine() (params, error) {
 		port = dockerPort
 	}
 
+	skipLatSend.Store(noLatDetail)
+
 	p.proxyURL = "http://" + ip + ":" + port
 
 	// Don't print arguments when just getting loaderID
@@ -567,6 +572,7 @@ func printArguments(set *flag.FlagSet) {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
+	fmt.Fprintf(w, "HTTP latency detalization:\t%v\n", !noLatDetail)
 	_, _ = fmt.Fprintf(w, "========================================\n\n")
 	_ = w.Flush()
 }
@@ -716,7 +722,9 @@ func main() {
 
 	osSigChan := make(chan os.Signal, 2)
 	if runParams.stoppable {
-		signal.Notify(osSigChan, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(osSigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	} else {
+		signal.Notify(osSigChan, syscall.SIGHUP)
 	}
 
 	logRunParams(runParams)
@@ -825,9 +833,20 @@ L:
 				sendStatsdStats(&intervalStats)
 				intervalStats = newStats(time.Now())
 			}
-		case <-osSigChan:
-			if runParams.stoppable {
-				break L
+		case sgnl := <-osSigChan:
+			switch sgnl {
+			case syscall.SIGHUP:
+				msg := "Collecting detailed latency info is "
+				if !skipLatSend.Toggle() {
+					msg += "disabled"
+				} else {
+					msg += "enabled"
+				}
+				fmt.Println(msg)
+			default:
+				if runParams.stoppable {
+					break L
+				}
 			}
 		default:
 			// Do nothing
@@ -1236,7 +1255,7 @@ func validateWorkOrder(wo *workOrder, delta time.Duration) error {
 func completeWorkOrder(wo *workOrder) {
 	delta := cmn.TimeDelta(wo.end, wo.start)
 
-	if wo.err == nil {
+	if wo.err == nil && !skipLatSend.Load() {
 		var lat *statsd.MetricLatsAgg
 		switch wo.op {
 		case opGet:
