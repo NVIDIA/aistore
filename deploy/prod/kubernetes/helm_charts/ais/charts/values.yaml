@@ -132,7 +132,7 @@ target:
       l4_port_intra_data: ""
       http:
         use_https   : false
-        chunked_transfer: false
+        chunked_transfer: true
   service:
     port: 8081
   nodeSelector:

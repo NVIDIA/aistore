@@ -57,7 +57,7 @@ aisloaderArg:
     default: "8M" 
     specific: []
   seed:
-    # can be 'fromhostip' or 'random'
+    # can be 'fromhostip' (last component of host IP), 'random' (shell $RANDOM) or '0' (time in ns)
     default: "fromhostip"
     specific: []
   statsinterval:
@@ -71,6 +71,9 @@ aisloaderArg:
     specific: []
   maxputs:
     default: "0"
+    specific: []
+  no_detailed_stats:
+    default: "true"
     specific: []
 
 resources: {}

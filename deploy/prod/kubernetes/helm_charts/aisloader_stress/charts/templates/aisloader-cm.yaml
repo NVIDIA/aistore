@@ -39,6 +39,7 @@ data:
     declare -A uniquegets=( [_default]="{{ .Values.aisloaderArg.uniquegets.default }}" )
     declare -A putshards=( [_default]="{{ .Values.aisloaderArg.putshards.default }}" )
     declare -A maxputs=( [_default]={{ .Values.aisloaderArg.maxputs.default | quote }} )
+    declare -A no_detailed_stats=( [_default]={{ .Values.aisloaderArg.no_detailed_stats.default | quote }} )
 
     # Node-specific values for bucket, if any
     {{ range .Values.aisloaderArg.bucket.specific }}
@@ -116,6 +117,11 @@ data:
     maxputs[{{ .node }}]={{ .value | quote }}
     {{ end }}
 
+    # Node-specific values for no_detailed_stats, if any
+    {{ range .Values.aisloaderArg.no_detailed_stats.specific }}
+    no_detailed_stats=[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
     #
     # Called from the container start script, with aisloader in PATH.
     # The stdout of aisloader can be seen in kubectl logs.
@@ -136,6 +142,9 @@ data:
         random)
           RANDOM=$(dd if=/dev/random bs=1 count=2 2>/dev/null | od -t u2 | head -1 | awk '{print $2}')
           SEED=$RANDOM
+          ;;
+        0)
+          SEED=0
           ;;
         *)
           SEED=$RANDOM
@@ -158,7 +167,8 @@ data:
         -statsinterval=${statsinterval[$n]:-${statsinterval['_default']}} \
         -uniquegets=${uniquegets[$n]:-${uniquegets['_default']}} \
         -putshards=${putshards[$n]:-${putshards['_default']}} \
-        -maxputs=${maxputs[$n]:-${maxputs['_default']}}
+        -maxputs=${maxputs[$n]:-${maxputs['_default']}} \
+        -no-detailed-stats=${no_detailed_stats[$n]:-${no_detailed_stats['_default']}}
 
       echo "aisloader exit code was $?"
     }
