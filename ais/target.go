@@ -1406,6 +1406,12 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 		ctx:          t.contextWithAuth(header),
 		workFQN:      fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut),
 	}
+	sizeStr := header.Get("Content-Length")
+	if sizeStr != "" {
+		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+			poi.size = size
+		}
+	}
 	return poi.putObject()
 }
 

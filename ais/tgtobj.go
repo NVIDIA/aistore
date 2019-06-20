@@ -36,6 +36,8 @@ type (
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
 		cksumToCheck cmn.Cksummer
+		// object size aka Content-Length
+		size int64
 		// Context used when putting the object which should be contained in
 		// cloud bucket. It usually contains credentials to access the cloud.
 		ctx context.Context
@@ -181,19 +183,23 @@ func (poi *putObjInfo) tryFinalize() (errstr string, errCode int) {
 func (poi *putObjInfo) writeToFile() (err error) {
 	var (
 		file   *os.File
+		buf    []byte
+		slab   *memsys.Slab2
 		reader = poi.r
 	)
-
 	if dryRun.disk {
 		return
 	}
-
 	if file, err = cmn.CreateFile(poi.workFQN); err != nil {
 		poi.t.fshc(err, poi.workFQN)
 		return fmt.Errorf("failed to create %s, err: %s", poi.workFQN, err)
 	}
 
-	buf, slab := gmem2.AllocEstimated(0)
+	if poi.size == 0 {
+		buf, slab = gmem2.AllocEstimated(0)
+	} else {
+		buf, slab = gmem2.AllocForSize(poi.size)
+	}
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		reader.Close()

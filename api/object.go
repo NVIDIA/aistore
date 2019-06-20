@@ -43,6 +43,7 @@ type PutObjectArgs struct {
 	Object         string
 	Hash           string
 	Reader         cmn.ReadOpenCloser
+	Size           uint64 // optional
 }
 
 // HeadObject API
@@ -273,6 +274,9 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	}
 	if len(replicateOpts) > 0 {
 		req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
+	}
+	if args.Size != 0 {
+		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 	}
 
 	resp, err := args.BaseParams.Client.Do(req)

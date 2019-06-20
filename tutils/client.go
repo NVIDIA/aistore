@@ -670,6 +670,7 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 			Object:     fullObjName,
 			Hash:       reader.XXHash(),
 			Reader:     reader,
+			Size:       size,
 		}
 		err = api.PutObject(putArgs)
 		if err != nil {
