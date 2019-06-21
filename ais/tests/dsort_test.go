@@ -1472,9 +1472,9 @@ func TestDistributedSortAddTarget(t *testing.T) {
 		df = &dsortFramework{
 			m:                m,
 			outputTempl:      "output-{0..100000}",
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "40%",
+			tarballCnt:       4000,
+			fileInTarballCnt: 200,
+			maxMemUsage:      "1KB",
 		}
 	)
 
