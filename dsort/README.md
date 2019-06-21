@@ -177,6 +177,24 @@ which can be monitored. Description of metrics returned for *single node*:
     * `min_ms` - shortest duration of waiting for a record (in milliseconds).
     * `max_ms` - longest duration of waiting for a record (in milliseconds).
     * `avg_ms` - average duration of waiting for a record (in milliseconds).
+  * `local_send_stats` - statistics about sending record content to other target.
+    * `total_ms` - total number of milliseconds spent on writing the record content to the wire.
+    * `count` - number of records received from other nodes.
+    * `min_ms` - shortest duration of waiting for a record content to written into the wire (in milliseconds).
+    * `max_ms` - longest duration of waiting for a record content to written into the wire (in milliseconds).
+    * `avg_ms` - average duration of waiting for a record content to written into the wire (in milliseconds).
+    * `min_throughput` - minimum throughput of writing record content into the wire (in bytes per second).
+    * `max_throughput` - maximum throughput of writing record content into the wire (in bytes per second).
+    * `avg_throughput` - average throughput of writing record content into the wire (in bytes per second).
+  * `local_recv_stats` - statistics receiving record content from other target.
+    * `total_ms` - total number of milliseconds spent on receiving the record content from the wire.
+    * `count` - number of records received from other nodes.
+    * `min_ms` - shortest duration of waiting for a record content to be read from the wire (in milliseconds).
+    * `max_ms` - longest duration of waiting for a record content to be read from the wire (in milliseconds).
+    * `avg_ms` - average duration of waiting for a record content to be read from the wire (in milliseconds).
+    * `min_throughput` - minimum throughput of reading record content from the wire (in bytes per second).
+    * `max_throughput` - maximum throughput of reading record content from the wire (in bytes per second).
+    * `avg_throughput` - average throughput of reading record content from the wire (in bytes per second).
   * `single_shard_stats` - statistics about single shard creation.
     * `total_ms` - total number of milliseconds spent creating all shards.
     * `count` - number of created shards.

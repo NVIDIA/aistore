@@ -640,7 +640,15 @@ func (m *Manager) pullStreamWriter(objName string) *streamWriter {
 	return writer
 }
 
-func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, _ unsafe.Pointer, err error) {
+func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
+	if m.Metrics.extended {
+		beforeSend := (*time.Time)(x)
+		m.Metrics.Creation.Lock()
+		m.Metrics.Creation.LocalSendStats.updateTime(time.Since(*beforeSend))
+		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size)
+		m.Metrics.Creation.Unlock()
+	}
+
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
@@ -685,6 +693,11 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
+		var beforeSend time.Time
+		if m.Metrics.extended {
+			beforeSend = time.Now()
+		}
+
 		fullContentPath := m.recManager.FullContentPath(req.RecordObj)
 
 		switch req.RecordObj.StoreType {
@@ -702,7 +715,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 
-			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
 				f.Close()
 				m.abort(err)
 			}
@@ -712,7 +725,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			respHdr.ObjAttrs.Size = sgl.Size()
-			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
 				sgl.Free()
 				m.abort(err)
 			}
@@ -729,7 +742,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.ObjAttrs.Size = fi.Size()
-			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, nil /* cmpl ptr */, fromNode); err != nil {
+			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
 				f.Close()
 				m.abort(err)
 			}
@@ -740,6 +753,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 }
 
 func (m *Manager) makeRecvResponseFunc() transport.Receive {
+	metrics := m.Metrics.Creation
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
 			m.abort(err)
@@ -759,6 +773,11 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 			return
 		}
 
+		var beforeSend time.Time
+		if m.Metrics.extended {
+			beforeSend = time.Now()
+		}
+
 		slab, err := mem.GetSlab2(memsys.MaxSlabSize)
 		cmn.AssertNoErr(err)
 		buf := slab.Alloc()
@@ -766,6 +785,13 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 		writer.wg.Done()
 		slab.Free(buf)
+
+		if m.Metrics.extended {
+			metrics.Lock()
+			metrics.LocalRecvStats.updateTime(time.Since(beforeSend))
+			metrics.LocalRecvStats.updateThroughput(writer.n)
+			metrics.Unlock()
+		}
 	}
 }
 
@@ -814,12 +840,22 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 func (m *Manager) loadContent() extract.LoadContentFunc {
 	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		loadLocal := func(w io.Writer) (written int64, err error) {
-			slab, err := mem.GetSlab2(memsys.MaxSlabSize)
-			cmn.AssertNoErr(err)
-			buf := slab.Alloc()
+			var (
+				slab      *memsys.Slab2
+				buf       []byte
+				storeType = obj.StoreType
+			)
+
+			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
+				slab, err = mem.GetSlab2(memsys.MaxSlabSize)
+				cmn.AssertNoErr(err)
+				buf = slab.Alloc()
+			}
 
 			defer func() {
-				slab.Free(buf)
+				if slab != nil {
+					slab.Free(buf)
+				}
 				m.decrementRef(1)
 			}()
 

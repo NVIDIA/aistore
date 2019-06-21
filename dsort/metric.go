@@ -37,8 +37,8 @@ type ThroughputStats struct {
 	AvgTp int64 `json:"avg_throughput"`
 }
 
-// ShardStats contains statistics about single shard processing.
-type ShardStats struct {
+// DetailedStats contains time and throughput statistics .
+type DetailedStats struct {
 	*TimeStats
 	*ThroughputStats
 }
@@ -72,8 +72,8 @@ func (tps *ThroughputStats) updateThroughput(throughput int64) {
 	tps.AvgTp = tps.total / tps.count
 }
 
-func newShardStats() *ShardStats {
-	return &ShardStats{
+func newDetailedStats() *DetailedStats {
+	return &DetailedStats{
 		newTimeStats(),
 		newThroughputStats(),
 	}
@@ -133,7 +133,7 @@ type LocalExtraction struct {
 	// to given moment.
 	ExtractedToDiskSize int64 `json:"extracted_to_disk_size"`
 	// ShardExtractionStats describes time statistics about single shard extraction.
-	ShardExtractionStats *ShardStats `json:"single_shard_stats,omitempty"`
+	ShardExtractionStats *DetailedStats `json:"single_shard_stats,omitempty"`
 }
 
 // MetaSorting contains metrics for second phase of DSort.
@@ -162,8 +162,12 @@ type ShardCreation struct {
 	RequestStats *TimeStats `json:"req_stats,omitempty"`
 	// ResponseStats describes time statistics about response to other target.
 	ResponseStats *TimeStats `json:"resp_stats,omitempty"`
+	// LocalSendStats describes time statistics about sending record content to other target.
+	LocalSendStats *DetailedStats `json:"local_send_stats,omitempty"`
+	// LocalRecvStats describes time statistics about receiving record content from other target.
+	LocalRecvStats *DetailedStats `json:"local_recv_stats,omitempty"`
 	// ShardCreationStats describes time statistics about single shard creation.
-	ShardCreationStats *ShardStats `json:"single_shard_stats,omitempty"`
+	ShardCreationStats *DetailedStats `json:"single_shard_stats,omitempty"`
 }
 
 // Metrics is general struct which contains all stats about DSort run.
@@ -197,11 +201,13 @@ func newMetrics(description string, extended bool) *Metrics {
 	creation := &ShardCreation{}
 
 	if extended {
-		extraction.ShardExtractionStats = newShardStats()
+		extraction.ShardExtractionStats = newDetailedStats()
 
 		creation.RequestStats = newTimeStats()
 		creation.ResponseStats = newTimeStats()
-		creation.ShardCreationStats = newShardStats()
+		creation.LocalSendStats = newDetailedStats()
+		creation.LocalRecvStats = newDetailedStats()
+		creation.ShardCreationStats = newDetailedStats()
 	}
 
 	sorting.SentStats = newTimeStats()

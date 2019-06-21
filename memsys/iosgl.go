@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	_ io.WriterTo        = &SGL{}
 	_ cmn.ReadOpenCloser = &SGL{}
 	_ cmn.ReadOpenCloser = &Reader{}
 	_ cmn.ReadOpenCloser = &SliceReader{}
@@ -62,6 +63,28 @@ func (z *SGL) grow(toSize int64) {
 		z.sgl = append(z.sgl, z.slab._alloc())
 	}
 	z.slab.muget.Unlock()
+}
+
+func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
+	var (
+		n0      int
+		toWrite = z.woff
+	)
+	for _, buf := range z.sgl {
+		l := cmn.MinI64(toWrite, int64(len(buf)))
+		if l == 0 {
+			break
+		}
+
+		n0, err = dst.Write(buf[:l])
+		n += int64(n0)
+		toWrite -= l
+
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 func (z *SGL) Write(p []byte) (n int, err error) {

@@ -1172,7 +1172,7 @@ components:
                 type: integer
                 format: int64
               single_shard_stats:
-                $ref: '#/components/schemas/TimeStats'
+                $ref: '#/components/schemas/DetailedStats'
           meta_sorting:
             type: object
             properties:
@@ -1221,8 +1221,12 @@ components:
                 $ref: '#/components/schemas/TimeStats'
               resp_stats:
                 $ref: '#/components/schemas/TimeStats'
+              local_send_stats:
+                $ref: '#/components/schemas/DetailedStats'
+              local_recv_stats:
+                $ref: '#/components/schemas/DetailedStats'
               single_shard_stats:
-                $ref: '#/components/schemas/TimeStats'
+                $ref: '#/components/schemas/DetailedStats'
           aborted:
             type: boolean
             description: Specifies if the distributed sort has been aborted or not.
@@ -1241,6 +1245,25 @@ components:
         max_ms:
           type: integer
         avg_ms:
+          type: integer
+    DetailedStats:
+      type: object
+      properties:
+        total_ms:
+          type: integer
+        count:
+          type: integer
+        min_ms:
+          type: integer
+        max_ms:
+          type: integer
+        avg_ms:
+          type: integer
+        min_throughput:
+          type: integer
+        max_throughput:
+          type: integer
+        avg_throughput:
           type: integer
     InputParameters:
       type: object
