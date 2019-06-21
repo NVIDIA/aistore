@@ -15,9 +15,9 @@ from __future__ import absolute_import
 
 import unittest
 
-import openapi_client
-from openapi_client.api.object_api import ObjectApi  # noqa: E501
-from openapi_client.rest import ApiException
+import ais_client
+from ais_client.api.object_api import ObjectApi  # noqa: E501
+from ais_client.rest import ApiException
 
 import random
 import uuid
@@ -31,12 +31,12 @@ class TestObjectApi(unittest.TestCase):
     def setUp(self):
         surpressResourceWarning()
 
-        configuration = openapi_client.Configuration()
+        configuration = ais_client.Configuration()
         configuration.debug = False
-        api_client = openapi_client.ApiClient(configuration)
-        self.object = openapi_client.api.object_api.ObjectApi(api_client)
-        self.bucket = openapi_client.api.bucket_api.BucketApi(api_client)
-        self.models = openapi_client.models
+        api_client = ais_client.ApiClient(configuration)
+        self.object = ais_client.api.object_api.ObjectApi(api_client)
+        self.bucket = ais_client.api.bucket_api.BucketApi(api_client)
+        self.models = ais_client.models
         self.BUCKET_NAME = os.environ["BUCKET"]
         self.assertTrue(self.BUCKET_NAME,
                         "Environment variable 'BUCKET' not set.")

@@ -16,9 +16,9 @@ from __future__ import absolute_import
 import unittest
 from .helpers import DictParser, surpressResourceWarning
 
-import openapi_client
-from openapi_client.api.daemon_api import DaemonApi  # noqa: E501
-from openapi_client.rest import ApiException
+import ais_client
+from ais_client.api.daemon_api import DaemonApi  # noqa: E501
+from ais_client.rest import ApiException
 
 class TestDaemonApi(unittest.TestCase):
     """DaemonApi unit test stubs"""
@@ -26,11 +26,11 @@ class TestDaemonApi(unittest.TestCase):
     def setUp(self):
         surpressResourceWarning()
 
-        configuration = openapi_client.Configuration()
+        configuration = ais_client.Configuration()
         configuration.debug = False
-        api_client = openapi_client.ApiClient(configuration)
-        self.daemon = openapi_client.api.daemon_api.DaemonApi(api_client)
-        self.models = openapi_client.models
+        api_client = ais_client.ApiClient(configuration)
+        self.daemon = ais_client.api.daemon_api.DaemonApi(api_client)
+        self.models = ais_client.models
 
     def tearDown(self):
         pass

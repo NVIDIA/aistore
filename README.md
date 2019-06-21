@@ -219,7 +219,7 @@ To get started with the python client package, you need to first generate the cl
 
     ```shell
     cd <path_to_repo>
-    java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -g python -o ./python-client/
+    java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -c openapi/config.json -g python -o ./python-client/
     ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
@@ -239,7 +239,7 @@ Once the package is generated, it can be installed as follows, these commands ca
 
 ```shell
 cd <path_to_repo>/python-client
-pip uninstall openapi_client #uninstalls any previous versions
+pip uninstall ais_client #uninstalls any previous versions
 pip install .
 ```
 
@@ -248,19 +248,19 @@ Now you're ready to import the package in python and use it to communicate with 
 For example, this script will display a map of your AIS cluster.
 
 ```shell
-import openapi_client
+import ais_client
 # Some aliases for functions in the package
-openapi_models = openapi_client.models
+openapi_models = ais_client.models
 openapi_params = openapi_models.InputParameters
 openapi_actions = openapi_models.Actions
 
-configuration = openapi_client.Configuration()
+configuration = ais_client.Configuration()
 configuration.debug = False
 proxy_url = 'localhost:8080' #Change this to the ip of any proxy in your AIS cluster, ex: 172.50.0.2:8080
 configuration.host = 'http://%s/v1/' % proxy_url
-proxyClient = openapi_client.ApiClient(configuration)
+proxyClient = ais_client.ApiClient(configuration)
 
-daemon_api = openapi_client.api.daemon_api.DaemonApi(proxyClient)
+daemon_api = ais_client.api.daemon_api.DaemonApi(proxyClient)
 print(daemon_api.get(openapi_models.GetWhat.SMAP))
 ```
 

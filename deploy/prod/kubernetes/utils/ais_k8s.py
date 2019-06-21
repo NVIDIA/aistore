@@ -1,5 +1,5 @@
 #
-# Run with python2 - a requirement of the AIS openapi_client
+# Run with python2 - a requirement of the AIS ais_client
 #
 # Python script to query/validate AIS cluster state & health on k8s as deployed
 # by our Helm chart.
@@ -17,7 +17,7 @@
 from __future__ import print_function
 import datetime
 import kubernetes.client
-import openapi_client
+import ais_client
 import os
 import ptvsd
 import pytz
@@ -54,7 +54,7 @@ class Ais:
     podNeProxyLabel = "app=ais,component=ne_proxy"
     podTargetLabel = "app=ais,component=target"
 
-    openapi_models = openapi_client.models
+    openapi_models = ais_client.models
     openapi_params = openapi_models.InputParameters
     openapi_actions = openapi_models.Actions
 
@@ -71,7 +71,7 @@ class Ais:
 
         self.refreshAisK8sState()
         self.refreshAisDaemonState()
-    
+
     def refreshAisK8sState(self, quiet=False):
         """ Query k8s for AIS state. """
 
@@ -102,12 +102,12 @@ class Ais:
         proxy_pods = sorted(self.v1api.list_pod_for_all_namespaces(label_selector=self.podProxyLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
         ne_proxy_pods = sorted(self.v1api.list_pod_for_all_namespaces(label_selector=self.podNeProxyLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
         target_pods = sorted(self.v1api.list_pod_for_all_namespaces (label_selector=self.podTargetLabel, include_uninitialized=True).items, key=attrgetter('spec.node_name'))
-        
+
         #
         # Each AIS Daemon will have a dict in one of the three lists:
         # {
         #   'pod':          pod object from k8s list_pod_for_all_namespaces,
-        #   'aisClientApi': openapi_client api for this daemon,
+        #   'aisClientApi': ais_client api for this daemon,
         #   'smap':         result of daemon smap query,
         #   'config':       result of daemon config query,
         #   'stats':        result of daemon stats query
@@ -147,10 +147,10 @@ class Ais:
                     d['aisClientApi'] = None
                     continue
 
-                config = openapi_client.Configuration()
+                config = ais_client.Configuration()
                 config.debug = False
                 config.host = "http://%s:%s/v1" % (d['pod'].status.pod_ip, d['pod'].spec.containers[0].ports[0].container_port)
-                d['aisClientApi'] = openapi_client.ApiClient(config)
+                d['aisClientApi'] = ais_client.ApiClient(config)
 
         createAisApiClients(self.daemons['proxy'])
         createAisApiClients(self.daemons['ne_proxy'])
@@ -163,7 +163,7 @@ class Ais:
                 """Thread function to grab daemon info."""
                 d[key] = {}
                 try:
-                    d[key] = openapi_client.api.daemon_api.DaemonApi(d['aisClientApi']).get(what)
+                    d[key] = ais_client.api.daemon_api.DaemonApi(d['aisClientApi']).get(what)
                 except (MaxRetryError, NewConnectionError):
                     pass
 
@@ -221,11 +221,11 @@ class Ais:
 
         if not quiet:
             print("Retrieving Smap/Config/Snode/Stats from each AIS daemon ...")
-        
+
         aisDaemonQuery(self.daemons['proxy'])
         aisDaemonQuery(self.daemons['ne_proxy'])
         aisDaemonQuery(self.daemons['target'])
-    
+
     def _aisNodeWalk(self, nodelist, cbfunc):
         """ Iterate over proxy, ne-proxy or target nodes with given callback."""
 
@@ -317,7 +317,7 @@ def print_ais_topo(aishdl):
         'target':   0
     }
 
-    print("Node labelling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" % 
+    print("Node labelling:\n\tProxy node(s): %d\n\tNon-electable proxy node(s): %d\n\tTarget node(s): %d" %
         (len(aishdl.aisProxyNodes()), len(aishdl.aisNeProxyNodes()), len(aishdl.aisTargetNodes()) ))
     print("\tNode labelled as initial primary proxy: %s\n" % nodename_ipp)
 

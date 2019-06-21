@@ -6,7 +6,7 @@ info:
   termsOfService: ""
   contact:
     name: "NVIDIA-AIS"
-    email: "dfcdev@exchange.nvidia.com"
+    email: "aisdev@exchange.nvidia.com"
     url: "https://github.com/NVIDIA/aistore"
   license:
     name: MIT
@@ -66,6 +66,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: bprovider
+          in: query
+          description: Bucket locality
+          schema:
+            type: string
+            enum: [local, cloud, none]
       responses:
         '200':
           description: Object at the location bucket-name/object-name
@@ -111,16 +117,12 @@ paths:
           required: true
           schema:
             type: string
-        - name: from_id
+        - name: bprovider
           in: query
-          description: Source target ID
+          description: Bucket locality
           schema:
             type: string
-        - name: to_id
-          in: query
-          description: Destination target ID
-          schema:
-            type: string
+            enum: [local, cloud, none]
       requestBody:
         content:
           application/octet-stream:
@@ -162,9 +164,10 @@ paths:
             type: string
         - name: bprovider
           in: query
-          description: bucket locality
+          description: Bucket locality
           schema:
             type: string
+            enum: [local, cloud, none]
       requestBody:
         content:
           application/json:
@@ -247,6 +250,12 @@ paths:
           description: Check if the object is cached
           schema:
             type: boolean
+        - name: bprovider
+          in: query
+          description: Bucket locality
+          schema:
+            type: string
+            enum: [local, cloud, none]
       responses:
         '200':
           description: Properties of the object at the location bucket-name/object-name
@@ -282,9 +291,10 @@ paths:
       parameters:
         - name: bprovider
           in: query
-          description: Get only local bucket names
+          description: Get only local, cloud, or all buckets
           schema:
             type: string
+            enum: [local, cloud, none]
       responses:
         '200':
           description: Cloud and local bucket names
@@ -318,9 +328,10 @@ paths:
             type: string
         - name: bprovider
           in: query
-          description: Bucket's locality
+          description: Bucket locality
           schema:
             type: string
+            enum: [local, cloud, none]
         - name: next_tier_url
           in: query
           description: URL for the next tier
@@ -365,9 +376,10 @@ paths:
             type: string
         - name: bprovider
           in: query
-          description: Bucket's locality
+          description: Bucket locality
           schema:
             type: string
+            enum: [local, cloud, none]
       requestBody:
         required: true
         content:
@@ -378,15 +390,19 @@ paths:
         '202':
           description: Asynchronous task is running
           content:
-            text/plain:
+            application/json:
               schema:
-                type: int64
+                oneOf:
+                  - $ref: '#/components/schemas/TaskID'
+                  - $ref: '#/components/schemas/ObjectPropertyList'
         '200':
           description: Operation on bucket-name succeeded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ObjectPropertyList'
+                oneOf:
+                  - $ref: '#/components/schemas/TaskID'
+                  - $ref: '#/components/schemas/ObjectPropertyList'
         default:
           description: An unexpected error was encountered
           content:
@@ -407,9 +423,10 @@ paths:
             type: string
         - name: bprovider
           in: query
-          description: Bucket's locality
+          description: Bucket locality
           schema:
             type: string
+            enum: [local, cloud, none]
       requestBody:
         required: true
         content:
@@ -437,6 +454,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: bprovider
+          in: query
+          description: Bucket locality
+          schema:
+            type: string
+            enum: [local, cloud, none]
       responses:
         '200':
           description: Properties of bucket-name
@@ -1359,7 +1382,8 @@ components:
         pagesize:
           type: string
         taskid:
-          type: int64
+          type: integer
+          format: int64
     ObjectProperties:
       type: object
       properties:
@@ -1368,11 +1392,7 @@ components:
         size:
           type: integer
           format: int64
-        ctime:
-          type: string
         checksum:
-          type: string
-        type:
           type: string
         atime:
           type: string
@@ -1380,10 +1400,12 @@ components:
           type: string
         version:
           type: string
-        iscached:
-          type: string
         targetURL:
           type: string
+        flags:
+          type: integer
+        copies:
+          type: integer
     ObjectPropertyList:
       type: object
       properties:
@@ -1395,7 +1417,7 @@ components:
             $ref: '#/components/schemas/ObjectProperties'
     ObjectPropertyTypes:
       type: string
-      enum: [size, ctime, checksum, atime, bucket, version, iscached, targetURL]
+      enum: [size, checksum, atime, bucket, version, copies, flags, targetURL]
     TimeFormat:
       type: string
       enum: [ANSIC, UnixDate, RubyDate, RFC822, RFC822Z, RFC850, RFC1123, RFC1123Z, RFC3339, RFC3339Nano, Kitchen, Stamp, StampMilli, StampMicro, StampNano]
@@ -1446,6 +1468,9 @@ components:
     GetProps:
       type: string
       enum: [rebalance, prefetch]
+    TaskID:
+      type: integer
+      format: int64
     ClusterMap:
       type: object
       properties:
@@ -1604,10 +1629,19 @@ components:
           type: string
         cloudprovider:
           type: string
-        cloud_buckets:
-          type: string
-        local_buckets:
-          type: string
+        mirror:
+          type: object
+          properties:
+            copies:
+              type: integer
+            burst_buffer:
+              type: integer
+            util_thresh:
+              type: integer
+            optimize_put:
+              type: boolean
+            enabled:
+              type: boolean
         log:
           type: object
           properties:
@@ -1645,13 +1679,19 @@ components:
               type: string
             startup_time:
               type: string
+            list_timeout:
+              type: string
         proxy:
           type: object
           properties:
-            primary:
-              $ref: '#/components/schemas/ProxyConfiguration'
-            original:
-              $ref: '#/components/schemas/ProxyConfiguration'
+            non_electable:
+              type: boolean
+            primary_url:
+              type: string
+            original_url:
+              type: string
+            discovery_url:
+              type: string
         lru:
           type: object
           properties:
@@ -1661,22 +1701,35 @@ components:
             highwm:
               type: integer
               format: int32
-            atime_cache_max:
+            out_of_space:
               type: integer
-              format: int64
+              format: int32
             dont_evict_time:
               type: string
             capacity_upd_time:
               type: string
             enabled:
               type: boolean
+            local_buckets:
+              type: boolean
+        disk:
+          type: object
+          properties:
+            iostat_time_long:
+              type: string
+            iostat_time_short:
+              type: string
+            disk_util_low_wm:
+              type: integer
+            disk_util_high_wm:
+              type: integer
         rebalance:
           type: object
           properties:
-            startup_delay_time:
-              type: string
             dest_retry_time:
               type: string
+            multiplier:
+              type: integer
             enabled:
               type: boolean
         cksum:
@@ -1688,13 +1741,17 @@ components:
               type: boolean
             validate_warm_get:
               type: boolean
+            validate_obj_move:
+              type: boolean
             enable_read_range:
               type: boolean
         version:
           type: object
           properties:
-            versioning:
+            type:
               type: string
+            enabled:
+              type: boolean
             validate_warm_get:
               type: boolean
         fspaths:
@@ -1724,28 +1781,36 @@ components:
                   type: string
                 port:
                     type: string
+                port_intra_control:
+                    type: string
+                port_intra_data:
+                    type: string
             http:
               type: object
               properties:
-                use_http2:
-                  type: boolean
                 use_https:
                   type: boolean
-                use_as_proxy:
+                proto:
+                  type: string
+                rproxy:
+                  type: string
+                rproxy_cache:
                   type: boolean
                 server_certificate:
                   type: string
                 server_key:
                   type: string
-        fskeeper:
+                chunked_transfer:
+                  type: boolean
+        fsch:
           type: object
           properties:
-            fs_check_time:
-              type: string
-            offline_fs_check_time:
-              type: string
-            fskeeper_enabled:
+            enabled:
               type: boolean
+            test_files:
+              type: integer
+            error_limit:
+              type: integer
         auth:
           type: object
           properties:
@@ -1762,16 +1827,30 @@ components:
               $ref: '#/components/schemas/KeepAliveTrackerConfiguration'
             target:
               $ref: '#/components/schemas/KeepAliveTrackerConfiguration'
-        callstats:
+            retry_factor:
+              type: integer
+            timeout_factor:
+              type: integer
+        downloader:
           type: object
           properties:
-            request_included:
-              type: array
-              items:
-                type: string
-            factor:
-              type: number
-              format: float
+            timeout:
+              type: string
+        distributed_sort:
+          type: object
+          properties:
+            duplicated_records:
+              type: string
+            missing_shards:
+              type: string
+            ekm_malformed_line:
+              type: string
+            ekm_missing_key:
+              type: string
+            default_max_mem_usage:
+              type: string
+            call_timeout:
+              type: string
     XactionDetails:
       type: object
       properties:

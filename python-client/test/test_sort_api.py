@@ -19,9 +19,9 @@ import tarfile, io, os
 import json
 from .helpers import bytestring, surpressResourceWarning
 
-import openapi_client
-from openapi_client.api.sort_api import SortApi  # noqa: E501
-from openapi_client.rest import ApiException
+import ais_client
+from ais_client.api.sort_api import SortApi  # noqa: E501
+from ais_client.rest import ApiException
 
 class TestSortApi(unittest.TestCase):
     """SortApi unit test stubs"""
@@ -33,14 +33,14 @@ class TestSortApi(unittest.TestCase):
     def setUp(self):
         surpressResourceWarning()
 
-        configuration = openapi_client.Configuration()
+        configuration = ais_client.Configuration()
         configuration.debug = False
-        api_client = openapi_client.ApiClient(configuration)
+        api_client = ais_client.ApiClient(configuration)
 
-        self.sort = openapi_client.api.sort_api.SortApi(api_client)
-        self.bucket = openapi_client.api.bucket_api.BucketApi(api_client)
-        self.object = openapi_client.api.object_api.ObjectApi(api_client)
-        self.models = openapi_client.models
+        self.sort = ais_client.api.sort_api.SortApi(api_client)
+        self.bucket = ais_client.api.bucket_api.BucketApi(api_client)
+        self.object = ais_client.api.object_api.ObjectApi(api_client)
+        self.models = ais_client.models
 
         # Create local bucket
         input_params = self.models.InputParameters(self.models.Actions.CREATELB)
@@ -63,13 +63,13 @@ class TestSortApi(unittest.TestCase):
         # Delete bucket
         input_params = self.models.InputParameters(self.models.Actions.DESTROYLB)
         self.bucket.delete(self.BUCKET_NAME, input_params)
-   
+
     def test_abort_sort(self):
         """Test case for abort_sort
 
         Abort distributed sort operation
         """
-        
+
         output_prefix="output-"
         spec = self.models.SortSpec(
             bucket=self.BUCKET_NAME,
@@ -93,7 +93,7 @@ class TestSortApi(unittest.TestCase):
                 if target_metrics['aborted']:
                     finished = True
                     break
-                
+
                 finished = finished and target_finished
 
         metrics = self.sort.get_sort_metrics(sort_uuid)
@@ -128,7 +128,7 @@ class TestSortApi(unittest.TestCase):
                 if target_metrics['aborted']:
                     finished = True
                     break
-                
+
                 finished = finished and target_finished
 
         metrics = self.sort.get_sort_metrics(sort_uuid)

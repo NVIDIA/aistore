@@ -254,7 +254,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		)
 
 		if cmn.ReadJSON(w, r, &msg) != nil {
-			t.invalmsghdlr(w, r, "Could not parse action message:", http.StatusBadRequest)
 			return
 		}
 

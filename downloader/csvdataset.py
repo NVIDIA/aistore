@@ -1,19 +1,19 @@
 from __future__ import print_function
 import csv, os, sys, itertools, time
 from pprint import pprint
-import openapi_client
-from openapi_client.rest import ApiException
+import ais_client
+from ais_client.rest import ApiException
 
 bucket_name = raw_input("Which local bucket would you like to save these files to: ")
 if not bucket_name:
     print("An empty bucket is not valid.")
     sys.exit()
 
-bucket_api = openapi_client.BucketApi()
+bucket_api = ais_client.BucketApi()
 local_buckets = bucket_api.list_names().local
 if bucket_name not in local_buckets:
     print('Bucket "%s" does not exists, creating...' % bucket_name)
-    input_params = openapi_client.InputParameters(openapi_client.Actions.CREATELB)
+    input_params = ais_client.InputParameters(ais_client.Actions.CREATELB)
     bucket_api.perform_operation(bucket_name, input_params)
 
 
@@ -46,8 +46,8 @@ col = int(raw_input("Which column contains the download link (0 indexed)? "))
 print("\n bucket: %s\n file_name: %s\n delim: \"%s\"\n col: %d\n start: %d\n end: %d\n" % (bucket_name, file_name, delim, col, start, end))
 
 # create an instance of the API class
-api_instance = openapi_client.DownloadApi()
-download_multi = openapi_client.DownloadMulti(bucket_name)
+api_instance = ais_client.DownloadApi()
+download_multi = ais_client.DownloadMulti(bucket_name)
 
 objects = []
 with open(file_name) as csv_file:

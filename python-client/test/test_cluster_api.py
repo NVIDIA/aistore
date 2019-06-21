@@ -16,8 +16,8 @@ from __future__ import absolute_import
 import unittest
 from .helpers import DictParser, surpressResourceWarning
 
-import openapi_client
-from openapi_client.api.cluster_api import ClusterApi  # noqa: E501
+import ais_client
+from ais_client.api.cluster_api import ClusterApi  # noqa: E501
 
 class TestClusterApi(unittest.TestCase):
     """ClusterApi unit test stubs"""
@@ -25,12 +25,12 @@ class TestClusterApi(unittest.TestCase):
     def setUp(self):
         surpressResourceWarning()
 
-        configuration = openapi_client.Configuration()
+        configuration = ais_client.Configuration()
         configuration.debug = False
-        api_client = openapi_client.ApiClient(configuration)
-        self.cluster = openapi_client.api.cluster_api.ClusterApi(api_client)
-        self.daemon = openapi_client.api.daemon_api.DaemonApi(api_client)
-        self.models = openapi_client.models
+        api_client = ais_client.ApiClient(configuration)
+        self.cluster = ais_client.api.cluster_api.ClusterApi(api_client)
+        self.daemon = ais_client.api.daemon_api.DaemonApi(api_client)
+        self.models = ais_client.models
 
     def tearDown(self):
         pass

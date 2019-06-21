@@ -15,9 +15,9 @@ from __future__ import absolute_import
 
 import unittest
 
-import openapi_client
-from openapi_client.api.bucket_api import BucketApi  # noqa: E501
-from openapi_client.rest import ApiException
+import ais_client
+from ais_client.api.bucket_api import BucketApi  # noqa: E501
+from ais_client.rest import ApiException
 
 import os
 import uuid
@@ -30,12 +30,12 @@ class TestBucketApi(unittest.TestCase):
     def setUp(self):
         surpressResourceWarning()
 
-        configuration = openapi_client.Configuration()
+        configuration = ais_client.Configuration()
         configuration.debug = False
-        api_client = openapi_client.ApiClient(configuration)
-        self.bucket = openapi_client.api.bucket_api.BucketApi(api_client)
-        self.object = openapi_client.api.object_api.ObjectApi(api_client)
-        self.models = openapi_client.models
+        api_client = ais_client.ApiClient(configuration)
+        self.bucket = ais_client.api.bucket_api.BucketApi(api_client)
+        self.object = ais_client.api.object_api.ObjectApi(api_client)
+        self.models = ais_client.models
         self.BUCKET_NAME = os.environ["BUCKET"]
         self.NEXT_TIER_URL = "http://foo.com"
         self.FILE_SIZE = 128
@@ -298,7 +298,7 @@ class TestBucketApi(unittest.TestCase):
         self.__execute_operation_on_unavailable_object(
             self.object.get_properties, self.BUCKET_NAME, object_name,
             check_cached=True)
-        
+
     def test_evict_cloudbucket(self):
         """
         1. Create object
