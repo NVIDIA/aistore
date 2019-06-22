@@ -749,7 +749,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 // 3) on demand via Mem2.Free()
 func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
 	avg, err := sys.LoadAverage()
-	if err != nil && glog.FastV(4, glog.SmoduleMemsys) {
+	if err != nil {
 		glog.Errorf("Failed to load averages, err: %v", err)
 		avg.One = 999 // fall thru on purpose
 	}
