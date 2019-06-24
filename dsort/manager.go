@@ -642,10 +642,10 @@ func (m *Manager) pullStreamWriter(objName string) *streamWriter {
 
 func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if m.Metrics.extended {
-		beforeSend := (*time.Time)(x)
+		dur := time.Since(*(*time.Time)(x))
 		m.Metrics.Creation.Lock()
-		m.Metrics.Creation.LocalSendStats.updateTime(time.Since(*beforeSend))
-		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size)
+		m.Metrics.Creation.LocalSendStats.updateTime(dur)
+		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
 		m.Metrics.Creation.Unlock()
 	}
 
@@ -787,9 +787,10 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 		slab.Free(buf)
 
 		if m.Metrics.extended {
+			dur := time.Since(beforeSend)
 			metrics.Lock()
-			metrics.LocalRecvStats.updateTime(time.Since(beforeSend))
-			metrics.LocalRecvStats.updateThroughput(writer.n)
+			metrics.LocalRecvStats.updateTime(dur)
+			metrics.LocalRecvStats.updateThroughput(writer.n, dur)
 			metrics.Unlock()
 		}
 	}

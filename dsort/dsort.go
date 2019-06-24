@@ -209,10 +209,8 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			metrics.ExtractedToDiskSize += extractedSize
 		}
 		if m.Metrics.extended {
-			throughput := int64(float64(extractedSize) / dur.Seconds())
-
 			metrics.ShardExtractionStats.updateTime(dur)
-			metrics.ShardExtractionStats.updateThroughput(throughput)
+			metrics.ShardExtractionStats.updateThroughput(extractedSize, dur)
 		}
 		metrics.Unlock()
 
@@ -408,10 +406,8 @@ exit:
 	}
 	if m.Metrics.extended {
 		dur := time.Since(beforeCreation)
-		throughput := int64(float64(lom.Size()) / dur.Seconds())
-
 		metrics.ShardCreationStats.updateTime(dur)
-		metrics.ShardCreationStats.updateThroughput(throughput)
+		metrics.ShardCreationStats.updateThroughput(lom.Size(), dur)
 	}
 	metrics.Unlock()
 

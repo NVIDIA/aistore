@@ -64,7 +64,9 @@ func newThroughputStats() *ThroughputStats {
 	}
 }
 
-func (tps *ThroughputStats) updateThroughput(throughput int64) {
+func (tps *ThroughputStats) updateThroughput(size int64, dur time.Duration) {
+	throughput := int64(float64(size) / dur.Seconds())
+
 	tps.total += throughput
 	tps.count++
 	tps.MinTp = cmn.MinI64(tps.MinTp, throughput)
