@@ -35,6 +35,10 @@ type (
 	}
 )
 
+// the minimum number of milliseconds between two cpu usage calculations
+// if a new requests comes earlier, the last calculated cpu usage is returned
+const cpuRefreshInterval = 1000
+
 // last values for requested processes to calculate CPU usage
 var cache = &procCache{procs: make(map[int]*ProcStats)}
 
@@ -56,12 +60,14 @@ func ProcessStats(pid int) (ProcStats, error) {
 	}
 	if ok {
 		tm := time.Now().UnixNano() / int64(time.Millisecond)
-		timeDiff := float64(tm - stats.CPU.LastTime)
-		stats.CPU.LastTime = tm
-		stats.CPU.Percent = 100.0 * float64(cpu.Total-stats.CPU.Total) / timeDiff
-		stats.CPU.Total = cpu.Total
-		stats.CPU.User = cpu.User
-		stats.CPU.System = cpu.System
+		timeDiff := tm - stats.CPU.LastTime
+		if timeDiff >= cpuRefreshInterval {
+			stats.CPU.LastTime = tm
+			stats.CPU.Percent = 100.0 * float64(cpu.Total-stats.CPU.Total) / float64(timeDiff)
+			stats.CPU.Total = cpu.Total
+			stats.CPU.User = cpu.User
+			stats.CPU.System = cpu.System
+		}
 	} else {
 		stats = &ProcStats{CPU: cpu}
 		stats.CPU.LastTime = time.Now().UnixNano() / int64(time.Millisecond)
