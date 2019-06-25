@@ -403,9 +403,6 @@ get:
 		goto do
 	}
 
-	if err != nil {
-		return err, errCode
-	}
 	cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 	return
 }
