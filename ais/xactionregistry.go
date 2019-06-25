@@ -22,6 +22,22 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+const (
+	// how often cleanup is called
+	cleanupInterval = 10 * time.Minute
+
+	// how long xaction had to finish to be considered to be removed
+	entryOldAge = 1 * time.Hour
+
+	// watermarks for entries size
+	entriesSizeHW = 300
+)
+
+const (
+	registryStateIdle = iota
+	registryStateCleanup
+)
+
 type (
 	xactRebBase struct {
 		cmn.XactBase
@@ -76,6 +92,18 @@ type (
 		IsGlobal() bool
 		IsTask() bool
 	}
+
+	xactionsRegistry struct {
+		sync.RWMutex
+		globalXacts   map[string]xactionGlobalEntry
+		taskXacts     sync.Map // map[string]xactionEntry
+		bucketXacts   sync.Map // map[string]*bucketXactions
+		byID          sync.Map // map[int64]xactionEntry
+		byIDSize      atomic.Int64
+		byIDTaskCount atomic.Int64
+		lastCleanup   atomic.Int64
+		state         atomic.Int32
+	}
 )
 
 func (xact *xactRebBase) Description() string   { return "base for rebalance xactions" }
@@ -112,40 +140,13 @@ func (xact *xactPrefetch) Description() string {
 	return "responsible for prefetching a flexibly-defined list or range of objects from any given Cloud bucket"
 }
 
-const (
-	// how often cleanup is called
-	cleanupInterval = 10 * time.Second //time.Minute
-
-	// how long xaction had to finish to be considered to be removed
-	entryOldAge = 30 * time.Second
-
-	// watermarks for entries size
-	entriesSizeHW = 200
-	entriesSizeLW = 100
-)
-const (
-	registryStateIdle = iota
-	registryStateCleanup
-)
-
-type xactionsRegistry struct {
-	sync.RWMutex
-	globalXacts map[string]xactionGlobalEntry
-	taskXacts   sync.Map // map[string]xactionEntry
-	bucketXacts sync.Map // map[string]*bucketXactions
-	byID        sync.Map // map[int64]xactionEntry
-	byIDSize    *atomic.Int64
-	lastCleanup *atomic.Int64
-	state       *atomic.Int32
-}
-
 func newXactions() *xactionsRegistry {
-	return &xactionsRegistry{
+	xar := &xactionsRegistry{
 		globalXacts: make(map[string]xactionGlobalEntry),
-		lastCleanup: atomic.NewInt64(time.Now().UnixNano()),
-		byIDSize:    atomic.NewInt64(0),
-		state:       atomic.NewInt32(registryStateIdle),
 	}
+	xar.lastCleanup.Store(time.Now().UnixNano())
+	xar.state.Store(registryStateIdle)
+	return xar
 }
 
 func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...string) {
@@ -640,8 +641,14 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 
 func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 	r.byID.Store(id, entry)
-	r.byIDSize.Inc()
-	r.cleanUpFinished()
+	byIDSize := r.byIDSize.Inc()
+	r.cleanUpFinished(byIDSize)
+
+	// Increase after cleanup to not force trigger it. If it was just added, for
+	// sure it didn't yet finish.
+	if entry.IsTask() {
+		r.byIDTaskCount.Inc()
+	}
 }
 
 // FIXME: cleanup might not remove the most old entries for each kind
@@ -649,20 +656,27 @@ func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 // or change in structure of byID
 // cleanup is made when size of r.byID is bigger then entriesSizeHW
 // but not more often than cleanupInterval
-func (r *xactionsRegistry) cleanUpFinished() {
+func (r *xactionsRegistry) cleanUpFinished(entryCount int64) {
 	if !r.state.CAS(registryStateIdle, registryStateCleanup) {
 		// cleanup is running already
 		return
 	}
 
-	aboveHW := r.byIDSize.Load() > entriesSizeHW
-	last := r.lastCleanup.Load()
 	startTime := time.Now()
-	nextCleanup := time.Unix(0, last).Add(cleanupInterval)
-	isCleanupTime := nextCleanup.Before(startTime) || aboveHW
-	anyTaskDeleted := false
+	if r.byIDTaskCount.Load() == 0 {
+		if entryCount <= entriesSizeHW {
+			return
+		}
+
+		last := r.lastCleanup.Load()
+		nextCleanup := time.Unix(0, last).Add(cleanupInterval)
+		if !nextCleanup.Before(startTime) {
+			return
+		}
+	}
 
 	go func(startTime time.Time) {
+		anyTaskDeleted := false
 		r.byID.Range(func(k, v interface{}) bool {
 			entry := v.(xactionEntry)
 			if !entry.Get().Finished() {
@@ -671,14 +685,12 @@ func (r *xactionsRegistry) cleanUpFinished() {
 
 			eID := entry.Get().ID()
 			eKind := entry.Get().Kind()
-			// skip xAction if it is not of Task type and the size of registry
-			// is below watermark or it is not time to cleanup yet
-			if !entry.IsTask() && (!isCleanupTime || r.byIDSize.Load() < entriesSizeLW) {
-				return true
-			}
 
-			// if IsTask == true the task must be cleaned up always - no extra checks
-			// besides it is finished at least entryOldAge ago
+			// if IsTask == true the task must be cleaned up always - no extra
+			// checks besides it is finished at least entryOldAge ago.
+			//
+			// We need to check if the entry is not the most recent entry for
+			// given kind. If it is we want to keep it anyway.
 			if entry.IsGlobal() {
 				currentEntry := r.GetL(eKind)
 				if currentEntry != nil && currentEntry.Get().ID() == eID {
@@ -705,16 +717,16 @@ func (r *xactionsRegistry) cleanUpFinished() {
 			}
 			return true
 		})
-	}(startTime)
 
-	// free all memory taken by cleaned up tasks
-	// Tasks like ListBucket ones may take up huge amount of memory, so they
-	// must be cleaned up as soon as possible
-	if anyTaskDeleted {
-		go cmn.FreeMemToOS(time.Second)
-	}
-	r.lastCleanup.Store(startTime.UnixNano())
-	r.state.CAS(registryStateCleanup, registryStateIdle)
+		// free all memory taken by cleaned up tasks
+		// Tasks like ListBucket ones may take up huge amount of memory, so they
+		// must be cleaned up as soon as possible
+		if anyTaskDeleted {
+			go cmn.FreeMemToOS(time.Second)
+		}
+		r.lastCleanup.Store(startTime.UnixNano())
+		r.state.CAS(registryStateCleanup, registryStateIdle)
+	}(startTime)
 }
 
 func (r *xactBckListTask) IsGlobal() bool        { return false }
