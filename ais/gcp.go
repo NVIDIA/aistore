@@ -289,6 +289,7 @@ func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, er
 
 		battrs, err = it.Next()
 		if err == iterator.Done {
+			err = nil
 			break
 		}
 		if err != nil {
