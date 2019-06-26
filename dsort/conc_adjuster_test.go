@@ -50,7 +50,7 @@ var _ = Describe("newConcAdjuster", func() {
 		err := cmn.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		fs.Mountpaths = fs.NewMountedFS()
+		fs.InitMountedFS()
 		fs.Mountpaths.Add(testingConfigDir)
 	})
 

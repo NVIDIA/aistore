@@ -21,6 +21,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const pkgName = "fs"
 const MLCG32 = 1103515245
 
 // mountpath lifecycle-change enum
@@ -49,6 +50,7 @@ var (
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
 type (
+	MPI          map[string]*MountpathInfo
 	PathRunGroup interface {
 		Reg(r PathRunner)
 		Unreg(r PathRunner)
@@ -98,7 +100,7 @@ type (
 		// Cached pointer to mountpathInfo used to store BMD
 		xattrMpath atomic.Pointer
 		// Iostats for the available mountpaths
-		Iostats *ios.IostatContext
+		ios *ios.IostatContext
 	}
 	ChangeReq struct {
 		Action string // MountPath action enum (above)
@@ -160,7 +162,7 @@ func (mi *MountpathInfo) IsIdle(config *cmn.Config, timestamp time.Time) bool {
 	if config == nil {
 		config = cmn.GCO.Get()
 	}
-	curr := Mountpaths.Iostats.GetDiskUtil(mi.Path, timestamp)
+	curr := Mountpaths.ios.GetMpathUtil(mi.Path, timestamp)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
 }
 
@@ -186,18 +188,66 @@ func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname strin
 }
 
 //
-// MountedFS aka fs.Mountpaths
+// MountedFS
 //
 
-// NewMountedFS returns initialized instance of MountedFS struct.
-func NewMountedFS() *MountedFS {
-	mfs := &MountedFS{
-		fsIDs:     make(map[syscall.Fsid]string, 10),
-		checkFsID: true,
+// global init
+func InitMountedFS() {
+	Mountpaths = NewMountedFS()
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
+		glog.SetV(glog.SmoduleFS, logLvl)
 	}
-	mfs.Iostats = ios.NewIostatContext(mfs)
+}
 
+// new instance
+func NewMountedFS() *MountedFS {
+	mfs := &MountedFS{fsIDs: make(map[syscall.Fsid]string, 10), checkFsID: true}
+	mfs.ios = ios.NewIostatContext()
 	return mfs
+}
+
+func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now time.Time) (fqn string) {
+	var (
+		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(now)
+		objutil, ok          = mpathUtils[objmpath]
+		rr, _                = mpathRRs[objmpath]
+		util                 = objutil
+	)
+	fqn = objfqn
+	if !ok {
+		cmn.DassertMsg(false, objmpath, pkgName)
+		return
+	}
+	for copyfqn, copympi := range copies {
+		if u, ok := mpathUtils[copympi.Path]; ok {
+			if u < util {
+				if r, k := mpathRRs[copympi.Path]; k {
+					if rr == nil || r.Load() < rr.Load()+1 {
+						fqn, util, rr = copyfqn, u, r
+					}
+				}
+			}
+		}
+	}
+	if rr != nil {
+		rr.Inc()
+	}
+	return
+}
+
+// ios delegators
+func (mfs *MountedFS) GetMpathUtil(mpath string, now time.Time) int64 {
+	return mfs.ios.GetMpathUtil(mpath, now)
+}
+func (mfs *MountedFS) GetAllMpathUtils(now time.Time) (utils map[string]int64) {
+	utils, _ = mfs.ios.GetAllMpathUtils(now)
+	return
+}
+func (mfs *MountedFS) LogAppend(lines []string) []string {
+	return mfs.ios.LogAppend(lines)
+}
+func (mfs *MountedFS) GetSelectedDiskStats() (m map[string]*ios.SelectedDiskStats) {
+	return mfs.ios.GetSelectedDiskStats()
 }
 
 // Init prepares and adds provided mountpaths. Also validates the mountpaths
@@ -259,7 +309,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	if _, exists := availablePaths[mp.Path]; exists {
 		return fmt.Errorf("tried to add already registered mountpath: %v", mp.Path)
 	}
-	mfs.Iostats.AddMpath(mp.Path, mp.FileSystem)
+	mfs.ios.AddMpath(mp.Path, mp.FileSystem)
 
 	if existingPath, exists := mfs.fsIDs[mp.Fsid]; exists && mfs.checkFsID {
 		return fmt.Errorf("tried to add path %v but same fsid was already registered by %v", mpath, existingPath)
@@ -301,7 +351,7 @@ func (mfs *MountedFS) Remove(mpath string) error {
 	}
 
 	delete(availablePaths, cleanMpath)
-	mfs.Iostats.RemoveMpath(cleanMpath)
+	mfs.ios.RemoveMpath(cleanMpath)
 	delete(mfs.fsIDs, mp.Fsid)
 	if l := len(availablePaths); l == 0 {
 		glog.Errorf("removed the last available mountpath %s", mp)
@@ -331,7 +381,7 @@ func (mfs *MountedFS) Enable(mpath string) (enabled bool, err error) {
 
 	if mp, ok := disabledPaths[cleanMpath]; ok {
 		availablePaths[cleanMpath] = mp
-		mfs.Iostats.AddMpath(cleanMpath, mp.FileSystem)
+		mfs.ios.AddMpath(cleanMpath, mp.FileSystem)
 		delete(disabledPaths, cleanMpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		return true, nil
@@ -355,7 +405,7 @@ func (mfs *MountedFS) Disable(mpath string) (disabled bool, err error) {
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
 	if mpathInfo, ok := availablePaths[cleanMpath]; ok {
 		disabledPaths[cleanMpath] = mpathInfo
-		mfs.Iostats.RemoveMpath(cleanMpath)
+		mfs.ios.RemoveMpath(cleanMpath)
 		delete(availablePaths, cleanMpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
 		if l := len(availablePaths); l == 0 {
@@ -373,21 +423,21 @@ func (mfs *MountedFS) Disable(mpath string) (disabled bool, err error) {
 
 // Returns number of available mountpaths
 func (mfs *MountedFS) NumAvail() int {
-	available := (*map[string]*MountpathInfo)(mfs.available.Load())
+	available := (*MPI)(mfs.available.Load())
 	return len(*available)
 }
 
 // Mountpaths returns both available and disabled mountpaths.
-func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
-	available := (*map[string]*MountpathInfo)(mfs.available.Load())
-	disabled := (*map[string]*MountpathInfo)(mfs.disabled.Load())
+func (mfs *MountedFS) Get() (MPI, MPI) {
+	available := (*MPI)(mfs.available.Load())
+	disabled := (*MPI)(mfs.disabled.Load())
 	if available == nil {
-		tmp := make(map[string]*MountpathInfo, 10)
+		tmp := make(MPI, 10)
 		available = &tmp
 	}
 
 	if disabled == nil {
-		tmp := make(map[string]*MountpathInfo, 10)
+		tmp := make(MPI, 10)
 		disabled = &tmp
 	}
 
@@ -462,7 +512,7 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 // private methods
 //
 
-func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
+func (mfs *MountedFS) updatePaths(available, disabled MPI) {
 	mfs.available.Store(unsafe.Pointer(&available))
 	mfs.disabled.Store(unsafe.Pointer(&disabled))
 	mfs.xattrMpath.Store(unsafe.Pointer(nil))
@@ -496,7 +546,9 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string
 						num++
 					}
 				}
-				glog.Infof("%q (bucket %s, num dirs %d)", passMsg, bucket, num)
+				if glog.FastV(4, glog.SmoduleFS) {
+					glog.Infof("%q (bucket %s, num dirs %d)", passMsg, bucket, num)
+				}
 				num = 0
 			}
 			wg.Done()
@@ -506,10 +558,10 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string
 }
 
 // mountpathsCopy returns shallow copy of current mountpaths
-func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
+func (mfs *MountedFS) mountpathsCopy() (MPI, MPI) {
 	available, disabled := mfs.Get()
-	availableCopy := make(map[string]*MountpathInfo, len(available))
-	disabledCopy := make(map[string]*MountpathInfo, len(available))
+	availableCopy := make(MPI, len(available))
+	disabledCopy := make(MPI, len(available))
 
 	for mpath, mpathInfo := range available {
 		availableCopy[mpath] = mpathInfo
@@ -540,7 +592,7 @@ func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
 	}
 
 	// slow path
-	avail := (*map[string]*MountpathInfo)(mfs.available.Load())
+	avail := (*MPI)(mfs.available.Load())
 	if len(*avail) == 0 {
 		return nil, fmt.Errorf("no mountpath available")
 	}
@@ -556,7 +608,7 @@ func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
 		return nil, fmt.Errorf("failed to choose a mountpath")
 	}
 
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if glog.FastV(4, glog.SmoduleFS) {
 		glog.Infof("Mountpath %q selected for storing BMD in xattrs", mpath.Path)
 	}
 	mfs.xattrMpath.Store(unsafe.Pointer(mpath))

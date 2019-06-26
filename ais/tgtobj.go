@@ -469,11 +469,15 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	}
 
 	if goi.lom.Size() == 0 {
-		glog.Warningf("%s: size=0 (zero)", goi.lom) // TODO: optimize out much of the below
 		return
 	}
 
-	fqn := goi.lom.LoadBalanceGET() // coldGet => len(CopyFQN) == 0
+	fqn := goi.lom.FQN
+	if !coldGet && !goi.gfn {
+		// best-effort GET load balancing (see also mirror.findLeastUtilized())
+		// (TODO: check whether the timestamp is not too old)
+		fqn = goi.lom.LoadBalanceGET(goi.started)
+	}
 	file, err = os.Open(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+const pkgName = "mirror"
 const (
 	throttleNumObjects = 16                      // unit of self-throttling
 	minThrottleSize    = 256 * cmn.KiB           // throttle every 4MB (= 16K*256) or greater
@@ -38,6 +39,12 @@ type (
 		buf    []byte
 	}
 )
+
+func init() {
+	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
+		glog.SetV(glog.SmoduleMirror, logLvl)
+	}
+}
 
 //
 // public methods
@@ -162,19 +169,31 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 			err = lom.Persist()
 		}
 	} else {
-		copies := lom.CopyFQN()
-		for i := len(copies) - 1; i >= j.parent.copies-1; i-- {
-			cpyfqn := copies[i]
+		var (
+			copies  = lom.GetCopies()
+			ndel    = len(copies) - j.parent.copies + 1
+			persist bool
+		)
+		for cpyfqn := range copies {
+			if ndel <= 0 {
+				break
+			}
 			if errstr := lom.DelCopy(cpyfqn); errstr != "" {
 				err = errors.New(errstr)
-				break
+			} else {
+				ndel--
+				size += lom.Size()
+				persist = true
 			}
-
-			if err = lom.Persist(); err != nil {
-				break
+		}
+		if persist {
+			if ers := lom.Persist(); ers != nil {
+				if err == nil {
+					err = ers
+				} else {
+					err = fmt.Errorf("[%v], [%v]", err, ers)
+				}
 			}
-
-			size += lom.Size()
 		}
 	}
 	lom.ReCache()
@@ -186,14 +205,15 @@ func (j *xcopyJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
 			cluster.ObjectLocker.Lock(lom.Uname(), false)
-			if err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
+			var clone *cluster.LOM
+			if clone, err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
 				cluster.ObjectLocker.Unlock(lom.Uname(), false)
 				return
 			}
 			size += lom.Size()
-			if glog.V(4) {
-				glog.Infof("%s: %s=>%s", lom, lom.ParsedFQN.MpathInfo, mpather.mountpathInfo())
+			if glog.FastV(4, glog.SmoduleMirror) {
+				glog.Infof("copied %s=>%s", lom, clone)
 			}
 			cluster.ObjectLocker.Unlock(lom.Uname(), false)
 		} else {

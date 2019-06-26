@@ -7,7 +7,6 @@ package ios
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 
@@ -20,10 +19,6 @@ import (
 )
 
 const (
-	writesPerRead = 2 // [TODO] the weight of the write queue compared to read queue
-	doubleThresh  = 2 // [TODO] mountpath gets double the requests if the other is more than this many times busy
-)
-const (
 	millis = int64(time.Millisecond)
 	second = int64(time.Second)
 )
@@ -33,12 +28,7 @@ const (
 const sectorSize = int64(512)
 
 type (
-	FQNResolver interface {
-		FQN2mountpath(fqn string) (mpath string)
-	}
-	// IostatContext tracks the iostats for a single mountpath (that may include multiple disks)
 	IostatContext struct {
-		fqnr        FQNResolver
 		mpathLock   sync.Mutex
 		mpath2disks map[string]fsDisks
 		disk2mpath  cmn.SimpleKVs
@@ -47,7 +37,7 @@ type (
 		disk2sysfn  cmn.SimpleKVs
 		cache       atomic.Pointer
 		cacheLock   *sync.Mutex
-		cacheHst    [16]*ioStatCache // history TODO
+		cacheHst    [16]*ioStatCache
 		cacheIdx    int
 	}
 	SelectedDiskStats struct {
@@ -66,15 +56,13 @@ type (
 		diskWSec map[string]int64
 		diskWBps map[string]int64
 
-		mpathUtil map[string]int64         // average utilization of the disks, max 100
-		mpathQue  map[string]int64         // average queue size of the disks, writes have extra weight
-		mpathRR   map[string]*atomic.Int64 // round robin counter
+		mpathUtil map[string]int64 // average utilization of the disks, max 100
+		mpathRR   map[string]*atomic.Int32
 	}
 )
 
-func NewIostatContext(fqnr FQNResolver) (ctx *IostatContext) {
+func NewIostatContext() (ctx *IostatContext) {
 	ctx = &IostatContext{
-		fqnr:        fqnr,
 		mpath2disks: make(map[string]fsDisks, 10),
 		disk2mpath:  make(cmn.SimpleKVs, 10),
 		sorted:      make([]string, 0, 10),
@@ -101,8 +89,7 @@ func newIostatCache() *ioStatCache {
 		diskWSec:  make(map[string]int64),
 		diskWBps:  make(map[string]int64),
 		mpathUtil: make(map[string]int64),
-		mpathQue:  make(map[string]int64),
-		mpathRR:   make(map[string]*atomic.Int64),
+		mpathRR:   make(map[string]*atomic.Int32),
 	}
 }
 
@@ -171,67 +158,13 @@ func (ctx *IostatContext) RemoveMpath(mpath string) {
 	delete(ctx.mpath2disks, mpath)
 }
 
-// GetRoundRobin provides load balancing on defaultFQN and copyFQN
-//   load balancing works by round robining the mountpoints, breaking all ties by selecting the least busy mountpath
-//   mountpoints that are 'significantly busy' have half weight in round robin
-//   the round robin is approximate because it doesn't lock since it's in datapath
-func (ctx *IostatContext) GetRoundRobin(defaultFQN string, copyFQN []string) (fqn string) {
-	cmn.Assert(len(copyFQN) > 0)
-	fqn = defaultFQN
-	mpath := ctx.fqnr.FQN2mountpath(defaultFQN)
-	var (
-		fqnRRCount   int64
-		fqnQueueSize int64
-		rrCountWrap  *atomic.Int64
-		ok           bool
-	)
-	cache := ctx.refreshIostatCache()
-	if rrCountWrap, ok = cache.mpathRR[mpath]; !ok {
-		fqnRRCount = int64(math.MaxInt64)
-	} else {
-		fqnRRCount = rrCountWrap.Load()
-	}
-	fqnQueueSize = cache.mpathQue[mpath]
-
-	for _, newFQN := range copyFQN {
-		newMpath := ctx.fqnr.FQN2mountpath(newFQN)
-		var newQueueSize int64
-
-		if newQueueSize, ok = cache.mpathQue[newMpath]; !ok {
-			continue
-		}
-		if rrCountWrap, ok = cache.mpathRR[newMpath]; !ok {
-			continue
-		}
-		newRRCount := rrCountWrap.Load()
-
-		// determine if newMpath is the next item in round robin
-		// newRRCount has half the weight if 'significantly busy'
-		// this, as of v2.1, means that newRRCount needs to be half of fqnRRCount to be chosen
-		// if newMpath is doubleThresh times as busy as mpath
-		if newRRCount*2 < fqnRRCount ||
-			newRRCount < fqnRRCount && !(fqnQueueSize*doubleThresh < newQueueSize) ||
-			newRRCount == fqnRRCount && newQueueSize < fqnQueueSize ||
-			newRRCount < fqnRRCount*2 && newQueueSize*doubleThresh < fqnQueueSize {
-			fqn = newFQN
-			mpath = newMpath
-			fqnRRCount = newRRCount
-			fqnQueueSize = newQueueSize
-		}
-	}
-
-	if counter, ok := cache.mpathRR[mpath]; ok {
-		counter.Inc()
-	}
-	if fqn == "" {
-		return defaultFQN
-	}
-	return
-}
-
-func (ctx *IostatContext) GetDiskUtil(mpath string, now time.Time) int64 {
+func (ctx *IostatContext) GetMpathUtil(mpath string, now time.Time) int64 {
 	cache := ctx.refreshIostatCache(now)
 	return cache.mpathUtil[mpath]
+}
+func (ctx *IostatContext) GetAllMpathUtils(now time.Time) (map[string]int64, map[string]*atomic.Int32) {
+	cache := ctx.refreshIostatCache(now)
+	return cache.mpathUtil, cache.mpathRR
 }
 
 func (ctx *IostatContext) GetSelectedDiskStats() (m map[string]*SelectedDiskStats) {
@@ -305,13 +238,12 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 	)
 	ncache.timestamp = now
 	for mpath := range ctx.mpath2disks {
+		ncache.mpathUtil[mpath] = 0
 		if rr, ok := ncache.mpathRR[mpath]; ok {
 			rr.Store(0)
 		} else {
-			ncache.mpathRR[mpath] = atomic.NewInt64(0)
+			ncache.mpathRR[mpath] = atomic.NewInt32(0)
 		}
-		ncache.mpathUtil[mpath] = 0
-		ncache.mpathQue[mpath] = 0
 	}
 	for disk := range ncache.diskIOms {
 		if _, ok := ctx.disk2mpath[disk]; !ok {
@@ -342,8 +274,6 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 		// deltas
 		var (
 			ioms   = stat.IOMs - statsCache.diskIOms[disk]
-			rqms   = stat.ReadMs - statsCache.diskRms[disk]
-			wqms   = stat.WriteMs - statsCache.diskWms[disk]
 			rdsect = stat.ReadSectors - statsCache.diskRSec[disk]
 			wdsect = stat.WriteSectors - statsCache.diskWSec[disk]
 		)
@@ -360,17 +290,6 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 			ncache.diskRBps[disk] = statsCache.diskRBps[disk]
 			ncache.diskWBps[disk] = statsCache.diskWBps[disk]
 		}
-		// These values count the number of milliseconds that I/O requests have
-		// waited on this block device.  If there are multiple I/O requests waiting,
-		// these values will increase at a rate greater than 1000/second; for
-		// example, if 60 read requests wait for an average of 30 ms, the read_ticks
-		// field will increase by 60*30 = 1800
-		// (from https://www.kernel.org/doc/Documentation/block/stat.txt)
-		if elapsedMillis > 0 {
-			ncache.mpathQue[mpath] += cmn.DivRound(rqms, elapsedMillis) + cmn.DivRound(wqms*writesPerRead, elapsedMillis)
-		} else {
-			ncache.mpathQue[mpath] += statsCache.mpathQue[mpath]
-		}
 	}
 
 	// average and max
@@ -379,8 +298,6 @@ func (ctx *IostatContext) refreshIostatCache(nows ...time.Time) *ioStatCache {
 		numDisk := int64(len(disks))
 		ncache.mpathUtil[mpath] /= numDisk
 		maxUtil = cmn.MaxI64(maxUtil, ncache.mpathUtil[mpath])
-		ncache.mpathQue[mpath] /= numDisk
-		ncache.mpathRR[mpath] = atomic.NewInt64(0)
 	}
 	ctx.mpathLock.Unlock()
 

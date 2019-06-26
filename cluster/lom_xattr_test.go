@@ -47,7 +47,8 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
 				lom.SetVersion("dummyversion")
-				lom.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
+				lom.SetCopies("some/copy/fqn", nil)
+				lom.AddCopy("some/other/copy/fqn", nil)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
@@ -60,19 +61,21 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(errstr).To(BeEmpty())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
-				Expect(lom.CopyFQN()).To(BeEquivalentTo(newLom.CopyFQN()))
+				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 
 			It("should override old values", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum1"))
 				lom.SetVersion("dummyversion1")
-				lom.SetCopyFQN([]string{"some/copy/fqn/1", "some/other/copy/fqn/1"})
+				lom.SetCopies("some/copy/fqn/1", nil)
+				lom.AddCopy("some/other/copy/fqn/1", nil)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum2"))
 				lom.SetVersion("dummyversion2")
-				lom.SetCopyFQN([]string{"some/copy/fqn/2", "some/other/copy/fqn/2"})
+				lom.SetCopies("some/copy/fqn/2", nil)
+				lom.AddCopy("some/other/copy/fqn/2", nil)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
@@ -86,7 +89,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(errstr).To(BeEmpty())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
-				Expect(lom.CopyFQN()).To(BeEquivalentTo(newLom.CopyFQN()))
+				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 		})
 
@@ -97,7 +100,8 @@ var _ = Describe("LOM Xattributes", func() {
 				lom2 := NewBasicLom(localFQN, tMock)
 				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
 				lom1.SetVersion("dummyversion")
-				lom1.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
+				lom1.SetCopies("some/copy/fqn", nil)
+				lom1.AddCopy("some/other/copy/fqn", nil)
 
 				Expect(lom1.Persist()).NotTo(HaveOccurred())
 				err := lom2.LoadMetaFromFS()
@@ -105,7 +109,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom1.Cksum()).To(BeEquivalentTo(lom2.Cksum()))
 				Expect(lom1.Version()).To(BeEquivalentTo(lom2.Version()))
-				Expect(lom1.CopyFQN()).To(BeEquivalentTo(lom2.CopyFQN()))
+				Expect(lom1.GetCopies()).To(BeEquivalentTo(lom2.GetCopies()))
 			})
 
 			It("should fail when checksum does not match", func() {
@@ -113,7 +117,8 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := NewBasicLom(localFQN, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
 				lom.SetVersion("dummyversion")
-				lom.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
+				lom.SetCopies("some/copy/fqn/", nil)
+				lom.AddCopy("some/other/copy/fqn", nil)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
@@ -133,7 +138,8 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := NewBasicLom(localFQN, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
 				lom.SetVersion("dummyversion")
-				lom.SetCopyFQN([]string{"some/copy/fqn", "some/other/copy/fqn"})
+				lom.SetCopies("some/copy/fqn/", nil)
+				lom.AddCopy("some/other/copy/fqn", nil)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 

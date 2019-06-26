@@ -331,7 +331,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(msg)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDiskStats:
-		diskStats := fs.Mountpaths.Iostats.GetSelectedDiskStats()
+		diskStats := fs.Mountpaths.GetSelectedDiskStats()
 		body := cmn.MustMarshal(diskStats)
 		t.writeJSON(w, r, body, httpdaeWhat)
 	default:

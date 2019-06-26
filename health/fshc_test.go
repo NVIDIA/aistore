@@ -28,7 +28,7 @@ func testCheckerMountPaths() *fs.MountedFS {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)

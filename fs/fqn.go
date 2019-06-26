@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ios"
 )
 
 const (
@@ -23,9 +22,6 @@ const (
 	WorkfileFSHC        = "fshc"   // FSHC test file
 )
 const sep = string(filepath.Separator)
-
-// MountedFS should be able to resolve FQNs
-var _ ios.FQNResolver = &MountedFS{}
 
 type ParsedFQN struct {
 	MpathInfo   *MountpathInfo
@@ -62,17 +58,9 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	return
 }
 
-// FQN2mountpath returns the mountpath of the fqn
-func (mfs *MountedFS) FQN2mountpath(fqn string) (mpath string) {
-	if mpathInfo, _ := mfs.FQN2MpathInfo(fqn); mpathInfo != nil {
-		mpath = mpathInfo.Path
-	}
-	return
-}
-
 func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePath string) {
 	var (
-		available = (*map[string]*MountpathInfo)(mfs.available.Load())
+		available = (*MPI)(mfs.available.Load())
 		max       = 0
 		ll        = len(fqn)
 	)

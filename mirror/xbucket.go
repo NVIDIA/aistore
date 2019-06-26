@@ -63,7 +63,7 @@ func (r *xactBckBase) Description() string          { return "base bucket xactio
 // init and stop
 func (r *xactBckBase) Stop(error) { r.Abort() } // call base method
 
-func (r *xactBckBase) init(availablePaths map[string]*fs.MountpathInfo) {
+func (r *xactBckBase) init(availablePaths fs.MPI) {
 	numjs := len(availablePaths)
 	r.doneCh = make(chan struct{}, numjs)
 	r.mpathers = make(map[string]mpather, numjs)
@@ -156,7 +156,7 @@ func (j *joggerBckBase) yieldTerm() error {
 	case <-j.stopCh:
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
 	default:
-		curr := fs.Mountpaths.Iostats.GetDiskUtil(j.mpathInfo.Path, time.Now())
+		curr := fs.Mountpaths.GetMpathUtil(j.mpathInfo.Path, time.Now())
 		if curr >= diskConf.DiskUtilHighWM {
 			time.Sleep(cmn.ThrottleSleepMin)
 		}

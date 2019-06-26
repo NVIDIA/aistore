@@ -1927,7 +1927,7 @@ func init() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	targetDirs, _ := ioutil.ReadDir(rootDir)
 

@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("RequestSpec", func() {
 	BeforeEach(func() {
-		fs.Mountpaths = fs.NewMountedFS()
+		fs.InitMountedFS()
 
 		config := cmn.GCO.BeginUpdate()
 		config.DSort.DefaultMaxMemUsage = "90%"

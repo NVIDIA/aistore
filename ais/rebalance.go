@@ -189,8 +189,9 @@ func (reb *rebManager) runGlobalReb(smap *smapX) {
 		config = cmn.GCO.Get()
 		sleep  = config.Timeout.CplaneOperation
 		maxwt  = config.Rebalance.DestRetryTime
+		wg     = &sync.WaitGroup{}
 		curwt  time.Duration
-		aPaths map[string]*fs.MountpathInfo
+		aPaths fs.MPI
 		cnt    int
 	)
 	// 1. check whether other targets are up and running
@@ -241,8 +242,10 @@ func (reb *rebManager) runGlobalReb(smap *smapX) {
 	// 6.5. synchronize with the cluster
 	glog.Infof("%s: poll other targets for: ready to receive", tname)
 	_ = reb.bcast(smap, config, reb.rxReady, xreb) // NOTE: ignore timeout
-
-	wg := &sync.WaitGroup{}
+	if xreb.Aborted() {
+		glog.Infoln("abrt")
+		goto term
+	}
 	for _, mpathInfo := range availablePaths {
 		var sema chan struct{}
 		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)

@@ -35,13 +35,13 @@ type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
 	lmeta struct {
 		uname   string
-		size    int64
 		version string
-		cksum   cmn.Cksummer
+		size    int64
 		atime   int64
 		atimefs int64
-		copyFQN []string
 		bckID   uint64
+		cksum   cmn.Cksummer // ReCache(ref)
+		copies  fs.MPI       // ditto
 	}
 	LOM struct {
 		// local meta
@@ -83,9 +83,6 @@ func init() {
 
 func (lom *LOM) Uname() string               { return lom.md.uname }
 func (lom *LOM) BMD() *BMD                   { return lom.bmd }
-func (lom *LOM) CopyFQN() []string           { return lom.md.copyFQN }
-func (lom *LOM) SetCopyFQN(cpyFQN []string)  { lom.md.copyFQN = cpyFQN }
-func (lom *LOM) AddXcopy(cpyfqn string)      { lom.md.copyFQN = append(lom.md.copyFQN, cpyfqn) }
 func (lom *LOM) Size() int64                 { return lom.md.size }
 func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
 func (lom *LOM) Version() string             { return lom.md.version }
@@ -98,13 +95,9 @@ func (lom *LOM) SetAtimeUnix(tu int64)       { lom.md.atime = tu }
 func (lom *LOM) ECEnabled() bool             { return lom.BckProps.EC.Enabled }
 func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
 func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
-func (lom *LOM) HasCopies() bool             { return !lom.IsCopy() && lom.NumCopies() > 1 }
-func (lom *LOM) NumCopies() int              { return len(lom.md.copyFQN) + 1 }
-func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }      // NOTE: internal use!
-func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid } // ditto
-func (lom *LOM) IsCopy() bool {
-	return len(lom.md.copyFQN) == 1 && lom.md.copyFQN[0] == lom.HrwFQN // is a local copy of an object
-}
+func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }                                 // NOTE: internal use!
+func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid }                            // ditto
+
 func (lom *LOM) Config() *cmn.Config {
 	if lom.config == nil {
 		lom.config = cmn.GCO.Get()
@@ -130,63 +123,76 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 //
 // local copy management
 //
+func (lom *LOM) HasCopies() bool   { return !lom.IsCopy() && lom.NumCopies() > 1 }
+func (lom *LOM) NumCopies() int    { return len(lom.md.copies) + 1 }
+func (lom *LOM) GetCopies() fs.MPI { return lom.md.copies }
+func (lom *LOM) IsCopy() bool {
+	if len(lom.md.copies) != 1 {
+		return false
+	}
+	_, ok := lom.md.copies[lom.HrwFQN]
+	return ok
+}
+func (lom *LOM) SetCopies(cpyfqn string, mpi *fs.MountpathInfo) {
+	lom.md.copies = make(fs.MPI, 1)
+	lom.md.copies[cpyfqn] = mpi
+}
+func (lom *LOM) AddCopy(cpyfqn string, mpi *fs.MountpathInfo) {
+	if lom.md.copies == nil {
+		lom.SetCopies(cpyfqn, mpi)
+	} else {
+		_, ok := lom.md.copies[cpyfqn]
+		cmn.Assert(!ok) // DEBUG  FIXME -- TODO -- FIXME
+		lom.md.copies[cpyfqn] = mpi
+	}
+}
 func (lom *LOM) DelCopy(cpyfqn string) (errstr string) {
-	if lom.IsCopy() { // NOTE: must never happen
-		errstr = fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copyFQN)
-		glog.Errorln(errstr)
-		return
-	}
-	var (
-		cpyidx = -1
-		l      = len(lom.md.copyFQN)
-	)
-	for i := 0; i < l; i++ {
-		if lom.md.copyFQN[i] == cpyfqn {
-			cpyidx = i
-			break
-		}
-	}
-	if cpyidx < 0 {
+	l := len(lom.md.copies)
+	if _, ok := lom.md.copies[cpyfqn]; !ok {
 		return fmt.Sprintf("lom %s(%d): copy %s %s", lom, l, cpyfqn, cmn.DoesNotExist)
 	}
 	if l == 1 {
 		return lom.DelAllCopies()
 	}
-	if cpyidx < l-1 {
-		copy(lom.md.copyFQN[cpyidx:], lom.md.copyFQN[cpyidx+1:])
+	if lom._whingeCopy() {
+		return
 	}
-	lom.md.copyFQN = lom.md.copyFQN[:l-1]
+	delete(lom.md.copies, cpyfqn)
 	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 		return err.Error()
 	}
-
 	return
 }
-
+func (lom *LOM) _whingeCopy() (yes bool) {
+	if !lom.IsCopy() {
+		return
+	}
+	errstr := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copies)
+	cmn.DassertMsg(false, errstr, pkgName)
+	glog.Errorln(errstr)
+	return true
+}
 func (lom *LOM) DelAllCopies() (errstr string) {
-	if lom.IsCopy() { // NOTE: must never happen
-		errstr = fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %v)", lom.StringEx(), lom.FQN, lom.HrwFQN, lom.md.copyFQN)
-		glog.Errorln(errstr)
+	if lom._whingeCopy() {
 		return
 	}
 	if !lom.HasCopies() {
 		return
 	}
 	n := 0
-	for _, cpyfqn := range lom.md.copyFQN {
+	for cpyfqn := range lom.md.copies {
 		if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
 			errstr = err.Error()
 			continue
 		}
+		delete(lom.md.copies, cpyfqn)
 		n++
 	}
-	if n == 0 {
-		return
-	} else if n < len(lom.md.copyFQN) {
-		glog.Errorf("%s: failed to remove copies(%d, %d), err: %s", lom, n, len(lom.md.copyFQN), errstr)
+	if n < len(lom.md.copies) {
+		glog.Errorf("%s: failed to remove some copies(%d < %d), err: %s", lom, n, len(lom.md.copies), errstr)
+	} else {
+		lom.md.copies = nil
 	}
-
-	lom.md.copyFQN = []string{}
 	return
 }
 
@@ -199,6 +205,10 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	err = cmn.CopyFile(lom.FQN, dst.FQN, buf)
 	return
 }
+
+//
+// lom.String() and helpers
+//
 
 func (lom *LOM) String() string { return lom._string(lom.Bucket) }
 
@@ -231,7 +241,7 @@ func (lom *LOM) _string(b string) string {
 			a += "(copy)"
 		}
 		if n := lom.NumCopies(); n > 1 {
-			a += fmt.Sprintf("(%d-copies)", n)
+			a += fmt.Sprintf("(%dc)", n)
 		}
 		if lom.BadCksum {
 			a += "(bad-cksum)"
@@ -276,19 +286,12 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 	return fmt.Sprintf("%d", numVersion+1), ""
 }
 
-// best-effort GET load balancing (see also `mirror` for loadBalancePUT)
-func (lom *LOM) LoadBalanceGET() (fqn string) {
-	if len(lom.md.copyFQN) == 0 {
-		// FIXME: increment the mpathRRCounter in Iostats for lom.FQN when code is more mature
+// best-effort GET load balancing (see also mirror.findLeastUtilized())
+func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
+	if len(lom.md.copies) == 0 {
 		return lom.FQN
 	}
-	fqn = fs.Mountpaths.Iostats.GetRoundRobin(lom.FQN, lom.md.copyFQN)
-
-	if bool(glog.FastV(4, glog.SmoduleAIS)) && fqn != lom.FQN {
-		glog.Infof("GET %s from a mirror %s", lom.FQN, fqn)
-	}
-
-	return
+	return fs.Mountpaths.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.md.copies, now)
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)
@@ -496,22 +499,16 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 // instance includes the following steps:
 //
 // 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
-//
 // 2) load persistent state (aka lmeta) from one of the LOM caches or the underlying
 //    filesystem: lom.Load(true/false)
-//
-//    NOTE: Load(false) also entails removing this LOM from cache, if exists -
+//    Load(false) also entails removing this LOM from cache, if exists -
 //    useful when you are going delete the corresponding data object, for instance
 //
 // 3) use: via lom.Atime(), lom.Cksum(), lom.Exists() and numerous other accessors
-//
-//    NOTE: it is illegal to check LOM's existence and, generally, do almost anything
-//    with it prior to loading - see the previous step
-//
+//    It is illegal to check LOM's existence and, generally, do almost anything
+//    with it prior to loading - see previous
 // 4) update persistent state in memory: lom.Set*() methods
-//
-//    NOTE that updating (above) requires subsequent re-caching via lom.ReCache()
-//
+//    (requires subsequent re-caching via lom.ReCache())
 // 5) update persistent state on disk: lom.Persist()
 // 6) remove a given LOM instance from cache: lom.Uncache()
 // 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
@@ -519,7 +516,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
-	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName) // DEBUG
+	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
 }
 func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
@@ -549,17 +546,21 @@ func (lom *LOM) Load(add bool) (fromCache bool, errstr string) {
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
 	)
 	lom.loaded = true
-	if md, ok := cache.M.Load(hkey); ok {
-		fromCache = true
-		lom.exists = true
-		lmeta := md.(*lmeta)
-		lom.md = *lmeta
-		if !add { // uncache
-			cache.M.Delete(hkey)
+	if lom.FQN == lom.HrwFQN {
+		if md, ok := cache.M.Load(hkey); ok {
+			fromCache = true
+			lom.exists = true
+			lmeta := md.(*lmeta)
+			lom.md = *lmeta
+			if !add { // uncache
+				cache.M.Delete(hkey)
+			}
+			if lom.existsInBucket() {
+				return
+			}
 		}
-		if lom.existsInBucket() {
-			return
-		}
+	} else {
+		add = false
 	}
 	// slow path
 	errstr = lom.FromFS()
@@ -589,6 +590,7 @@ func (lom *LOM) existsInBucket() bool {
 }
 
 func (lom *LOM) ReCache() {
+	cmn.Assert(lom.FQN == lom.HrwFQN) // DEBUG not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
@@ -601,6 +603,7 @@ func (lom *LOM) ReCache() {
 }
 
 func (lom *LOM) Uncache() {
+	cmn.Assert(lom.FQN == lom.HrwFQN) // DEBUG not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)

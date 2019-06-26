@@ -199,7 +199,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 			if !lctx.mpathInfo.IsIdle(lctx.config, now) {
 				// throttle self
 				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedpct)
-				curr := fs.Mountpaths.Iostats.GetDiskUtil(lctx.mpathInfo.Path, now)
+				curr := fs.Mountpaths.GetMpathUtil(lctx.mpathInfo.Path, now)
 				ratioUtilization := cmn.Ratio(lctx.config.Disk.DiskUtilHighWM, lctx.config.Disk.DiskUtilLowWM, curr)
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true
@@ -219,7 +219,7 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 
 	// Don't persist meta as object will be soon removed
 	if errstr := fi.lom.DelAllCopies(); errstr != "" {
-		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.CopyFQN(), errstr)
+		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.GetCopies(), errstr)
 	}
 	if err := os.Remove(fi.lom.FQN); err == nil {
 		glog.Infof("Evicted %s", fi.lom)

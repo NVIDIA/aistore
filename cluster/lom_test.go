@@ -44,7 +44,7 @@ var _ = Describe("LOM", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	_ = fs.Mountpaths.Add(mpath)
 
 	fs.Mountpaths.DisableFsIDCheck()
@@ -554,14 +554,13 @@ var _ = Describe("LOM", func() {
 
 			It("should be able to get copy", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
-				lom.SetCopyFQN([]string{copyFQN})
+				lom.SetCopies(copyFQN, nil)
 				lom.SetSize(int64(testFileSize))
 				addLocalBucket(lom)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				_, errstr := lom.Load(false)
 				Expect(errstr).To(BeEmpty())
-				Expect(lom.CopyFQN()[0]).To(BeEquivalentTo(copyFQN))
 			})
 		})
 	})
@@ -598,14 +597,13 @@ var _ = Describe("LOM", func() {
 			Expect(os.IsNotExist(err)).To(BeFalse())
 
 			if setXCopy {
-				lom.SetCopyFQN([]string{copyFQN})
+				lom.SetCopies(copyFQN, nil)
 				Expect(lom.Persist()).ShouldNot(HaveOccurred())
-				dst.SetCopyFQN([]string{lom.FQN})
+				dst.SetCopies(lom.FQN, nil)
 				Expect(dst.Persist()).ShouldNot(HaveOccurred())
 			}
 
 			lom.Uncache()
-			dst.Uncache()
 
 			return
 		}
@@ -699,6 +697,7 @@ var _ = Describe("LOM", func() {
 // needs to be called inside of gomega scope like Describe/It
 func NewBasicLom(fqn string, t cluster.Target) *cluster.LOM {
 	lom, err := cluster.LOM{T: t, FQN: fqn}.Init()
+	lom.HrwFQN = fqn
 	Expect(err).To(BeEmpty())
 	return lom
 }

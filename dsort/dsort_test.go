@@ -201,7 +201,7 @@ func (tctx *testContext) setup() {
 	tctx.errCh = make(chan error, tctx.targetCnt)
 	tctx.wg = &sync.WaitGroup{}
 
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	err := cmn.CreateDir(testDir)
 	Expect(err).NotTo(HaveOccurred())
 	err = fs.Mountpaths.Add(testDir)

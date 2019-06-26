@@ -207,7 +207,8 @@ func aisinit(version, build string) {
 	sys.UpdateMaxProcs()
 
 	// init daemon
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
+
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
 	ctx.rg = &rungroup{

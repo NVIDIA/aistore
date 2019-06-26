@@ -224,11 +224,11 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 	cluster.ObjectLocker.Lock(lom.Uname(), false)
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
-	if err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
+	if clone, err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)
 	} else {
-		if glog.V(4) {
-			glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
+		if glog.FastV(4, glog.SmoduleMirror) {
+			glog.Infof("copied %s=>%s", lom, clone)
 		}
 		if v := j.parent.ObjectsInc(); (v % logNumProcessed) == 0 {
 			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)

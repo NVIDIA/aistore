@@ -9,6 +9,7 @@ import (
 	"container/heap"
 	"context"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -208,7 +209,9 @@ func Init() *StreamCollector {
 }
 
 func (sc *StreamCollector) Run() (err error) {
-	glog.Infof("Starting %s", sc.Getname())
+	if flag.Parsed() {
+		glog.Infof("Starting %s", sc.Getname())
+	}
 	return gc.run()
 }
 func (sc *StreamCollector) Stop(err error) {

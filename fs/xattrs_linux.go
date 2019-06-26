@@ -8,24 +8,21 @@ import (
 	"syscall"
 )
 
-const maxAttrSize = 4096
-
 // GetXattr gets xattr by name - see also the buffered version below
 func GetXattr(fqn, attrname string) ([]byte, error) {
+	const maxAttrSize = 4096
 	buf := make([]byte, maxAttrSize)
 	return GetXattrBuf(fqn, attrname, buf)
 }
 
 // GetXattr gets xattr by name via provided buffer
-func GetXattrBuf(fqn, attrname string, buf []byte) ([]byte, error) {
-	n, err := syscall.Getxattr(fqn, attrname, buf)
-	if err != nil { // returns ERANGE if len(data) is not enough
-		return nil, err
+func GetXattrBuf(fqn, attrname string, buf []byte) (b []byte, err error) {
+	var n int
+	n, err = syscall.Getxattr(fqn, attrname, buf)
+	if err == nil { // returns ERANGE if len(buf) is not enough
+		b = buf[:n]
 	}
-	if n < 0 {
-		return nil, syscall.ENOENT
-	}
-	return buf[:n], nil
+	return
 }
 
 // SetXattr sets xattr name = value

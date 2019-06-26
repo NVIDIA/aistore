@@ -31,7 +31,7 @@ var _ = Describe("ManagerGroup", func() {
 		cmn.GCO.CommitUpdate(config)
 		mgrp = NewManagerGroup()
 
-		fs.Mountpaths = fs.NewMountedFS()
+		fs.InitMountedFS()
 		fs.Mountpaths.Add(testingConfigDir)
 	})
 

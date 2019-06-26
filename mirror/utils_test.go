@@ -33,7 +33,7 @@ var _ = Describe("Mirror", func() {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	_ = fs.Mountpaths.Add(mpath)
 	_ = fs.Mountpaths.Add(mpath2)
@@ -72,23 +72,24 @@ var _ = Describe("Mirror", func() {
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 
 			Expect(lom.ValidateChecksum(true)).To(BeEmpty())
-			Expect(copyTo(lom, mpathInfo2, copyBuf)).ShouldNot(HaveOccurred())
+			clone, err := copyTo(lom, mpathInfo2, copyBuf)
+			Expect(clone.IsCopy()).To(BeTrue())
+			Expect(err).ShouldNot(HaveOccurred())
 			stat, err := os.Stat(expectedCopyFQN)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
-			newCopyLom := newBasicLom(expectedCopyFQN, tMock)
-			_, errstr := newCopyLom.Load(false)
-			Expect(errstr).To(BeEmpty())
-			Expect(newCopyLom.CopyFQN()).To(HaveLen(1))
-			Expect(newCopyLom.CopyFQN()[0]).To(BeEquivalentTo(testFQN))
+			Expect(clone.GetCopies()).To(HaveLen(1))
+			_, ok := clone.GetCopies()[testFQN]
+			Expect(ok).To(BeTrue())
 
 			newLom := newBasicLom(testFQN, tMock)
-			_, errstr = newLom.Load(false)
+			_, errstr := newLom.Load(false)
 			Expect(errstr).To(BeEmpty())
-			Expect(newLom.CopyFQN()).To(HaveLen(1))
-			Expect(newLom.CopyFQN()[0]).To(BeEquivalentTo(expectedCopyFQN))
+			Expect(newLom.GetCopies()).To(HaveLen(1))
+			_, ok = newLom.GetCopies()[expectedCopyFQN]
+			Expect(ok).To(BeTrue())
 
 			// Check msic copy data
 			lomCopy, errstr := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init()

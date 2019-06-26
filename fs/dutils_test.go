@@ -17,10 +17,6 @@ import (
 // test file for ios/dutils_linux.go
 // placed here because it requires fs to set up the testing environment
 
-func init() {
-	Mountpaths = NewMountedFS()
-}
-
 func TestLsblk(t *testing.T) {
 	var lsblk ios.LsBlk
 	rawJSON := jsoniter.RawMessage(
@@ -51,7 +47,7 @@ func TestLsblk(t *testing.T) {
 }
 
 func TestSearchValidMountPath(t *testing.T) {
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp")
 	mpathInfo, _ := Mountpaths.Path2MpathInfo("/tmp/abc")
 	longestPrefix := mpathInfo.Path
@@ -60,7 +56,7 @@ func TestSearchValidMountPath(t *testing.T) {
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp")
 	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -68,7 +64,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := Mountpaths.Path2MpathInfo("xabc")
 	tassert.Errorf(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -80,7 +76,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -101,7 +97,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -123,7 +119,7 @@ func TestSimilarCases(t *testing.T) {
 
 func TestSimilarCasesWithRoot(t *testing.T) {
 	// root is an invalid mountpath
-	Mountpaths = NewMountedFS()
+	InitMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
 	mpathInfo, _ := Mountpaths.Path2MpathInfo("/abx")

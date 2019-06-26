@@ -22,9 +22,10 @@ type mpather interface {
 
 func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {
 	var (
-		util int64 = 101
-		skip       = make(cmn.SimpleKVs)
-		now        = time.Now()
+		util       int64 = 101
+		skip             = make(cmn.SimpleKVs)
+		now              = time.Now()
+		mpathUtils       = fs.Mountpaths.GetAllMpathUtils(now)
 	)
 loop:
 	for _, j := range mpathers {
@@ -34,15 +35,10 @@ loop:
 		}
 		if lom.HasCopies() {
 			// skip existing
-			for _, cpyfqn := range lom.CopyFQN() {
+			for cpyfqn, mpathInfo := range lom.GetCopies() {
 				cpath, ok := skip[cpyfqn]
 				if !ok {
-					parsedFQN, err := fs.Mountpaths.FQN2Info(cpyfqn) // can be optimized via lom.init
-					if err != nil {
-						glog.Errorf("%s: failed to parse copyFQN %s, err: %v", lom, cpyfqn, err)
-						continue loop
-					}
-					cpath = parsedFQN.MpathInfo.Path
+					cpath = mpathInfo.Path
 					skip[cpyfqn] = cpath
 				}
 				if jpath == cpath {
@@ -50,7 +46,7 @@ loop:
 				}
 			}
 		}
-		if u := fs.Mountpaths.Iostats.GetDiskUtil(jpath, now); u < util {
+		if u, ok := mpathUtils[jpath]; ok && u < util {
 			out = j
 			util = u
 		}
@@ -58,7 +54,8 @@ loop:
 	return
 }
 
-func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err error) {
+func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
+	orig := lom.ParsedFQN.MpathInfo
 	parsedFQN := lom.ParsedFQN
 	parsedFQN.MpathInfo = mpathInfo
 	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
@@ -68,36 +65,24 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (err erro
 		return
 	}
 
-	// TODO: the lock here should be exclusive but it isn't. This can result
-	// in errors where we check that the file exist but it has not yet metadata
-	// persisted. On the other hand, taking an exclusive lock on original
-	// object will prevent from GETs from happening.
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
 	if err = cmn.MvFile(workFQN, copyFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
-			glog.Errorf("Failed to remove %s, err: %v", workFQN, errRemove)
+			glog.Errorf("nested err: %v", errRemove)
 		}
 		return
 	}
-
-	// Append copyFQN to FQNs of existing copies
-	lom.AddXcopy(copyFQN)
-
+	lom.AddCopy(copyFQN, mpathInfo)
 	if err = lom.Persist(); err == nil {
-		copyLOM := lom.Clone(copyFQN)
-		copyLOM.SetCopyFQN([]string{lom.FQN})
-		if err = copyLOM.Persist(); err == nil {
+		clone = lom.Clone(copyFQN)
+		clone.HrwFQN = lom.FQN
+		clone.SetCopies(lom.FQN, orig)
+		if err = clone.Persist(); err == nil {
 			lom.ReCache()
-			return
+			return // ok
 		}
 	}
-
 	// on error
-	// FIXME: add rollback which restores lom's metadata in case of failure
-	if err := os.Remove(copyFQN); err != nil && !os.IsNotExist(err) {
-		lom.T.FSHC(err, lom.FQN)
-	}
-
-	lom.ReCache()
+	_ = lom.DelCopy(copyFQN)
 	return
 }

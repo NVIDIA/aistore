@@ -142,7 +142,7 @@ func (r *Trunner) log() (runlru bool) {
 	}
 
 	// 3. io stats
-	r.lines = fs.Mountpaths.Iostats.LogAppend(r.lines)
+	r.lines = fs.Mountpaths.LogAppend(r.lines)
 
 	// 4. log
 	for _, ln := range r.lines {
@@ -165,7 +165,7 @@ func (r *Trunner) housekeep(runlru bool) {
 	r.statsRunner.housekeep(runlru)
 }
 
-func (r *Trunner) UpdateCapacityOOS(availableMountpaths map[string]*fs.MountpathInfo) (runlru bool) {
+func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 	if availableMountpaths == nil {
 		availableMountpaths, _ = fs.Mountpaths.Get()
 	}

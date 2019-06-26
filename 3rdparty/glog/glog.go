@@ -119,6 +119,8 @@ const (
 	SmoduleAIS
 	SmoduleMemsys
 	SmoduleCluster
+	SmoduleMirror
+	SmoduleFS
 	// NOTE: this guard is used to define size of 'smodules' array, make sure it is always last.
 	_smoduleLast
 )

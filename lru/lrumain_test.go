@@ -107,7 +107,7 @@ func initConfig() {
 
 func createAndAddMountpath(path string) {
 	cmn.CreateDir(path)
-	fs.Mountpaths = fs.NewMountedFS()
+	fs.InitMountedFS()
 	fs.Mountpaths.Add(path)
 
 	fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
