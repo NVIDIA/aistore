@@ -5,11 +5,11 @@
 package ais_test
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -19,23 +19,144 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (
-	fshcDetectTimeMax = time.Second * 5
-	fshcRunTimeMax    = time.Second * 20
-	fshcDir           = "fschecker"
+	fshcDetectTimeMax      = time.Second * 20
+	fshcDetectTimeDisabled = time.Second * 10
+	fshcRunTimeMax         = time.Second * 20
+	fshcDir                = "fschecker"
 )
 
-func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen int, failIfDiffer bool) bool {
-	// wait for target disables the failed filesystem
-	var err error
+type checkerMD struct {
+	t          *testing.T
+	seed       int64
+	numObjs    int
+	proxyURL   string
+	bucket     string
+	smap       cluster.Smap
+	mpList     map[string]string
+	allMps     map[string]*cmn.MountpathList
+	origAvail  int
+	fileSize   int64
+	baseParams *api.BaseParams
+	chstop     chan struct{}
+	chfail     chan struct{}
+	wg         *sync.WaitGroup
+}
+
+func newCheckerMD(t *testing.T) *checkerMD {
+	md := &checkerMD{
+		t:        t,
+		seed:     baseseed + 300,
+		numObjs:  100,
+		proxyURL: getPrimaryURL(t, proxyURLReadOnly),
+		bucket:   TestLocalBucketName,
+		fileSize: 64 * cmn.KiB,
+		mpList:   make(map[string]string, 10),
+		allMps:   make(map[string]*cmn.MountpathList, 10),
+		chstop:   make(chan struct{}),
+		chfail:   make(chan struct{}),
+		wg:       &sync.WaitGroup{},
+	}
+
+	md.init()
+
+	return md
+}
+
+func (md *checkerMD) init() {
+	md.smap = getClusterMap(md.t, md.proxyURL)
+	for target, tinfo := range md.smap.Tmap {
+		tutils.Logf("Target: %s\n", target)
+		md.baseParams = tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
+		lst, err := api.GetMountpaths(md.baseParams)
+		tassert.CheckFatal(md.t, err)
+		tutils.Logf("    Mountpaths: %v\n", lst)
+
+		for _, fqn := range lst.Available {
+			md.mpList[fqn] = tinfo.PublicNet.DirectURL
+		}
+		md.allMps[tinfo.PublicNet.DirectURL] = lst
+
+		md.origAvail += len(lst.Available)
+	}
+}
+
+func (md *checkerMD) randomTargetMpath() (target string, mpath string, mpathMap *cmn.MountpathList) {
+	// select random target and mountpath
+	for m, t := range md.mpList {
+		target, mpath = t, m
+		mpathMap = md.allMps[target]
+		break
+	}
+	return
+}
+
+func (md *checkerMD) runTestAsync(method, target, mpath string, mpathList *cmn.MountpathList, sgl *memsys.SGL) {
+	md.wg.Add(1)
+	go runAsyncJob(md.t, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl, md.bucket)
+	// let the job run for a while and then make a mountpath broken
+	time.Sleep(time.Second * 2)
+	md.chfail <- struct{}{}
+	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, true); detected {
+		// let the job run for a while with broken mountpath, so FSHC detects the trouble
+		time.Sleep(time.Second * 2)
+	}
+	md.chstop <- struct{}{}
+	md.wg.Wait()
+
+	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
+}
+
+func (md *checkerMD) runTestSync(method, target, mpath string, mpathList *cmn.MountpathList, objList []string, sgl *memsys.SGL) {
+	ldir := filepath.Join(LocalSrcDir, fshcDir)
+	os.RemoveAll(mpath)
+	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
+
+	f, err := cmn.CreateFile(mpath)
+	if err != nil {
+		md.t.Errorf("Failed to create file: %v", err)
+		return
+	}
+	f.Close()
+
+	switch method {
+	case http.MethodPut:
+		tutils.PutObjsFromList(md.proxyURL, md.bucket, ldir, readerType, fshcDir, uint64(md.fileSize), objList, nil, nil, sgl)
+	case http.MethodGet:
+		for _, objName := range objList {
+			// GetObject must fail - so no error checking
+			_, err := api.GetObject(md.baseParams, md.bucket, objName)
+			if err == nil {
+				md.t.Errorf("Get %q must fail", objName)
+			}
+		}
+	}
+
+	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, false, fshcDetectTimeDisabled); detected {
+		md.t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
+	}
+
+}
+
+func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen int, failIfDiffer bool, timeout ...time.Duration) bool {
+	var (
+		err       error
+		newMpaths *cmn.MountpathList
+	)
+
+	maxWaitTime := fshcDetectTimeMax
+	if len(timeout) != 0 && timeout[0] != 0 {
+		maxWaitTime = timeout[0]
+	}
+
 	detectStart := time.Now()
-	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var newMpaths *cmn.MountpathList
+	detectLimit := time.Now().Add(maxWaitTime)
 
 	baseParams := tutils.BaseAPIParams(target)
 	for detectLimit.After(time.Now()) {
@@ -62,6 +183,7 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 		return false
 	}
 
+	tutils.Logf("Current mpath list: %v\n", newMpaths)
 	if len(newMpaths.Disabled) != disabledLen {
 		t.Errorf("Failed mpath count mismatch.\nOld count: %v\nNew list:%v\n",
 			disabledLen, newMpaths.Disabled)
@@ -164,16 +286,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 	wg.Done()
 }
 
-func TestFSCheckerDetection(t *testing.T) {
-	const filesize = 64 * 1024
-	var (
-		seed       = baseseed + 300
-		numObjs    = 100
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
-		bucket     = TestLocalBucketName
-		baseParams *api.BaseParams
-	)
-
+func TestFSCheckerDetectionEnabled(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -182,138 +295,88 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	md := newCheckerMD(t)
 
-	smap := getClusterMap(t, proxyURL)
-	mpList := make(map[string]string, 10)
-	allMps := make(map[string]*cmn.MountpathList, 10)
-	origAvail := 0
-	for target, tinfo := range smap.Tmap {
-		tutils.Logf("Target: %s\n", target)
-		baseParams = tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
-		lst, err := api.GetMountpaths(baseParams)
-		tassert.CheckFatal(t, err)
-		tutils.Logf("    Mountpaths: %v\n", lst)
-
-		for _, fqn := range lst.Available {
-			mpList[fqn] = tinfo.PublicNet.DirectURL
-		}
-		allMps[tinfo.PublicNet.DirectURL] = lst
-
-		origAvail += len(lst.Available)
-	}
-
-	if origAvail == 0 {
+	if md.origAvail == 0 {
 		t.Fatal("No available mountpaths found")
 	}
 
-	// select random target and mountpath
-	failedTarget, failedMpath := "", ""
-	var failedMap *cmn.MountpathList
-	for m, t := range mpList {
-		failedTarget, failedMpath = t, m
-		failedMap = allMps[failedTarget]
-		break
-	}
-	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
+	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
 
-	sgl := tutils.Mem2.NewSGL(filesize)
+	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
+	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+
+	sgl := tutils.Mem2.NewSGL(md.fileSize)
 	defer sgl.Free()
 
 	// generate some filenames to PUT to them in a loop
-	generateRandomData(seed, numObjs)
+	generateRandomData(md.seed, md.numObjs)
 
-	// start PUT in a loop for some time
-	chstop := make(chan struct{})
-	chfail := make(chan struct{})
-	wg := &sync.WaitGroup{}
-
+	md.baseParams = tutils.BaseAPIParams(selectedTarget)
 	// Checking detection on object PUT
-	wg.Add(1)
-	go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
-	time.Sleep(time.Second * 2)
-	chfail <- struct{}{}
-	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
-		time.Sleep(time.Second * 2)
-	}
-	chstop <- struct{}{}
-	wg.Wait()
-
-	repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
-
+	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, sgl)
 	// Checking detection on object GET
-	wg.Add(1)
-	go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
-	time.Sleep(time.Second * 2)
-	chfail <- struct{}{}
-	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
-		time.Sleep(time.Second * 1)
-	}
-	chstop <- struct{}{}
-	wg.Wait()
+	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, sgl)
 
-	repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
-
-	// reading non-existing objects should not disable mountpath
+	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
 	tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
-	baseParams = tutils.BaseAPIParams(proxyURL)
 	for n := 1; n < 10; n++ {
-		if _, err := api.GetObject(baseParams, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
+		objName := fmt.Sprintf("%s/o%d", fshcDir, n)
+		if _, err := api.GetObject(md.baseParams, md.bucket, objName); err == nil {
 			t.Error("Should not be able to GET non-existing objects")
 		}
 	}
-	if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
+	if detected := waitForMountpathChanges(t, selectedTarget, len(selectedMap.Available)-1, len(selectedMap.Disabled)+1, false); detected {
 		t.Error("GETting non-existing objects should not disable mountpath")
-		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
+		repairMountpath(t, selectedTarget, selectedMpath, len(selectedMap.Available), len(selectedMap.Disabled))
 	}
 
-	// try PUT and GET with disabled FSChecker
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
+}
+
+func TestFSCheckerDetectionDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	if containers.DockerRunning() {
+		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
+	}
+
+	md := newCheckerMD(t)
+
+	if md.origAvail == 0 {
+		t.Fatal("No available mountpaths found")
+	}
+
 	tutils.Logf("*** Testing with disabled FSHC***\n")
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "false"})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "true"})
+
+	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
+
+	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
+	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
+
+	sgl := tutils.Mem2.NewSGL(md.fileSize)
+	defer sgl.Free()
+
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	objList := []string{}
 	for n := 0; n < 5; n++ {
-		objList = append(objList, fileNames[n])
-	}
-	ldir := filepath.Join(LocalSrcDir, fshcDir)
-	{
-		os.RemoveAll(failedMpath)
-
-		f, err := os.OpenFile(failedMpath, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			t.Errorf("Failed to create file: %v", err)
-		}
-		f.Close()
-		objsPutCh := make(chan string, len(objList))
-		tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, filesize, objList, nil, objsPutCh, sgl)
-		close(objsPutCh)
-		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
-			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
-		}
-
-		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
-	}
-	{
-		os.RemoveAll(failedMpath)
-
-		f, err := os.OpenFile(failedMpath, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			t.Errorf("Failed to create file: %v", err)
-		}
-		f.Close()
-		for _, n := range objList {
-			// GetObject must fail - so no error checking
-			api.GetObject(baseParams, bucket, n)
-		}
-		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
-			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")
-		}
-
-		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
+		objName := fmt.Sprintf("obj-fshc-%d", n)
+		objList = append(objList, objName)
 	}
 
+	md.baseParams = tutils.BaseAPIParams(selectedTarget)
+	// Checking detection on object PUT
+	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, sgl)
+	// Checking detection on object GET
+	md.runTestSync(http.MethodGet, selectedTarget, selectedMpath, selectedMap, objList, sgl)
+
+	waitForRebalanceToComplete(t, tutils.BaseAPIParams(md.proxyURL), rebalanceTimeout)
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
@@ -345,22 +408,22 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	// select random target and mountpath
-	failedTarget, failedMpath := "", ""
+	selectedTarget, selectedMpath := "", ""
 	for m, t := range mpList {
-		failedTarget, failedMpath = t, m
+		selectedTarget, selectedMpath = t, m
 		break
 	}
 
 	// create a local bucket to write to
-	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
+	tutils.Logf("mountpath %s of %s is going offline\n", selectedMpath, selectedTarget)
 
-	baseParams := tutils.BaseAPIParams(failedTarget)
-	err := api.EnableMountpath(baseParams, failedMpath)
+	baseParams := tutils.BaseAPIParams(selectedTarget)
+	err := api.EnableMountpath(baseParams, selectedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
 
-	err = api.EnableMountpath(baseParams, failedMpath+"some_text")
+	err = api.EnableMountpath(baseParams, selectedMpath+"some_text")
 	if err == nil {
 		t.Errorf("Enabling non-existing mountpath should return error")
 	} else {

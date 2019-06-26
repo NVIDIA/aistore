@@ -680,7 +680,9 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 				errCh <- err
 			}
 		}
-		objsPutCh <- objName
+		if objsPutCh != nil {
+			objsPutCh <- objName
+		}
 	}
 }
 
