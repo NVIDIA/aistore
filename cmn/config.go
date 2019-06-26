@@ -1007,14 +1007,14 @@ func (c *FSPathsConf) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (c *FSPathsConf) MarshalJSON() (data []byte) {
+func (c *FSPathsConf) MarshalJSON() (data []byte, err error) {
 	m := make(map[string]string)
 
 	for k := range c.Paths {
 		m[k] = " "
 	}
 
-	return MustMarshal(m)
+	return MustMarshal(m), nil
 }
 
 func (c *FSPathsConf) Validate(contextConfig *Config) (err error) {
