@@ -67,9 +67,9 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 
 	bckList := lists[0] // main list to collect all info
 	objSet := make(map[string]*cmn.BucketEntry, len(bckList.Entries))
-	pageMarker := ""
+	pageMarker := bckList.PageMarker
 	for _, l := range lists {
-		if pageMarker == "" && l.PageMarker != "" {
+		if pageMarker < l.PageMarker {
 			pageMarker = l.PageMarker
 		}
 		for _, e := range l.Entries {
@@ -116,6 +116,7 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 		bckList.Entries[i] = nil
 	}
 	bckList.Entries = bckList.Entries[:maxSize]
+	pageMarker = bckList.Entries[maxSize-1].Name
 
 	return bckList, pageMarker
 }

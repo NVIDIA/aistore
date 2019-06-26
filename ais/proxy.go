@@ -1745,6 +1745,9 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	if err != nil {
 		return nil, 0, err
 	}
+	if useCache {
+		q.Set(cmn.URLParamCached, "true")
+	}
 
 	smap := p.smapowner.get()
 	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
@@ -1801,6 +1804,9 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
 	q.Set(cmn.URLParamSilent, "true")
+	if useCache {
+		q.Set(cmn.URLParamCached, "true")
+	}
 	results = p.broadcastTo(
 		urlPath,
 		q,
@@ -1836,7 +1842,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 		}
 
 		if useCache {
-			bucketList.Entries, pageMarker = objwalk.ConcatObjLists(
+			allEntries.Entries, pageMarker = objwalk.ConcatObjLists(
 				[][]*cmn.BucketEntry{allEntries.Entries, bucketList.Entries}, pageSize)
 		} else {
 			allEntries, pageMarker = objwalk.MergeObjLists(
