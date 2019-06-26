@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	initialPollInterval = 200 * time.Millisecond
+	initialPollInterval = 50 * time.Millisecond
 	maxPollInterval     = 10 * time.Second
 )
 
@@ -487,10 +487,10 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 			return nil, err
 		}
 
-		optParams := OptionalParams{Header: http.Header{
-			"Content-Type": []string{"application/json"},
-		},
-			Query: q}
+		optParams := OptionalParams{
+			Header: http.Header{"Content-Type": []string{"application/json"}},
+			Query:  q,
+		}
 
 		resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
 		if err != nil {

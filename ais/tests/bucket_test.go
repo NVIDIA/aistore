@@ -88,10 +88,10 @@ func TestResetBucketProps(t *testing.T) {
 
 func TestListObjects(t *testing.T) {
 	var (
-		iterations  = 20
+		iterations  = 10
 		workerCount = 10
-		dirLen      = 10
-		objectSize  = cmn.KiB
+		dirLen      = 5
+		objectSize  = 256
 
 		bucket   = t.Name() + "Bucket"
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
@@ -100,7 +100,7 @@ func TestListObjects(t *testing.T) {
 	)
 
 	if testing.Short() {
-		iterations = 5
+		iterations = 3
 	}
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
@@ -109,7 +109,7 @@ func TestListObjects(t *testing.T) {
 	// Iterations of PUT
 	totalObjects := 0
 	for iter := 0; iter < iterations; iter++ {
-		objectCount := random.Intn(1024) + 1000
+		objectCount := random.Intn(2048) + 2000
 		totalObjects += objectCount
 		for wid := 0; wid < workerCount; wid++ {
 			wg.Add(1)
