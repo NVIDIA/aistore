@@ -113,12 +113,12 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string
 			return
 		}
 
-		if bckProvider == cmn.LocalBs || bckProvider == "" {
+		if cmn.IsProviderLocal(bckProvider) || bckProvider == "" {
 			for _, bucket := range bucketNames.Local {
 				fmt.Println(bucket)
 			}
 		}
-		if bckProvider == cmn.CloudBs || bckProvider == "" {
+		if cmn.IsProviderCloud(bckProvider) || bckProvider == "" {
 			for _, bucket := range bucketNames.Cloud {
 				fmt.Println(bucket)
 			}

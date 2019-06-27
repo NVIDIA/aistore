@@ -120,7 +120,7 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 		isLocal = true
 	case cmn.CloudBs:
 		// Check if user does have the associated cloud
-		if !cmn.IsValidCloudProvider(bckProvider, config.CloudProvider) {
+		if bckProvider != config.CloudProvider && bckProvider != cmn.CloudBs {
 			err = fmt.Errorf("cluster cloud provider %q, mis-match bucket provider %q", config.CloudProvider, bckProvider)
 			return
 		}

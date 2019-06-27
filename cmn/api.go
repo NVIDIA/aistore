@@ -130,13 +130,6 @@ const (
 	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
-// Cloud Provider enum
-const (
-	ProviderAmazon = "aws"
-	ProviderGoogle = "gcp"
-	ProviderAIS    = "ais"
-)
-
 // Header Key enum
 // Constant values conventions:
 // - the constant equals the path of a value in BucketProps structure
@@ -805,16 +798,6 @@ func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluste
 		if err := validator.ValidateAsProps(validationArgs); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateCloudProvider(provider string, bckIsLocal bool) error {
-	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderAIS {
-		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
-			ProviderAmazon, ProviderGoogle, ProviderAIS)
-	} else if bckIsLocal && provider != ProviderAIS && provider != "" {
-		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", ProviderAIS)
 	}
 	return nil
 }

@@ -450,8 +450,8 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 		if err != nil {
 			return err.Error()
 		}
-		lom.BckIsLocal = val == cmn.LocalBs
-		bckProvider = cmn.BckProviderFromLocal(lom.BckIsLocal)
+		lom.BckIsLocal = cmn.IsProviderLocal(val)
+		bckProvider = val
 	}
 	if lom.Bucket == "" || lom.Objname == "" {
 		if bckProvider != "" {

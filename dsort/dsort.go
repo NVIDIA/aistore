@@ -373,7 +373,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		hdr := transport.Header{
 			Bucket:  bucket,
 			Objname: shardName,
-			IsLocal: bckProvider == cmn.LocalBs,
+			IsLocal: cmn.IsProviderLocal(bckProvider),
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),
 				CksumType:  cksumType,

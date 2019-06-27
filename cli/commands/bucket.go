@@ -686,7 +686,8 @@ func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err er
 }
 
 func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
-	if bckProvider == cmn.LocalBs || bckProvider == "" {
+	isBckLocal := cmn.IsProviderLocal(bckProvider)
+	if isBckLocal || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)
 		if showHeaders {
 			_, _ = fmt.Fprintf(c.App.Writer, "Local Buckets (%d)\n", len(localBuckets))
@@ -694,7 +695,7 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckPr
 		for _, bucket := range localBuckets {
 			_, _ = fmt.Fprintln(c.App.Writer, bucket)
 		}
-		if bckProvider == cmn.LocalBs {
+		if isBckLocal {
 			return
 		}
 		if showHeaders {

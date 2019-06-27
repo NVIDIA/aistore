@@ -1478,7 +1478,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
 	bmd := p.bmdowner.get()
 	bckProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
-	if bckProvider == cmn.LocalBs {
+	if cmn.IsProviderLocal(bckProvider) {
 		bucketNames := &cmn.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
 		for bucket := range bmd.LBmap {
 			bucketNames.Local = append(bucketNames.Local, bucket)
@@ -1743,6 +1743,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	if useCache {
 		q.Set(cmn.URLParamCached, "true")
 	}
+	q.Set(cmn.URLParamBckProvider, cmn.CloudBs)
 
 	smap := p.smapowner.get()
 	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
@@ -1799,6 +1800,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
 	q.Set(cmn.URLParamSilent, "true")
+	q.Set(cmn.URLParamBckProvider, cmn.CloudBs)
 	if useCache {
 		q.Set(cmn.URLParamCached, "true")
 	}
@@ -1876,7 +1878,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 //      * error
 func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (bckList *cmn.BucketList, taskID int64, err error) {
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
-	if bckProvider == cmn.CloudBs || !p.bmdowner.get().IsLocal(bucket) {
+	if cmn.IsProviderCloud(bckProvider) || !p.bmdowner.get().IsLocal(bucket) {
 		bckList, taskID, err = p.getCloudBucketObjects(r, bucket, headerID, msg)
 	} else {
 		bckList, taskID, err = p.getLocalBucketObjects(bucket, msg, headerID)

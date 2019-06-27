@@ -23,51 +23,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// as in: mountpath/<content-type>/<CloudBs|LocalBs>/<bucket-name>/...
-const (
-	CloudBs = "cloud"
-	LocalBs = "local"
-)
-
-var (
-	// Translates the various query values for URLParamBckProvider for cluster use
-	bckProviderMap = map[string]string{
-		// Cloud values
-		CloudBs:        CloudBs,
-		ProviderAmazon: CloudBs,
-		ProviderGoogle: CloudBs,
-
-		// Local values
-		LocalBs:     LocalBs,
-		ProviderAIS: LocalBs,
-
-		// unset
-		"": "",
-	}
-
-	_ json.Marshaler   = &FSPathsConf{}
-	_ json.Unmarshaler = &FSPathsConf{}
-)
-
-// bucket-is-local to provider helper
-func BckProviderFromLocal(isLocal bool) string {
-	if isLocal {
-		return LocalBs
-	}
-	return CloudBs
-}
-func BckProviderFromStr(provider string) (val string, err error) {
-	var ok bool
-	val, ok = bckProviderMap[strings.ToLower(provider)]
-	if !ok {
-		err = errors.New("invalid bucket provider '" + provider + "'")
-	}
-	return
-}
-func IsValidCloudProvider(bckProvider, cloudProvider string) bool {
-	return bckProvider == cloudProvider || bckProvider == CloudBs
-}
-
 // $CONFDIR/*
 const (
 	SmapBackupFile      = "smap.json"
@@ -148,6 +103,9 @@ var (
 	_ PropsValidator = &LRUConf{}
 	_ PropsValidator = &MirrorConf{}
 	_ PropsValidator = &ECConf{}
+
+	_ json.Marshaler   = &FSPathsConf{}
+	_ json.Unmarshaler = &FSPathsConf{}
 
 	// Debugging
 	pkgDebug = make(map[string]glog.Level)

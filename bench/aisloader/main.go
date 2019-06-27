@@ -533,7 +533,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = p.bckProvider == cmn.LocalBs
+		p.cleanUp.Val = cmn.IsProviderLocal(p.bckProvider)
 	}
 
 	// For Dry-Run on Docker
@@ -1374,7 +1374,7 @@ func cleanUp() {
 		wg.Wait()
 	}
 
-	if runParams.bckProvider == cmn.LocalBs {
+	if cmn.IsProviderLocal(runParams.bckProvider) {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 		api.DestroyLocalBucket(baseParams, runParams.bucket)
 	}
