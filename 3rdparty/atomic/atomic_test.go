@@ -166,6 +166,12 @@ var _ = Describe("Primitive atomics tests", func() {
 		Expect(atom.Load()).To(Equal(10 * time.Minute))
 	})
 
+	It("should properly perform basic operations on Time", func() {
+		now := time.Now()
+		atom := NewTime(now)
+		Expect(atom.Load()).Should(BeTemporally("~", now, 0))
+	})
+
 	It("should properly perform basic operations on Value", func() {
 		var v Value
 		Expect(v.Load()).To(BeNil())

@@ -63,6 +63,7 @@ const (
 	KeepAliveMinLatency = "kalive.µs.min"
 	KeepAliveMaxLatency = "kalive.µs.max"
 	KeepAliveLatency    = "kalive.µs"
+
 	// KindSpecial
 	Uptime = "up.µs.time"
 )
@@ -119,13 +120,12 @@ type (
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
 		cmn.Named
-		stopCh    chan struct{}
-		workCh    chan NamedVal64
-		starttime time.Time
-		ticker    *time.Ticker
-		ctracker  copyTracker // to avoid making it at runtime
-		logLimit  int64       // check log size
-		logIdx    int64       // time interval counting
+		stopCh   chan struct{}
+		workCh   chan NamedVal64
+		ticker   *time.Ticker
+		ctracker copyTracker // to avoid making it at runtime
+		logLimit int64       // check log size
+		logIdx   int64       // time interval counting
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -145,9 +145,9 @@ type (
 	copyTracker  map[string]*copyValue
 )
 
-//
-// CoreStats
-//
+///////////////
+// CoreStats //
+///////////////
 
 var (
 	_ json.Marshaler   = &CoreStats{}
@@ -157,6 +157,17 @@ var (
 func (s *CoreStats) init(size int) {
 	s.Tracker = make(statsTracker, size)
 	s.Tracker.registerCommonStats()
+}
+
+func (s *CoreStats) UpdateUptime(t time.Time) {
+	if t.IsZero() {
+		return
+	}
+
+	v := s.Tracker[Uptime]
+	v.Lock()
+	v.Value = time.Since(t).Nanoseconds() / int64(time.Microsecond)
+	v.Unlock()
 }
 
 func (s *CoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
@@ -325,7 +336,7 @@ func (tracker statsTracker) registerCommonStats() {
 	tracker.register(ErrListCount, KindCounter, true)
 	tracker.register(ErrRangeCount, KindCounter, true)
 	tracker.register(ErrDownloadCount, KindCounter, true)
-	//
+
 	tracker.register(Uptime, KindSpecial, true)
 }
 
@@ -341,7 +352,6 @@ var (
 func (r *statsRunner) runcommon(logger statslogger) error {
 	r.stopCh = make(chan struct{}, 4)
 	r.workCh = make(chan NamedVal64, 256)
-	r.starttime = time.Now()
 
 	glog.Infof("Starting %s", r.Getname())
 	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
@@ -189,7 +190,8 @@ type httprunner struct {
 	publicServer          *netServer
 	intraControlServer    *netServer
 	intraDataServer       *netServer
-	glogger               *log.Logger
+	logger                *log.Logger
+	startTime             atomic.Time
 	si                    *cluster.Snode
 	httpclient            *http.Client // http client for intra-cluster comm
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
@@ -419,12 +421,12 @@ func (h *httprunner) initSI(daemonType string) {
 }
 
 func (h *httprunner) run() error {
+	h.startTime.Store(time.Now())
 	config := cmn.GCO.Get()
 
-	// a wrapper to glog http.Server errors - otherwise
+	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
-	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
-
+	h.logger = log.New(&glogwriter{}, "net/http err: ", 0)
 	if config.Net.UseIntraControl || config.Net.UseIntraData {
 		var errCh chan error
 		if config.Net.UseIntraControl && config.Net.UseIntraData {
@@ -436,20 +438,20 @@ func (h *httprunner) run() error {
 		if config.Net.UseIntraControl {
 			go func() {
 				addr := h.si.IntraControlNet.NodeIPAddr + ":" + h.si.IntraControlNet.DaemonPort
-				errCh <- h.intraControlServer.listenAndServe(addr, h.glogger)
+				errCh <- h.intraControlServer.listenAndServe(addr, h.logger)
 			}()
 		}
 
 		if config.Net.UseIntraData {
 			go func() {
 				addr := h.si.IntraDataNet.NodeIPAddr + ":" + h.si.IntraDataNet.DaemonPort
-				errCh <- h.intraDataServer.listenAndServe(addr, h.glogger)
+				errCh <- h.intraDataServer.listenAndServe(addr, h.logger)
 			}()
 		}
 
 		go func() {
 			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
-			errCh <- h.publicServer.listenAndServe(addr, h.glogger)
+			errCh <- h.publicServer.listenAndServe(addr, h.logger)
 		}()
 
 		return <-errCh
@@ -457,7 +459,7 @@ func (h *httprunner) run() error {
 
 	// When only public net is configured listen on *:port
 	addr := ":" + h.si.PublicNet.DaemonPort
-	return h.publicServer.listenAndServe(addr, h.glogger)
+	return h.publicServer.listenAndServe(addr, h.logger)
 }
 
 // stop gracefully

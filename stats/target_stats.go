@@ -121,8 +121,7 @@ func (r *Trunner) GetWhatStats() []byte {
 
 func (r *Trunner) log() (runlru bool) {
 	// copy stats values while skipping zeros; reset latency stats
-	now := time.Now()
-	r.Core.Tracker[Uptime].Value = int64(now.Sub(r.starttime) / time.Microsecond)
+	r.Core.UpdateUptime(r.T.StartTime())
 	r.Core.copyZeroReset(r.ctracker)
 
 	r.lines = r.lines[:0]

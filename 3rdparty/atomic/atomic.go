@@ -347,6 +347,28 @@ func (d *Duration) CAS(old, new time.Duration) bool {
 	return d.v.CAS(int64(old), int64(new))
 }
 
+// Time is an atomic wrapper around time.Time
+// https://godoc.org/time#Time
+type Time struct {
+	noCopy noCopy
+	v      Int64
+}
+
+// NewTime creates a Time.
+func NewTime(d time.Time) *Time {
+	return &Time{v: *NewInt64(int64(d.UnixNano()))}
+}
+
+// Load atomically loads the wrapped value.
+func (d *Time) Load() time.Time {
+	return time.Unix(0, d.v.Load())
+}
+
+// Store atomically stores the passed value.
+func (d *Time) Store(n time.Time) {
+	d.v.Store(int64(n.UnixNano()))
+}
+
 // Value shadows the type of the same name from sync/atomic
 // https://godoc.org/sync/atomic#Value
 type Value struct {

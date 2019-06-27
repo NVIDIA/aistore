@@ -1068,10 +1068,10 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
-	for {
-		time.Sleep(time.Second)
+	for i := 1; ; i++ {
+		time.Sleep(time.Duration(i) * time.Second)
 		smap := t.smapowner.get()
-		if smap == nil || !smap.isValid() {
+		if !smap.isValid() {
 			continue
 		}
 		psi := smap.ProxySI
@@ -1088,14 +1088,8 @@ func (t *targetrunner) pollClusterStarted(timeout time.Duration) {
 		if res.err != nil {
 			continue
 		}
-		proxystats := &stats.CoreStats{}
-		err := jsoniter.Unmarshal(res.outjson, proxystats)
-		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.Name(), err, string(res.outjson))
-			continue
-		}
-		if proxystats.Tracker[stats.Uptime].Value != 0 {
-			glog.Infof("%s startup: primary %s", t.si.Name(), psi.Name())
+
+		if res.status == http.StatusOK {
 			break
 		}
 	}

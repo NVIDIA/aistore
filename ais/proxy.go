@@ -65,7 +65,6 @@ func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.Handle
 //===========================================================================
 type proxyrunner struct {
 	httprunner
-	starttime  time.Time
 	authn      *authManager
 	startedUp  atomic.Bool
 	metasyncer *metasyncer
@@ -159,7 +158,6 @@ func (p *proxyrunner) Run() error {
 	if config.Net.HTTP.RevProxy != "" {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
 	}
-	p.starttime = time.Now()
 
 	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil)
 	return p.httprunner.run()
@@ -644,16 +642,13 @@ func (p *proxyrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Request
 
 // GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
-	rr := getproxystatsrunner()
-	v := rr.Core.Tracker[stats.Uptime]
-	v.Lock()
-	v.Value = int64(time.Since(p.starttime) / time.Microsecond)
 	if !p.startedUp.Load() {
-		rr.Core.Tracker[stats.Uptime].Value = 0
+		// If not yet ready we need to send status accepted -> completed but
+		// not yet ready.
+		w.WriteHeader(http.StatusAccepted)
+		return
 	}
-	v.Unlock()
-	body := cmn.MustMarshal(rr.Core)
-	p.writeJSON(w, r, body, "proxycorestats")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool) error {
@@ -2100,8 +2095,9 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
-		rst := getproxystatsrunner()
-		body := rst.GetWhatStats()
+		pst := getproxystatsrunner()
+		pst.Core.UpdateUptime(p.startTime.Load())
+		body := pst.GetWhatStats()
 		p.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatSysInfo:
 		body := cmn.MustMarshal(gmem2.FetchSysInfo())
@@ -2121,11 +2117,13 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(smap)
 		p.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
+		pst := getproxystatsrunner()
+		pst.Core.UpdateUptime(p.startTime.Load())
 		msg := &stats.DaemonStatus{
 			Snode:       p.httprunner.si,
 			SmapVersion: p.smapowner.get().Version,
 			SysInfo:     gmem2.FetchSysInfo(),
-			Stats:       getproxystatsrunner().Core,
+			Stats:       pst.Core,
 		}
 		body := cmn.MustMarshal(msg)
 		p.writeJSON(w, r, body, httpdaeWhat)

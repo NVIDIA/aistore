@@ -40,7 +40,7 @@ const (
 		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
 
-	ProxyInfoBodyTmpl       = "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}\n"
+	ProxyInfoBodyTmpl       = "{{ range $key, $value := . }}" + ProxyInfoBody + "{{end}}"
 	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
@@ -53,7 +53,7 @@ const (
 		"{{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
 		"{{FormatXactStatus $value.TStatus }}\n"
 
-	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}\n"
+	TargetInfoBodyTmpl       = "{{ range $key, $value := . }}" + TargetInfoBody + "{{end}}"
 	TargetInfoTmpl           = TargetInfoHeader + TargetInfoBodyTmpl
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
@@ -374,7 +374,7 @@ func fmtObjTime(t time.Time) string {
 
 func fmtDuration(d int64) string {
 	// Convert to nanoseconds
-	dNano := time.Duration(d * 1000)
+	dNano := time.Duration(d * int64(time.Microsecond))
 	return dNano.String()
 }
 

@@ -52,12 +52,7 @@ const (
 )
 
 type (
-	uxprocess struct {
-		starttime time.Time
-		spid      string
-		pid       int64
-	}
-	renamectx struct {
+	renameCtx struct {
 		bucketFrom string
 		bucketTo   string
 		t          *targetrunner
@@ -88,7 +83,6 @@ type (
 	targetrunner struct {
 		httprunner
 		cloudif        cloudif // multi-cloud backend
-		uxprocess      *uxprocess
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
 		clusterStarted atomic.Bool
@@ -250,9 +244,6 @@ func (t *targetrunner) Run() error {
 
 	// rebalance Rx endpoints
 	t.setupRebalanceRx(config)
-
-	pid := int64(os.Getpid())
-	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 
 	getfshealthchecker().SetDispatcher(t)
 
@@ -1137,16 +1128,15 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 	return
 }
 
-func (t *targetrunner) renameOne(fromdir, bucketFrom, bucketTo, pid string) (errstr string) {
-	renctx := &renamectx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t, pid: pid}
-
-	if err := filepath.Walk(fromdir, renctx.walkf); err != nil {
-		errstr = fmt.Sprintf("Failed to rename %s, err: %v", fromdir, err)
+func (t *targetrunner) renameOne(fromDir, bucketFrom, bucketTo, pid string) (errstr string) {
+	rctx := &renameCtx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t, pid: pid}
+	if err := filepath.Walk(fromDir, rctx.walkf); err != nil {
+		errstr = fmt.Sprintf("Failed to rename %s, err: %v", fromDir, err)
 	}
 	return
 }
 
-func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
+func (rctx *renameCtx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		if errstr := cmn.PathWalkErr(err); errstr != "" {
 			glog.Errorf(errstr)
@@ -1166,11 +1156,11 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	parsedFQN, _, errstr := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
 	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
 	if errstr == "" {
-		if bucket != renctx.bucketFrom {
-			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
+		if bucket != rctx.bucketFrom {
+			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, rctx.bucketFrom)
 		}
 	}
-	if errstr := renctx.t.renameBucketObject(contentType, bucket, objname, renctx.bucketTo, objname, renctx.pid); errstr != "" {
+	if errstr := rctx.t.renameBucketObject(contentType, bucket, objname, rctx.bucketTo, objname, rctx.pid); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -1673,4 +1663,8 @@ func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 
 func (t *targetrunner) CloudIntf() cluster.CloudIf {
 	return t.cloudif
+}
+
+func (t *targetrunner) StartTime() time.Time {
+	return t.startTime.Load()
 }

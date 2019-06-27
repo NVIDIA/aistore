@@ -28,7 +28,7 @@ type (
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
 		Smap      smapX     `json:"smap"`
-		StartTime time.Time `json:"starttime"`
+		StartTime time.Time `json:"start_time"`
 		Initiator string    `json:"initiator"`
 	}
 
@@ -36,15 +36,15 @@ type (
 	VoteResult     VoteRecord
 
 	VoteMessage struct {
-		Record VoteRecord `json:"voterecord"`
+		Record VoteRecord `json:"vote_record"`
 	}
 
 	VoteInitiationMessage struct {
-		Request VoteInitiation `json:"voteinitiation"`
+		Request VoteInitiation `json:"vote_initiation"`
 	}
 
 	VoteResultMessage struct {
-		Result VoteResult `json:"voteresult"`
+		Result VoteResult `json:"vote_result"`
 	}
 
 	voteResult struct {

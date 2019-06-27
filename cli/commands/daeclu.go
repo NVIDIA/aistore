@@ -212,6 +212,7 @@ func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (er
 		if err := templates.DisplayOutput(proxy, c.App.Writer, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
+		fmt.Fprintf(c.App.Writer, "\n")
 		err = templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON)
 	} else {
 		return fmt.Errorf(invalidDaemonMsg, daemonID)
