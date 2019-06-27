@@ -76,7 +76,7 @@ func listFlags(c *cli.Context, flagsToSkip ...string) {
 // By default it tries to read `provider` from flag `--provider` or AIS_BUCKET_PROVIDER env variable. If none
 // is provided it lists all buckets.
 // Optional parameter `provider` can be used to specify which buckets will be listed - only local or only cloud.
-func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string) cli.BashCompleteFunc {
+func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, provider ...string) cli.BashCompleteFunc {
 	bckProvider := ""
 	if len(provider) > 0 {
 		bckProvider = provider[0]
@@ -85,7 +85,7 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string
 	// Completions for bucket names based on bucket provider
 	return func(c *cli.Context) {
 		// Don't list buckets if one is provided via env variable
-		if c.NArg() >= 1 {
+		if c.NArg() >= 1 && !multiple {
 			for _, f := range additionalCompletions {
 				f(c)
 			}
@@ -113,15 +113,29 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string
 			return
 		}
 
-		if cmn.IsProviderLocal(bckProvider) || bckProvider == "" {
-			for _, bucket := range bucketNames.Local {
-				fmt.Println(bucket)
+		printNotUsedBuckets := func(buckets []string) {
+			for _, bucket := range buckets {
+				alreadyListed := false
+				if multiple {
+					for _, bucketArg := range c.Args() {
+						if bucketArg == bucket {
+							alreadyListed = true
+							break
+						}
+					}
+				}
+
+				if !alreadyListed {
+					fmt.Println(bucket)
+				}
 			}
 		}
+
+		if cmn.IsProviderLocal(bckProvider) || bckProvider == "" {
+			printNotUsedBuckets(bucketNames.Local)
+		}
 		if cmn.IsProviderCloud(bckProvider) || bckProvider == "" {
-			for _, bucket := range bucketNames.Cloud {
-				fmt.Println(bucket)
-			}
+			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
 }

@@ -465,8 +465,8 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if _, err := p.destroyBucket(&msg, bucket, true); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+		if _, err, errCode := p.destroyBucket(&msg, bucket, true); err != nil {
+			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
 	case cmn.ActEvictCB:
@@ -481,9 +481,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		bmd, err := p.destroyBucket(&msg, bucket, false)
+		bmd, err, errCode := p.destroyBucket(&msg, bucket, false)
 		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
+			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
 
@@ -659,7 +659,7 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 	bucketProps := cmn.DefaultBucketProps(local)
 	if !clone.add(bucket, local, bucketProps) {
 		p.bmdowner.Unlock()
-		return cmn.ErrorBucketAlreadyExists
+		return cmn.NewErrorBucketAlreadyExists(bucket)
 	}
 	if errstr := p.savebmdconf(clone, config); errstr != "" {
 		p.bmdowner.Unlock()
@@ -672,30 +672,30 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 	return nil
 }
 
-func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local bool) (*bucketMD, error) {
+func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local bool) (*bucketMD, error, int) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
 	if local {
 		if !bmd.IsLocal(bucket) {
 			err := fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
 			p.bmdowner.Unlock()
-			return bmd, err
+			return bmd, err, http.StatusNotFound
 		}
 	} else if !bmd.IsCloud(bucket) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bmd.Bstring(bucket, local), cmn.DoesNotExist)
 		}
 		p.bmdowner.Unlock()
-		return bmd, nil
+		return bmd, nil, 0
 	}
 	clone := bmd.clone()
 	if !clone.del(bucket, local) {
 		p.bmdowner.Unlock()
-		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist)
+		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist), http.StatusNotFound
 	}
 	if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
 		p.bmdowner.Unlock()
-		return nil, fmt.Errorf(errstr)
+		return nil, fmt.Errorf(errstr), http.StatusInternalServerError
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -703,7 +703,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 
-	return clone, nil
+	return clone, nil, 0
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -762,7 +762,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := p.createBucket(&msg, bucket, true); err != nil {
 			errCode := http.StatusInternalServerError
-			if err == cmn.ErrorBucketAlreadyExists {
+			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
 			}
 			p.invalmsghdlr(w, r, err.Error(), errCode)
@@ -808,7 +808,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := p.createBucket(&msg, bucket, false); err != nil {
 			errCode := http.StatusInternalServerError
-			if err == cmn.ErrorBucketAlreadyExists {
+			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
 			}
 			p.invalmsghdlr(w, r, err.Error(), errCode)
@@ -976,7 +976,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		}
 		if !existsInCloud {
 			p.bmdowner.Unlock()
-			return cmn.ErrorCloudBucketDoesNotExist
+			return cmn.NewErrorCloudBucketDoesNotExist(bucket)
 		}
 
 		bprops = cmn.DefaultBucketProps(bckIsLocal)
@@ -1190,7 +1190,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		kvs := cmn.NewSimpleKVsFromQuery(query)
 
 		err := p.updateBucketProps(bucket, bckIsLocal, kvs)
-		if err == cmn.ErrorCloudBucketDoesNotExist {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
 		}

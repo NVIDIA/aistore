@@ -5,7 +5,6 @@
 package cmn
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -823,33 +822,4 @@ func (k XactKindType) IsGlobalKind(kind string) (bool, error) {
 	}
 
 	return kindMeta.IsGlobal, nil
-}
-
-// Common errors
-var (
-	ErrorBucketAlreadyExists     = errors.New("bucket already exists")
-	ErrorCloudBucketDoesNotExist = errors.New("cloud bucket does not exist")
-)
-
-type errAccessDenied struct {
-	entity      string
-	operation   string
-	accessAttrs uint64
-}
-
-func (e *errAccessDenied) String() string {
-	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
-}
-
-type BucketAccessDenied struct{ errAccessDenied }
-type ObjectAccessDenied struct{ errAccessDenied }
-
-func (e *BucketAccessDenied) Error() string { return "bucket " + e.String() }
-func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
-
-func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDenied {
-	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
-}
-func NewObjectAccessDenied(name, oper string, aattrs uint64) *ObjectAccessDenied {
-	return &ObjectAccessDenied{errAccessDenied{name, oper, aattrs}}
 }

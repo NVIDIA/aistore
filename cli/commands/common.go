@@ -183,6 +183,7 @@ const (
 
 	// Bucket
 	bucketArgumentText       = "BUCKET_NAME"
+	bucketsArgumentText      = "BUCKET_NAME [BUCKET_NAME...]"
 	bucketRenameArgumentText = bucketArgumentText + " NEW_NAME"
 	bucketPropsArgumentText  = bucketArgumentText + " " + keyValuePairArgumentsText
 

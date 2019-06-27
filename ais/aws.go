@@ -144,10 +144,10 @@ func createSession(ct context.Context) *session.Session {
 	return session.Must(session.NewSessionWithOptions(session.Options{Config: conf}))
 }
 
-func awsErrorToAISError(awsError error) (error, int) {
+func awsErrorToAISError(bucket string, awsError error) (error, int) {
 	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
 		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return cmn.ErrorCloudBucketDoesNotExist, reqErr.StatusCode()
+			return cmn.NewErrorCloudBucketDoesNotExist(bucket), reqErr.StatusCode()
 		}
 		return awsError, reqErr.StatusCode()
 	}
@@ -189,7 +189,7 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(bucket, err)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 
 		verResp, err = svc.ListObjectVersions(verParams)
 		if err != nil {
-			err, errcode = awsErrorToAISError(err)
+			err, errcode = awsErrorToAISError(bucket, err)
 			return
 		}
 
@@ -261,7 +261,7 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 
 	_, err = svc.HeadBucket(input)
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(bucket, err)
 		return
 	}
 	bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
@@ -269,7 +269,7 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}
 	result, err := svc.GetBucketVersioning(inputVers)
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(bucket, err)
 		return
 	}
 
@@ -278,12 +278,12 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	return
 }
 
-func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, err error, errcode int) {
-	sess := createSession(ct)
+func (awsimpl *awsimpl) getbucketnames(ctx context.Context) (buckets []string, err error, errcode int) {
+	sess := createSession(ctx)
 	svc := s3.New(sess)
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError("", err)
 		return
 	}
 	buckets = make([]string, len(result.Buckets))
@@ -301,16 +301,16 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (awsimpl *awsimpl) headobject(ct context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int) {
+func (awsimpl *awsimpl) headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int) {
 	objmeta = make(cmn.SimpleKVs)
 
-	sess := createSession(ct)
+	sess := createSession(ctx)
 	svc := s3.New(sess)
 	input := &s3.HeadObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)}
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
@@ -342,7 +342,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		Key:    aws.String(lom.Objname),
 	})
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	// may not have ais metadata
@@ -378,7 +378,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int) {
+func (awsimpl *awsimpl) putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int) {
 	var (
 		uploadoutput *s3manager.UploadOutput
 	)
@@ -387,7 +387,7 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 	md[awsChecksumType] = aws.String(cksumType)
 	md[awsChecksumVal] = aws.String(cksumValue)
 
-	sess := createSession(ct)
+	sess := createSession(ctx)
 	uploader := s3manager.NewUploader(sess)
 	uploadoutput, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(lom.Bucket),
@@ -396,7 +396,7 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 		Metadata: md,
 	})
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -410,12 +410,12 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, lom *cluster.L
 	return
 }
 
-func (awsimpl *awsimpl) deleteobj(ct context.Context, lom *cluster.LOM) (err error, errcode int) {
-	sess := createSession(ct)
+func (awsimpl *awsimpl) deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int) {
+	sess := createSession(ctx)
 	svc := s3.New(sess)
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)})
 	if err != nil {
-		err, errcode = awsErrorToAISError(err)
+		err, errcode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

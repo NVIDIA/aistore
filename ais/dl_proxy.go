@@ -353,7 +353,7 @@ func (p *proxyrunner) handleUnknownCB(bucket string) error {
 	// This is the primary proxy, update the CBmap
 	if smap.isPrimary(p.si) {
 		err := p.createBucket(&actionMsg, bucket, false)
-		if err != nil && err != cmn.ErrorBucketAlreadyExists {
+		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			return err
 		}
 		return nil

@@ -501,6 +501,31 @@ func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
 	return bucket, nil
 }
 
+func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
+	buckets := c.Args()
+
+	var nonEmptyBuckets cli.Args
+	for _, bucket := range buckets {
+		if bucket != "" {
+			nonEmptyBuckets = append(nonEmptyBuckets, bucket)
+		}
+	}
+
+	if len(nonEmptyBuckets) != 0 {
+		return nonEmptyBuckets, nil
+	}
+
+	var (
+		bucket string
+		ok     bool
+	)
+	if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
+		return nil, missingArgumentsError(c, "bucket name")
+	}
+	return []string{bucket}, nil
+
+}
+
 func cliAPIParams(proxyURL string) *api.BaseParams {
 	return &api.BaseParams{
 		Client: httpClient,

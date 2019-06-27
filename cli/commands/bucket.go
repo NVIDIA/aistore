@@ -8,6 +8,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -99,7 +100,7 @@ var (
 							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[propsList],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{}),
+							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 						},
 						{
 							Name:         propsSet,
@@ -107,7 +108,7 @@ var (
 							ArgsUsage:    bucketPropsArgumentText,
 							Flags:        bucketPropsFlags[propsSet],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{propList}),
+							BashComplete: bucketList([]cli.BashCompleteFunc{propList}, false /*multiple*/),
 						},
 						{
 							Name:         propsReset,
@@ -115,25 +116,25 @@ var (
 							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[propsReset],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{}),
+							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 						},
 					},
 				},
 				{
 					Name:         bucketCreate,
-					Usage:        "creates the local bucket",
-					ArgsUsage:    bucketArgumentText,
+					Usage:        "creates the local bucket(s)",
+					ArgsUsage:    bucketsArgumentText,
 					Flags:        bucketFlags[bucketCreate],
 					Action:       bucketHandler,
 					BashComplete: flagList,
 				},
 				{
 					Name:         bucketDestroy,
-					Usage:        "destroys the local bucket",
-					ArgsUsage:    bucketArgumentText,
+					Usage:        "destroys the local bucket(s)",
+					ArgsUsage:    bucketsArgumentText,
 					Flags:        bucketFlags[bucketDestroy],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /*multiple*/, cmn.LocalBs),
 				},
 				{
 					Name:         subcommandRename,
@@ -141,7 +142,7 @@ var (
 					ArgsUsage:    bucketRenameArgumentText,
 					Flags:        bucketFlags[subcommandRename],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.LocalBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.LocalBs),
 				},
 				{
 					Name:         propsList,
@@ -157,7 +158,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketObjects],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 				},
 				{
 					Name:         bucketNWayMirror,
@@ -165,7 +166,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketNWayMirror],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 				},
 				{
 					Name:         bucketEvict,
@@ -173,7 +174,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketEvict],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, cmn.CloudBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.CloudBs),
 				},
 				{
 					Name:         bucketSummary,
@@ -181,7 +182,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketSummary],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 				},
 			},
 		},
@@ -192,6 +193,23 @@ func bucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	command := c.Command.Name
 
+	switch command {
+	case bucketCreate:
+		buckets, err := bucketsFromArgsOrEnv(c)
+		if err != nil {
+			return err
+		}
+		return createBuckets(c, baseParams, buckets)
+	case bucketDestroy:
+		buckets, err := bucketsFromArgsOrEnv(c)
+		if err != nil {
+			return err
+		}
+		return destroyBuckets(c, baseParams, buckets)
+	default:
+		break
+	}
+
 	bucket, err := bucketFromArgsOrEnv(c)
 	// In case of subcommandRename validation will be done inside renameBucket
 	if err != nil && command != propsList && command != subcommandRename {
@@ -199,10 +217,6 @@ func bucketHandler(c *cli.Context) (err error) {
 	}
 
 	switch command {
-	case bucketCreate:
-		err = createBucket(c, baseParams, bucket)
-	case bucketDestroy:
-		err = destroyBucket(c, baseParams, bucket)
 	case subcommandRename:
 		err = renameBucket(c, baseParams)
 	case bucketEvict:
@@ -239,22 +253,44 @@ func bucketPropsHandler(c *cli.Context) (err error) {
 	return err
 }
 
-// Creates new local bucket
-func createBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
-		return
+// Creates new local buckets
+func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
+	// TODO: on "soft" error (bucket already exists) we will
+	// emit zero exit code - this may be problematic when using
+	// in scripts.
+	for _, bucket := range buckets {
+		if err := api.CreateLocalBucket(baseParams, bucket); err != nil {
+			if herr, ok := err.(*cmn.HTTPError); ok {
+				if herr.Status == http.StatusConflict {
+					_, _ = fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bucket)
+					continue
+				}
+			}
+			return err
+		}
+		_, _ = fmt.Fprintf(c.App.Writer, "%s bucket created\n", bucket)
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket created\n", bucket)
-	return
+	return nil
 }
 
-// Destroy local bucket
-func destroyBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = api.DestroyLocalBucket(baseParams, bucket); err != nil {
-		return
+// Destroy local buckets
+func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
+	// TODO: on "soft" error (bucket does not exist) we will
+	// emit zero exit code - this may be problematic when using
+	// in scripts.
+	for _, bucket := range buckets {
+		if err := api.DestroyLocalBucket(baseParams, bucket); err != nil {
+			if herr, ok := err.(*cmn.HTTPError); ok {
+				if herr.Status == http.StatusNotFound {
+					_, _ = fmt.Fprintf(c.App.Writer, "Bucket %q does not exist\n", bucket)
+					continue
+				}
+			}
+			return err
+		}
+		_, _ = fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bucket)
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket destroyed\n", bucket)
-	return
+	return nil
 }
 
 // Rename local bucket
