@@ -23,6 +23,7 @@ import (
 
 const pkgName = "fs"
 const MLCG32 = 1103515245
+const uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
 
 // mountpath lifecycle-change enum
 const (
@@ -210,8 +211,9 @@ func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now ti
 	var (
 		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(now)
 		objutil, ok          = mpathUtils[objmpath]
-		rr, _                = mpathRRs[objmpath]
+		rr, _                = mpathRRs[objmpath] // GET round-robin counter (zeros out every iostats refresh i-val)
 		util                 = objutil
+		r                    = rr
 	)
 	fqn = objfqn
 	if !ok {
@@ -219,16 +221,34 @@ func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now ti
 		return
 	}
 	for copyfqn, copympi := range copies {
-		if u, ok := mpathUtils[copympi.Path]; ok {
+		var (
+			u        int64
+			c, rrcnt int32
+		)
+		if u, ok = mpathUtils[copympi.Path]; !ok {
+			continue
+		}
+		if r, ok = mpathRRs[copympi.Path]; !ok {
 			if u < util {
-				if r, k := mpathRRs[copympi.Path]; k {
-					if rr == nil || r.Load() < rr.Load()+1 {
-						fqn, util, rr = copyfqn, u, r
-					}
-				}
+				fqn, util, rr = copyfqn, u, r
 			}
+			continue
+		}
+		c = r.Load()
+		if rr != nil {
+			rrcnt = rr.Load()
+		}
+		if u < util && c <= rrcnt { // the obvious choice
+			fqn, util, rr = copyfqn, u, r
+			continue
+		}
+		if u+int64(c)*uQuantum < util+int64(rrcnt)*uQuantum { // heuristics - make uQuantum configurable?
+			fqn, util, rr = copyfqn, u, r
 		}
 	}
+	// NOTE: the counter could've been already inc-ed
+	//       could keep track of the second best and use CAS to recerve-inc and compare
+	//       can wait though
 	if rr != nil {
 		rr.Inc()
 	}

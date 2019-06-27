@@ -572,7 +572,6 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode i
 	aborted, running := t.xactions.isRebalancing(cmn.ActLocalReb)
 	gfnActive := t.gfn.local.active()
 	if aborted || running || gfnActive {
-		// FIXME: move this part to lom
 		oldFQN, oldSize := getFromOtherLocalFS(lom)
 		if oldFQN != "" {
 			lom.FQN = oldFQN
@@ -580,7 +579,6 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode i
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("restored from LFS %s (%s)", lom, cmn.B2S(oldSize, 1))
 			}
-			lom.ReCache()
 			return
 		}
 	}
