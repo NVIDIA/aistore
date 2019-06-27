@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -147,6 +148,12 @@ type (
 //
 // CoreStats
 //
+
+var (
+	_ json.Marshaler   = &CoreStats{}
+	_ json.Unmarshaler = &CoreStats{}
+)
+
 func (s *CoreStats) init(size int) {
 	s.Tracker = make(statsTracker, size)
 	s.Tracker.registerCommonStats()
@@ -259,6 +266,11 @@ func (s *CoreStats) initStatsD(daemonStr, daemonID string) (err error) {
 // statsValue
 //
 
+var (
+	_ json.Marshaler   = &statsValue{}
+	_ json.Unmarshaler = &statsValue{}
+)
+
 func (v *statsValue) MarshalJSON() (b []byte, err error) {
 	v.RLock()
 	b, err = jsoniter.Marshal(v.Value)
@@ -270,6 +282,11 @@ func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b
 //
 // copyValue
 //
+
+var (
+	_ json.Marshaler   = &copyValue{}
+	_ json.Unmarshaler = &copyValue{}
+)
 
 func (v *copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
 func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmarshal(b, &v.Value) }

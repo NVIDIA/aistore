@@ -44,6 +44,9 @@ var (
 		// unset
 		"": "",
 	}
+
+	_ json.Marshaler   = &FSPathsConf{}
+	_ json.Unmarshaler = &FSPathsConf{}
 )
 
 // bucket-is-local to provider helper
