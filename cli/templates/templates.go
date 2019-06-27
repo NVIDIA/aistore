@@ -238,12 +238,12 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
-	DSortListHeader = "JobID\t Status\t Description\n"
+	DSortListHeader = "JobID\t Status\t Description\t Start\t Finish\n"
 	DSortListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else if (eq $value.Archived true) }}Finished" +
 		"{{else}}Running" +
-		"{{end}} \t {{$value.Description}}\n"
+		"{{end}} \t {{$value.Description}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}}\n"
 	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
 
 	XactionBaseStatsHeader = "Daemon\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
