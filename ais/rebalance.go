@@ -988,7 +988,6 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
-	lom.Uncache()
 	dst.Load(true)
 	//
 	// TODO: remove the object and handle local copies
