@@ -101,7 +101,7 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, pro
 			}
 
 			var err error
-			bckProvider, err = cmn.BckProviderFromStr(bckProvider)
+			bckProvider, err = cmn.ProviderFromStr(bckProvider)
 			if err != nil {
 				bckProvider = ""
 			}

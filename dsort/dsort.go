@@ -126,7 +126,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return nil
 		}
 
-		lom, errMsg := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket, BucketProvider: m.rs.BckProvider}.Init()
+		lom, errMsg := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket}.Init(m.rs.BckProvider)
 		if errMsg == "" {
 			_, errMsg = lom.Load(true)
 		}
@@ -284,7 +284,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		errCh = make(chan error, 2)
 	)
-	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName, BucketProvider: bckProvider}.Init()
+	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}.Init(bckProvider)
 	if errStr != "" {
 		return errors.New(errStr)
 	}

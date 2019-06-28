@@ -304,8 +304,7 @@ func RandomObjDir(src *rand.Rand, dirLen, maxDepth int) (dir string) {
 }
 
 func SetXattrCksm(fqn string, value cmn.Cksummer, t cluster.Target) error {
-	lom := cluster.LOM{FQN: fqn, T: t}
-	lom.Init()
+	lom, _ := cluster.LOM{FQN: fqn, T: t}.Init("")
 	_ = lom.LoadMetaFromFS()
 
 	lom.SetCksum(value)

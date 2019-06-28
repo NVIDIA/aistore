@@ -149,7 +149,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 	// this lom is for local slice/metafile requested by another target
 	// to restore the object. So, just create lom and call FromFS
 	// because LOM cache does not keep non-objects
-	lom, errstr := cluster.LOM{FQN: fqn, T: r.t}.Init()
+	lom, errstr := cluster.LOM{FQN: fqn, T: r.t}.Init("")
 	if errstr != "" {
 		glog.Warningf("Failed to read file stats #1: %s", errstr)
 	}

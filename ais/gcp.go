@@ -354,8 +354,8 @@ func (gcpimpl *gcpimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	bckProvider, _ := cmn.BckProviderFromStr(cmn.CloudBs)
-	lom, errstr := cluster.LOM{T: gcpimpl.t, Bucket: lom.Bucket, Objname: lom.Objname, BucketProvider: bckProvider}.Init()
+	bckProvider, _ := cmn.ProviderFromStr(cmn.CloudBs)
+	lom, errstr := cluster.LOM{T: gcpimpl.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
 	if errstr != "" {
 		err = errors.New(errstr)
 		return

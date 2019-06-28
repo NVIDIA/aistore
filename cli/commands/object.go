@@ -164,7 +164,7 @@ func objectHandler(c *cli.Context) (err error) {
 
 	baseParams := cliAPIParams(ClusterURL)
 	bucket := parseStrFlag(c, bucketFlag)
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}

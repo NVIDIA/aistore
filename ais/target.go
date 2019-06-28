@@ -471,7 +471,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	bucket := apiItems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	normalizedBckProvider, err := cmn.BckProviderFromStr(bckProvider)
+	normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -534,7 +534,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objName, BucketProvider: bckProvider}.Init(config)
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider, config)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -700,7 +700,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, "OOS")
 		return
 	}
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -806,7 +806,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict = (msg.Action == cmn.ActEvictObjects)
 	}
 
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -1027,7 +1027,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
 	if errstr != "" {
 		invalidHandler(w, r, errstr)
 		return
@@ -1194,7 +1194,7 @@ func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
 	}
 
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, lom.BucketProvider)
+	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -1503,6 +1503,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	cluster.ObjectLocker.Unlock(uname, true)
 }
 
+// TODO: cleanup
 func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo, pid string) (errstr string) {
 	var (
 		file                  *cmn.FileHandle
@@ -1553,7 +1554,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	defer file.Close()
 
-	lom, errstr := cluster.LOM{T: t, FQN: fqn}.Init()
+	lom, errstr := cluster.LOM{T: t, FQN: fqn}.Init(cmn.ProviderFromLoc(bckIsLocalFrom))
 	if errstr != "" {
 		return errstr
 	}
@@ -1566,7 +1567,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 
 	// PUT object into different target
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, lom.BucketProvider)
+	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
 	query.Add(cmn.URLParamProxyID, pid)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,

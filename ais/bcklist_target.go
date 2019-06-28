@@ -93,7 +93,7 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 			if len(bckList.Entries) > minloaded {
 				go func(bckEntries []*cmn.BucketEntry) {
 					var (
-						bckProvider = cmn.BckProviderFromLocal(bckIsLocal)
+						bckProvider = cmn.ProviderFromLoc(bckIsLocal)
 						l           = len(bckEntries)
 						m           = l / minloaded
 						loaded      int
@@ -102,8 +102,8 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 						return
 					}
 					for i := 0; i < l; i += m {
-						lom, errstr := cluster.LOM{T: t, Bucket: bucket,
-							Objname: bckEntries[i].Name, BucketProvider: bckProvider}.Init()
+						lom, errstr :=
+							cluster.LOM{T: t, Bucket: bucket, Objname: bckEntries[i].Name}.Init(bckProvider)
 						if errstr == "" && lom.IsLoaded() { // loaded?
 							loaded++
 						}

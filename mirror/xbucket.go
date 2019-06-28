@@ -135,7 +135,7 @@ func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	lom, errstr := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(j.config)
+	lom, errstr := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(cmn.ProviderFromLoc(j.parent.BckIsLocal()), j.config)
 	if errstr != "" {
 		return nil
 	}

@@ -516,7 +516,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		tsi  = smap.GetTarget(tsid)
 	)
 	// Rx
-	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init()
+	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
 	if errstr != "" {
 		glog.Error(errstr)
 		return
@@ -572,7 +572,7 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init()
+	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
 	}
@@ -724,7 +724,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	if fi.Mode().IsDir() {
 		return nil
 	}
-	lom, errstr = cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
+	lom, errstr = cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
 	if errstr != "" {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %s - skipping...", lom, errstr)
@@ -925,7 +925,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	lom, errstr := cluster.LOM{T: rj.m.t, FQN: fqn}.Init()
+	lom, errstr := cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
 	if errstr != "" {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %v - skipping #1...", lom, errstr)

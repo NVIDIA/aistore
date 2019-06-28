@@ -319,7 +319,7 @@ func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 
 // Lists bucket names
 func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -538,7 +538,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		propsArgs = c.Args().Tail()
 		bucket    = c.Args().First()
 	)
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -583,7 +583,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 	if err != nil {
 		return err
 	}
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return err
 	}
@@ -610,7 +610,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return err
 	}
 
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -634,7 +634,7 @@ func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return err
 	}
 
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}
@@ -673,7 +673,7 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps) error {
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return
 	}

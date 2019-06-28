@@ -186,7 +186,7 @@ func (d *dispatcher) checkAborted() bool {
 func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LOM, error) {
 	var err error
 
-	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname, BucketProvider: job.BckProvider()}.Init()
+	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname}.Init(job.BckProvider())
 	if errstr == "" {
 		_, errstr = lom.Load(true)
 	}

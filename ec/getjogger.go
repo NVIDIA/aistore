@@ -615,7 +615,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	// FIXME: slice meta file should be a different kind of LOM
-	metaLom, errstr := cluster.LOM{FQN: metaFQN, T: c.parent.t}.Init()
+	metaLom, errstr := cluster.LOM{FQN: metaFQN, T: c.parent.t}.Init("")
 	if errstr != "" {
 		return restored, errors.New(errstr)
 	}

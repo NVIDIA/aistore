@@ -150,7 +150,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	var (
 		objStatus uint16 = cmn.ObjStatusOK
 	)
-	lom, errstr := cluster.LOM{T: ci.t, FQN: fqn}.Init()
+	lom, errstr := cluster.LOM{T: ci.t, FQN: fqn}.Init("")
 	if errstr != "" {
 		glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
 	}

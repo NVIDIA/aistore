@@ -49,7 +49,6 @@ type (
 		// other names
 		FQN             string
 		Bucket, Objname string
-		BucketProvider  string
 		HrwFQN          string // misplaced?
 		// runtime context
 		T          Target
@@ -446,7 +445,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 	var bckPresent, fromFQN bool
 	bowner := lom.T.GetBowner()
 	if bckProvider != "" {
-		val, err := cmn.BckProviderFromStr(bckProvider)
+		val, err := cmn.ProviderFromStr(bckProvider)
 		if err != nil {
 			return err.Error()
 		}
@@ -458,7 +457,7 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 			lom.ParsedFQN, lom.HrwFQN, errstr = ResolveFQN(lom.FQN, nil, lom.BckIsLocal)
 		} else {
 			lom.ParsedFQN, lom.HrwFQN, errstr = ResolveFQN(lom.FQN, bowner)
-			bckProvider = cmn.BckProviderFromLocal(lom.ParsedFQN.IsLocal)
+			bckProvider = cmn.ProviderFromLoc(lom.ParsedFQN.IsLocal)
 		}
 		if errstr != "" {
 			return
@@ -472,7 +471,6 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 	lom.bmd = bowner.Get()
 	if bckProvider == "" {
 		lom.BckIsLocal = lom.bmd.IsLocal(lom.Bucket)
-		bckProvider = cmn.BckProviderFromLocal(lom.BckIsLocal)
 	}
 	lom.BckProps, bckPresent = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.BckIsLocal && !bckPresent {
@@ -488,9 +486,6 @@ func (lom *LOM) init(bckProvider string) (errstr string) {
 		lom.HrwFQN = lom.FQN
 		lom.ParsedFQN.IsLocal = lom.BckIsLocal
 		lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname = lom.Bucket, lom.Objname
-	}
-	if lom.BucketProvider == "" {
-		lom.BucketProvider = bckProvider
 	}
 	return
 }
@@ -519,9 +514,9 @@ func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
 }
-func (newlom LOM) Init(config ...*cmn.Config) (lom *LOM, errstr string) {
+func (newlom LOM) Init(bckProvider string, config ...*cmn.Config) (lom *LOM, errstr string) {
 	lom = &newlom
-	if errstr = lom.init(lom.BucketProvider); errstr != "" {
+	if errstr = lom.init(bckProvider); errstr != "" {
 		return
 	}
 	if len(config) > 0 {

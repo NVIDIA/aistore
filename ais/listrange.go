@@ -110,7 +110,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+		lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
 		if errstr != "" {
 			glog.Errorln(errstr)
 			continue
@@ -151,7 +151,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		errstr            string
 		vchanged, coldGet bool
 	)
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname, BucketProvider: bckProvider}.Init()
+	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
 	if errstr != "" {
 		glog.Error(errstr)
 		return

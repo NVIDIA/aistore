@@ -484,7 +484,7 @@ func (m *Manager) setExtractCreator() (err error) {
 		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.BckProvider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
 	m.shardManager = extract.NewShardManager()
 
 	return nil
@@ -808,8 +808,8 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		}
 
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-		bckProvider := cmn.BckProviderFromLocal(hdr.IsLocal)
-		lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname, BucketProvider: bckProvider}.Init()
+		bckProvider := cmn.ProviderFromLoc(hdr.IsLocal)
+		lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(bckProvider)
 		if errStr == "" {
 			_, errStr = lom.Load(true)
 		}

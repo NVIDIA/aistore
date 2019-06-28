@@ -103,7 +103,7 @@ func downloadStartHandler(c *cli.Context) error {
 		id string
 	)
 
-	bckProvider, err := cmn.BckProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return err
 	}

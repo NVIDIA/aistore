@@ -199,7 +199,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		buf, slab := mem2.AllocEstimated(cmn.MiB)
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		if err == nil {
-			lom, errstr := cluster.LOM{FQN: objFQN, T: r.t}.Init()
+			lom, errstr := cluster.LOM{FQN: objFQN, T: r.t}.Init("")
 			if errstr != "" {
 				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, errstr)
 				slab.Free(buf)
@@ -231,7 +231,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
 
 		if err == nil {
-			lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init()
+			lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init("")
 			if errstr != "" {
 				err = errors.New(errstr)
 			} else {

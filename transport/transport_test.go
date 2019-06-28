@@ -120,8 +120,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} IsLocal:false Opaque:[]} (96)
-	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} IsLocal:true Opaque:[49 50 51]} (111)
+	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] IsLocal:false} (96)
+	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] IsLocal:true} (111)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -140,7 +140,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			CksumValue: "hash",
 			Version:    "2",
 		},
-		false, nil,
+		nil, false,
 	}
 	wg.Add(1)
 	stream.Send(hdr, sgl1, cb, nil)
@@ -157,7 +157,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 			CksumValue: "hash",
 			Version:    "2",
 		},
-		true, []byte{'1', '2', '3'},
+		[]byte{'1', '2', '3'}, true,
 	}
 	wg.Add(1)
 	stream.Send(hdr, sgl2, cb, nil)

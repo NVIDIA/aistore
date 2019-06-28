@@ -120,8 +120,8 @@ type (
 	Header struct {
 		Bucket, Objname string      // uname at the destination
 		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
-		IsLocal         bool        // determines if the bucket is local
 		Opaque          []byte      // custom control (optional)
+		IsLocal         bool        // determines if the bucket is local
 	}
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)

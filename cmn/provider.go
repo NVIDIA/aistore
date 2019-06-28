@@ -44,14 +44,14 @@ var (
 )
 
 // bucket-is-local to provider helper
-func BckProviderFromLocal(isLocal bool) string {
+func ProviderFromLoc(isLocal bool) string {
 	if isLocal {
 		return LocalBs
 	}
 	return CloudBs
 }
 
-func BckProviderFromStr(provider string) (val string, err error) {
+func ProviderFromStr(provider string) (val string, err error) {
 	var ok bool
 	val, ok = bckProviderMap[strings.ToLower(provider)]
 	if !ok {

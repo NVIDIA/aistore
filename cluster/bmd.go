@@ -77,7 +77,7 @@ func (m *BMD) IsCloud(bucket string) bool { _, ok := m.CBmap[bucket]; return ok 
 
 func (m *BMD) Bstring(b string, local bool) string {
 	var (
-		s    = cmn.BckProviderFromLocal(local)
+		s    = cmn.ProviderFromLoc(local)
 		p, e = m.Get(b, local)
 	)
 	if !e {
@@ -105,7 +105,7 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 	}
 	config := cmn.GCO.Get()
 
-	normalizedBckProvider, err := cmn.BckProviderFromStr(bckProvider)
+	normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
 	if err != nil {
 		return false, err
 	}

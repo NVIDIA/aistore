@@ -92,7 +92,7 @@ var _ = Describe("Mirror", func() {
 			Expect(ok).To(BeTrue())
 
 			// Check msic copy data
-			lomCopy, errstr := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init()
+			lomCopy, errstr := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init("")
 			Expect(errstr).To(BeEmpty())
 
 			_, errstr = lomCopy.Load(false)
@@ -118,7 +118,7 @@ func createTestFile(filepath, objname string, size int64) {
 }
 
 func newBasicLom(fqn string, t cluster.Target) *cluster.LOM {
-	lom, err := cluster.LOM{T: t, FQN: fqn}.Init()
+	lom, err := cluster.LOM{T: t, FQN: fqn}.Init("")
 	Expect(err).To(BeEmpty())
 	lom.Uncache()
 	return lom

@@ -77,9 +77,9 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	var (
 		h           = lctx.heap
-		bckProvider = cmn.BckProviderFromLocal(lctx.bckIsLocal)
+		bckProvider = cmn.ProviderFromLoc(lctx.bckIsLocal)
 	)
-	lom, errstr := cluster.LOM{T: lctx.ini.T, FQN: fqn, BucketProvider: bckProvider}.Init(lctx.config)
+	lom, errstr := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
 	if errstr != "" {
 		return nil
 	}
