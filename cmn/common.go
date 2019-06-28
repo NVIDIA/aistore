@@ -319,6 +319,13 @@ func CapitalizeString(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+func NounEnding(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
 const assertMsg = "assertion failed"
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below

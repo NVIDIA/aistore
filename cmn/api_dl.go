@@ -38,13 +38,22 @@ func (d *DlStatusResp) Print(verbose bool) string {
 		return "Download was aborted."
 	}
 
+	var sb strings.Builder
+	errCount := len(d.Errs)
 	if d.JobFinished() {
-		return fmt.Sprintf("Download has finished. %d files downloaded, %d errors", d.Finished, len(d.Errs))
+		sb.WriteString(fmt.Sprintf("Done: %d file%s downloaded, %d error%s\n",
+			d.Finished, NounEnding(d.Finished), errCount, NounEnding(errCount)))
+
+		if verbose {
+			for _, e := range d.Errs {
+				sb.WriteString(fmt.Sprintf("%s: %s\n", e.Name, e.Err))
+			}
+		}
+
+		return sb.String()
 	}
 
-	var sb strings.Builder
-
-	realFinished := d.Finished + len(d.Errs)
+	realFinished := d.Finished + errCount
 	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt())))
 	if !verbose {
 		return sb.String()
