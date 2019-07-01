@@ -76,15 +76,17 @@ func (tg *TimeoutGroup) WaitTimeout(timeout time.Duration) bool {
 //
 // NOTE: WaitTimeoutWithStop can be only invoked after all Adds!
 func (tg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan struct{}) (timed bool, stopped bool) {
+	t := time.NewTimer(timeout)
 	select {
 	case <-tg.fin:
 		tg.postedFin.Store(0)
 		timed, stopped = false, false
-	case <-time.After(timeout):
+	case <-t.C:
 		timed, stopped = true, false
 	case <-stop:
 		timed, stopped = false, true
 	}
+	t.Stop()
 	return
 }
 

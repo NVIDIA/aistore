@@ -276,7 +276,9 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 	if n == 0 {
 		return
 	}
-	cmn.DassertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen), pkgName)
+	if _, ok := cmn.CheckDebug(pkgName); ok {
+		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
+	}
 	hdr, sessID = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
 		if glog.FastV(4, glog.SmoduleTransport) {
@@ -326,7 +328,9 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessID int64) {
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	off, sessID = extInt64(off, body)
-	cmn.DassertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen), pkgName)
+	if _, ok := cmn.CheckDebug(pkgName); ok {
+		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
+	}
 	return
 }
 
