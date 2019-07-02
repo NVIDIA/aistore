@@ -94,6 +94,7 @@ type RequestSpec struct {
 	ExtractConcLimit  int64         `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
 	CreateConcLimit   int64         `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
 	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
+	DryRun            bool          `json:"dry_run"`                   // Default: false
 }
 
 type ParsedRequestSpec struct {
@@ -114,6 +115,7 @@ type ParsedRequestSpec struct {
 	ExtractConcLimit  int64                 `json:"extract_concurrency_limit"`
 	CreateConcLimit   int64                 `json:"create_concurrency_limit"`
 	ExtendedMetrics   bool                  `json:"extended_metrics"`
+	DryRun            bool                  `json:"dry_run"`
 }
 
 type SortAlgorithm struct {
@@ -210,6 +212,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
+	parsedRS.DryRun = rs.DryRun
 	return parsedRS, nil
 }
 

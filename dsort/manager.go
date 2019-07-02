@@ -200,7 +200,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	//               too much overhead on context switching and managing the goroutines.
 	//               Also for large workloads goroutines can take a lot of memory.
 	//
-	// Coeficient for extraction should be larger and depends on target count
+	// Coefficient for extraction should be larger and depends on target count
 	// because we will skip a lot shards (which do not belong to us).
 	m.extractAdjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
 	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 3 /*goroutineLimitCoef*/)
@@ -233,7 +233,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 // TODO: Currently we create streams for each dSort job but maybe we should
 // create streams once and have them available for all the dSort jobs so they
-// would share the resource rather than competeing for it.
+// would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
 	// Requests are usually small packets, no more 1KB that is why we want to
 	// utilize intraControl network
@@ -473,15 +473,22 @@ func (m *Manager) setExtractCreator() (err error) {
 		return m.react(cfg.DuplicatedRecords, msg)
 	}
 
+	var extractCreator extract.ExtractCreator
 	switch m.rs.Extension {
 	case ExtTar:
-		m.extractCreator = extract.NewTarExtractCreator()
+		extractCreator = extract.NewTarExtractCreator()
 	case ExtTarTgz, ExtTgz:
-		m.extractCreator = extract.NewTargzExtractCreator()
+		extractCreator = extract.NewTargzExtractCreator()
 	case ExtZip:
-		m.extractCreator = extract.NewZipExtractCreator()
+		extractCreator = extract.NewZipExtractCreator()
 	default:
 		cmn.AssertMsg(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
+	}
+
+	if !m.rs.DryRun {
+		m.extractCreator = extractCreator
+	} else {
+		m.extractCreator = extract.NopExtractCreator(extractCreator)
 	}
 
 	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.BckProvider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
@@ -700,6 +707,16 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 
 		fullContentPath := m.recManager.FullContentPath(req.RecordObj)
 
+		if m.rs.DryRun {
+			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
+			r := cmn.NopOpener(ioutil.NopCloser(lr))
+			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
+				m.abort(err)
+			}
+			return
+		}
+
 		switch req.RecordObj.StoreType {
 		case extract.OffsetStoreType:
 			f, err := cmn.NewFileHandle(fullContentPath)
@@ -861,6 +878,12 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}()
 
 			fullContentPath := m.recManager.FullContentPath(obj)
+
+			if m.rs.DryRun {
+				r := cmn.NopReader(obj.MetadataSize + obj.Size)
+				written, err = io.CopyBuffer(w, r, buf)
+				return
+			}
 
 			var n int64
 			switch obj.StoreType {

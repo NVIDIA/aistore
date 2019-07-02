@@ -81,6 +81,15 @@ func newDetailedStats() *DetailedStats {
 	}
 }
 
+type ConcurrencyLimits struct {
+	Func       int64 `json:"func"`
+	Goroutines int64 `json:"goroutine"`
+}
+
+func newConcurrencyLimits() *ConcurrencyLimits {
+	return &ConcurrencyLimits{}
+}
+
 // PhaseInfo contains general stats and state for given phase. It is base struct
 // which is extended by actual phases structs.
 type PhaseInfo struct {
@@ -154,7 +163,8 @@ type ShardCreation struct {
 	ToCreate int `json:"to_create"`
 	// CreatedCnt specifies number of shards that have been created to given
 	// moment. Should match ToCreate when phase is finished.
-	CreatedCnt int `json:"created_count"`
+	CreatedCnt int                `json:"created_count"`
+	Limits     *ConcurrencyLimits `json:"limits,omitempty"`
 	// MovedShardCnt describes number of shards that have been moved from this
 	// target to some other. This only applies when dealing with compressed
 	// data. Sometimes is faster to create shard on specific target and send it
@@ -205,6 +215,7 @@ func newMetrics(description string, extended bool) *Metrics {
 	if extended {
 		extraction.ShardExtractionStats = newDetailedStats()
 
+		creation.Limits = newConcurrencyLimits()
 		creation.RequestStats = newTimeStats()
 		creation.ResponseStats = newTimeStats()
 		creation.LocalSendStats = newDetailedStats()

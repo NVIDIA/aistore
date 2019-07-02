@@ -480,6 +480,7 @@ var (
 	_ ReadOpenCloser = &FileHandle{}
 	_ ReadSizer      = &SizedReader{}
 	_ ReadOpenCloser = &FileSectionHandle{}
+	_ ReadOpenCloser = &nopOpener{}
 )
 
 type (
@@ -512,7 +513,19 @@ type (
 		io.Reader
 		size int64
 	}
+
+	nopOpener struct {
+		io.ReadCloser
+	}
 )
+
+func NopOpener(r io.ReadCloser) ReadOpenCloser {
+	return &nopOpener{r}
+}
+
+func (n *nopOpener) Open() (io.ReadCloser, error) {
+	return n, nil
+}
 
 func NewFileHandle(fqn string) (*FileHandle, error) {
 	file, err := os.Open(fqn)

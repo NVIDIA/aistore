@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -307,11 +308,20 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 	beforeCreation := time.Now()
 
-	wg := &sync.WaitGroup{}
-	r, w := io.Pipe()
+	var (
+		wg   = &sync.WaitGroup{}
+		r, w = io.Pipe()
+		n    int64
+	)
 	wg.Add(2)
 	go func() {
-		err := m.ctx.t.PutObject(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
+		var err error
+		if !m.rs.DryRun {
+			err = m.ctx.t.PutObject(workFQN, r, lom, cluster.WarmGet, nil, beforeCreation)
+			n = lom.Size()
+		} else {
+			n, err = io.Copy(ioutil.Discard, r)
+		}
 		errCh <- err
 		wg.Done()
 	}()
@@ -347,7 +357,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 
 	dur := time.Since(beforeCreation)
-	m.createAdjuster.inform(lom.Size(), dur, lom.ParsedFQN.MpathInfo)
+	m.createAdjuster.inform(n, dur, lom.ParsedFQN.MpathInfo)
 
 	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	cmn.AssertMsg(si != nil, errStr)
@@ -356,7 +366,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
-	if si.DaemonID != m.ctx.node.DaemonID {
+	if si.DaemonID != m.ctx.node.DaemonID && !m.rs.DryRun {
 		cluster.ObjectLocker.Lock(lom.Uname(), false)
 		defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
@@ -407,7 +417,7 @@ exit:
 	if m.Metrics.extended {
 		dur := time.Since(beforeCreation)
 		metrics.ShardCreationStats.updateTime(dur)
-		metrics.ShardCreationStats.updateThroughput(lom.Size(), dur)
+		metrics.ShardCreationStats.updateThroughput(n, dur)
 	}
 	metrics.Unlock()
 
@@ -418,7 +428,7 @@ exit:
 // shards, then creates shards in parallel.
 func (m *Manager) createShardsLocally() (err error) {
 	// Wait for signal to start shard creations. This will happen when manager
-	// notice that specificion for shards to be created locally was received.
+	// notice that specification for shards to be created locally was received.
 	select {
 	case <-m.startShardCreation:
 		break
@@ -450,6 +460,18 @@ CreateAllShards:
 		}
 
 		m.createAdjuster.acquireGoroutineSema()
+		if m.Metrics.extended {
+			metrics.Lock()
+			metrics.Limits.Goroutines = m.createAdjuster.gorountinesSema.Size()
+			var avg int64
+			for _, v := range m.createAdjuster.adjusters {
+				avg += v.funcCallsSema.Size()
+			}
+			avg /= int64(len(m.createAdjuster.adjusters))
+			metrics.Limits.Func = avg
+			metrics.Unlock()
+		}
+
 		group.Go(func(s *extract.Shard) func() error {
 			return func() error {
 				err := m.createShard(s)

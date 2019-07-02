@@ -59,6 +59,7 @@ type (
 		missingKeys     bool
 		outputShardSize string
 		maxMemUsage     string
+		dryRun          bool
 
 		baseParams  *api.BaseParams
 		managerUUID string
@@ -120,6 +121,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		ExtractConcLimit: 10,
 		CreateConcLimit:  10,
 		MaxMemUsage:      df.maxMemUsage,
+		DryRun:           df.dryRun,
 	}
 }
 
@@ -1861,4 +1863,92 @@ func TestDistributedSortOrderFile(t *testing.T) {
 	}
 
 	dsortFW.checkDSortList()
+}
+
+func TestDistributedSortDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	var (
+		m = &ioContext{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		df = &dsortFramework{
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			maxMemUsage:      "99%",
+			dryRun:           true,
+		}
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	df.init()
+	df.clearDSortList()
+	df.createInputShards()
+
+	tutils.Logln("starting distributed sort...")
+	df.start()
+
+	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	df.checkMetrics(false /* expectAbort */)
+	df.checkDSortList()
+}
+
+func TestDistributedSortDryRunDisk(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	var (
+		m = &ioContext{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		df = &dsortFramework{
+			m:                m,
+			tarballCnt:       1000,
+			fileInTarballCnt: 100,
+			maxMemUsage:      "1KB",
+			dryRun:           true,
+		}
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	df.init()
+	df.clearDSortList()
+	df.createInputShards()
+
+	tutils.Logln("starting distributed sort...")
+	df.start()
+
+	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	tassert.CheckFatal(t, err)
+	tutils.Logln("finished distributed sort")
+
+	df.checkMetrics(false /* expectAbort */)
+	df.checkDSortList()
 }
