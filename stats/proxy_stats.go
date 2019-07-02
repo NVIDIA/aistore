@@ -71,7 +71,7 @@ func (r *Prunner) log(uptime time.Duration) (runlru bool) {
 	r.Core.UpdateUptime(uptime)
 	n := r.Core.copyT(r.ctracker)
 	if n > len(proxyLogIdleItems) {
-		b := cmn.MustMarshal(r.ctracker)
+		b, _ := jsonCompat.Marshal(r.ctracker)
 		glog.Infoln(string(b))
 	}
 	return

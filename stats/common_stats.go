@@ -68,6 +68,8 @@ const (
 	Uptime = "up.µs.time"
 )
 
+var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+
 //
 // public types
 //
@@ -233,9 +235,11 @@ func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
 			}
 		case KindCounter:
 			v.RLock()
-			if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
-				ctracker[name] = &copyValue{Value: v.Value}
-				updatedCnt++
+			if v.Value > 0 {
+				if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
+					ctracker[name] = &copyValue{Value: v.Value}
+					updatedCnt++
+				}
 			}
 			v.RUnlock()
 		default:

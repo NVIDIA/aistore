@@ -131,7 +131,7 @@ func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 	n := r.Core.copyT(r.ctracker)
 
 	if n > len(targetLogIdleItems) {
-		b := cmn.MustMarshal(r.ctracker)
+		b, _ := jsonCompat.Marshal(r.ctracker)
 		r.lines = append(r.lines, string(b))
 	}
 
