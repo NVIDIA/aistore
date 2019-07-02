@@ -1663,7 +1663,3 @@ func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 func (t *targetrunner) CloudIntf() cluster.CloudIf {
 	return t.cloudif
 }
-
-func (t *targetrunner) StartTime() time.Time {
-	return t.startTime.Load()
-}

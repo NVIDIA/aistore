@@ -6,6 +6,8 @@
 package stats
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -29,6 +31,10 @@ type (
 		Target map[string]jsoniter.RawMessage `json:"target"`
 	}
 )
+
+// the items that change in every collection cycle; the system is idle when there are
+// no other stats changes (see also targetLogIdleItems)
+var proxyLogIdleItems = []string{"kalive.µs.min", "kalive.µs", "kalive.µs.max", "pst.n"}
 
 //
 // Prunner
@@ -61,12 +67,13 @@ func (r *Prunner) GetWhatStats() []byte {
 }
 
 // statslogger interface impl
-func (r *Prunner) log() (runlru bool) {
-	// copy stats values while skipping zeros; reset latency stats
-	r.Core.copyZeroReset(r.ctracker)
-
-	b := cmn.MustMarshal(r.ctracker)
-	glog.Infoln(string(b))
+func (r *Prunner) log(uptime time.Duration) (runlru bool) {
+	r.Core.UpdateUptime(uptime)
+	n := r.Core.copyT(r.ctracker)
+	if n > len(proxyLogIdleItems) {
+		b := cmn.MustMarshal(r.ctracker)
+		glog.Infoln(string(b))
+	}
 	return
 }
 

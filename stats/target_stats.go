@@ -49,6 +49,10 @@ const (
 	GetThroughput = "get.bps" // bytes per second
 )
 
+// the item that changes in every collection cycle; the target is idle when there are
+// no other stats changes (see also proxyLogIdleItems)
+var targetLogIdleItems = []string{"kalive.µs"}
+
 //
 // public type
 //
@@ -119,14 +123,17 @@ func (r *Trunner) GetWhatStats() []byte {
 	return cmn.MustMarshal(crunner)
 }
 
-func (r *Trunner) log() (runlru bool) {
-	// copy stats values while skipping zeros; reset latency stats
-	r.Core.UpdateUptime(r.T.StartTime())
-	r.Core.copyZeroReset(r.ctracker)
-
+func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 	r.lines = r.lines[:0]
-	b := cmn.MustMarshal(r.ctracker)
-	r.lines = append(r.lines, string(b))
+
+	// copy stats, reset latencies
+	r.Core.UpdateUptime(uptime)
+	n := r.Core.copyT(r.ctracker)
+
+	if n > len(targetLogIdleItems) {
+		b := cmn.MustMarshal(r.ctracker)
+		r.lines = append(r.lines, string(b))
+	}
 
 	// 2. capacity
 	availableMountpaths, _ := fs.Mountpaths.Get()

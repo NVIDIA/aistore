@@ -2098,7 +2098,6 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		pst := getproxystatsrunner()
-		pst.Core.UpdateUptime(p.startTime.Load())
 		body := pst.GetWhatStats()
 		p.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatSysInfo:
@@ -2120,7 +2119,6 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, body, httpdaeWhat)
 	case cmn.GetWhatDaemonStatus:
 		pst := getproxystatsrunner()
-		pst.Core.UpdateUptime(p.startTime.Load())
 		msg := &stats.DaemonStatus{
 			Snode:       p.httprunner.si,
 			SmapVersion: p.smapowner.get().Version,

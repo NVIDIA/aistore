@@ -113,7 +113,7 @@ type (
 
 	// implemented by the stats runners
 	statslogger interface {
-		log() (runlru bool)
+		log(uptime time.Duration) (runlru bool)
 		housekeep(bool)
 		doAdd(nv NamedVal64)
 	}
@@ -159,14 +159,10 @@ func (s *CoreStats) init(size int) {
 	s.Tracker.registerCommonStats()
 }
 
-func (s *CoreStats) UpdateUptime(t time.Time) {
-	if t.IsZero() {
-		return
-	}
-
+func (s *CoreStats) UpdateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	v.Lock()
-	v.Value = time.Since(t).Nanoseconds() / int64(time.Microsecond)
+	v.Value = d.Nanoseconds() / int64(time.Microsecond)
 	v.Unlock()
 }
 
@@ -207,39 +203,46 @@ func (s *CoreStats) doAdd(name string, val int64) {
 	}
 }
 
-func (s *CoreStats) copyZeroReset(ctracker copyTracker) {
+func (s *CoreStats) copyT(ctracker copyTracker) (updatedCnt int) {
 	for name, v := range s.Tracker {
-		if v.kind == KindLatency {
+		switch v.kind {
+		case KindLatency:
 			v.Lock()
 			if v.numSamples > 0 {
-				ctracker[name] = &copyValue{Value: v.Value / v.numSamples} // note: int divide
+				ctracker[name] = &copyValue{Value: v.Value / v.numSamples}
+				updatedCnt++
 			}
 			v.Value = 0
 			v.numSamples = 0
 			v.Unlock()
-		} else if v.kind == KindThroughput {
-			cmn.AssertMsg(s.statsTime.Seconds() > 0, "CoreStats: statsTime not set")
+		case KindThroughput:
+			var throughput int64
 			v.Lock()
-			throughput := v.Value / int64(s.statsTime.Seconds()) // note: int divide
-			ctracker[name] = &copyValue{Value: throughput}
-			v.Value = 0
+			if v.Value > 0 {
+				throughput = v.Value / cmn.MaxI64(int64(s.statsTime.Seconds()), 1)
+				ctracker[name] = &copyValue{Value: throughput}
+				updatedCnt++
+				v.Value = 0
+			}
 			v.Unlock()
-			if strings.HasSuffix(name, ".bps") {
+			if throughput > 0 {
 				nroot := strings.TrimSuffix(name, ".bps")
 				s.statsdC.Send(nroot, 1,
 					metric{Type: statsd.Gauge, Name: "throughput", Value: throughput},
 				)
 			}
-		} else if v.kind == KindCounter {
+		case KindCounter:
 			v.RLock()
-			if v.Value != 0 {
+			if prev, ok := ctracker[name]; !ok || prev.Value != v.Value {
 				ctracker[name] = &copyValue{Value: v.Value}
+				updatedCnt++
 			}
 			v.RUnlock()
-		} else {
+		default:
 			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
 		}
 	}
+	return
 }
 
 func (s *CoreStats) copyCumulative(ctracker copyTracker) {
@@ -355,6 +358,7 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 
 	glog.Infof("Starting %s", r.Getname())
 	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)
+	startTime := time.Now()
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -362,7 +366,7 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 				logger.doAdd(nv)
 			}
 		case <-r.ticker.C:
-			runlru := logger.log()
+			runlru := logger.log(time.Since(startTime))
 			logger.housekeep(runlru)
 		case <-r.stopCh:
 			r.ticker.Stop()

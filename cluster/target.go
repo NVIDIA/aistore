@@ -44,5 +44,4 @@ type Target interface {
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	RunLRU()
 	CloudIntf() CloudIf
-	StartTime() time.Time
 }

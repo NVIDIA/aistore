@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
@@ -191,7 +190,6 @@ type httprunner struct {
 	intraControlServer    *netServer
 	intraDataServer       *netServer
 	logger                *log.Logger
-	startTime             atomic.Time
 	si                    *cluster.Snode
 	httpclient            *http.Client // http client for intra-cluster comm
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
@@ -421,7 +419,6 @@ func (h *httprunner) initSI(daemonType string) {
 }
 
 func (h *httprunner) run() error {
-	h.startTime.Store(time.Now())
 	config := cmn.GCO.Get()
 
 	// A wrapper to glog http.Server errors - otherwise
