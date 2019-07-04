@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
+	"github.com/NVIDIA/aistore/housekeep/housekeeper"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -24,6 +25,7 @@ import (
 // runners
 const (
 	xmem             = "gmem2"
+	xhousekeeper     = "housekeeper"
 	xstreamc         = "stream-collector"
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
@@ -234,7 +236,6 @@ func aisinit(version, build string) {
 		ts := &stats.Trunner{T: t} // iostat below
 		ts.Init("aistarget", t.si.DaemonID)
 		ctx.rg.add(ts, xstorstats)
-
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
 		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
@@ -283,6 +284,7 @@ func aisinit(version, build string) {
 
 		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
 	}
+	ctx.rg.add(housekeeper.Housekeeper, xhousekeeper)
 	ctx.rg.add(&sigrunner{}, xsignal)
 
 	// even more config changes, e.g:

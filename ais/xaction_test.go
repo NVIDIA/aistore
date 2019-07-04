@@ -8,8 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/aistore/lru"
-
+	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 

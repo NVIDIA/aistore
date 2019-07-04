@@ -17,7 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/housekeep/housekeeper"
+	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -31,11 +32,6 @@ const (
 
 	// watermarks for entries size
 	entriesSizeHW = 300
-)
-
-const (
-	registryStateIdle = iota
-	registryStateCleanup
 )
 
 type (
@@ -101,8 +97,6 @@ type (
 		byID          sync.Map // map[int64]xactionEntry
 		byIDSize      atomic.Int64
 		byIDTaskCount atomic.Int64
-		lastCleanup   atomic.Int64
-		state         atomic.Int32
 	}
 )
 
@@ -144,8 +138,7 @@ func newXactions() *xactionsRegistry {
 	xar := &xactionsRegistry{
 		globalXacts: make(map[string]xactionGlobalEntry),
 	}
-	xar.lastCleanup.Store(time.Now().UnixNano())
-	xar.state.Store(registryStateIdle)
+	housekeeper.Housekeeper.Register(xar.cleanUpFinished)
 	return xar
 }
 
@@ -641,8 +634,6 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 
 func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 	r.byID.Store(id, entry)
-	byIDSize := r.byIDSize.Inc()
-	r.cleanUpFinished(byIDSize)
 
 	// Increase after cleanup to not force trigger it. If it was just added, for
 	// sure it didn't yet finish.
@@ -656,77 +647,63 @@ func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
 // or change in structure of byID
 // cleanup is made when size of r.byID is bigger then entriesSizeHW
 // but not more often than cleanupInterval
-func (r *xactionsRegistry) cleanUpFinished(entryCount int64) {
-	if !r.state.CAS(registryStateIdle, registryStateCleanup) {
-		// cleanup is running already
-		return
-	}
-
+func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 	startTime := time.Now()
 	if r.byIDTaskCount.Load() == 0 {
-		if entryCount <= entriesSizeHW {
-			return
-		}
-
-		last := r.lastCleanup.Load()
-		nextCleanup := time.Unix(0, last).Add(cleanupInterval)
-		if !nextCleanup.Before(startTime) {
-			return
+		if r.byIDSize.Inc() <= entriesSizeHW {
+			return cleanupInterval
 		}
 	}
 
-	go func(startTime time.Time) {
-		anyTaskDeleted := false
-		r.byID.Range(func(k, v interface{}) bool {
-			entry := v.(xactionEntry)
-			if !entry.Get().Finished() {
+	anyTaskDeleted := false
+	r.byID.Range(func(k, v interface{}) bool {
+		entry := v.(xactionEntry)
+		if !entry.Get().Finished() {
+			return true
+		}
+
+		eID := entry.Get().ID()
+		eKind := entry.Get().Kind()
+
+		// if IsTask == true the task must be cleaned up always - no extra
+		// checks besides it is finished at least entryOldAge ago.
+		//
+		// We need to check if the entry is not the most recent entry for
+		// given kind. If it is we want to keep it anyway.
+		if entry.IsGlobal() {
+			currentEntry := r.GetL(eKind)
+			if currentEntry != nil && currentEntry.Get().ID() == eID {
 				return true
 			}
-
-			eID := entry.Get().ID()
-			eKind := entry.Get().Kind()
-
-			// if IsTask == true the task must be cleaned up always - no extra
-			// checks besides it is finished at least entryOldAge ago.
-			//
-			// We need to check if the entry is not the most recent entry for
-			// given kind. If it is we want to keep it anyway.
-			if entry.IsGlobal() {
-				currentEntry := r.GetL(eKind)
+		} else if !entry.IsTask() {
+			bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
+			if bXact != nil {
+				currentEntry := bXact.GetL(eKind)
 				if currentEntry != nil && currentEntry.Get().ID() == eID {
 					return true
 				}
-			} else if !entry.IsTask() {
-				bXact, _ := r.getBucketsXacts(entry.Get().Bucket())
-				if bXact != nil {
-					currentEntry := bXact.GetL(eKind)
-					if currentEntry != nil && currentEntry.Get().ID() == eID {
-						return true
-					}
-				}
 			}
+		}
 
-			if entry.Get().EndTime().Add(entryOldAge).Before(startTime) {
-				// xaction has finished more than entryOldAge ago
-				r.byID.Delete(k)
-				r.byIDSize.Dec()
-				if entry.IsTask() {
-					anyTaskDeleted = true
-				}
-				return true
+		if entry.Get().EndTime().Add(entryOldAge).Before(startTime) {
+			// xaction has finished more than entryOldAge ago
+			r.byID.Delete(k)
+			r.byIDSize.Dec()
+			if entry.IsTask() {
+				anyTaskDeleted = true
 			}
 			return true
-		})
-
-		// free all memory taken by cleaned up tasks
-		// Tasks like ListBucket ones may take up huge amount of memory, so they
-		// must be cleaned up as soon as possible
-		if anyTaskDeleted {
-			go cmn.FreeMemToOS(time.Second)
 		}
-		r.lastCleanup.Store(startTime.UnixNano())
-		r.state.CAS(registryStateCleanup, registryStateIdle)
-	}(startTime)
+		return true
+	})
+
+	// free all memory taken by cleaned up tasks
+	// Tasks like ListBucket ones may take up huge amount of memory, so they
+	// must be cleaned up as soon as possible
+	if anyTaskDeleted {
+		cmn.FreeMemToOS(time.Second)
+	}
+	return cleanupInterval
 }
 
 func (r *xactBckListTask) IsGlobal() bool        { return false }

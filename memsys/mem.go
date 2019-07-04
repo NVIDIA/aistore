@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/housekeep/housekeeper"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -186,7 +187,6 @@ type (
 		statCh chan ReqStats2
 		time   struct {
 			d time.Duration
-			t *time.Timer
 		}
 		lowWM    uint64
 		rings    [NumSlabs]*Slab2
@@ -358,7 +358,6 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		r.TimeIval = memCheckAbove
 	}
 	r.time.d = r.TimeIval
-	r.setTimer(mem.ActualFree, mem.Total, false /*swapping */, false /* reset */)
 
 	// 5. final construction steps
 	r.sorted = make([]sortpair, NumSlabs)
@@ -433,12 +432,13 @@ func (r *Mem2) Free(spec FreeSpec) {
 
 // as a cmn.Runner
 func (r *Mem2) Run() error {
+	housekeeper.Housekeeper.Register(r.garbageCollect)
+
 	// if the usageLvl of GMem2 is Mem2Initialized, swaps its usageLvl to Mem2Running atomically
 	// CAS implemented to enforce only one invocation of GMem2.Run()
 	if !r.usageLvl.CAS(Mem2Initialized, Mem2Running) {
 		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl.Load()])
 	}
-	r.time.t = time.NewTimer(r.time.d)
 	mem, _ := sys.Mem()
 	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowWM), 2)
 	logMsg(fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d))
@@ -457,8 +457,6 @@ func (r *Mem2) Run() error {
 
 	for {
 		select {
-		case <-r.time.t.C:
-			r.work()
 		case req := <-r.statCh:
 			r.doStats()
 			for i := 0; i < NumSlabs; i++ {
@@ -468,7 +466,6 @@ func (r *Mem2) Run() error {
 			}
 			req.Wg.Done()
 		case <-r.stopCh:
-			r.time.t.Stop()
 			r.stop()
 			return nil
 		}
@@ -621,7 +618,7 @@ func (r *Mem2) env() (err error) {
 }
 
 // NOTE: notice enumerated heuristics below denoted as "Heu"
-func (r *Mem2) work() {
+func (r *Mem2) garbageCollect() time.Duration {
 	var (
 		depth int               // => current ring depth tbd
 		limit = int64(sizeToGC) // minimum accumulated size that triggers GC
@@ -680,10 +677,10 @@ func (r *Mem2) work() {
 		r.doGC(mem.ActualFree, limit, true, swapping)
 	}
 timex:
-	r.setTimer(mem.ActualFree, mem.Total, swapping, true /* reset */)
+	return r.getNextInterval(mem.ActualFree, mem.Total, swapping)
 }
 
-func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
+func (r *Mem2) getNextInterval(free, total uint64, swapping bool) time.Duration {
 	var changed bool
 	switch {
 	case free > r.lowWM && free > total-total/5:
@@ -707,12 +704,10 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 			changed = true
 		}
 	}
-	if reset {
-		if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
-			glog.Infof("timer %v, free %s", r.time.d, cmn.B2S(int64(free), 1))
-		}
-		r.time.t.Reset(r.time.d)
+	if changed && bool(glog.FastV(4, glog.SmoduleMemsys)) {
+		glog.Infof("timer %v, free %s", r.time.d, cmn.B2S(int64(free), 1))
 	}
+	return r.time.d
 }
 
 // freeIdle traverses and deallocates idle slabs- those that were not used for at

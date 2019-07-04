@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/lru"
+	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/stats"
 )
 
