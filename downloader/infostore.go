@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 )
 
 type (
@@ -29,10 +31,12 @@ func newInfoStore() (*infoStore, error) {
 		return nil, err
 	}
 
-	return &infoStore{
+	is := &infoStore{
 		downloaderDB: db,
 		jobInfo:      make(map[string]*DownloadJobInfo),
-	}, nil
+	}
+	hk.Housekeeper.Register("downloader", is.housekeep, hk.DayInterval)
+	return is, nil
 }
 
 func (is *infoStore) getJob(id string) (*DownloadJobInfo, error) {
@@ -107,6 +111,17 @@ func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
 	return nil
 }
 
+func (is *infoStore) markFinished(id string) error {
+	jInfo, err := is.getJob(id)
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+
+	jInfo.FinishedTime.Store(time.Now())
+	return nil
+}
+
 func (is *infoStore) setAborted(id string) error {
 	jInfo, err := is.getJob(id)
 	if err != nil {
@@ -121,4 +136,18 @@ func (is *infoStore) setAborted(id string) error {
 func (is *infoStore) delJob(id string) {
 	delete(is.jobInfo, id)
 	is.downloaderDB.delete(id)
+}
+
+func (is *infoStore) housekeep() time.Duration {
+	const interval = hk.DayInterval
+
+	is.Lock()
+	for id, jInfo := range is.jobInfo {
+		if time.Since(jInfo.FinishedTime.Load()) > interval {
+			is.delJob(id)
+		}
+	}
+	is.Unlock()
+
+	return interval
 }

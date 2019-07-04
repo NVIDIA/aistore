@@ -79,6 +79,8 @@ type (
 
 		Aborted       atomic.Bool `json:"aborted"`
 		AllDispatched atomic.Bool `json:"all_dispatched"`
+
+		FinishedTime atomic.Time `json:"-"`
 	}
 
 	ListBucketPageCb func(bucket, pageMarker string) (*cmn.BucketList, error)

@@ -117,6 +117,7 @@ func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
 
 func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 	defer func() {
+		d.parent.infoStore.markFinished(job.ID())
 		d.parent.infoStore.flush(job.ID())
 		d.cleanUpAborted(job.ID())
 	}()
@@ -147,7 +148,6 @@ func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 				return false
 			}
 		}
-
 	}
 }
 
@@ -252,8 +252,8 @@ func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlO
 		return err, true
 	}
 	if task == nil || jogger == nil {
-		d.parent.infoStore.incFinished(job.ID())
-		return nil, true
+		err = d.parent.infoStore.incFinished(job.ID())
+		return err, true
 	}
 
 	select {

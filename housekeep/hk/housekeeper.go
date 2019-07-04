@@ -13,6 +13,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+const (
+	DayInterval = 24 * time.Hour
+)
+
 type (
 	request struct {
 		registering     bool

@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
+
+	"github.com/NVIDIA/aistore/housekeep/hk"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -34,9 +37,11 @@ type ManagerGroup struct {
 
 // NewManagerGroup returns new, initialized manager group.
 func NewManagerGroup() *ManagerGroup {
-	return &ManagerGroup{
+	mg := &ManagerGroup{
 		managers: make(map[string]*Manager, 1),
 	}
+	hk.Housekeeper.Register(cmn.DSortNameLowercase, mg.housekeep, hk.DayInterval)
+	return mg
 }
 
 // Add new, non-initialized manager with given managerUUID to manager group.
@@ -145,7 +150,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 		glog.Error(err)
 		return err
 	}
-	db.Delete(managersCollection, managerUUID) // Delete only returns err when record does not exist, which should be ignored
+	_ = db.Delete(managersCollection, managerUUID) // Delete only returns err when record does not exist, which should be ignored
 	return nil
 }
 
@@ -184,4 +189,45 @@ func (mg *ManagerGroup) AbortAll(err error) {
 	for _, manager := range mg.managers {
 		manager.abort(err)
 	}
+}
+
+func (mg *ManagerGroup) housekeep() time.Duration {
+	const (
+		retryInterval   = time.Hour // retry interval in case error occurred
+		regularInterval = hk.DayInterval
+	)
+
+	mg.mtx.Lock()
+	defer mg.mtx.Unlock()
+
+	config := cmn.GCO.Get()
+	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
+	if err != nil {
+		glog.Error(err)
+		return retryInterval
+	}
+
+	managersUUID, err := db.ReadAll(managersCollection)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return regularInterval
+		}
+
+		glog.Error(err)
+		return retryInterval
+	}
+
+	var manager Manager
+	for _, managerUUID := range managersUUID {
+		if err = db.Read(managersCollection, managerUUID, &manager); err != nil {
+			glog.Error(err)
+			return retryInterval
+		}
+
+		if time.Since(manager.Metrics.Extraction.End) > regularInterval {
+			_ = db.Delete(managersCollection, managerUUID)
+		}
+	}
+
+	return regularInterval
 }
