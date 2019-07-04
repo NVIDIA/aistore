@@ -82,9 +82,10 @@ cat > $CONFFILE <<EOL
 		"instance": ${INSTANCE:-0}
 	},
 	"net": {
-		"ipv4":               "${IPV4LIST}",
-		"ipv4_intra_control": "${IPV4LIST_INTRA_CONTROL}",
-		"ipv4_intra_data":    "${IPV4LIST_INTRA_DATA}",
+		"ipv4":			"${IPV4LIST}",
+		"ipv4_intra_control":	"${IPV4LIST_INTRA_CONTROL}",
+		"ipv4_intra_data":	"${IPV4LIST_INTRA_DATA}",
+		"tcp_buf_size":		${TCP_BUF_SIZE:-131072},
 		"l4": {
 			"proto":              "tcp",
 			"port":	              "${PORT:-8080}",

@@ -147,7 +147,7 @@ func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 
 	var ereg error
-	t.httprunner.init(getstorstatsrunner())
+	t.httprunner.init(getstorstatsrunner(), config)
 	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 
@@ -556,8 +556,11 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		chunked: config.Net.HTTP.Chunked,
 	}
 	if err, errCode := goi.getObject(); err != nil {
-		t.invalmsghdlr(w, r, err.Error(), errCode)
-		return
+		if cmn.IsErrConnectionReset(err) {
+			glog.Errorf("GET %s: %v", lom, err)
+		} else {
+			t.invalmsghdlr(w, r, err.Error(), errCode)
+		}
 	}
 }
 

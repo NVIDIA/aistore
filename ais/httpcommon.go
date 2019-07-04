@@ -91,38 +91,54 @@ type (
 		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
 		NewDaemonID string `json:"newdaemonid"`
 	}
-)
 
-//===========
-//
-// interfaces
-//
-//===========
+	// http server and http runner (common for proxy and target)
+	netServer struct {
+		s          *http.Server
+		mux        *mux.ServeMux
+		tcpBufSize int
+	}
+	httprunner struct {
+		cmn.Named
+		publicServer          *netServer
+		intraControlServer    *netServer
+		intraDataServer       *netServer
+		logger                *log.Logger
+		si                    *cluster.Snode
+		httpclient            *http.Client // http client for intra-cluster comm
+		httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
+		keepalive             keepaliver
+		smapowner             *smapowner
+		bmdowner              *bmdowner
+		xactions              *xactionsRegistry
+		statsif               stats.Tracker
+		statsdC               statsd.Client
+	}
+
+	// aws and gcp interface
+	cloudif interface {
+		cluster.CloudIf
+		headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int)
+		getbucketnames(ctx context.Context) (buckets []string, err error, errcode int)
+		//
+		headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int)
+		//
+		getobj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errcode int)
+		putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int)
+		deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int)
+	}
+
+	glogwriter struct{}
+)
 
 //nolint:unused, deadcode
 const (
 	InitialBucketListSize = 128 // nolint did not work, so it is public now
 )
 
-type cloudif interface {
-	cluster.CloudIf
-	headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int)
-	getbucketnames(ctx context.Context) (buckets []string, err error, errcode int)
-	//
-	headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int)
-	//
-	getobj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errcode int)
-	putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int)
-	deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int)
-}
-
-//===========================================================================
 //
-// http runner
+// glog writer
 //
-//===========================================================================
-type glogwriter struct {
-}
 
 func (r *glogwriter) Write(p []byte) (int, error) {
 	n := len(p)
@@ -136,13 +152,12 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-type netServer struct {
-	s   *http.Server
-	mux *mux.ServeMux
-}
+//
+// netServer
+//
 
 // Override muxer ServeHTTP to support proxying HTTPS requests. Clients
-// initiates all HTTPS requests with CONNECT method instead of GET/PUT etc
+// initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodConnect {
 		server.mux.ServeHTTP(w, r)
@@ -184,23 +199,6 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go transfer(clientConn, destConn)
 }
 
-type httprunner struct {
-	cmn.Named
-	publicServer          *netServer
-	intraControlServer    *netServer
-	intraDataServer       *netServer
-	logger                *log.Logger
-	si                    *cluster.Snode
-	httpclient            *http.Client // http client for intra-cluster comm
-	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
-	keepalive             keepaliver
-	smapowner             *smapowner
-	bmdowner              *bmdowner
-	xactions              *xactionsRegistry
-	statsif               stats.Tracker
-	statsdC               statsd.Client
-}
-
 func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	config := cmn.GCO.Get()
 
@@ -212,9 +210,15 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		httpHandler = server
 	}
-
+	server.s = &http.Server{
+		Addr:     addr,
+		Handler:  httpHandler,
+		ErrorLog: logger,
+	}
+	if server.tcpBufSize > 0 {
+		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
+	}
 	if config.Net.HTTP.UseHTTPS {
-		server.s = &http.Server{Addr: addr, Handler: httpHandler, ErrorLog: logger}
 		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)
@@ -222,7 +226,6 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 			}
 		}
 	} else {
-		server.s = &http.Server{Addr: addr, Handler: httpHandler, ErrorLog: logger}
 		if err := server.s.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)
@@ -234,6 +237,17 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 	return nil
 }
 
+func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
+	if cs != http.StateNew {
+		return
+	}
+	tcpconn, ok := c.(*net.TCPConn)
+	cmn.Assert(ok)
+	rawconn, _ := tcpconn.SyscallConn()
+	args := cmn.TransportArgs{TCPBufSize: server.tcpBufSize}
+	rawconn.Control(args.ConnControl(rawconn))
+}
+
 func (server *netServer) shutdown() {
 	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.Default)
 	if err := server.s.Shutdown(contextwith); err != nil {
@@ -241,6 +255,10 @@ func (server *netServer) shutdown() {
 	}
 	cancel()
 }
+
+//
+// httprunner
+//
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	config := cmn.GCO.Get()
@@ -301,32 +319,37 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 	}
 }
 
-func (h *httprunner) init(s stats.Tracker) {
+func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	h.statsif = s
-
-	config := cmn.GCO.Get()
-	h.httpclient = cmn.NewClient(cmn.ClientArgs{
+	h.httpclient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:  config.Timeout.Default,
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
 	})
-	h.httpclientLongTimeout = cmn.NewClient(cmn.ClientArgs{
+	h.httpclientLongTimeout = cmn.NewClient(cmn.TransportArgs{
 		Timeout:  config.Timeout.DefaultLong,
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
 	})
 
+	bufsize := int(config.Net.TCPBufSize)
+	if h.si.IsProxy() {
+		bufsize = 0
+	}
 	h.publicServer = &netServer{
-		mux: mux.NewServeMux(),
+		mux:        mux.NewServeMux(),
+		tcpBufSize: bufsize,
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
 	if config.Net.UseIntraControl {
 		h.intraControlServer = &netServer{
-			mux: mux.NewServeMux(),
+			mux:        mux.NewServeMux(),
+			tcpBufSize: 0,
 		}
 	}
 	h.intraDataServer = h.publicServer // by default intra data net is the same as public
 	if config.Net.UseIntraData {
 		h.intraDataServer = &netServer{
-			mux: mux.NewServeMux(),
+			mux:        mux.NewServeMux(),
+			tcpBufSize: bufsize,
 		}
 	}
 
@@ -410,7 +433,7 @@ func (h *httprunner) initSI(daemonType string) {
 	if daemonID == "" {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
-		if cmn.GCO.Get().TestingEnv() {
+		if config.TestingEnv() {
 			daemonID += "_" + config.Net.L4.PortStr
 		}
 	}
@@ -495,13 +518,10 @@ func (h *httprunner) stop(err error) {
 	wg.Wait()
 }
 
-//=================================
 //
 // intra-cluster IPC, control plane
+// call another target or a proxy; optionally, include a json-encoded body
 //
-//=================================
-// call another target or a proxy
-// optionally, include a json-encoded body
 func (h *httprunner) call(args callArgs) callResult {
 	var (
 		req     *http.Request

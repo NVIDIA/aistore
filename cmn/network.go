@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -24,9 +25,10 @@ var (
 )
 
 type (
-	ClientArgs struct {
+	TransportArgs struct {
 		DialTimeout      time.Duration
 		Timeout          time.Duration
+		TCPBufSize       int
 		IdleConnsPerHost int
 		UseHTTPS         bool
 	}
@@ -49,7 +51,7 @@ func ParsePort(p string) (int, error) {
 	return port, nil
 }
 
-func NewTransport(args ClientArgs) *http.Transport {
+func NewTransport(args TransportArgs) *http.Transport {
 	var (
 		dialTimeout      = args.DialTimeout
 		idleConnsPerHost = args.IdleConnsPerHost
@@ -59,14 +61,17 @@ func NewTransport(args ClientArgs) *http.Transport {
 	if dialTimeout == 0 {
 		dialTimeout = 30 * time.Second
 	}
-
+	dialer := &net.Dialer{
+		Timeout:   dialTimeout,
+		KeepAlive: 30 * time.Second,
+	}
+	// setsockopt when non-zero, otherwise use TCP defaults
+	if args.TCPBufSize > 0 {
+		dialer.Control = args.setSockOpt
+	}
 	transport := &http.Transport{
-		Proxy: defaultTransport.Proxy,
-		DialContext: (&net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
+		Proxy:                 defaultTransport.Proxy,
+		DialContext:           dialer.DialContext,
 		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
 		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
@@ -79,11 +84,25 @@ func NewTransport(args ClientArgs) *http.Transport {
 	return transport
 }
 
-func NewClient(args ClientArgs) *http.Client {
+func NewClient(args TransportArgs) *http.Client {
 	transport := NewTransport(args)
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   args.Timeout,
 	}
 	return client
+}
+
+func (args *TransportArgs) ConnControl(c syscall.RawConn) (cntl func(fd uintptr)) {
+	cntl = func(fd uintptr) {
+		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, args.TCPBufSize)
+		AssertNoErr(err)
+		err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.TCPBufSize)
+		AssertNoErr(err)
+	}
+	return
+}
+
+func (args *TransportArgs) setSockOpt(_, _ string, c syscall.RawConn) (err error) {
+	return c.Control(args.ConnControl(c))
 }

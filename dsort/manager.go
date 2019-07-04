@@ -179,7 +179,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// Set extract creator depending on extension provided by the user
 	m.setExtractCreator()
 
-	m.client = cmn.NewClient(cmn.ClientArgs{
+	m.client = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,
 	})

@@ -438,6 +438,7 @@ type NetConf struct {
 	IPv4             string   `json:"ipv4"`
 	IPv4IntraControl string   `json:"ipv4_intra_control"`
 	IPv4IntraData    string   `json:"ipv4_intra_data"`
+	TCPBufSize       int64    `json:"tcp_buf_size"`
 	L4               L4Conf   `json:"l4"`
 	HTTP             HTTPConf `json:"http"`
 	UseIntraControl  bool     `json:"-"`

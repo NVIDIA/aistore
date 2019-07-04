@@ -80,7 +80,7 @@ type proxyrunner struct {
 // start proxy runner
 func (p *proxyrunner) Run() error {
 	config := cmn.GCO.Get()
-	p.httprunner.init(getproxystatsrunner())
+	p.httprunner.init(getproxystatsrunner(), config)
 	p.httprunner.keepalive = getproxykeepalive()
 
 	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
@@ -109,7 +109,7 @@ func (p *proxyrunner) Run() error {
 	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.rproxy.cloud = &httputil.ReverseProxy{
 			Director: func(r *http.Request) {},
-			Transport: cmn.NewTransport(cmn.ClientArgs{
+			Transport: cmn.NewTransport(cmn.TransportArgs{
 				UseHTTPS: config.Net.HTTP.UseHTTPS,
 			}),
 		}
@@ -1341,7 +1341,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
 		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
-		p.rproxy.p.Transport = cmn.NewTransport(cmn.ClientArgs{
+		p.rproxy.p.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
 		})
 	}
@@ -1367,7 +1367,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 		uparsed, err := url.Parse(tsi.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
 		rproxy = httputil.NewSingleHostReverseProxy(uparsed)
-		rproxy.Transport = cmn.NewTransport(cmn.ClientArgs{
+		rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
 		})
 		p.rproxy.tmap[tsi.DaemonID] = rproxy

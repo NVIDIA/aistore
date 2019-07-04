@@ -181,7 +181,10 @@ var (
 
 // default HTTP client to be used with streams
 // resulting transport will have all defaults, dial timeout=30s, timeout=no-timeout
-func NewDefaultClient() *http.Client { return cmn.NewClient(cmn.ClientArgs{}) }
+func NewDefaultClient() *http.Client {
+	config := cmn.GCO.Get()
+	return cmn.NewClient(cmn.TransportArgs{TCPBufSize: int(config.Net.TCPBufSize)})
+}
 
 //
 // Stream Collector - a singleton object with responsibilities that include:

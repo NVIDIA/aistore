@@ -44,7 +44,7 @@ func init() {
 	// target
 	t = &targetrunner{}
 	t.initSI(cmn.Target)
-	t.init(nil)
+	t.init(nil, cmn.GCO.Get())
 
 	bmd := newBucketMD()
 	bmd.add(testBucket, true, &cmn.BucketProps{

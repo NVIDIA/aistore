@@ -520,6 +520,9 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 
 	written, err = io.CopyBuffer(w, reader, buf)
 	if err != nil {
+		if cmn.IsErrConnectionReset(err) {
+			return
+		}
 		goi.t.fshc(err, fqn)
 		err = fmt.Errorf("Failed to GET %s, err: %v", fqn, err)
 		errCode = http.StatusInternalServerError

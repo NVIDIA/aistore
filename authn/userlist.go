@@ -56,7 +56,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		err   error
 		bytes []byte
 	)
-	client := cmn.NewClient(cmn.ClientArgs{
+	client := cmn.NewClient(cmn.TransportArgs{
 		Timeout: conf.Timeout.Default,
 	})
 	mgr := &userManager{
