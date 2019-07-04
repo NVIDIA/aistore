@@ -22,11 +22,11 @@ const (
 	WarmGet
 )
 
-type CloudIf interface {
-	ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errcode int)
+type CloudProvider interface {
+	ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
 }
 
-// For implementations, please refer to ais/target.go
+// NOTE: For implementations, please refer to ais/target.go
 type Target interface {
 	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
 	Snode() *Snode
@@ -43,5 +43,5 @@ type Target interface {
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
 	RunLRU()
-	CloudIntf() CloudIf
+	Cloud() CloudProvider
 }

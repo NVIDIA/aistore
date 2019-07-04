@@ -359,13 +359,6 @@ func getstorstatsrunner() *stats.Trunner {
 	return rr
 }
 
-func getcloudif() cloudif {
-	r := ctx.rg.runmap[cmn.Target]
-	rr, ok := r.(*targetrunner)
-	cmn.Assert(ok)
-	return rr.cloudif
-}
-
 func getmetasyncer() *metasyncer {
 	r := ctx.rg.runmap[xmetasyncer]
 	rr, ok := r.(*metasyncer)

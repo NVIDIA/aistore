@@ -7,10 +7,10 @@
 package ais
 
 type (
-	awsimpl struct { // mock
-		emptyCloud
+	awsProvider struct { // mock
+		emptyCloudProvider
 		t *targetrunner
 	}
 )
 
-func newAWSProvider(t *targetrunner) *awsimpl { return &awsimpl{emptyCloud{}, t} }
+func newAWSProvider(t *targetrunner) *awsProvider { return &awsProvider{emptyCloudProvider{}, t} }

@@ -425,7 +425,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		err            error
 		bucket         = apitems[0]
 		prefix         = rangeMsg.Prefix
-		ct             = t.contextWithAuth(r.Header)
+		ctx            = t.contextWithAuth(r.Header)
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 	bckIsLocal, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)
@@ -448,7 +448,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 			walk := objwalk.NewWalk(context.TODO(), bucket, bckIsLocal, msg, t)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
-			bucketListPage, err, _ = t.CloudIntf().ListBucket(ct, bucket, msg)
+			bucketListPage, err, _ = t.Cloud().ListBucket(ctx, bucket, msg)
 		}
 		if err != nil {
 			return err

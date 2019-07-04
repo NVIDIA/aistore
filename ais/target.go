@@ -82,7 +82,7 @@ type (
 
 	targetrunner struct {
 		httprunner
-		cloudif        cloudif // multi-cloud backend
+		cloud          cloudProvider // multi-cloud backend
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
 		clusterStarted atomic.Bool
@@ -200,11 +200,11 @@ func (t *targetrunner) Run() error {
 
 	// cloud provider (empty stubs that may get populated via build tags)
 	if config.CloudProvider == cmn.ProviderAmazon {
-		t.cloudif = newAWSProvider(t)
+		t.cloud = newAWSProvider(t)
 	} else if config.CloudProvider == cmn.ProviderGoogle {
-		t.cloudif = newGCPProvider(t)
+		t.cloud = newGCPProvider(t)
 	} else {
-		t.cloudif = newEmptyCloud() // mock
+		t.cloud = newEmptyCloud() // mock
 	}
 
 	// prefetch
@@ -946,7 +946,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	config := cmn.GCO.Get()
 	if !bckIsLocal {
-		bucketProps, err, errCode = getcloudif().headbucket(t.contextWithAuth(r.Header), bucket)
+		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
 			errMsg := fmt.Sprintf("bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
 			t.invalmsghdlr(w, r, errMsg, errCode)
@@ -1061,7 +1061,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
 	} else {
-		objmeta, err, errcode = getcloudif().headobject(t.contextWithAuth(r.Header), lom)
+		objmeta, err, errcode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
 			invalidHandler(w, r, errMsg, errcode)
@@ -1171,7 +1171,7 @@ func (rctx *renameCtx) walkf(fqn string, osfi os.FileInfo, err error) error {
 // should be called only if the local copy exists
 func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
 	var objMeta cmn.SimpleKVs
-	objMeta, err, errCode = t.cloudif.headobject(ctx, lom)
+	objMeta, err, errCode = t.cloud.headObj(ctx, lom)
 	if err != nil {
 		err = fmt.Errorf("%s: failed to head metadata, err: %v", lom, err)
 		return
@@ -1272,7 +1272,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		vchanged, crace bool
 		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
-	if err, errcode = getcloudif().getobj(ct, workFQN, lom); err != nil {
+	if err, errcode = t.cloud.getObj(ct, workFQN, lom); err != nil {
 		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
 		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 		return
@@ -1363,7 +1363,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 		}
 	}
 
-	buckets, err, errcode := getcloudif().getbucketnames(t.contextWithAuth(r.Header))
+	buckets, err, errcode := t.cloud.getBucketNames(t.contextWithAuth(r.Header))
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to list all buckets, err: %v", err)
 		t.invalmsghdlr(w, r, errMsg, errcode)
@@ -1438,7 +1438,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	}
 }
 
-func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict bool) error {
+func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bool) error {
 	var (
 		cloudErr error
 		errRet   error
@@ -1454,7 +1454,7 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 	delFromAIS := lom.Exists()
 
 	if delFromCloud {
-		if err, _ := getcloudif().deleteobj(ct, lom); err != nil {
+		if err, _ := t.cloud.deleteObj(ctx, lom); err != nil {
 			cloudErr = fmt.Errorf("%s: DELETE failed, err: %v", lom, err)
 			t.statsif.Add(stats.DeleteCount, 1)
 		}
@@ -1485,6 +1485,10 @@ func (t *targetrunner) objDelete(ct context.Context, lom *cluster.LOM, evict boo
 	}
 	return errRet
 }
+
+///////////////////
+// RENAME OBJECT //
+///////////////////
 
 func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg, pid string) {
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -1663,6 +1667,6 @@ func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 	return
 }
 
-func (t *targetrunner) CloudIntf() cluster.CloudIf {
-	return t.cloudif
+func (t *targetrunner) Cloud() cluster.CloudProvider {
+	return t.cloud
 }

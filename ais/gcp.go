@@ -41,24 +41,19 @@ type gcpAuthRec struct {
 	ProjectID string `json:"project_id"`
 }
 
-//======
-//
-// implements cloudif
-//
-//======
 type (
 	gcpCreds struct {
 		projectID string
 		creds     string
 	}
 
-	gcpimpl struct {
+	gcpProvider struct {
 		t *targetrunner
 	}
 )
 
 var (
-	_ cloudif = &gcpimpl{}
+	_ cloudProvider = &gcpProvider{}
 )
 
 //======
@@ -66,7 +61,7 @@ var (
 // global - FIXME: environ
 //
 //======
-func newGCPProvider(t *targetrunner) *gcpimpl { return &gcpimpl{t} }
+func newGCPProvider(t *targetrunner) *gcpProvider { return &gcpProvider{t} }
 
 func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -140,7 +135,7 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 //    it from environment variable GOOGLE_CLOUD_PROJECT
 // The function returns:
 //   connection to the cloud, GCP context, project_id, error_string
-// project_id is used only by getbucketnames function
+// project_id is used only by getBucketNames function
 
 func createClient(ctx context.Context) (*storage.Client, context.Context, string, error) {
 	userID := getStringFromContext(ctx, ctxUserID)
@@ -193,21 +188,22 @@ func handleObjectError(objErr error, bckName string, bucket *storage.BucketHandl
 	return objErr, http.StatusBadRequest
 }
 
-//==================
-//
-// bucket operations
-//
-//==================
-func (gcpimpl *gcpimpl) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (reslist *cmn.BucketList, err error, errcode int) {
+/////////////////
+// LIST BUCKET //
+/////////////////
+
+func (gcpp *gcpProvider) ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("listbucket %s", bucket)
+		glog.Infof("list_bucket %s", bucket)
 	}
-	gcpclient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	var query *storage.Query
-	var pageToken string
+	var (
+		query     *storage.Query
+		pageToken string
+	)
 
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}
@@ -216,7 +212,7 @@ func (gcpimpl *gcpimpl) ListBucket(ctx context.Context, bucket string, msg *cmn.
 		pageToken = msg.PageMarker
 	}
 
-	it := gcpclient.Bucket(bucket).Objects(gctx, query)
+	it := gcpClient.Bucket(bucket).Objects(gctx, query)
 	pageSize := gcpPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
@@ -225,12 +221,12 @@ func (gcpimpl *gcpimpl) ListBucket(ctx context.Context, bucket string, msg *cmn.
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
-		err, errcode = gcpErrorToAISError(bucket, err)
+		err, errCode = gcpErrorToAISError(bucket, err)
 		return
 	}
 
-	reslist = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
-	reslist.PageMarker = nextPageToken
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
+	bckList.PageMarker = nextPageToken
 	for _, attrs := range objs {
 		entry := &cmn.BucketEntry{}
 		entry.Name = attrs.Name
@@ -244,46 +240,49 @@ func (gcpimpl *gcpimpl) ListBucket(ctx context.Context, bucket string, msg *cmn.
 			entry.Version = fmt.Sprintf("%d", attrs.Generation)
 		}
 		// TODO: other cmn.SelectMsg props TBD
-
-		reslist.Entries = append(reslist.Entries, entry)
+		bckList.Entries = append(bckList.Entries, entry)
 	}
 
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("listbucket count %d", len(reslist.Entries))
+		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
 	}
 
 	return
 }
 
-func (gcpimpl *gcpimpl) headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int) {
+func (gcpp *gcpProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("headbucket %s", bucket)
+		glog.Infof("head_bucket %s", bucket)
 	}
-	bucketprops = make(cmn.SimpleKVs)
+	bckProps = make(cmn.SimpleKVs)
 
-	gcpclient, gctx, _, err := createClient(ctx)
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	_, err = gcpclient.Bucket(bucket).Attrs(gctx)
+	_, err = gcpClient.Bucket(bucket).Attrs(gctx)
 	if err != nil {
-		err, errcode = gcpErrorToAISError(bucket, err)
+		err, errCode = gcpErrorToAISError(bucket, err)
 		return
 	}
-	bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bucketprops[cmn.HeaderBucketVerEnabled] = "true"
+	bckProps[cmn.HeaderBucketVerEnabled] = "true"
 	return
 }
 
-func (gcpimpl *gcpimpl) getbucketnames(ctx context.Context) (buckets []string, err error, errcode int) {
-	gcpclient, gctx, projectID, err := createClient(ctx)
+//////////////////
+// BUCKET NAMES //
+//////////////////
+
+func (gcpp *gcpProvider) getBucketNames(ctx context.Context) (buckets []string, err error, errCode int) {
+	gcpClient, gctx, projectID, err := createClient(ctx)
 	if err != nil {
 		return
 	}
 	buckets = make([]string, 0, 16)
-	it := gcpclient.Buckets(gctx, projectID)
+	it := gcpClient.Buckets(gctx, projectID)
 	for {
 		var battrs *storage.BucketAttrs
 
@@ -293,56 +292,54 @@ func (gcpimpl *gcpimpl) getbucketnames(ctx context.Context) (buckets []string, e
 			break
 		}
 		if err != nil {
-			err, errcode = gcpErrorToAISError(battrs.Name, err)
+			err, errCode = gcpErrorToAISError(battrs.Name, err)
 			return
 		}
 		buckets = append(buckets, battrs.Name)
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
+			glog.Infof("[bucket_names] %s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
 	}
 	return
 }
 
-//============
-//
-// object meta
-//
-//============
-func (gcpimpl *gcpimpl) headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int) {
-	objmeta = make(cmn.SimpleKVs)
+/////////////////
+// HEAD OBJECT //
+/////////////////
 
-	gcpclient, gctx, _, err := createClient(ctx)
+func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+	objMeta = make(cmn.SimpleKVs)
+
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	attrs, err := gcpclient.Bucket(lom.Bucket).Object(lom.Objname).Attrs(gctx)
+	attrs, err := gcpClient.Bucket(lom.Bucket).Object(lom.Objname).Attrs(gctx)
 	if err != nil {
-		err, errcode = handleObjectError(err, lom.Bucket, gcpclient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
 		return
 	}
-	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
-	objmeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
+	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
+	objMeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("HEAD %s", lom)
+		glog.Infof("[head_object] %s", lom)
 	}
 	return
 }
 
-//=======================
-//
-// object data operations
-//
-//=======================
-func (gcpimpl *gcpimpl) getobj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errcode int) {
-	gcpclient, gctx, _, err := createClient(ctx)
+////////////////
+// GET OBJECT //
+////////////////
+
+func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	o := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		err, errcode = handleObjectError(err, lom.Bucket, gcpclient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
 		return
 	}
 
@@ -355,7 +352,7 @@ func (gcpimpl *gcpimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 	}
 	// hashtype and hash could be empty for legacy objects.
 	bckProvider, _ := cmn.ProviderFromStr(cmn.CloudBs)
-	lom, errstr := cluster.LOM{T: gcpimpl.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
+	lom, errstr := cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
 	if errstr != "" {
 		err = errors.New(errstr)
 		return
@@ -363,7 +360,7 @@ func (gcpimpl *gcpimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 	lom.SetCksum(cksum)
 	lom.SetVersion(strconv.FormatInt(attrs.Generation, 10))
 	poi := &putObjInfo{
-		t:            gcpimpl.t,
+		t:            gcpp.t,
 		cold:         true,
 		r:            rc,
 		cksumToCheck: cksumToCheck,
@@ -376,13 +373,17 @@ func (gcpimpl *gcpimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("GET %s", lom)
+		glog.Infof("[get_object] %s", lom)
 	}
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int) {
-	gcpclient, gctx, _, err := createClient(ctx)
+////////////////
+// PUT OBJECT //
+////////////////
+
+func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
@@ -390,11 +391,11 @@ func (gcpimpl *gcpimpl) putobj(ctx context.Context, file *os.File, lom *cluster.
 	md := make(cmn.SimpleKVs)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
 
-	gcpObj := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
+	gcpObj := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
 	buf, slab := gmem2.AllocEstimated(0)
-	written, err := io.CopyBuffer(wc, file, buf)
+	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	if err != nil {
 		return
@@ -405,29 +406,33 @@ func (gcpimpl *gcpimpl) putobj(ctx context.Context, file *os.File, lom *cluster.
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		err, errcode = handleObjectError(err, lom.Bucket, gcpclient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s, size %d, version %s", lom, written, version)
+		glog.Infof("[put_object] %s, size %d, version %s", lom, written, version)
 	}
 	return
 }
 
-func (gcpimpl *gcpimpl) deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int) {
-	gcpclient, gctx, _, err := createClient(ctx)
+///////////////////
+// DELETE OBJECT //
+///////////////////
+
+func (gcpp *gcpProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+	gcpClient, gctx, _, err := createClient(ctx)
 	if err != nil {
 		return
 	}
-	o := gcpclient.Bucket(lom.Bucket).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
 	err = o.Delete(gctx)
 	if err != nil {
-		err, errcode = handleObjectError(err, lom.Bucket, gcpclient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("DELETE %s", lom)
+		glog.Infof("[delete_object] %s", lom)
 	}
 	return
 }

@@ -431,9 +431,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumstr, errstr string) 
 	return
 }
 
-//
-// private methods
-//
+// NOTE: Clone performs shallow copy of the LOM struct.
 func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom

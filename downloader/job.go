@@ -171,7 +171,7 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 		PageSize:   cmn.DefaultPageSize,
 	}
 
-	bckList, err, _ := j.t.CloudIntf().ListBucket(j.ctx, j.bucket, msg)
+	bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bucket, msg)
 	if err != nil {
 		return err
 	}

@@ -115,32 +115,30 @@ type (
 		statsdC               statsd.Client
 	}
 
-	// aws and gcp interface
-	cloudif interface {
-		cluster.CloudIf
-		headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int)
-		getbucketnames(ctx context.Context) (buckets []string, err error, errcode int)
-		//
-		headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int)
-		//
-		getobj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errcode int)
-		putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int)
-		deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int)
+	// AWS and GCP provider interface
+	cloudProvider interface {
+		cluster.CloudProvider
+		headBucket(ctx context.Context, bucket string) (bucketProps cmn.SimpleKVs, err error, errCode int)
+		getBucketNames(ctx context.Context) (buckets []string, err error, errCode int)
+
+		headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int)
+		getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int)
+		putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int)
+		deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int)
 	}
 
-	glogwriter struct{}
+	glogWriter struct{}
 )
 
-//nolint:unused, deadcode
 const (
-	InitialBucketListSize = 128 // nolint did not work, so it is public now
+	initialBucketListSize = 128 //nolint:unused,varcheck,deadcode
 )
 
-//
-// glog writer
-//
+////////////////
+// glogWriter //
+////////////////
 
-func (r *glogwriter) Write(p []byte) (int, error) {
+func (r *glogWriter) Write(p []byte) (int, error) {
 	n := len(p)
 	s := string(p[:n])
 	glog.Errorln(s)
@@ -152,9 +150,9 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-//
-// netServer
-//
+///////////////
+// netServer //
+///////////////
 
 // Override muxer ServeHTTP to support proxying HTTPS requests. Clients
 // initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
@@ -256,9 +254,9 @@ func (server *netServer) shutdown() {
 	cancel()
 }
 
-//
-// httprunner
-//
+////////////////
+// httprunner //
+////////////////
 
 func (h *httprunner) registerNetworkHandlers(networkHandlers []networkHandler) {
 	config := cmn.GCO.Get()
@@ -446,7 +444,7 @@ func (h *httprunner) run() error {
 
 	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
-	h.logger = log.New(&glogwriter{}, "net/http err: ", 0)
+	h.logger = log.New(&glogWriter{}, "net/http err: ", 0)
 	if config.Net.UseIntraControl || config.Net.UseIntraData {
 		var errCh chan error
 		if config.Net.UseIntraControl && config.Net.UseIntraData {
@@ -629,9 +627,9 @@ func (h *httprunner) call(args callArgs) callResult {
 	return callResult{args.si, outjson, err, errstr, resp.StatusCode}
 }
 
-//
-// broadcast
-//
+///////////////
+// broadcast //
+///////////////
 
 func (h *httprunner) broadcastTo(path string, query url.Values, method string, body []byte,
 	smap *smapX, timeout time.Duration, network string, to int) chan callResult {
@@ -724,11 +722,9 @@ func (h *httprunner) newActionMsgInternal(actionMsg *cmn.ActionMsg, smap *smapX,
 	return msgInt
 }
 
-//=============================
-//
-// http request parsing helpers
-//
-//=============================
+//////////////////////////////////
+// HTTP request parsing helpers //
+//////////////////////////////////
 
 // remove validated fields and return the resulting slice
 func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
@@ -799,11 +795,10 @@ func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err er
 	return
 }
 
-//=========================
-//
-// common http req handlers
-//
-//==========================
+//////////////////////////////
+// common HTTP req handlers //
+//////////////////////////////
+
 func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		body    []byte
@@ -830,11 +825,9 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, r, body, "httpdaeget-"+getWhat)
 }
 
-//=================
-//
-// http err + spec message + code + stats
-//
-//=================
+////////////////////////////////////////////
+// HTTP err + spec message + code + stats //
+////////////////////////////////////////////
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	if caller := r.Header.Get(cmn.HeaderCallerName); caller != "" {
@@ -848,11 +841,10 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 	cmn.InvalidHandlerDetailedNoLog(w, r, msg, errCode...)
 }
 
-//=====================
-//
-// metasync Rx handlers
-//
-//=====================
+//////////////////////////
+// metasync Rx handlers //
+//////////////////////////
+
 func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msgInt *actionMsgInternal, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return

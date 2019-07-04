@@ -8,8 +8,8 @@ package ais
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
@@ -31,11 +31,6 @@ const (
 	awsMaxPageSize    = 1000
 )
 
-//======
-//
-// implements cloudif
-//
-//======
 type (
 	awsCreds struct {
 		region string
@@ -43,16 +38,16 @@ type (
 		secret string
 	}
 
-	awsimpl struct {
+	awsProvider struct {
 		t *targetrunner
 	}
 )
 
 var (
-	_ cloudif = &awsimpl{}
+	_ cloudProvider = &awsProvider{}
 )
 
-func newAWSProvider(t *targetrunner) *awsimpl { return &awsimpl{t} }
+func newAWSProvider(t *targetrunner) *awsProvider { return &awsProvider{t} }
 
 // If extractAWSCreds returns no error and awsCreds is nil then the default
 //   AWS client is used (that loads credentials from ~/.aws/credentials)
@@ -159,12 +154,11 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "null" && *version != ""
 }
 
-//==================
-//
-// bucket operations
-//
-//==================
-func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (reslist *cmn.BucketList, err error, errcode int) {
+/////////////////
+// LIST BUCKET //
+/////////////////
+
+func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -189,7 +183,7 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		err, errcode = awsErrorToAISError(bucket, err)
+		err, errCode = awsErrorToAISError(bucket, err)
 		return
 	}
 
@@ -204,11 +198,11 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 
 		verResp, err = svc.ListObjectVersions(verParams)
 		if err != nil {
-			err, errcode = awsErrorToAISError(bucket, err)
+			err, errCode = awsErrorToAISError(bucket, err)
 			return
 		}
 
-		versions = make(map[string]*string, InitialBucketListSize)
+		versions = make(map[string]*string, initialBucketListSize)
 		for _, vers := range verResp.Versions {
 			if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
 				versions[*(vers.Key)] = vers.VersionId
@@ -217,7 +211,7 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 	}
 
 	// var msg cmn.SelectMsg
-	reslist = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, InitialBucketListSize)}
+	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
 		entry.Name = *(key.Key)
@@ -234,75 +228,82 @@ func (awsimpl *awsimpl) ListBucket(ct context.Context, bucket string, msg *cmn.S
 			}
 		}
 		// TODO: other cmn.SelectMsg props TBD
-		reslist.Entries = append(reslist.Entries, entry)
+		bckList.Entries = append(bckList.Entries, entry)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("listbucket count %d", len(reslist.Entries))
+		glog.Infof("[list_bucket] count %d", len(bckList.Entries))
 	}
 
 	if *resp.IsTruncated {
 		// For AWS, resp.NextMarker is only set when a query has a delimiter.
 		// Without a delimiter, NextMarker should be the last returned key.
-		reslist.PageMarker = reslist.Entries[len(reslist.Entries)-1].Name
+		bckList.PageMarker = bckList.Entries[len(bckList.Entries)-1].Name
 	}
 
 	return
 }
 
-func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops cmn.SimpleKVs, err error, errcode int) {
+/////////////////
+// HEAD BUCKET //
+/////////////////
+
+func (awsp *awsProvider) headBucket(ctx context.Context, bucket string) (bckProps cmn.SimpleKVs, err error, errCode int) {
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("headbucket %s", bucket)
+		glog.Infof("[head_bucket] %s", bucket)
 	}
-	bucketprops = make(cmn.SimpleKVs)
+	bckProps = make(cmn.SimpleKVs)
 
-	sess := createSession(ct)
-	svc := s3.New(sess)
-	input := &s3.HeadBucketInput{Bucket: aws.String(bucket)}
-
-	_, err = svc.HeadBucket(input)
+	svc := s3.New(createSession(ctx))
+	_, err = svc.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(bucket),
+	})
 	if err != nil {
-		err, errcode = awsErrorToAISError(bucket, err)
+		err, errCode = awsErrorToAISError(bucket, err)
 		return
 	}
-	bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	bckProps[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 
 	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}
 	result, err := svc.GetBucketVersioning(inputVers)
 	if err != nil {
-		err, errcode = awsErrorToAISError(bucket, err)
+		err, errCode = awsErrorToAISError(bucket, err)
 		return
 	}
 
-	bucketprops[cmn.HeaderBucketVerEnabled] =
-		strconv.FormatBool(result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled)
+	bckProps[cmn.HeaderBucketVerEnabled] = strconv.FormatBool(
+		result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled,
+	)
 	return
 }
 
-func (awsimpl *awsimpl) getbucketnames(ctx context.Context) (buckets []string, err error, errcode int) {
-	sess := createSession(ctx)
-	svc := s3.New(sess)
+//////////////////
+// BUCKET NAMES //
+//////////////////
+
+func (awsp *awsProvider) getBucketNames(ctx context.Context) (buckets []string, err error, errCode int) {
+	svc := s3.New(createSession(ctx))
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		err, errcode = awsErrorToAISError("", err)
+		err, errCode = awsErrorToAISError("", err)
 		return
 	}
+
 	buckets = make([]string, len(result.Buckets))
-	for idx, bkt := range result.Buckets {
+	for idx, bck := range result.Buckets {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: created %v", aws.StringValue(bkt.Name), *bkt.CreationDate)
+			glog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
 		}
-		buckets[idx] = aws.StringValue(bkt.Name)
+		buckets[idx] = aws.StringValue(bck.Name)
 	}
 	return
 }
 
-//============
-//
-// object meta
-//
-//============
-func (awsimpl *awsimpl) headobject(ctx context.Context, lom *cluster.LOM) (objmeta cmn.SimpleKVs, err error, errcode int) {
-	objmeta = make(cmn.SimpleKVs)
+////////////////
+// HEAD OBJECT //
+////////////////
+
+func (awsp *awsProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
+	objMeta = make(cmn.SimpleKVs)
 
 	sess := createSession(ctx)
 	svc := s3.New(sess)
@@ -310,27 +311,26 @@ func (awsimpl *awsimpl) headobject(ctx context.Context, lom *cluster.LOM) (objme
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errcode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
-	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
+	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 	if awsIsVersionSet(headOutput.VersionId) {
-		objmeta[cmn.HeaderObjVersion] = *headOutput.VersionId
+		objMeta[cmn.HeaderObjVersion] = *headOutput.VersionId
 	}
 	size := strconv.FormatInt(*headOutput.ContentLength, 10)
-	objmeta[cmn.HeaderObjSize] = size
+	objMeta[cmn.HeaderObjSize] = size
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("HEAD %s", lom)
+		glog.Infof("[head_object] %s", lom)
 	}
 	return
 }
 
-//=======================
-//
-// object data operations
-//
-//=======================
-func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errcode int) {
+////////////////
+// GET OBJECT //
+////////////////
+
+func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
 		cksum        cmn.Cksummer
 		cksumToCheck cmn.Cksummer
@@ -342,13 +342,13 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		Key:    aws.String(lom.Objname),
 	})
 	if err != nil {
-		err, errcode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	// may not have ais metadata
-	if htype, ok := obj.Metadata[awsChecksumType]; ok {
-		if hval, ok := obj.Metadata[awsChecksumVal]; ok {
-			cksum = cmn.NewCksum(*htype, *hval)
+	if cksumType, ok := obj.Metadata[awsChecksumType]; ok {
+		if cksumValue, ok := obj.Metadata[awsChecksumVal]; ok {
+			cksum = cmn.NewCksum(*cksumType, *cksumValue)
 		}
 	}
 
@@ -362,7 +362,7 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		lom.SetVersion(*obj.VersionId)
 	}
 	poi := &putObjInfo{
-		t:            awsimpl.t,
+		t:            awsp.t,
 		lom:          lom,
 		r:            obj.Body,
 		cksumToCheck: cksumToCheck,
@@ -373,53 +373,59 @@ func (awsimpl *awsimpl) getobj(ctx context.Context, workFQN string, lom *cluster
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("GET %s", lom)
+		glog.Infof("[get_object] %s", lom)
 	}
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ctx context.Context, file *os.File, lom *cluster.LOM) (version string, err error, errcode int) {
+////////////////
+// PUT OBJECT //
+////////////////
+
+func (awsp *awsProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
 	var (
-		uploadoutput *s3manager.UploadOutput
+		uploadOutput          *s3manager.UploadOutput
+		cksumType, cksumValue = lom.Cksum().Get()
+		md                    = make(map[string]*string)
 	)
-	cksumType, cksumValue := lom.Cksum().Get()
-	md := make(map[string]*string)
 	md[awsChecksumType] = aws.String(cksumType)
 	md[awsChecksumVal] = aws.String(cksumValue)
 
-	sess := createSession(ctx)
-	uploader := s3manager.NewUploader(sess)
-	uploadoutput, err = uploader.Upload(&s3manager.UploadInput{
+	uploader := s3manager.NewUploader(createSession(ctx))
+	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(lom.Bucket),
 		Key:      aws.String(lom.Objname),
-		Body:     file,
+		Body:     r,
 		Metadata: md,
 	})
 	if err != nil {
-		err, errcode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		if uploadoutput.VersionID != nil {
-			version = *uploadoutput.VersionID
-			glog.Infof("PUT %s, version %s", lom, version)
+		if uploadOutput.VersionID != nil {
+			version = *uploadOutput.VersionID
+			glog.Infof("[put_object] %s, version %s", lom, version)
 		} else {
-			glog.Infof("PUT %s", lom)
+			glog.Infof("[put_object] %s", lom)
 		}
 	}
 	return
 }
 
-func (awsimpl *awsimpl) deleteobj(ctx context.Context, lom *cluster.LOM) (err error, errcode int) {
-	sess := createSession(ctx)
-	svc := s3.New(sess)
+///////////////////
+// DELETE OBJECT //
+///////////////////
+
+func (awsp *awsProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
+	svc := s3.New(createSession(ctx))
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)})
 	if err != nil {
-		err, errcode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket, err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("DELETE %s", lom)
+		glog.Infof("[delete_object] %s", lom)
 	}
 	return
 }

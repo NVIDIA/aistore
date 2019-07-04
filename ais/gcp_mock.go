@@ -7,10 +7,10 @@
 package ais
 
 type (
-	gcpimpl struct { // mock
-		emptyCloud
+	gcpProvider struct {
+		emptyCloudProvider
 		t *targetrunner
 	}
 )
 
-func newGCPProvider(t *targetrunner) *gcpimpl { return &gcpimpl{emptyCloud{}, t} }
+func newGCPProvider(t *targetrunner) *gcpProvider { return &gcpProvider{emptyCloudProvider{}, t} }
