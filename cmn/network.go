@@ -28,7 +28,7 @@ type (
 	TransportArgs struct {
 		DialTimeout      time.Duration
 		Timeout          time.Duration
-		TCPBufSize       int
+		SndRcvBufSize    int
 		IdleConnsPerHost int
 		UseHTTPS         bool
 	}
@@ -66,7 +66,7 @@ func NewTransport(args TransportArgs) *http.Transport {
 		KeepAlive: 30 * time.Second,
 	}
 	// setsockopt when non-zero, otherwise use TCP defaults
-	if args.TCPBufSize > 0 {
+	if args.SndRcvBufSize > 0 {
 		dialer.Control = args.setSockOpt
 	}
 	transport := &http.Transport{
@@ -95,9 +95,11 @@ func NewClient(args TransportArgs) *http.Client {
 
 func (args *TransportArgs) ConnControl(c syscall.RawConn) (cntl func(fd uintptr)) {
 	cntl = func(fd uintptr) {
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, args.TCPBufSize)
+		// NOTE: is limited by /proc/sys/net/core/rmem_max
+		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, args.SndRcvBufSize)
 		AssertNoErr(err)
-		err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.TCPBufSize)
+		// NOTE: is limited by /proc/sys/net/core/wmem_max
+		err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.SndRcvBufSize)
 		AssertNoErr(err)
 	}
 	return

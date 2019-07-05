@@ -94,9 +94,9 @@ type (
 
 	// http server and http runner (common for proxy and target)
 	netServer struct {
-		s          *http.Server
-		mux        *mux.ServeMux
-		tcpBufSize int
+		s             *http.Server
+		mux           *mux.ServeMux
+		sndRcvBufSize int
 	}
 	httprunner struct {
 		cmn.Named
@@ -215,7 +215,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 		Handler:  httpHandler,
 		ErrorLog: logger,
 	}
-	if server.tcpBufSize > 0 {
+	if server.sndRcvBufSize > 0 {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
 	}
 	if config.Net.HTTP.UseHTTPS {
@@ -244,7 +244,7 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 	tcpconn, ok := c.(*net.TCPConn)
 	cmn.Assert(ok)
 	rawconn, _ := tcpconn.SyscallConn()
-	args := cmn.TransportArgs{TCPBufSize: server.tcpBufSize}
+	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize}
 	rawconn.Control(args.ConnControl(rawconn))
 }
 
@@ -330,26 +330,26 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
 	})
 
-	bufsize := int(config.Net.TCPBufSize)
+	bufsize := config.Net.L4.SndRcvBufSize
 	if h.si.IsProxy() {
 		bufsize = 0
 	}
 	h.publicServer = &netServer{
-		mux:        mux.NewServeMux(),
-		tcpBufSize: bufsize,
+		mux:           mux.NewServeMux(),
+		sndRcvBufSize: bufsize,
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
 	if config.Net.UseIntraControl {
 		h.intraControlServer = &netServer{
-			mux:        mux.NewServeMux(),
-			tcpBufSize: 0,
+			mux:           mux.NewServeMux(),
+			sndRcvBufSize: 0,
 		}
 	}
 	h.intraDataServer = h.publicServer // by default intra data net is the same as public
 	if config.Net.UseIntraData {
 		h.intraDataServer = &netServer{
-			mux:        mux.NewServeMux(),
-			tcpBufSize: bufsize,
+			mux:           mux.NewServeMux(),
+			sndRcvBufSize: bufsize,
 		}
 	}
 

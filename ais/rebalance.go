@@ -463,14 +463,15 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 	reb.streams = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, client, sbArgs)
 
 	//
-	// ACKs (using the same client)
+	// ACKs (notice client with default transport args)
 	//
+	clientAcks := cmn.NewClient(cmn.TransportArgs{})
 	sbArgs = transport.SBArgs{
 		ManualResync: true,
 		Network:      reb.netc,
 		Trname:       rebalanceAcksName,
 	}
-	reb.acks = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, client, sbArgs)
+	reb.acks = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, clientAcks, sbArgs)
 	reb.ackrc.Store(0)
 }
 

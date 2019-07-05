@@ -438,7 +438,6 @@ type NetConf struct {
 	IPv4             string   `json:"ipv4"`
 	IPv4IntraControl string   `json:"ipv4_intra_control"`
 	IPv4IntraData    string   `json:"ipv4_intra_data"`
-	TCPBufSize       int64    `json:"tcp_buf_size"`
 	L4               L4Conf   `json:"l4"`
 	HTTP             HTTPConf `json:"http"`
 	UseIntraControl  bool     `json:"-"`
@@ -451,8 +450,9 @@ type L4Conf struct {
 	PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
 	PortIntraDataStr    string `json:"port_intra_data"`    // listening port for intra data network
 	Port                int    `json:"-"`                  // (runtime)
-	PortIntraControl    int    `json:"-"`                  // (runtime)
-	PortIntraData       int    `json:"-"`
+	PortIntraControl    int    `json:"-"`                  // --/--
+	PortIntraData       int    `json:"-"`                  // --/--
+	SndRcvBufSize       int    `json:"sndrcv_buf_size"`    // SO_RCVBUF and SO_SNDBUF
 }
 
 type HTTPConf struct {

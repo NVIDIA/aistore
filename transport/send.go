@@ -183,7 +183,7 @@ var (
 // resulting transport will have all defaults, dial timeout=30s, timeout=no-timeout
 func NewDefaultClient() *http.Client {
 	config := cmn.GCO.Get()
-	return cmn.NewClient(cmn.TransportArgs{TCPBufSize: int(config.Net.TCPBufSize)})
+	return cmn.NewClient(cmn.TransportArgs{SndRcvBufSize: config.Net.L4.SndRcvBufSize})
 }
 
 //
