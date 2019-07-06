@@ -117,7 +117,7 @@ type Manager struct {
 	startShardCreation chan struct{}
 	rs                 *ParsedRequestSpec
 
-	client        *http.Client
+	client        *http.Client // Client for sending records metadata
 	fileExtension string
 	compression   struct {
 		compressed   atomic.Int64 // Total compressed size
@@ -179,6 +179,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// Set extract creator depending on extension provided by the user
 	m.setExtractCreator()
 
+	// NOTE: Total size of the records metadata can sometimes be large
+	// and so this is why we need such a long timeout.
 	m.client = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,
