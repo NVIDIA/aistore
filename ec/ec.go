@@ -261,7 +261,7 @@ func (m *Metadata) marshal() []byte {
 }
 
 var (
-	mem2         = &memsys.Mem2{Name: "ec", MinPctFree: 10}
+	mm           = &memsys.Mem2{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
 
 	ErrorECDisabled          = errors.New("EC is disabled for bucket")
@@ -271,12 +271,11 @@ var (
 )
 
 func Init() {
-	if err := mem2.Init(true); err != nil {
+	if err := mm.Init(false /*panicOnErr*/); err != nil {
 		glog.Fatalf("Failed to initialize EC: %v", err)
 	}
 	fs.CSM.RegisterFileType(SliceType, &SliceSpec{})
 	fs.CSM.RegisterFileType(MetaType, &MetaSpec{})
-	go mem2.Run()
 }
 
 // SliceSize returns the size of one slice that EC will create for the object
@@ -300,8 +299,8 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 		return nil, err
 	}
 
-	sgl = mem2.NewSGL(lom.Size())
-	buf, slab := mem2.AllocEstimated(cmn.KiB * 32)
+	sgl = mm.NewSGL(lom.Size())
+	buf, slab := mm.AllocEstimated(cmn.KiB * 32)
 	_, err = io.CopyBuffer(sgl, f, buf)
 	f.Close()
 	slab.Free(buf)
@@ -321,7 +320,7 @@ func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
 // returns whether EC must use disk instead of keeping everything in memory.
 // Depends on available free memory and size of an object to process
 func useDisk(objSize int64) bool {
-	switch mem2.MemPressure() {
+	switch mm.MemPressure() {
 	case memsys.OOM, memsys.MemPressureExtreme:
 		return true
 	case memsys.MemPressureHigh:

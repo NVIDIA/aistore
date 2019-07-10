@@ -196,9 +196,9 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	if poi.size == 0 {
-		buf, slab = gmem2.AllocEstimated(0)
+		buf, slab = nodeCtx.mm.AllocEstimated(0)
 	} else {
-		buf, slab = gmem2.AllocForSize(poi.size)
+		buf, slab = nodeCtx.mm.AllocForSize(poi.size)
 	}
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
@@ -497,12 +497,12 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		reader = file
 		if goi.chunked {
 			w = writerOnly{goi.w} // hide ReadFrom; CopyBuffer will use the buffer instead
-			buf, slab = gmem2.AllocForSize(goi.lom.Size())
+			buf, slab = nodeCtx.mm.AllocForSize(goi.lom.Size())
 		} else {
 			hdr.Set("Content-Length", strconv.FormatInt(goi.lom.Size(), 10))
 		}
 	} else {
-		buf, slab = gmem2.AllocForSize(goi.length)
+		buf, slab = nodeCtx.mm.AllocForSize(goi.length)
 		if cksumRange {
 			var (
 				cksum, errstr string
@@ -524,7 +524,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 			return
 		}
 		goi.t.fshc(err, fqn)
-		err = fmt.Errorf("Failed to GET %s, err: %v", fqn, err)
+		err = fmt.Errorf("failed to GET %s, err: %v", fqn, err)
 		errCode = http.StatusInternalServerError
 		goi.t.statsif.Add(stats.ErrGetCount, 1)
 		return
@@ -559,7 +559,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	return
 }
 
-// slight variation vs t.httpobjeget() above
+// slight variation vs t.httpobjget()
 func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Time) error {
 	goi := &getObjInfo{
 		started: started,

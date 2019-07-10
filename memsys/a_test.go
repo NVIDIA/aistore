@@ -61,11 +61,10 @@ func Test_Sleep(t *testing.T) {
 	}
 
 	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
-	err := mem.Init(true /* ignore errors */)
+	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
 	}
-	go mem.Run()
 
 	wg := &sync.WaitGroup{}
 	random := cmn.NowRand()
@@ -89,7 +88,7 @@ func Test_Sleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Stop(nil)
+	mem.Release()
 }
 
 func Test_NoSleep(t *testing.T) {
@@ -98,12 +97,11 @@ func Test_NoSleep(t *testing.T) {
 	}
 
 	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
-	err := mem.Init(true /* ignore errors */)
+	err := mem.Init(false /*panicOnErr*/)
 	if err != nil {
 		t.Fatal(err)
 	}
-	go mem.Run()
-	go printstats(mem)
+	go printStats(mem)
 
 	wg := &sync.WaitGroup{}
 	random := cmn.NowRand()
@@ -121,7 +119,7 @@ func Test_NoSleep(t *testing.T) {
 	}
 	wg.Wait()
 	close(c)
-	mem.Stop(nil)
+	mem.Release()
 }
 
 func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
@@ -170,29 +168,28 @@ func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *
 	}
 }
 
-func printstats(mem *memsys.Mem2) {
+func printStats(mem *memsys.Mem2) {
 	var (
-		prevStats, currStats memsys.Stats2
-		req                  = memsys.ReqStats2{Wg: &sync.WaitGroup{}, Stats: &currStats}
-		ravghits             = make([]float64, memsys.NumSlabs)
+		avgHits = make([]float64, memsys.NumSlabs)
 	)
+
 	for {
 		time.Sleep(mem.TimeIval)
-		req.Wg.Add(1)
-		mem.GetStats(req)
-		req.Wg.Wait()
+		currStats := mem.GetStats()
+
 		for i := 0; i < memsys.NumSlabs; i++ {
 			ftot := float64(currStats.Hits[i])
 			if ftot == 0 {
 				continue
 			}
-			if ravghits[i] == 0 {
-				ravghits[i] = float64(currStats.Hits[i]) / ftot
+			if avgHits[i] == 0 {
+				avgHits[i] = float64(currStats.Hits[i]) / ftot
 			} else {
 				x := float64(currStats.Hits[i]) / ftot
-				ravghits[i] = ravghits[i]*0.4 + x*0.6
+				avgHits[i] = avgHits[i]*0.4 + x*0.6
 			}
 		}
+
 		str := ""
 		for i := 0; i < memsys.NumSlabs; i++ {
 			slab, err := mem.GetSlab2(int64(i+1) * cmn.KiB * 4)
@@ -200,13 +197,10 @@ func printstats(mem *memsys.Mem2) {
 				fmt.Println(err)
 				return
 			}
-			if ravghits[i] < 0.0001 || ravghits[i] > 0.9999 {
+			if avgHits[i] < 0.0001 || avgHits[i] > 0.9999 {
 				continue
 			}
-			str += fmt.Sprintf("%s (%.2f) ", slab.Tag(), ravghits[i])
-			prevStats.Hits[i] = currStats.Hits[i]
-			prevStats.Adeltas[i] = currStats.Adeltas[i]
-			prevStats.Idle[i] = currStats.Idle[i]
+			str += fmt.Sprintf("%s (%.2f) ", slab.Tag(), avgHits[i])
 		}
 		if len(str) > 0 {
 			fmt.Println(str)

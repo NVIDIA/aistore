@@ -394,7 +394,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	gcpObj := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	buf, slab := gmem2.AllocEstimated(0)
+	buf, slab := nodeCtx.mm.AllocEstimated(0)
 	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	if err != nil {

@@ -1,9 +1,9 @@
-// Package housekeeper provides mechanism for registering cleanup
+// Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package housekeeper
+package hk
 
 import (
 	"testing"

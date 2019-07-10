@@ -192,7 +192,7 @@ type mncEntry struct {
 }
 
 func (e *mncEntry) Start(id int64) error {
-	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
+	slab := nodeCtx.mm.SelectSlab2(cmn.MiB) // FIXME: estimate
 	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, slab, e.copies, e.bckIsLocal)
 	go xmnc.Run()
 	e.xact = xmnc
@@ -241,7 +241,7 @@ type putLocReplicasEntry struct {
 }
 
 func (e *putLocReplicasEntry) Start(id int64) error {
-	slab := gmem2.SelectSlab2(cmn.MiB) // TODO: estimate
+	slab := nodeCtx.mm.SelectSlab2(cmn.MiB) // TODO: estimate
 	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
 
 	if err != nil {

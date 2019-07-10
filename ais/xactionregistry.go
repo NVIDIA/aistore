@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
-	"github.com/NVIDIA/aistore/housekeep/housekeeper"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/housekeep/lru"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
@@ -138,7 +138,7 @@ func newXactions() *xactionsRegistry {
 	xar := &xactionsRegistry{
 		globalXacts: make(map[string]xactionGlobalEntry),
 	}
-	housekeeper.Housekeeper.Register(xar.cleanUpFinished)
+	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
 	return xar
 }
 

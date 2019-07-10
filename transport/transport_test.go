@@ -76,7 +76,7 @@ func init() {
 	if duration, err = time.ParseDuration(d); err != nil {
 		cmn.ExitInfof("Invalid duration %q", d)
 	}
-	Mem2 = memsys.Init()
+	Mem2 = memsys.GMM()
 
 	sc := transport.Init()
 	sc.Setname("stream-collector")

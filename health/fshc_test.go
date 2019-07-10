@@ -71,8 +71,9 @@ func testCheckerCleanup() {
 }
 
 func TestFSCheckerMain(t *testing.T) {
-	mem2 := memsys.Init()
-	defer mem2.Stop(nil)
+	mem2 := memsys.GMM()
+	defer mem2.Release()
+
 	updateTestConfig()
 	fshc := NewFSHC(testCheckerMountPaths(), mem2, fs.CSM)
 	if fshc == nil {

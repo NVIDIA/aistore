@@ -47,21 +47,20 @@ const (
 var (
 	ctx dsortContext
 
-	mem      *memsys.Mem2
+	mm       *memsys.Mem2
 	once     sync.Once
 	initOnce = func() {
 		fs.CSM.RegisterFileType(filetype.DSortFileType, &filetype.DSortFile{})
 		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
-		mem = &memsys.Mem2{
+		mm = &memsys.Mem2{
 			Name:     cmn.DSortName + ".Mem2",
 			TimeIval: time.Minute * 10,
 		}
-		if err := mem.Init(false); err != nil {
+		if err := mm.Init(false); err != nil {
 			glog.Error(err)
 			return
 		}
-		go mem.Run()
 	}
 
 	_ cluster.Slistener = &Manager{}
@@ -797,7 +796,7 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 			beforeSend = time.Now()
 		}
 
-		slab, err := mem.GetSlab2(memsys.MaxSlabSize)
+		slab, err := mm.GetSlab2(memsys.MaxSlabSize)
 		cmn.AssertNoErr(err)
 		buf := slab.Alloc()
 
@@ -867,7 +866,7 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			)
 
 			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				slab, err = mem.GetSlab2(memsys.MaxSlabSize)
+				slab, err = mm.GetSlab2(memsys.MaxSlabSize)
 				cmn.AssertNoErr(err)
 				buf = slab.Alloc()
 			}

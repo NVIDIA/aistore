@@ -37,9 +37,7 @@ func init() {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// memory
-	mem := &memsys.Mem2{MinPctTotal: 4, MinFree: cmn.GiB * 2} // free mem: try to maintain at least the min of these two
-	_ = mem.Init(false)                                       // don't ignore init-time errors
-	gmem2 = mem
+	nodeCtx.mm = memsys.GMM()
 
 	// target
 	t = &targetrunner{}

@@ -1,9 +1,9 @@
-// Package housekeeper provides mechanism for registering cleanup
+// Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package housekeeper
+package hk
 
 import (
 	"time"
@@ -17,13 +17,9 @@ var _ = Describe("Housekeeper", func() {
 		initCleaner()
 	})
 
-	AfterEach(func() {
-		Housekeeper.Stop(nil)
-	})
-
 	It("should register the callback and fire it", func() {
 		fired := false
-		Housekeeper.Register(func() time.Duration {
+		Housekeeper.Register("", func() time.Duration {
 			fired = true
 			return time.Second
 		})
@@ -39,13 +35,27 @@ var _ = Describe("Housekeeper", func() {
 		Expect(fired).To(BeTrue())
 	})
 
+	It("should register the callback and fire it after initial interval", func() {
+		fired := false
+		Housekeeper.Register("", func() time.Duration {
+			fired = true
+			return time.Second
+		}, time.Second)
+
+		time.Sleep(500 * time.Millisecond)
+		Expect(fired).To(BeFalse())
+
+		time.Sleep(600 * time.Millisecond)
+		Expect(fired).To(BeTrue())
+	})
+
 	It("should register multiple callbacks and fire it in correct order", func() {
 		fired := make([]bool, 2)
-		Housekeeper.Register(func() time.Duration {
+		Housekeeper.Register("", func() time.Duration {
 			fired[0] = true
 			return 2 * time.Second
 		})
-		Housekeeper.Register(func() time.Duration {
+		Housekeeper.Register("", func() time.Duration {
 			fired[1] = true
 			return time.Second
 		})
@@ -65,5 +75,30 @@ var _ = Describe("Housekeeper", func() {
 
 		time.Sleep(time.Second)
 		Expect(fired[0] && fired[1]).To(BeTrue()) // after ~2sec both callback should fire
+	})
+
+	It("should unregister callback", func() {
+		fired := make([]bool, 2)
+		Housekeeper.Register("second", func() time.Duration {
+			fired[0] = true
+			return 400 * time.Millisecond
+		})
+		Housekeeper.Register("first", func() time.Duration {
+			fired[1] = true
+			return 200 * time.Millisecond
+		})
+
+		time.Sleep(time.Second)
+		Expect(fired[0] && fired[1]).To(BeTrue()) // after ~2sec both callback should fire
+
+		fired[0] = false
+		fired[1] = false
+		Housekeeper.Unregister("first")
+
+		time.Sleep(time.Second)
+		Expect(fired[1]).To(BeFalse())
+		Expect(fired[0]).To(BeTrue())
+
+		Housekeeper.Unregister("second")
 	})
 })

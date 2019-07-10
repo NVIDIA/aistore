@@ -359,7 +359,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 // * exists - if the remote target had the requested object
 // * reader - response body
 func (r *xactECBase) writerReceive(writer *slice, exists bool, objAttrs transport.ObjectAttrs, reader io.Reader) (err error) {
-	buf, slab := mem2.AllocEstimated(cmn.MiB)
+	buf, slab := mm.AllocEstimated(cmn.MiB)
 
 	if !exists {
 		writer.wg.Done()

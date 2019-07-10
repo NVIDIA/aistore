@@ -40,7 +40,7 @@ type putJogger struct {
 
 func (c *putJogger) run() {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
-	c.buffer, c.slab = mem2.AllocEstimated(cmn.MiB)
+	c.buffer, c.slab = mm.AllocEstimated(cmn.MiB)
 
 	for {
 		select {
@@ -240,7 +240,7 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 // Fills slices with calculated checksums, reports errors to errCh
 func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan error, cksmReaders []io.Reader, sliceSize int64) {
 	defer wg.Done()
-	buf, slab := mem2.AllocForSize(sliceSize)
+	buf, slab := mm.AllocForSize(sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
 		cksm, errstr := cmn.ComputeXXHash(reader, buf)
@@ -315,7 +315,7 @@ func generateSlicesToMemory(lom *cluster.LOM, dataSlices, paritySlices int) (cmn
 	go calculateDataSlicesHashes(slices, wgCksmReaders, errCksmCh, cksmReaders, sliceSize)
 
 	for i := 0; i < paritySlices; i++ {
-		writer := mem2.NewSGL(initSize)
+		writer := mm.NewSGL(initSize)
 		slices[i+dataSlices] = &slice{obj: writer}
 		writers[i] = writer
 		hashes[i] = xxhash.New64()

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -60,13 +61,6 @@ type (
 		BadCksum   bool         // this object has a bad checksum
 		exists     bool         // determines if the object exists or not (initially set by fstat)
 		loaded     bool
-	}
-	LomCacheRunner struct {
-		cmn.Named
-		mem2    *memsys.Mem2
-		T       Target
-		stopCh  chan struct{}
-		stopped atomic.Bool
 	}
 )
 
@@ -680,80 +674,23 @@ const (
 	minSize2Evict = cmn.KiB * 256
 )
 
-func NewLomCacheRunner(mem2 *memsys.Mem2, t Target) *LomCacheRunner {
-	return &LomCacheRunner{
-		T:      t,
-		mem2:   mem2,
-		stopCh: make(chan struct{}, 1),
-	}
-}
+var (
+	minEvict = int(minSize2Evict / unsafe.Sizeof(lmeta{}))
+)
 
-func (r *LomCacheRunner) Run() error {
-	var (
-		d     time.Duration
-		timer = time.NewTimer(time.Minute * 10)
-		md    = lmeta{}
-		minev = int(minSize2Evict / unsafe.Sizeof(md))
-	)
-	for {
-		select {
-		case <-timer.C:
-			switch p := r.mem2.MemPressure(); p { // TODO: heap-memory-arbiter (HMA) abstraction TBD
-			case memsys.OOM:
-				d = oomEvictAtime
-			case memsys.MemPressureExtreme:
-				d = mpeEvictAtime
-			case memsys.MemPressureHigh:
-				d = mphEvictAtime
-			default:
-				d = mpnEvictAtime
-			}
-			evicted, total := r.work(d)
-			if evicted < minev {
-				d = mpnTimeIntval
-			} else {
-				switch p := r.mem2.MemPressure(); p {
-				case memsys.OOM:
-					d = oomTimeIntval
-				case memsys.MemPressureExtreme:
-					d = mpeTimeIntval
-				case memsys.MemPressureHigh:
-					d = mphTimeIntval
-				default:
-					d = mpnTimeIntval
-				}
-				timer.Reset(d)
-			}
-			cmn.Assert(total >= evicted)
-			glog.Infof("total %d, evicted %d, timer %v", total-evicted, evicted, d)
-		case <-r.stopCh:
-			r.stopped.Store(true)
-			timer.Stop()
-			return nil
-		}
-	}
-}
-func (r *LomCacheRunner) Stop(err error) {
-	r.stopCh <- struct{}{}
-	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
-}
-func (r *LomCacheRunner) isStopping() bool { return r.stopped.Load() }
-
-func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
+func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 	var (
 		caches         = lomCaches()
 		now            = time.Now()
+		bmd            = t.GetBowner().Get()
 		wg             = &sync.WaitGroup{}
-		bmd            = r.T.GetBowner().Get()
 		evicted, total atomic.Uint32
 	)
+
 	for _, cache := range caches {
 		wg.Add(1)
 		go func(cache *fs.LomCache) {
 			feviat := func(hkey, value interface{}) bool {
-				if r.isStopping() {
-					return false
-				}
 				var (
 					md    = value.(*lmeta)
 					atime = time.Unix(0, md.atime)
@@ -777,7 +714,43 @@ func (r *LomCacheRunner) work(d time.Duration) (numevicted, numtotal int) {
 		}(cache)
 	}
 	wg.Wait()
-	numevicted, numtotal = int(evicted.Load()), int(total.Load())
+	return int(evicted.Load()), int(total.Load())
+
+}
+
+func LomCacheHousekeep(mem *memsys.Mem2, t Target) (housekeep hk.CleanupFunc, initialInterval time.Duration) {
+	initialInterval = 10 * time.Minute
+	housekeep = func() (d time.Duration) {
+		switch p := mem.MemPressure(); p { // TODO: heap-memory-arbiter (HMA) abstraction TBD
+		case memsys.OOM:
+			d = oomEvictAtime
+		case memsys.MemPressureExtreme:
+			d = mpeEvictAtime
+		case memsys.MemPressureHigh:
+			d = mphEvictAtime
+		default:
+			d = mpnEvictAtime
+		}
+
+		evicted, total := lomCacheCleanup(t, d)
+		if evicted < minEvict {
+			d = mpnTimeIntval
+		} else {
+			switch p := mem.MemPressure(); p {
+			case memsys.OOM:
+				d = oomTimeIntval
+			case memsys.MemPressureExtreme:
+				d = mpeTimeIntval
+			case memsys.MemPressureHigh:
+				d = mphTimeIntval
+			default:
+				d = mpnTimeIntval
+			}
+		}
+		cmn.Assert(total >= evicted)
+		glog.Infof("total %d, evicted %d, timer %v", total-evicted, evicted, d)
+		return
+	}
 	return
 }
 

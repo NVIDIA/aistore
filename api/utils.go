@@ -43,7 +43,7 @@ type OptionalParams struct {
 }
 
 func init() {
-	Mem2 = memsys.Init()
+	Mem2 = memsys.GMM()
 }
 
 // DoHTTPRequest sends one HTTP request and returns only the body of the response

@@ -35,7 +35,7 @@ var (
 )
 
 func init() {
-	Mem2 = memsys.Init()
+	Mem2 = memsys.GMM()
 }
 
 type (

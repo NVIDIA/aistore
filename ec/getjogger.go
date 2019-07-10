@@ -95,7 +95,7 @@ func (c *getJogger) ec(req *Request) {
 		c.jobMtx.Lock()
 		c.jobs[jobID] = restore
 		c.jobMtx.Unlock()
-		buffer, slab := mem2.AllocEstimated(cmn.MiB)
+		buffer, slab := mm.AllocEstimated(cmn.MiB)
 		go func() {
 			restore(req, toDisk, buffer, cb)
 			slab.Free(buffer)
@@ -198,7 +198,7 @@ func (c *getJogger) restoreReplicatedFromMemory(req *Request, meta *Metadata, no
 		uname := unique(node, req.LOM.Bucket, req.LOM.Objname)
 		iReqBuf := c.parent.newIntraReq(reqGet, nil).Marshal()
 
-		w := mem2.NewSGL(cmn.KiB)
+		w := mm.NewSGL(cmn.KiB)
 		if err := c.parent.readRemote(req.LOM, node, uname, iReqBuf, w); err != nil {
 			glog.Errorf("Failed to read from %s", node)
 			w.Free()
@@ -354,7 +354,7 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 			}
 		} else {
 			writer = &slice{
-				writer: mem2.NewSGL(cmn.KiB * 512),
+				writer: mm.NewSGL(cmn.KiB * 512),
 				wg:     wgSlices,
 				lom:    &lom,
 			}
@@ -406,7 +406,7 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
 		writers[id] = io.MultiWriter(file, hashes[id])
 		restored[id] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
-		sgl := mem2.NewSGL(sliceSize)
+		sgl := mm.NewSGL(sliceSize)
 		restored[id] = &slice{obj: sgl, n: sliceSize}
 		hashes[id] = xxhash.New64()
 		writers[id] = io.MultiWriter(sgl, hashes[id])
@@ -426,7 +426,7 @@ func checkSliceChecksum(reader io.Reader, recvCksm cmn.Cksummer, wg *sync.WaitGr
 		return
 	}
 
-	buf, slab := mem2.AllocForSize(sliceSize)
+	buf, slab := mm.AllocForSize(sliceSize)
 	actualCksm, errstr := cmn.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 
@@ -878,7 +878,7 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 		}
 
 		writer := &slice{
-			writer: mem2.NewSGL(cmn.KiB),
+			writer: mm.NewSGL(cmn.KiB),
 			wg:     metaWG,
 		}
 		metaWG.Add(1)

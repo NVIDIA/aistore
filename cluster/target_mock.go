@@ -41,7 +41,7 @@ func (*TargetMock) PrefetchQueueLen() int                                       
 func (*TargetMock) Prefetch()                                                   {}
 func (t *TargetMock) GetBowner() Bowner                                         { return t.BO }
 func (*TargetMock) FSHC(err error, path string)                                 {}
-func (*TargetMock) GetMem2() *memsys.Mem2                                       { return memsys.Init() }
+func (*TargetMock) GetMem2() *memsys.Mem2                                       { return memsys.GMM() }
 func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int) {
 	return "", http.StatusOK
 }

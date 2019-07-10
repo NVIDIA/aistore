@@ -418,7 +418,7 @@ loop:
 
 func (t *targetrunner) GetBowner() cluster.Bowner   { return t.bmdowner }
 func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
-func (t *targetrunner) GetMem2() *memsys.Mem2       { return gmem2 }
+func (t *targetrunner) GetMem2() *memsys.Mem2       { return nodeCtx.mm }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
 func (t *targetrunner) GetSmap() *cluster.Smap      { return t.smapowner.Get() }
 
@@ -640,7 +640,7 @@ func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int6
 	)
 	rangeReader = io.NewSectionReader(r, offset, length)
 	if length <= maxBytesInMem {
-		sgl = gmem2.NewSGL(length)
+		sgl = nodeCtx.mm.NewSGL(length)
 		if _, cksumValue, err = cmn.WriteWithHash(sgl, rangeReader, buf); err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
 			t.fshc(err, fqn)

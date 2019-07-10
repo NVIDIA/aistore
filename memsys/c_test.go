@@ -35,11 +35,12 @@ const (
 // creates 2 SGL, put some data to one of them and them copy from SGL to SGL
 func TestSGLStressN(t *testing.T) {
 	mem := &memsys.Mem2{MinPctFree: 50, Name: "cmem", Debug: verbose}
-	err := mem.Init(true /* ignore errors */)
-	defer mem.Stop(nil)
+	err := mem.Init(false /*panicOnErr*/)
+	defer mem.Release()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	wg := &sync.WaitGroup{}
 	fn := func(id int) {
 		defer wg.Done()

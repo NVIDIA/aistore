@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/housekeep/housekeeper"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -33,16 +33,12 @@ import (
 // Multiple Mem2 instances may coexist in the system, each having its own
 // constraints and managing its own Slabs and SGLs.
 //
-// Mem2 is a "runner" that can be Run() to monitor system resources, automatically
-// adjust Slab sizes based on their respective usages, and incrementally
-// deallocate idle Slabs.
-//
 // There will be use cases, however, when actually running a Mem2 instance
 // won't be necessary: e.g., when an app utilizes a single (or a few distinct)
 // Slab size(s) for the duration of its relatively short lifecycle,
 // while at the same time preferring minimal interference with other running apps.
 //
-// In that sense, a typical initialization sequence includes 2 or 3 steps, e.g.:
+// In that sense, a typical initialization sequence includes 2 steps, e.g.:
 // 1) construct:
 // 	mem2 := &memsys.Mem2{TimeIval: ..., MinPctFree: ..., Name: ..., Debug: ...}
 // 2) initialize:
@@ -50,15 +46,13 @@ import (
 // 	if err != nil {
 //		...
 // 	}
-// 3) optionally, run:
-// 	go mem2.Run()
 //
-// Cleanup:
+// Mem register itself in hk which will periodically call garbageCollect
+// function which tries to free reclaim unused memory.
 //
-// To clean up a Mem2 instance after it is used, call Stop(error) on the Mem2 instance.
-// Note that a Mem2 instance can be Stopped as long as it had been initialized.
-// This will free all the slabs that were allocated to the memory manager.
-// Since the stop is being performed intentionally, nil should be passed as the error.
+// Release:
+//
+// To clean up a Mem2 instance after it is used, call Release() on the Mem2 instance.
 //
 // In addition, there are several environment variables that can be used
 // (to circumvent the need to change the code, for instance):
@@ -81,13 +75,6 @@ import (
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
-//
-// When being run (as in: go mem2.Run()), the memory manager periodically evaluates
-// the remaining free memory resource and adjusts its slabs accordingly.
-// The entire logic is consolidated in one work() method that can, for instance,
-// "cleanup" (see cleanup()) an existing "idle" slab,
-// or forcefully "reduce" (see reduce()) one if and when the amount of free
-// memory falls below watermark.
 //
 // Near `go build` or `go install` one can find `GODEBUG=madvdontneed=1`. This
 // is to revert behavior which was changed in 1.12: https://golang.org/doc/go1.12#runtime
@@ -128,13 +115,6 @@ const (
 const (
 	countThreshold = 32 // exceeding this scatter-gather count warrants selecting a larger-size Slab
 	minSizeUnknown = 32 * cmn.KiB
-)
-
-// mem2 usage levels; one-indexed to avoid zero value check issues
-const (
-	Mem2Initialized = iota + 1
-	Mem2Running
-	Mem2Stopped
 )
 
 const SwappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
@@ -182,10 +162,7 @@ type (
 		Stats *Stats2
 	}
 	Mem2 struct {
-		cmn.Named
-		stopCh chan struct{}
-		statCh chan ReqStats2
-		time   struct {
+		time struct {
 			d time.Duration
 		}
 		lowWM    uint64
@@ -194,7 +171,6 @@ type (
 		sorted   []sortpair
 		toGC     atomic.Int64 // accumulates over time and triggers GC upon reaching the spec-ed limit
 		minDepth atomic.Int64 // minimum ring depth aka length
-		usageLvl atomic.Int64 // integer values corresponding to Mem2Initialized, Mem2Running, or Mem2Stopped
 		// for user to specify at construction time
 		Name        string
 		MinFree     uint64        // memory that must be available at all times
@@ -220,18 +196,18 @@ type sortpair struct {
 }
 
 var (
-	// gMem2 is the global memory manager used in various packages outside ais.
+	// gmm is the global memory manager used in various packages outside ais.
 	// Its runtime params are set below and is intended to remain so.
-	gMem2 = &Mem2{Name: globalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
-	// Mapping of usageLvl values to corresponding strings for log messages
-	usageLvls = map[int64]string{Mem2Initialized: "Initialized", Mem2Running: "Running", Mem2Stopped: "Stopped"}
+	gmm     = &Mem2{Name: globalMem2Name, TimeIval: time.Minute * 2, MinPctFree: 50}
+	gmmOnce sync.Once // ensures that there is only one initialization
 )
 
 // Global memory manager getter
-func Init() *Mem2 {
-	gMem2.Init(false /* don't ignore init-time errors */)
-	go gMem2.Run()
-	return gMem2
+func GMM() *Mem2 {
+	gmmOnce.Do(func() {
+		_ = gmm.Init(true /*panicOnErr*/)
+	})
+	return gmm
 }
 
 //
@@ -244,7 +220,6 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ..
 		n    int64
 		sgl  [][]byte
 	)
-	r.assertInited()
 	if len(sbufSize) > 0 {
 		var err error
 		slab, err = r.GetSlab2(sbufSize[0])
@@ -292,30 +267,19 @@ func (r *Mem2) MemPressure() int {
 }
 func MemPressureText(v int) string { return memPressureText[v] }
 
-//
-// on error behavior is defined by the ignorerr argument
-// true:  print error message and proceed regardless
-// false: print error message and panic
-//
-func (r *Mem2) Init(ignorerr bool) (err error) {
-	// CAS implemented to enforce only one invocation of gMem2.Init()
-	// for possible concurrent calls to memsys.Init() in multi-threaded context
-	if !r.usageLvl.CAS(0, Mem2Initialized) {
-		if r.usageLvl.Load() != Mem2Running {
-			logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl.Load()]))
-		}
-		return
-	}
-	if r.Name != "" {
-		r.Setname(r.Name)
-	}
+// NOTE: On error behavior is defined by the panicOnErr argument
+//  true:  proceed regardless and return error
+//  false: panic with error message
+func (r *Mem2) Init(panicOnErr bool) (err error) {
+	cmn.Assert(r.Name != "")
+
 	// 1. environment overrides defaults and Mem2{...} hard-codings
 	if err = r.env(); err != nil {
-		if !ignorerr {
+		if panicOnErr {
 			panic(err)
 		}
 	}
-	// 2. compute minfree - mem size that must remain free at all times
+	// 2. compute minFree - mem size that must remain free at all times
 	mem, _ := sys.Mem()
 	if r.MinPctTotal > 0 {
 		x := mem.Total * uint64(r.MinPctTotal) / 100
@@ -346,7 +310,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	m, f := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
 		err = fmt.Errorf("insufficient free memory %s, minimum required %s", f, m)
-		if !ignorerr {
+		if panicOnErr {
 			panic(err)
 		}
 	}
@@ -365,14 +329,13 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	r.minDepth.Store(minDepth)
 	r.toGC.Store(0)
 
-	r.stopCh = make(chan struct{}, 1)
-	r.statCh = make(chan ReqStats2, 1)
-
 	// init slabs
 	for i := range &r.rings {
+		bufSize := int64(cmn.PageSize * (i + 1))
 		slab := &Slab2{
 			m:       r,
-			bufSize: int64(cmn.PageSize * (i + 1)),
+			tag:     r.Name + "." + cmn.B2S(bufSize, 0),
+			bufSize: bufSize,
 			get:     make([][]byte, 0, minDepth),
 			put:     make([][]byte, 0, minDepth),
 		}
@@ -383,13 +346,12 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 
 	// 6. always GC at init time
 	runtime.GC()
-
+	hk.Housekeeper.Register(r.Name+".gc", r.garbageCollect)
 	return
 }
 
 // on-demand memory freeing to the user-provided specification
 func (r *Mem2) Free(spec FreeSpec) {
-	r.assertInited()
 	var freed int64
 	if spec.Totally {
 		for _, s := range &r.rings {
@@ -399,12 +361,8 @@ func (r *Mem2) Free(spec FreeSpec) {
 		if spec.IdleDuration == 0 {
 			spec.IdleDuration = freeIdleMin // using default
 		}
-		currStats := Stats2{}
-		req := ReqStats2{Wg: &sync.WaitGroup{}, Stats: &currStats}
-		req.Wg.Add(1)
-		r.GetStats(req)
-		req.Wg.Wait()
 
+		currStats := r.GetStats()
 		for i, idle := range &currStats.Idle {
 			if idle.IsZero() {
 				continue
@@ -430,66 +388,6 @@ func (r *Mem2) Free(spec FreeSpec) {
 	}
 }
 
-// as a cmn.Runner
-func (r *Mem2) Run() error {
-	housekeeper.Housekeeper.Register(r.garbageCollect)
-
-	// if the usageLvl of GMem2 is Mem2Initialized, swaps its usageLvl to Mem2Running atomically
-	// CAS implemented to enforce only one invocation of GMem2.Run()
-	if !r.usageLvl.CAS(Mem2Initialized, Mem2Running) {
-		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl.Load()])
-	}
-	mem, _ := sys.Mem()
-	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowWM), 2)
-	logMsg(fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d))
-
-	// assign tags
-	for _, s := range &r.rings {
-		s.tag = r.Getname() + "." + cmn.B2S(s.bufSize, 0)
-	}
-
-	f := cmn.B2S(int64(mem.ActualFree), 2)
-	if mem.ActualFree > mem.Total-mem.Total/5 { // more than 80%
-		logMsg(fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f))
-	} else if mem.ActualFree < r.lowWM {
-		logMsg(fmt.Sprintf("Warning: free memory %s below low watermark %s at %s startup", f, l, r.Getname()))
-	}
-
-	for {
-		select {
-		case req := <-r.statCh:
-			r.doStats()
-			for i := 0; i < NumSlabs; i++ {
-				req.Stats.Hits[i] = r.stats.Hits[i]
-				req.Stats.Adeltas[i] = r.stats.Adeltas[i]
-				req.Stats.Idle[i] = r.stats.Idle[i]
-			}
-			req.Wg.Done()
-		case <-r.stopCh:
-			r.stop()
-			return nil
-		}
-	}
-}
-
-func (r *Mem2) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
-	if r.usageLvl.CAS(Mem2Initialized, Mem2Stopped) {
-		r.stop()
-	} else if r.usageLvl.CAS(Mem2Running, Mem2Stopped) {
-		r.stopCh <- struct{}{}
-		close(r.stopCh)
-	} else {
-		glog.Warningf("%s already stopped", r.Name)
-	}
-}
-
-func (r *Mem2) stop() {
-	for _, s := range &r.rings {
-		_ = s.cleanup()
-	}
-}
-
 func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
 	a, b := bufSize/cmn.PageSize, bufSize%cmn.PageSize
 	if b != 0 {
@@ -505,7 +403,6 @@ func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
 }
 
 func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
-	r.assertInited()
 	if estimatedSize == 0 {
 		estimatedSize = minSizeUnknown
 	}
@@ -536,13 +433,33 @@ func (r *Mem2) AllocForSize(size int64) (buf []byte, slab *Slab2) {
 	return
 }
 
-func (r *Mem2) GetStats(req ReqStats2) {
-	r.statCh <- req
+func (r *Mem2) GetStats() *Stats2 {
+	now := time.Now()
+	for i, s := range &r.rings {
+		prev := r.stats.Hits[i]
+		r.stats.Hits[i] = s.stats.Hits.Load()
+		r.stats.Adeltas[i] = r.stats.Hits[i] - prev
+		isZero := r.stats.Idle[i].IsZero()
+		if r.stats.Adeltas[i] == 0 && isZero {
+			r.stats.Idle[i] = now
+		} else if r.stats.Adeltas[i] > 0 && !isZero {
+			r.stats.Idle[i] = time.Time{}
+		}
+	}
+
+	resp := &Stats2{}
+	for i := 0; i < NumSlabs; i++ {
+		resp.Hits[i] = r.stats.Hits[i]
+		resp.Adeltas[i] = r.stats.Adeltas[i]
+		resp.Idle[i] = r.stats.Idle[i]
+	}
+
+	return resp
 }
 
-//
-// Slab2 API
-//
+///////////////
+// Slab2 API //
+///////////////
 
 func (s *Slab2) Size() int64 { return s.bufSize }
 func (s *Slab2) Tag() string { return s.tag }
@@ -580,11 +497,9 @@ func (s *Slab2) Free(bufs ...[]byte) {
 	}
 }
 
-//============================================================================
-//
-// private methods
-//
-//============================================================================
+/////////////////////
+// PRIVATE METHODS //
+/////////////////////
 
 func (r *Mem2) env() (err error) {
 	var minfree int64
@@ -617,7 +532,7 @@ func (r *Mem2) env() (err error) {
 	return
 }
 
-// NOTE: notice enumerated heuristics below denoted as "Heu"
+// NOTE: notice enumerated heuristics
 func (r *Mem2) garbageCollect() time.Duration {
 	var (
 		depth int               // => current ring depth tbd
@@ -631,8 +546,6 @@ func (r *Mem2) garbageCollect() time.Duration {
 		r.Swapping.Store(r.Swapping.Load() / 2)
 	}
 	r.swap.Store(mem.SwapUsed)
-
-	r.doStats()
 
 	// 1. enough => free idle
 	if mem.ActualFree > r.lowWM && !swapping {
@@ -776,30 +689,11 @@ func (r *Mem2) fsort(i, j int) bool {
 	return r.sorted[i].v < r.sorted[j].v
 }
 
-func (r *Mem2) doStats() {
-	now := time.Now()
-	for i, s := range &r.rings {
-		prev := r.stats.Hits[i]
-		r.stats.Hits[i] = s.stats.Hits.Load()
-		r.stats.Adeltas[i] = r.stats.Hits[i] - prev
-		isZero := r.stats.Idle[i].IsZero()
-		if r.stats.Adeltas[i] == 0 && isZero {
-			r.stats.Idle[i] = now
-		} else if r.stats.Adeltas[i] > 0 && !isZero {
-			r.stats.Idle[i] = time.Time{}
-		}
+func (r *Mem2) Release() {
+	hk.Housekeeper.Unregister(r.Name + ".gc")
+	for _, s := range &r.rings {
+		_ = s.cleanup()
 	}
-}
-
-func (r *Mem2) assertInited() {
-	if _, ok := cmn.CheckDebug(pkgName); !ok {
-		return
-	}
-	curLvl := r.usageLvl.Load()
-	if curLvl == Mem2Initialized || curLvl == Mem2Running {
-		return
-	}
-	cmn.Assert(false)
 }
 
 func (s *Slab2) _alloc() (buf []byte) {
@@ -918,10 +812,4 @@ func (s *Slab2) cleanup() (freed int64) {
 	s.muput.Unlock()
 	s.muget.Unlock()
 	return
-}
-
-func logMsg(arg interface{}) {
-	if flag.Parsed() {
-		glog.Infoln(arg)
-	}
 }

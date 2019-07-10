@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/health"
-	"github.com/NVIDIA/aistore/housekeep/housekeeper"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -24,15 +24,12 @@ import (
 
 // runners
 const (
-	xmem             = "gmem2"
-	xhousekeeper     = "housekeeper"
 	xstreamc         = "stream-collector"
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
 	xproxykeepalive  = "proxykeepalive"
 	xtargetkeepalive = "targetkeepalive"
-	xlomcache        = "lomcache"
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
@@ -46,8 +43,10 @@ type (
 		ntargets int           // expected number of targets in a starting-up cluster (proxy only)
 		persist  bool          // true: make cmn.ConfigCLI settings permanent, false: leave them transient
 	}
+
 	// daemon instance: proxy or storage target
 	daemon struct {
+		mm *memsys.Mem2 // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
 		rg *rungroup
 	}
 
@@ -75,9 +74,8 @@ type dryRunConfig struct {
 //
 //====================
 var (
-	gmem2      *memsys.Mem2 // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
 	clivars    = &cliVars{}
-	ctx        = &daemon{}
+	nodeCtx    = &daemon{}
 	jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
 	dryRun     = &dryRunConfig{}
 )
@@ -213,42 +211,42 @@ func aisinit(version, build string) {
 
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
-	ctx.rg = &rungroup{
+	nodeCtx.rg = &rungroup{
 		runarr: make([]cmn.Runner, 0, 8),
 		runmap: make(map[string]cmn.Runner, 8),
 	}
+	// system-wide gen-purpose memory manager and slab/SGL allocator
+	nodeCtx.mm = &memsys.Mem2{Name: "target-mm", MinPctTotal: 4, MinFree: cmn.GiB * 2}
+	if err := nodeCtx.mm.Init(false /*panicOnErr*/); err != nil {
+		glog.Error(err)
+	}
+
 	if clivars.role == cmn.Proxy {
 		p := &proxyrunner{}
 		p.initSI(cmn.Proxy)
-		ctx.rg.add(p, cmn.Proxy)
+		nodeCtx.rg.add(p, cmn.Proxy)
 
 		ps := &stats.Prunner{}
 		ps.Init("aisproxy", p.si.DaemonID)
-		ctx.rg.add(ps, xproxystats)
+		nodeCtx.rg.add(ps, xproxystats)
 
-		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
-		ctx.rg.add(newmetasyncer(p), xmetasyncer)
+		nodeCtx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
+		nodeCtx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		t.initSI(cmn.Target)
-		ctx.rg.add(t, cmn.Target)
+		nodeCtx.rg.add(t, cmn.Target)
 
 		ts := &stats.Trunner{T: t} // iostat below
 		ts.Init("aistarget", t.si.DaemonID)
-		ctx.rg.add(ts, xstorstats)
-		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
+		nodeCtx.rg.add(ts, xstorstats)
+		nodeCtx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
-		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
-
-		// system-wide gen-purpose memory manager and slab/SGL allocator
-		mem := &memsys.Mem2{MinPctTotal: 4, MinFree: cmn.GiB * 2} // free mem: try to maintain at least the min of these two
-		_ = mem.Init(false)                                       // don't ignore init-time errors
-		ctx.rg.add(mem, xmem)                                     // to periodically house-keep
-		gmem2 = getmem2()                                         // making it global; getmem2() can still be used
+		t.fsprg.init(t) // subgroup of the nodeCtx.rg rungroup
 
 		// Stream Collector - a singleton object with responsibilities that include:
 		sc := transport.Init()
-		ctx.rg.add(sc, xstreamc)
+		nodeCtx.rg.add(sc, xstreamc)
 
 		// fs.Mountpaths must be inited prior to all runners that utilize them
 		// for mountpath definition, see fs/mountfs.go
@@ -266,26 +264,24 @@ func aisinit(version, build string) {
 			}
 		}
 
-		fshc := health.NewFSHC(fs.Mountpaths, gmem2, fs.CSM)
-		ctx.rg.add(fshc, xfshc)
+		fshc := health.NewFSHC(fs.Mountpaths, nodeCtx.mm, fs.CSM)
+		nodeCtx.rg.add(fshc, xfshc)
 		t.fsprg.Reg(fshc)
 
 		if config.Readahead.Enabled {
 			readaheader := newReadaheader()
-			ctx.rg.add(readaheader, xreadahead)
+			nodeCtx.rg.add(readaheader, xreadahead)
 			t.fsprg.Reg(readaheader)
 			t.readahead = readaheader
 		} else {
 			t.readahead = &dummyreadahead{}
 		}
 
-		lct := cluster.NewLomCacheRunner(gmem2, t)
-		ctx.rg.add(lct, xlomcache)
-
+		housekeep, initialInterval := cluster.LomCacheHousekeep(nodeCtx.mm, t)
+		hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)
 		_ = ts.UpdateCapacityOOS(nil) // goes after fs.Mountpaths.Init
 	}
-	ctx.rg.add(housekeeper.Housekeeper, xhousekeeper)
-	ctx.rg.add(&sigrunner{}, xsignal)
+	nodeCtx.rg.add(&sigrunner{}, xsignal)
 
 	// even more config changes, e.g:
 	// -config=/etc/ais.json -role=target -persist=true -confjson="{\"default_timeout\": \"13s\" }"
@@ -305,7 +301,7 @@ func Run(version, build string) {
 	aisinit(version, build)
 	var ok bool
 
-	err := ctx.rg.run()
+	err := nodeCtx.rg.run()
 	if err == nil {
 		goto m
 	}
@@ -325,49 +321,42 @@ m:
 //
 //==================
 func getproxystatsrunner() *stats.Prunner {
-	r := ctx.rg.runmap[xproxystats]
+	r := nodeCtx.rg.runmap[xproxystats]
 	rr, ok := r.(*stats.Prunner)
 	cmn.Assert(ok)
 	return rr
 }
 
 func getproxykeepalive() *proxyKeepaliveRunner {
-	r := ctx.rg.runmap[xproxykeepalive]
+	r := nodeCtx.rg.runmap[xproxykeepalive]
 	rr, ok := r.(*proxyKeepaliveRunner)
 	cmn.Assert(ok)
 	return rr
 }
 
-func getmem2() *memsys.Mem2 {
-	r := ctx.rg.runmap[xmem]
-	rr, ok := r.(*memsys.Mem2)
-	cmn.Assert(ok)
-	return rr
-}
-
 func gettargetkeepalive() *targetKeepaliveRunner {
-	r := ctx.rg.runmap[xtargetkeepalive]
+	r := nodeCtx.rg.runmap[xtargetkeepalive]
 	rr, ok := r.(*targetKeepaliveRunner)
 	cmn.Assert(ok)
 	return rr
 }
 
 func getstorstatsrunner() *stats.Trunner {
-	r := ctx.rg.runmap[xstorstats]
+	r := nodeCtx.rg.runmap[xstorstats]
 	rr, ok := r.(*stats.Trunner)
 	cmn.Assert(ok)
 	return rr
 }
 
 func getmetasyncer() *metasyncer {
-	r := ctx.rg.runmap[xmetasyncer]
+	r := nodeCtx.rg.runmap[xmetasyncer]
 	rr, ok := r.(*metasyncer)
 	cmn.Assert(ok)
 	return rr
 }
 
 func getfshealthchecker() *health.FSHC {
-	r := ctx.rg.runmap[xfshc]
+	r := nodeCtx.rg.runmap[xfshc]
 	rr, ok := r.(*health.FSHC)
 	cmn.Assert(ok)
 	return rr

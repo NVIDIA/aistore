@@ -20,8 +20,8 @@ import (
 
 func Test_sglhash(t *testing.T) {
 	mem := &memsys.Mem2{TimeIval: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
-	err := mem.Init(true /* ignore errors */)
-	defer mem.Stop(nil)
+	err := mem.Init(false /*panicOnErr*/)
+	defer mem.Release()
 	if err != nil {
 		t.Fatal(err)
 	}
