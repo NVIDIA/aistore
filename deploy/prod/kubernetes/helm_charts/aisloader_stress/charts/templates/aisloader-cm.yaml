@@ -40,6 +40,8 @@ data:
     declare -A putshards=( [_default]="{{ .Values.aisloaderArg.putshards.default }}" )
     declare -A maxputs=( [_default]={{ .Values.aisloaderArg.maxputs.default | quote }} )
     declare -A no_detailed_stats=( [_default]={{ .Values.aisloaderArg.no_detailed_stats.default | quote }} )
+    declare -A readlen=( [_default]={{ .Values.aisloaderArg.readlen.default | quote }} )
+    declare -A readoff=( [_default]={{ .Values.aisloaderArg.readoff.default | quote }} )
 
     # Node-specific values for bucket, if any
     {{ range .Values.aisloaderArg.bucket.specific }}
@@ -122,6 +124,16 @@ data:
     no_detailed_stats=[{{ .node }}]={{ .value | quote }}
     {{ end }}
 
+    # Node-specific values for readlen, if any
+    {{ range .Values.aisloaderArg.readlen.specific }}
+    readlen=[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Node-specific values for readoff, if any
+    {{ range .Values.aisloaderArg.readoff.specific }}
+    readoff=[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
     #
     # Called from the container start script, with aisloader in PATH.
     # The stdout of aisloader can be seen in kubectl logs.
@@ -168,7 +180,9 @@ data:
         -uniquegets=${uniquegets[$n]:-${uniquegets['_default']}} \
         -putshards=${putshards[$n]:-${putshards['_default']}} \
         -maxputs=${maxputs[$n]:-${maxputs['_default']}} \
-        -no-detailed-stats=${no_detailed_stats[$n]:-${no_detailed_stats['_default']}}
+        -no-detailed-stats=${no_detailed_stats[$n]:-${no_detailed_stats['_default']}} \
+        -readlen=${readlen[$n]:-${readlen['_default']}} \
+        -readoff=${readoff[$n]:-${readoff['_default']}}
 
       echo "aisloader exit code was $?"
     }

@@ -188,9 +188,9 @@ mlx5_driver:
 # See e.g. https://www.beegfs.io/wiki/StorageServerTuning
 # and https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-storage_and_file_systems-configuration_tools
 blkdevtune:
-  queue/scheduler: deadline
+  queue/scheduler: mq-deadline
   queue/nr_requests: 4096
-  queue/read_ahead_kb: 131072
+  queue/read_ahead_kb: 4096
   queue/rq_affinity: 2
   queue/max_sectors_kb: 16383
 

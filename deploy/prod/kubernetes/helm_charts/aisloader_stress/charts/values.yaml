@@ -75,6 +75,14 @@ aisloaderArg:
   no_detailed_stats:
     default: "true"
     specific: []
+  readlen:
+    default: "0"
+    specific: []
+  readoff:
+    default: "0"
+    specific: []
+
+
 
 resources: {}
 
