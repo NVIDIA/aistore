@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/xoshiro256"
+	"github.com/pierrec/lz4"
 )
 
 //
@@ -31,19 +33,21 @@ type (
 type (
 	iterator struct {
 		trname    string
-		body      io.ReadCloser
+		body      io.Reader
 		headerBuf []byte
 	}
 	objReader struct {
-		body io.ReadCloser
-		hdr  Header
-		off  int64
+		body  io.Reader
+		hdr   Header
+		off   int64
+		zbody *lz4.Reader
 	}
 	handler struct {
 		trname      string
 		callback    Receive
 		sessions    sync.Map // map[int64]*Stats
 		oldSessions sync.Map // map[int64]time.Time
+		now         time.Time
 	}
 )
 
@@ -186,55 +190,55 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
 		return
 	}
-	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, maxHeaderSize)}
+
+	var reader io.Reader = r.Body
+	if compress := r.Header.Get(cmn.HeaderCompress); compress != "" {
+		cmn.Assert(compress == cmn.LZ4Compression)
+		reader = lz4.NewReader(r.Body)
+	}
+	debug := bool(glog.FastV(4, glog.SmoduleTransport))
+	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
+	if err != nil || sessID == 0 {
+		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[%d]: invalid session ID, err %v", trname, sessID, err))
+		return
+	}
+	statsif, loaded := h.sessions.LoadOrStore(sessID, &Stats{})
+	if !loaded && debug {
+		glog.Infof("%s[%d]: start-of-stream", trname, sessID)
+	}
+	stats := statsif.(*Stats)
+
+	it := iterator{trname: trname, body: reader, headerBuf: make([]byte, maxHeaderSize)}
 	for {
-		var stats *Stats
-		objReader, sessID, hl64, err := it.next()
-		if sessID != 0 {
-			statsif, loaded := h.sessions.LoadOrStore(sessID, &Stats{})
-			if !loaded && bool(glog.FastV(4, glog.SmoduleTransport)) {
-				glog.Infof("%s[%d]: start-of-stream", trname, sessID)
-			}
-			stats = statsif.(*Stats)
-		}
-		if stats != nil && hl64 != 0 {
-			off := stats.Offset.Add(hl64)
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessID, off, hl64)
-			}
+		objReader, hl64, err := it.next()
+		if hl64 != 0 {
+			_ = stats.Offset.Add(hl64)
 		}
 		if objReader != nil {
-			hdr := objReader.hdr
-			h.callback(w, hdr, objReader, nil)
-			num := stats.Num.Inc()
-			if hdr.ObjAttrs.Size != objReader.off {
-				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d, NAME: %s",
-					trname, sessID, objReader.off, hdr.ObjAttrs.Size, num, objReader.hdr.Objname)
-				glog.Errorln(err)
-			} else {
+			er := err
+			if er == io.EOF {
+				er = nil
+			}
+			h.callback(w, objReader.hdr, objReader, er)
+			hdr := &objReader.hdr
+			if hdr.ObjAttrs.Size == objReader.off {
+				num := stats.Num.Inc()
 				siz := stats.Size.Add(hdr.ObjAttrs.Size)
 				off := stats.Offset.Add(hdr.ObjAttrs.Size)
-				if glog.FastV(4, glog.SmoduleTransport) {
-					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d - %s", trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Objname)
+				if debug {
+					glog.Infof("%s[%d]: off=%d, size=%d(%d), num=%d - %s/%s",
+						trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.Objname)
 				}
 				continue
 			}
+			err = fmt.Errorf("%s[%d]: sbrk #3: err %v, off %d != %d size, num=%d, %s/%s",
+				trname, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.Objname)
 		}
 		if err != nil {
-			if sessID != 0 {
-				// delayed cleanup old sessions
-				f := func(key, value interface{}) bool {
-					id := key.(int64)
-					timeClosed := value.(time.Time)
-					if time.Since(timeClosed) > cleanupTimeout {
-						h.oldSessions.Delete(id)
-						h.sessions.Delete(id)
-					}
-					return true
-				}
-				h.oldSessions.Range(f)
-				h.oldSessions.Store(sessID, time.Now())
-			}
+			// delayed cleanup old sessions -- TODO -- FIXME: use housekeeper
+			h.now = time.Now()
+			h.oldSessions.Range(h.cleanup)
+			h.oldSessions.Store(sessID, h.now)
 			if err != io.EOF {
 				h.callback(w, Header{}, nil, err)
 				cmn.InvalidHandlerDetailed(w, r, err.Error())
@@ -244,14 +248,24 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
+func (h *handler) cleanup(key, value interface{}) bool {
+	id := key.(int64)
+	timeClosed := value.(time.Time)
+	if h.now.Sub(timeClosed) > cleanupTimeout {
+		h.oldSessions.Delete(id)
+		h.sessions.Delete(id)
+	}
+	return true
+}
+
+func (it iterator) next() (obj *objReader, hl64 int64, err error) {
 	var (
 		n   int
 		hdr Header
 	)
 	n, err = it.body.Read(it.headerBuf[:cmn.SizeofI64*2])
 	if n < cmn.SizeofI64*2 {
-		cmn.AssertMsg(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
+		cmn.Assert(err != nil) // expecting an error or EOF as the reason for failing to read 16 bytes
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
 		}
@@ -261,13 +275,13 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 	_, hl64 = extInt64(0, it.headerBuf)
 	hlen := int(hl64)
 	if hlen > len(it.headerBuf) {
-		err = fmt.Errorf("%s: stream breakage type #1: header length %d", it.trname, hlen)
+		err = fmt.Errorf("%s: sbrk #1: header length %d", it.trname, hlen)
 		return
 	}
 	_, checksum := extUint64(0, it.headerBuf[cmn.SizeofI64:])
 	chc := xoshiro256.Hash(uint64(hl64))
 	if checksum != chc {
-		err = fmt.Errorf("%s: stream breakage type #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
+		err = fmt.Errorf("%s: sbrk #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
 		return
 	}
 	cmn.Dassert(hlen < len(it.headerBuf), pkgName)
@@ -279,27 +293,25 @@ func (it iterator) next() (obj *objReader, sessID, hl64 int64, err error) {
 	if _, ok := cmn.CheckDebug(pkgName); ok {
 		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
 	}
-	hdr, sessID = ExtHeader(it.headerBuf, hlen)
+	hdr = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
-		if glog.FastV(4, glog.SmoduleTransport) {
-			glog.Infof("%s[%d]: last", it.trname, sessID)
-		}
 		err = io.EOF
 		return
-	}
-	if glog.FastV(4, glog.SmoduleTransport) {
-		glog.Infof("%s[%d]: new object %s size=%d", it.trname, sessID, hdr.Objname, hdr.ObjAttrs.Size)
 	}
 	obj = &objReader{body: it.body, hdr: hdr}
 	return
 }
 
 func (obj *objReader) Read(b []byte) (n int, err error) {
-	rem := obj.hdr.ObjAttrs.Size - obj.off
-	if rem < int64(len(b)) {
-		b = b[:int(rem)]
+	if obj.zbody != nil {
+		n, err = obj.zbody.Read(b) // read and decompress
+	} else {
+		rem := obj.hdr.ObjAttrs.Size - obj.off
+		if rem < int64(len(b)) {
+			b = b[:int(rem)]
+		}
+		n, err = obj.body.Read(b)
 	}
-	n, err = obj.body.Read(b)
 	obj.off += int64(n)
 	switch err {
 	case nil:
@@ -309,7 +321,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 		}
 	case io.EOF:
 		if obj.off != obj.hdr.ObjAttrs.Size {
-			glog.Errorf("actual offset: %d, expected: %d", obj.off, obj.hdr.ObjAttrs.Size)
+			glog.Errorf("actual off: %d, expected: %d", obj.off, obj.hdr.ObjAttrs.Size)
 		}
 	default:
 		glog.Errorf("err %v\n", err) // canceled?
@@ -320,14 +332,13 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 //
 // helpers
 //
-func ExtHeader(body []byte, hlen int) (hdr Header, sessID int64) {
+func ExtHeader(body []byte, hlen int) (hdr Header) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.Objname = extString(off, body)
 	off, hdr.IsLocal = extBool(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
-	off, sessID = extInt64(off, body)
 	if _, ok := cmn.CheckDebug(pkgName); ok {
 		cmn.AssertMsg(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
 	}

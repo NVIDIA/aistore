@@ -99,7 +99,7 @@ func Example_headers() {
 		for {
 			hlen = int(binary.BigEndian.Uint64(body[off:]))
 			off += 16 // hlen and hlen-checksum
-			hdr, _ = transport.ExtHeader(body[off:], hlen)
+			hdr = transport.ExtHeader(body[off:], hlen)
 			if !hdr.IsLast() {
 				fmt.Printf("%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.ObjAttrs.Size)
@@ -120,8 +120,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] IsLocal:false} (96)
-	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] IsLocal:true} (111)
+	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] IsLocal:false} (88)
+	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] IsLocal:true} (103)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -192,12 +192,7 @@ func Example_mux() {
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
-	time.Sleep(time.Second)
-
 	sendText(stream, text1, text2)
-
-	time.Sleep(time.Second)
-
 	sendText(stream, text3, text4)
 	stream.Fin()
 
@@ -512,10 +507,6 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	totalRecv, recvFunc := makeRecvFunc(t)
 	path, err := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
 	tassert.CheckFatal(t, err)
-
-	// NOTE: prior to running traffic, give it some time for all other goroutines
-	//       to perform registration (see README for details)
-	time.Sleep(time.Second)
 
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path

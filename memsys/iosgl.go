@@ -165,7 +165,8 @@ func (z *SGL) ReadAll() (b []byte, err error) {
 }
 
 // reuse already allocated SGL
-func (z *SGL) Reset() { z.woff, z.roff = 0, 0 }
+func (z *SGL) Reset()     { z.woff, z.roff = 0, 0 }
+func (z *SGL) Len() int64 { return z.woff - z.roff }
 
 func (z *SGL) Open() (io.ReadCloser, error) { return NewReader(z), nil }
 

@@ -30,7 +30,6 @@ const (
 )
 
 // Module names
-
 const (
 	DSortName          = "dSort"
 	DSortNameLowercase = "dsort"
@@ -138,7 +137,7 @@ const (
 // Note: only constants from sections 'tiering' and 'bucket props' can used by
 // in set single bucket property request.
 const (
-	HeaderCloudProvider = "cloud_provider" // from Cloud Provider enum
+	HeaderCloudProvider = "cloud.provider" // ProviderAmazon et al. - see provider.go
 
 	// tiering
 	HeaderNextTierURL = "tier.next_url"     // URL of the next tier in a AIStore multi-tier environment
@@ -178,10 +177,19 @@ const (
 	HeaderObjNumCopies  = "ObjNumCopies"  // Number of copies of the object
 	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
 
-	// intra-cluster comm
+	// intra-cluster: control
 	HeaderCallerID          = "caller.id"
 	HeaderCallerName        = "caller.name"
 	HeaderCallerSmapVersion = "caller.smap.ver"
+
+	// intra-cluster: streams
+	HeaderSessID   = "session.id"
+	HeaderCompress = "compress"
+)
+
+// supported compressions (alg-s)
+const (
+	LZ4Compression = "lz4"
 )
 
 // BucketPropList is a map bucket property <-> readonly, groupped by type

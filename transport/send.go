@@ -6,10 +6,8 @@
 package transport
 
 import (
-	"container/heap"
 	"context"
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -25,7 +23,9 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
+	"github.com/pierrec/lz4"
 )
 
 // transport defaults
@@ -87,14 +87,17 @@ type (
 			err    error
 			reason *string
 		}
+		lz4s lz4Stream
 	}
 	// advanced usage: additional stream control
 	Extra struct {
 		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
 		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
+		Mem2        *memsys.Mem2    // compression-related buffering
 		Burst       int             // SQ and CSQ buffer sizes: max num objects and send-completions
 		DryRun      bool            // dry run: short-circuit the stream on the send side
+		Compress    bool            // lz4
 	}
 	// stream stats
 	Stats struct {
@@ -121,7 +124,7 @@ type (
 		Bucket, Objname string      // uname at the destination
 		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
 		Opaque          []byte      // custom control (optional)
-		IsLocal         bool        // determines if the bucket is local
+		IsLocal         bool        // bucket is local?
 	}
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
@@ -139,6 +142,11 @@ type (
 
 // internal
 type (
+	lz4Stream struct {
+		s   *Stream
+		zw  *lz4.Writer // orig reader => zw
+		sgl *memsys.SGL // zw => bb => network
+	}
 	obj struct {
 		hdr      Header         // object header
 		reader   io.ReadCloser  // reader, to read the object, and close when done
@@ -174,7 +182,7 @@ type (
 var (
 	nopRC      = &nopReadCloser{}
 	background = context.Background()
-	sessID     = *atomic.NewInt64(100) // unique session IDs starting from 101
+	nextSID    = *atomic.NewInt64(100) // unique session IDs starting from 101
 	sc         = &StreamCollector{}
 	gc         *collector // real collector
 )
@@ -184,156 +192,6 @@ var (
 func NewDefaultClient() *http.Client {
 	config := cmn.GCO.Get()
 	return cmn.NewClient(cmn.TransportArgs{SndRcvBufSize: config.Net.L4.SndRcvBufSize})
-}
-
-//
-// Stream Collector - a singleton object with responsibilities that include:
-// 1. control part of the stream lifecycle:
-//    - activation (followed by connection establishment and HTTP PUT), and
-//    - deactivation (teardown)
-// 2. implement per-stream idle timeouts measured in tick units (tickUnit)
-//    whereby each stream is effectively provided with its own idle timer
-//
-// NOTE: requires static initialization
-//
-func Init() *StreamCollector {
-	cmn.Assert(gc == nil)
-
-	// real stream collector
-	gc = &collector{
-		stopCh:  cmn.NewStopCh(),
-		ctrlCh:  make(chan ctrl, 16),
-		streams: make(map[string]*Stream, 16),
-		heap:    make([]*Stream, 0, 16), // min-heap sorted by stream.time.ticks
-	}
-	heap.Init(gc)
-
-	return sc
-}
-
-func (sc *StreamCollector) Run() (err error) {
-	if flag.Parsed() {
-		glog.Infof("Starting %s", sc.Getname())
-	}
-	return gc.run()
-}
-func (sc *StreamCollector) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", sc.Getname(), err)
-	gc.stop()
-}
-
-func (gc *collector) run() (err error) {
-	gc.ticker = time.NewTicker(tickUnit)
-	for {
-		select {
-		case <-gc.ticker.C:
-			gc.do()
-		case ctrl, ok := <-gc.ctrlCh:
-			if !ok {
-				return
-			}
-			s, add := ctrl.s, ctrl.add
-			_, ok = gc.streams[s.lid]
-			if add {
-				cmn.AssertMsg(!ok, s.lid)
-				gc.streams[s.lid] = s
-				heap.Push(gc, s)
-			} else if ok {
-				heap.Remove(gc, s.time.index)
-				s.time.ticks = 1
-			}
-		case <-gc.stopCh.Listen():
-			for _, s := range gc.streams {
-				s.Stop()
-			}
-			gc.streams = nil
-			return
-		}
-	}
-}
-
-func (gc *collector) stop() {
-	gc.stopCh.Close()
-}
-
-func (gc *collector) remove(s *Stream) {
-	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
-}
-
-// as min-heap
-func (gc *collector) Len() int { return len(gc.heap) }
-
-func (gc *collector) Less(i, j int) bool {
-	si := gc.heap[i]
-	sj := gc.heap[j]
-	return si.time.ticks < sj.time.ticks
-}
-
-func (gc *collector) Swap(i, j int) {
-	gc.heap[i], gc.heap[j] = gc.heap[j], gc.heap[i]
-	gc.heap[i].time.index = i
-	gc.heap[j].time.index = j
-}
-
-func (gc *collector) Push(x interface{}) {
-	l := len(gc.heap)
-	s := x.(*Stream)
-	s.time.index = l
-	gc.heap = append(gc.heap, s)
-	heap.Fix(gc, s.time.index) // reorder the newly added stream right away
-}
-
-func (gc *collector) update(s *Stream, ticks int) {
-	s.time.ticks = ticks
-	cmn.Assert(s.time.ticks >= 0)
-	heap.Fix(gc, s.time.index)
-}
-
-func (gc *collector) Pop() interface{} {
-	old := gc.heap
-	n := len(old)
-	sl := old[n-1]
-	gc.heap = old[0 : n-1]
-	return sl
-}
-
-// collector's main method
-func (gc *collector) do() {
-	for _, s := range gc.streams {
-		if s.Terminated() {
-			s.time.ticks--
-			if s.time.ticks <= 0 {
-				delete(gc.streams, s.lid)
-				close(s.workCh) // delayed close
-				if s.term.err == nil {
-					s.term.err = fmt.Errorf(reasonUnknown)
-				}
-				for obj := range s.workCh {
-					s.objDone(&obj, s.term.err)
-				}
-			}
-		} else if s.sessST.Load() == active {
-			gc.update(s, s.time.ticks-1)
-		}
-	}
-	for _, s := range gc.streams {
-		if s.time.ticks > 0 {
-			continue
-		}
-		gc.update(s, int(s.time.idleOut/tickUnit))
-		if s.time.posted.Swap(0) > 0 {
-			continue
-		}
-		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
-			s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: tickMarker}}}
-			if glog.FastV(4, glog.SmoduleTransport) {
-				glog.Infof("%s: active => inactive", s)
-			}
-		}
-	}
-	// at this point the following must be true for each i = range gc.heap:
-	// 1. heap[i].index == i
-	// 2. heap[i+1].ticks >= heap[i].ticks
 }
 
 //
@@ -356,12 +214,16 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		}
 		dryrun = extra.DryRun
 		cmn.Assert(dryrun || client != nil)
+		if extra.Compress {
+			s.lz4s.s = s
+			s.lz4s.sgl = extra.Mem2.NewSGL(memsys.MaxSlabSize, memsys.MaxSlabSize) // TODO -- FIXME
+		}
 	}
 	if s.time.idleOut < tickUnit {
 		s.time.idleOut = tickUnit
 	}
 	s.time.ticks = int(s.time.idleOut / tickUnit)
-	s.sessID = sessID.Inc()
+	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
 	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
 
@@ -405,6 +267,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	gc.ctrlCh <- ctrl{s, true /* collect */}
 	return
 }
+
+func (s *Stream) compressed() bool { return s.lz4s.s == s }
 
 // Asynchronously send an object defined by its header and its reader.
 // ---------------------------------------------------------------------------------------
@@ -478,6 +342,12 @@ func (s *Stream) terminate() {
 		gc.remove(s)
 		s.Stop()
 		close(s.cmplCh)
+	}
+	if s.compressed() {
+		s.lz4s.sgl.Free()
+		if s.lz4s.zw != nil {
+			s.lz4s.zw.Reset(nil)
+		}
 	}
 }
 
@@ -624,8 +494,18 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 	var (
 		request  *http.Request
 		response *http.Response
+		body     io.Reader = s
 	)
-	if request, err = http.NewRequest(http.MethodPut, s.toURL, s); err != nil {
+	if s.compressed() {
+		s.lz4s.sgl.Reset()
+		if s.lz4s.zw == nil {
+			s.lz4s.zw = lz4.NewWriter(s.lz4s.sgl)
+		} else {
+			s.lz4s.zw.Reset(s.lz4s.sgl)
+		}
+		body = &s.lz4s
+	}
+	if request, err = http.NewRequest(http.MethodPut, s.toURL, body); err != nil {
 		return
 	}
 	if ctx != background {
@@ -635,6 +515,10 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: Do", s)
 	}
+	if s.compressed() {
+		request.Header.Set(cmn.HeaderCompress, cmn.LZ4Compression)
+	}
+	request.Header.Set(cmn.HeaderSessID, strconv.FormatInt(s.sessID, 10))
 	response, err = s.client.Do(request)
 	if err == nil {
 		if glog.FastV(4, glog.SmoduleTransport) {
@@ -781,7 +665,6 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 	l = insBool(l, s.maxheader, hdr.IsLocal)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
-	l = insInt64(l, s.maxheader, s.sessID)
 	hlen := l - cmn.SizeofI64*2
 	insInt64(0, s.maxheader, int64(hlen))
 	checksum := xoshiro256.Hash(uint64(hlen))
@@ -839,7 +722,7 @@ func (s *Stream) dryrun() {
 	scloser := ioutil.NopCloser(s)
 	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, maxHeaderSize)}
 	for {
-		objReader, _, _, err := it.next()
+		objReader, _, err := it.next()
 		if objReader != nil {
 			written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
 			cmn.Assert(written == objReader.hdr.ObjAttrs.Size)
@@ -854,5 +737,37 @@ func (s *Stream) dryrun() {
 //
 // nopReadCloser ---------------------------
 //
+
 func (r *nopReadCloser) Read([]byte) (n int, err error) { return }
 func (r *nopReadCloser) Close() error                   { return nil }
+
+//
+// lz4Stream ---------------------------
+//
+
+func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
+	sendoff := &lz4s.s.sendoff
+	if lz4s.sgl.Len() > 0 {
+		n, err = lz4s.sgl.Read(b)
+		if err == io.EOF { // reusing/rewinding this buf multiple times
+			err = nil
+		}
+		goto ex
+	}
+	n, err = lz4s.s.Read(b)
+	_, _ = lz4s.zw.Write(b[:n])
+	n, _ = lz4s.sgl.Read(b)
+
+	// zw house-keep on object and end-stream boundaries -- TODO -- FIXME
+	if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {
+		lz4s.zw.Flush()
+	}
+	if sendoff.obj.hdr.IsLast() {
+		lz4s.zw.Close()
+	}
+ex:
+	if lz4s.sgl.Len() == 0 {
+		lz4s.sgl.Reset()
+	}
+	return
+}

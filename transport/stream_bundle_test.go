@@ -80,17 +80,18 @@ func Test_Bundle(t *testing.T) {
 	_, err := transport.Register(network, trname, receive) // DirectURL = /v1/transport/10G
 	tassert.CheckFatal(t, err)
 
-	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-
-	sowner := &sowner{}
-	lsnode := cluster.Snode{DaemonID: "local"}
-
-	random := newRand(time.Now().UnixNano())
-	multiplier := int(random.Int63()%13) + 4
-
-	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient, transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier})
-
-	size, num, prevsize := int64(0), 0, int64(0)
+	var (
+		httpclient     = &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+		sowner         = &sowner{}
+		lsnode         = cluster.Snode{DaemonID: "local"}
+		random         = newRand(time.Now().UnixNano())
+		extra          = &transport.Extra{Compress: true, Mem2: Mem2}
+		size, prevsize int64
+		multiplier     = int(random.Int63()%13) + 4
+		num            int
+	)
+	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient,
+		transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 
 	for size < cmn.GiB*10 {
 		var err error

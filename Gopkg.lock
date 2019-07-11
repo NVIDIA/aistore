@@ -266,6 +266,17 @@
   version = "v1.4.2"
 
 [[projects]]
+  digest = "1:f690a0a27cefae695fa9587aa3ed23652e593be1d98b35f8184d10bccec30444"
+  name = "github.com/pierrec/lz4"
+  packages = [
+    ".",
+    "internal/xxh32",
+  ]
+  pruneopts = "UT"
+  revision = "057d66e894a4e55853274a3bbbf7de02ba639e43"
+  version = "v2.2.4"
+
+[[projects]]
   digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
   name = "github.com/pkg/errors"
   packages = ["."]
@@ -342,7 +353,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4657755483f38deb980f0b751f1cf847dba1a072fef75d4f6feb0cd47bee4494"
+  digest = "1:e9b5f44a9dd339afa0658606991de208ca826a819cb951ac1409dceb294c21ea"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -352,7 +363,6 @@
     "html/charset",
     "http/httpguts",
     "http2",
-    "http2/h2c",
     "http2/hpack",
     "idna",
     "internal/timeseries",
@@ -560,6 +570,7 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",
     "github.com/onsi/gomega",
+    "github.com/pierrec/lz4",
     "github.com/pkg/errors",
     "github.com/seiflotfy/cuckoofilter",
     "github.com/teris-io/shortid",
@@ -567,8 +578,6 @@
     "github.com/vbauerster/mpb",
     "github.com/vbauerster/mpb/decor",
     "golang.org/x/net/context",
-    "golang.org/x/net/http2",
-    "golang.org/x/net/http2/h2c",
     "golang.org/x/sync/errgroup",
     "google.golang.org/api/iterator",
     "google.golang.org/api/option",

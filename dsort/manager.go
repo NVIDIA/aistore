@@ -280,6 +280,7 @@ func (m *Manager) initStreams() error {
 		Network:    respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
+		// Extra:      &transport.Extra{Compress: true, Mem2: mm},
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {
 		return errors.WithStack(err)
