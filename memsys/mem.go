@@ -9,7 +9,6 @@ package memsys
 import (
 	"flag"
 	"fmt"
-	"hash"
 	"os"
 	"runtime"
 	"sort"
@@ -236,12 +235,6 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ..
 	}
 	slab.muget.Unlock()
 	return &SGL{sgl: sgl, slab: slab}
-}
-
-func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64, sbufSize ...int64) *SGL {
-	sgl := r.NewSGL(immediateSize, sbufSize...)
-	sgl.hash = hash
-	return sgl
 }
 
 // returns an estimate for the current memory pressured expressed as one of the enumerated values

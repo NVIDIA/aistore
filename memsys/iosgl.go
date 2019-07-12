@@ -8,7 +8,6 @@ package memsys
 
 import (
 	"errors"
-	"hash"
 	"io"
 	"runtime/debug"
 
@@ -17,6 +16,7 @@ import (
 )
 
 var (
+	_ io.ReaderFrom      = &SGL{}
 	_ io.WriterTo        = &SGL{}
 	_ cmn.ReadOpenCloser = &SGL{}
 	_ cmn.ReadOpenCloser = &Reader{}
@@ -31,7 +31,6 @@ type (
 		slab *Slab2
 		woff int64 // stream
 		roff int64
-		hash hash.Hash64
 	}
 	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
 	Reader struct {
@@ -63,6 +62,28 @@ func (z *SGL) grow(toSize int64) {
 		z.sgl = append(z.sgl, z.slab._alloc())
 	}
 	z.slab.muget.Unlock()
+}
+
+func (z *SGL) ReadFrom(r io.Reader) (n int64, err error) {
+	for {
+		if z.woff-z.Cap() == 0 {
+			z.grow(z.Cap() + z.slab.Size())
+		}
+
+		idx := z.woff / z.slab.Size()
+		off := z.woff % z.slab.Size()
+		buf := z.sgl[idx][off:]
+
+		written, err := r.Read(buf)
+		z.woff += int64(written)
+		n += int64(written)
+		if err != nil {
+			if err == io.EOF {
+				return n, nil
+			}
+			return n, err
+		}
+	}
 }
 
 func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
@@ -99,12 +120,6 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 		buf := z.sgl[idx]
 		src := p[poff : poff+int(size)]
 		copy(buf[off:], src) // assert(n == size)
-		if z.hash != nil {
-			_, err = z.hash.Write(src) // assert(n == size)
-			if err != nil {
-				return poff, err
-			}
-		}
 		z.woff += size
 		idx++
 		off = 0
@@ -112,13 +127,6 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 		poff += int(size)
 	}
 	return len(p), nil
-}
-
-func (z *SGL) ComputeHash() uint64 {
-	if z.hash == nil {
-		return 0
-	}
-	return z.hash.Sum64()
 }
 
 func (z *SGL) Read(b []byte) (n int, err error) {
