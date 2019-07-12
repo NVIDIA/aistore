@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -117,13 +116,11 @@ func Test_Bundle(t *testing.T) {
 	stats := sb.GetStats()
 
 	for id, tstat := range stats {
-		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%\n", id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.IdlePct)
+		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%, compression ratio=%.2f\n",
+			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.IdlePct,
+			float64(tstat.Size.Load())/float64(tstat.CompressedSize.Load()))
 	}
-	// printNetworkStats(t, network)
-
 	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
-
-	glog.Flush()
 }
 
 func addTarget(smap *cluster.Smap, ts *httptest.Server, i int) {

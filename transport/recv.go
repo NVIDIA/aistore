@@ -40,10 +40,9 @@ type (
 		headerBuf []byte
 	}
 	objReader struct {
-		body  io.Reader
-		hdr   Header
-		off   int64
-		zbody *lz4.Reader
+		body io.Reader
+		off  int64
+		hdr  Header
 	}
 	handler struct {
 		trname      string
@@ -183,7 +182,7 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 }
 
 //
-// internal methods
+// internal methods -- handler
 //
 
 func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
@@ -229,9 +228,11 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			h.callback(w, objReader.hdr, objReader, er)
 			hdr := &objReader.hdr
 			if hdr.ObjAttrs.Size == objReader.off {
-				num := stats.Num.Inc()
-				siz := stats.Size.Add(hdr.ObjAttrs.Size)
-				off := stats.Offset.Add(hdr.ObjAttrs.Size)
+				var (
+					num = stats.Num.Inc()
+					siz = stats.Size.Add(hdr.ObjAttrs.Size)
+					off = stats.Offset.Add(hdr.ObjAttrs.Size)
+				)
 				if debug {
 					glog.Infof("%s[%d]: off=%d, size=%d(%d), num=%d - %s/%s",
 						trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.Objname)
@@ -266,6 +267,10 @@ func (h *handler) cleanupOldSessions() time.Duration {
 	h.oldSessions.Range(f)
 	return cleanupInterval
 }
+
+//
+// iterator
+//
 
 func (it iterator) next() (obj *objReader, hl64 int64, err error) {
 	var (
@@ -311,16 +316,16 @@ func (it iterator) next() (obj *objReader, hl64 int64, err error) {
 	return
 }
 
+//
+// objReader
+//
+
 func (obj *objReader) Read(b []byte) (n int, err error) {
-	if obj.zbody != nil {
-		n, err = obj.zbody.Read(b) // read and decompress
-	} else {
-		rem := obj.hdr.ObjAttrs.Size - obj.off
-		if rem < int64(len(b)) {
-			b = b[:int(rem)]
-		}
-		n, err = obj.body.Read(b)
+	rem := obj.hdr.ObjAttrs.Size - obj.off
+	if rem < int64(len(b)) {
+		b = b[:int(rem)]
 	}
+	n, err = obj.body.Read(b)
 	obj.off += int64(n)
 	switch err {
 	case nil:
@@ -396,4 +401,9 @@ func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
 func uniqueID(r *http.Request, sessID int64) uint64 {
 	x := xxhash.ChecksumString64S(r.RemoteAddr, cmn.MLCG32)
 	return (x&math.MaxUint32)<<32 | uint64(sessID)
+}
+
+func UID2SessID(uid uint64) (xxh, sessID uint64) {
+	xxh, sessID = uid>>32, uid&math.MaxUint32
+	return
 }

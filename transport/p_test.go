@@ -83,7 +83,9 @@ func Test_OneStream10G(t *testing.T) {
 	stream.Fin()
 	stats := stream.GetStats()
 
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%\n", stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.IdlePct)
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%, compression ratio=%.2f\n",
+		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.IdlePct,
+		float64(stats.Size.Load())/float64(stats.CompressedSize.Load()))
 
 	printNetworkStats(t, network)
 }

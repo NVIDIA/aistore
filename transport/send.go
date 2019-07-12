@@ -101,12 +101,13 @@ type (
 	}
 	// stream stats
 	Stats struct {
-		Num     atomic.Int64 // number of transferred objects
-		Size    atomic.Int64 // transferred size, in bytes
-		Offset  atomic.Int64 // stream offset, in bytes
-		IdleDur atomic.Int64 // the time stream was idle since the previous getStats call
-		TotlDur int64        // total time since --/---/---
-		IdlePct float64      // idle time % since --/---/--
+		Num            atomic.Int64 // number of transferred objects
+		Size           atomic.Int64 // transferred size, in bytes
+		CompressedSize atomic.Int64 // compressed size
+		Offset         atomic.Int64 // stream offset, in bytes
+		IdleDur        atomic.Int64 // the time stream was idle since the previous getStats call
+		TotlDur        int64        // total time since --/---/---
+		IdlePct        float64      // idle time % since --/---/--
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
 
@@ -143,9 +144,10 @@ type (
 // internal
 type (
 	lz4Stream struct {
-		s   *Stream
-		zw  *lz4.Writer // orig reader => zw
-		sgl *memsys.SGL // zw => bb => network
+		s    *Stream
+		zw   *lz4.Writer // orig reader => zw
+		sgl  *memsys.SGL // zw => bb => network
+		size int64
 	}
 	obj struct {
 		hdr      Header         // object header
@@ -366,6 +368,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	stats.Num.Store(s.stats.Num.Load())
 	stats.Offset.Store(s.stats.Offset.Load())
 	stats.Size.Store(s.stats.Size.Load())
+	stats.CompressedSize.Store(s.stats.CompressedSize.Load())
 	// idle(%)
 	now := time.Now().UnixNano()
 	stats.TotlDur = now - s.time.start.Load()
@@ -629,6 +632,7 @@ func (s *Stream) eoObj(err error) {
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	s.stats.Size.Add(s.sendoff.off)
+	s.stats.CompressedSize.Add(s.lz4s.size)
 
 	if err != nil {
 		goto exit
@@ -653,6 +657,7 @@ exit:
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
 
 	s.sendoff = sendoff{}
+	s.lz4s.size = 0
 }
 
 //
@@ -760,6 +765,7 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	n, err = lz4s.s.Read(b)
 	_, _ = lz4s.zw.Write(b[:n])
 	n, _ = lz4s.sgl.Read(b)
+	lz4s.size += int64(n)
 
 	// zw house-keep on object and end-stream boundaries -- TODO -- FIXME
 	if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {

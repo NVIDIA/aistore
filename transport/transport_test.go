@@ -312,8 +312,9 @@ func printNetworkStats(t *testing.T, network string) {
 	netstats, err := transport.GetNetworkStats(network)
 	tassert.CheckFatal(t, err)
 	for trname, eps := range netstats {
-		for sessID, stats := range eps { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessID, stats.Offset.Load(), stats.Num.Load())
+		for uid, stats := range eps { // EndpointStats by session ID
+			xx, sessID := transport.UID2SessID(uid)
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
 }
