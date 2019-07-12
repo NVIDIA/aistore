@@ -746,7 +746,10 @@ func (r *nopReadCloser) Close() error                   { return nil }
 //
 
 func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
-	sendoff := &lz4s.s.sendoff
+	var (
+		sendoff = &lz4s.s.sendoff
+		last    = sendoff.obj.hdr.IsLast()
+	)
 	if lz4s.sgl.Len() > 0 {
 		n, err = lz4s.sgl.Read(b)
 		if err == io.EOF { // reusing/rewinding this buf multiple times
@@ -762,12 +765,17 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {
 		lz4s.zw.Flush()
 	}
-	if sendoff.obj.hdr.IsLast() {
+	if last {
 		lz4s.zw.Close()
 	}
 ex:
 	if lz4s.sgl.Len() == 0 {
 		lz4s.sgl.Reset()
+		if last && err == nil {
+			err = io.EOF
+		}
+	} else if last && err == io.EOF {
+		err = nil
 	}
 	return
 }
