@@ -195,22 +195,27 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
 		return
 	}
-
-	var reader io.Reader = r.Body
-	if compress := r.Header.Get(cmn.HeaderCompress); compress != "" {
-		cmn.Assert(compress == cmn.LZ4Compression)
-		reader = lz4.NewReader(r.Body)
+	var (
+		reader    io.Reader = r.Body
+		lz4Reader *lz4.Reader
+	)
+	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
+		cmn.Assert(compressionType == cmn.LZ4Compression)
+		lz4Reader = lz4.NewReader(r.Body)
+		reader = lz4Reader
 	}
 	debug := bool(glog.FastV(4, glog.SmoduleTransport))
 	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
 	if err != nil || sessID == 0 {
-		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[%d]: invalid session ID, err %v", trname, sessID, err))
+		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
 		return
 	}
 	uid := uniqueID(r, sessID)
 	statsif, loaded := h.sessions.LoadOrStore(uid, &Stats{})
 	if !loaded && debug {
-		glog.Infof("%s[%d]: start-of-stream", trname, sessID)
+		xxh, id := UID2SessID(uid)
+		cmn.Assert(id == uint64(sessID))
+		glog.Infof("%s[%d:%d]: start-of-stream from %s", trname, xxh, sessID, r.RemoteAddr) // r.RemoteAddr => xxh
 	}
 	stats := statsif.(*Stats)
 
@@ -234,19 +239,24 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 					off = stats.Offset.Add(hdr.ObjAttrs.Size)
 				)
 				if debug {
-					glog.Infof("%s[%d]: off=%d, size=%d(%d), num=%d - %s/%s",
-						trname, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.Objname)
+					xxh, _ := UID2SessID(uid)
+					glog.Infof("%s[%d:%d]: off=%d, size=%d(%d), num=%d - %s/%s",
+						trname, xxh, sessID, off, siz, hdr.ObjAttrs.Size, num, hdr.Bucket, hdr.Objname)
 				}
 				continue
 			}
-			err = fmt.Errorf("%s[%d]: sbrk #3: err %v, off %d != %d size, num=%d, %s/%s",
-				trname, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.Objname)
+			xxh, _ := UID2SessID(uid)
+			err = fmt.Errorf("%s[%d:%d]: sbrk #3: err %v, off %d != %d size, num=%d, %s/%s",
+				trname, xxh, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.Objname)
 		}
 		if err != nil {
 			h.oldSessions.Store(uid, time.Now())
 			if err != io.EOF {
 				h.callback(w, Header{}, nil, err)
 				cmn.InvalidHandlerDetailed(w, r, err.Error())
+			}
+			if lz4Reader != nil {
+				lz4Reader.Reset(nil)
 			}
 			return
 		}
