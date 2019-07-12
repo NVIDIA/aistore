@@ -12,6 +12,7 @@ import (
 )
 
 const BadCksumPrefix = "BAD CHECKSUM:"
+const MLCG32 = 1103515245 // xxhash seed
 
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))

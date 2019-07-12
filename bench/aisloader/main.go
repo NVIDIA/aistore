@@ -58,7 +58,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/bench/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/tutils"
@@ -652,7 +651,7 @@ func setupBucket(runParams *params) error {
 }
 
 func getIDFromString(val string, hashLen uint) uint64 {
-	hash := xxhash.ChecksumString64S(val, cluster.MLCG32)
+	hash := xxhash.ChecksumString64S(val, cmn.MLCG32)
 	// leave just right loaderIDHashLen bytes
 	hash <<= (64 - hashLen)
 	hash >>= (64 - hashLen)

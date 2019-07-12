@@ -91,7 +91,7 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 	)
 	expectedCksm = binary.BigEndian.Uint64([]byte(mdstr))
 	payload = mdstr[cmn.SizeofI64:]
-	actualCksm = xxhash.ChecksumString64S(payload, MLCG32)
+	actualCksm = xxhash.ChecksumString64S(payload, cmn.MLCG32)
 
 	if expectedCksm != actualCksm {
 		return fmt.Errorf("%s (%x != %x)", cmn.BadCksumPrefix, expectedCksm, actualCksm)
@@ -209,7 +209,7 @@ func (md *lmeta) marshal(buf []byte) (off int) {
 	//
 	// checksum, prepend, and return
 	//
-	metaCksm := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), MLCG32)
+	metaCksm := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
 	binary.BigEndian.PutUint64(buf[0:], metaCksm)
 	return
 }

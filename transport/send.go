@@ -108,7 +108,7 @@ type (
 		TotlDur int64        // total time since --/---/---
 		IdlePct float64      // idle time % since --/---/--
 	}
-	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
+	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
 
 	// attributes associated with given object
 	ObjectAttrs struct {

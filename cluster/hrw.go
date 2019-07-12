@@ -16,8 +16,6 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-const MLCG32 = 1103515245
-
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 func Bo2Uname(bucket, objname string) string { return path.Join(bucket, objname) }
@@ -32,7 +30,7 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 	var (
 		max    uint64
 		name   = Bo2Uname(bucket, objname)
-		digest = xxhash.ChecksumString64S(name, MLCG32)
+		digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
 		// Assumes that sinfo.idDigest is initialized
@@ -67,7 +65,7 @@ func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, 
 	arr := make([]tsi, len(smap.Tmap))
 	si = make([]*Snode, count)
 	name := Bo2Uname(bucket, objname)
-	digest := xxhash.ChecksumString64S(name, MLCG32)
+	digest := xxhash.ChecksumString64S(name, cmn.MLCG32)
 
 	i := 0
 	for _, sinfo := range smap.Tmap {
@@ -123,7 +121,7 @@ func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, digest uint64, errs
 		max  uint64
 		name = Bo2Uname(bucket, objname)
 	)
-	digest = xxhash.ChecksumString64S(name, MLCG32)
+	digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs > max {

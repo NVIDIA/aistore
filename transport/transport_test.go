@@ -312,8 +312,8 @@ func printNetworkStats(t *testing.T, network string) {
 	netstats, err := transport.GetNetworkStats(network)
 	tassert.CheckFatal(t, err)
 	for trname, eps := range netstats {
-		for sessid, stats := range eps { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats.Offset.Load(), stats.Num.Load())
+		for sessID, stats := range eps { // EndpointStats by session ID
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessID, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
 }
@@ -323,18 +323,18 @@ func compareNetworkStats(t *testing.T, network string, netstats1 map[string]tran
 	tassert.CheckFatal(t, err)
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
-		for sessid, stats2 := range eps2 { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats2.Offset.Load(), stats2.Num.Load())
+		for sessID, stats2 := range eps2 { // EndpointStats by session ID
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessID, stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
-				stats1, ok := eps1[sessid]
+				stats1, ok := eps1[sessID]
 				if ok {
 					fmt.Printf("send$ %s[%d]: offset=%d, num=%d, idle=%.2f%%\n",
-						trname, sessid, stats1.Offset.Load(), stats1.Num.Load(), stats1.IdlePct)
+						trname, sessID, stats1.Offset.Load(), stats1.Num.Load(), stats1.IdlePct)
 				} else {
-					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessid)
+					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
 				}
 			} else {
-				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessid)
+				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
 			}
 		}
 	}
@@ -511,7 +511,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
-	trname, sessid := stream.ID()
+	trname, sessID := stream.ID()
 	now := time.Now()
 
 	random := newRand(time.Now().UnixNano())
@@ -529,7 +529,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			}
 			if random.Int63()%5 == 0 {
 				stats := stream.GetStats()
-				tutils.Logf("send$ %s[%d]: idle=%.2f%%\n", trname, sessid, stats.IdlePct)
+				tutils.Logf("send$ %s[%d]: idle=%.2f%%\n", trname, sessID, stats.IdlePct)
 			}
 		}
 	}
@@ -538,11 +538,11 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	if netstats == nil {
 		termReason, termErr := stream.TermInfo()
 		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
-			trname, sessid, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
+			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
 	} else {
 		lock.Lock()
 		eps := make(transport.EndpointStats)
-		eps[sessid] = &stats
+		eps[uint64(sessID)] = &stats
 		netstats[trname] = eps
 		lock.Unlock()
 	}

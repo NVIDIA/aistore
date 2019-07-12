@@ -50,7 +50,7 @@ type Snode struct {
 
 func (d *Snode) Digest() uint64 {
 	if d.idDigest == 0 {
-		d.idDigest = xxhash.ChecksumString64S(d.DaemonID, MLCG32)
+		d.idDigest = xxhash.ChecksumString64S(d.DaemonID, cmn.MLCG32)
 	}
 	return d.idDigest
 }

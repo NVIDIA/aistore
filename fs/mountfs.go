@@ -22,7 +22,6 @@ import (
 )
 
 const pkgName = "fs"
-const MLCG32 = 1103515245
 const uQuantum = 10 // each GET adds a "quantum" of utilization to the mountpath
 
 // mountpath lifecycle-change enum
@@ -124,7 +123,7 @@ func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *Mou
 		OrigPath:   origPath,
 		Fsid:       fsid,
 		FileSystem: fs,
-		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
+		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
 	}
 	return mi
 }

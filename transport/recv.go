@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path"
 	"strconv"
@@ -18,7 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/xoshiro256"
+	"github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4"
 )
 
@@ -45,24 +48,24 @@ type (
 	handler struct {
 		trname      string
 		callback    Receive
-		sessions    sync.Map // map[int64]*Stats
-		oldSessions sync.Map // map[int64]time.Time
-		now         time.Time
+		sessions    sync.Map // map[uint64]*Stats
+		oldSessions sync.Map // map[uint64]time.Time
+		hkName      string   // house-keeping name
 	}
 )
 
 const (
-	// session stats cleanup timeout
-	cleanupTimeout = time.Minute
+	cleanupInterval = time.Minute * 10
+)
 
+const (
 	pkgName = "transport"
 )
 
-//====================
 //
 // globals
 //
-//====================
+
 var (
 	muxers   map[string]*mux.ServeMux // "mux" stands for HTTP request multiplexer
 	handlers map[string]map[string]*handler
@@ -73,11 +76,9 @@ func init() {
 	mu = &sync.Mutex{}
 	muxers = make(map[string]*mux.ServeMux)
 	handlers = make(map[string]map[string]*handler)
-	// No good way to check package name
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		glog.SetV(glog.SmoduleTransport, logLvl)
 	}
-
 }
 
 //
@@ -107,7 +108,7 @@ func SetMux(network string, x *mux.ServeMux) {
 // http.ServeMux private map of its URL paths.
 // This map is protected by a private mutex and is read-accessed to route HTTP requests.
 //
-func Register(network, trname string, callback Receive) (path string, err error) {
+func Register(network, trname string, callback Receive) (upath string, err error) {
 	mu.Lock()
 	mux, ok := muxers[network]
 	if !ok {
@@ -116,14 +117,16 @@ func Register(network, trname string, callback Receive) (path string, err error)
 		return
 	}
 
-	h := &handler{trname: trname, callback: callback}
-	path = cmn.URLPath(cmn.Version, cmn.Transport, trname)
-	mux.HandleFunc(path, h.receive)
+	h := &handler{trname: trname, callback: callback, hkName: path.Join(network, trname, "oldSessions")}
+	upath = cmn.URLPath(cmn.Version, cmn.Transport, trname)
+	mux.HandleFunc(upath, h.receive)
 	if _, ok = handlers[network][trname]; ok {
 		glog.Errorf("Warning: re-registering transport handler '%s'", trname)
 	}
 	handlers[network][trname] = h
 	mu.Unlock()
+
+	hk.Housekeeper.Register(h.hkName, h.cleanupOldSessions)
 	return
 }
 
@@ -131,20 +134,23 @@ func Unregister(network, trname string) (err error) {
 	mu.Lock()
 	mux, ok := muxers[network]
 	if !ok {
-		err = fmt.Errorf("failed to unregister path /%s: network %s is unknown", trname, network)
+		err = fmt.Errorf("failed to unregister transport endpoint %s: network %s is unknown", trname, network)
 		mu.Unlock()
 		return
 	}
-
-	path := cmn.URLPath(cmn.Version, cmn.Transport, trname)
-	if _, ok := handlers[network][trname]; !ok {
-		err = fmt.Errorf("failed to unregister unknown path /%s", trname)
+	var h *handler
+	if h, ok = handlers[network][trname]; !ok {
+		err = fmt.Errorf("cannot unregister: transport endpoint %s is unknown, network %s", trname, network)
 		mu.Unlock()
 		return
 	}
 	delete(handlers[network], trname)
-	mux.Unhandle(path)
+
+	upath := cmn.URLPath(cmn.Version, cmn.Transport, trname)
+	mux.Unhandle(upath)
 	mu.Unlock()
+
+	hk.Housekeeper.Unregister(h.hkName)
 	return
 }
 
@@ -161,12 +167,12 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 		eps := make(EndpointStats)
 		f := func(key, value interface{}) bool {
 			out := &Stats{}
-			sessID := key.(int64)
+			uid := key.(uint64)
 			in := value.(*Stats)
 			out.Num.Store(in.Num.Load())
 			out.Offset.Store(in.Offset.Load())
 			out.Size.Store(in.Size.Load())
-			eps[sessID] = out
+			eps[uid] = out
 			return true
 		}
 		h.sessions.Range(f)
@@ -202,7 +208,8 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[%d]: invalid session ID, err %v", trname, sessID, err))
 		return
 	}
-	statsif, loaded := h.sessions.LoadOrStore(sessID, &Stats{})
+	uid := uniqueID(r, sessID)
+	statsif, loaded := h.sessions.LoadOrStore(uid, &Stats{})
 	if !loaded && debug {
 		glog.Infof("%s[%d]: start-of-stream", trname, sessID)
 	}
@@ -235,10 +242,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 				trname, sessID, err, objReader.off, hdr.ObjAttrs.Size, stats.Num.Load(), hdr.Bucket, hdr.Objname)
 		}
 		if err != nil {
-			// delayed cleanup old sessions -- TODO -- FIXME: use housekeeper
-			h.now = time.Now()
-			h.oldSessions.Range(h.cleanup)
-			h.oldSessions.Store(sessID, h.now)
+			h.oldSessions.Store(uid, time.Now())
 			if err != io.EOF {
 				h.callback(w, Header{}, nil, err)
 				cmn.InvalidHandlerDetailed(w, r, err.Error())
@@ -248,14 +252,19 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) cleanup(key, value interface{}) bool {
-	id := key.(int64)
-	timeClosed := value.(time.Time)
-	if h.now.Sub(timeClosed) > cleanupTimeout {
-		h.oldSessions.Delete(id)
-		h.sessions.Delete(id)
+func (h *handler) cleanupOldSessions() time.Duration {
+	now := time.Now()
+	f := func(key, value interface{}) bool {
+		uid := key.(uint64)
+		timeClosed := value.(time.Time)
+		if now.Sub(timeClosed) > cleanupInterval {
+			h.oldSessions.Delete(uid)
+			h.sessions.Delete(uid)
+		}
+		return true
 	}
-	return true
+	h.oldSessions.Range(f)
+	return cleanupInterval
 }
 
 func (it iterator) next() (obj *objReader, hl64 int64, err error) {
@@ -379,4 +388,12 @@ func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
 	off, attr.CksumValue = extString(off, from)
 	off, attr.Version = extString(off, from)
 	return off, attr
+}
+
+//
+// sessID => unique ID
+//
+func uniqueID(r *http.Request, sessID int64) uint64 {
+	x := xxhash.ChecksumString64S(r.RemoteAddr, cmn.MLCG32)
+	return (x&math.MaxUint32)<<32 | uint64(sessID)
 }

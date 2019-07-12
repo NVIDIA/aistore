@@ -429,7 +429,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	daemonID := os.Getenv("AIS_DAEMONID")
 	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
+		cs := xxhash.ChecksumString32S(publicAddr.String(), cmn.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if config.TestingEnv() {
 			daemonID += "_" + config.Net.L4.PortStr
