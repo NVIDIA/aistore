@@ -552,6 +552,11 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Register target 1 to bring cluster to original state
 	m.reregisterTarget(targets[1])
+
+	// wait for rebalance to complete
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
 	m.assertClusterState()
 }
 
@@ -621,6 +626,7 @@ func TestStressRebalance(t *testing.T) {
 		testStressRebalance(t, rand, i == 1, i == max)
 	}
 }
+
 func testStressRebalance(t *testing.T, rand *rand.Rand, createlb, destroylb bool) {
 	var (
 		md = ioContext{
@@ -920,6 +926,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
 			len(mpList.Available), len(mpListAfter.Available))
 	}
+
+	// wait for rebalance to complete
+	baseParams = tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	m.ensureNoErrors()
 	m.assertClusterState()
