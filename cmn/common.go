@@ -191,13 +191,7 @@ func GenUUID64() (int64, error) {
 		return 0, err
 	}
 
-	n := uint64(0)
-	for _, c := range s {
-		idx := strings.IndexRune(uuidABC, c)
-		n = (n << 6) + uint64(idx)
-	}
-
-	return int64(n), err
+	return int64(xxhash.ChecksumString64S(s, MLCG32)), nil
 }
 
 func S2B(s string) (int64, error) {
