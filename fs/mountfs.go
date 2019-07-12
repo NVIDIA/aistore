@@ -100,7 +100,7 @@ type (
 		// Cached pointer to mountpathInfo used to store BMD
 		xattrMpath atomic.Pointer
 		// Iostats for the available mountpaths
-		ios *ios.IostatContext
+		ios ios.IOStater
 	}
 	ChangeReq struct {
 		Action string // MountPath action enum (above)
@@ -200,9 +200,13 @@ func InitMountedFS() {
 }
 
 // new instance
-func NewMountedFS() *MountedFS {
+func NewMountedFS(iostater ...ios.IOStater) *MountedFS {
 	mfs := &MountedFS{fsIDs: make(map[syscall.Fsid]string, 10), checkFsID: true}
-	mfs.ios = ios.NewIostatContext()
+	if len(iostater) > 0 {
+		mfs.ios = iostater[0]
+	} else {
+		mfs.ios = ios.NewIostatContext()
+	}
 	return mfs
 }
 
