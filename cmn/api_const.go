@@ -19,9 +19,6 @@ const (
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
 	ChecksumCRC32C = "crc32c"
-
-	// EC default object size limit: smaller objects are replicated instead of EC'ing
-	ECDefaultSizeLimit = 256 * KiB
 )
 
 // module names
@@ -262,8 +259,8 @@ const (
 	EntryIsCached   = 1 << (EntryStatusBits + 1) // StatusMaskBits + 1
 )
 
+// list-bucket default page size
 const (
-	// DefaultPageSize determines the number of cached file infos returned in one page
 	DefaultPageSize = 1000
 )
 
@@ -329,4 +326,11 @@ const (
 
 	AllowAccess = "allow"
 	DenyAccess  = "deny"
+)
+
+// enum: compression
+const (
+	CompressAllways = "always"
+	CompressNever   = "never"
+	CompressRatio   = "ratio=%d" // adaptive: min ratio that warrants compression
 )

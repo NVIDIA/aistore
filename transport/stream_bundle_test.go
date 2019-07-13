@@ -84,7 +84,7 @@ func Test_Bundle(t *testing.T) {
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(time.Now().UnixNano())
-		extra          = &transport.Extra{Compress: true, Mem2: Mem2}
+		extra          = &transport.Extra{Compression: cmn.CompressAllways, Mem2: Mem2}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int

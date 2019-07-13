@@ -52,7 +52,7 @@ func Test_OneStream10G(t *testing.T) {
 	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 2, Compress: true, Mem2: Mem2})
+	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 2, Compression: cmn.CompressAllways, Mem2: Mem2})
 
 	slab := Mem2.SelectSlab2(cmn.MiB)
 	buf1 = slab.Alloc()

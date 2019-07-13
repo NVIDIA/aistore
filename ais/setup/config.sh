@@ -9,12 +9,12 @@ cat > $CONFFILE <<EOL
 		"optimize_put": false,
 		"enabled":      ${MIRROR_ENABLED:-false}
 	},
-	"readahead": {
-		"object_mem": 1048576,
-		"total_mem":  1073741824,
-		"by_proxy":   true,
-		"discard":    false,
-		"enabled":    false
+	"ec": {
+		"objsize_limit":	${OBJSIZE_LIMIT:-262144},
+		"data_slices":		${DATA_SLICES:-2},
+		"parity_slices":	${PARITY_SLICES:-2},
+		"compression":		"${COMPRESSION:-never}",
+		"enabled":		${EC_ENABLED:-false}
 	},
 	"log": {
 		"dir":       "${LOGDIR:-/tmp/ais$NEXT_TIER/log}",
@@ -59,6 +59,7 @@ cat > $CONFFILE <<EOL
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",
+		"compression":		"${COMPRESSION:-never}",
 		"multiplier":		${REBALANCE_MULTIPLIER:-4},
 		"enabled":		true
 	},
@@ -135,6 +136,7 @@ cat > $CONFFILE <<EOL
 		"ekm_malformed_line":    "abort",
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
+		"compression":		"${COMPRESSION:-never}",
 		"call_timeout":          "10m"
 	}
 }

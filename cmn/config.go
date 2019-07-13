@@ -263,7 +263,7 @@ type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`
 	Mirror           MirrorConf      `json:"mirror"`
-	Readahead        RahConf         `json:"readahead"`
+	EC               ECConf          `json:"ec"`
 	Log              LogConf         `json:"log"`
 	Periodic         PeriodConf      `json:"periodic"`
 	Timeout          TimeoutConf     `json:"timeout"`
@@ -282,6 +282,7 @@ type Config struct {
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
 	Downloader       DownloaderConf  `json:"downloader"`
 	DSort            DSortConf       `json:"distributed_sort"`
+	Readahead        RahConf         `json:"readahead"`
 }
 
 type MirrorConf struct {
@@ -389,6 +390,7 @@ type DiskConf struct {
 
 type RebalanceConf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"` // max time to wait for ACKs and for neighbors to complete
+	Compression      string        `json:"compression"`     // see CompressAllways, etc. enum
 	DestRetryTime    time.Duration `json:"-"`               // (runtime)
 	Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 	Enabled          bool          `json:"enabled"`         // true: auto-rebalance, false: manual rebalancing
@@ -505,7 +507,8 @@ type DSortConf struct {
 	EKMMissingKey      string        `json:"ekm_missing_key"`
 	DefaultMaxMemUsage string        `json:"default_max_mem_usage"`
 	CallTimeoutStr     string        `json:"call_timeout"`
-	CallTimeout        time.Duration `json:"-"` // determines how long target should wait for other target to respond
+	Compression        string        `json:"compression"` // see CompressAllways, etc. enum
+	CallTimeout        time.Duration `json:"-"`           // determines how long target should wait for other target to respond
 }
 
 type FSPathsConf struct {

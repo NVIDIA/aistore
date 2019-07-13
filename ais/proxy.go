@@ -384,24 +384,6 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 		}
 		redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
-		if config.Readahead.Enabled && config.Readahead.ByProxy {
-			go func(url string) {
-				url += "&" + cmn.URLParamReadahead + "=true"
-				args := callArgs{
-					si: nil, // already inside url
-					req: cmn.ReqArgs{
-						Method: r.Method,
-						Base:   url,
-						Header: r.Header,
-					},
-					timeout: config.Timeout.ProxyPing,
-				}
-				res := p.call(args)
-				if res.err != nil {
-					glog.Errorf("Failed readahead %s/%s => %s: %v", bucket, objname, si, res.err)
-				}
-			}(redirectURL)
-		}
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	}
 	p.statsif.Add(stats.GetCount, 1)

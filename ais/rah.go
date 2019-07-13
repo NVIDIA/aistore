@@ -111,12 +111,6 @@ func (r *readahead) delmp(mpath, tag string) {
 }
 
 // c-tors
-func newReadaheader() (r *readahead) {
-	r = &readahead{}
-	r.joggers = make(map[string]*rahjogger, 8)
-	r.stopCh = make(chan struct{}, 4)
-	return
-}
 func newRahJogger(mpath string) (rj *rahjogger) {
 	rj = &rahjogger{mpath: mpath}
 	rj.rahmap = make(map[string]*rahfcache, rahMapInitSize)

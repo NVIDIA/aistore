@@ -314,7 +314,7 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 }
 
 func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
-	return size < ecConf.ObjSizeLimit || (ecConf.ObjSizeLimit == 0 && size < cmn.ECDefaultSizeLimit)
+	return size < ecConf.ObjSizeLimit
 }
 
 // returns whether EC must use disk instead of keeping everything in memory.

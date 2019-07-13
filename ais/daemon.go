@@ -32,7 +32,6 @@ const (
 	xtargetkeepalive = "targetkeepalive"
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
-	xreadahead       = "readahead"
 )
 
 type (
@@ -268,14 +267,7 @@ func aisinit(version, build string) {
 		nodeCtx.rg.add(fshc, xfshc)
 		t.fsprg.Reg(fshc)
 
-		if config.Readahead.Enabled {
-			readaheader := newReadaheader()
-			nodeCtx.rg.add(readaheader, xreadahead)
-			t.fsprg.Reg(readaheader)
-			t.readahead = readaheader
-		} else {
-			t.readahead = &dummyreadahead{}
-		}
+		t.readahead = &dummyreadahead{}
 
 		housekeep, initialInterval := cluster.LomCacheHousekeep(nodeCtx.mm, t)
 		hk.Housekeeper.Register("lom-cache", housekeep, initialInterval)

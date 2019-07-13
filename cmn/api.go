@@ -248,10 +248,11 @@ type TierConf struct {
 
 // ECConfig - per-bucket erasure coding configuration
 type ECConf struct {
-	ObjSizeLimit int64 `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
-	DataSlices   int   `json:"data_slices"`   // number of data slices
-	ParitySlices int   `json:"parity_slices"` // number of parity slices/replicas
-	Enabled      bool  `json:"enabled"`       // EC is enabled
+	ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
+	DataSlices   int    `json:"data_slices"`   // number of data slices
+	ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
+	Compression  string `json:"compression"`   // see CompressAllways, etc. enum
+	Enabled      bool   `json:"enabled"`       // EC is enabled
 }
 
 func (c *VersionConf) String() string {
@@ -360,9 +361,6 @@ func (c *ECConf) String() string {
 		return "Disabled"
 	}
 	objSizeLimit := c.ObjSizeLimit
-	if objSizeLimit == 0 {
-		objSizeLimit = ECDefaultSizeLimit
-	}
 	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, B2S(objSizeLimit, 0))
 }
 

@@ -455,10 +455,11 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 	//
 	client := transport.NewDefaultClient()
 	sbArgs := transport.SBArgs{
-		ManualResync: true,
-		Multiplier:   int(config.Rebalance.Multiplier),
 		Network:      reb.netd,
 		Trname:       rebalanceStreamName,
+		Extra:        &transport.Extra{Compression: config.Rebalance.Compression, Mem2: nodeCtx.mm},
+		Multiplier:   int(config.Rebalance.Multiplier),
+		ManualResync: true,
 	}
 	reb.streams = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, client, sbArgs)
 

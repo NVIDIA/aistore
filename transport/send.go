@@ -94,10 +94,10 @@ type (
 		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
 		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
+		Compression string          // see CompressAlways, etc. enum
 		Mem2        *memsys.Mem2    // compression-related buffering
 		Burst       int             // SQ and CSQ buffer sizes: max num objects and send-completions
 		DryRun      bool            // dry run: short-circuit the stream on the send side
-		Compress    bool            // lz4
 	}
 	// stream stats
 	Stats struct {
@@ -216,7 +216,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		}
 		dryrun = extra.DryRun
 		cmn.Assert(dryrun || client != nil)
-		if extra.Compress {
+		if extra.Compression != "" && extra.Compression != cmn.CompressNever { // TODO -- FIXME ...
 			s.lz4s.s = s
 			s.lz4s.sgl = extra.Mem2.NewSGL(memsys.MaxSlabSize, memsys.MaxSlabSize) // TODO -- FIXME
 		}
