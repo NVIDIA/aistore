@@ -229,7 +229,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			_, storedCksum := lom.Cksum().Get()
 			e.Checksum = storedCksum
 		}
-		if needVersion {
+		if needVersion && lom.Version() != "" {
 			e.Version = lom.Version()
 		}
 		if needCopies {

@@ -398,6 +398,8 @@ func DefaultBucketProps(local bool) *BucketProps {
 		if !c.LRU.LocalBuckets {
 			c.LRU.Enabled = false
 		}
+	} else {
+		c.EC.Enabled = false // TODO: EC is unsupported for cloud yet
 	}
 	return &BucketProps{
 		Cksum:       c.Cksum,
@@ -405,6 +407,7 @@ func DefaultBucketProps(local bool) *BucketProps {
 		Mirror:      c.Mirror,
 		Versioning:  c.Ver,
 		AccessAttrs: AllowAllAccess,
+		EC:          c.EC,
 	}
 }
 

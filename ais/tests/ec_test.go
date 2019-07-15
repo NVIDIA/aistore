@@ -577,7 +577,7 @@ func TestECChange(t *testing.T) {
 
 	tutils.Logln("Resetting bucket properties")
 	err = api.ResetBucketProps(baseParams, bucket)
-	tassert.Errorf(t, err != nil, "Resetting properties when EC is enabled must fail")
+	tassert.Errorf(t, err == nil, "Resetting properties should work")
 }
 
 func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName string, sema chan struct{}, rnd *rand.Rand, fullPath string) {

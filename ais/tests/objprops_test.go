@@ -382,7 +382,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 		}
 
 		if m.Version == "" {
-			t.Error("Failed to read object version")
+			t.Errorf("Failed to read object %q version", m.Name)
 			t.Fail()
 		} else {
 			fileslist[m.Name] = m.Version

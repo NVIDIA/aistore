@@ -32,10 +32,20 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 }
 
 func TestDefaultBucketProps(t *testing.T) {
+	const dataSlices = 7
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		globalConfig = getDaemonConfig(t, proxyURL)
 	)
+
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"ec_enabled":     "true",
+		"ec_data_slices": strconv.FormatUint(dataSlices, 10),
+	})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"ec_enabled":     "false",
+		"ec_data_slices": "2",
+	})
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -44,6 +54,12 @@ func TestDefaultBucketProps(t *testing.T) {
 	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.LocalBuckets {
 		t.Errorf("LRU should be disabled for local buckets (bucket.Enabled: %v, global.localBuckets: %v)",
 			p.LRU.Enabled, globalConfig.LRU.LocalBuckets)
+	}
+	if !p.EC.Enabled {
+		t.Errorf("EC should be enabled for local buckets")
+	}
+	if p.EC.DataSlices != dataSlices {
+		t.Errorf("Invalid number of EC data slices: expected %d, got %d", dataSlices, p.EC.DataSlices)
 	}
 }
 
@@ -54,6 +70,15 @@ func TestResetBucketProps(t *testing.T) {
 		globalConfig = getDaemonConfig(t, proxyURL)
 	)
 
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"ec_enabled":       "true",
+		"ec_parity_slices": "1",
+	})
+	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
+		"ec_enabled":       "false",
+		"ec_parity_slices": "2",
+	})
+
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
@@ -61,29 +86,44 @@ func TestResetBucketProps(t *testing.T) {
 	bucketProps.Cksum.Type = cmn.ChecksumNone
 	bucketProps.Cksum.ValidateWarmGet = true
 	bucketProps.Cksum.EnableReadRange = true
+	bucketProps.EC.DataSlices = 1
+	bucketProps.EC.ParitySlices = 2
+	bucketProps.EC.Enabled = false
 
 	globalProps.CloudProvider = cmn.ProviderAIS
 	globalProps.Cksum = globalConfig.Cksum
 	globalProps.LRU = testBucketProps(t).LRU
+	globalProps.EC.ParitySlices = 1
 	// For local bucket, there is additional config option that affects LRU.Enabled
 	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.LocalBuckets
 
-	err := api.SetBucketPropsMsg(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
+	bParams := tutils.DefaultBaseAPIParams(t)
+	err := api.SetBucketPropsMsg(bParams, TestLocalBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
+	p, err := api.HeadBucket(bParams, TestLocalBucketName)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
-	err = api.ResetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
+	err = api.ResetBucketProps(bParams, TestLocalBucketName)
 	tassert.CheckFatal(t, err)
 
-	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
+	p, err = api.HeadBucket(bParams, TestLocalBucketName)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)
+
+	if isCloudBucket(t, bParams.URL, clibucket) {
+		err = api.ResetBucketProps(bParams, clibucket)
+		tassert.CheckFatal(t, err)
+		p, err = api.HeadBucket(bParams, clibucket)
+		tassert.CheckFatal(t, err)
+		if p.EC.Enabled {
+			t.Error("EC should be disabled for cloud bucket")
+		}
+	}
 }
 
 func TestListObjects(t *testing.T) {

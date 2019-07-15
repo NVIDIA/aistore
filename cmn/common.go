@@ -320,6 +320,14 @@ func NounEnding(count int) string {
 	return "s"
 }
 
+// Either returns either lhs or rhs depending on which one is non-empty
+func Either(lhs, rhs string) string {
+	if lhs != "" {
+		return lhs
+	}
+	return rhs
+}
+
 const assertMsg = "assertion failed"
 
 // NOTE: not to be used in the datapath - consider instead one of the 3 flavors below

@@ -78,14 +78,14 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 				objSet[e.Name] = e
 				continue
 			}
-
-			// TargetURL maybe filled even if an object is not cached
-			if entry.TargetURL == "" && e.TargetURL != "" {
-				entry.TargetURL = e.TargetURL
-			}
 			// detect which list contains real information about the object
 			if !entry.IsCached() && e.IsCached() {
+				e.Version = cmn.Either(e.Version, entry.Version)
 				objSet[e.Name] = e
+			} else {
+				// TargetURL maybe filled even if an object is not cached
+				entry.TargetURL = cmn.Either(entry.TargetURL, e.TargetURL)
+				entry.Version = cmn.Either(entry.Version, e.Version)
 			}
 		}
 	}

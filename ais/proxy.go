@@ -1243,12 +1243,6 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		bprops.CopyFrom(nprops)
 	case cmn.ActResetProps:
-		if bprops.EC.Enabled {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, "Cannot reset bucket properties after EC is enabled",
-				http.StatusBadRequest)
-			return
-		}
 		bprops = cmn.DefaultBucketProps(bckIsLocal)
 	}
 	clone.set(bucket, bckIsLocal, bprops)

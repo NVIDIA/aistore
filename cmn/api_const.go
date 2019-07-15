@@ -119,6 +119,7 @@ const (
 	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
 	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
+	HeaderBucketECCompression   = "ec.compression"          // EC stream compression settings
 	HeaderBucketAccessAttrs     = "aattrs"                  // Bucket access attributes
 
 	// object meta

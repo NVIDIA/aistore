@@ -1155,6 +1155,18 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	case "mirror_copies", HeaderBucketCopies:
 		return &conf.Mirror, updateValue(&conf.Mirror.Copies)
 
+	// EC
+	case "ec_enabled", HeaderBucketECEnabled:
+		return &conf.EC, updateValue(&conf.EC.Enabled)
+	case "ec_data_slices", HeaderBucketECData:
+		return &conf.EC, updateValue(&conf.EC.DataSlices)
+	case "ec_parity_slices", HeaderBucketECParity:
+		return &conf.EC, updateValue(&conf.EC.ParitySlices)
+	case "ec_objsize_limit", HeaderBucketECMinSize:
+		return &conf.EC, updateValue(&conf.EC.ObjSizeLimit)
+	case "ec_compression", HeaderBucketECCompression:
+		return &conf.EC, updateValue(&conf.EC.Compression)
+
 	//
 	// 3. CONFIG SECTIONS
 	//
@@ -1226,6 +1238,8 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.DSort, updateValue(&conf.DSort.DefaultMaxMemUsage)
 	case "distributed_sort.call_timeout":
 		return &conf.DSort, updateValue(&conf.DSort.CallTimeoutStr)
+	case "distributed_sort.compression":
+		return &conf.DSort, updateValue(&conf.DSort.Compression)
 
 	// COMPRESSION
 	case "compression.block_size":
@@ -1287,6 +1301,12 @@ var ConfigPropList = map[string]bool{
 	"distributed_sort.call_timeout":          false,
 	"compression.block_size":                 false,
 	"compression.checksum":                   false,
+	"distributed_sort.compression":           false,
+	HeaderBucketECEnabled:                    false,
+	HeaderBucketECData:                       false,
+	HeaderBucketECParity:                     false,
+	HeaderBucketECMinSize:                    false,
+	HeaderBucketECCompression:                false,
 }
 
 func SetConfigMany(nvmap SimpleKVs) (err error) {
