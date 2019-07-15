@@ -61,15 +61,14 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	return manager, nil
 }
 
-func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
+func (mg *ManagerGroup) List(descRegex *regexp.Regexp) []JobInfo {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
 
-	jobInfoMap := make(map[string]JobInfo, len(mg.managers))
-
-	for k, v := range mg.managers {
+	jobsInfos := make([]JobInfo, 0, len(mg.managers))
+	for _, v := range mg.managers {
 		if descRegex == nil || descRegex.MatchString(v.Metrics.Description) {
-			jobInfoMap[k] = v.Metrics.ToJobInfo(v.ManagerUUID)
+			jobsInfos = append(jobsInfos, v.Metrics.ToJobInfo(v.ManagerUUID))
 		}
 	}
 
@@ -78,14 +77,14 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
 	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
 	if err != nil {
 		glog.Error(err)
-		return jobInfoMap
+		return jobsInfos
 	}
 	records, err := db.ReadAll(managersCollection)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			glog.Error(err)
 		}
-		return jobInfoMap
+		return jobsInfos
 	}
 	for _, r := range records {
 		var m Manager
@@ -94,11 +93,11 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp) map[string]JobInfo {
 			continue
 		}
 		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
-			jobInfoMap[m.ManagerUUID] = m.Metrics.ToJobInfo(m.ManagerUUID)
+			jobsInfos = append(jobsInfos, m.Metrics.ToJobInfo(m.ManagerUUID))
 		}
 	}
 
-	return jobInfoMap
+	return jobsInfos
 }
 
 // Get gets manager with given mangerUUID. When manager with given uuid does not

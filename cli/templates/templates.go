@@ -248,13 +248,13 @@ const (
 		"{{end}} \t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
-	DSortListHeader = "JobID\t Status\t Description\t Start\t Finish\n"
+	DSortListHeader = "JobID\t Status\t Start\t Finish\t Description\n"
 	DSortListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else if (eq $value.Archived true) }}Finished" +
 		"{{else}}Running" +
-		"{{end}} \t {{$value.Description}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}}\n"
-	DSortListTmpl = DSortListHeader + "{{ range $key, $value := . }}" + DSortListBody + "{{end}}"
+		"{{end}}\t {{FormatTime $value.StartedTime}}\t {{FormatTime $value.FinishTime}} \t {{$value.Description}}\n"
+	DSortListTmpl = DSortListHeader + "{{ range $value := . }}" + DSortListBody + "{{end}}"
 
 	XactionBaseStatsHeader = "Daemon\t Kind\t Bucket\t Objects\t Bytes\t Start\t End\t Aborted\n"
 	XactionBaseBody        = "{{$key}}\t {{$xact.KindX}}\t {{$xact.BucketX}}\t " +
@@ -375,7 +375,7 @@ func isUnsetTime(t time.Time) bool {
 }
 
 func fmtTime(t time.Time) string {
-	return t.Format("01-02 15:04:05.000")
+	return t.Format("01-02 15:04:05")
 }
 
 func fmtObjTime(t time.Time) string {

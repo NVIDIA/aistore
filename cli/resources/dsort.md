@@ -91,14 +91,15 @@ Retrieves status of the dSort with provided `ID` which is returned upon creation
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--progress` | `bool` | if set, displays a progress bar that illustrates the progress of the dSort | `false` |
 | `--refresh` | `int` | refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
+| `--verbose, -v` | `bool` | if set, detailed metrics will be shown | `false` |
 | `--log` | `string` | path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
 #### Examples:
-* `ais dsort status 5JjIuGemR` returns the metrics of the dSort job
-* `ais dsort status 5JjIuGemR --progress --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
-* `ais dsort status 5JjIuGemR --refresh 500` every `500` milliseconds returns newly fetched metrics of the dSort job
+* `ais dsort status 5JjIuGemR` returns short status description of the dSort job
+* `ais dsort status 5JjIuGemR -v` returns detailed metrics of dSort job
+* `ais dsort status 5JjIuGemR --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
+* `ais dsort status 5JjIuGemR --refresh 500 -v` every `500` milliseconds returns newly fetched metrics of the dSort job
 * `ais dsort status 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"` every `500` milliseconds saves newly fetched metrics of the dSort job to `/tmp/dsort_run.txt` file
 
 ### abort

@@ -189,7 +189,7 @@ type Metrics struct {
 	Creation   *ShardCreation   `json:"shard_creation,omitempty"`
 
 	// Aborted specifies if the DSort has been aborted or not.
-	Aborted bool `json:"aborted"`
+	Aborted bool `json:"aborted,omitempty"`
 	// Archived specifies if the DSort has been archived to persistent storage.
 	Archived bool `json:"archived,omitempty"`
 

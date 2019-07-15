@@ -16,6 +16,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -46,8 +47,8 @@ var (
 		},
 		dsortStart: {},
 		dsortStatus: {
-			progressBarFlag,
 			refreshFlag,
+			verboseFlag,
 			logFlag,
 		},
 		dsortAbort:  {},
@@ -208,7 +209,7 @@ func dsortGenHandler(c *cli.Context, baseParams *api.BaseParams) error {
 		return fmt.Errorf("extension is invalid: %s, should be one of: %s", ext, supportedExts)
 	}
 
-	mem := &memsys.Mem2{}
+	mem := &memsys.Mem2{Name: "dsort-cli"}
 	if err := mem.Init(false); err != nil {
 		return err
 	}
@@ -323,8 +324,14 @@ func dsortHandler(c *cli.Context) error {
 		}
 		_, _ = fmt.Fprintln(c.App.Writer, id)
 	case dsortStatus:
-		showProgressBar := flagIsSet(c, progressBarFlag)
-		if showProgressBar {
+		var (
+			verbose = flagIsSet(c, verboseFlag)
+			refresh = flagIsSet(c, refreshFlag)
+			logging = flagIsSet(c, logFlag)
+		)
+
+		// Show progress bar.
+		if !verbose && refresh && !logging {
 			refreshRate, err := calcRefreshRate(c)
 			if err != nil {
 				return err
@@ -335,78 +342,60 @@ func dsortHandler(c *cli.Context) error {
 			}
 
 			_, _ = fmt.Fprintln(c.App.Writer, dsortResult)
-		} else {
-			if !flagIsSet(c, refreshFlag) {
-				// show metrics just once
-				if _, _, err := showMetrics(baseParams, id, c.App.Writer); err != nil {
-					return err
-				}
-			} else {
-				// show metrics once in a while
-				var (
-					w = c.App.Writer
-				)
-
-				rate, err := calcRefreshRate(c)
-				if err != nil {
-					return err
-				}
-
-				if flagIsSet(c, logFlag) {
-					file, err := cmn.CreateFile(c.String(logFlag.Name))
-					if err != nil {
-						return err
-					}
-					w = file
-					defer file.Close()
-				}
-
-				var (
-					aborted  bool
-					finished bool
-				)
-
-				for {
-					aborted, finished, err = showMetrics(baseParams, id, w)
-					if err != nil {
-						return err
-					}
-					if aborted || finished {
-						break
-					}
-
-					time.Sleep(rate)
-				}
-
-				if aborted {
-					_, _ = fmt.Fprintf(c.App.Writer, "\nDSort job was aborted. Check metrics for encountered errors.\n")
-				} else { // finished == true
-					resp, err := api.MetricsDSort(baseParams, id)
-					if err != nil {
-						return err
-					}
-
-					var (
-						elapsedTime    time.Duration
-						extractionTime time.Duration
-						sortingTime    time.Duration
-						creationTime   time.Duration
-					)
-					for _, tm := range resp {
-						elapsedTime = cmn.MaxDuration(elapsedTime, tm.ElapsedTime())
-						extractionTime = cmn.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
-						sortingTime = cmn.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
-						creationTime = cmn.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
-					}
-
-					_, _ = fmt.Fprintf(
-						c.App.Writer,
-						"\nDSort job has finished successfully in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
-						elapsedTime, extractionTime, sortingTime, creationTime,
-					)
-				}
-			}
+			return nil
 		}
+
+		// Show metrics just once.
+		if !refresh && !logging {
+			if verbose {
+				if _, _, err := printMetrics(c.App.Writer, baseParams, id); err != nil {
+					return err
+				}
+
+				_, _ = fmt.Fprintf(c.App.Writer, "\n")
+			}
+
+			return printCondensedStats(c.App.Writer, baseParams, id)
+		}
+
+		// Show metrics once in a while.
+		var (
+			w = c.App.Writer
+		)
+
+		rate, err := calcRefreshRate(c)
+		if err != nil {
+			return err
+		}
+
+		if logging {
+			file, err := cmn.CreateFile(c.String(logFlag.Name))
+			if err != nil {
+				return err
+			}
+			w = file
+			defer file.Close()
+		}
+
+		var (
+			aborted  bool
+			finished bool
+		)
+
+		for {
+			aborted, finished, err = printMetrics(w, baseParams, id)
+			if err != nil {
+				return err
+			}
+			if aborted || finished {
+				break
+			}
+
+			time.Sleep(rate)
+		}
+
+		_, _ = fmt.Fprintf(c.App.Writer, "\n")
+		return printCondensedStats(c.App.Writer, baseParams, id)
 	case dsortAbort:
 		if err := api.AbortDSort(baseParams, id); err != nil {
 			return err
@@ -422,6 +411,23 @@ func dsortHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
+		sort.Slice(list, func(i, j int) bool {
+			if list[i].IsRunning() && !list[j].IsRunning() {
+				return true
+			}
+			if !list[i].IsRunning() && list[j].IsRunning() {
+				return false
+			}
+			if !list[i].Aborted && list[j].Aborted {
+				return true
+			}
+			if list[i].Aborted && !list[j].Aborted {
+				return false
+			}
+
+			return list[i].StartedTime.Before(list[j].StartedTime)
+		})
 
 		err = templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
 		if err != nil {
@@ -634,7 +640,7 @@ func (b *dsortProgressBar) result() dsortResult {
 	}
 }
 
-func showMetrics(baseParams *api.BaseParams, id string, w io.Writer) (aborted, finished bool, err error) {
+func printMetrics(w io.Writer, baseParams *api.BaseParams, id string) (aborted, finished bool, err error) {
 	resp, err := api.MetricsDSort(baseParams, id)
 	if err != nil {
 		return false, false, err
@@ -654,4 +660,68 @@ func showMetrics(baseParams *api.BaseParams, id string, w io.Writer) (aborted, f
 
 	_, err = fmt.Fprintf(w, "%s\n", string(b))
 	return
+}
+
+func printCondensedStats(w io.Writer, baseParams *api.BaseParams, id string) error {
+	resp, err := api.MetricsDSort(baseParams, id)
+	if err != nil {
+		return err
+	}
+
+	var (
+		aborted  bool
+		finished = true
+
+		elapsedTime    time.Duration
+		extractionTime time.Duration
+		sortingTime    time.Duration
+		creationTime   time.Duration
+	)
+	for _, tm := range resp {
+		aborted = aborted || tm.Aborted
+		finished = finished && tm.Creation.Finished
+
+		elapsedTime = cmn.MaxDuration(elapsedTime, tm.ElapsedTime())
+		if tm.Extraction.Finished {
+			extractionTime = cmn.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
+		} else {
+			extractionTime = cmn.MaxDuration(extractionTime, time.Since(tm.Extraction.Start))
+		}
+
+		if tm.Sorting.Finished {
+			sortingTime = cmn.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
+		} else if tm.Sorting.Running {
+			sortingTime = cmn.MaxDuration(sortingTime, time.Since(tm.Sorting.Start))
+		}
+
+		if tm.Creation.Finished {
+			creationTime = cmn.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
+		} else if tm.Creation.Running {
+			creationTime = cmn.MaxDuration(creationTime, time.Since(tm.Creation.Start))
+		}
+	}
+
+	if finished {
+		_, _ = fmt.Fprintf(
+			w,
+			"DSort job has finished successfully in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
+			elapsedTime, extractionTime, sortingTime, creationTime,
+		)
+		return nil
+	}
+
+	if aborted {
+		_, _ = fmt.Fprintf(w, "DSort job was aborted. Check detailed metrics for encountered errors.\n")
+		return nil
+	}
+
+	_, _ = fmt.Fprintf(w, "DSort job currently running:\n  Extraction:\t%v", extractionTime)
+	if sortingTime.Seconds() > 0 {
+		_, _ = fmt.Fprintf(w, "\n  Sorting:\t%v", sortingTime)
+	}
+	if creationTime.Seconds() > 0 {
+		_, _ = fmt.Fprintf(w, "\n  Creation:\t%v", creationTime)
+	}
+	_, _ = fmt.Fprint(w, "\n")
+	return nil
 }

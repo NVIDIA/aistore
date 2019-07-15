@@ -62,7 +62,7 @@ func RemoveDSort(baseParams *BaseParams, managerUUID string) error {
 	return err
 }
 
-func ListDSort(baseParams *BaseParams, regex string) (map[string]*dsort.JobInfo, error) {
+func ListDSort(baseParams *BaseParams, regex string) ([]*dsort.JobInfo, error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Sort)
 	query := url.Values{}
@@ -76,7 +76,7 @@ func ListDSort(baseParams *BaseParams, regex string) (map[string]*dsort.JobInfo,
 		return nil, err
 	}
 
-	var metrics map[string]*dsort.JobInfo
-	err = jsoniter.Unmarshal(body, &metrics)
-	return metrics, err
+	var jobsInfos []*dsort.JobInfo
+	err = jsoniter.Unmarshal(body, &jobsInfos)
+	return jobsInfos, err
 }

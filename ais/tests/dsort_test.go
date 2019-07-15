@@ -404,16 +404,16 @@ func (df *dsortFramework) clearDSortList() {
 		seenRunningDSort := false
 		listDSort, err := api.ListDSort(baseParams, dsortDescAllRegex)
 		tassert.CheckFatal(df.m.t, err)
-		for k, v := range listDSort {
+		for _, v := range listDSort {
 			if v.Archived {
-				err = api.RemoveDSort(baseParams, k)
+				err = api.RemoveDSort(baseParams, v.ID)
 				tassert.CheckFatal(df.m.t, err)
 			} else {
 				// We get here when dsort is aborted because a target goes down
 				// but when it rejoins it thinks the dsort is not aborted and doesn't do cleanup
 				// this happens in TestDistributedSortKillTargetDuringPhases
-				tutils.Logf("Stopping: %v...\n", k)
-				err = api.AbortDSort(baseParams, k)
+				tutils.Logf("Stopping: %v...\n", v.ID)
+				err = api.AbortDSort(baseParams, v.ID)
 				tassert.CheckFatal(df.m.t, err)
 				seenRunningDSort = true
 			}
