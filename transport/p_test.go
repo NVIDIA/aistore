@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -25,11 +26,14 @@ import (
 	"github.com/NVIDIA/aistore/tutils"
 )
 
-var buf1 []byte
+// e.g.:
+// # go test -v -run=Test_OneStream10G -logtostderr=true
+
+var cpbuf = make([]byte, cmn.KiB*32)
 
 func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	cmn.Assert(err == nil)
-	written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
+	written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
 	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
 
@@ -43,6 +47,13 @@ func Test_OneStream10G(t *testing.T) {
 
 	transport.SetMux(network, mux)
 
+	config := cmn.GCO.BeginUpdate()
+	config.Compression.BlockMaxSize = cmn.KiB * 256
+	cmn.GCO.CommitUpdate(config)
+	if err := config.Compression.Validate(config); err != nil {
+		tassert.CheckFatal(t, err)
+	}
+
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -52,36 +63,39 @@ func Test_OneStream10G(t *testing.T) {
 	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 2, Compression: cmn.CompressAllways, Mem2: Mem2})
+	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
+	tassert.CheckFatal(t, err)
+	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAllways})
 
 	slab := Mem2.SelectSlab2(cmn.MiB)
-	buf1 = slab.Alloc()
-
 	random := newRand(time.Now().UnixNano())
-	slab, _ = Mem2.GetSlab2(cmn.KiB * 32)
+	buf := slab.Alloc()
+	_, _ = random.Read(buf)
+	hdr := genStaticHeader()
 	size, prevsize, num, numhdr := int64(0), int64(0), 0, 0
 
-	for size < cmn.GiB*10 {
-		hdr := genStaticHeader()
+	for size < cmn.GiB*32 {
 		if num%3 == 0 { // every so often send header-only
+			sz := hdr.ObjAttrs.Size
 			hdr.ObjAttrs.Size = 0
 			stream.Send(hdr, nil, nil, nil)
+			hdr.ObjAttrs.Size = sz
 			numhdr++
 		} else {
-			reader := newRandReader(random, hdr, slab)
+			reader := &randReader{buf: buf, hdr: hdr, clone: true}
 			stream.Send(hdr, reader, nil, nil)
 		}
 		num++
 		size += hdr.ObjAttrs.Size
-		if size-prevsize >= cmn.GiB {
+		if size-prevsize >= cmn.GiB*4 {
 			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
-			stats := stream.GetStats()
-			tutils.Logf("send$ %s: idle=%.2f%%\n", stream, stats.IdlePct)
 		}
 	}
 	stream.Fin()
 	stats := stream.GetStats()
+
+	slab.Free(buf)
 
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%, compression ratio=%.2f\n",
 		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.IdlePct,
@@ -94,7 +108,9 @@ func Test_DryRunTB(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
-	stream := transport.NewStream(nil, "dummy/null", &transport.Extra{DryRun: true})
+	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
+	tassert.CheckFatal(t, err)
+	stream := transport.NewStream(nil, "dummy/null", nil)
 
 	random := newRand(time.Now().UnixNano())
 	slab, _ := Mem2.GetSlab2(cmn.KiB * 32)
@@ -129,7 +145,7 @@ func Test_CompletionCount(t *testing.T) {
 
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
+		written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 	}
@@ -148,7 +164,9 @@ func Test_CompletionCount(t *testing.T) {
 	}
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 256}) // provide for sizeable queue at any point
+	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
+	tassert.CheckFatal(t, err)
+	stream := transport.NewStream(httpclient, url, nil) // provide for sizeable queue at any point
 	random := newRand(time.Now().UnixNano())
 	rem := int64(0)
 	for idx := 0; idx < 10000; idx++ {

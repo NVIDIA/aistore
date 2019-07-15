@@ -96,8 +96,6 @@ type (
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
 		Compression string          // see CompressAlways, etc. enum
 		Mem2        *memsys.Mem2    // compression-related buffering
-		Burst       int             // SQ and CSQ buffer sizes: max num objects and send-completions
-		DryRun      bool            // dry run: short-circuit the stream on the send side
 	}
 	// stream stats
 	Stats struct {
@@ -144,10 +142,12 @@ type (
 // internal
 type (
 	lz4Stream struct {
-		s    *Stream
-		zw   *lz4.Writer // orig reader => zw
-		sgl  *memsys.SGL // zw => bb => network
-		size int64
+		s             *Stream
+		zw            *lz4.Writer // orig reader => zw
+		sgl           *memsys.SGL // zw => bb => network
+		size          int64
+		blockMaxSize  int  // *uncompressed* block max size
+		frameChecksum bool // true: checksum lz4 frames
 	}
 	obj struct {
 		hdr      Header         // object header
@@ -200,7 +200,6 @@ func NewDefaultClient() *http.Client {
 // API: methods
 //
 func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
-	var dryrun bool
 	u, err := url.Parse(toURL)
 	if err != nil {
 		glog.Errorf("Failed to parse %s: %v", toURL, err)
@@ -214,11 +213,21 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		if extra.IdleTimeout > 0 {
 			s.time.idleOut = extra.IdleTimeout
 		}
-		dryrun = extra.DryRun
-		cmn.Assert(dryrun || client != nil)
-		if extra.Compression != "" && extra.Compression != cmn.CompressNever { // TODO -- FIXME ...
+		if extra.Compression != "" && extra.Compression != cmn.CompressNever {
+			config := cmn.GCO.Get()
 			s.lz4s.s = s
-			s.lz4s.sgl = extra.Mem2.NewSGL(memsys.MaxSlabSize, memsys.MaxSlabSize) // TODO -- FIXME
+			s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
+			s.lz4s.frameChecksum = config.Compression.Checksum
+			mem := extra.Mem2
+			if mem == nil {
+				mem = memsys.GMM()
+				glog.Warningln("Using global memory manager for streaming inline compression")
+			}
+			if s.lz4s.blockMaxSize >= memsys.MaxSlabSize {
+				s.lz4s.sgl = mem.NewSGL(memsys.MaxSlabSize, memsys.MaxSlabSize)
+			} else {
+				s.lz4s.sgl = mem.NewSGL(cmn.KiB*64, cmn.KiB*64)
+			}
 		}
 	}
 	if s.time.idleOut < tickUnit {
@@ -227,17 +236,18 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.time.ticks = int(s.time.idleOut / tickUnit)
 	s.sessID = nextSID.Inc()
 	s.trname = path.Base(u.Path)
-	s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
+	if !s.compressed() {
+		s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
+	} else {
+		s.lid = fmt.Sprintf("%s[%d:%t,%d]", s.trname, s.sessID, s.lz4s.frameChecksum, s.lz4s.blockMaxSize)
+	}
 
 	// burst size: the number of objects the caller is permitted to post for sending
 	// without experiencing any sort of back-pressure
 	burst := burstNum
-	if extra != nil && extra.Burst > 0 {
-		burst = extra.Burst
-	}
 	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
 		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
-			glog.Errorf("%s: error parsing burst env '%s': %v", s, a, err)
+			glog.Errorf("%s: error parsing env AIS_STREAM_BURST_NUM=%s: %v", s, a, err)
 			burst = burstNum
 		} else {
 			burst = int(burst64)
@@ -263,6 +273,13 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s.term.reason = new(string)
 
 	s.wg.Add(2)
+	var dryrun bool
+	if a := os.Getenv("AIS_STREAM_DRY_RUN"); a != "" {
+		if dryrun, err = strconv.ParseBool(a); err != nil {
+			glog.Errorf("%s: error parsing env AIS_STREAM_DRY_RUN=%s: %v", s, a, err)
+		}
+		cmn.Assert(dryrun || client != nil)
+	}
 	go s.sendLoop(ctx, dryrun) // handle SQ
 	go s.cmplLoop()            // handle SCQ
 
@@ -506,6 +523,9 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 		} else {
 			s.lz4s.zw.Reset(s.lz4s.sgl)
 		}
+		s.lz4s.zw.Header.BlockChecksum = false
+		s.lz4s.zw.Header.NoChecksum = !s.lz4s.frameChecksum
+		s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
 		body = &s.lz4s
 	}
 	if request, err = http.NewRequest(http.MethodPut, s.toURL, body); err != nil {

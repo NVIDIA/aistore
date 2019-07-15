@@ -215,6 +215,7 @@ For more examples, please see tests in the package directory.
 |--- | --- |
 | AIS_DEBUG | Enable inline assertions and verbose tracing (eg. `AIS_DEBUG=transport=1`) |
 | AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
+| AIS_STREAM_DRY_RUN | If enabled, read and immediately discard all read data (can be used to evaluate client-side throughput) |
 
 
 

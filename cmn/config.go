@@ -79,38 +79,6 @@ type (
 	}
 )
 
-var (
-	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
-	supportedL4Protos  = []string{tcpProto}
-	supportedL7Protos  = []string{httpProto, httpsProto}
-
-	_ Validator = &CksumConf{}
-	_ Validator = &LRUConf{}
-	_ Validator = &MirrorConf{}
-	_ Validator = &ECConf{}
-	_ Validator = &VersionConf{}
-	_ Validator = &KeepaliveConf{}
-	_ Validator = &PeriodConf{}
-	_ Validator = &TimeoutConf{}
-	_ Validator = &RebalanceConf{}
-	_ Validator = &NetConf{}
-	_ Validator = &DownloaderConf{}
-	_ Validator = &DSortConf{}
-	_ Validator = &FSPathsConf{}
-	_ Validator = &TestfspathConf{}
-
-	_ PropsValidator = &CksumConf{}
-	_ PropsValidator = &LRUConf{}
-	_ PropsValidator = &MirrorConf{}
-	_ PropsValidator = &ECConf{}
-
-	_ json.Marshaler   = &FSPathsConf{}
-	_ json.Unmarshaler = &FSPathsConf{}
-
-	// Debugging
-	pkgDebug = make(map[string]glog.Level)
-)
-
 //
 // CONFIG PROVIDER
 //
@@ -259,6 +227,41 @@ func (gco *globalConfigOwner) Subscribe(cl ConfigListener) {
 //
 // CONFIGURATION
 //
+var (
+	SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
+	supportedL4Protos  = []string{tcpProto}
+	supportedL7Protos  = []string{httpProto, httpsProto}
+
+	// NOTE: new validators must be run via Config.Validate() - see below
+
+	_ Validator = &CksumConf{}
+	_ Validator = &LRUConf{}
+	_ Validator = &MirrorConf{}
+	_ Validator = &ECConf{}
+	_ Validator = &VersionConf{}
+	_ Validator = &KeepaliveConf{}
+	_ Validator = &PeriodConf{}
+	_ Validator = &TimeoutConf{}
+	_ Validator = &RebalanceConf{}
+	_ Validator = &NetConf{}
+	_ Validator = &DownloaderConf{}
+	_ Validator = &DSortConf{}
+	_ Validator = &FSPathsConf{}
+	_ Validator = &TestfspathConf{}
+	_ Validator = &CompressionConf{}
+
+	_ PropsValidator = &CksumConf{}
+	_ PropsValidator = &LRUConf{}
+	_ PropsValidator = &MirrorConf{}
+	_ PropsValidator = &ECConf{}
+
+	_ json.Marshaler   = &FSPathsConf{}
+	_ json.Unmarshaler = &FSPathsConf{}
+
+	// Debugging
+	pkgDebug = make(map[string]glog.Level)
+)
+
 type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`
@@ -282,6 +285,7 @@ type Config struct {
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
 	Downloader       DownloaderConf  `json:"downloader"`
 	DSort            DSortConf       `json:"distributed_sort"`
+	Compression      CompressionConf `json:"compression"`
 	Readahead        RahConf         `json:"readahead"`
 }
 
@@ -515,6 +519,18 @@ type FSPathsConf struct {
 	Paths map[string]struct{} `json:"paths,omitempty"`
 }
 
+// lz4 block and frame formats: http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
+type CompressionConf struct {
+	BlockMaxSize int  `json:"block_size"` // *uncompressed* block max size
+	Checksum     bool `json:"checksum"`   // true: checksum lz4 frames
+}
+
+//==============================
+//
+// config functions
+//
+//==============================
+
 func SetLogLevel(config *Config, loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
@@ -527,11 +543,6 @@ func SetLogLevel(config *Config, loglevel string) (err error) {
 	return
 }
 
-//==============================
-//
-// config functions
-//
-//==============================
 func LoadConfig(clivars *ConfigCLI) (config *Config, changed bool) {
 	config, changed, err := LoadConfigErr(clivars)
 
@@ -620,11 +631,18 @@ func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error)
 	return
 }
 
+// TestingEnv returns true if config is set to a development environment
+// where a single local filesystem is partitioned between all (locally running)
+// targets and is used for both local and Cloud buckets
+func (c *Config) TestingEnv() bool {
+	return c.TestFSP.Count > 0
+}
+
 func (c *Config) Validate() error {
 	validators := []Validator{
 		&c.Disk, &c.LRU, &c.Mirror, &c.Cksum,
 		&c.Timeout, &c.Periodic, &c.Rebalance, &c.KeepaliveTracker, &c.Net, &c.Ver,
-		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths,
+		&c.Downloader, &c.DSort, &c.TestFSP, &c.FSpaths, &c.Compression,
 	}
 	for _, validator := range validators {
 		if err := validator.Validate(c); err != nil {
@@ -632,13 +650,6 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
-}
-
-// TestingEnv returns true if config is set to a development environment
-// where a single local filesystem is partitioned between all (locally running)
-// targets and is used for both local and Cloud buckets
-func (c *Config) TestingEnv() bool {
-	return c.TestFSP.Count > 0
 }
 
 // ipv4ListsOverlap checks if two comma-separated ipv4 address lists
@@ -1031,6 +1042,14 @@ func ValidateMpath(mpath string) (string, error) {
 		return "", NewInvalidaMountpathError(mpath, "root directory is not a valid mountpath")
 	}
 	return cleanMpath, nil
+}
+
+// NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
+func (c *CompressionConf) Validate(_ *Config) (err error) {
+	if c.BlockMaxSize != 64*KiB && c.BlockMaxSize != 256*KiB && c.BlockMaxSize != MiB && c.BlockMaxSize != 4*MiB {
+		return fmt.Errorf("invalid compression.block_size %d", c.BlockMaxSize)
+	}
+	return nil
 }
 
 // setGLogVModule sets glog's vmodule flag

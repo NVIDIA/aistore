@@ -31,6 +31,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"reflect"
 	"strconv"
@@ -248,7 +249,9 @@ func Test_CancelStream(t *testing.T) {
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	ctx, cancel := context.WithCancel(context.Background())
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 1, Ctx: ctx})
+	err = os.Setenv("AIS_STREAM_BURST_NUM", "1")
+	tassert.CheckFatal(t, err)
+	stream := transport.NewStream(httpclient, url, &transport.Extra{Ctx: ctx})
 	now := time.Now()
 
 	random := newRand(time.Now().UnixNano())
@@ -618,6 +621,7 @@ type randReader struct {
 	slab   *memsys.Slab2
 	off    int64
 	random *rand.Rand
+	clone  bool
 }
 
 func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) *randReader {
@@ -648,6 +652,9 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 			return
 		}
 		nr := copy(p[n:n+int(l64)], r.buf)
+		if false && nr > 0 { // to fully randomize
+			r.random.Read(p[n : n+nr])
+		}
 		n += nr
 		r.off += int64(nr)
 	}
@@ -661,7 +668,9 @@ func (r *randReader) Open() (io.ReadCloser, error) {
 }
 
 func (r *randReader) Close() error {
-	r.slab.Free(r.buf)
+	if !r.clone {
+		r.slab.Free(r.buf)
+	}
 	return nil
 }
 

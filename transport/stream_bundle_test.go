@@ -65,11 +65,11 @@ func Test_Bundle(t *testing.T) {
 	transport.SetMux(network, mux)
 
 	slab := Mem2.SelectSlab2(32 * cmn.KiB)
-	buf := slab.Alloc()
-	defer slab.Free(buf)
+	rbuf := slab.Alloc()
+	defer slab.Free(rbuf)
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
+		written, _ := io.CopyBuffer(ioutil.Discard, objReader, rbuf)
 		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
 	callback := func(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
@@ -84,11 +84,19 @@ func Test_Bundle(t *testing.T) {
 		sowner         = &sowner{}
 		lsnode         = cluster.Snode{DaemonID: "local"}
 		random         = newRand(time.Now().UnixNano())
+		wbuf           = slab.Alloc()
 		extra          = &transport.Extra{Compression: cmn.CompressAllways, Mem2: Mem2}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int
 	)
+	config := cmn.GCO.BeginUpdate()
+	config.Compression.BlockMaxSize = cmn.MiB
+	cmn.GCO.CommitUpdate(config)
+	if err := config.Compression.Validate(config); err != nil {
+		tassert.CheckFatal(t, err)
+	}
+	_, _ = random.Read(wbuf)
 	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient,
 		transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 
@@ -99,7 +107,7 @@ func Test_Bundle(t *testing.T) {
 			hdr.ObjAttrs.Size = 0
 			err = sb.SendV(hdr, nil, callback, nil)
 		} else {
-			reader := newRandReader(random, hdr, slab)
+			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
 			err = sb.SendV(hdr, reader, callback, nil)
 		}
 		if err != nil {
@@ -114,6 +122,8 @@ func Test_Bundle(t *testing.T) {
 	}
 	sb.Close(true /* gracefully */)
 	stats := sb.GetStats()
+
+	slab.Free(wbuf)
 
 	for id, tstat := range stats {
 		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%, compression ratio=%.2f\n",

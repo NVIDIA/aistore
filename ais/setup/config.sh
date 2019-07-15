@@ -70,6 +70,10 @@ cat > $CONFFILE <<EOL
 		"validate_obj_move":	false,
 		"enable_read_range":	false
 	},
+	"compression": {
+		"block_size":		${BLOCK_SIZE:-262144},
+		"checksum":		${CHECKSUM:-false}
+	},
 	"versioning": {
 		"enabled":		"true",
 		"validate_warm_get":	false
