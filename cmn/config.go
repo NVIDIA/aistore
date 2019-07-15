@@ -1227,6 +1227,12 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	case "distributed_sort.call_timeout":
 		return &conf.DSort, updateValue(&conf.DSort.CallTimeoutStr)
 
+	// COMPRESSION
+	case "compression.block_size":
+		return &conf.Compression, updateValue(&conf.Compression.BlockMaxSize)
+	case "compression.checksum":
+		return &conf.Compression, updateValue(&conf.Compression.Checksum)
+
 	default:
 		return nil, fmt.Errorf("cannot set config key: %q - is readonly or unsupported", key)
 	}
@@ -1279,6 +1285,8 @@ var ConfigPropList = map[string]bool{
 	"distributed_sort.missing_shards":        false,
 	"distributed_sort.default_max_mem_usage": false,
 	"distributed_sort.call_timeout":          false,
+	"compression.block_size":                 false,
+	"compression.checksum":                   false,
 }
 
 func SetConfigMany(nvmap SimpleKVs) (err error) {

@@ -215,13 +215,23 @@ const (
 	DSortConfTmpl = "\n{{$obj := .DSort}}Distributed Sort Config\n" +
 		" Duplicated Records: {{$obj.DuplicatedRecords}}\n" +
 		" Missing Shards: {{$obj.MissingShards}}\n"
+	CompressionTmpl = "\n{{$obj := .Compression}}Compression\n" +
+		" BlockSize:\t{{$obj.BlockMaxSize}}\n" +
+		" Checksum:\t{{$obj.Checksum}}\n"
+	ECTmpl = "\n{{$obj := .EC}}EC\n" +
+		" Enabled:\t{{$obj.Enabled}}\n" +
+		" Minimum object for EC:\t{{$obj.ObjSizeLimit}}\n" +
+		" Number of data slices:\t{{$obj.DataSlices}}\n" +
+		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
+		" Compression options:\t{{$obj.Compression}}\n"
 
 	ConfigTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n" +
 		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
 		TestFSPConfTmpl + NetConfTmpl + FSHCConfTmpl + AuthConfTmpl + KeepaliveConfTmpl +
-		DownloaderConfTmpl + DSortConfTmpl
+		DownloaderConfTmpl + DSortConfTmpl +
+		CompressionTmpl + ECTmpl
 
 	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
 		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
