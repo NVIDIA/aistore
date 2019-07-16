@@ -330,7 +330,7 @@ const (
 
 // enum: compression
 const (
-	CompressAllways = "always"
-	CompressNever   = "never"
-	CompressRatio   = "ratio=%d" // adaptive: min ratio that warrants compression
+	CompressAlways = "always"
+	CompressNever  = "never"
+	CompressRatio  = "ratio=%d" // adaptive: min ratio that warrants compression
 )

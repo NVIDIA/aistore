@@ -394,7 +394,7 @@ type DiskConf struct {
 
 type RebalanceConf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"` // max time to wait for ACKs and for neighbors to complete
-	Compression      string        `json:"compression"`     // see CompressAllways, etc. enum
+	Compression      string        `json:"compression"`     // see CompressAlways, etc. enum
 	DestRetryTime    time.Duration `json:"-"`               // (runtime)
 	Multiplier       uint8         `json:"multiplier"`      // stream-bundle-and-jogger multiplier
 	Enabled          bool          `json:"enabled"`         // true: auto-rebalance, false: manual rebalancing
@@ -511,7 +511,7 @@ type DSortConf struct {
 	EKMMissingKey      string        `json:"ekm_missing_key"`
 	DefaultMaxMemUsage string        `json:"default_max_mem_usage"`
 	CallTimeoutStr     string        `json:"call_timeout"`
-	Compression        string        `json:"compression"` // see CompressAllways, etc. enum
+	Compression        string        `json:"compression"` // see CompressAlways, etc. enum
 	CallTimeout        time.Duration `json:"-"`           // determines how long target should wait for other target to respond
 }
 
@@ -574,7 +574,7 @@ func LoadConfigErr(clivars *ConfigCLI) (config *Config, changed bool, err error)
 		return nil, false, fmt.Errorf("Failed to create log dir %q, err: %s", config.Log.Dir, err)
 	}
 	if err := config.Validate(); err != nil {
-		return nil, false, fmt.Errorf("%s", err)
+		return nil, false, err
 	}
 
 	// glog rotate

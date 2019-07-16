@@ -65,7 +65,7 @@ func Test_OneStream10G(t *testing.T) {
 	url := ts.URL + path
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
 	tassert.CheckFatal(t, err)
-	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAllways})
+	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab := Mem2.SelectSlab2(cmn.MiB)
 	random := newRand(time.Now().UnixNano())

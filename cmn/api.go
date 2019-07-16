@@ -251,7 +251,7 @@ type ECConf struct {
 	ObjSizeLimit int64  `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
 	DataSlices   int    `json:"data_slices"`   // number of data slices
 	ParitySlices int    `json:"parity_slices"` // number of parity slices/replicas
-	Compression  string `json:"compression"`   // see CompressAllways, etc. enum
+	Compression  string `json:"compression"`   // see CompressAlways, etc. enum
 	Enabled      bool   `json:"enabled"`       // EC is enabled
 }
 
