@@ -29,7 +29,7 @@ import (
 // e.g.:
 // # go test -v -run=Test_OneStream10G -logtostderr=true
 
-var cpbuf = make([]byte, cmn.KiB*32)
+var cpbuf = make([]byte, 32*cmn.KiB)
 
 func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	cmn.Assert(err == nil)
@@ -48,7 +48,7 @@ func Test_OneStream10G(t *testing.T) {
 	transport.SetMux(network, mux)
 
 	config := cmn.GCO.BeginUpdate()
-	config.Compression.BlockMaxSize = cmn.KiB * 256
+	config.Compression.BlockMaxSize = 256 * cmn.KiB
 	cmn.GCO.CommitUpdate(config)
 	if err := config.Compression.Validate(config); err != nil {
 		tassert.CheckFatal(t, err)
@@ -109,6 +109,7 @@ func Test_DryRunTB(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 	err := os.Setenv("AIS_STREAM_DRY_RUN", "true")
+	defer os.Unsetenv("AIS_STREAM_DRY_RUN")
 	tassert.CheckFatal(t, err)
 	stream := transport.NewStream(nil, "dummy/null", nil)
 
