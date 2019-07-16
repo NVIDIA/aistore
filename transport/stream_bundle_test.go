@@ -42,10 +42,6 @@ func (listeners *slisteners) Reg(sl cluster.Slistener)  {}
 func (listeners *slisteners) Unreg(cluster.Slistener)   {}
 
 func Test_Bundle(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
 	var (
 		numCompleted atomic.Int64
 		Mem2         = tutils.Mem2
@@ -99,8 +95,11 @@ func Test_Bundle(t *testing.T) {
 	_, _ = random.Read(wbuf)
 	sb := transport.NewStreamBundle(sowner, &lsnode, httpclient,
 		transport.SBArgs{Network: network, Trname: trname, Multiplier: multiplier, Extra: extra})
-
-	for size < cmn.GiB*10 {
+	var numGs int64 = 10
+	if testing.Short() {
+		numGs = 1
+	}
+	for size < cmn.GiB*numGs {
 		var err error
 		hdr := genRandomHeader(random)
 		if num%7 == 0 {

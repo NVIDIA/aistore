@@ -38,12 +38,9 @@ func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader
 }
 
 func Test_Compressed16G(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
 	network := "np"
 	mux := mux.NewServeMux()
-	trname := "32G"
+	trname := "cmpr"
 
 	transport.SetMux(network, mux)
 
@@ -73,9 +70,11 @@ func Test_Compressed16G(t *testing.T) {
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)
 	hdr := genStaticHeader()
-	size, prevsize, num, numhdr := int64(0), int64(0), 0, 0
-
-	for size < cmn.GiB*16 {
+	size, prevsize, num, numhdr, numGs := int64(0), int64(0), 0, 0, int64(16)
+	if testing.Short() {
+		numGs = 2
+	}
+	for size < cmn.GiB*numGs {
 		if num%7 == 0 { // header-only
 			hdr.ObjAttrs.Size = 0
 			stream.Send(hdr, nil, nil, nil)

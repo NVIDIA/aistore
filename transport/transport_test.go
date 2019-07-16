@@ -206,9 +206,6 @@ func Example_mux() {
 
 // test random streaming
 func Test_OneStream(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
 	mux := mux.NewServeMux()
 
 	transport.SetMux("n1", mux)
@@ -216,9 +213,11 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	// streamWriteUntil(t, 55, nil, ts, nil, nil, false)
-	streamWriteUntil(t, 99, nil, ts, nil, nil, true /*compress*/)
-
+	if time.Now().UnixNano()%2 == 1 {
+		streamWriteUntil(t, 99, nil, ts, nil, nil, true /*compress*/)
+	} else {
+		streamWriteUntil(t, 55, nil, ts, nil, nil, false)
+	}
 	printNetworkStats(t, "n1")
 }
 
@@ -546,7 +545,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {
-			tutils.Logf("[%2d]: %d GiB\n", ii, size/cmn.GiB)
+			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
 			if random.Int63()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout

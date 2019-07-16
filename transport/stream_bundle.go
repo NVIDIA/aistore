@@ -38,6 +38,7 @@ type (
 		trname       string
 		streams      atomic.Pointer // points to bundle (below)
 		extra        Extra
+		lid          string
 		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
 		multiplier   int // optionally, greater than 1 number of streams per destination (with round-robin selection)
 		manualResync bool
@@ -91,12 +92,21 @@ func NewStreamBundle(sowner cluster.Sowner, lsnode *cluster.Snode, cl *http.Clie
 	if sb.multiplier == 0 {
 		sb.multiplier = 1
 	}
+	if sb.extra.Config == nil {
+		sb.extra.Config = cmn.GCO.Get()
+	}
 	// update streams when Smap changes
 	sb.Resync()
 
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
 		listeners.Reg(sb)
+	}
+	if !sb.extra.compressed() {
+		sb.lid = fmt.Sprintf("sb[%s=>%s/%s]", sb.lsnode.DaemonID, sb.network, sb.trname)
+	} else {
+		sb.lid = fmt.Sprintf("sb[%s=>%s/%s[%s]]", sb.lsnode.DaemonID, sb.network, sb.trname,
+			cmn.B2S(int64(sb.extra.Config.Compression.BlockMaxSize), 0))
 	}
 	return
 }
@@ -186,9 +196,7 @@ func (sb *StreamBundle) Send(hdr Header, reader cmn.ReadOpenCloser, cb SendCallb
 
 var _ cluster.Slistener = &StreamBundle{}
 
-func (sb *StreamBundle) String() string {
-	return sb.lsnode.DaemonID + "=>" + sb.network + "/" + sb.trname
-}
+func (sb *StreamBundle) String() string { return sb.lid }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
 func (sb *StreamBundle) ListenSmapChanged(newSmapVersionChannel chan int64) {

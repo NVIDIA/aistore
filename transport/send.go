@@ -96,6 +96,7 @@ type (
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
 		Compression string          // see CompressAlways, etc. enum
 		Mem2        *memsys.Mem2    // compression-related buffering
+		Config      *cmn.Config
 	}
 	// stream stats
 	Stats struct {
@@ -194,6 +195,10 @@ func NewDefaultClient() *http.Client {
 	return cmn.NewClient(cmn.TransportArgs{SndRcvBufSize: config.Net.L4.SndRcvBufSize})
 }
 
+func (extra *Extra) compressed() bool {
+	return extra.Compression != "" && extra.Compression != cmn.CompressNever
+}
+
 //
 // API: methods
 //
@@ -211,8 +216,11 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		if extra.IdleTimeout > 0 {
 			s.time.idleOut = extra.IdleTimeout
 		}
-		if extra.Compression != "" && extra.Compression != cmn.CompressNever {
-			config := cmn.GCO.Get()
+		if extra.compressed() {
+			config := extra.Config
+			if config == nil {
+				config = cmn.GCO.Get()
+			}
 			s.lz4s.s = s
 			s.lz4s.blockMaxSize = config.Compression.BlockMaxSize
 			s.lz4s.frameChecksum = config.Compression.Checksum
