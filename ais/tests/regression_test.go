@@ -7,6 +7,7 @@ package ais_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -1314,7 +1315,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	time.Sleep(time.Second * 10)
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	ch := make(chan string, 2)
+	ch := make(chan error, 2)
 
 	timeout := time.Duration(0)
 	if len(timeouts) > 0 {
@@ -1338,7 +1339,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 			}
 
 			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
-				ch <- "global rebalance has not completed before " + timeout.String()
+				ch <- errors.New("global rebalance has not completed before " + timeout.String())
 				return
 			}
 		}
@@ -1361,7 +1362,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 			}
 
 			if timeout.Nanoseconds() != 0 && time.Since(start) > timeout {
-				ch <- "global rebalance has not completed before " + timeout.String()
+				ch <- errors.New("global rebalance has not completed before " + timeout.String())
 				return
 			}
 		}
@@ -1370,8 +1371,8 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	wg.Wait()
 	close(ch)
 
-	for errstr := range ch {
-		t.Fatalf(errstr)
+	for err := range ch {
+		t.Fatal(err)
 	}
 }
 

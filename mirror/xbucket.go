@@ -126,8 +126,8 @@ func (j *joggerBckBase) jog() {
 
 func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
+		if err := cmn.PathWalkErr(err); err != nil {
+			glog.Error(err)
 			return err
 		}
 		return nil
@@ -135,11 +135,11 @@ func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	lom, errstr := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(cmn.ProviderFromLoc(j.parent.BckIsLocal()), j.config)
-	if errstr != "" {
+	lom, err := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(cmn.ProviderFromLoc(j.parent.BckIsLocal()), j.config)
+	if err != nil {
 		return nil
 	}
-	if _, errstr := lom.Load(true); errstr != "" || !lom.Exists() {
+	if _, err := lom.Load(true); err != nil || !lom.Exists() {
 		return nil
 	}
 	if lom.IsCopy() {

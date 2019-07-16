@@ -185,3 +185,15 @@ func (e *ErrorOnce) GetErr() error {
 func (e *ErrorOnce) Flush() {
 	e.err = nil
 }
+
+type (
+	SkipError struct{}
+)
+
+func (e *SkipError) Error() string {
+	return "skip"
+}
+
+func NewSkipError() *SkipError {
+	return &SkipError{}
+}

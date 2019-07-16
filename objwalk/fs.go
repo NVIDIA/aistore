@@ -134,8 +134,8 @@ func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
 
 func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
+		if err1 := cmn.PathWalkErr(err); err1 != nil {
+			glog.Error(err1)
 			return err
 		}
 		return nil
@@ -150,11 +150,11 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	var (
 		objStatus uint16 = cmn.ObjStatusOK
 	)
-	lom, errstr := cluster.LOM{T: ci.t, FQN: fqn}.Init("")
-	if errstr != "" {
-		glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
+	lom, err := cluster.LOM{T: ci.t, FQN: fqn}.Init("")
+	if err != nil {
+		glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 	}
-	_, errstr = lom.Load(true)
+	_, err = lom.Load(true)
 	if !lom.Exists() {
 		return nil
 	}
@@ -164,12 +164,12 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if lom.Misplaced() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
-		if errstr != "" {
-			glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
+		if err != nil {
+			glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 		}
-		si, errstr := cluster.HrwTarget(lom.Bucket, lom.Objname, ci.smap)
-		if errstr != "" {
-			glog.Errorf("%s: %s", lom, errstr)
+		si, err := cluster.HrwTarget(lom.Bucket, lom.Objname, ci.smap)
+		if err != nil {
+			glog.Errorf("%s: %s", lom, err)
 		}
 		if ci.t.Snode().DaemonID != si.DaemonID {
 			objStatus = cmn.ObjStatusMoved

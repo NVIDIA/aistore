@@ -119,10 +119,10 @@ func (c *getJogger) ec(req *Request) {
 // * nodes - targets that have metadata and replica - filled by requestMeta
 // * replicaCnt - total number of replicas including main one
 func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenCloser, metadata *Metadata, nodes map[string]*Metadata, replicaCnt int) {
-	targets, errstr := cluster.HrwTargetList(lom.Bucket, lom.Objname, c.parent.smap.Get(), replicaCnt)
-	if errstr != "" {
+	targets, err := cluster.HrwTargetList(lom.Bucket, lom.Objname, c.parent.smap.Get(), replicaCnt)
+	if err != nil {
 		freeObject(reader)
-		glog.Errorf("Failed to get list of %d targets: %s", replicaCnt, errstr)
+		glog.Errorf("failed to get list of %d targets: %s", replicaCnt, err)
 		return
 	}
 
@@ -147,7 +147,6 @@ func (c *getJogger) copyMissingReplicas(lom *cluster.LOM, reader cmn.ReadOpenClo
 	}
 	var (
 		srcReader cmn.ReadOpenCloser
-		err       error
 	)
 
 	switch r := reader.(type) {
@@ -427,11 +426,11 @@ func checkSliceChecksum(reader io.Reader, recvCksm cmn.Cksummer, wg *sync.WaitGr
 	}
 
 	buf, slab := mm.AllocForSize(sliceSize)
-	actualCksm, errstr := cmn.ComputeXXHash(reader, buf)
+	actualCksm, err := cmn.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 
-	if errstr != "" {
-		glog.Errorf("Couldn't compute hash of a slice: %s", errstr)
+	if err != nil {
+		glog.Errorf("Couldn't compute hash of a slice: %s", err)
 		errCh <- i
 		return
 	}
@@ -615,9 +614,9 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	}
 
 	// FIXME: slice meta file should be a different kind of LOM
-	metaLom, errstr := cluster.LOM{FQN: metaFQN, T: c.parent.t}.Init("")
-	if errstr != "" {
-		return restored, errors.New(errstr)
+	metaLom, err := cluster.LOM{FQN: metaFQN, T: c.parent.t}.Init("")
+	if err != nil {
+		return restored, err
 	}
 
 	metaLom.SetSize(int64(metaSize))
@@ -665,9 +664,9 @@ func (c *getJogger) uploadRestoredSlices(req *Request, meta *Metadata, slices []
 	// generate the list of targets that should have a slice and find out
 	// the targets without any one
 	// FIXME: when fewer targets than sliceCnt+1, send slices to those available anyway
-	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
-	if errstr != "" {
-		glog.Warning(errstr)
+	targets, err := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), sliceCnt+1)
+	if err != nil {
+		glog.Warning(err)
 		return
 	}
 	emptyNodes := make([]string, 0, len(targets))

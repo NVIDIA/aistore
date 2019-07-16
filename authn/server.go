@@ -342,8 +342,8 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 		glog.Errorf("isSyscallWriteError: %v [%s]", err, s)
 		return
 	}
-	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
-	cmn.InvalidHandlerWithMsg(w, r, errstr, http.StatusInternalServerError)
+	msg := fmt.Sprintf("%s: failed to write json, err: %v", tag, err)
+	cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusInternalServerError)
 	return
 }
 

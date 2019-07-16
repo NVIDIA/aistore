@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -110,12 +111,12 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-		if errstr != "" {
-			glog.Errorln(errstr)
+		lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
+		if err != nil {
+			glog.Error(err)
 			continue
 		}
-		err := t.objDelete(ct, lom, evict)
+		err = t.objDelete(ct, lom, evict)
 		if err != nil {
 			return err
 		}
@@ -145,19 +146,17 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, bc
 //
 //=========
 
-func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckProvider string) {
+func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, bckProvider string) {
 	var (
-		err               error
-		errstr            string
 		vchanged, coldGet bool
 	)
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if errstr != "" {
-		glog.Error(errstr)
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider)
+	if err != nil {
+		glog.Error(err)
 		return
 	}
-	if _, errstr = lom.Load(true); errstr != "" {
-		glog.Error(errstr)
+	if _, err = lom.Load(true); err != nil {
+		glog.Error(err)
 		return
 	}
 	coldGet = !lom.Exists()
@@ -168,16 +167,16 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket, bckP
 		return
 	}
 	if !coldGet && lom.Version() != "" && lom.VerConf().ValidateWarmGet {
-		if coldGet, err, _ = t.checkCloudVersion(ct, lom); err != nil {
+		if coldGet, err, _ = t.checkCloudVersion(ctx, lom); err != nil {
 			return
 		}
 	}
 	if !coldGet {
 		return
 	}
-	if errstr, _ = t.GetCold(ct, lom, true); errstr != "" {
-		if errstr != "skip" {
-			glog.Errorln(errstr)
+	if err, _ = t.GetCold(ctx, lom, true); err != nil {
+		if _, ok := err.(*cmn.SkipError); !ok {
+			glog.Error(err)
 		}
 		return
 	}
@@ -211,24 +210,22 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 //
 //================
 
-func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, errstr string) {
+func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, err error) {
 	v, ok := jsmap[key]
 	if !ok {
-		errstr = fmt.Sprintf("no %s field in map", key)
+		err = fmt.Errorf("no %s field in map", key)
 		return
 	}
 	if val, ok = v.(string); !ok {
-		errstr = fmt.Sprintf("value ((%+v, %T) corresponding to key (%s) in map is not of string type", v, v, key)
+		err = fmt.Errorf("value ((%+v, %T) corresponding to key (%s) in map is not of string type", v, v, key)
 	}
 	return
 }
 
-func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, errstr string) {
+func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, err error) {
 	var (
 		deadline time.Duration
-		err      error
 	)
-	const s = "Error parsing BaseMsg:"
 	pbm = &cmn.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
 		// When unmarshalling map[string]interface{},
@@ -240,69 +237,67 @@ func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, errs
 		}
 
 		if err != nil {
-			return pbm, fmt.Sprintf("%s (Deadline: %v, %T, %v)", s, v, v, err)
+			return pbm, fmt.Errorf("error parsing BaseMsg: (Deadline: %v, %T, %v)", v, v, err)
 		}
 		pbm.Deadline = deadline
 	}
 	if v, ok := jsmap["wait"]; ok {
 		wait, ok := v.(bool)
 		if !ok {
-			return pbm, fmt.Sprintf("%s (Wait: %v, %T)", s, v, v)
+			return pbm, fmt.Errorf("error parsing BaseMsg: (Wait: %v, %T)", v, v)
 		}
 		pbm.Wait = wait
 	}
 	return
 }
 
-func parseListMsg(jsmap map[string]interface{}) (pm *cmn.ListMsg, errstr string) {
-	const s = "Error parsing ListMsg: "
-	pbm, errstr := parseBaseMsg(jsmap)
-	if errstr != "" {
+func parseListMsg(jsmap map[string]interface{}) (pm *cmn.ListMsg, err error) {
+	pbm, err := parseBaseMsg(jsmap)
+	if err != nil {
 		return
 	}
 	pm = &cmn.ListMsg{ListRangeMsgBase: *pbm}
 	v, ok := jsmap["objnames"]
 	if !ok {
-		return pm, s + "No objnames field"
+		return pm, errors.New("error parsing ListMsg: no 'objnames' field")
 	}
-	if objnames, ok := v.([]interface{}); ok {
-		pm.Objnames = make([]string, 0, len(objnames))
-		for _, obj := range objnames {
-			objname, ok := obj.(string)
+	if objNames, ok := v.([]interface{}); ok {
+		pm.Objnames = make([]string, 0, len(objNames))
+		for _, obj := range objNames {
+			objName, ok := obj.(string)
 			if !ok {
-				return pm, s + "Non-string Object Name"
+				return pm, errors.New("error parsing ListMsg: non-string 'objnames' field")
 			}
-			pm.Objnames = append(pm.Objnames, objname)
+			pm.Objnames = append(pm.Objnames, objName)
 		}
 	} else {
-		return pm, s + "Couldn't parse objnames"
+		return pm, errors.New("error parsing ListMsg: couldn't parse 'objnames' field")
 	}
 	return
 }
 
-func parseRangeMsg(jsmap map[string]interface{}) (pm *cmn.RangeMsg, errstr string) {
-	const s = "Error parsing RangeMsg: %s"
-	pbm, errstr := parseBaseMsg(jsmap)
-	if errstr != "" {
+func parseRangeMsg(jsmap map[string]interface{}) (pm *cmn.RangeMsg, err error) {
+	pbm, err := parseBaseMsg(jsmap)
+	if err != nil {
 		return
 	}
 	pm = &cmn.RangeMsg{ListRangeMsgBase: *pbm}
 
-	prefix, errstr := unmarshalMsgValue(jsmap, rangePrefix)
-	if errstr != "" {
-		return pm, fmt.Sprintf(s, errstr)
+	prefix, err := unmarshalMsgValue(jsmap, rangePrefix)
+	if err != nil {
+		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
 	pm.Prefix = prefix
 
-	regex, errstr := unmarshalMsgValue(jsmap, rangeRegex)
-	if errstr != "" {
-		return pm, fmt.Sprintf(s, errstr)
+	regex, err := unmarshalMsgValue(jsmap, rangeRegex)
+	if err != nil {
+		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
 	pm.Regex = regex
 
-	r, errstr := unmarshalMsgValue(jsmap, rangeKey)
-	if errstr != "" {
-		return pm, fmt.Sprintf(s, errstr)
+	r, err := unmarshalMsgValue(jsmap, rangeKey)
+	if err != nil {
+		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
 	pm.Range = r
 
@@ -350,23 +345,23 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bck
 		return fmt.Errorf("invalid operation")
 	}
 
-	detail := fmt.Sprintf(" (%s, %s, %T)", msgInt.Action, msgInt.Name, msgInt.Value)
+	details := fmt.Sprintf(" (%s, %s, %T)", msgInt.Action, msgInt.Name, msgInt.Value)
 	jsmap, ok := msgInt.Value.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("invalid cmn.ActionMsg.Value format" + detail)
+		return fmt.Errorf("invalid cmn.ActionMsg.Value format %s", details)
 	}
 	if _, ok := jsmap["objnames"]; !ok {
 		// Parse map into RangeMsg, convert to and process ListMsg page-by-page
-		rangeMsg, errstr := parseRangeMsg(jsmap)
-		if errstr != "" {
-			return fmt.Errorf(errstr + detail)
+		rangeMsg, err := parseRangeMsg(jsmap)
+		if err != nil {
+			return fmt.Errorf("%v: %s", err, details)
 		}
 		return t.iterateBucketListPages(r, apitems, bckProvider, rangeMsg, operation)
 	}
 	// Parse map into ListMsg
-	listMsg, errstr := parseListMsg(jsmap)
-	if errstr != "" {
-		return fmt.Errorf(errstr + detail)
+	listMsg, err := parseListMsg(jsmap)
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, details)
 	}
 	return t.listOperation(r, apitems, bckProvider, listMsg, operation)
 }
@@ -376,9 +371,9 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 	bucket := apitems[0]
 	objs := make([]string, 0, len(listMsg.Objnames))
 	for _, obj := range listMsg.Objnames {
-		si, errstr := hrwTarget(bucket, obj, t.smapowner.get())
-		if errstr != "" {
-			return fmt.Errorf(errstr)
+		si, err := hrwTarget(bucket, obj, t.smapowner.get())
+		if err != nil {
+			return err
 		}
 		if si.DaemonID == t.si.DaemonID {
 			objs = append(objs, obj)

@@ -123,18 +123,14 @@ func (p *proxyrunner) bootstrap() {
 }
 
 func (p *proxyrunner) resolvePrimary(myPrimary, otherPrimary *cluster.Snode, smap *smapX) (getSmapURL string) {
-	var (
-		newSmap *smapX
-		errstr  string
-	)
 	getSmapURL = myPrimary.IntraControlNet.DirectURL
-	newSmap, errstr = p.smapFromURL(getSmapURL)
-	if errstr == "" && newSmap.ProxySI.DaemonID == myPrimary.DaemonID {
+	newSmap, err := p.smapFromURL(getSmapURL)
+	if err == nil && newSmap.ProxySI.DaemonID == myPrimary.DaemonID {
 		return
 	}
 	getSmapURL = otherPrimary.IntraControlNet.DirectURL
-	newSmap, errstr = p.smapFromURL(getSmapURL)
-	if errstr == "" && newSmap.ProxySI.DaemonID == otherPrimary.DaemonID {
+	newSmap, err = p.smapFromURL(getSmapURL)
+	if err == nil && newSmap.ProxySI.DaemonID == otherPrimary.DaemonID {
 		smap.ProxySI = newSmap.ProxySI
 		glog.Infof("%s: change of mind #3: primary is %s (not %s)", p.si.Name(), otherPrimary.DaemonID, myPrimary.DaemonID)
 		return
@@ -201,8 +197,8 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	if !smap.isPresent(p.si) {
 		glog.Fatalf("FATAL: %s failed to register self - not present in the %s", p.si.Name(), smap.pp())
 	}
-	if errstr := p.smapowner.persist(smap, true /*saveSmap*/); errstr != "" {
-		glog.Fatalf("FATAL: %s", errstr)
+	if err := p.smapowner.persist(smap, true /*saveSmap*/); err != nil {
+		glog.Fatalf("FATAL: %s", err)
 	}
 	p.smapowner.Unlock()
 	p.startedUp.Store(true) // joined as non-primary and started up
@@ -270,8 +266,8 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 		return
 	}
 
-	if s := p.smapowner.persist(p.smapowner.get(), true); s != "" {
-		glog.Fatalf("FATAL: %s", s)
+	if err := p.smapowner.persist(p.smapowner.get(), true); err != nil {
+		glog.Fatalf("FATAL: %s", err)
 	}
 	bmd := p.bmdowner.get()
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)

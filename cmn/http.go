@@ -213,20 +213,24 @@ func InvalidHandlerDetailedNoLog(w http.ResponseWriter, r *http.Request, msg str
 	invalidHandlerInternal(w, r, msg, status, true /*silent*/)
 }
 
-func ReadBytes(r *http.Request) (b []byte, errDetails string, err error) {
-	b, err = ioutil.ReadAll(r.Body)
-	if err != nil {
-		errDetails = fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
+func ReadBytes(r *http.Request) (b []byte, err error) {
+	var (
+		e error
+	)
+
+	b, e = ioutil.ReadAll(r.Body)
+	if e != nil {
+		err = fmt.Errorf("failed to read %s request, err: %v", r.Method, e)
+		if e == io.EOF {
 			trailer := r.Trailer.Get("Error")
 			if trailer != "" {
-				errDetails = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				err = fmt.Errorf("failed to read %s request, err: %v, trailer: %s", r.Method, e, trailer)
 			}
 		}
 	}
 	r.Body.Close()
 
-	return b, errDetails, err
+	return b, err
 }
 
 func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
@@ -238,9 +242,9 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 		return ""
 	}
 
-	b, errstr, err := ReadBytes(r)
+	b, err := ReadBytes(r)
 	if err != nil {
-		InvalidHandlerDetailed(w, r, errstr)
+		InvalidHandlerDetailed(w, r, err.Error())
 		return err
 	}
 

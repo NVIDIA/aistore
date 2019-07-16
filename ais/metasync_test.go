@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/tutils/tassert"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -728,12 +730,6 @@ func TestMetaSyncMembership(t *testing.T) {
 // TestMetaSyncReceive tests extracting received sync data.
 func TestMetaSyncReceive(t *testing.T) {
 	{
-		noErr := func(s string) {
-			if s != "" {
-				t.Fatal("Unexpected error", s)
-			}
-		}
-
 		emptyActionMsgInt := func(a *actionMsgInternal) {
 			if a.Action != "" || a.Name != "" || a.Value != nil {
 				t.Fatal("Expecting empty action message", a)
@@ -784,23 +780,23 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload
-		newSMap, actMsg, errStr := proxy1.extractSmap(make(map[string]string))
-		if newSMap != nil || actMsg != nil || errStr != "" {
+		newSMap, actMsg, err := proxy1.extractSmap(make(map[string]string))
+		if newSMap != nil || actMsg != nil || err != nil {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
 
 		syncer.sync(true, revspair{primary.smapowner.get(), &actionMsgInternal{}})
 		payload := <-chProxy
 
-		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
-		noErr(errStr)
+		newSMap, actMsg, err = proxy1.extractSmap(payload)
+		tassert.CheckFatal(t, err)
 		emptyActionMsgInt(actMsg)
 		matchSMap(primary.smapowner.get(), newSMap)
 		proxy1.smapowner.put(newSMap)
 
 		// same version of smap received
-		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
-		noErr(errStr)
+		newSMap, actMsg, err = proxy1.extractSmap(payload)
+		tassert.CheckFatal(t, err)
 		emptyActionMsgInt(actMsg)
 		nilSMap(newSMap)
 	}

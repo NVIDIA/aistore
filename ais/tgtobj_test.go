@@ -69,9 +69,9 @@ func BenchmarkObjPut(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom, errstr := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
-			if errstr != "" {
-				b.Fatal(errstr)
+			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
+			if err != nil {
+				b.Fatal(err)
 			}
 
 			b.ResetTimer()
@@ -113,9 +113,9 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom, errstr := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
-			if errstr != "" {
-				b.Fatal(errstr)
+			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
+			if err != nil {
+				b.Fatal(err)
 			}
 
 			r, _ := tutils.NewRandReader(bench.fileSize, false)
@@ -126,14 +126,14 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				r:       r,
 				workFQN: path.Join(testMountpath, "objname.work"),
 			}
-			err, _ := poi.putObject()
+			err, _ = poi.putObject()
 			if err != nil {
 				b.Fatal(err)
 			}
 
 			// load lom
-			if _, errstr := lom.Load(true); errstr != "" {
-				b.Fatal(errstr)
+			if _, err := lom.Load(true); err != nil {
+				b.Fatal(err)
 			}
 
 			w := ioutil.Discard

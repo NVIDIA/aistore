@@ -352,9 +352,8 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	}
 	// hashtype and hash could be empty for legacy objects.
 	bckProvider, _ := cmn.ProviderFromStr(cmn.CloudBs)
-	lom, errstr := cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
-	if errstr != "" {
-		err = errors.New(errstr)
+	lom, err = cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
+	if err != nil {
 		return
 	}
 	lom.SetCksum(cksum)
@@ -369,7 +368,6 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	}
 
 	if err = poi.writeToFile(); err != nil {
-		errstr = err.Error()
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

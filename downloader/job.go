@@ -6,7 +6,6 @@ package downloader
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 
@@ -181,9 +180,9 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 
 	objects := make(cmn.SimpleKVs, cmn.DefaultPageSize)
 	for _, entry := range bckList.Entries {
-		si, errstr := j.t.HRWTarget(j.bucket, entry.Name)
-		if errstr != "" {
-			return errors.New(errstr)
+		si, err := j.t.HRWTarget(j.bucket, entry.Name)
+		if err != nil {
+			return err
 		}
 
 		if !strings.HasSuffix(entry.Name, j.suffix) || si.ID() != j.t.Snode().ID() {

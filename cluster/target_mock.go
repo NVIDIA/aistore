@@ -33,17 +33,17 @@ func NewTargetMock(bo Bowner) *TargetMock {
 func (*TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
 	return 0, false
 }
-func (*TargetMock) Snode() *Snode                                               { return nil }
-func (*TargetMock) HRWTarget(bucket, objname string) (si *Snode, errstr string) { return nil, "" }
-func (*TargetMock) IsRebalancing() bool                                         { return false }
-func (*TargetMock) RunLRU()                                                     {}
-func (*TargetMock) PrefetchQueueLen() int                                       { return 0 }
-func (*TargetMock) Prefetch()                                                   {}
-func (t *TargetMock) GetBowner() Bowner                                         { return t.BO }
-func (*TargetMock) FSHC(err error, path string)                                 {}
-func (*TargetMock) GetMem2() *memsys.Mem2                                       { return memsys.GMM() }
-func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int) {
-	return "", http.StatusOK
+func (*TargetMock) Snode() *Snode                                           { return nil }
+func (*TargetMock) HRWTarget(bucket, objName string) (si *Snode, err error) { return nil, nil }
+func (*TargetMock) IsRebalancing() bool                                     { return false }
+func (*TargetMock) RunLRU()                                                 {}
+func (*TargetMock) PrefetchQueueLen() int                                   { return 0 }
+func (*TargetMock) Prefetch()                                               {}
+func (t *TargetMock) GetBowner() Bowner                                     { return t.BO }
+func (*TargetMock) FSHC(err error, path string)                             {}
+func (*TargetMock) GetMem2() *memsys.Mem2                                   { return memsys.GMM() }
+func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int) {
+	return nil, http.StatusOK
 }
 func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ cmn.Cksummer, _ time.Time) error {
 	return nil

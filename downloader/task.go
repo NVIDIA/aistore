@@ -42,12 +42,12 @@ func (t *singleObjectTask) download() {
 		statusMsg string
 		err       error
 	)
-	lom, errstr := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init(t.bckProvider)
-	if errstr == "" {
-		_, errstr = lom.Load(true)
+	lom, err := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init(t.bckProvider)
+	if err == nil {
+		_, err = lom.Load(true)
 	}
-	if errstr != "" {
-		t.abort(internalErrorMessage(), errors.New(errstr))
+	if err != nil {
+		t.abort(internalErrorMessage(), err)
 		return
 	}
 	if lom.Exists() {
@@ -129,8 +129,8 @@ func (t *singleObjectTask) setTotalSize(resp *http.Response) {
 }
 
 func (t *singleObjectTask) downloadCloud(lom *cluster.LOM) (string, error) {
-	if errstr, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); errstr != "" {
-		return internalErrorMessage(), errors.New(errstr)
+	if err, _ := t.parent.t.GetCold(t.downloadCtx, lom, true /* prefetch */); err != nil {
+		return internalErrorMessage(), err
 	}
 	return "", nil
 }

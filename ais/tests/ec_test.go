@@ -112,23 +112,23 @@ func ecGetAllLocalSlices(t *testing.T, objName, bucketName string) (map[string]e
 		}
 
 		if strings.Contains(path, objName) {
-			sliceLom, errstr := cluster.LOM{FQN: path, T: tMock}.Init(cmn.LocalBs)
-			tassert.Fatalf(t, errstr == "", errstr)
+			sliceLom, err := cluster.LOM{FQN: path, T: tMock}.Init(cmn.LocalBs)
+			tassert.CheckFatal(t, err)
 
-			_, errstr = sliceLom.Load(false)
+			_, err = sliceLom.Load(false)
 
-			var cksmVal string
-			if strings.Contains(path, ecMetaDir) && errstr != "" {
+			var cksumVal string
+			if strings.Contains(path, ecMetaDir) && err != nil {
 				// meta file of the original object on the main target doesn't have meta saved on a disk
 				noObjCnt++
 			} else if !strings.Contains(path, ecMetaDir) {
 				// meta files contain checksum inside, but dont have a checksum itself in a lom
 				if sliceLom.Cksum() != nil {
-					_, cksmVal = sliceLom.Cksum().Get()
+					_, cksumVal = sliceLom.Cksum().Get()
 				}
 			}
 
-			foundParts[path] = ecSliceMD{info.Size(), cksmVal}
+			foundParts[path] = ecSliceMD{info.Size(), cksumVal}
 			if strings.Contains(path, ecDataDir) && oldest.After(info.ModTime()) {
 				main = path
 				oldest = info.ModTime()
@@ -1757,8 +1757,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		defer wg.Done()
 
 		// hack: calculate which targets stored a replica
-		targets, errstr := cluster.HrwTargetList(bucket, ecTestDir+objName, &initialSmap, ecParitySliceCnt+1)
-		tassert.Errorf(t, errstr == "", errstr)
+		targets, err := cluster.HrwTargetList(bucket, ecTestDir+objName, &initialSmap, ecParitySliceCnt+1)
+		tassert.CheckFatal(t, err)
 
 		mainTarget := targets[0]
 		targets = targets[1:]

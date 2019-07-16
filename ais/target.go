@@ -529,14 +529,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
 	}
-	rangeOff, rangeLen, errstr := t.offsetAndLength(query)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	rangeOff, rangeLen, err := t.offsetAndLength(query)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider, config)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider, config)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if err = lom.AllowGET(); err != nil {
@@ -633,16 +633,12 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode i
 	return
 }
 
-func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64, buf []byte) (
-	cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, errstr string) {
-	var (
-		err error
-	)
+func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64, buf []byte) (cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, err error) {
 	rangeReader = io.NewSectionReader(r, offset, length)
 	if length <= maxBytesInMem {
 		sgl = nodeCtx.mm.NewSGL(length)
 		if _, cksumValue, err = cmn.WriteWithHash(sgl, rangeReader, buf); err != nil {
-			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
+			err = fmt.Errorf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
 			t.fshc(err, fqn)
 			return
 		}
@@ -651,7 +647,7 @@ func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int6
 	}
 
 	if _, err = rangeReader.Seek(0, io.SeekStart); err != nil {
-		errstr = fmt.Sprintf("failed to seek file %s to beginning, err: %v", fqn, err)
+		err = fmt.Errorf("failed to seek file %s to beginning, err: %v", fqn, err)
 		t.fshc(err, fqn)
 		return
 	}
@@ -659,21 +655,20 @@ func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int6
 	return
 }
 
-func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, errstr string) {
+func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, err error) {
 	offsetStr := query.Get(cmn.URLParamOffset)
 	lengthStr := query.Get(cmn.URLParamLength)
 	if offsetStr == "" && lengthStr == "" {
 		return
 	}
-	s := fmt.Sprintf("Invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
 	if offsetStr == "" || lengthStr == "" {
-		errstr = s
+		err = fmt.Errorf("invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
 		return
 	}
 	o, err1 := strconv.ParseInt(url.QueryEscape(offsetStr), 10, 64)
 	l, err2 := strconv.ParseInt(url.QueryEscape(lengthStr), 10, 64)
 	if err1 != nil || err2 != nil || o < 0 || l <= 0 {
-		errstr = s
+		err = fmt.Errorf("invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
 		return
 	}
 	offset, length = o, l
@@ -703,9 +698,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, "OOS")
 		return
 	}
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if err = lom.AllowPUT(); err != nil {
@@ -796,9 +791,9 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	b, errstr, err := cmn.ReadBytes(r)
+	b, err := cmn.ReadBytes(r)
 	if err != nil {
-		t.invalmsghdlr(w, r, errstr)
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if len(b) > 0 {
@@ -806,12 +801,12 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		evict = (msg.Action == cmn.ActEvictObjects)
+		evict = msg.Action == cmn.ActEvictObjects
 	}
 
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if err = lom.AllowDELETE(); err != nil {
@@ -878,8 +873,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		t.bmdowner.put(clone) // bmd updated with an added bucket, lock#1 end
 		t.bmdowner.Unlock()
 
-		if errstr := t.renameLB(bucketFrom, bucketTo); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+		if err := t.renameLB(bucketFrom, bucketTo); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
@@ -1009,11 +1004,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket, objname, errstr string
-		objmeta                 cmn.SimpleKVs
-		query                   = r.URL.Query()
+		bucket, objName string
+		objmeta         cmn.SimpleKVs
+		query           = r.URL.Query()
 
-		errcode        int
+		errCode        int
 		exists         bool
 		checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached)) // establish local presence, ignore obj attrs
 		silent, _      = cmn.ParseBool(query.Get(cmn.URLParamSilent))
@@ -1023,23 +1018,23 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname = apitems[0], apitems[1]
+	bucket, objName = apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	invalidHandler := t.invalmsghdlr
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	lom, errstr := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if errstr != "" {
-		invalidHandler(w, r, errstr)
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider)
+	if err != nil {
+		invalidHandler(w, r, err.Error())
 		return
 	}
 	cluster.ObjectLocker.Lock(lom.Uname(), false)
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
-	if _, errstr = lom.Load(true); errstr != "" { // (doesnotexist -> ok, other)
-		invalidHandler(w, r, errstr)
+	if _, err = lom.Load(true); err != nil { // (doesnotexist -> ok, other)
+		invalidHandler(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1050,7 +1045,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	exists = lom.Exists()
 	if lom.BckIsLocal || checkCached {
 		if !exists {
-			invalidHandler(w, r, fmt.Sprintf("no such object %s in bucket %s", objname, bucket), http.StatusNotFound)
+			invalidHandler(w, r, fmt.Sprintf("no such object %s in bucket %s", objName, bucket), http.StatusNotFound)
 			return
 		}
 		if checkCached {
@@ -1061,10 +1056,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size(), 1), lom.Version())
 		}
 	} else {
-		objmeta, err, errcode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
+		objmeta, err, errCode = t.cloud.headObj(t.contextWithAuth(r.Header), lom)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s: failed to head metadata, err: %v", lom, err)
-			invalidHandler(w, r, errMsg, errcode)
+			invalidHandler(w, r, errMsg, errCode)
 			return
 		}
 	}
@@ -1093,20 +1088,20 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
+func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (err error) {
 	// ready to receive migrated obj-s _after_ that point
 	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
 	wg := &sync.WaitGroup{}
 
 	pid := t.smapowner.get().ProxySI.DaemonID
 	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan string, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
+	ch := make(chan error, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
 	for contentType := range fs.CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			// Create directory for new local bucket
 			toDir := mpathInfo.MakePathBucket(contentType, bucketTo, true /*bucket is local*/)
 			if err := cmn.CreateDir(toDir); err != nil {
-				ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
+				ch <- fmt.Errorf("failed to create dir %s, error: %v", toDir, err)
 				continue
 			}
 
@@ -1121,26 +1116,26 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 	}
 	wg.Wait()
 	close(ch)
-	for errstr = range ch {
-		if errstr != "" {
+	for err = range ch {
+		if err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (t *targetrunner) renameOne(fromDir, bucketFrom, bucketTo, pid string) (errstr string) {
+func (t *targetrunner) renameOne(fromDir, bucketFrom, bucketTo, pid string) error {
 	rctx := &renameCtx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t, pid: pid}
 	if err := filepath.Walk(fromDir, rctx.walkf); err != nil {
-		errstr = fmt.Sprintf("Failed to rename %s, err: %v", fromDir, err)
+		return fmt.Errorf("failed to rename %s, err: %v", fromDir, err)
 	}
-	return
+	return nil
 }
 
 func (rctx *renameCtx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
+		if err := cmn.PathWalkErr(err); err != nil {
+			glog.Error(err)
 			return err
 		}
 		return nil
@@ -1154,15 +1149,15 @@ func (rctx *renameCtx) walkf(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	// FIXME: ignoring "misplaced" (non-error) and errors that ResolveFQN may return
-	parsedFQN, _, errstr := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
-	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
-	if errstr == "" {
+	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
+	contentType, bucket, objName := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
+	if err == nil {
 		if bucket != rctx.bucketFrom {
 			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, rctx.bucketFrom)
 		}
 	}
-	if errstr := rctx.t.renameBucketObject(contentType, bucket, objname, rctx.bucketTo, objname, rctx.pid); errstr != "" {
-		return fmt.Errorf(errstr)
+	if err := rctx.t.renameBucketObject(contentType, bucket, objName, rctx.bucketTo, objName, rctx.pid); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1258,41 +1253,39 @@ func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
 }
 
 // FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
+func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
 	if prefetch {
 		if !cluster.ObjectLocker.TryLock(lom.Uname(), true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
-			return "skip", 0
+			return cmn.NewSkipError(), 0
 		}
 	} else {
 		cluster.ObjectLocker.Lock(lom.Uname(), true) // one cold-GET at a time
 	}
 	var (
-		err             error
 		vchanged, crace bool
 		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	)
-	if err, errcode = t.cloud.getObj(ct, workFQN, lom); err != nil {
-		errstr = fmt.Sprintf("%s: GET failed, err: %v", lom, err)
+	if err, errCode = t.cloud.getObj(ct, workFQN, lom); err != nil {
+		err = fmt.Errorf("%s: GET failed, err: %v", lom, err)
 		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 		return
 	}
 	defer func() {
-		if errstr != "" {
+		if err != nil {
 			cluster.ObjectLocker.Unlock(lom.Uname(), true)
 			if errRemove := os.Remove(workFQN); errRemove != nil {
-				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, workFQN, errRemove)
+				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
 				t.fshc(errRemove, workFQN)
 			}
 		}
 	}()
 	if err = cmn.MvFile(workFQN, lom.FQN); err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
+		err = fmt.Errorf("unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
 		t.fshc(err, lom.FQN)
 		return
 	}
 	if err = lom.Persist(); err != nil {
-		errstr = err.Error()
 		return
 	}
 	lom.ReCache()
@@ -1448,8 +1441,8 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
-	if _, errstr := lom.Load(false); errstr != "" {
-		return errors.New(errstr)
+	if _, err := lom.Load(false); err != nil {
+		return err
 	}
 	delFromAIS := lom.Exists()
 
@@ -1461,8 +1454,8 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	}
 	if delFromAIS {
 		// Don't persist meta as object will be removed soon anyway
-		if errs := lom.DelAllCopies(); errs != "" {
-			glog.Errorf("%s: %s", lom, errs)
+		if err := lom.DelAllCopies(); err != nil {
+			glog.Errorf("%s: %s", lom, err)
 		}
 		errRet = os.Remove(lom.FQN)
 		if errRet != nil {
@@ -1504,48 +1497,47 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	uname := cluster.Bo2Uname(bucket, objnameFrom)
 	cluster.ObjectLocker.Lock(uname, true)
 
-	if errstr := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo, pid); errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	if err := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo, pid); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 	}
 	cluster.ObjectLocker.Unlock(uname, true)
 }
 
 // TODO: cleanup
-func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo, pid string) (errstr string) {
+func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo, pid string) (err error) {
 	var (
 		file                  *cmn.FileHandle
 		si                    *cluster.Snode
 		newFQN                string
 		cksumType, cksumValue string
-		err                   error
 	)
-	if si, errstr = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
+	if si, err = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); err != nil {
 		return
 	}
 	bmd := t.bmdowner.get()
 	bckIsLocalFrom := bmd.IsLocal(bucketFrom)
-	fqn, _, errstr := cluster.HrwFQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
-	if errstr != "" {
+	fqn, _, err := cluster.HrwFQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
+	if err != nil {
 		return
 	}
 	if _, err = os.Stat(fqn); err != nil {
-		errstr = fmt.Sprintf("failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
+		err = fmt.Errorf("failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
 		return
 	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		bckIsLocalTo := bmd.IsLocal(bucketTo)
-		newFQN, _, errstr = cluster.HrwFQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
-		if errstr != "" {
+		newFQN, _, err = cluster.HrwFQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
+		if err != nil {
 			return
 		}
 		if err := cmn.MvFile(fqn, newFQN); err != nil {
-			errstr = fmt.Sprintf("Rename object %s/%s: %v", bucketFrom, objnameFrom, err)
-		} else {
-			t.statsif.Add(stats.RenameCount, 1)
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("Renamed %s => %s", fqn, newFQN)
-			}
+			return fmt.Errorf("rename object %s/%s: %v", bucketFrom, objnameFrom, err)
+		}
+
+		t.statsif.Add(stats.RenameCount, 1)
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Renamed %s => %s", fqn, newFQN)
 		}
 		return
 	}
@@ -1557,16 +1549,16 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 
 	if file, err = cmn.NewFileHandle(fqn); err != nil {
-		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
+		return fmt.Errorf("failed to open %s, err: %v", fqn, err)
 	}
 	defer file.Close()
 
-	lom, errstr := cluster.LOM{T: t, FQN: fqn}.Init(cmn.ProviderFromLoc(bckIsLocalFrom))
-	if errstr != "" {
-		return errstr
+	lom, err := cluster.LOM{T: t, FQN: fqn}.Init(cmn.ProviderFromLoc(bckIsLocalFrom))
+	if err != nil {
+		return err
 	}
-	if _, errstr := lom.Load(false); errstr != "" {
-		return errstr
+	if _, err := lom.Load(false); err != nil {
+		return err
 	}
 	if lom.Cksum() != nil {
 		cksumType, cksumValue = lom.Cksum().Get()
@@ -1585,7 +1577,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
 	if err != nil {
-		errstr = fmt.Sprintf("unexpected failure to create request, err: %v", err)
+		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
 		return
 	}
 	defer cancel()
@@ -1601,7 +1593,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 
 	_, err = t.httpclientLongTimeout.Do(req)
 	if err != nil {
-		errstr = fmt.Sprintf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
+		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
 	}
 	return
 }
@@ -1647,7 +1639,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	getfshealthchecker().OnErr(filepath)
 }
 
-func (t *targetrunner) HRWTarget(bucket, objname string) (si *cluster.Snode, errstr string) {
+func (t *targetrunner) HRWTarget(bucket, objname string) (si *cluster.Snode, err error) {
 	return hrwTarget(bucket, objname, t.smapowner.get())
 }
 

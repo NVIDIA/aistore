@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,14 +58,14 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status i
 
 	// bmd
 	msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
-	if errstr := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); errstr != "" {
-		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
+	if err := t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, ""); err != nil {
+		glog.Errorf("registered %s: %s", t.si.Name(), err)
 	} else {
 		glog.Infof("registered %s: %s v%d", t.si.Name(), bmdTermName, t.bmdowner.get().version())
 	}
 	// smap
-	if errstr := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-		glog.Errorf("registered %s: %s", t.si.Name(), errstr)
+	if err := t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
+		glog.Errorf("registered %s: %s", t.si.Name(), err)
 	} else {
 		glog.Infof("registered %s: Smap v%d", t.si.Name(), t.smapowner.get().version())
 	}
@@ -120,8 +121,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
-			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
+			if err := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
+				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", err))
 			}
 			glog.Infof("%s: %s v%d done", t.si.Name(), cmn.SyncSmap, newsmap.version())
 			return
@@ -130,8 +131,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.ActSetConfig: // setconfig #1 - via query parameters and "?n1=v1&n2=v2..."
 			kvs := cmn.NewSimpleKVsFromQuery(r.URL.Query())
-			if errstr := t.setConfig(kvs); errstr != "" {
-				t.invalmsghdlr(w, r, errstr)
+			if err := t.setConfig(kvs); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
 			return
@@ -156,8 +157,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		kvs := cmn.NewSimpleKVs(cmn.SimpleKVsEntry{Key: msg.Name, Value: value})
-		if errstr := t.setConfig(kvs); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+		if err := t.setConfig(kvs); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	case cmn.ActShutdown:
@@ -168,10 +169,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (errstr string) {
+func (t *targetrunner) setConfig(kvs cmn.SimpleKVs) (err error) {
 	prevConfig := cmn.GCO.Get()
 	if err := cmn.SetConfigMany(kvs); err != nil {
-		return err.Error()
+		return err
 	}
 
 	config := cmn.GCO.Get()
@@ -223,9 +224,9 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	if smap.ProxySI.DaemonID != psi.DaemonID {
 		clone := smap.clone()
 		clone.ProxySI = psi
-		if s := t.smapowner.persist(clone, false /*saveSmap*/); s != "" {
+		if err := t.smapowner.persist(clone, false /*saveSmap*/); err != nil {
 			t.smapowner.Unlock()
-			t.invalmsghdlr(w, r, s)
+			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		t.smapowner.put(clone)
@@ -632,7 +633,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag, caller string) (errstr string) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgInternal, tag, caller string) (err error) {
 	from := ""
 	if caller != "" {
 		from = " from " + caller
@@ -648,7 +649,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	if newbucketmd.version() <= myver {
 		t.bmdowner.Unlock()
 		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
+			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
 		}
 		return
 	}
@@ -691,7 +692,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, caller string) (err error) {
 	var (
 		newTargetID, s, from       string
 		iPresent, newTargetPresent bool
@@ -720,14 +721,14 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		}
 	}
 	if !iPresent {
-		errstr = fmt.Sprintf("Not finding %s(self) in the new %s", t.si.Name(), newsmap.pp())
+		err = fmt.Errorf("Not finding %s(self) in the new %s", t.si.Name(), newsmap.pp())
 		return
 	}
 	if newTargetID != "" && newTargetID != t.si.DaemonID && !newTargetPresent {
-		errstr = fmt.Sprintf("Not finding %s(new target) in the new %s", newTargetID, newsmap.pp())
+		err = fmt.Errorf("Not finding %s(new target) in the new %s", newTargetID, newsmap.pp())
 		return
 	}
-	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
+	if err = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
 		return
 	}
 	if msgInt.Action == cmn.ActGlobalReb {
@@ -738,7 +739,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 			case cmn.RebAbort:
 				t.rebManager.abortGlobalReb()
 			default:
-				errstr = fmt.Sprintf("Expecting %q or %q in the action message value, getting %s",
+				err = fmt.Errorf("Expecting %q or %q in the action message value, getting %s",
 					cmn.RebStart, cmn.RebAbort, cmd)
 			}
 			return
@@ -858,10 +859,10 @@ func (t *targetrunner) detectMpathChanges() {
 	}
 }
 
-func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (errstr string) {
+func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (err error) {
 	smap := t.smapowner.get()
 	if smap == nil || !smap.isValid() {
-		return "smap nil or missing"
+		return errors.New("smap nil or missing")
 	}
 	psi := smap.ProxySI
 	q := url.Values{}
@@ -878,38 +879,38 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (errst
 	}
 	res := t.call(args)
 	if res.err != nil {
-		return fmt.Sprintf("failed to %s=%s, err: %v", what, cmn.GetWhatBucketMeta, res.err)
+		return fmt.Errorf("failed to %s=%s, err: %v", what, cmn.GetWhatBucketMeta, res.err)
 	}
 
-	err := jsoniter.Unmarshal(res.outjson, outStruct)
+	err = jsoniter.Unmarshal(res.outjson, outStruct)
 	if err != nil {
-		return fmt.Sprintf("unexpected: failed to unmarshal %s=%s response, err: %v [%v]",
+		return fmt.Errorf("unexpected: failed to unmarshal %s=%s response, err: %v [%v]",
 			what, psi.IntraControlNet.DirectURL, err, string(res.outjson))
 	}
 
-	return ""
+	return nil
 }
 
 func (t *targetrunner) smapVersionFixup() {
-	newsmap := &smapX{}
-	errstr := t.fetchPrimaryMD(cmn.GetWhatSmap, newsmap)
-	if errstr != "" {
-		glog.Errorf(errstr)
+	newSmap := &smapX{}
+	err := t.fetchPrimaryMD(cmn.GetWhatSmap, newSmap)
+	if err != nil {
+		glog.Error(err)
 		return
 	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newsmap, nil)
-	t.receiveSmap(newsmap, msgInt, "")
+	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatSmap, newSmap, nil)
+	t.receiveSmap(newSmap, msgInt, "")
 }
 
 func (t *targetrunner) bmdVersionFixup() {
-	newbucketmd := &bucketMD{}
-	errstr := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newbucketmd)
-	if errstr != "" {
-		glog.Errorf(errstr)
+	newBucketMD := &bucketMD{}
+	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD)
+	if err != nil {
+		glog.Error(err)
 		return
 	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newbucketmd)
-	t.receiveBucketMD(newbucketmd, msgInt, bucketMDFixup, "")
+	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newBucketMD)
+	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, "")
 }
 
 // handler for: /v1/tokens
@@ -941,31 +942,31 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	newsmap, actionsmap, errstr := t.extractSmap(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	newSmap, actionSmap, err := t.extractSmap(payload)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if newsmap != nil {
+	if newSmap != nil {
 		caller := r.Header.Get(cmn.HeaderCallerName)
-		errstr = t.receiveSmap(newsmap, actionsmap, caller)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+		err = t.receiveSmap(newSmap, actionSmap, caller)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	}
 
-	newbmd, actionlb, errstr := t.extractbucketmd(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	newBMD, actionLB, err := t.extractbucketmd(payload)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if newbmd != nil {
+	if newBMD != nil {
 		caller := r.Header.Get(cmn.HeaderCallerName)
-		if errstr = t.receiveBucketMD(newbmd, actionlb, bucketMDReceive, caller); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+		if err = t.receiveBucketMD(newBMD, actionLB, bucketMDReceive, caller); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 
@@ -984,9 +985,9 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 		}()
 	}
 
-	revokedTokens, errstr := t.extractRevokedTokenList(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	revokedTokens, err := t.extractRevokedTokenList(payload)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	t.authn.updateRevokedList(revokedTokens)
@@ -999,9 +1000,9 @@ func (t *targetrunner) metasyncHandlerPost(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	newSmap, msgInt, errstr := t.extractSmap(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	newSmap, msgInt, err := t.extractSmap(payload)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 

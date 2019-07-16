@@ -251,9 +251,9 @@ func (r *smapowner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr bool) (errstr string) {
+func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr bool) (err error) {
 	if !newsmap.isValid() {
-		errstr = fmt.Sprintf("Invalid smapX: %s", newsmap.pp())
+		err = fmt.Errorf("invalid smapX: %s", newsmap.pp())
 		return
 	}
 	r.Lock()
@@ -262,39 +262,39 @@ func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr boo
 		myver := smap.Version
 		if newsmap.version() <= myver {
 			if lesserVersionIsErr && newsmap.version() < myver {
-				errstr = fmt.Sprintf("Attempt to downgrade local smapX v%d to v%d", myver, newsmap.version())
+				err = fmt.Errorf("attempt to downgrade local smapX v%d to v%d", myver, newsmap.version())
 			}
 			r.Unlock()
 			return
 		}
 	}
-	if errstr = r.persist(newsmap, saveSmap); errstr == "" {
+	if err = r.persist(newsmap, saveSmap); err == nil {
 		r.put(newsmap)
 	}
 	r.Unlock()
 	return
 }
 
-func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
+func (r *smapowner) persist(newSmap *smapX, saveSmap bool) error {
 	confFile := cmn.GCO.GetConfigFile()
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
 
 	origURL := config.Proxy.PrimaryURL
-	config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
+	config.Proxy.PrimaryURL = newSmap.ProxySI.PublicNet.DirectURL
 	if err := cmn.LocalSave(confFile, config); err != nil {
-		errstr = fmt.Sprintf("Error writing config file %s, err: %v", confFile, err)
+		err = fmt.Errorf("failed writing config file %s, err: %v", confFile, err)
 		config.Proxy.PrimaryURL = origURL
-		return
+		return err
 	}
 
 	if saveSmap {
-		smappathname := filepath.Join(config.Confdir, cmn.SmapBackupFile)
-		if err := cmn.LocalSave(smappathname, newsmap); err != nil {
-			glog.Errorf("Error writing smapX %s, err: %v", smappathname, err)
+		smapPathName := filepath.Join(config.Confdir, cmn.SmapBackupFile)
+		if err := cmn.LocalSave(smapPathName, newSmap); err != nil {
+			glog.Errorf("failed writing smapX %s, err: %v", smapPathName, err)
 		}
 	}
-	return
+	return nil
 }
 
 //=====================================================================

@@ -7,7 +7,6 @@ package ais
 import (
 	"context"
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -98,8 +97,8 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 			return err, http.StatusInternalServerError
 		}
 
-		if errstr, errCode := poi.finalize(); errstr != "" {
-			return errors.New(errstr), errCode
+		if err, errCode := poi.finalize(); err != nil {
+			return err, errCode
 		}
 	}
 
@@ -111,43 +110,43 @@ func (poi *putObjInfo) putObject() (err error, errCode int) {
 	return nil, 0
 }
 
-func (poi *putObjInfo) finalize() (errstr string, errCode int) {
-	if errstr, errCode = poi.tryFinalize(); errstr != "" {
-		if _, err := os.Stat(poi.workFQN); err == nil || !os.IsNotExist(err) {
-			if err == nil {
-				err = errors.New(errstr)
+func (poi *putObjInfo) finalize() (err error, errCode int) {
+	if err, errCode = poi.tryFinalize(); err != nil {
+		if _, err1 := os.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
+			if err1 == nil {
+				err1 = err
 			}
 			poi.t.fshc(err, poi.workFQN)
 			if err = os.Remove(poi.workFQN); err != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, poi.workFQN, err)
+				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err)
 			}
 		}
 		poi.lom.Uncache()
 		return
 	}
-	if err := poi.t.ecmanager.EncodeObject(poi.lom); err != nil && err != ec.ErrorECDisabled {
-		errstr = err.Error()
+	if err1 := poi.t.ecmanager.EncodeObject(poi.lom); err1 != nil && err1 != ec.ErrorECDisabled {
+		err = err1
 	}
 	poi.t.putMirror(poi.lom)
 	return
 }
 
-func (poi *putObjInfo) tryFinalize() (errstr string, errCode int) {
+func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	var (
 		ver string
 		lom = poi.lom
 	)
 	if !lom.BckIsLocal && !poi.migrated {
-		file, err := os.Open(poi.workFQN)
-		if err != nil {
-			errstr = fmt.Sprintf("failed to open %s err: %v", poi.workFQN, err)
+		file, err1 := os.Open(poi.workFQN)
+		if err1 != nil {
+			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
 			return
 		}
 		cmn.Assert(lom.Cksum() != nil)
 		ver, err, errCode = poi.t.cloud.putObj(poi.ctx, file, lom)
 		file.Close()
 		if err != nil {
-			errstr = fmt.Sprintf("%s: PUT failed, err: %v", lom, err)
+			err = fmt.Errorf("%s: PUT failed, err: %v", lom, err)
 			return
 		}
 		lom.SetVersion(ver)
@@ -157,22 +156,21 @@ func (poi *putObjInfo) tryFinalize() (errstr string, errCode int) {
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
 	if lom.BckIsLocal && lom.VerConf().Enabled {
-		if ver, errstr = lom.IncObjectVersion(); errstr != "" {
+		if ver, err = lom.IncObjectVersion(); err != nil {
 			return
 		}
 		lom.SetVersion(ver)
 	}
 	// Don't persist meta, it will be persisted after move
-	if errstr = lom.DelAllCopies(); errstr != "" {
+	if err = lom.DelAllCopies(); err != nil {
 		return
 	}
 	if err := cmn.MvFile(poi.workFQN, lom.FQN); err != nil {
-		errstr = fmt.Sprintf("MvFile failed => %s: %v", lom, err)
-		return
+		return fmt.Errorf("MvFile failed => %s: %v", lom, err), 0
 	}
-	if err := lom.Persist(); err != nil {
-		errstr = err.Error()
-		glog.Errorf("failed to persist %s: %s", lom, errstr)
+	if err1 := lom.Persist(); err1 != nil {
+		err = err1
+		glog.Errorf("failed to persist %s: %s", lom, err1)
 	}
 	lom.ReCache()
 	return
@@ -317,7 +315,6 @@ func (goi *getObjInfo) getObject() (err error, errCode int) {
 	var (
 		fromCache bool
 		retried   bool
-		errstr    string
 	)
 
 	// under lock: lom init, restore from cluster
@@ -329,10 +326,10 @@ do:
 		goto get
 	}
 
-	fromCache, errstr = goi.lom.Load(true)
-	if errstr != "" {
+	fromCache, err = goi.lom.Load(true)
+	if err != nil {
 		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
-		return errors.New(errstr), http.StatusInternalServerError
+		return err, http.StatusInternalServerError
 	}
 
 	coldGet = !goi.lom.Exists()
@@ -357,25 +354,25 @@ do:
 	// checksum validation, if requested
 	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
 		if fromCache {
-			errstr = goi.lom.ValidateChecksum(true)
+			err = goi.lom.ValidateChecksum(true)
 		} else {
-			errstr = goi.lom.ValidateDiskChecksum()
+			err = goi.lom.ValidateDiskChecksum()
 		}
 
-		if errstr != "" {
+		if err != nil {
 			if goi.lom.BadCksum {
-				glog.Errorln(errstr)
+				glog.Error(err)
 				if goi.lom.BckIsLocal {
 					if err := os.Remove(goi.lom.FQN); err != nil {
-						glog.Warningf("%s - failed to remove, err: %v", errstr, err)
+						glog.Warningf("%s - failed to remove, err: %v", err, err)
 					}
 					cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
-					return errors.New(errstr), http.StatusInternalServerError
+					return err, http.StatusInternalServerError
 				}
 				coldGet = true
 			} else {
 				cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
-				return errors.New(errstr), http.StatusInternalServerError
+				return err, http.StatusInternalServerError
 			}
 		}
 	}
@@ -387,8 +384,8 @@ do:
 			return err, http.StatusBadRequest
 		}
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
-		if errstr, errCode := goi.t.GetCold(goi.ctx, goi.lom, false); errstr != "" {
-			return errors.New(errstr), errCode
+		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false); err != nil {
+			return err, errCode
 		}
 		goi.t.putMirror(goi.lom)
 	}
@@ -505,14 +502,14 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		buf, slab = nodeCtx.mm.AllocForSize(goi.length)
 		if cksumRange {
 			var (
-				cksum, errstr string
+				cksumValue string
 			)
-			cksum, sgl, reader, errstr = goi.t.rangeCksum(file, fqn, goi.offset, goi.length, buf)
-			if errstr != "" {
+			cksumValue, sgl, reader, err = goi.t.rangeCksum(file, fqn, goi.offset, goi.length, buf)
+			if err != nil {
 				return
 			}
+			hdr.Set(cmn.HeaderObjCksumVal, cksumValue)
 			hdr.Set(cmn.HeaderObjCksumType, cksumConf.Type)
-			hdr.Set(cmn.HeaderObjCksumVal, cksum)
 		} else {
 			reader = io.NewSectionReader(file, goi.offset, goi.length)
 		}

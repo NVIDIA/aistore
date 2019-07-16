@@ -5,6 +5,7 @@
 package ais_test
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -814,10 +815,10 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 }
 
 func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
-	pid, errstr := hrwProxyTest(smap, smap.ProxySI.DaemonID)
+	pid, err := hrwProxyTest(smap, smap.ProxySI.DaemonID)
 	pi := smap.Pmap[pid]
-	if errstr != "" {
-		return "", "", fmt.Errorf("%s", errstr)
+	if err != nil {
+		return
 	}
 
 	return pi.DaemonID, pi.PublicNet.DirectURL, nil
@@ -1016,9 +1017,9 @@ func primarySetToOriginal(t *testing.T) {
 // exported. As a result of this, ais.HrwProxy will not return the correct
 // proxy since the `idDigest` will be initialized to 0. To avoid this, we
 // compute the checksum directly in this method.
-func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, errstr string) {
+func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
 	if len(smap.Pmap) == 0 {
-		errstr = "AIStore cluster map is empty: no proxies"
+		err = errors.New("AIStore cluster map is empty: no proxies")
 		return
 	}
 	var (
@@ -1041,7 +1042,7 @@ func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, errstr string
 		}
 	}
 	if pi == "" {
-		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", len(smap.Pmap), skipped)
+		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d", len(smap.Pmap), skipped)
 	}
 	return
 }

@@ -80,8 +80,8 @@ func (r *XactPutLRepl) Run() error {
 	for {
 		select {
 		case lom := <-r.workCh:
-			if _, errstr := lom.Load(true); errstr != "" {
-				glog.Errorln(errstr)
+			if _, err := lom.Load(true); err != nil {
+				glog.Error(err)
 				break
 			}
 			cmn.Assert(r.BckIsLocal() == lom.BckIsLocal)

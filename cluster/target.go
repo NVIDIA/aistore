@@ -35,13 +35,13 @@ type Target interface {
 	GetSmap() *Smap
 	GetFSPRG() fs.PathRunGroup
 	GetMem2() *memsys.Mem2
-	HRWTarget(bucket, objname string) (si *Snode, errstr string)
+	HRWTarget(bucket, objName string) (si *Snode, err error)
 	IsRebalancing() bool
 	Prefetch()
 	PrefetchQueueLen() int
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
-	GetCold(ctx context.Context, lom *LOM, prefetch bool) (string, int)
+	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 	RunLRU()
 	Cloud() CloudProvider
 }

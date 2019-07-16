@@ -8,10 +8,10 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 )
 
-func hrwTarget(bucket, objname string, smap *smapX) (si *cluster.Snode, errstr string) {
+func hrwTarget(bucket, objname string, smap *smapX) (si *cluster.Snode, err error) {
 	return cluster.HrwTarget(bucket, objname, &smap.Smap)
 }
 
-func hrwProxy(smap *smapX, idToSkip string) (pi *cluster.Snode, errstr string) {
+func hrwProxy(smap *smapX, idToSkip string) (pi *cluster.Snode, err error) {
 	return cluster.HrwProxy(&smap.Smap, idToSkip)
 }

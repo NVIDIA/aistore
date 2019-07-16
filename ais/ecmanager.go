@@ -274,8 +274,8 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		LOM:    lom,
 	}
 
-	if _, errstr := lom.Load(true); errstr != "" {
-		return errors.New(errstr)
+	if _, err := lom.Load(true); err != nil {
+		return err
 	}
 
 	mgr.restoreBckPutXact(lom.Bucket).Encode(req)

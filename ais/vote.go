@@ -135,8 +135,8 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s := h.smapowner.synchronize(newsmap, isproxy /*saveSmap*/, false /* lesserIsErr */); s != "" {
-		glog.Errorf("Failed to synchronize VoteRecord Smap v%d, err %s - voting No", newsmap.version(), s)
+	if err := h.smapowner.synchronize(newsmap, isproxy /*saveSmap*/, false /* lesserIsErr */); err != nil {
+		glog.Errorf("Failed to synchronize VoteRecord Smap v%d, err %s - voting No", newsmap.version(), err)
 		if _, err := w.Write([]byte(VoteNo)); err != nil {
 			glog.Errorf("Error writing a No vote: %v", err)
 		}
@@ -199,8 +199,8 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	if oldprimary != "" {
 		clone.delProxy(oldprimary)
 	}
-	if s := h.smapowner.persist(clone, isproxy /*saveSmap*/); s != "" {
-		h.invalmsghdlr(w, r, s)
+	if err := h.smapowner.persist(clone, isproxy /*saveSmap*/); err != nil {
+		h.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	h.smapowner.put(clone)
@@ -229,14 +229,14 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if s := p.smapowner.synchronize(newsmap, true /*saveSmap*/, false /* lesserIsErr */); s != "" {
-		glog.Errorln(s)
+	if err := p.smapowner.synchronize(newsmap, true /*saveSmap*/, false /* lesserIsErr */); err != nil {
+		glog.Error(err)
 	}
 
 	smap := p.smapowner.get()
-	psi, errstr := hrwProxy(smap, smap.ProxySI.DaemonID)
-	if errstr != "" {
-		s := fmt.Sprintf("Error preforming HRW: %s", errstr)
+	psi, err := hrwProxy(smap, smap.ProxySI.DaemonID)
+	if err != nil {
+		s := fmt.Sprintf("Error preforming HRW: %s", err)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -318,8 +318,8 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode,
 
 	glog.Infof("Moving %s(self) to primary state", p.si.Name())
 	// Begin Primary State
-	if s := p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */); s != "" {
-		glog.Error(s)
+	if err := p.becomeNewPrimary(vr.Primary /* proxyIDToRemove */); err != nil {
+		glog.Error(err)
 	}
 }
 
@@ -450,9 +450,9 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	// elected as the primary one.
 	for {
 		// Generate the next candidate
-		nextPrimaryProxy, errstr := hrwProxy(clone, clone.ProxySI.DaemonID)
-		if errstr != "" {
-			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", errstr)
+		nextPrimaryProxy, err := hrwProxy(clone, clone.ProxySI.DaemonID)
+		if err != nil {
+			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
 			return
 		}
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -504,9 +504,9 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	// elected as the primary one.
 	for {
 		// Generate the next candidate
-		nextPrimaryProxy, errstr := hrwProxy(clone, clone.ProxySI.DaemonID)
-		if errstr != "" {
-			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", errstr)
+		nextPrimaryProxy, err := hrwProxy(clone, clone.ProxySI.DaemonID)
+		if err != nil {
+			glog.Errorf("Failed to execute HRW selection upon primary proxy failure: %v", err)
 			return
 		}
 		if nextPrimaryProxy == nil {
@@ -584,9 +584,9 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 
 	// Second: Vote according to whether or not the candidate is the Highest Random Weight remaining
 	// in the Smap
-	nextPrimaryProxy, errstr := hrwProxy(h.smapowner.get(), currPrimaryID)
-	if errstr != "" {
-		return false, fmt.Errorf("error executing HRW: %v", errstr)
+	nextPrimaryProxy, err := hrwProxy(h.smapowner.get(), currPrimaryID)
+	if err != nil {
+		return false, fmt.Errorf("error executing HRW: %v", err)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Voting result for %s is %v. Expected primary: %s",

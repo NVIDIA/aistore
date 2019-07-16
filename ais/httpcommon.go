@@ -48,7 +48,7 @@ type (
 		si      *cluster.Snode
 		outjson []byte
 		err     error
-		errstr  string
+		details string
 		status  int
 	}
 
@@ -526,7 +526,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		sid     = unknownDaemonID
 		outjson []byte
 		err     error
-		errstr  string
+		details string
 		status  int
 		client  *http.Client
 	)
@@ -575,8 +575,8 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to create HTTP request %s %s, err: %v", args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, err, errstr, status}
+		details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v", args.req.Method, args.req.URL(), err)
+		return callResult{args.si, outjson, err, details, status}
 	}
 
 	req.Header.Set(cmn.HeaderCallerID, h.si.DaemonID)
@@ -589,42 +589,42 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	if err != nil {
 		if resp != nil && resp.StatusCode > 0 {
-			errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v", sid, args.req.Method, args.req.URL(), resp.Status, err)
+			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v", sid, args.req.Method, args.req.URL(), resp.Status, err)
 			status = resp.StatusCode
-			return callResult{args.si, outjson, err, errstr, status}
+			return callResult{args.si, outjson, err, details, status}
 		}
 
-		errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
-		return callResult{args.si, outjson, err, errstr, status}
+		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
+		return callResult{args.si, outjson, err, details, status}
 	}
 
 	if outjson, err = ioutil.ReadAll(resp.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v", sid, args.req.Method, args.req.URL(), err)
+		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): read response err: %v", sid, args.req.Method, args.req.URL(), err)
 		if err == io.EOF {
 			trailer := resp.Trailer.Get("Error")
 			if trailer != "" {
-				errstr = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s", sid, args.req.Method, args.req.URL(), err, trailer)
+				details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err: %v, trailer: %s", sid, args.req.Method, args.req.URL(), err, trailer)
 			}
 		}
 
 		resp.Body.Close()
-		return callResult{args.si, outjson, err, errstr, status}
+		return callResult{args.si, outjson, err, details, status}
 	}
 	resp.Body.Close()
 
 	// err == nil && bad status: resp.Body contains the error message
 	if resp.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf("%s", outjson)
-		errstr = err.Error()
+		err = errors.New(string(outjson))
+		details = err.Error()
 		status = resp.StatusCode
-		return callResult{args.si, outjson, err, errstr, status}
+		return callResult{args.si, outjson, err, details, status}
 	}
 
 	if sid != unknownDaemonID {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{args.si, outjson, err, errstr, resp.StatusCode}
+	return callResult{args.si, outjson, err, details, resp.StatusCode}
 }
 
 ///////////////
@@ -764,12 +764,12 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 		h.statsif.AddErrorHTTP(r.Method, 1)
 		return
 	}
-	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
+	msg := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
 	if _, file, line, ok := runtime.Caller(1); ok {
 		f := filepath.Base(file)
-		errstr += fmt.Sprintf("(%s, #%d)", f, line)
+		msg += fmt.Sprintf("(%s, #%d)", f, line)
 	}
-	h.invalmsghdlr(w, r, errstr)
+	h.invalmsghdlr(w, r, msg)
 	return
 }
 
@@ -845,47 +845,45 @@ func (h *httprunner) invalmsghdlrsilent(w http.ResponseWriter, r *http.Request, 
 // metasync Rx handlers //
 //////////////////////////
 
-func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msgInt *actionMsgInternal, errstr string) {
+func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newSmap *smapX, msgInt *actionMsgInternal, err error) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, msgInt = &smapX{}, &actionMsgInternal{}
-	smapvalue := payload[smaptag]
-	msgvalue := ""
-	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new smap, value (%+v, %T), err: %v", smapvalue, smapvalue, err)
+	newSmap, msgInt = &smapX{}, &actionMsgInternal{}
+	smapValue := payload[smaptag]
+	if err1 := jsoniter.Unmarshal([]byte(smapValue), newSmap); err1 != nil {
+		err = fmt.Errorf("failed to unmarshal new smap, value (%+v, %T), err: %v", smapValue, smapValue, err1)
 		return
 	}
-	if _, ok := payload[smaptag+actiontag]; ok {
-		msgvalue = payload[smaptag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), msgInt); err != nil {
-			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
+	if msgValue, ok := payload[smaptag+actiontag]; ok {
+		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
+			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
 			return
 		}
 	}
 	localsmap := h.smapowner.get()
 	myver := localsmap.version()
 	isManualReb := msgInt.Action == cmn.ActGlobalReb && msgInt.Value != nil
-	if newsmap.version() == myver && !isManualReb {
-		newsmap = nil
+	if newSmap.version() == myver && !isManualReb {
+		newSmap = nil
 		return
 	}
-	if !newsmap.isValid() {
-		errstr = fmt.Sprintf("Invalid Smap v%d - lacking or missing the primary", newsmap.version())
-		newsmap = nil
+	if !newSmap.isValid() {
+		err = fmt.Errorf("invalid Smap v%d - lacking or missing the primary", newSmap.version())
+		newSmap = nil
 		return
 	}
-	if newsmap.version() < myver {
+	if newSmap.version() < myver {
 		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) == nil {
-			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap v%d to v%d", h.si, myver, newsmap.version())
-			newsmap = nil
+			err = fmt.Errorf("%s: attempt to downgrade Smap v%d to v%d", h.si, myver, newSmap.version())
+			newSmap = nil
 			return
 		}
 		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) != nil {
 			glog.Errorf("target %s: receive Smap v%d < v%d local - proceeding anyway",
-				h.si.DaemonID, newsmap.version(), localsmap.version())
+				h.si.DaemonID, newSmap.version(), localsmap.version())
 		} else {
-			errstr = fmt.Sprintf("Attempt to downgrade Smap v%d to v%d", myver, newsmap.version())
+			err = fmt.Errorf("attempt to downgrade Smap v%d to v%d", myver, newSmap.version())
 			return
 		}
 	}
@@ -893,59 +891,56 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msgInt 
 	if msgInt.Action != "" {
 		s = ", action " + msgInt.Action
 	}
-	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.CountTargets(), s)
+	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newSmap.version(), localsmap.version(), newSmap.CountTargets(), s)
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucketMD, msgInt *actionMsgInternal, errstr string) {
+func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newBMD *bucketMD, msgInt *actionMsgInternal, err error) {
 	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
-	newbucketmd, msgInt = &bucketMD{}, &actionMsgInternal{}
-	bmdvalue := payload[bucketmdtag]
-	msgvalue := ""
-	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new %s, value (%+v, %T), err: %v", bmdTermName, bmdvalue, bmdvalue, err)
+	newBMD, msgInt = &bucketMD{}, &actionMsgInternal{}
+	bmdValue := payload[bucketmdtag]
+	if err1 := jsoniter.Unmarshal([]byte(bmdValue), newBMD); err1 != nil {
+		err = fmt.Errorf("failed to unmarshal new %s, value (%+v, %T), err: %v", bmdTermName, bmdValue, bmdValue, err1)
 		return
 	}
-	if _, ok := payload[bucketmdtag+actiontag]; ok {
-		msgvalue = payload[bucketmdtag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), msgInt); err != nil {
-			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
+	if msgValue, ok := payload[bucketmdtag+actiontag]; ok {
+		if err1 := jsoniter.Unmarshal([]byte(msgValue), msgInt); err1 != nil {
+			err = fmt.Errorf("failed to unmarshal action message, value (%+v, %T), err: %v", msgValue, msgValue, err1)
 			return
 		}
 	}
-	myver := h.bmdowner.get().version()
-	if newbucketmd.version() <= myver {
-		if newbucketmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbucketmd.version())
+	curVersion := h.bmdowner.get().version()
+	if newBMD.version() <= curVersion {
+		if newBMD.version() < curVersion {
+			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, curVersion, newBMD.version())
 		}
-		newbucketmd = nil
+		newBMD = nil
 	}
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList, string) {
+func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList, error) {
 	bytes, ok := payload[tokentag]
 	if !ok {
-		return nil, ""
+		return nil, nil
 	}
 
 	msgInt := actionMsgInternal{}
-	if _, ok := payload[tokentag+actiontag]; ok {
-		msgvalue := payload[tokentag+actiontag]
-		if err := jsoniter.Unmarshal([]byte(msgvalue), &msgInt); err != nil {
-			errstr := fmt.Sprintf(
-				"Failed to unmarshal action message, value (%+v, %T), err: %v",
-				msgvalue, msgvalue, err)
-			return nil, errstr
+	if msgValue, ok := payload[tokentag+actiontag]; ok {
+		if err := jsoniter.Unmarshal([]byte(msgValue), &msgInt); err != nil {
+			err := fmt.Errorf(
+				"failed to unmarshal action message, value (%+v, %T), err: %v",
+				msgValue, msgValue, err)
+			return nil, err
 		}
 	}
 
 	tokenList := &TokenList{}
 	if err := jsoniter.Unmarshal([]byte(bytes), tokenList); err != nil {
-		return nil, fmt.Sprintf(
-			"Failed to unmarshal blocked token list, value (%+v, %T), err: %v",
+		return nil, fmt.Errorf(
+			"failed to unmarshal blocked token list, value (%+v, %T), err: %v",
 			bytes, bytes, err)
 	}
 
@@ -955,7 +950,7 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 	}
 	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
 
-	return tokenList, ""
+	return tokenList, nil
 }
 
 // ================================== Background =========================================

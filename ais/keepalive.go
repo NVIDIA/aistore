@@ -265,8 +265,8 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	metaction += " ]"
 
 	pkr.p.smapowner.put(clone)
-	if errstr := pkr.p.smapowner.persist(clone, true); errstr != "" {
-		glog.Errorln(errstr)
+	if err := pkr.p.smapowner.persist(clone, true); err != nil {
+		glog.Error(err)
 	}
 	pkr.p.smapowner.Unlock()
 

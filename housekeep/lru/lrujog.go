@@ -63,8 +63,8 @@ func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh ch
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
+		if err1 := cmn.PathWalkErr(err); err1 != nil {
+			glog.Error(err1)
 			return err
 		}
 		return nil
@@ -79,8 +79,8 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		h           = lctx.heap
 		bckProvider = cmn.ProviderFromLoc(lctx.bckIsLocal)
 	)
-	lom, errstr := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
-	if errstr != "" {
+	lom, err := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
+	if err != nil {
 		return nil
 	}
 
@@ -88,8 +88,8 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if !lom.LRUEnabled() {
 		return nil
 	}
-	_, errstr = lom.Load(false)
-	if errstr != "" {
+	_, err = lom.Load(false)
+	if err != nil {
 		return nil
 	}
 
@@ -218,8 +218,8 @@ func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
 	// (hence, precise size accounting TODO)
 
 	// Don't persist meta as object will be soon removed
-	if errstr := fi.lom.DelAllCopies(); errstr != "" {
-		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.GetCopies(), errstr)
+	if err := fi.lom.DelAllCopies(); err != nil {
+		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.GetCopies(), err)
 	}
 	if err := os.Remove(fi.lom.FQN); err == nil {
 		glog.Infof("Evicted %s", fi.lom)

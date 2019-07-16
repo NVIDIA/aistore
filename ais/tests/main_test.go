@@ -1607,9 +1607,9 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 				}
 				defer file.Close()
-				hash, errstr := cmn.ComputeXXHash(file, nil)
-				if errstr != "" {
-					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, errstr)
+				hash, err := cmn.ComputeXXHash(file, nil)
+				if err != nil {
+					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, err)
 				}
 				if hash != ckErr.ExpectedHash {
 					t.Errorf("Expected entire object checksum [%s], checksum returned in response [%s]", ckErr.ExpectedHash, hash)

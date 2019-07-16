@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -164,8 +163,8 @@ func (reb *rebManager) fillinStatus(status *rebStatus) {
 	for _, lomack := range reb.lomAcks() {
 		lomack.mu.Lock()
 		for _, lom := range lomack.q {
-			tsi, errstr := hrwTarget(lom.Bucket, lom.Objname, rsmap)
-			if errstr != "" {
+			tsi, err := hrwTarget(lom.Bucket, lom.Objname, rsmap)
+			if err != nil {
 				continue
 			}
 			tmap[tsi.DaemonID] = tsi
@@ -289,8 +288,8 @@ wack:
 				cnt += l
 				if !logged {
 					for _, lom := range lomack.q {
-						tsi, errstr := hrwTarget(lom.Bucket, lom.Objname, smap)
-						if errstr == "" {
+						tsi, err := hrwTarget(lom.Bucket, lom.Objname, smap)
+						if err == nil {
 							glog.Infof("waiting for %s ACK from %s", lom, tsi)
 							logged = true
 							break
@@ -521,9 +520,9 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		tsi  = smap.GetTarget(tsid)
 	)
 	// Rx
-	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
-	if errstr != "" {
-		glog.Error(errstr)
+	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
+	if err != nil {
+		glog.Error(err)
 		return
 	}
 	if stage := reb.stage.Load(); stage >= rebStageFin { // TODO: store as pending and handle elsewhere
@@ -577,12 +576,12 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	lom, errstr := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
+	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
 	}
-	if errstr != "" {
-		glog.Errorln(errstr)
+	if err != nil {
+		glog.Error(err)
 		return
 	}
 	var (
@@ -623,8 +622,8 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, config *cmn.Config) (cnt 
 	for _, lomack := range reb.lomAcks() {
 		lomack.mu.Lock()
 		for uname, lom := range lomack.q {
-			if _, errstr := lom.Load(false); errstr != "" {
-				glog.Errorf("%s: failed loading %s, err: %s", tname, lom, errstr)
+			if _, err := lom.Load(false); err != nil {
+				glog.Errorf("%s: failed loading %s, err: %s", tname, lom, err)
 				delete(lomack.q, uname)
 				continue
 			}
@@ -709,9 +708,8 @@ func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 // the walking callback is executed by the LRU xaction
 func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err error) {
 	var (
-		lom    *cluster.LOM
-		tsi    *cluster.Snode
-		errstr string
+		lom *cluster.LOM
+		tsi *cluster.Snode
 	)
 	if rj.xreb.Aborted() {
 		return fmt.Errorf("%s: aborted, path %s", rj.xreb, rj.mpath)
@@ -720,8 +718,8 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 		inerr = <-rj.errCh
 	}
 	if inerr != nil {
-		if errstr = cmn.PathWalkErr(inerr); errstr != "" {
-			glog.Errorf(errstr)
+		if err := cmn.PathWalkErr(inerr); err != nil {
+			glog.Error(err)
 			return inerr
 		}
 		return nil
@@ -729,18 +727,18 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	if fi.Mode().IsDir() {
 		return nil
 	}
-	lom, errstr = cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
-	if errstr != "" {
+	lom, err = cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
+	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s, err %s - skipping...", lom, errstr)
+			glog.Infof("%s, err %s - skipping...", lom, err)
 		}
 		return nil
 	}
 
 	// rebalance, maybe
-	tsi, errstr = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
-	if errstr != "" {
-		return errors.New(errstr)
+	tsi, err = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
+	if err != nil {
+		return err
 	}
 	if tsi.DaemonID == rj.m.t.si.DaemonID {
 		return nil
@@ -780,7 +778,6 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64) (err error) {
 	var (
 		file                  *cmn.FileHandle
-		errstr                string
 		hdr                   transport.Header
 		cksum                 cmn.Cksummer
 		cksumType, cksumValue string
@@ -790,11 +787,11 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 	uname := lom.Uname()
 	cluster.ObjectLocker.Lock(uname, false) // NOTE: unlock in objSentCallback()
 
-	_, errstr = lom.Load(false)
-	if errstr != "" || !lom.Exists() || lom.IsCopy() {
+	_, err = lom.Load(false)
+	if err != nil || !lom.Exists() || lom.IsCopy() {
 		goto rerr
 	}
-	if cksum, errstr = lom.CksumComputeIfMissing(); errstr != "" {
+	if cksum, err = lom.CksumComputeIfMissing(); err != nil {
 		goto rerr
 	}
 	cksumType, cksumValue = cksum.Get()
@@ -833,9 +830,6 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 	return nil
 rerr:
 	cluster.ObjectLocker.Unlock(uname, false)
-	if errstr != "" {
-		err = errors.New(errstr)
-	}
 	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Errorf("%s, err: %v", lom, err)
@@ -921,8 +915,8 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	}
 
 	if err != nil {
-		if errstr := cmn.PathWalkErr(err); errstr != "" {
-			glog.Errorf(errstr)
+		if err := cmn.PathWalkErr(err); err != nil {
+			glog.Error(err)
 			return err
 		}
 		return nil
@@ -930,17 +924,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	lom, errstr := cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
-	if errstr != "" {
+	lom, err := cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
+	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s, err %v - skipping #1...", lom, errstr)
+			glog.Infof("%s, err %v - skipping #1...", lom, err)
 		}
 		return nil
 	}
-	_, errstr = lom.Load(false)
-	if errstr != "" {
+	_, err = lom.Load(false)
+	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s, err %v - skipping #2...", lom, errstr)
+			glog.Infof("%s, err %v - skipping #2...", lom, err)
 		}
 		return nil
 	}

@@ -62,15 +62,15 @@ type (
 		pending atomic.Int64
 	}
 	ErrXpired struct { // return it if called (right) after self-termination
-		errstr string
+		msg string
 	}
 
 	MountpathXact    struct{}
 	NonmountpathXact struct{}
 )
 
-func (e *ErrXpired) Error() string     { return e.errstr }
-func NewErrXpired(s string) *ErrXpired { return &ErrXpired{errstr: s} }
+func (e *ErrXpired) Error() string       { return e.msg }
+func NewErrXpired(msg string) *ErrXpired { return &ErrXpired{msg: msg} }
 
 //
 // XactBase - partially implements Xact interface

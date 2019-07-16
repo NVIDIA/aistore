@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -18,18 +19,18 @@ import (
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
-func Bo2Uname(bucket, objname string) string { return path.Join(bucket, objname) }
-func Uname2Bo(uname string) (bucket, objname string) {
+func Bo2Uname(bucket, objName string) string { return path.Join(bucket, objName) }
+func Uname2Bo(uname string) (bucket, objName string) {
 	i := strings.Index(uname, "/")
-	bucket, objname = uname[:i], uname[i+1:]
+	bucket, objName = uname[:i], uname[i+1:]
 	return
 }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
-func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
+func HrwTarget(bucket, objName string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
-		name   = Bo2Uname(bucket, objname)
+		name   = Bo2Uname(bucket, objName)
 		digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {
@@ -41,7 +42,7 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 		}
 	}
 	if si == nil {
-		errstr = "cluster map is empty: no targets"
+		err = errors.New("cluster map is empty: no targets")
 	}
 	return
 }
@@ -49,12 +50,12 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 // Returns count number of first targets with highest random weight. The list
 // of targets is sorted from the greatest to least.
 // Returns error if the cluster does not have enough targets
-func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, errstr string) {
+func HrwTargetList(bucket, objName string, smap *Smap, count int) (si []*Snode, err error) {
 	if count <= 0 {
-		return nil, fmt.Sprintf("invalid number of targets requested: %d", count)
+		return nil, fmt.Errorf("invalid number of targets requested: %d", count)
 	}
 	if smap.CountTargets() < count {
-		errstr = fmt.Sprintf("Number of targets %d is fewer than requested %d", smap.CountTargets(), count)
+		err = fmt.Errorf("number of targets %d is fewer than requested %d", smap.CountTargets(), count)
 		return
 	}
 
@@ -64,7 +65,7 @@ func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, 
 	}
 	arr := make([]tsi, len(smap.Tmap))
 	si = make([]*Snode, count)
-	name := Bo2Uname(bucket, objname)
+	name := Bo2Uname(bucket, objName)
 	digest := xxhash.ChecksumString64S(name, cmn.MLCG32)
 
 	i := 0
@@ -78,13 +79,12 @@ func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, 
 	for i := 0; i < count; i++ {
 		si[i] = arr[i].node
 	}
-
 	return
 }
 
-func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
+func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 	if smap.CountProxies() == 0 {
-		errstr = "cluster map is empty: no proxies"
+		err = errors.New("cluster map is empty: no proxies")
 		return
 	}
 	var (
@@ -106,20 +106,20 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 		}
 	}
 	if pi == nil {
-		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", smap.CountProxies(), skipped)
+		err = fmt.Errorf("cannot HRW-select proxy: current count=%d, skipped=%d", smap.CountProxies(), skipped)
 	}
 	return
 }
 
-func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, digest uint64, errstr string) {
+func hrwMpath(bucket, objName string) (mi *fs.MountpathInfo, digest uint64, err error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
-		errstr = fmt.Sprintf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objname)
+		err = fmt.Errorf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objName)
 		return
 	}
 	var (
 		max  uint64
-		name = Bo2Uname(bucket, objname)
+		name = Bo2Uname(bucket, objName)
 	)
 	digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
 	for _, mpathInfo := range availablePaths {

@@ -5,7 +5,6 @@
 package mirror
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 
@@ -163,9 +162,7 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	if j.parent.copies == 1 {
 		size += lom.Size() * int64(lom.NumCopies()-1)
-		if errstr := lom.DelAllCopies(); errstr != "" {
-			err = errors.New(errstr)
-		} else {
+		if err = lom.DelAllCopies(); err == nil {
 			err = lom.Persist()
 		}
 	} else {
@@ -178,9 +175,7 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 			if ndel <= 0 {
 				break
 			}
-			if errstr := lom.DelCopy(cpyfqn); errstr != "" {
-				err = errors.New(errstr)
-			} else {
+			if err = lom.DelCopy(cpyfqn); err == nil {
 				ndel--
 				size += lom.Size()
 				persist = true

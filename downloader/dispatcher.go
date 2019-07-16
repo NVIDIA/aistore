@@ -5,7 +5,6 @@
 package downloader
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -186,12 +185,12 @@ func (d *dispatcher) checkAborted() bool {
 func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LOM, error) {
 	var err error
 
-	lom, errstr := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname}.Init(job.BckProvider())
-	if errstr == "" {
-		_, errstr = lom.Load(true)
+	lom, err := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname}.Init(job.BckProvider())
+	if err == nil {
+		_, err = lom.Load(true)
 	}
-	if errstr != "" {
-		return nil, errors.New(errstr)
+	if err != nil {
+		return nil, err
 	}
 	if lom.Exists() { // FIXME: add versioning
 		if glog.V(4) {
@@ -202,7 +201,7 @@ func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LO
 
 	if lom.ParsedFQN.MpathInfo == nil {
 		err = fmt.Errorf("download task for %s failed. Failed to get mountpath for the request's fqn %s", obj.Link, lom.FQN)
-		glog.Error(err.Error())
+		glog.Error(err)
 		return nil, err
 	}
 

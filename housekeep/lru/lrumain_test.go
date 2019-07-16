@@ -124,7 +124,7 @@ func saveRandomFile(t cluster.Target, filename string, size int64) {
 	_, err := cmn.SaveReader(filename, rand.Reader, buff, false, size)
 	Expect(err).NotTo(HaveOccurred())
 	lom, errstr := cluster.LOM{T: t, FQN: filename}.Init("")
-	Expect(errstr).To(BeEmpty())
+	Expect(errstr).NotTo(HaveOccurred())
 	lom.SetSize(size)
 	lom.IncObjectVersion()
 	Expect(lom.Persist()).NotTo(HaveOccurred())

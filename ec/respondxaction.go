@@ -2,7 +2,6 @@ package ec
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -82,9 +81,9 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, errstr := cluster.HrwFQN(tp, bucket, objname, bckIsLocal)
-		if errstr != "" {
-			return errors.New(errstr)
+		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, objname, bckIsLocal)
+		if err != nil {
+			return err
 		}
 		if err := os.RemoveAll(fqnMeta); err != nil {
 			return fmt.Errorf("error removing %s %q: %v", tp, fqnMeta, err)
@@ -107,22 +106,25 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case reqGet:
 		// slice or replica request: send the object's data to the caller
-		var fqn, errstr string
+		var (
+			fqn string
+			err error
+		)
 		if iReq.IsSlice {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, errstr = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
+			fqn, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, errstr = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
 		}
-		if errstr != "" {
-			glog.Errorf(errstr)
+		if err != nil {
+			glog.Error(err)
 			return
 		}
 
@@ -131,9 +133,9 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, _, errstr := cluster.HrwFQN(MetaType, bucket, objName, bckIsLocal)
-		if errstr != "" {
-			glog.Errorf(errstr)
+		fqn, _, err := cluster.HrwFQN(MetaType, bucket, objName, bckIsLocal)
+		if err != nil {
+			glog.Error(err)
 			return
 		}
 
@@ -168,17 +170,18 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		bckIsLocal := r.bmd.Get().IsLocal(bucket)
 		var (
-			objFQN, errstr string
-			err            error
+			objFQN string
+			lom    *cluster.LOM
+			err    error
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
 			}
-			objFQN, _, errstr = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
-			if errstr != "" {
-				glog.Error(errstr)
+			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
+			if err != nil {
+				glog.Error(err)
 				return
 			}
 		} else {
@@ -187,9 +190,9 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 					iReq.Sender, bucket, objName)
 			}
 			// FIXME: vs. lom.Fill() a few lines below
-			objFQN, _, errstr = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
-			if errstr != "" {
-				glog.Error(errstr)
+			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			if err != nil {
+				glog.Error(err)
 				return
 			}
 		}
@@ -199,9 +202,9 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		buf, slab := mm.AllocEstimated(cmn.MiB)
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		if err == nil {
-			lom, errstr := cluster.LOM{FQN: objFQN, T: r.t}.Init("")
-			if errstr != "" {
-				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, errstr)
+			lom, err = cluster.LOM{FQN: objFQN, T: r.t}.Init("")
+			if err != nil {
+				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, err)
 				slab.Free(buf)
 				return
 			}
@@ -231,10 +234,8 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		_, err = cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), buf, false)
 
 		if err == nil {
-			lom, errstr := cluster.LOM{FQN: metaFQN, T: r.t}.Init("")
-			if errstr != "" {
-				err = errors.New(errstr)
-			} else {
+			lom, err = cluster.LOM{FQN: metaFQN, T: r.t}.Init("")
+			if err == nil {
 				lom.SetSize(int64(metaLen))
 				err = lom.Persist()
 			}

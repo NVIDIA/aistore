@@ -5,8 +5,6 @@
 package downloader
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -41,9 +39,9 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bucket string, clo
 		// Make sure that link contains protocol (absence of protocol can result in errors).
 		link = cmn.PrependProtocol(link)
 
-		si, errstr := t.HRWTarget(bucket, objName)
-		if errstr != "" {
-			return nil, fmt.Errorf(errstr)
+		si, err := t.HRWTarget(bucket, objName)
+		if err != nil {
+			return nil, err
 		}
 		if si.ID() != t.Snode().ID() {
 			continue

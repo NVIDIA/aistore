@@ -585,8 +585,8 @@ var _ = Describe("Distributed Sort", func() {
 					key := fmt.Sprintf("record-%d.txt", i)
 					keys[i] = key
 
-					fqn, _, errstr := cluster.HrwFQN(fs.ObjectType, testBucket, key, true)
-					Expect(errstr).To(BeEmpty())
+					fqn, _, err := cluster.HrwFQN(fs.ObjectType, testBucket, key, true)
+					Expect(err).ShouldNot(HaveOccurred())
 					f, err := cmn.CreateFile(fqn)
 					Expect(err).ShouldNot(HaveOccurred())
 					err = f.Close()

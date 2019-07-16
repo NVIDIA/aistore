@@ -30,8 +30,8 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	var msg cmn.SelectMsg
 	getMsgJSON := cmn.MustMarshal(actionMsg.Value)
 	if err := jsoniter.Unmarshal(getMsgJSON, &msg); err != nil {
-		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
-		t.invalmsghdlr(w, r, errstr)
+		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
+		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	ok = t.listBucketAsync(w, r, bucket, bckIsLocal, &msg)
@@ -102,9 +102,8 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 						return
 					}
 					for i := 0; i < l; i += m {
-						lom, errstr :=
-							cluster.LOM{T: t, Bucket: bucket, Objname: bckEntries[i].Name}.Init(bckProvider)
-						if errstr == "" && lom.IsLoaded() { // loaded?
+						lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: bckEntries[i].Name}.Init(bckProvider)
+						if err == nil && lom.IsLoaded() { // loaded?
 							loaded++
 						}
 					}

@@ -648,11 +648,11 @@ func CopyFile(src, dst string, buf []byte) (err error) {
 	return
 }
 
-func PathWalkErr(err error) string {
+func PathWalkErr(err error) error {
 	if os.IsNotExist(err) {
-		return ""
+		return nil
 	}
-	return fmt.Sprintf("filepath-walk invoked with err: %v", err)
+	return fmt.Errorf("filepath-walk invoked with err: %v", err)
 }
 
 // Saves the reader directly to a local file
@@ -799,14 +799,16 @@ func ReceiveAndChecksum(w io.Writer, r io.Reader, buf []byte, hashes ...hash.Has
 	return
 }
 
-func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
-	var err error
-	var xx hash.Hash = xxhash.New64()
+func ComputeXXHash(reader io.Reader, buf []byte) (cksumValue string, err error) {
+	var (
+		xx hash.Hash = xxhash.New64()
+	)
+
 	_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
 	if err != nil {
-		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
+		return "", fmt.Errorf("failed to copy buffer, err: %v", err)
 	}
-	return HashToStr(xx), ""
+	return HashToStr(xx), nil
 }
 
 func ParseI64Range(str string, base, bits int, low, high int64) (int64, error) {
@@ -846,12 +848,12 @@ func LocalSave(pathname string, v interface{}) error {
 	}
 	r := bytes.NewReader(b)
 	_, err = io.Copy(file, r)
-	errclose := file.Close()
+	errClose := file.Close()
 	if err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
-	if errclose != nil {
+	if errClose != nil {
 		_ = os.Remove(tmp)
 		return err
 	}

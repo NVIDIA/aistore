@@ -6,7 +6,6 @@ package ec
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -139,9 +138,9 @@ func (c *putJogger) encode(req *Request) error {
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, _, errstr := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
-	if errstr != "" {
-		return errors.New(errstr)
+	metaFQN, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	if err != nil {
+		return err
 	}
 	metaBuf := meta.marshal()
 	if _, err := cmn.SaveReader(metaFQN, bytes.NewReader(metaBuf), c.buffer, false); err != nil {
@@ -171,9 +170,9 @@ func (c *putJogger) encode(req *Request) error {
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, _, errstr := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
-	if errstr != "" {
-		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, errstr)
+	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsLocal)
+	if err != nil {
+		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
 		return nil
 	}
 
@@ -202,9 +201,9 @@ func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
-	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), copies+1)
-	if errstr != "" {
-		return errors.New(errstr)
+	targets, err := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), copies+1)
+	if err != nil {
+		return err
 	}
 	targets = targets[1:]
 
@@ -243,10 +242,9 @@ func calculateDataSlicesHashes(slices []*slice, wg *sync.WaitGroup, errCh chan e
 	buf, slab := mm.AllocForSize(sliceSize)
 	defer slab.Free(buf)
 	for i, reader := range cksmReaders {
-		cksm, errstr := cmn.ComputeXXHash(reader, buf)
-
-		if errstr != "" {
-			errCh <- fmt.Errorf("failure computing checksum of a slice: %s", errstr)
+		cksm, err := cmn.ComputeXXHash(reader, buf)
+		if err != nil {
+			errCh <- fmt.Errorf("failure computing checksum of a slice: %s", err)
 			return
 		}
 
@@ -462,16 +460,15 @@ func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes
 	// gets a slice each
-	targets, errstr := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
-	if errstr != "" {
-		return nil, errors.New(errstr)
+	targets, err := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
+	if err != nil {
+		return nil, err
 	}
 
 	// load the data slices from original object and construct parity ones
 	var (
 		objReader cmn.ReadOpenCloser
 		slices    []*slice
-		err       error
 	)
 	if c.toDisk {
 		objReader, slices, err = generateSlicesToDisk(req.LOM.FQN, ecConf.DataSlices, ecConf.ParitySlices)

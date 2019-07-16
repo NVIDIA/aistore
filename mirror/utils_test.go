@@ -71,7 +71,7 @@ var _ = Describe("Mirror", func() {
 			lom.SetSize(testObjectSize)
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 
-			Expect(lom.ValidateChecksum(true)).To(BeEmpty())
+			Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
 			clone, err := copyTo(lom, mpathInfo2, copyBuf)
 			Expect(clone.IsCopy()).To(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -85,20 +85,20 @@ var _ = Describe("Mirror", func() {
 			Expect(ok).To(BeTrue())
 
 			newLom := newBasicLom(testFQN, tMock)
-			_, errstr := newLom.Load(false)
-			Expect(errstr).To(BeEmpty())
+			_, err = newLom.Load(false)
+			Expect(err).ShouldNot(HaveOccurred())
 			Expect(newLom.GetCopies()).To(HaveLen(1))
 			_, ok = newLom.GetCopies()[expectedCopyFQN]
 			Expect(ok).To(BeTrue())
 
 			// Check msic copy data
-			lomCopy, errstr := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init("")
-			Expect(errstr).To(BeEmpty())
+			lomCopy, err := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init("")
+			Expect(err).ShouldNot(HaveOccurred())
 
-			_, errstr = lomCopy.Load(false)
-			Expect(errstr).To(BeEmpty())
-			copyCksm, errstr := lomCopy.CksumComputeIfMissing()
-			Expect(errstr).To(BeEmpty())
+			_, err = lomCopy.Load(false)
+			Expect(err).ShouldNot(HaveOccurred())
+			copyCksm, err := lomCopy.CksumComputeIfMissing()
+			Expect(err).ShouldNot(HaveOccurred())
 			_, copyCksmVal := copyCksm.Get()
 			_, orgCksmVal := lom.Cksum().Get()
 			Expect(copyCksmVal).To(BeEquivalentTo(orgCksmVal))
@@ -119,7 +119,7 @@ func createTestFile(filepath, objname string, size int64) {
 
 func newBasicLom(fqn string, t cluster.Target) *cluster.LOM {
 	lom, err := cluster.LOM{T: t, FQN: fqn}.Init("")
-	Expect(err).To(BeEmpty())
+	Expect(err).NotTo(HaveOccurred())
 	lom.Uncache()
 	return lom
 }

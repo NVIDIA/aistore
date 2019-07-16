@@ -119,20 +119,20 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		defer m.extractAdjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
-		si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
-		if errStr != "" {
-			return errors.New(errStr)
+		si, err := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
+		if err != nil {
+			return err
 		}
 		if si.DaemonID != m.ctx.node.DaemonID {
 			return nil
 		}
 
-		lom, errMsg := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket}.Init(m.rs.BckProvider)
-		if errMsg == "" {
-			_, errMsg = lom.Load(true)
+		lom, err := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket}.Init(m.rs.BckProvider)
+		if err == nil {
+			_, err = lom.Load(true)
 		}
-		if errMsg != "" {
-			return errors.New(errMsg)
+		if err != nil {
+			return err
 		} else if !lom.Exists() {
 			msg := fmt.Sprintf("shard %q does not exist (is missing)", shardName)
 			return m.react(cfg.MissingShards, msg)
@@ -282,9 +282,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		errCh = make(chan error, 2)
 	)
-	lom, errStr := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}.Init(bckProvider)
-	if errStr != "" {
-		return errors.New(errStr)
+	lom, err := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}.Init(bckProvider)
+	if err != nil {
+		return err
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)
@@ -353,8 +353,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
-	cmn.AssertMsg(si != nil, errStr)
+	si, err := cluster.HrwTarget(bucket, shardName, m.smap)
+	cmn.AssertNoErr(err)
 
 	// If the newly created shard belongs on a different target
 	// according to HRW, send it there. Since it doesn't really matter
@@ -793,8 +793,8 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// }
 
 	for _, s := range shards {
-		si, errStr := cluster.HrwTarget(m.rs.OutputBucket, s.Name, m.smap)
-		cmn.AssertMsg(si != nil, errStr)
+		si, err := cluster.HrwTarget(m.rs.OutputBucket, s.Name, m.smap)
+		cmn.AssertNoErr(err)
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 	}
 

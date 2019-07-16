@@ -296,8 +296,8 @@ func (rm *RecordManager) encodeRecordName(storeType string, shardName, recordNam
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. /tmp/ais/dsort/local/bucket/shard_1-record_name.cls)
 		recordExt := filepath.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
-		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init(rm.bckProvider)
-		cmn.Assert(errMsg == "")
+		lom, err := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init(rm.bckProvider)
+		cmn.Assert(err == nil)
 		return contentPath, fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortFileType, "")
 	default:
 		cmn.AssertMsg(false, storeType)
@@ -310,8 +310,8 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 	case OffsetStoreType:
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
-		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: obj.ContentPath}.Init(rm.bckProvider)
-		cmn.Assert(errMsg == "")
+		lom, err := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: obj.ContentPath}.Init(rm.bckProvider)
+		cmn.Assert(err == nil)
 		return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, obj.ObjectFileType, "")
 	case SGLStoreType:
 		// To convert contentPath to fullContentPath we need to add record
@@ -321,8 +321,8 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		lom, errMsg := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init(rm.bckProvider)
-		cmn.Assert(errMsg == "")
+		lom, err := cluster.LOM{T: rm.t, Bucket: rm.bucket, Objname: contentPath}.Init(rm.bckProvider)
+		cmn.Assert(err == nil)
 		return fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortFileType, "")
 	default:
 		cmn.AssertMsg(false, obj.StoreType)

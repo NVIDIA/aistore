@@ -317,9 +317,9 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, objname, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	si, err := hrwTarget(bucket, objname, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
@@ -366,9 +366,9 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, objname, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	si, err := hrwTarget(bucket, objname, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	config := cmn.GCO.Get()
@@ -396,7 +396,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objName := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
@@ -407,14 +407,14 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, objname, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	si, err := hrwTarget(bucket, objName, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		bmd := p.bmdowner.get()
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objName, si)
 	}
 	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -486,7 +486,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		)
 		for result := range results {
 			if result.err != nil {
-				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, result.errstr))
+				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, result.err))
 				return
 			}
 		}
@@ -526,9 +526,9 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, objname, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	si, err := hrwTarget(bucket, objname, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -566,47 +566,47 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newsmap, _, errstr := p.extractSmap(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	newSmap, _, err := p.extractSmap(payload)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	if newsmap != nil {
+	if newSmap != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new Smap v%d from %s", newsmap.version(), caller)
+			glog.Infof("new Smap v%d from %s", newSmap.version(), caller)
 		}
-		errstr = p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */)
-		if errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
+		err = p.smapowner.synchronize(newSmap, true /*saveSmap*/, true /* lesserIsErr */)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if !newsmap.isPresent(p.si) {
-			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si, newsmap.pp())
+		if !newSmap.isPresent(p.si) {
+			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si, newSmap.pp())
 			glog.Errorln(s)
 		}
 	}
 
-	newbmd, actionlb, errstr := p.extractbucketmd(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	newBMD, actionLB, err := p.extractbucketmd(payload)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if newbmd != nil {
+	if newBMD != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new BMD v%d from %s", newbmd.version(), caller)
+			glog.Infof("new BMD v%d from %s", newBMD.version(), caller)
 		}
-		if errstr = p.receiveBucketMD(newbmd, actionlb); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
+		if err = p.receiveBucketMD(newBMD, actionLB); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	}
 
-	revokedTokens, errstr := p.extractRevokedTokenList(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	revokedTokens, err := p.extractRevokedTokenList(payload)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	p.authn.updateRevokedList(revokedTokens)
@@ -643,9 +643,9 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool
 		p.bmdowner.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bucket)
 	}
-	if errstr := p.savebmdconf(clone, config); errstr != "" {
+	if err := p.savebmdconf(clone, config); err != nil {
 		p.bmdowner.Unlock()
-		return errors.New(errstr)
+		return err
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -675,9 +675,9 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 		p.bmdowner.Unlock()
 		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist), http.StatusNotFound
 	}
-	if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
+	if err := p.savebmdconf(clone, cmn.GCO.Get()); err != nil {
 		p.bmdowner.Unlock()
-		return nil, fmt.Errorf(errstr), http.StatusInternalServerError
+		return nil, err, http.StatusInternalServerError
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -756,8 +756,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		bucketFrom, bucketTo := bucket, msg.Name
 		if bucketFrom == "" || bucketTo == "" {
-			errstr := fmt.Sprintf("Invalid rename local bucket request: empty name %q or %q", bucketFrom, bucketTo)
-			p.invalmsghdlr(w, r, errstr)
+			s := fmt.Sprintf("invalid rename local bucket request: empty name %q or %q", bucketFrom, bucketTo)
+			p.invalmsghdlr(w, r, s)
 			return
 		}
 		clone := p.bmdowner.get().clone()
@@ -773,8 +773,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !p.renameLB(bucketFrom, bucketTo, clone, props, &msg, config) {
-			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
-			p.invalmsghdlr(w, r, errstr)
+			s := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
+			p.invalmsghdlr(w, r, s)
 			return
 		}
 		glog.Infof("renamed local bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
@@ -1131,8 +1131,8 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 	}
 
 	clone.set(bucket, bckIsLocal, bprops)
-	if e := p.savebmdconf(clone, config); e != "" {
-		glog.Errorln(e)
+	if err := p.savebmdconf(clone, config); err != nil {
+		glog.Error(err)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -1246,8 +1246,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		bprops = cmn.DefaultBucketProps(bckIsLocal)
 	}
 	clone.set(bucket, bckIsLocal, bprops)
-	if e := p.savebmdconf(clone, config); e != "" {
-		glog.Errorln(e)
+	if err := p.savebmdconf(clone, config); err != nil {
+		glog.Error(err)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -1277,8 +1277,9 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, objname, smap)
-	if errstr != "" {
+	si, err := hrwTarget(bucket, objname, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1358,8 +1359,8 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	smap4bcast := p.smapowner.get()
 	p.bmdowner.Lock()
 	clone.add(bucketTo, true, props)
-	if errstr := p.savebmdconf(clone, config); errstr != "" {
-		glog.Errorln(errstr)
+	if err := p.savebmdconf(clone, config); err != nil {
+		glog.Error(err)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -1390,8 +1391,8 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	clone = p.bmdowner.get().clone()
 	clone.del(bucketFrom, true)
 	clone.add(bucketTo, true, props)
-	if errstr := p.savebmdconf(clone, config); errstr != "" {
-		glog.Errorln(errstr)
+	if err := p.savebmdconf(clone, config); err != nil {
+		glog.Error(err)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -1422,12 +1423,12 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 	)
 	for res := range results {
 		if res.err != nil {
-			s := fmt.Sprintf("Failed to make-num-copies: %s, bucket %s, err: %v(%d)",
+			msg := fmt.Sprintf("Failed to make-num-copies: %s, bucket %s, err: %v(%d)",
 				res.si.Name(), bucket, res.err, res.status)
-			if res.errstr != "" {
-				glog.Errorln(res.errstr)
+			if res.details != "" {
+				glog.Errorln(res.details)
 			}
-			p.invalmsghdlr(w, r, s)
+			p.invalmsghdlr(w, r, msg)
 			return
 		}
 	}
@@ -1481,7 +1482,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 	}
 	res := p.call(args)
 	if res.err != nil {
-		p.invalmsghdlr(w, r, res.errstr)
+		p.invalmsghdlr(w, r, res.details)
 		p.keepalive.onerr(res.err, res.status)
 	} else {
 		p.writeJSON(w, r, res.outjson, "getbucketnames"+bckProviderStr)
@@ -1831,7 +1832,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	if msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
 			si, err := hrwTarget(bucket, e.Name, smap)
-			if err == "" {
+			if err == nil {
 				e.TargetURL = si.URL(cmn.NetworkPublic)
 			}
 		}
@@ -1862,12 +1863,12 @@ func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, ms
 	return
 }
 
-func (p *proxyrunner) savebmdconf(bmd *bucketMD, config *cmn.Config) (errstr string) {
-	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
-	if err := cmn.LocalSave(bucketmdfull, bmd); err != nil {
-		errstr = fmt.Sprintf("Failed to store %s at %s, err: %v", bmdTermName, bucketmdfull, err)
+func (p *proxyrunner) savebmdconf(bmd *bucketMD, config *cmn.Config) (err error) {
+	bmdFullPath := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
+	if err := cmn.LocalSave(bmdFullPath, bmd); err != nil {
+		return fmt.Errorf("failed to store %s at %s, err: %v", bmdTermName, bmdFullPath, err)
 	}
-	return
+	return nil
 }
 
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
@@ -1884,9 +1885,9 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	smap := p.smapowner.get()
-	si, errstr := hrwTarget(lbucket, objname, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	si, err := hrwTarget(lbucket, objname, smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -1964,7 +1965,7 @@ func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg,
 				"failed to execute List/Range request: %v (%d: %s)",
 				result.err,
 				result.status,
-				result.errstr,
+				result.details,
 			)
 		}
 	}
@@ -2133,8 +2134,8 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, s)
 				return
 			}
-			if s := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); s != "" {
-				p.invalmsghdlr(w, r, s)
+			if err := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
 			glog.Infof("%s: %s v%d done", p.si.Name(), cmn.SyncSmap, newsmap.version())
@@ -2186,7 +2187,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
+func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, err error) {
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	req := cmn.ReqArgs{
@@ -2198,14 +2199,14 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *smapX, errstr string) {
 	args := callArgs{req: req, timeout: defaultTimeout}
 	res := p.call(args)
 	if res.err != nil {
-		return nil, fmt.Sprintf("Failed to get smap from %s: %v", baseURL, res.err)
+		return nil, fmt.Errorf("failed to get smap from %s: %v", baseURL, res.err)
 	}
 	smap = &smapX{}
 	if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
-		return nil, fmt.Sprintf("Failed to unmarshal smap: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal smap: %v", err)
 	}
 	if !smap.isValid() {
-		return nil, fmt.Sprintf("Invalid Smap from %s: %s", baseURL, smap.pp())
+		return nil, fmt.Errorf("invalid Smap from %s: %s", baseURL, smap.pp())
 	}
 	return
 }
@@ -2238,9 +2239,9 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	newSmap, errstr := p.smapFromURL(newPrimaryURL)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	newSmap, err := p.smapFromURL(newPrimaryURL)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if proxyID != newSmap.ProxySI.DaemonID {
@@ -2297,8 +2298,8 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	if p.si.DaemonID == proxyID {
 		if !prepare {
-			if s := p.becomeNewPrimary(""); s != "" {
-				p.invalmsghdlr(w, r, s)
+			if err := p.becomeNewPrimary(""); err != nil {
+				p.invalmsghdlr(w, r, err.Error())
 			}
 		}
 		return
@@ -2321,16 +2322,16 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	p.smapowner.Lock()
 	clone := smap.clone()
 	clone.ProxySI = psi
-	if s := p.smapowner.persist(clone, true); s != "" {
+	if err := p.smapowner.persist(clone, true); err != nil {
 		p.smapowner.Unlock()
-		p.invalmsghdlr(w, r, s)
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
 }
 
-func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (errstr string) {
+func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
@@ -2345,9 +2346,9 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (errstr string) {
 
 	clone.ProxySI = p.si
 	clone.Version += 100
-	if errstr = p.smapowner.persist(clone, true); errstr != "" {
+	if err = p.smapowner.persist(clone, true); err != nil {
 		p.smapowner.Unlock()
-		glog.Errorln(errstr)
+		glog.Error(err)
 		return
 	}
 	p.smapowner.put(clone)
@@ -2414,8 +2415,8 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	clone := p.smapowner.get().clone()
 	clone.ProxySI = psi
 	p.metasyncer.becomeNonPrimary()
-	if s := p.smapowner.persist(clone, true); s != "" {
-		glog.Errorf("Failed to save Smap locally after having transitioned to non-primary:\n%s", s)
+	if err := p.smapowner.persist(clone, true); err != nil {
+		glog.Errorf("Failed to save Smap locally after having transitioned to non-primary:\n%s", err)
 	}
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
@@ -2569,15 +2570,13 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 
 	var (
 		msgBody []byte
-		errstr  string
 		err     error
 	)
 
 	if r.Body != nil {
-		msgBody, errstr, err = cmn.ReadBytes(r)
-
+		msgBody, err = cmn.ReadBytes(r)
 		if err != nil {
-			p.invalmsghdlr(w, r, errstr)
+			p.invalmsghdlr(w, r, err.Error())
 			return nil, false
 		}
 	}
@@ -2596,9 +2595,9 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 	for result := range results {
 		if result.err != nil {
 			if silent {
-				p.invalmsghdlrsilent(w, r, result.errstr)
+				p.invalmsghdlrsilent(w, r, result.details)
 			} else {
-				p.invalmsghdlr(w, r, result.errstr)
+				p.invalmsghdlr(w, r, result.details)
 			}
 			return nil, false
 		}
@@ -2623,7 +2622,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 		sysInfoMap := make(map[string]jsoniter.RawMessage, expectedNodes)
 		for result := range results {
 			if result.err != nil {
-				return nil, result.errstr
+				return nil, result.details
 			}
 			sysInfoMap[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
 		}
@@ -2792,7 +2791,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				errstr := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.errstr)
+				errstr := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.details)
 				p.invalmsghdlr(w, r, errstr, res.status)
 				return
 			}
@@ -2836,8 +2835,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		p.smapowner.put(clone)
-		if errstr := p.smapowner.persist(clone, true); errstr != "" {
-			glog.Errorln(errstr)
+		if err := p.smapowner.persist(clone, true); err != nil {
+			glog.Error(err)
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
@@ -2950,7 +2949,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		res := p.call(args)
 		if res.err != nil {
-			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.errstr)
+			glog.Warningf("%s that is being unregistered failed to respond back: %v, %s", node.Name(), res.err, res.details)
 		}
 	}
 	if !p.startedUp.Load() {
@@ -2958,8 +2957,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		p.smapowner.Unlock()
 		return
 	}
-	if errstr := p.smapowner.persist(clone, true); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
+	if err := p.smapowner.persist(clone, true); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		p.smapowner.Unlock()
 		return
 	}
@@ -3056,7 +3055,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(
 					w,
 					r,
-					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.errstr),
+					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.details),
 				)
 				p.keepalive.onerr(err, result.status)
 				return
@@ -3095,9 +3094,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveBucketMD(newbmd *bucketMD, msgInt *actionMsgInternal) (errstr string) {
+func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInternal) (err error) {
 	if glog.V(3) {
-		s := fmt.Sprintf("receive %s: v%d", bmdTermName, newbmd.version())
+		s := fmt.Sprintf("receive %s: v%d", bmdTermName, newBMD.version())
 		if msgInt.Action == "" {
 			glog.Infoln(s)
 		} else {
@@ -3105,17 +3104,17 @@ func (p *proxyrunner) receiveBucketMD(newbmd *bucketMD, msgInt *actionMsgInterna
 		}
 	}
 	p.bmdowner.Lock()
-	myver := p.bmdowner.get().version()
-	if newbmd.version() <= myver {
+	curVersion := p.bmdowner.get().version()
+	if newBMD.version() <= curVersion {
 		p.bmdowner.Unlock()
-		if newbmd.version() < myver {
-			errstr = fmt.Sprintf("Attempt to downgrade %s v%d to v%d", bmdTermName, myver, newbmd.version())
+		if newBMD.version() < curVersion {
+			err = fmt.Errorf("attempt to downgrade %s v%d to v%d", bmdTermName, curVersion, newBMD.version())
 		}
 		return
 	}
-	p.bmdowner.put(newbmd)
-	if errstr := p.savebmdconf(newbmd, cmn.GCO.Get()); errstr != "" {
-		glog.Errorln(errstr)
+	p.bmdowner.put(newBMD)
+	if err := p.savebmdconf(newBMD, cmn.GCO.Get()); err != nil {
+		glog.Error(err)
 	}
 	p.bmdowner.Unlock()
 	return
@@ -3195,7 +3194,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, act
 				"failed to execute list buckets request: %v (%d: %s)",
 				result.err,
 				result.status,
-				result.errstr,
+				result.details,
 			)
 			continue
 		}
