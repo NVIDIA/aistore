@@ -169,9 +169,6 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		dur := time.Since(beforeExtraction)
 
-		// Inform concurrency adjuster about new calculation
-		m.extractAdjuster.inform(extractedSize, dur, lom.ParsedFQN.MpathInfo)
-
 		// Make sure that compression rate is updated before releasing
 		// next extractor goroutine.
 		if m.extractCreator.UsingCompression() {
@@ -355,9 +352,6 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if err != nil {
 		return err
 	}
-
-	dur := time.Since(beforeCreation)
-	m.createAdjuster.inform(n, dur, lom.ParsedFQN.MpathInfo)
 
 	si, errStr := cluster.HrwTarget(bucket, shardName, m.smap)
 	cmn.AssertMsg(si != nil, errStr)

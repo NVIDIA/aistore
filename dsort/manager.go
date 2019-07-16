@@ -204,7 +204,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// Coefficient for extraction should be larger and depends on target count
 	// because we will skip a lot shards (which do not belong to us).
 	m.extractAdjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
-	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 3 /*goroutineLimitCoef*/)
+	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 2 /*goroutineLimitCoef*/)
 
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
@@ -254,7 +254,7 @@ func (m *Manager) initStreams() error {
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 	reqSbArgs := transport.SBArgs{
-		Multiplier: 2,
+		Multiplier: 200,
 		Network:    reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -265,7 +265,7 @@ func (m *Manager) initStreams() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
 	respSbArgs := transport.SBArgs{
-		Multiplier: transport.IntraBundleMultiplier,
+		Multiplier: 200,
 		Network:    respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,

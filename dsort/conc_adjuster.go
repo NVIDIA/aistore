@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"math"
 	"sync"
 	"time"
 
@@ -14,70 +13,64 @@ import (
 )
 
 // concAdjuster is responsible for finding optimal number of goroutine which
-// maximizes the throughput - it is assumed that such optimal number exists and
+// maximizes the utilization - it is assumed that such optimal number exists and
 // can be achieved. For each mountpath there is new 'optimizer' created called
 // mapthAdjuster.
 //
-// When concAdjuster receives new information about current throughput it will
-// firstly check if there is enough information to make a decision or not. If
-// the decision can be made (by default it is: defaultBatchSize) the particular
-// mpathAdjuster will be updated - update will either increase the number of
-// concurrent functions by 1 or decrease it by 1. Next decision will require
-// more information - the ratio is defined in batchIncRatio:
-// newNumberOfInfosToDecision = prevNumberOfInfos * batchIncRatio. Thanks to
-// this we will do more adjustments at the beginning (hopefully reaching the
-// optimal point) and then later just do adjustments once in a while in case
-// something happened. As we need more information to make decision, the final
-// decision is only based on couple of last ones (lastInfoCnt).
+// Once in a while concAdjuster asks for current disks utilization. It saves
+// them for future use. When it has enough information to make decision it will
+// average previously collected disk utilization and based on new utilization
+// it will adjust the concurrency limit. Number of information which are needed
+// to make decision increases every time. This mechanism prevents from doing
+// a lot of adjustments in short time but rather tries to find the best value
+// at the very beginning (doing a lot of small steps) and then just keeps
+// oscillating around the desired watermark.
 //
 // There is mechanism which resets number of information required to make
-// decision. This mechanism is required in case throughput decreases
+// decision. This mechanism is required in case utilization decreases
 // significantly (resetRatio).
 
 const (
 	// Default value of initial concurrency limit for functions - defined
 	// per mountpath. This value is used when user provided `0` as concurrency
 	// limit.
-	defaultConcFuncLimit = 2
+	defaultConcFuncLimit = 10
 
 	// Batch corresponds to number of received update information per mountpath.
 	// Every time the size of the batch is reached, recalculation of limit is
 	// performed.
-	defaultBatchSize = 3
+	defaultBatchSize = 10
 	// Defines how much interval size will increase every time it is changed.
 	batchIncRatio = 1.2
+	// Defines the maximal batch size - this prevents from growing batch indefinitely.
+	maxBatchSize = 200
 
 	lastInfoCnt = 20 // maximum number of latest adjust information
 
-	// oldThroughput / newThroughput ratio which will trigger resetting number
+	// oldUtil / newUtil ratio which will trigger resetting number
 	// of information required to make decision.
-	resetRatio = 2
+	resetRatio = 1.7
+
+	// High watermark when utilization is considered 'sufficient'.
+	// Going beyond this value could potentially decrease the performance.
+	highUtilWM = 95
 )
 
 type (
 	limitInfo struct {
-		limit      float64
-		throughput float64
-		increasing bool
-	}
-
-	adjustInfo struct {
-		size      int64
-		dur       time.Duration
-		mpathInfo *fs.MountpathInfo
+		limit int64
+		util  int64
 	}
 
 	mpathAdjuster struct {
-		mu sync.RWMutex
-
 		// Determines how often much information must be processed until we
 		// adjust the concurrency limits.
 		curBatchSize float64 // float64 to not lose precision
-		// Current number of received information, as it reaches the
-		// curBatchSize limit update is performed.
-		receivedCnt  int
+		// Current number updates, as it reaches the curBatchSize
+		// limit update is performed.
+		tickCnt      int
 		curLimitInfo limitInfo
-		lastInfos    []adjustInfo
+		lastUtils    []int64
 		// Semaphore for function calls. On update it is swapped with a new one.
 		funcCallsSema *cmn.DynSemaphore
 	}
@@ -85,7 +78,6 @@ type (
 	concAdjuster struct {
 		mu sync.RWMutex
 
-		workCh chan adjustInfo
 		stopCh cmn.StopCh
 
 		defaultLimit int64 // default limit for new mpath adjusters
@@ -101,9 +93,9 @@ func newMpathAdjuster(limit int64) *mpathAdjuster {
 	return &mpathAdjuster{
 		curBatchSize: defaultBatchSize,
 		curLimitInfo: limitInfo{
-			limit: float64(limit),
+			limit: limit,
 		},
-		lastInfos:     make([]adjustInfo, 0, lastInfoCnt),
+		lastUtils:     make([]int64, 0, lastInfoCnt),
 		funcCallsSema: cmn.NewDynSemaphore(limit),
 	}
 }
@@ -120,7 +112,6 @@ func newConcAdjuster(limit, goroutineLimitCoef int64) *concAdjuster {
 	}
 
 	return &concAdjuster{
-		workCh: make(chan adjustInfo, 1000),
 		stopCh: cmn.NewStopCh(),
 
 		defaultLimit: limit,
@@ -136,55 +127,55 @@ func (ca *concAdjuster) start() {
 }
 
 func (ca *concAdjuster) run() {
+	ticker := time.NewTicker(cmn.GCO.Get().Disk.IostatTimeShort)
+	defer ticker.Stop()
 	for {
 		select {
-		case info := <-ca.workCh:
+		case <-ticker.C:
+			utils := fs.Mountpaths.GetAllMpathUtils(time.Now())
 			ca.mu.RLock()
-			adjuster, ok := ca.adjusters[info.mpathInfo.Path]
-			// Adjuster should be added in `acquireSema`, so before info will be
-			// put/received on workCh - that is why we can assert here.
-			cmn.Assert(ok)
+			for mpath, adjuster := range ca.adjusters {
+				util, ok := utils[mpath]
+				if !ok {
+					continue
+				}
+
+				adjuster.lastUtils = append(adjuster.lastUtils, util)
+				if len(adjuster.lastUtils) > lastInfoCnt {
+					adjuster.lastUtils = adjuster.lastUtils[1:]
+				}
+				adjuster.tickCnt++
+
+				if float64(adjuster.tickCnt) >= adjuster.curBatchSize {
+					var (
+						totalUtil int64
+						prevLimit = adjuster.curLimitInfo.limit
+					)
+
+					for _, util := range adjuster.lastUtils {
+						totalUtil += util
+					}
+					newUtil := totalUtil / int64(len(adjuster.lastUtils))
+					reset := adjuster.curLimitInfo.recalc(newUtil)
+
+					if adjuster.curLimitInfo.limit != prevLimit {
+						adjuster.funcCallsSema.SetSize(adjuster.curLimitInfo.limit)
+
+						diff := ca.goroutineLimitCoef * (adjuster.curLimitInfo.limit - prevLimit)
+						ca.gorountinesSema.SetSize(ca.gorountinesSema.Size() + diff)
+					}
+
+					if reset {
+						adjuster.curBatchSize = defaultBatchSize
+					} else {
+						adjuster.curBatchSize = batchIncRatio * adjuster.curBatchSize
+						adjuster.curBatchSize = cmn.MinF64(adjuster.curBatchSize, maxBatchSize)
+					}
+
+					adjuster.tickCnt = 0
+				}
+			}
 			ca.mu.RUnlock()
-
-			adjuster.mu.Lock()
-
-			adjuster.lastInfos = append(adjuster.lastInfos, info)
-			if len(adjuster.lastInfos) > lastInfoCnt {
-				adjuster.lastInfos = adjuster.lastInfos[1:]
-			}
-			adjuster.receivedCnt++
-			if float64(adjuster.receivedCnt) >= adjuster.curBatchSize {
-				var (
-					totalSize int64
-					totalDur  float64
-					prevLimit = adjuster.curLimitInfo.limit
-				)
-
-				// Calculate average of lastInfos and use it as throughput
-				for _, info := range adjuster.lastInfos {
-					totalSize += info.size
-					totalDur += info.dur.Seconds()
-				}
-				newThroughput := float64(totalSize) / totalDur
-				reset := adjuster.curLimitInfo.recalc(newThroughput)
-
-				if adjuster.curLimitInfo.limit != prevLimit {
-					adjuster.funcCallsSema.SetSize(int64(adjuster.curLimitInfo.limit))
-
-					diff := ca.goroutineLimitCoef * int64(adjuster.curLimitInfo.limit-prevLimit)
-					ca.gorountinesSema.SetSize(ca.gorountinesSema.Size() + diff)
-				}
-
-				if reset {
-					adjuster.curBatchSize = defaultBatchSize
-				} else {
-					adjuster.curBatchSize = batchIncRatio * adjuster.curBatchSize
-				}
-
-				adjuster.receivedCnt = 0
-			}
-
-			adjuster.mu.Unlock()
 		case <-ca.stopCh.Listen():
 			return
 		}
@@ -193,10 +184,6 @@ func (ca *concAdjuster) run() {
 
 func (ca *concAdjuster) stop() {
 	ca.stopCh.Close()
-}
-
-func (ca *concAdjuster) inform(size int64, dur time.Duration, mpathInfo *fs.MountpathInfo) {
-	ca.workCh <- adjustInfo{size: size, dur: dur, mpathInfo: mpathInfo}
 }
 
 func (ca *concAdjuster) acquireSema(mpathInfo *fs.MountpathInfo) {
@@ -229,25 +216,21 @@ func (ca *concAdjuster) releaseGoroutineSema() {
 	ca.gorountinesSema.Release()
 }
 
-func (li *limitInfo) recalc(newThroughput float64) (reset bool) {
-	if newThroughput-li.throughput < 0 {
-		// Change direction - throughput has decreased.
-		li.increasing = !li.increasing
+func (li *limitInfo) recalc(newUtil int64) (reset bool) {
+	prevUtil := li.util
+	li.util = newUtil
 
-		// If new throughput is significantly lower than previous one, request reset.
-		if li.throughput/newThroughput > resetRatio {
-			reset = true
-		}
+	// If new utilization is significantly lower than previous one, request reset.
+	if float64(prevUtil)/float64(newUtil) > resetRatio {
+		reset = true
+		return
 	}
 
-	// Change the decision
-	if li.increasing {
-		li.limit++
-	} else {
+	if newUtil > highUtilWM {
 		li.limit--
+		li.limit = cmn.MaxI64(li.limit, 1)
+	} else {
+		li.limit++
 	}
-
-	li.limit = math.Max(li.limit, 1)
-	li.throughput = newThroughput
 	return
 }

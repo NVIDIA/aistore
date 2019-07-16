@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"math"
 	"os"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -46,12 +46,18 @@ func calcSemaLimit(acquire func(), release func()) int64 {
 }
 
 var _ = Describe("newConcAdjuster", func() {
+	var mios = ios.NewIOStaterMock()
+
 	BeforeEach(func() {
 		err := cmn.CreateDir(testingConfigDir)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		fs.InitMountedFS()
-		fs.Mountpaths.Add(testingConfigDir)
+		fs.Mountpaths = fs.NewMountedFS(mios)
+		_ = fs.Mountpaths.Add(testingConfigDir)
+
+		config := cmn.GCO.BeginUpdate()
+		config.Disk.IostatTimeShort = 10 * time.Millisecond
+		cmn.GCO.CommitUpdate(config)
 	})
 
 	AfterEach(func() {
@@ -71,8 +77,8 @@ var _ = Describe("newConcAdjuster", func() {
 
 	It("should converge to perfect limit by increasing limit", func() {
 		var (
-			perfectLimit      int64 = 20
-			perfectThroughput int64 = 1000
+			perfectLimit int64 = 20
+			perfectUtil  int64 = highUtilWM
 
 			defaultLimit int64 = 10
 		)
@@ -92,23 +98,23 @@ var _ = Describe("newConcAdjuster", func() {
 			})
 
 			// If we get enough close we can just break
-			if math.Abs(float64(curLimit-perfectLimit)) < 2 {
+			if cmn.AbsI64(curLimit-perfectLimit) < 2 {
 				break
 			}
 
-			curThroughput := perfectThroughput * curLimit / perfectLimit
+			curUtil := perfectUtil * curLimit / perfectLimit
+			mios.Utils[testingConfigDir] = curUtil
 
-			adjuster.inform(curThroughput, time.Second, mpathInfo)
 			time.Sleep(10 * time.Millisecond) // make sure that `adjuster.inform` processed all information
 		}
 	})
 
-	It("should converge to perfect limit by decreasing limit", func() {
+	It("should not go beyond high util watermark", func() {
 		var (
-			perfectLimit      int64 = 10
-			perfectThroughput int64 = 1000
+			perfectLimit int64 = 20
+			perfectUtil  int64 = 100
 
-			defaultLimit int64 = 20
+			defaultLimit int64 = 10
 		)
 		availablePaths, _ := fs.Mountpaths.Get()
 		mpathInfo := availablePaths[testingConfigDir]
@@ -125,13 +131,14 @@ var _ = Describe("newConcAdjuster", func() {
 				adjuster.releaseSema(mpathInfo)
 			})
 
-			// If we get enough close we can just break
-			if math.Abs(float64(curLimit-perfectLimit)) < 2 {
+			Expect(curLimit).To(BeNumerically("<", highUtilWM))
+
+			curUtil := perfectUtil * curLimit / perfectLimit
+			if curUtil == perfectUtil {
 				break
 			}
 
-			curThroughput := perfectThroughput * perfectLimit / curLimit
-			adjuster.inform(curThroughput, time.Second, mpathInfo)
+			mios.Utils[testingConfigDir] = curUtil
 			time.Sleep(10 * time.Millisecond) // make sure that `adjuster.inform` processed all information
 		}
 	})

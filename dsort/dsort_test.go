@@ -212,6 +212,7 @@ func (tctx *testContext) setup() {
 	config := cmn.GCO.BeginUpdate()
 	config.Net.UseIntraControl = false
 	config.Net.UseIntraData = false
+	config.Disk.IostatTimeShort = 10 * time.Millisecond
 	cmn.GCO.CommitUpdate(config)
 
 	genNodeID := func(i int) string {
