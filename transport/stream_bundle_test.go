@@ -126,9 +126,9 @@ func Test_Bundle(t *testing.T) {
 	slab.Free(wbuf)
 
 	for id, tstat := range stats {
-		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), idle=%.2f%%, compression ratio=%.2f\n",
-			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.IdlePct,
-			float64(tstat.Size.Load())/float64(tstat.CompressedSize.Load()))
+		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
+			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num,
+			tstat.CompressionRatio.Load())
 	}
 	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }

@@ -27,7 +27,7 @@ import (
 )
 
 // e.g.:
-// # go test -v -run=Test_OneStream10G -logtostderr=true
+// # go test -v -run=Test_Compressed32G -logtostderr=true
 
 var cpbuf = make([]byte, 32*cmn.KiB)
 
@@ -37,13 +37,13 @@ func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader
 	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
 
-func Test_OneStream10G(t *testing.T) {
+func Test_Compressed16G(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
 	network := "np"
 	mux := mux.NewServeMux()
-	trname := "10G"
+	trname := "32G"
 
 	transport.SetMux(network, mux)
 
@@ -65,6 +65,7 @@ func Test_OneStream10G(t *testing.T) {
 	url := ts.URL + path
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "2")
 	tassert.CheckFatal(t, err)
+	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
 	slab := Mem2.SelectSlab2(cmn.MiB)
@@ -74,21 +75,28 @@ func Test_OneStream10G(t *testing.T) {
 	hdr := genStaticHeader()
 	size, prevsize, num, numhdr := int64(0), int64(0), 0, 0
 
-	for size < cmn.GiB*32 {
-		if num%3 == 0 { // every so often send header-only
-			sz := hdr.ObjAttrs.Size
+	for size < cmn.GiB*16 {
+		if num%7 == 0 { // header-only
 			hdr.ObjAttrs.Size = 0
 			stream.Send(hdr, nil, nil, nil)
-			hdr.ObjAttrs.Size = sz
 			numhdr++
 		} else {
-			reader := &randReader{buf: buf, hdr: hdr, clone: true}
+			var reader io.ReadCloser
+			if num%3 == 0 {
+				hdr.ObjAttrs.Size = int64(random.Intn(100))
+				reader = ioutil.NopCloser(&io.LimitedReader{random, hdr.ObjAttrs.Size}) // full random
+			} else {
+				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB))
+				reader = &randReader{buf: buf, hdr: hdr, clone: true}
+			}
 			stream.Send(hdr, reader, nil, nil)
 		}
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {
-			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
+			stats := stream.GetStats()
+			tutils.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB,
+				stats.CompressionRatio.Load())
 			prevsize = size
 		}
 	}
@@ -97,14 +105,13 @@ func Test_OneStream10G(t *testing.T) {
 
 	slab.Free(buf)
 
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), idle=%.2f%%, compression ratio=%.2f\n",
-		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.IdlePct,
-		float64(stats.Size.Load())/float64(stats.CompressedSize.Load()))
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
+		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio.Load())
 
 	printNetworkStats(t, network)
 }
 
-func Test_DryRunTB(t *testing.T) {
+func Test_DryRun(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -118,22 +125,20 @@ func Test_DryRunTB(t *testing.T) {
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
 
-	for size < cmn.TiB {
+	for size < cmn.TiB/4 {
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil, nil)
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*100 {
 			prevsize = size
-			stats := stream.GetStats()
-			tutils.Logf("[dry]: %d GiB, idle=%.2f%%\n", size/cmn.GiB, stats.IdlePct)
+			tutils.Logf("[dry]: %d GiB\n", size/cmn.GiB)
 		}
 	}
-	go stream.Fin()
-	time.Sleep(time.Second * 3)
+	stream.Fin()
 	stats := stream.GetStats()
 
-	fmt.Printf("[dry]: offset=%d, num=%d(%d), idle=%.2f%%\n", stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct)
+	fmt.Printf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
 }
 
 func Test_CompletionCount(t *testing.T) {
@@ -167,6 +172,7 @@ func Test_CompletionCount(t *testing.T) {
 	url := ts.URL + path
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "256")
 	tassert.CheckFatal(t, err)
+	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, nil) // provide for sizeable queue at any point
 	random := newRand(time.Now().UnixNano())
 	rem := int64(0)

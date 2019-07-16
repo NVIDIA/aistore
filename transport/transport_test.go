@@ -216,7 +216,9 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	streamWriteUntil(t, 99, nil, ts, nil, nil)
+	// streamWriteUntil(t, 55, nil, ts, nil, nil, false)
+	streamWriteUntil(t, 99, nil, ts, nil, nil, true /*compress*/)
+
 	printNetworkStats(t, "n1")
 }
 
@@ -251,6 +253,7 @@ func Test_CancelStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	err = os.Setenv("AIS_STREAM_BURST_NUM", "1")
 	tassert.CheckFatal(t, err)
+	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Ctx: ctx})
 	now := time.Now()
 
@@ -284,8 +287,8 @@ func Test_CancelStream(t *testing.T) {
 
 	termReason, termErr := stream.TermInfo()
 	stats := stream.GetStats()
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
-		stream, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d), term(%s, %v)\n",
+		stream, stats.Offset.Load(), stats.Num.Load(), num, termReason, termErr)
 	stream.Fin() // vs. stream being term-ed
 }
 
@@ -305,7 +308,7 @@ func Test_MultiStream(t *testing.T) {
 	lock := &sync.Mutex{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
-		go streamWriteUntil(t, i, wg, ts, netstats, lock)
+		go streamWriteUntil(t, i, wg, ts, netstats, lock, false)
 	}
 	wg.Wait()
 	compareNetworkStats(t, "n1", netstats)
@@ -317,7 +320,8 @@ func printNetworkStats(t *testing.T, network string) {
 	for trname, eps := range netstats {
 		for uid, stats := range eps { // EndpointStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
+				trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
 		}
 	}
 }
@@ -327,13 +331,14 @@ func compareNetworkStats(t *testing.T, network string, netstats1 map[string]tran
 	tassert.CheckFatal(t, err)
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
-		for sessID, stats2 := range eps2 { // EndpointStats by session ID
-			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessID, stats2.Offset.Load(), stats2.Num.Load())
+		for uid, stats2 := range eps2 { // EndpointStats by session ID
+			xx, sessID := transport.UID2SessID(uid)
+			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID, stats2.Offset.Load(), stats2.Num.Load())
 			if ok {
 				stats1, ok := eps1[sessID]
 				if ok {
-					fmt.Printf("send$ %s[%d]: offset=%d, num=%d, idle=%.2f%%\n",
-						trname, sessID, stats1.Offset.Load(), stats1.Num.Load(), stats1.IdlePct)
+					fmt.Printf("send$ %s[%d]: offset=%d, num=%d\n",
+						trname, sessID, stats1.Offset.Load(), stats1.Num.Load())
 				} else {
 					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
 				}
@@ -465,7 +470,8 @@ func Test_ObjAttrs(t *testing.T) {
 
 		idx := hdr.Opaque[0]
 		cmn.AssertMsg(hdr.IsLocal, "incorrectly set is local value")
-		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs), fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
+		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
+			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 
 		written, err := io.Copy(ioutil.Discard, objReader)
 		cmn.Assert(err == nil)
@@ -504,7 +510,8 @@ func Test_ObjAttrs(t *testing.T) {
 // test helpers
 //
 
-func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock sync.Locker) {
+func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server,
+	netstats map[string]transport.EndpointStats, lock sync.Locker, compress bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -512,9 +519,22 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	path, err := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
 	tassert.CheckFatal(t, err)
 
+	if compress {
+		config := cmn.GCO.BeginUpdate()
+		config.Compression.BlockMaxSize = cmn.KiB * 256
+		cmn.GCO.CommitUpdate(config)
+		if err := config.Compression.Validate(config); err != nil {
+			tassert.CheckFatal(t, err)
+		}
+	}
+
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url, nil)
+	var extra *transport.Extra
+	if compress {
+		extra = &transport.Extra{Compression: cmn.CompressAlways}
+	}
+	stream := transport.NewStream(httpclient, url, extra)
 	trname, sessID := stream.ID()
 	now := time.Now()
 
@@ -525,15 +545,11 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		stream.Send(hdr, reader, nil, nil)
 		num++
 		size += hdr.ObjAttrs.Size
-		if size-prevsize >= cmn.GiB {
+		if size-prevsize >= cmn.GiB*4 {
 			tutils.Logf("[%2d]: %d GiB\n", ii, size/cmn.GiB)
 			prevsize = size
 			if random.Int63()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout
-			}
-			if random.Int63()%5 == 0 {
-				stats := stream.GetStats()
-				tutils.Logf("send$ %s[%d]: idle=%.2f%%\n", trname, sessID, stats.IdlePct)
 			}
 		}
 	}
@@ -541,8 +557,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	stats := stream.GetStats()
 	if netstats == nil {
 		termReason, termErr := stream.TermInfo()
-		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
-			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, stats.IdlePct, termReason, termErr)
+		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%s, %v)\n",
+			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, termReason, termErr)
 	} else {
 		lock.Lock()
 		eps := make(transport.EndpointStats)

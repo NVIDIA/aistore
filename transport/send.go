@@ -99,15 +99,13 @@ type (
 	}
 	// stream stats
 	Stats struct {
-		Num            atomic.Int64 // number of transferred objects
-		Size           atomic.Int64 // transferred size, in bytes
-		CompressedSize atomic.Int64 // compressed size
-		Offset         atomic.Int64 // stream offset, in bytes
-		IdleDur        atomic.Int64 // the time stream was idle since the previous getStats call
-		TotlDur        int64        // total time since --/---/---
-		IdlePct        float64      // idle time % since --/---/--
+		Num              atomic.Int64   // number of transferred objects including zero size (header-only) objects
+		NumObj           atomic.Int64   // number of transferred objects excluding zero size
+		Size             atomic.Int64   // transferred object size (does not include transport headers)
+		Offset           atomic.Int64   // stream offset, in bytes
+		CompressionRatio atomic.Float64 // compression ratio
 	}
-	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
+	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple(network, trname) by session ID
 
 	// attributes associated with given object
 	ObjectAttrs struct {
@@ -239,7 +237,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	if !s.compressed() {
 		s.lid = fmt.Sprintf("%s[%d]", s.trname, s.sessID)
 	} else {
-		s.lid = fmt.Sprintf("%s[%d:%t,%d]", s.trname, s.sessID, s.lz4s.frameChecksum, s.lz4s.blockMaxSize)
+		s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cmn.B2S(int64(s.lz4s.blockMaxSize), 0))
 	}
 
 	// burst size: the number of objects the caller is permitted to post for sending
@@ -385,14 +383,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	stats.Num.Store(s.stats.Num.Load())
 	stats.Offset.Store(s.stats.Offset.Load())
 	stats.Size.Store(s.stats.Size.Load())
-	stats.CompressedSize.Store(s.stats.CompressedSize.Load())
-	// idle(%)
-	now := time.Now().UnixNano()
-	stats.TotlDur = now - s.time.start.Load()
-	stats.IdlePct = float64(s.stats.IdleDur.Load()) * 100 / float64(stats.TotlDur)
-	stats.IdlePct = cmn.MinF64(100, stats.IdlePct) // getStats is async vis-à-vis IdleDur += deltas
-	s.time.start.Store(now)
-	s.stats.IdleDur.Store(0)
+	stats.CompressionRatio.Store(s.stats.CompressionRatio.Load())
 	return
 }
 
@@ -481,8 +472,6 @@ func (s *Stream) objDone(obj *obj, err error) {
 }
 
 func (s *Stream) isNextReq(ctx context.Context) (next bool) {
-	beg := time.Now()
-	defer s.addIdle(beg)
 	for {
 		select {
 		case <-ctx.Done():
@@ -575,7 +564,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 	}
 repeat:
-	select { // ignoring idle time spent here to optimize-out addIdle(time.Now()) overhead
+	select {
 	case s.sendoff.obj = <-s.workCh: // next object OR idle tick
 		if s.sendoff.obj.hdr.IsIdleTick() {
 			if len(s.workCh) > 0 {
@@ -629,14 +618,15 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 }
 
 func (s *Stream) sendData(b []byte) (n int, err error) {
-	n, err = s.sendoff.obj.reader.Read(b)
-	s.sendoff.off += int64(n) // (avg send transfer size tbd)
+	obj := &s.sendoff.obj
+	n, err = obj.reader.Read(b)
+	s.sendoff.off += int64(n)
 	if err != nil {
 		if err == io.EOF {
 			err = nil
 		}
 		s.eoObj(err)
-	} else if s.sendoff.off >= s.sendoff.obj.hdr.ObjAttrs.Size {
+	} else if s.sendoff.off >= obj.hdr.ObjAttrs.Size {
 		s.eoObj(err)
 	}
 	return
@@ -647,13 +637,12 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 // NOTE: reader.Close() is done by the completion handling code objDone
 //
 func (s *Stream) eoObj(err error) {
-	obj := &s.sendoff.obj
-
+	var (
+		num int64
+		obj = &s.sendoff.obj
+	)
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
-	s.stats.Size.Add(s.sendoff.off)
-	s.stats.CompressedSize.Add(s.lz4s.size)
-
 	if err != nil {
 		goto exit
 	}
@@ -662,9 +651,18 @@ func (s *Stream) eoObj(err error) {
 			s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.ObjAttrs.Size)
 		goto exit
 	}
+	s.stats.Size.Add(obj.hdr.ObjAttrs.Size)
 	s.Numcur++
 	s.stats.Num.Inc()
-
+	if obj.hdr.ObjAttrs.Size > 0 && !obj.hdr.IsLast() {
+		num = s.stats.NumObj.Inc()
+		if s.compressed() && s.lz4s.size > 0 {
+			prev := s.stats.CompressionRatio.Load()
+			curr := float64(obj.hdr.ObjAttrs.Size) / float64(s.lz4s.size)
+			updt := (prev*float64(num-1) + curr) / float64(num)
+			s.stats.CompressionRatio.Store(updt)
+		}
+	}
 	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.hdr.Objname)
 	}
@@ -736,9 +734,6 @@ func insAttrs(off int, to []byte, attr ObjectAttrs) int {
 	return off
 }
 
-// addIdle
-func (s *Stream) addIdle(beg time.Time) { s.stats.IdleDur.Add(int64(time.Since(beg))) }
-
 //
 // dry-run ---------------------------
 //
@@ -784,17 +779,14 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	}
 	n, err = lz4s.s.Read(b)
 	_, _ = lz4s.zw.Write(b[:n])
-	n, _ = lz4s.sgl.Read(b)
-	lz4s.size += int64(n)
-
-	// zw house-keep on object and end-stream boundaries -- TODO -- FIXME
-	if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {
-		lz4s.zw.Flush()
-	}
 	if last {
 		lz4s.zw.Close()
+	} else if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {
+		lz4s.zw.Flush()
 	}
+	n, _ = lz4s.sgl.Read(b)
 ex:
+	lz4s.size += int64(n)
 	if lz4s.sgl.Len() == 0 {
 		lz4s.sgl.Reset()
 		if last && err == nil {
