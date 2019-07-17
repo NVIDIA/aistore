@@ -187,30 +187,6 @@ func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.
 		return
 	}
 
-	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
-	if msg.Prefix != "" {
-		verParams.Prefix = aws.String(msg.Prefix)
-	}
-
-	var versions map[string]*string
-	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-		var verResp *s3.ListObjectVersionsOutput
-
-		verResp, err = svc.ListObjectVersions(verParams)
-		if err != nil {
-			err, errCode = awsErrorToAISError(bucket, err)
-			return
-		}
-
-		versions = make(map[string]*string, initialBucketListSize)
-		for _, vers := range verResp.Versions {
-			if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
-				versions[*(vers.Key)] = vers.VersionId
-			}
-		}
-	}
-
-	// var msg cmn.SelectMsg
 	bckList = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, initialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &cmn.BucketEntry{}
@@ -222,12 +198,7 @@ func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.
 			omd5, _ := strconv.Unquote(*key.ETag)
 			entry.Checksum = omd5
 		}
-		if strings.Contains(msg.Props, cmn.GetPropsVersion) {
-			if val, ok := versions[*(key.Key)]; ok && awsIsVersionSet(val) {
-				entry.Version = *val
-			}
-		}
-		// TODO: other cmn.SelectMsg props TBD
+
 		bckList.Entries = append(bckList.Entries, entry)
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -238,6 +209,52 @@ func (awsp *awsProvider) ListBucket(ct context.Context, bucket string, msg *cmn.
 		// For AWS, resp.NextMarker is only set when a query has a delimiter.
 		// Without a delimiter, NextMarker should be the last returned key.
 		bckList.PageMarker = bckList.Entries[len(bckList.Entries)-1].Name
+	}
+
+	// if version is requested, read versions page by page and stop
+	// when there is nothing to read or the version page marker is
+	// greater than object page marker
+	// Page is limited with 500+ items, so reading them is slow
+	if strings.Contains(msg.Props, cmn.GetPropsVersion) {
+		versions := make(map[string]*string, initialBucketListSize)
+		keyMarker := msg.PageMarker
+		verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
+		if msg.Prefix != "" {
+			verParams.Prefix = aws.String(msg.Prefix)
+		}
+
+		for {
+			if keyMarker != "" {
+				verParams.KeyMarker = aws.String(keyMarker)
+			}
+
+			verResp, err := svc.ListObjectVersions(verParams)
+			if err != nil {
+				err, errCode := awsErrorToAISError(bucket, err)
+				return nil, err, errCode
+			}
+
+			for _, vers := range verResp.Versions {
+				if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
+					versions[*(vers.Key)] = vers.VersionId
+				}
+			}
+
+			if !(*verResp.IsTruncated) {
+				break
+			}
+
+			keyMarker = *verResp.NextKeyMarker
+			if bckList.PageMarker != "" && keyMarker > bckList.PageMarker {
+				break
+			}
+		}
+
+		for _, entry := range bckList.Entries {
+			if version, ok := versions[entry.Name]; ok {
+				entry.Version = *version
+			}
+		}
 	}
 
 	return

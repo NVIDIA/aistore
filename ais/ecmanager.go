@@ -99,7 +99,10 @@ func (mgr *ecManager) initECBundles() {
 	}
 
 	client := transport.NewDefaultClient()
-	extraReq := transport.Extra{Callback: cbReq}
+	extraReq := transport.Extra{
+		Callback:    cbReq,
+		Compression: cmn.GCO.Get().EC.Compression,
+	}
 
 	reqSbArgs := transport.SBArgs{
 		Multiplier: transport.IntraBundleMultiplier,

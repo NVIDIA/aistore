@@ -126,6 +126,64 @@ func TestResetBucketProps(t *testing.T) {
 	}
 }
 
+func TestCloudListObjectVersions(t *testing.T) {
+	var (
+		workerCount = 10
+		objectDir   = "cloud-version-test"
+		objectSize  = 256
+		objectCount = 1340 // must be greater than 1000(AWS page size)
+
+		bucket   = clibucket
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		wg       = &sync.WaitGroup{}
+	)
+
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+	if !isCloudBucket(t, proxyURL, bucket) {
+		t.Skip("test requires a cloud bucket")
+	}
+
+	tutils.Logf("Filling the bucket %q\n", bucket)
+	for wid := 0; wid < workerCount; wid++ {
+		wg.Add(1)
+		go func(wid int) {
+			defer wg.Done()
+			reader, err := tutils.NewRandReader(int64(objectSize), true)
+			tassert.CheckFatal(t, err)
+			objectsToPut := objectCount / workerCount
+			if wid == workerCount-1 { // last worker puts leftovers
+				objectsToPut += objectCount % workerCount
+			}
+			putRR(t, reader, bucket, objectDir, objectsToPut)
+		}(wid)
+	}
+	wg.Wait()
+
+	tutils.Logf("Reading bucket %q objects\n", bucket)
+	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	bckObjs, err := api.ListBucket(baseParams, bucket, msg, 0, query)
+	tassert.CheckError(t, err)
+
+	tutils.Logf("Checking bucket %q object versions[total: %d]\n", bucket, len(bckObjs.Entries))
+	for _, entry := range bckObjs.Entries {
+		if entry.Version == "" {
+			t.Errorf("Object %s does not have version", entry.Name)
+		}
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			err := api.DeleteObject(baseParams, bucket, name, cmn.CloudBs)
+			tassert.CheckError(t, err)
+		}(entry.Name)
+	}
+	wg.Wait()
+}
+
 func TestListObjects(t *testing.T) {
 	var (
 		iterations  = 10
