@@ -184,13 +184,13 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.List)
 	responses := broadcast(http.MethodGet, path, r.URL.Query(), nil, targets)
 
-	resultList := make([]JobInfo, 0)
+	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
 		if r.err != nil {
 			glog.Error(r.err)
 			continue
 		}
-		var newMetrics []JobInfo
+		var newMetrics []*JobInfo
 		err := jsoniter.Unmarshal(r.res, &newMetrics)
 		cmn.AssertNoErr(err)
 
@@ -198,7 +198,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request) {
 			found := false
 			for _, oldMetric := range resultList {
 				if oldMetric.ID == v.ID {
-					v.Aggregate(oldMetric)
+					oldMetric.Aggregate(v)
 					found = true
 					break
 				}

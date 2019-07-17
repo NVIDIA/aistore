@@ -463,10 +463,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		t.handleMountpathReq(w, r)
 		return
 	case cmn.Unregister:
-		if glog.V(3) {
-			glog.Infoln("Sending unregister on target keepalive control channel")
-		}
-		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
+		t.handleUnregisterReq()
 		return
 	default:
 		t.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
@@ -474,7 +471,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Decrypts token and retreives userID from request header
+// Decrypts token and retrieves userID from request header
 // Returns empty userID in case of token is invalid
 func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
 	token := ""
@@ -521,6 +518,20 @@ func (t *targetrunner) contextWithAuth(header http.Header) context.Context {
 	}
 
 	return ct
+}
+
+func (t *targetrunner) handleUnregisterReq() {
+	if glog.V(3) {
+		glog.Infoln("Sending unregister on target keepalive control channel")
+	}
+	// Stop keepaliving
+	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
+
+	// Abort all dSort jobs
+	dsort.Managers.AbortAll(errors.New("target was removed from the cluster"))
+
+	// Stop all xactions
+	t.xactions.abortAll()
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {

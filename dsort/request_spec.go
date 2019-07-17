@@ -93,6 +93,7 @@ type RequestSpec struct {
 	OutputBckProvider string        `json:"output_bprovider"`          // Default: "local"
 	ExtractConcLimit  int64         `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
 	CreateConcLimit   int64         `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
+	StreamMultiplier  int           `json:"stream_multiplier"`         // Default: transport.IntraBundleMultiplier
 	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
 	DryRun            bool          `json:"dry_run"`                   // Default: false
 }
@@ -112,8 +113,9 @@ type ParsedRequestSpec struct {
 	OrderFileSep      string                `json:"order_file_sep"`
 	MaxMemUsage       cmn.ParsedQuantity    `json:"max_mem_usage"`
 	TargetOrderSalt   []byte                `json:"target_order_salt"`
-	ExtractConcLimit  int64                 `json:"extract_concurrency_limit"`
-	CreateConcLimit   int64                 `json:"create_concurrency_limit"`
+	ExtractConcLimit  int64                 `json:"extract_concurrency_limit"` // TODO: should be removed
+	CreateConcLimit   int64                 `json:"create_concurrency_limit"`  // TODO: should be removed
+	StreamMultiplier  int                   `json:"stream_multiplier"`         // TODO: should be removed
 	ExtendedMetrics   bool                  `json:"extended_metrics"`
 	DryRun            bool                  `json:"dry_run"`
 }
@@ -211,6 +213,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 
 	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
+	parsedRS.StreamMultiplier = rs.StreamMultiplier
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
 	parsedRS.DryRun = rs.DryRun
 	return parsedRS, nil

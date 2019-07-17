@@ -252,9 +252,14 @@ func (m *Manager) initStreams() error {
 
 	client := transport.NewDefaultClient()
 
+	streamMultiplier := transport.IntraBundleMultiplier
+	if m.rs.StreamMultiplier != 0 {
+		streamMultiplier = m.rs.StreamMultiplier
+	}
+
 	trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 	reqSbArgs := transport.SBArgs{
-		Multiplier: 200,
+		Multiplier: streamMultiplier,
 		Network:    reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -265,10 +270,15 @@ func (m *Manager) initStreams() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
 	respSbArgs := transport.SBArgs{
-		Multiplier: 200,
+		Multiplier: streamMultiplier,
 		Network:    respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
+		Extra: &transport.Extra{
+			Compression: config.DSort.Compression,
+			Config:      config,
+			Mem2:        mm,
+		},
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvResponseFunc()); err != nil {
 		return errors.WithStack(err)
@@ -283,7 +293,8 @@ func (m *Manager) initStreams() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			Mem2:        mm},
+			Mem2:        mm,
+		},
 	}
 	if _, err := transport.Register(respNetwork, trname, m.makeRecvShardFunc()); err != nil {
 		return errors.WithStack(err)

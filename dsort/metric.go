@@ -312,7 +312,7 @@ func (m *Metrics) ToJobInfo(id string) JobInfo {
 	}
 }
 
-func (j *JobInfo) Aggregate(other JobInfo) {
+func (j *JobInfo) Aggregate(other *JobInfo) {
 	j.StartedTime = startTime(j.StartedTime, other.StartedTime)
 	j.FinishTime = stopTime(j.FinishTime, other.FinishTime)
 

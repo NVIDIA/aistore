@@ -680,8 +680,8 @@ func TestDistributedSortParallel(t *testing.T) {
 	for i := 0; i < dSortsCount; i++ {
 		wg.Add(1)
 		go func(i int) {
+			defer wg.Done()
 			dispatchDSortJob(m, i)
-			wg.Done()
 		}(i)
 	}
 	wg.Wait()
