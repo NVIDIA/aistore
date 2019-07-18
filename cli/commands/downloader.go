@@ -28,7 +28,6 @@ const (
 var (
 	downloadFlags = map[string][]cli.Flag{
 		downloadStart: {
-			bckProviderFlag,
 			timeoutFlag,
 			descriptionFlag,
 		},
@@ -103,13 +102,8 @@ func downloadStartHandler(c *cli.Context) error {
 		id string
 	)
 
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
-	if err != nil {
-		return err
-	}
-
 	basePayload := cmn.DlBase{
-		BckProvider: bckProvider,
+		BckProvider: cmn.LocalBs, // NOTE: currently downloading only to local buckets is supported
 		Timeout:     timeout,
 		Description: description,
 	}
@@ -200,7 +194,7 @@ func downloadAdminHandler(c *cli.Context) error {
 			}
 
 			verbose := flagIsSet(c, verboseFlag)
-			_, _ = fmt.Fprintln(c.App.Writer, resp.Print(verbose))
+			_, _ = fmt.Fprint(c.App.Writer, resp.Print(verbose))
 		}
 	case downloadAbort:
 		if err := api.DownloadAbort(baseParams, id); err != nil {
@@ -409,7 +403,7 @@ func (b *progressBar) trackNewFile(state cmn.TaskDlInfo) {
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
 			decor.Name(state.Name+" ", decor.WC{W: len(state.Name) + 1, C: decor.DSyncWidthR}),
-			decor.Counters(decor.UnitKiB, "% .1f/% .1f", decor.WCSyncWidth),
+			decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
 		),
 		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
 	)

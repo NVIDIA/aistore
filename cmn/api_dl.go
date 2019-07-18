@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -56,14 +57,26 @@ func (d *DlStatusResp) Print(verbose bool) string {
 	realFinished := d.Finished + errCount
 	sb.WriteString(fmt.Sprintf("Download progress: %d/%d (%.2f%%)", realFinished, d.TotalCnt(), 100*float64(realFinished)/float64(d.TotalCnt())))
 	if !verbose {
+		sb.WriteString("\n")
 		return sb.String()
 	}
 
 	if len(d.CurrentTasks) != 0 {
+		sort.Slice(d.CurrentTasks, func(i, j int) bool {
+			return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
+		})
+
 		sb.WriteString("\n")
 		sb.WriteString("Progress of files that are currently being downloaded:\n")
 		for _, task := range d.CurrentTasks {
-			sb.WriteString(fmt.Sprintf("\t%s: %s\n", task.Name, B2S(task.Downloaded, 2))) // TODO: print total too
+			sb.WriteString(fmt.Sprintf("\t%s: ", task.Name))
+			if task.Total > 0 {
+				pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
+				sb.WriteString(fmt.Sprintf("%s/%s (%.2f%%)", B2S(task.Downloaded, 2), B2S(task.Total, 2), pctDownloaded))
+			} else {
+				sb.WriteString(B2S(task.Downloaded, 2))
+			}
+			sb.WriteString("\n")
 		}
 	}
 
