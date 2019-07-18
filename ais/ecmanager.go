@@ -99,9 +99,10 @@ func (mgr *ecManager) initECBundles() {
 	}
 
 	client := transport.NewDefaultClient()
+	compression := cmn.GCO.Get().EC.Compression
 	extraReq := transport.Extra{
 		Callback:    cbReq,
-		Compression: cmn.GCO.Get().EC.Compression,
+		Compression: compression,
 	}
 
 	reqSbArgs := transport.SBArgs{
@@ -115,6 +116,7 @@ func (mgr *ecManager) initECBundles() {
 		Multiplier: transport.IntraBundleMultiplier,
 		Trname:     ec.RespStreamName,
 		Network:    mgr.netResp,
+		Extra:      &transport.Extra{Compression: compression},
 	}
 
 	mgr.reqBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, reqSbArgs)
