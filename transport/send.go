@@ -100,11 +100,10 @@ type (
 	}
 	// stream stats
 	Stats struct {
-		Num              atomic.Int64   // number of transferred objects including zero size (header-only) objects
-		NumObj           atomic.Int64   // number of transferred objects excluding zero size
-		Size             atomic.Int64   // transferred object size (does not include transport headers)
-		Offset           atomic.Int64   // stream offset, in bytes
-		CompressionRatio atomic.Float64 // compression ratio
+		Num            atomic.Int64 // number of transferred objects including zero size (header-only) objects
+		Size           atomic.Int64 // transferred object size (does not include transport headers)
+		Offset         atomic.Int64 // stream offset, in bytes
+		CompressedSize atomic.Int64 // compressed size (NOTE: converges to the actual compressed size over time)
 	}
 	EndpointStats map[uint64]*Stats // all stats for a given http endpoint defined by a tuple(network, trname) by session ID
 
@@ -144,9 +143,8 @@ type (
 		s             *Stream
 		zw            *lz4.Writer // orig reader => zw
 		sgl           *memsys.SGL // zw => bb => network
-		size          int64
-		blockMaxSize  int  // *uncompressed* block max size
-		frameChecksum bool // true: checksum lz4 frames
+		blockMaxSize  int         // *uncompressed* block max size
+		frameChecksum bool        // true: checksum lz4 frames
 	}
 	obj struct {
 		hdr      Header         // object header
@@ -391,7 +389,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	stats.Num.Store(s.stats.Num.Load())
 	stats.Offset.Store(s.stats.Offset.Load())
 	stats.Size.Store(s.stats.Size.Load())
-	stats.CompressionRatio.Store(s.stats.CompressionRatio.Load())
+	stats.CompressedSize.Store(s.stats.CompressedSize.Load())
 	return
 }
 
@@ -520,6 +518,7 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 		} else {
 			s.lz4s.zw.Reset(s.lz4s.sgl)
 		}
+		// lz4 framing spec at http://fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
 		s.lz4s.zw.Header.BlockChecksum = false
 		s.lz4s.zw.Header.NoChecksum = !s.lz4s.frameChecksum
 		s.lz4s.zw.Header.BlockMaxSize = s.lz4s.blockMaxSize
@@ -645,10 +644,7 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 // NOTE: reader.Close() is done by the completion handling code objDone
 //
 func (s *Stream) eoObj(err error) {
-	var (
-		num int64
-		obj = &s.sendoff.obj
-	)
+	var obj = &s.sendoff.obj
 	s.Sizecur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
@@ -662,15 +658,6 @@ func (s *Stream) eoObj(err error) {
 	s.stats.Size.Add(obj.hdr.ObjAttrs.Size)
 	s.Numcur++
 	s.stats.Num.Inc()
-	if obj.hdr.ObjAttrs.Size > 0 && !obj.hdr.IsLast() {
-		num = s.stats.NumObj.Inc()
-		if s.compressed() && s.lz4s.size > 0 {
-			prev := s.stats.CompressionRatio.Load()
-			curr := float64(obj.hdr.ObjAttrs.Size) / float64(s.lz4s.size)
-			updt := (prev*float64(num-1) + curr) / float64(num)
-			s.stats.CompressionRatio.Store(updt)
-		}
-	}
 	if glog.FastV(4, glog.SmoduleTransport) {
 		glog.Infof("%s: sent size=%d (%d/%d): %s", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num.Load(), obj.hdr.Objname)
 	}
@@ -683,7 +670,6 @@ exit:
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
 
 	s.sendoff = sendoff{}
-	s.lz4s.size = 0
 }
 
 //
@@ -763,6 +749,16 @@ func (s *Stream) dryrun() {
 }
 
 //
+// Stats ---------------------------
+//
+
+func (stats *Stats) CompressionRatio() float64 {
+	bytesRead := stats.Offset.Load()
+	bytesSent := stats.CompressedSize.Load()
+	return float64(bytesRead) / float64(bytesSent)
+}
+
+//
 // nopReadCloser ---------------------------
 //
 
@@ -787,14 +783,16 @@ func (lz4s *lz4Stream) Read(b []byte) (n int, err error) {
 	}
 	n, err = lz4s.s.Read(b)
 	_, _ = lz4s.zw.Write(b[:n])
+	// NOTE: lz4s.zw.Flush() vs compression ratio
 	if last {
 		lz4s.zw.Close()
-	} else if sendoff.off >= sendoff.obj.hdr.ObjAttrs.Size {
+	} else if lz4s.s.sendoff.obj.reader == nil { // eoObj happened
 		lz4s.zw.Flush()
 	}
 	n, _ = lz4s.sgl.Read(b)
 ex:
-	lz4s.size += int64(n)
+	lz4s.s.stats.CompressedSize.Add(int64(n))
+
 	if lz4s.sgl.Len() == 0 {
 		lz4s.sgl.Reset()
 		if last && err == nil {

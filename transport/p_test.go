@@ -17,6 +17,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -27,21 +28,22 @@ import (
 )
 
 // e.g.:
-// # go test -v -run=Test_Compressed32G -logtostderr=true
+// # go test -v -run=Test_CompressedOne -logtostderr=true
 
 var cpbuf = make([]byte, 32*cmn.KiB)
 
 func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
-	cmn.Assert(err == nil)
+	cmn.AssertNoErr(err)
 	written, _ := io.CopyBuffer(ioutil.Discard, objReader, cpbuf)
 	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
 
-func Test_Compressed16G(t *testing.T) {
-	network := "np"
-	mux := mux.NewServeMux()
-	trname := "cmpr"
-
+func Test_CompressedOne(t *testing.T) {
+	var (
+		network = "np"
+		trname  = "cmpr"
+		mux     = mux.NewServeMux()
+	)
 	transport.SetMux(network, mux)
 
 	config := cmn.GCO.BeginUpdate()
@@ -54,7 +56,7 @@ func Test_Compressed16G(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path, err := transport.Register(network, trname, receive10G)
+	path, err := transport.Register(network, trname, receive10G, memsys.GMM() /* optionally, specify memsys*/)
 	tassert.CheckFatal(t, err)
 
 	httpclient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
@@ -83,7 +85,7 @@ func Test_Compressed16G(t *testing.T) {
 			var reader io.ReadCloser
 			if num%3 == 0 {
 				hdr.ObjAttrs.Size = int64(random.Intn(100))
-				reader = ioutil.NopCloser(&io.LimitedReader{random, hdr.ObjAttrs.Size}) // full random
+				reader = ioutil.NopCloser(&io.LimitedReader{random, hdr.ObjAttrs.Size}) // fully random to hinder compression
 			} else {
 				hdr.ObjAttrs.Size = int64(random.Intn(cmn.GiB))
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
@@ -94,8 +96,7 @@ func Test_Compressed16G(t *testing.T) {
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*4 {
 			stats := stream.GetStats()
-			tutils.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB,
-				stats.CompressionRatio.Load())
+			tutils.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cmn.GiB, stats.CompressionRatio())
 			prevsize = size
 		}
 	}
@@ -105,7 +106,7 @@ func Test_Compressed16G(t *testing.T) {
 	slab.Free(buf)
 
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
-		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio.Load())
+		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
 
 	printNetworkStats(t, network)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/hk"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4"
@@ -37,11 +38,13 @@ type (
 	iterator struct {
 		trname    string
 		body      io.Reader
+		fbuf      *fixedBuffer // when extraBuffering == true
 		headerBuf []byte
 	}
 	objReader struct {
 		body io.Reader
 		off  int64
+		fbuf *fixedBuffer // ditto
 		hdr  Header
 	}
 	handler struct {
@@ -50,15 +53,23 @@ type (
 		sessions    sync.Map // map[uint64]*Stats
 		oldSessions sync.Map // map[uint64]time.Time
 		hkName      string   // house-keeping name
+		mem         *memsys.Mem2
+	}
+	fixedBuffer struct {
+		slab *memsys.Slab2
+		buf  []byte
+		roff int
+		woff int
 	}
 )
 
 const (
 	cleanupInterval = time.Minute * 10
-)
+	pkgName         = "transport"
 
-const (
-	pkgName = "transport"
+	// compressed streams perf tunables
+	slabBufferSize = 32 * cmn.KiB
+	extraBuffering = false
 )
 
 //
@@ -107,7 +118,8 @@ func SetMux(network string, x *mux.ServeMux) {
 // http.ServeMux private map of its URL paths.
 // This map is protected by a private mutex and is read-accessed to route HTTP requests.
 //
-func Register(network, trname string, callback Receive) (upath string, err error) {
+func Register(network, trname string, callback Receive, mems ...*memsys.Mem2) (upath string, err error) {
+	var mem *memsys.Mem2
 	mu.Lock()
 	mux, ok := muxers[network]
 	if !ok {
@@ -115,8 +127,10 @@ func Register(network, trname string, callback Receive) (upath string, err error
 		mu.Unlock()
 		return
 	}
-
-	h := &handler{trname: trname, callback: callback, hkName: path.Join(network, trname, "oldSessions")}
+	if len(mems) > 0 {
+		mem = mems[0]
+	}
+	h := &handler{trname: trname, callback: callback, hkName: path.Join(network, trname, "oldSessions"), mem: mem}
 	upath = cmn.URLPath(cmn.Version, cmn.Transport, trname)
 	mux.HandleFunc(upath, h.receive)
 	if _, ok = handlers[network][trname]; ok {
@@ -198,13 +212,19 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
+		fbuf      *fixedBuffer
+		debug     = bool(glog.FastV(4, glog.SmoduleTransport))
 	)
+	// compression
 	if compressionType := r.Header.Get(cmn.HeaderCompress); compressionType != "" {
 		cmn.Assert(compressionType == cmn.LZ4Compression)
 		lz4Reader = lz4.NewReader(r.Body)
 		reader = lz4Reader
+		if extraBuffering {
+			fbuf = newFixedBuffer(h.mem)
+		}
 	}
-	debug := bool(glog.FastV(4, glog.SmoduleTransport))
+	// session
 	sessID, err := strconv.ParseInt(r.Header.Get(cmn.HeaderSessID), 10, 64)
 	if err != nil || sessID == 0 {
 		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
@@ -219,7 +239,8 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	}
 	stats := statsif.(*Stats)
 
-	it := iterator{trname: trname, body: reader, headerBuf: make([]byte, maxHeaderSize)}
+	// Rx loop
+	it := &iterator{trname: trname, body: reader, fbuf: fbuf, headerBuf: make([]byte, maxHeaderSize)}
 	for {
 		objReader, hl64, err := it.next()
 		if hl64 != 0 {
@@ -258,6 +279,9 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			if lz4Reader != nil {
 				lz4Reader.Reset(nil)
 			}
+			if fbuf != nil {
+				fbuf.Free()
+			}
 			return
 		}
 	}
@@ -282,12 +306,33 @@ func (h *handler) cleanupOldSessions() time.Duration {
 // iterator
 //
 
-func (it iterator) next() (obj *objReader, hl64 int64, err error) {
+func (it *iterator) Read(p []byte) (n int, err error) {
+	if it.fbuf == nil {
+		return it.body.Read(p)
+	}
+	if it.fbuf.Len() != 0 {
+		goto read
+	}
+nextchunk:
+	it.fbuf.Reset()
+	n, err = it.body.Read(it.fbuf.Bytes())
+	it.fbuf.Written(n)
+read:
+	n, _ = it.fbuf.Read(p)
+	if err == nil && n < len(p) {
+		cmn.Dassert(it.fbuf.Len() == 0, pkgName)
+		p = p[n:]
+		goto nextchunk
+	}
+	return
+}
+
+func (it *iterator) next() (obj *objReader, hl64 int64, err error) {
 	var (
 		n   int
 		hdr Header
 	)
-	n, err = it.body.Read(it.headerBuf[:cmn.SizeofI64*2])
+	n, err = it.Read(it.headerBuf[:cmn.SizeofI64*2])
 	if n < cmn.SizeofI64*2 {
 		cmn.Assert(err != nil) // expecting an error or EOF as the reason for failing to read 16 bytes
 		if err != io.EOF {
@@ -310,19 +355,21 @@ func (it iterator) next() (obj *objReader, hl64 int64, err error) {
 	}
 	cmn.Dassert(hlen < len(it.headerBuf), pkgName)
 	hl64 += int64(cmn.SizeofI64) * 2 // to account for hlen and its checksum
-	n, err = it.body.Read(it.headerBuf[:hlen])
+	n, err = it.Read(it.headerBuf[:hlen])
 	if n == 0 {
 		return
 	}
 	if _, ok := cmn.CheckDebug(pkgName); ok {
 		cmn.AssertMsg(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
 	}
+	// buf => obj header
 	hdr = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
 		err = io.EOF
 		return
 	}
-	obj = &objReader{body: it.body, hdr: hdr}
+
+	obj = &objReader{body: it.body, fbuf: it.fbuf, hdr: hdr}
 	return
 }
 
@@ -335,7 +382,17 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
 	}
-	n, err = obj.body.Read(b)
+	if obj.fbuf != nil && obj.fbuf.Len() > 0 {
+		n, _ = obj.fbuf.Read(b)
+		if n < len(b) {
+			b = b[n:]
+			nr, er := obj.body.Read(b)
+			n += nr
+			err = er
+		}
+	} else {
+		n, err = obj.body.Read(b)
+	}
 	obj.off += int64(n)
 	switch err {
 	case nil:
@@ -352,6 +409,31 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	}
 	return
 }
+
+//
+// fixedBuffer - a fixed-size reusable buffer and io.Reader
+//
+
+// TODO -- FIXME: move to memsys
+func newFixedBuffer(mem *memsys.Mem2) (bb *fixedBuffer) {
+	if mem == nil {
+		mem = memsys.GMM()
+	}
+	buf, slab := mem.AllocForSize(slabBufferSize)
+	return &fixedBuffer{slab: slab, buf: buf}
+}
+
+func (bb *fixedBuffer) Read(p []byte) (n int, err error) {
+	n = copy(p, bb.buf[bb.roff:bb.woff])
+	bb.roff += n
+	return
+}
+
+func (bb *fixedBuffer) Bytes() []byte { return bb.buf }
+func (bb *fixedBuffer) Len() int      { return bb.woff - bb.roff }
+func (bb *fixedBuffer) Reset()        { bb.roff, bb.woff = 0, 0 }
+func (bb *fixedBuffer) Written(n int) { bb.woff += n }
+func (bb *fixedBuffer) Free()         { bb.slab.Free(bb.buf) }
 
 //
 // helpers

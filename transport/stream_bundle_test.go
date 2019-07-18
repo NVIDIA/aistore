@@ -126,8 +126,7 @@ func Test_Bundle(t *testing.T) {
 
 	for id, tstat := range stats {
 		fmt.Printf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
-			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num,
-			tstat.CompressionRatio.Load())
+			id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())
 	}
 	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }
