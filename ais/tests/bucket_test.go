@@ -145,6 +145,27 @@ func TestCloudListObjectVersions(t *testing.T) {
 		t.Skip("test requires a cloud bucket")
 	}
 
+	// Enable local versioning management
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.SetBucketProps(baseParams, bucket,
+		cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "true"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer api.SetBucketProps(baseParams, bucket,
+		cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "false"})
+
+	// Enabling local versioning may not work if the cloud bucket has
+	// versioning disabled. So, request props and do double check
+	bprops, err := api.HeadBucket(baseParams, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bprops.Versioning.Enabled {
+		t.Skip("test requires a cloud bucket with enabled versioning")
+	}
+
 	tutils.Logf("Filling the bucket %q\n", bucket)
 	for wid := 0; wid < workerCount; wid++ {
 		wg.Add(1)
@@ -163,7 +184,6 @@ func TestCloudListObjectVersions(t *testing.T) {
 
 	tutils.Logf("Reading bucket %q objects\n", bucket)
 	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
-	baseParams := tutils.BaseAPIParams(proxyURL)
 	query := url.Values{}
 	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
 	bckObjs, err := api.ListBucket(baseParams, bucket, msg, 0, query)

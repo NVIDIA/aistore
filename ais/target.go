@@ -978,9 +978,15 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Set(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumConf.ValidateWarmGet))
 	hdr.Set(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
 	hdr.Set(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
-
-	hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
 	hdr.Set(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
+	// for Cloud buckets correct Versioning.Enabled is combination of
+	// local and cloud settings and it is true only if versioning
+	// is enabled at both sides: Cloud and for local usage
+	if bckIsLocal || !verConf.Enabled {
+		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
+	} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
+		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
+	}
 
 	hdr.Set(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Set(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
