@@ -47,7 +47,7 @@ const (
 	uuidSeed    = 17
 	// Alphabet for generating UUIDs - similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
-	uuidABC = "5nZJDft6LuzsjGNpPwY7r_Qa3-9vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk"
+	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
 
 	// misc
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
@@ -181,8 +181,16 @@ func (fpair PairF32) String() string {
 // common utils
 //
 
-func GenUUID() (string, error) {
-	return shortid.Generate()
+func GenUUID() (uuid string, err error) {
+	for {
+		uuid, err = shortid.Generate()
+		if err != nil {
+			return
+		}
+		if uuid[0] != '-' && uuid[0] != '_' {
+			return
+		}
+	}
 }
 
 func GenUUID64() (int64, error) {
