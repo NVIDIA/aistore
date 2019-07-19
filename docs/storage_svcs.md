@@ -69,10 +69,13 @@ Erasure coding, or EC, is a well-known storage technique that protects user data
 
 EC schemas are flexible and user-configurable: users can select the N and the K (above), thus ensuring that user data remains available even if the cluster loses **any** (emphasis on the **any**) of its K servers.
 
+A bucket inherits EC settings from global configuration. But it can be overridden on a per bucket basis.
+
 * `ec.enabled`: bool - enables or disabled data protection the bucket
 * `ec.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
 * `ec.parity_slices`: integer in the range [2, 32], representing the number of redundant fragments to provide protection from failures. The value defines the maximum number of storage targets a cluster can lose but it is still able to restore the original object
 * `ec.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated. The field can be 0 - in this case the default value is used (as of version 1.3 it is 256KiB)
+* `ec.compression`: string that contains rules for LZ4 compression used by EC when it sends its fragments and replicas over network. Value "never" disables compression. Other values enable compression: it can be "always" - use compression for all transfers, or list of compression options, like "ratio=1.5" that means "disable compression automatically when compression ratio drops below 1.5"
 
 Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
 
@@ -87,7 +90,7 @@ Example of setting bucket properties:
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","enabled":true}, "ec": {"enabled": true, "data": 4, "parity": 2}}}' 'http://G/v1/buckets/<bucket-name>'
 ```
 
-To change ony one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the sinlge set property API. Example of disabling EC:
+To change only one EC property(e.g, enable or disable EC for a bucket) without touching other bucket properties, use the single set property API. Example of disabling EC:
 
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
@@ -108,7 +111,7 @@ In other words, AIS n-way mirroring is intended to withstand loss of disks, not 
 
 The service ensures is that for any given object there will be *no two replicas* sharing the same local disk.
 
-> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
+> Unlike [erasure coding](#erasure-coding) that takes care of distributing redundant content across *different* clustered nodes, local mirror is, as the name implies, local. When a bucket is [configured as a mirror](/ais/setup/config.sh), objects placed into this bucket get locally replicated and the replicas are stored in local filesystems.
 
 > As aside, note that AIS storage targets can be deployed to utilize Linux LVMs that provide a variety of RAID/mirror schemas.
 
@@ -140,7 +143,7 @@ $ curl -L -X PUT 'http://G/v1/objects/abc/obj1' -T /tmp/obj1
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/abc'
 ```
 
-The next command will redefine the `abc` bucket created in the previous example as a 2-way mirroru - all objects that were previously stored in three replicas will now have only two (replicas):
+The next command will redefine the `abc` bucket created in the previous example as a 2-way mirror - all objects that were previously stored in three replicas will now have only two (replicas):
 
 ```shell
 $ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":2}' 'http://G/v1/buckets/abc'

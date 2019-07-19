@@ -106,6 +106,13 @@ Following is a table-summary that contains a *subset* of all *settable* knobs:
 | distributed_sort.missing_shards | distributed_sort.missing_shards | "ignore" | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
 | distributed_sort.call_timeout | distributed_sort.call_timeout | "10m" | a maximum time a target waits for another target to respond |
 | distributed_sort.default_max_mem_usage | distributed_sort.default_max_mem_usage | "80%" | a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g `80%`) or as the number of bytes(e.g, `12G`) |
+| distributed_sort.compression |distributed_sort.compression | "never" | LZ4 compression parameters used when dSort sends its shards over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
+| ec.enabled | ec.enabled | false | Enables or disables data protection |
+| ec.data_slices | ec.data_slices | 2 | Represents the number of fragments an object is broken into (in the range [2, 100]) |
+| ec.parity_slices | ec.parity_slices | 2 | Represents the number of redundant fragments to provide protection from failures (in the range [2, 32]) |
+| ec.objsize_limit | ec.objsize_limit | 262144 | Indicated the minimum size of an object in bytes that is erasure encoded. Smaller objects are replicated |
+| ec.compression | ec.compression | "never" | LZ4 compression parameters used when EC sends its fragments and replicas over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
+| compression.block_size | compression.block_size | 262144 | Maximum data block size used by LZ4, greater values may increase compression ration but requires more memory. Value is one of 64KB, 256KB(AIS default), 1MB, and 4MB |
 
 ## Configuration persistence
 
@@ -241,7 +248,7 @@ or, same:
         "timeout_factor": 3
         "timeout": "1h"
         "call_timeout": "10m"
-# ais config set list_timeout=5m
+# ais config set timeout.list_timeout=5m
 
 # ais config get --json | grep list_timeout
         "list_timeout": "5m"
