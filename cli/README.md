@@ -49,7 +49,7 @@ List of available CLI resources
 
 * [Daemon/Cluster](./resources/daeclu.md)
 
-* [Downloader](./resources/downloader.md)
+* [Downloader](./resources/download.md)
 
 * [Object](./resources/object.md)
 
@@ -79,7 +79,7 @@ To add a new command to a new resource,
 
 #### Bucket
 If `AIS_BUCKET` environment variable is set, the `--bucket` flag is set to the value of this variable.
-Setting `--bucket` flag overwrites the default value.  
+Setting `--bucket` flag overwrites the default value.
 Setting `AIS_BUCKET` also allows you to omit one of the arguments to `ais bucket` commands. For more information, check [here](./resources/bucket.md#default-bucket-argument-value).
 
 #### Bucket Provider
