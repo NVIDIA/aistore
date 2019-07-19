@@ -95,7 +95,7 @@ func (c *getJogger) ec(req *Request) {
 		c.jobMtx.Lock()
 		c.jobs[jobID] = restore
 		c.jobMtx.Unlock()
-		buffer, slab := mm.AllocEstimated(cmn.MiB)
+		buffer, slab := mm.AllocDefault()
 		go func() {
 			restore(req, toDisk, buffer, cb)
 			slab.Free(buffer)

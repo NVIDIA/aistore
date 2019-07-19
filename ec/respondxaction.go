@@ -199,7 +199,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		// save slice/object
 		tmpFQN := fs.CSM.GenContentFQN(objFQN, fs.WorkfileType, "ec")
-		buf, slab := mm.AllocEstimated(cmn.MiB)
+		buf, slab := mm.AllocDefault()
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		if err == nil {
 			lom, err = cluster.LOM{FQN: objFQN, T: r.t}.Init("")

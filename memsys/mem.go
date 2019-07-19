@@ -63,12 +63,7 @@ import (
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator
 // (Mem2, for shortness) can be exercised via its public API that includes
-// GetSlab2(), SelectSlab2() and AllocEstimated().
-//
-// NOTE the difference between the first and the second:
-// - GetSlab2(memsys.MaxSlabSize) returns the Slab of MaxSlabSize buffers
-// - SelectSlab2(256 * 1024) - the Slab that is considered optimal
-//   for the estimated *total* size 256KB.
+// GetSlab2() and AllocDefault().
 //
 // Once selected, each Slab2 instance can be used via its own public API that
 // includes Alloc() and Free() methods. In addition, each allocated SGL internally
@@ -112,8 +107,7 @@ const (
 
 // slab constants
 const (
-	countThreshold = 32 // exceeding this scatter-gather count warrants selecting a larger-size Slab
-	minSizeUnknown = 32 * cmn.KiB
+	countThreshold = 16 // exceeding this scatter-gather count warrants selecting a larger-size Slab
 )
 
 const SwappingMax = 4 // make sure that `swapping` condition, once noted, lingers for a while
@@ -224,7 +218,7 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to preallocate */, sbufSize ..
 		slab, err = r.GetSlab2(sbufSize[0])
 		cmn.AssertNoErr(err)
 	} else {
-		slab = r.SelectSlab2(immediateSize)
+		slab = r.slabForSGL(immediateSize)
 	}
 	n = cmn.DivCeil(immediateSize, slab.Size())
 	sgl = make([][]byte, n)
@@ -395,24 +389,10 @@ func (r *Mem2) GetSlab2(bufSize int64) (s *Slab2, err error) {
 	return
 }
 
-func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
-	if estimatedSize == 0 {
-		estimatedSize = minSizeUnknown
-	}
-	size := cmn.DivCeil(estimatedSize, countThreshold)
-	for _, slab := range &r.rings {
-		if slab.Size() >= size {
-			return slab
-		}
-	}
-	return r.rings[len(r.rings)-1]
+func (r *Mem2) AllocDefault() (buf []byte, slab *Slab2) {
+	return r.AllocForSize(cmn.DefaultBufSize)
 }
 
-func (r *Mem2) AllocEstimated(estimSize int64) (buf []byte, slab *Slab2) {
-	slab = r.SelectSlab2(estimSize)
-	buf = slab.Alloc()
-	return
-}
 func (r *Mem2) AllocForSize(size int64) (buf []byte, slab *Slab2) {
 	if size >= MaxSlabSize {
 		slab = r.rings[len(r.rings)-1]
@@ -493,6 +473,21 @@ func (s *Slab2) Free(bufs ...[]byte) {
 /////////////////////
 // PRIVATE METHODS //
 /////////////////////
+
+// select a slab for SGL given its immediate size to allocate
+func (r *Mem2) slabForSGL(immediateSize int64) *Slab2 {
+	if immediateSize == 0 {
+		slab, _ := r.GetSlab2(cmn.DefaultBufSize)
+		return slab
+	}
+	size := cmn.DivCeil(immediateSize, countThreshold)
+	for _, slab := range &r.rings {
+		if slab.Size() >= size {
+			return slab
+		}
+	}
+	return r.rings[len(r.rings)-1]
+}
 
 func (r *Mem2) env() (err error) {
 	var minfree int64

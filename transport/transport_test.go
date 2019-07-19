@@ -233,7 +233,7 @@ func Test_CancelStream(t *testing.T) {
 		if err != nil {
 			return // stream probably canceled nothing to do
 		}
-		slab := Mem2.SelectSlab2(cmn.GiB)
+		slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != nil && err != io.EOF {
@@ -261,7 +261,7 @@ func Test_CancelStream(t *testing.T) {
 	canceled := false
 	for time.Since(now) < duration {
 		hdr := genStaticHeader()
-		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
+		slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil, nil)
 		num++
@@ -494,7 +494,10 @@ func Test_ObjAttrs(t *testing.T) {
 			Opaque:   []byte{byte(idx)},
 			ObjAttrs: attrs,
 		}
-		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
+		slab, err := Mem2.GetSlab2(cmn.PageSize)
+		if err != nil {
+			t.Fatal(err)
+		}
 		reader := newRandReader(random, hdr, slab)
 		if err := stream.Send(hdr, reader, nil, nil); err != nil {
 			t.Fatal(err)
@@ -577,7 +580,7 @@ func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
-		slab := Mem2.SelectSlab2(32 * cmn.KiB)
+		slab, _ := Mem2.GetSlab2(32 * cmn.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != io.EOF {
@@ -650,7 +653,10 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) 
 }
 
 func makeRandReader() (transport.Header, *randReader) {
-	slab := Mem2.SelectSlab2(32 * cmn.KiB)
+	slab, err := Mem2.GetSlab2(32 * cmn.KiB)
+	if err != nil {
+		panic("Failed getting slab: " + err.Error())
+	}
 	random := newRand(time.Now().UnixNano())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)

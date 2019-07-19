@@ -67,7 +67,7 @@ func Test_CompressedOne(t *testing.T) {
 	defer os.Unsetenv("AIS_STREAM_BURST_NUM")
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Compression: cmn.CompressAlways})
 
-	slab := Mem2.SelectSlab2(cmn.MiB)
+	slab, _ := Mem2.GetSlab2(memsys.MaxSlabSize)
 	random := newRand(time.Now().UnixNano())
 	buf := slab.Alloc()
 	_, _ = random.Read(buf)

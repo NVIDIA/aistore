@@ -117,9 +117,7 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 	rj.aheadCh = make(chan *rahfcache, rahChanSize)
 	rj.getCh = make(chan *rahfcache, rahChanSize)
 	rj.stopCh = make(chan struct{}, 4)
-
-	rj.slab = nodeCtx.mm.SelectSlab2(cmn.GCO.Get().Readahead.ObjectMem)
-	rj.buf = rj.slab.Alloc()
+	rj.buf, rj.slab = nodeCtx.mm.AllocDefault()
 	return
 }
 

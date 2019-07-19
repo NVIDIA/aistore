@@ -39,7 +39,7 @@ type putJogger struct {
 
 func (c *putJogger) run() {
 	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bckName)
-	c.buffer, c.slab = mm.AllocEstimated(cmn.MiB)
+	c.buffer, c.slab = mm.AllocDefault()
 
 	for {
 		select {

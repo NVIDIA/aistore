@@ -863,7 +863,8 @@ func (reb *rebManager) runLocalReb() {
 	}
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
-	slab := nodeCtx.mm.SelectSlab2(cmn.MiB) // FIXME: estimate
+	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize) // TODO: estimate
+	cmn.AssertNoErr(err)
 
 	// TODO: support non-object content types
 	for _, mpathInfo := range availablePaths {

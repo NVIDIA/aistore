@@ -60,7 +60,7 @@ func Test_Bundle(t *testing.T) {
 
 	transport.SetMux(network, mux)
 
-	slab := Mem2.SelectSlab2(32 * cmn.KiB)
+	slab, _ := Mem2.GetSlab2(32 * cmn.KiB)
 	rbuf := slab.Alloc()
 	defer slab.Free(rbuf)
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {

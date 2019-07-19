@@ -194,7 +194,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	}
 
 	if poi.size == 0 {
-		buf, slab = nodeCtx.mm.AllocEstimated(0)
+		buf, slab = nodeCtx.mm.AllocDefault()
 	} else {
 		buf, slab = nodeCtx.mm.AllocForSize(poi.size)
 	}

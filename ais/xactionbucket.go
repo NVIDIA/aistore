@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -192,7 +193,8 @@ type mncEntry struct {
 }
 
 func (e *mncEntry) Start(id int64) error {
-	slab := nodeCtx.mm.SelectSlab2(cmn.MiB) // FIXME: estimate
+	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize) // TODO: estimate
+	cmn.AssertNoErr(err)
 	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, slab, e.copies, e.bckIsLocal)
 	go xmnc.Run()
 	e.xact = xmnc
@@ -241,7 +243,8 @@ type putLocReplicasEntry struct {
 }
 
 func (e *putLocReplicasEntry) Start(id int64) error {
-	slab := nodeCtx.mm.SelectSlab2(cmn.MiB) // TODO: estimate
+	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize) // TODO: estimate
+	cmn.AssertNoErr(err)
 	x, err := mirror.RunXactPutLRepl(id, e.lom, slab)
 
 	if err != nil {

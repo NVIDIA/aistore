@@ -135,7 +135,7 @@ func (mw *memoryWatcher) watchReserved() {
 func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 	defer mw.excess.wg.Done()
 
-	buf, slab := mm.AllocEstimated(cmn.MiB)
+	buf, slab := mm.AllocDefault()
 	defer slab.Free(buf)
 
 	lastMemoryUsage := memStat.ActualUsed

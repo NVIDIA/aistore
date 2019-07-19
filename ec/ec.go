@@ -300,7 +300,7 @@ func readFile(lom *cluster.LOM) (sgl *memsys.SGL, err error) {
 	}
 
 	sgl = mm.NewSGL(lom.Size())
-	buf, slab := mm.AllocEstimated(cmn.KiB * 32)
+	buf, slab := mm.AllocForSize(cmn.DefaultBufSize)
 	_, err = io.CopyBuffer(sgl, f, buf)
 	f.Close()
 	slab.Free(buf)
