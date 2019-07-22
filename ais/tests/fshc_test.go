@@ -234,9 +234,10 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	}
 }
 
-func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
-	chstop chan struct{}, sgl *memsys.SGL, bucket string) {
-	const filesize = 64 * 1024
+func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *memsys.SGL, bucket string) {
+	defer wg.Done()
+
+	const fileSize = 64 * cmn.KiB
 	var proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
@@ -260,7 +261,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 				}
 				f.Close()
 			case <-chstop:
-				wg.Done()
+
 				return
 			default:
 				// do nothing and just start the next loop
@@ -270,7 +271,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			case "PUT":
 				fileList := []string{fname}
 				ldir := filepath.Join(LocalSrcDir, fshcDir)
-				tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, filesize, fileList, errCh, objsPutCh, sgl)
+				tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, fileSize, fileList, errCh, objsPutCh, sgl)
 			case "GET":
 				api.GetObject(tutils.DefaultBaseAPIParams(t), bucket, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
@@ -282,8 +283,6 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 		close(errCh)
 		close(objsPutCh)
 	}
-
-	wg.Done()
 }
 
 func TestFSCheckerDetectionEnabled(t *testing.T) {

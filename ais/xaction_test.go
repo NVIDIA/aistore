@@ -23,8 +23,8 @@ func TestXactionRenewLRU(t *testing.T) {
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
+			defer wg.Done()
 			ch <- xactions.renewLRU()
-			wg.Done()
 		}()
 	}
 
@@ -50,8 +50,8 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
+			defer wg.Done()
 			ch <- xactions.renewPrefetch(nil)
-			wg.Done()
 		}()
 	}
 
@@ -77,8 +77,8 @@ func TestXactionRenewEvictDelete(t *testing.T) {
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
+			defer wg.Done()
 			ch <- xactions.renewEvictDelete(true)
-			wg.Done()
 		}()
 	}
 

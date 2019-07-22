@@ -354,8 +354,9 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		primaryCrashElectRestart(t)
-		m.wg.Done()
 	}()
 
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
@@ -370,14 +371,16 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	m.wg.Add(m.num*m.numGetsEachFile + 2)
 
 	go func() {
+		defer m.wg.Done()
+
 		m.reregisterTarget(target)
-		m.wg.Done()
 	}()
 
 	go func() {
+		defer m.wg.Done()
+
 		<-m.controlCh
 		primarySetToOriginal(t)
-		m.wg.Done()
 	}()
 
 	m.gets()
@@ -440,9 +443,10 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Step 4
 	m.wg.Add(m.num*m.numGetsEachFile + 1)
 	go func() {
+		defer m.wg.Done()
+
 		time.Sleep(4 * time.Second)
 		restore(tcmd, targs, false, "target")
-		m.wg.Done()
 	}()
 
 	m.gets()
@@ -525,26 +529,29 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Do puts in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		m.puts()
-		m.wg.Done()
 	}()
 
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
-		m.wg.Done()
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterNode(m.proxyURL, targets[1].DaemonID)
 		tassert.CheckFatal(t, err)
-		m.wg.Done()
 	}()
 
 	// Wait for everything to end
@@ -733,19 +740,21 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		tutils.Logf("Register target %s\n", targets[0].URL(cmn.NetworkPublic))
 		err = tutils.RegisterNode(m.proxyURL, targets[0], m.smap)
 		tassert.CheckFatal(t, err)
-		m.wg.Done()
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		tutils.Logf("Unregister target %s\n", targets[1].URL(cmn.NetworkPublic))
 		err = tutils.UnregisterNode(m.proxyURL, targets[1].DaemonID)
 		tassert.CheckFatal(t, err)
-		m.wg.Done()
 	}()
 
 	// Wait for everything to end
@@ -802,12 +811,13 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Start putting files and register target in parallel
 	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
+
 		// sleep some time to wait for PUT operations to begin
 		time.Sleep(3 * time.Second)
 		tutils.Logf("Register target %s\n", target.URL(cmn.NetworkPublic))
 		err = tutils.RegisterNode(m.proxyURL, target, m.smap)
 		tassert.CheckFatal(t, err)
-		m.wg.Done()
 	}()
 
 	m.puts()
@@ -1109,17 +1119,19 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	m.wg.Add(unregisterTargetCount)
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
+			defer m.wg.Done()
+
 			err := tutils.RegisterNode(m.proxyURL, targets[number], m.smap)
 			tassert.CheckError(t, err)
-			m.wg.Done()
 		}(i)
 	}
 
 	m.wg.Add(newLocalBucketCount)
 	for i := 0; i < newLocalBucketCount; i++ {
 		go func(number int) {
+			defer m.wg.Done()
+
 			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
-			m.wg.Done()
 		}(i)
 
 		defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(i))
@@ -1583,9 +1595,10 @@ func TestForwardCP(t *testing.T) {
 	m.gets()
 
 	go func() {
+		defer m.wg.Done()
+
 		setPrimaryTo(t, m.proxyURL, m.smap, nextProxyURL, nextProxyID)
 		m.proxyURL = nextProxyURL
-		m.wg.Done()
 	}()
 
 	m.wg.Wait()

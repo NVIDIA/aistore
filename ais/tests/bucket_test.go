@@ -232,6 +232,8 @@ func TestListObjects(t *testing.T) {
 		for wid := 0; wid < workerCount; wid++ {
 			wg.Add(1)
 			go func(wid int) {
+				defer wg.Done()
+
 				reader, err := tutils.NewRandReader(int64(objectSize), true)
 				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(random, dirLen, 5)
@@ -240,7 +242,6 @@ func TestListObjects(t *testing.T) {
 					objectsToPut += objectCount % workerCount
 				}
 				putRR(t, reader, bucket, objDir, objectsToPut)
-				wg.Done()
 			}(wid)
 		}
 		wg.Wait()

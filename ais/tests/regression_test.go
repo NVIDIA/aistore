@@ -1125,9 +1125,11 @@ func TestStressDeleteRange(t *testing.T) {
 		reader, err := tutils.NewRandReader(size, true /* withHash */)
 		tassert.CheckFatal(t, err)
 		readersList[i] = reader
-		wg.Add(1)
 
+		wg.Add(1)
 		go func(i int, reader tutils.Reader) {
+			defer wg.Done()
+
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
 				putArgs := api.PutObjectArgs{
@@ -1143,7 +1145,6 @@ func TestStressDeleteRange(t *testing.T) {
 				}
 				reader.Seek(0, io.SeekStart)
 			}
-			wg.Done()
 			tutils.Progress(i, 99)
 		}(i, reader)
 	}

@@ -30,8 +30,8 @@ func TestRandomReaderPutStress(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			putRR(t, reader, bucket, dir, numobjects)
-			wg.Done()
 		}()
 	}
 	wg.Wait()

@@ -285,13 +285,14 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
+					defer wg.Done()
+
 					_, err := api.GetObject(baseParams, clibucket, keyname)
 					if err != nil {
 						errCh <- err
 					}
 					unlockFile(localIdx, rwFileExists)
 					getCounter.Dec()
-					wg.Done()
 				}()
 			} else {
 				_, err := api.GetObject(baseParams, clibucket, keyname)

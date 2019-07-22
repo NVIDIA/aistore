@@ -755,8 +755,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func(i int) {
+			defer wg.Done()
 			createDamageRestoreECFile(t, baseParams, bucket, objName, i, sema, rnd, fullPath)
-			wg.Done()
 		}(i)
 	}
 	wg.Wait()
@@ -907,8 +907,8 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func(i int) {
+			defer wg.Done()
 			createDamageRestoreECFile(t, baseParams, bucket, objName, i, sema, rnd, fullPath)
-			wg.Done()
 		}(i)
 	}
 	wg.Wait()
@@ -927,8 +927,8 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	for i := numFiles; i < 2*numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func() {
+			defer wg.Done()
 			putRandomFile(t, baseParams, bucket, objName, cmn.MiB)
-			wg.Done()
 		}()
 	}
 
@@ -948,8 +948,8 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	for i := 2 * numFiles; i < 3*numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func(i int) {
+			defer wg.Done()
 			createDamageRestoreECFile(t, baseParams, bucket, objName, i, sema, rnd, fullPath)
-			wg.Done()
 		}(i)
 	}
 	wg.Wait()
@@ -999,8 +999,8 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func(i int) {
+			defer wg.Done()
 			createDamageRestoreECFile(t, baseParams, bucket, objName, i, sema, rnd, fullPath)
-			wg.Done()
 		}(i)
 	}
 	wg.Wait()
@@ -1077,8 +1077,8 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 		objName := fmt.Sprintf(objPatt, j)
 
 		go func(i int) {
+			defer wg.Done()
 			createDamageRestoreECFile(t, baseParams, bucket, objName, i, sema, rnd, fullPath)
-			wg.Done()
 		}(j)
 	}
 
@@ -1168,12 +1168,12 @@ func TestECStressManyBuckets(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		doECPutsAndCheck(t, bck1Name, seed1, baseParams, concurr, objCount)
-		wg.Done()
 	}()
 	go func() {
+		defer wg.Done()
 		doECPutsAndCheck(t, bck2Name, seed2, baseParams, concurr, objCount)
-		wg.Done()
 	}()
 	wg.Wait()
 
@@ -1246,6 +1246,11 @@ func TestECExtraStress(t *testing.T) {
 		semaphore <- struct{}{}
 
 		go func(i int) {
+			defer func() {
+				<-semaphore
+				wg.Done()
+			}()
+
 			objName := fmt.Sprintf(objPatt, i)
 			totalCnt, objSize, sliceSize, doEC := randObjectSize(rnd, i, smallEvery)
 			objPath := ecTestDir + objName
@@ -1262,9 +1267,6 @@ func TestECExtraStress(t *testing.T) {
 
 			totalSlices.Add(int64(totalCnt))
 			cntCh <- sCnt{obj: objName, cnt: totalCnt}
-
-			<-semaphore
-			wg.Done()
 		}(idx)
 	}
 
@@ -1505,8 +1507,14 @@ func TestECDestroyBucket(t *testing.T) {
 
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
+
+		semaphore <- struct{}{}
 		go func(i int) {
-			semaphore <- struct{}{}
+			defer func() {
+				<-semaphore
+				wg.Done()
+			}()
+
 			if i%10 == 0 {
 				tutils.Logf("ec file %s into bucket %s\n", objName, bucket)
 			}
@@ -1515,17 +1523,18 @@ func TestECDestroyBucket(t *testing.T) {
 			} else {
 				sucCnt.Inc()
 			}
-			<-semaphore
-			wg.Done()
 		}(i)
 
 		if i == 4*numFiles/5 {
 			// DestroyLocalBucket when put requests are still executing
+			semaphore <- struct{}{}
 			go func() {
-				semaphore <- struct{}{}
+				defer func() {
+					<-semaphore
+				}()
+
 				tutils.Logf("Destroying bucket %s\n", bucket)
 				tutils.DestroyLocalBucket(t, proxyURL, bucket)
-				<-semaphore
 			}()
 		}
 	}
@@ -1713,8 +1722,8 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	for i := 0; i < numFiles; i++ {
 		objName := fmt.Sprintf(objPatt, i)
 		go func() {
+			defer wg.Done()
 			createECReplicas(t, baseParams, bucket, objName, sema, rnd, fullPath)
-			wg.Done()
 		}()
 	}
 

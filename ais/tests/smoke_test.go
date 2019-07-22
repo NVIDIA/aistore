@@ -91,16 +91,16 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, files
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
 			go func(i int) {
+				defer wg.Done()
 				sgl := sgls[i]
 				tutils.PutRandObjs(proxyURL, clibucket, SmokeDir, readerType, SmokeStr, uint64(objSize), numops, errCh, filesPutCh, sgl)
-				wg.Done()
 			}(i)
 			nPut--
 		} else {
 			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				getRandomFiles(proxyURL, numops, clibucket, SmokeStr+"/", t, errCh)
-				wg.Done()
 			}()
 			nGet--
 		}
@@ -153,12 +153,13 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
 		go func() {
+			defer getsGroup.Done()
+
 			baseParams := tutils.BaseAPIParams(proxyURL)
 			_, err := api.GetObject(baseParams, bucket, keyname)
 			if err != nil {
 				errCh <- err
 			}
-			getsGroup.Done()
 		}()
 	}
 

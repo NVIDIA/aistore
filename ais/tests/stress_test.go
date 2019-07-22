@@ -44,11 +44,12 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 	for wid := 0; wid < workerCount; wid++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			reader, err := tutils.NewRandReader(objSize, true)
 			tassert.CheckFatal(t, err)
 			objDir := tutils.RandomObjDir(random, 10, 5)
 			putRR(t, reader, bucket, objDir, objectCountPerWorker)
-			wg.Done()
 		}()
 	}
 	wg.Wait()
@@ -84,11 +85,12 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		for wid := 0; wid < workerCount; wid++ {
 			wg.Add(1)
 			go func() {
+				defer wg.Done()
+
 				reader, err := tutils.NewRandReader(objSize, true)
 				tassert.CheckFatal(t, err)
 				objDir := tutils.RandomObjDir(random, 10, 5)
 				putRR(t, reader, bucket, objDir, numObjs)
-				wg.Done()
 			}()
 		}
 		wg.Wait()
