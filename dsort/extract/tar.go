@@ -216,10 +216,11 @@ func NewTarExtractCreator() ExtractCreator {
 // Note that the order of closing must be trw, gzw, then finally tarball.
 func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var (
-		n        int64
-		padBuf   = make([]byte, tarBlockSize)
-		tw       = tar.NewWriter(tarball)
-		rdReader = newTarRecordDataReader()
+		n         int64
+		needFlush bool
+		padBuf    = make([]byte, tarBlockSize)
+		tw        = tar.NewWriter(tarball)
+		rdReader  = newTarRecordDataReader()
 	)
 
 	defer func() {
@@ -231,6 +232,15 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 		for _, obj := range rec.Objects {
 			switch obj.StoreType {
 			case OffsetStoreType:
+				if needFlush {
+					// We now will write directly to the tarball file so we need
+					// to flush everything what we have written so far.
+					if err := tw.Flush(); err != nil {
+						return written, err
+					}
+					needFlush = false
+				}
+
 				if n, err = loadContent(tarball, rec, obj); err != nil {
 					return written + n, err
 				}
@@ -249,10 +259,9 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 				if n, err = loadContent(rdReader, rec, obj); err != nil {
 					return written + n, err
 				}
-				if err := tw.Flush(); err != nil {
-					return written + n, err
-				}
 				written += n
+
+				needFlush = true
 			default:
 				cmn.AssertMsg(false, obj.StoreType)
 			}
