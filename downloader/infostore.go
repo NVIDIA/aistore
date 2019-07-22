@@ -11,7 +11,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/housekeep/hk"
+)
+
+var (
+	// global downloader info store
+	dlStore *infoStore
 )
 
 type (
@@ -24,6 +30,14 @@ type (
 		sync.RWMutex
 	}
 )
+
+func init() {
+	var err error
+	dlStore, err = newInfoStore()
+	if err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+}
 
 func newInfoStore() (*infoStore, error) {
 	db, err := newDownloadDB()

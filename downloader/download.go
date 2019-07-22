@@ -144,8 +144,6 @@ type (
 		downloadCh chan DownloadJob
 
 		dispatcher *dispatcher
-
-		infoStore *infoStore
 	}
 )
 
@@ -248,11 +246,7 @@ func (d *Downloader) Description() string {
 /*
  * Downloader constructors
  */
-func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader, err error) {
-	js, err := newInfoStore()
-	if err != nil {
-		return nil, err
-	}
+func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id int64, kind string) (d *Downloader) {
 	downloader := &Downloader{
 		XactDemandBase: *cmn.NewXactDemandBase(id, kind, "" /* no bucket */, false),
 		t:              t,
@@ -261,11 +255,10 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
 		downloadCh:     make(chan DownloadJob, jobsChSize),
-		infoStore:      js,
 	}
 
 	downloader.dispatcher = newDispatcher(downloader)
-	return downloader, nil
+	return downloader
 }
 
 func (d *Downloader) init() {
@@ -331,7 +324,7 @@ func (d *Downloader) Stop(err error) {
 func (d *Downloader) Download(dJob DownloadJob) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
-	d.infoStore.setJob(dJob.ID(), dJob)
+	dlStore.setJob(dJob.ID(), dJob)
 
 	select {
 	case d.downloadCh <- dJob:
@@ -402,7 +395,7 @@ func (d *Downloader) ListJobs(regex *regexp.Regexp) (resp interface{}, err error
 }
 
 func (d *Downloader) checkJob(req *request) (*DownloadJobInfo, error) {
-	jInfo, err := d.infoStore.getJob(req.id)
+	jInfo, err := dlStore.getJob(req.id)
 	if err != nil {
 		if err == errJobNotFound {
 			req.writeErrResp(fmt.Errorf("download job with id %q has not been found", req.id), http.StatusNotFound)

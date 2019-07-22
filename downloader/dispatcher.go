@@ -116,8 +116,8 @@ func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
 
 func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 	defer func() {
-		d.parent.infoStore.markFinished(job.ID())
-		d.parent.infoStore.flush(job.ID())
+		dlStore.markFinished(job.ID())
+		dlStore.flush(job.ID())
 		d.cleanUpAborted(job.ID())
 	}()
 
@@ -128,7 +128,7 @@ func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 	for {
 		objs, ok := job.GenNext()
 		if !ok {
-			_ = d.parent.infoStore.setAllDispatched(job.ID(), true)
+			_ = dlStore.setAllDispatched(job.ID(), true)
 			return true
 		}
 
@@ -140,7 +140,7 @@ func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
 			err, ok := d.blockingDispatchDownloadSingle(job, obj)
 			if err != nil {
 				glog.Errorf("Download job %s failed, couldn't download object %s, aborting; %s", job.ID(), obj.Link, err.Error())
-				cmn.AssertNoErr(d.parent.infoStore.setAborted(job.ID()))
+				cmn.AssertNoErr(dlStore.setAborted(job.ID()))
 				return ok
 			}
 			if !ok {
@@ -227,7 +227,7 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 		glog.Warningf("error in handling downloader request: %s", err.Error())
 		d.parent.stats.Add(stats.ErrDownloadCount, 1)
 
-		dbErr := t.parent.infoStore.persistError(t.id, t.obj.Objname, err.Error())
+		dbErr := dlStore.persistError(t.id, t.obj.Objname, err.Error())
 		cmn.AssertNoErr(dbErr)
 		return nil, nil, err
 	}
@@ -245,13 +245,13 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 
 // returns false if dispatcher was aborted in the meantime, true otherwise
 func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) (err error, ok bool) {
-	_ = d.parent.infoStore.incScheduled(job.ID())
+	_ = dlStore.incScheduled(job.ID())
 	task, jogger, err := d.prepareTask(job, obj)
 	if err != nil {
 		return err, true
 	}
 	if task == nil || jogger == nil {
-		err = d.parent.infoStore.incFinished(job.ID())
+		err = dlStore.incFinished(job.ID())
 		return err, true
 	}
 
@@ -279,7 +279,7 @@ func (d *dispatcher) dispatchRemove(req *request) {
 		return
 	}
 
-	d.parent.infoStore.delJob(req.id)
+	dlStore.delJob(req.id)
 	req.writeResp(nil)
 }
 
@@ -307,7 +307,7 @@ func (d *dispatcher) dispatchAbort(req *request) {
 		j.Unlock()
 	}
 
-	err = d.parent.infoStore.setAborted(req.id)
+	err = dlStore.setAborted(req.id)
 	cmn.AssertNoErr(err) // Everything should be okay since getReqFromDB
 	req.writeResp(nil)
 }
@@ -319,7 +319,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 	}
 
 	currentTasks := d.parent.activeTasks(req.id)
-	finishedTasks, err := d.parent.infoStore.getTasks(req.id)
+	finishedTasks, err := dlStore.getTasks(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
@@ -327,7 +327,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 
 	numPending := d.parent.getNumPending(jInfo.ID)
 
-	dlErrors, err := d.parent.infoStore.getErrors(req.id)
+	dlErrors, err := dlStore.getErrors(req.id)
 	if err != nil {
 		req.writeErrResp(err, http.StatusInternalServerError)
 		return
@@ -349,7 +349,7 @@ func (d *dispatcher) dispatchStatus(req *request) {
 }
 
 func (d *dispatcher) dispatchList(req *request) {
-	records := d.parent.infoStore.getList(req.regex)
+	records := dlStore.getList(req.regex)
 	respMap := make(map[string]cmn.DlJobInfo)
 	for _, r := range records {
 		respMap[r.ID] = cmn.DlJobInfo{

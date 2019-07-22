@@ -186,11 +186,7 @@ type downloaderEntry struct {
 }
 
 func (e *downloaderEntry) Start(id int64) error {
-	xdl, err := downloader.NewDownloader(e.t, e.t.statsif, fs.Mountpaths, id, cmn.Download)
-	if err != nil {
-		return err
-	}
-
+	xdl := downloader.NewDownloader(e.t, e.t.statsif, fs.Mountpaths, id, cmn.Download)
 	e.xact = xdl
 	go xdl.Run()
 	return nil
