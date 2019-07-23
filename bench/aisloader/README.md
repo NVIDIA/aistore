@@ -24,11 +24,12 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-numworkers` - Number of go routines sending requests in parallel
  - `-pctput` - Percentage of put request (0% - 100%, remaining is allocated for GET)
  - `-tmpdir` - Local temporary directory used to store temporary files
- - `-totalputsize` - Stops after total put size exceeds this, can specify with [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit
+ - `-totalputsize` - Stops after total put size exceeds this, may contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit
  - `-cleanup` - Determines if aisloader cleans up the files it creates when run is finished, true by default.
  - `-verifyhash` - If set, the contents of the downloaded files are verified using the xxhash in response headers during GET requests.
- - `-minsize` - Minimal object size, can specify with [multiplicative suffix](#bytes-multiplicative-suffix)
- - `-maxsize` - Maximal object size, can specify with [multiplicative suffix](#bytes-multiplicative-suffix)
+ - `-minsize` - Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix)
+ - `-maxsize` - Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix)
+ - `-maxputs` - Maximum number of objects to PUT
  - `-readertype` - Type of reader: sg (default) | file | inmem | rand
  - `-loaderid` - ID to identify a loader when multiple instances of loader running on the same host
  - `-check-statsd` - If set, checks if statsd is running before run
@@ -37,6 +38,17 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-batchsize` - List and delete batch size
  - `-getconfig` - If set, aisloader tests reading the configuration of the proxy instead of the usual GET/PUT requests.
  - `-seed` - Seed for random source, 0=use current time
+ - `-readoff` - Read range offset, may contain [multiplicative suffix](#bytes-multiplicative-suffix)
+ - `-readlen` - Read range length(0 - GET full object), may contain [multiplicative suffix](#bytes-multiplicative-suffix)
+ - `-loadernum` - Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen
+ - `-getloaderid` - Print out stored/computed unique loaderID(aisloader identifier) and exit
+ - `-loaderidhashlen` - Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum
+ - `-randomname` - Generate objects names of 32 random characters. This option is ignored when loadernum is defined
+ - `-subdir` - Virtual destination directory for all aisloader-generated objects. If not set, all generated objects are PUT into bucket's root
+ - `-putshards` - Spread generated objects over this many subdirectories (max 100k)
+ - `-uniquegets` - If set, GET objects randomly and equally(it makes sure *not* to GET some objects more frequently than the others). If not set, GET selects a random object every time, that may result, e.g, in reading the same object twice in a row
+ - `-no-detailed-stats` - If set, disable collecting detailed HTTP latencies for PUT and GET (to minimize amount of stats sent to statsD)
+ - `-dry-run` - Show the configuration and parameters that aisloader will use for benchmark and exit
 
 ### Examples
 
@@ -72,6 +84,21 @@ Time      OP    Count                 	Total Bytes           	Latency(min, avg, 
 01:52:52  CFG   0                     	0B                    	0.00ms     0.00ms     0.00ms        	0B                    	0
 01:52:52 Clean up ...
 01:52:54 Clean up done
+```
+
+Loader ID:
+
+```sh
+$ ./aisloader -getloaderid
+0x0
+$ ./aisloader -getloaderid -loaderid=loaderstring -loaderidhashlen=8
+0xdb
+```
+
+PUT 2000 objects with names that look like hex({0..2000}{loaderid}):
+
+```sh
+$ ./aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 ```
 
 ***Warning:*** Performance tests generate a heavy load on your local system, please save your work.

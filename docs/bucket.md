@@ -127,14 +127,14 @@ curl -i -X PUT 'http://localhost:8080/v1/buckets/abc/setprops?aattrs=18446744073
 
 ## List Bucket
 
-ListBucket API returns a page of object names and, optionally, their properties (including sizes, creation times, checksums, and more), in addition to a token that servers as a cursor or a marker for the *next* page retrieval.
+ListBucket API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that servers as a cursor or a marker for the *next* page retrieval.
 
 ### Properties and options
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
 | Property/Option | Description | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version","targetURL". <sup id="a6">[6](#ft6)</sup> |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","version","targetURL","copies","status". <sup id="a6">[6](#ft6)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
@@ -162,6 +162,7 @@ The full list of bucket properties are:
 | `ec.data_slices` | int | number of data slices for EC |
 | `ec.parity_slices` | int | number of parity slices for EC |
 | `ec.objsize_limit` | int | size limit in which objects below this size are replicated instead of EC'ed |
+| `ec.compression` | string | LZ4 compression parameters used when EC sends its fragments and replicas over network |
 | `mirror.enabled` | bool | enable local mirroring |
 | `mirror.copies` | int | number of local copies |
 | `mirror.util_thresh` | int | threshold when utilizations are considered equivalent |
@@ -172,15 +173,70 @@ The full list of bucket properties are:
 
 ### Curl example: listing local and Cloud buckets
 
-To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
+Example of listing objects in the smoke/ subdirectory of a given bucket called 'myBucket', the result must include object respective sizes and checksums.
+
+Bucket list API is asynchronous, so it cannot be executed as one cURL command. The first request starts the task that enumerates objects in a background and returns the task ID to watch it:
 
 ```shell
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
+5315610902768416055
 ```
 
-This request will produce an output that (in part) may look as follows:
+Watch the task status, until it returns the list of objects. The requests is the same, except a field `taskid` that now contains the value returned by previous request(if `taskid` is zero or omitted, API starts a new task). If the task is still running, the request keeps responding with `taskid`. When the task completes, it returns the page content:
 
-<img src="images/ais-ls-subdir.png" alt="AIStore list directory" width="440">
+```shell
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "5315610902768416055"}}' http://localhost:8080/v1/buckets/myBucket
+{
+  "entries": [
+    {
+      "name": "zbIvfYiZlweQRORFBGGjOENsPigguamh",
+      "size": 8388608,
+      "checksum": "983bfada723b7fa1",
+      "copies": 1,
+      "flags": 64
+    },
+    {
+      "name": "zqlvXFpMkEzZyezafixTXvHUHDHGzWGp",
+      "size": 8388608,
+      "checksum": "cb9a3c208f0bab01",
+      "copies": 1,
+      "flags": 64
+    }
+  ],
+  "pagemarker": ""
+}
+```
+
+The listing can be truncated: API returns at most 1000 objects per requests. If a bucket contains more objects, one has to requests the list page by page. Please, note the field `pagemarker`: empty `pagemarker` in response means that there are no more objects left, it is the last page. Non-empty `pagemarker` should be used to request the next page. Example of requesting two pages:
+
+Start listing bucket from the first object (`taskid` is 0, and `pagemarker` is empty):
+
+```shell
+
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBigBucket
+7315610902768416055
+
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "taskid": "7315610902768416055"}}' http://localhost:8080/v1/buckets/myBigBucket
+{
+  "entries": [
+    {
+      "name": "zbIvfYiZlweQRORFBGGjOENsPigguamh",
+      "size": 8388608,
+	  # many lines skipped
+      "copies": 1,
+      "flags": 64
+    }
+  ],
+  "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"
+}
+```
+
+Request the next page (`pagemarker` is copied from the previous response - it is the only difference from the first request; do not forget to set `taskid` to `0` or remove it):
+
+```shell
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/", "pagemarker": "PLqOWWuiCXATlSkhTXbnXlFCNWVhCUGR"}}' http://localhost:8080/v1/buckets/myBigBucket
+4910019837373721
+```
 
 For many more examples, please refer to the [test sources](/ais/tests/) in the repository.
 
@@ -216,43 +272,6 @@ $ AIS_BUCKET=mybucket ais bucket props set ec.enabled=true
 $ AIS_BUCKET=mybucket ais bucket props set ver.enabled=true
 $ AIS_BUCKET=mybucket ais bucket props list
 ```
-
-### Go code example: listing all pages
-
-The following Go code retrieves a list of all of object names from a named bucket (note: error handling omitted):
-
-```go
-// e.g. proxyurl: "http://localhost:8080"
-url := proxyurl + "/v1/buckets/" + bucket
-
-msg := &api.ActionMsg{Action: ais.ActListObjects}
-fullbucketlist := &ais.BucketList{Entries: make([]*ais.BucketEntry, 0)}
-for {
-    // 1. First, send the request
-    body, _ := json.Marshal(msg)
-    r, _ := http.DefaultClient.Post(url, "application/json", bytes.NewBuffer(body))
-
-    defer func(r *http.Response){
-        r.Body.Close()
-    }(r)
-
-    // 2. Unmarshal the response
-    pagelist := &ais.BucketList{}
-    respbytes, _ := ioutil.ReadAll(r.Body)
-    _ = json.Unmarshal(respbytes, pagelist)
-
-    // 3. Add the entries to the list
-    fullbucketlist.Entries = append(fullbucketlist.Entries, pagelist.Entries...)
-    if pagelist.PageMarker == "" {
-        // If PageMarker is the empty string, this was the last page
-        break
-    }
-    // If not, update PageMarker to the next page returned from the request.
-    msg.PageMarker = pagelist.PageMarker
-}
-```
-
->> PageMarker returned as part of the pagelist *points* to the *next* page.
 
 ## Recover Buckets
 

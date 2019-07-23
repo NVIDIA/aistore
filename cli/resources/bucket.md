@@ -6,16 +6,16 @@ The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS
 
 ### create
 
-`ais bucket create BUCKET`
+`ais bucket create BUCKET [BUCKET...]`
 
-Creates a local bucket.
+Creates a local bucket or buckets.
 
 
 ### destroy
 
-`ais bucket destroy BUCKET`
+`ais bucket destroy BUCKET [BUCKET...]`
 
-Destroys a local bucket.
+Destroys a local bucket or buckets.
 
 ### list
 
