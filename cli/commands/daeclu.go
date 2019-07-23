@@ -143,9 +143,23 @@ func clusterSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, us
 	}
 
 	baseParams.URL = newURL
-	body, err := api.GetClusterMap(baseParams)
+	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return err
+	}
+
+	extendedURLs := false
+	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+		for _, v := range m {
+			if v.PublicNet != v.IntraControlNet || v.PublicNet != v.IntraDataNet {
+				extendedURLs = true
+			}
+		}
+	}
+
+	body := templates.SmapTemplateHelper{
+		Smap:         smap,
+		ExtendedURLs: extendedURLs,
 	}
 	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, useJSON)
 }

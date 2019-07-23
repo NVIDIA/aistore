@@ -12,9 +12,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/NVIDIA/aistore/ios"
-
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -22,17 +22,20 @@ import (
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
 	// Smap
-	SmapHeader = "\nDaemonID\t Type\t PublicURL\t IntraControlURL\t IntraDataURL\n"
-	SmapBody   = "{{$value.DaemonID}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}\t " +
-		"{{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}\n"
+	SmapHeader = "DaemonID\t Type\t PublicURL" +
+		"{{ if (eq $.ExtendedURLs true) }}\t IntraControlURL\t IntraDataURL{{end}}" +
+		"\n"
+	SmapBody = "{{$value.DaemonID}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
+		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}{{end}}" +
+		"\n"
 
 	SmapTmpl = SmapHeader +
-		"{{ range $key, $value := .Pmap }}" + SmapBody + "{{end}}" +
+		"{{ range $key, $value := .Smap.Pmap }}" + SmapBody + "{{end}}\n" +
 		SmapHeader +
-		"{{ range $key, $value := .Tmap }}" + SmapBody + "{{end}}\n" +
+		"{{ range $key, $value := .Smap.Tmap }}" + SmapBody + "{{end}}\n" +
 		"Non-Electable:\n" +
-		"{{ range $key, $val := .NonElects }}Key: {{$key}}\t Value: {{$val}}\n {{end}}\n" +
-		"PrimaryProxy: {{.ProxySI.DaemonID}}\t Proxies: {{len .Pmap}}\t Targets: {{len .Tmap}}\t Smap Version: {{.Version}}\n"
+		"{{ range $key, $ := .Smap.NonElects }} ProxyID: {{$key}}\n{{end}}\n" +
+		"PrimaryProxy: {{.Smap.ProxySI.DaemonID}}\t Proxies: {{len .Smap.Pmap}}\t Targets: {{len .Smap.Tmap}}\t Smap Version: {{.Smap.Version}}\n"
 
 	// Proxy Info
 	ProxyInfoHeader = "Proxy\t %MemUsed\t MemAvail\t %CpuUsed\t Uptime\n"
@@ -277,7 +280,7 @@ const (
 		XactionExtBody +
 		"{{end}}" +
 		"{{end}}"
-	BucketStatTmpl = "Value\tTotal\tData\tLocal\n{{range $p := . }}{{$p.Name}}\t{{$p.Total}}\t{{$p.Data}}\t{{$p.Local}}\n{{end}}\n"
+	BucketStatTmpl = "Value\tTotal\tData\tLocal\n{{range $p := . }}{{$p.Name}}\t{{$p.Total}}\t{{$p.Data}}\t{{$p.Local}}\n{{end}}"
 )
 
 var (
@@ -328,6 +331,11 @@ type DiskStatsTemplateHelper struct {
 type ObjectStatTemplateHelper struct {
 	Name  string
 	Props *cmn.ObjectProps
+}
+
+type SmapTemplateHelper struct {
+	Smap         cluster.Smap
+	ExtendedURLs bool
 }
 
 // Gets the associated value from CoreStats
