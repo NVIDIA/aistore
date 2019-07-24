@@ -37,9 +37,9 @@ Last but not the least, AIS features open format and, therefore, freedom to copy
 
 ## Prerequisites
 
-* Linux (with gcc, sysstat and attr packages, and kernel 4.15+)
+* Linux (with `gcc`, `sysstat` and `attr` packages, and kernel 4.15+)
 * [Go 1.12.5 or later](https://golang.org/dl/)
-* Extended attributes (xattrs - see below)
+* Extended attributes (`xattrs` - see below)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account(s)
 
 Depending on your Linux distribution you may or may not have `gcc`, `sysstat`, and/or `attr` packages - to install, use `apt-get` (Debian), `yum` (RPM), or other applicable package management tool, e.g.:
