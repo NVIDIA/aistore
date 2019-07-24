@@ -20,6 +20,11 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+const (
+	// Number of retries when doing a request to external resource.
+	retryCnt = 3
+)
+
 type (
 	singleObjectTask struct {
 		parent *Downloader
@@ -86,35 +91,57 @@ func (t *singleObjectTask) download() {
 	t.finishedCh <- nil
 }
 
-func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (string, error) {
-	postFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+func (t *singleObjectTask) downloadLocal(lom *cluster.LOM, started time.Time) (errMsg string, err error) {
+	var (
+		postFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		req     *http.Request
+		resp    *http.Response
+	)
 
-	// Create request
-	httpReq, err := http.NewRequest(http.MethodGet, t.obj.Link, nil)
-	if err != nil {
-		return "", err
+	for i := 0; i < retryCnt; i++ {
+		// Create request
+		req, err = http.NewRequest(http.MethodGet, t.obj.Link, nil)
+		if err != nil {
+			continue
+		}
+
+		// Set "User-Agent" header when doing requests to Google Cloud Storage.
+		// This should increase number of connections to GCS.
+		if cmn.IsGoogleStorageURL(req.URL) {
+			req.Header.Add("User-Agent", cmn.GcsUA)
+		}
+
+		reqWithCtx := req.WithContext(t.downloadCtx)
+		resp, err = httpClient.Do(reqWithCtx)
+		if err != nil {
+			// Error returned by httpClient.Do() is a *url.Error
+			errMsg = httpClientErrorMessage(err.(*url.Error))
+			continue
+		}
+		if resp.StatusCode >= http.StatusBadRequest {
+			errMsg = httpRequestErrorMessage(t.obj.Link, resp)
+			err = fmt.Errorf("status code: %d", resp.StatusCode)
+			continue
+		}
+
+		break // no error, we can proceed
 	}
 
-	requestWithContext := httpReq.WithContext(t.downloadCtx)
-	response, err := httpClient.Do(requestWithContext)
 	if err != nil {
-		return httpClientErrorMessage(err.(*url.Error)), err // Error returned by httpClient.Do() is a *url.Error
-	}
-	if response.StatusCode >= http.StatusBadRequest {
-		return httpRequestErrorMessage(t.obj.Link, response), fmt.Errorf("status code: %d", response.StatusCode)
+		return
 	}
 
 	// Create a custom reader to monitor progress every time we read from response body stream
 	progressReader := &progressReader{
-		r: response.Body,
+		r: resp.Body,
 		reporter: func(n int64) {
 			t.currentSize.Add(n)
 		},
 	}
 
-	t.setTotalSize(response)
+	t.setTotalSize(resp)
 
-	cksum := getCksum(t.obj.Link, response)
+	cksum := getCksum(t.obj.Link, resp)
 	if err := t.parent.t.PutObject(postFQN, progressReader, lom, cluster.ColdGet, cksum, started); err != nil {
 		return internalErrorMessage(), err
 	}
