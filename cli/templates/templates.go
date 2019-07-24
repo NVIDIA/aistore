@@ -296,9 +296,9 @@ var (
 		"bucket":    "{{$obj.Bucket}}\t",
 		"version":   "{{$obj.Version}}\t",
 		"targetURL": "{{$obj.TargetURL}}\t",
-		"status":    "{{$obj.Status}}\t",
+		"status":    "{{FormatObjStatus $obj}}\t",
 		"copies":    "{{$obj.Copies}}\t",
-		"iscached":  "{{$obj.IsCached}}\t",
+		"iscached":  "{{FormatObjIsCached $obj}}\t",
 	}
 
 	ObjStatMap = map[string]string{
@@ -321,6 +321,8 @@ var (
 		"FormatObjTime":       fmtObjTime,
 		"FormatDur":           fmtDuration,
 		"FormatXactStatus":    fmtXactStatus,
+		"FormatObjStatus":     fmtObjStatus,
+		"FormatObjIsCached":   fmtObjIsCached,
 	}
 )
 
@@ -378,6 +380,20 @@ func fmtXactStatus(tStatus *stats.TargetStatus) string {
 		return fmt.Sprintf("running; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
 	}
 	return fmt.Sprintf("finished; %d objs moved (%s)", tStats.ObjCount(), cmn.B2S(tStats.BytesCount(), 1))
+}
+
+func fmtObjStatus(obj *cmn.BucketEntry) string {
+	if obj.IsStatusOK() {
+		return ""
+	}
+	return "Moved"
+}
+
+func fmtObjIsCached(obj *cmn.BucketEntry) string {
+	if obj.IsCached() {
+		return "true"
+	}
+	return "false"
 }
 
 func isUnsetTime(t time.Time) bool {
