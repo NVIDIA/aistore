@@ -625,9 +625,10 @@ func CreateFile(fname string) (*os.File, error) {
 	return os.Create(fname)
 }
 
-// MvFile renames file ensuring that the directory of dst exists. Creates
+// Rename renames file ensuring that the directory of dst exists. Creates
 // destination directory when it does not exist.
-func MvFile(src, dst string) error {
+// NOTE: Rename should not be used to move objects across different disks, see: fs.MvFile.
+func Rename(src, dst string) error {
 	if err := CreateDir(filepath.Dir(dst)); err != nil {
 		return err
 	}
@@ -712,7 +713,7 @@ func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum 
 		return "", err
 	}
 
-	if err := MvFile(tmpfqn, fqn); err != nil {
+	if err := Rename(tmpfqn, fqn); err != nil {
 		return "", err
 	}
 	return cksum, nil

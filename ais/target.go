@@ -1245,7 +1245,7 @@ func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
 		return
 	}
 	// commit
-	if err = cmn.MvFile(workFQN, lom.FQN); err != nil {
+	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
 		return
 	}
 	if err = lom.Persist(); err != nil {
@@ -1286,7 +1286,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 			}
 		}
 	}()
-	if err = cmn.MvFile(workFQN, lom.FQN); err != nil {
+	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
 		err = fmt.Errorf("unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
 		t.fshc(err, lom.FQN)
 		return
@@ -1537,7 +1537,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 		if err != nil {
 			return
 		}
-		if err := cmn.MvFile(fqn, newFQN); err != nil {
+		if err := fs.MvFile(fqn, newFQN); err != nil {
 			return fmt.Errorf("rename object %s/%s: %v", bucketFrom, objnameFrom, err)
 		}
 
@@ -1583,8 +1583,7 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
 	if err != nil {
-		err = fmt.Errorf("unexpected failure to create request, err: %v", err)
-		return
+		return fmt.Errorf("unexpected failure to create request, err: %v", err)
 	}
 	defer cancel()
 	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
@@ -1599,9 +1598,9 @@ func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, 
 
 	_, err = t.httpclientLongTimeout.Do(req)
 	if err != nil {
-		err = fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
+		return fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
 	}
-	return
+	return os.Remove(fqn)
 }
 
 //====================== common for both cold GET and PUT ======================================

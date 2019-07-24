@@ -66,7 +66,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	}
 
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
-	if err = cmn.MvFile(workFQN, copyFQN); err != nil {
+	if err = cmn.Rename(workFQN, copyFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
 		}

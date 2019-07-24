@@ -284,7 +284,7 @@ func (c *getJogger) restoreReplicatedFromDisk(req *Request, meta *Metadata, node
 		return errors.New("failed to read a replica from any target")
 	}
 	req.LOM.FQN = objFQN
-	if err := cmn.MvFile(tmpFQN, objFQN); err != nil {
+	if err := cmn.Rename(tmpFQN, objFQN); err != nil {
 		return err
 	}
 

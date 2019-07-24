@@ -165,8 +165,8 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	if err = lom.DelAllCopies(); err != nil {
 		return
 	}
-	if err := cmn.MvFile(poi.workFQN, lom.FQN); err != nil {
-		return fmt.Errorf("MvFile failed => %s: %v", lom, err), 0
+	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
+		return fmt.Errorf("Rename failed => %s: %v", lom, err), 0
 	}
 	if err1 := lom.Persist(); err1 != nil {
 		err = err1

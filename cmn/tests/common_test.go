@@ -206,34 +206,38 @@ func TestCopyFile(t *testing.T) {
 	os.Remove(dstFilename)
 }
 
-func TestMvFile(t *testing.T) {
+func TestRename(t *testing.T) {
 	// Should error when src does not exist
-	if err := cmn.MvFile("/some/non/existing/file.txt", "/tmp/file.txt"); !os.IsNotExist(err) {
-		t.Error("MvFile should fail when src file does not exist")
+	if err := cmn.Rename("/some/non/existing/file.txt", "/tmp/file.txt"); !os.IsNotExist(err) {
+		t.Error("Rename should fail when src file does not exist")
 	}
 
 	nonExistingFile := filepath.Join(tmpDir, "file.txt")
 	nonExistingRenamedFile := filepath.Join(tmpDir, "some/path/fi.txt")
 
 	// Should not error when dst file does not exist
-	file, _ := cmn.CreateFile(nonExistingFile)
-	file.Close()
-	if err := cmn.MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
-		t.Error(err)
-	}
+	{
+		file, _ := cmn.CreateFile(nonExistingFile)
+		file.Close()
+		if err := cmn.Rename(nonExistingFile, nonExistingRenamedFile); err != nil {
+			t.Error(err)
+		}
 
-	ensurePathExists(t, nonExistingRenamedFile, false)
-	ensurePathNotExists(t, nonExistingFile)
+		ensurePathExists(t, nonExistingRenamedFile, false)
+		ensurePathNotExists(t, nonExistingFile)
+	}
 
 	// Should not error when dst file already exists
-	file, _ = cmn.CreateFile(nonExistingFile)
-	file.Close()
-	if err := cmn.MvFile(nonExistingFile, nonExistingRenamedFile); err != nil {
-		t.Error(err)
-	}
+	{
+		file, _ := cmn.CreateFile(nonExistingFile)
+		file.Close()
+		if err := cmn.Rename(nonExistingFile, nonExistingRenamedFile); err != nil {
+			t.Error(err)
+		}
 
-	ensurePathExists(t, nonExistingRenamedFile, false)
-	ensurePathNotExists(t, nonExistingFile)
+		ensurePathExists(t, nonExistingRenamedFile, false)
+		ensurePathNotExists(t, nonExistingFile)
+	}
 
 	os.RemoveAll(tmpDir)
 }
@@ -521,24 +525,6 @@ var _ = Describe("Common file", func() {
 	})
 })
 
-func ensurePathExists(t *testing.T, path string, dir bool) {
-	if fi, err := os.Stat(path); err != nil {
-		t.Error(err)
-	} else {
-		if dir && !fi.IsDir() {
-			t.Errorf("expected path %q to be directory", path)
-		} else if !dir && fi.IsDir() {
-			t.Errorf("expected path %q to not be directory", path)
-		}
-	}
-}
-
-func ensurePathNotExists(t *testing.T, path string) {
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Error(err)
-	}
-}
-
 func TestSlicesEqual(t *testing.T) {
 	tests := []struct {
 		lhs []string
@@ -559,5 +545,23 @@ func TestSlicesEqual(t *testing.T) {
 		if cmn.StrSlicesEqual(c.lhs, c.rhs) != c.res {
 			t.Errorf("%v == %v != %v", c.lhs, c.rhs, c.res)
 		}
+	}
+}
+
+func ensurePathExists(t *testing.T, path string, dir bool) {
+	if fi, err := os.Stat(path); err != nil {
+		t.Error(err)
+	} else {
+		if dir && !fi.IsDir() {
+			t.Errorf("expected path %q to be directory", path)
+		} else if !dir && fi.IsDir() {
+			t.Errorf("expected path %q to not be directory", path)
+		}
+	}
+}
+
+func ensurePathNotExists(t *testing.T, path string) {
+	if _, err := os.Stat(path); err != nil && !os.IsNotExist(err) {
+		t.Error(err)
 	}
 }
