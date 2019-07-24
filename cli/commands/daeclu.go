@@ -209,30 +209,36 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 }
 
 // Displays the status of the cluster or daemon
-func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) (err error) {
+func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
-		err = templates.DisplayOutput(res, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if res, targetOK := target[daemonID]; targetOK {
 		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
-		err = templates.DisplayOutput(res, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Proxy {
 		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
-		err = templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
 	} else if daemonID == cmn.Target {
 		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
-		err = templates.DisplayOutput(target, c.App.Writer, template, useJSON)
+		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
+		baseParams := cliAPIParams(ClusterURL)
+		smap, err := api.GetClusterMap(baseParams)
+		if err != nil {
+			return err
+		}
 		if err := templates.DisplayOutput(proxy, c.App.Writer, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
-		fmt.Fprintf(c.App.Writer, "\n")
-		err = templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON)
-	} else {
-		return fmt.Errorf(invalidDaemonMsg, daemonID)
+		_, _ = fmt.Fprintf(c.App.Writer, "\n")
+		if err := templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(c.App.Writer, "\n")
+		return templates.DisplayOutput(smap, c.App.Writer, templates.ClusterSummary, useJSON)
 	}
-
-	return err
+	return fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
 // Adds new node to the cluster.

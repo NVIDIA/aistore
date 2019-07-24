@@ -61,6 +61,8 @@ const (
 	TargetInfoSingleBodyTmpl = "{{$value := . }}" + TargetInfoBody
 	TargetInfoSingleTmpl     = TargetInfoHeader + TargetInfoSingleBodyTmpl
 
+	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.DaemonID}}\n Smap Version:\t{{.Version}}\n"
+
 	// Stats
 	StatsHeader = "{{$obj := . }}\nDaemon: {{ .Snode.DaemonID }}\t Type: {{ .Snode.DaemonType }}\n\nStats\n"
 	StatsBody   = "{{range $key, $val := $obj.Stats.Tracker }}" +
@@ -391,9 +393,8 @@ func fmtObjTime(t time.Time) string {
 }
 
 func fmtDuration(d int64) string {
-	// Convert to nanoseconds
 	dNano := time.Duration(d * int64(time.Microsecond))
-	return dNano.String()
+	return dNano.Round(time.Second).String()
 }
 
 // Displays the output in either JSON or tabular form
