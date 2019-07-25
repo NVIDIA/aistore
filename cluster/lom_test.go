@@ -19,28 +19,30 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const (
-	mpath  = "/tmp/lomtest_mpath/1"
-	mpath2 = "/tmp/lomtest_mpath/2"
-
-	bucketLocalA = "LOM_TEST_Local_1"
-	bucketLocalB = "LOM_TEST_Local_2"
-
-	bucketCloudA = "LOM_TEST_Cloud_1"
-	bucketCloudB = "LOM_TEST_Cloud_2"
-
-	sameBucketName = "LOM_TEST_Local_and_Cloud"
-)
-
-var bmd = cluster.BMD{}
-
 var _ = Describe("LOM", func() {
-	oldCloudProvider := cmn.GCO.Get().CloudProvider
+	const (
+		tmpDir = "/tmp/lom_test"
+		mpath  = tmpDir + "/mpath1"
+		mpath2 = tmpDir + "/mpath2"
+
+		bucketLocalA = "LOM_TEST_Local_1"
+		bucketLocalB = "LOM_TEST_Local_2"
+
+		bucketCloudA = "LOM_TEST_Cloud_1"
+		bucketCloudB = "LOM_TEST_Cloud_2"
+
+		sameBucketName = "LOM_TEST_Local_and_Cloud"
+	)
+
+	var (
+		bmd              = &cluster.BMD{}
+		oldCloudProvider = cmn.GCO.Get().CloudProvider
+		config           = cmn.GCO.BeginUpdate()
+	)
 
 	_ = cmn.CreateDir(mpath)
 	_ = cmn.CreateDir(mpath2)
 
-	config := cmn.GCO.BeginUpdate()
 	config.TestFSP.Count = 1
 	cmn.GCO.CommitUpdate(config)
 
@@ -74,17 +76,15 @@ var _ = Describe("LOM", func() {
 	}})
 
 	BeforeEach(func() {
-		//dummy cloud provider for tests involving cloud buckets
+		// Dummy cloud provider for tests involving cloud buckets
 		cmn.GCO.Get().CloudProvider = cmn.ProviderAmazon
 
-		_ = os.RemoveAll(mpath)
-		_ = os.RemoveAll(mpath2)
 		_ = cmn.CreateDir(mpath)
 		_ = cmn.CreateDir(mpath2)
 	})
+
 	AfterEach(func() {
-		_ = os.RemoveAll(mpath)
-		_ = os.RemoveAll(mpath2)
+		_ = os.RemoveAll(tmpDir)
 
 		cmn.GCO.Get().CloudProvider = oldCloudProvider
 	})
@@ -261,12 +261,12 @@ var _ = Describe("LOM", func() {
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init("")
 				lom.SetSize(int64(testFileSize))
 				Expect(err).NotTo(HaveOccurred())
-				lom.SetBMD(&bmd)
+				lom.SetBMD(bmd)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				_, err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
-				addLocalBucket(lom)
+				addLocalBucket(bmd, lom)
 				Expect(lom.Exists()).To(BeTrue())
 				Expect(lom.Size()).To(BeEquivalentTo(testFileSize))
 			})
@@ -555,7 +555,7 @@ var _ = Describe("LOM", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCopies(copyFQN, nil)
 				lom.SetSize(int64(testFileSize))
-				addLocalBucket(lom)
+				addLocalBucket(bmd, lom)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				_, err := lom.Load(false)
@@ -734,7 +734,7 @@ func getTestFileHash(fqn string) (hash string) {
 	return
 }
 
-func addLocalBucket(lom *cluster.LOM) {
+func addLocalBucket(bmd *cluster.BMD, lom *cluster.LOM) {
 	bmd.LBmap = make(map[string]*cmn.BucketProps)
 	bmd.Version++
 	p := cmn.DefaultBucketProps(true)

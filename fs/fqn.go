@@ -36,9 +36,8 @@ type ParsedFQN struct {
 func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	var rel string
 
-	parsed.MpathInfo, rel = mfs.FQN2MpathInfo(fqn)
-	if parsed.MpathInfo == nil {
-		err = fmt.Errorf("fqn %s is invalid", fqn)
+	parsed.MpathInfo, rel, err = mfs.FQN2MpathInfo(fqn)
+	if err != nil {
 		return
 	}
 	items := strings.SplitN(rel, sep, 4)
@@ -58,13 +57,14 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	return
 }
 
-func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePath string) {
+func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePath string, err error) {
 	var (
 		available = (*MPI)(mfs.available.Load())
 		max       = 0
 		ll        = len(fqn)
 	)
 	if available == nil {
+		err = fmt.Errorf("failed to get mountpaths, fqn: %s", fqn)
 		return
 	}
 	availablePaths := *available
@@ -75,6 +75,10 @@ func (mfs *MountedFS) FQN2MpathInfo(fqn string) (info *MountpathInfo, relativePa
 			relativePath = fqn[l+1:]
 			max = l
 		}
+	}
+	if info == nil {
+		err = fmt.Errorf("no mountpath match FQN: %s", fqn)
+		return
 	}
 	return
 }

@@ -143,7 +143,12 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 			haveCps = true
 			md.copies = make(fs.MPI, len(cpyfqns))
 			for _, cpyfqn := range cpyfqns {
-				md.copies[cpyfqn], _ = fs.Mountpaths.FQN2MpathInfo(cpyfqn)
+				mpathInfo, _, err := fs.Mountpaths.FQN2MpathInfo(cpyfqn)
+				if err != nil {
+					glog.Warning(err)
+					continue
+				}
+				md.copies[cpyfqn] = mpathInfo
 			}
 		default:
 			return errors.New(invalid + "#6")

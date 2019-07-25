@@ -14,41 +14,62 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const xattrmapth = "/tmp/lomxattrtest_mpath/1"
-
 var _ = Describe("LOM Xattributes", func() {
+	const (
+		tmpDir     = "/tmp/lom_xattr_test"
+		xattrMpath = tmpDir + "/xattr"
+		copyMpath  = tmpDir + "/copy"
 
-	_ = cmn.CreateDir(xattrmapth)
+		bucketLocal = "LOM_TEST_Local"
+	)
 
-	_ = fs.Mountpaths.Add(xattrmapth)
-	fs.Mountpaths.DisableFsIDCheck()
 	_ = fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{})
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
-	tMock := cluster.NewTargetMock(cluster.NewBaseBownerMock(bucketLocalB))
+	var (
+		tMock         = cluster.NewTargetMock(cluster.NewBaseBownerMock(bucketLocal))
+		copyMpathInfo *fs.MountpathInfo
+	)
 
 	BeforeEach(func() {
-		_ = os.RemoveAll(xattrmapth)
-		_ = cmn.CreateDir(xattrmapth)
-	})
-	AfterEach(func() {
-		_ = os.RemoveAll(xattrmapth)
+		_ = cmn.CreateDir(xattrMpath)
+		_ = cmn.CreateDir(copyMpath)
 
+		fs.Mountpaths.DisableFsIDCheck()
+		_ = fs.Mountpaths.Add(xattrMpath)
+		_ = fs.Mountpaths.Add(copyMpath)
+
+		available, _ := fs.Mountpaths.Get()
+		copyMpathInfo = available[copyMpath]
+	})
+
+	AfterEach(func() {
+		_ = fs.Mountpaths.Remove(xattrMpath)
+		_ = fs.Mountpaths.Remove(copyMpath)
+		_ = os.RemoveAll(tmpDir)
 	})
 
 	Describe("xattrs", func() {
-		testFileSize := 456
-		testObjectName := "xattr-foldr/test-obj.ext"
-		//Bucket needs to have checksum enabled
-		localFQN := filepath.Join(xattrmapth, fs.ObjectType, cmn.LocalBs, bucketLocalB, testObjectName)
+		var (
+			testFileSize   = 456
+			testObjectName = "xattr-foldr/test-obj.ext"
+
+			// Bucket needs to have checksum enabled
+			localFQN = filepath.Join(xattrMpath, fs.ObjectType, cmn.LocalBs, bucketLocal, testObjectName)
+
+			fqns = []string{
+				copyMpath + "/copy/fqn",
+				copyMpath + "/other/copy/fqn",
+			}
+		)
 
 		Describe("Persist", func() {
 			It("should save correct meta to disk", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
-				lom.SetVersion("dummyversion")
-				lom.SetCopies("some/copy/fqn", nil)
-				lom.AddCopy("some/other/copy/fqn", nil)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version")
+				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[1], copyMpathInfo)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, cmn.XattrLOM)
@@ -61,21 +82,22 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(lom.GetCopies()).To(HaveLen(2))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 
 			It("should override old values", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum1"))
-				lom.SetVersion("dummyversion1")
-				lom.SetCopies("some/copy/fqn/1", nil)
-				lom.AddCopy("some/other/copy/fqn/1", nil)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version1")
+				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[1], copyMpathInfo)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum2"))
-				lom.SetVersion("dummyversion2")
-				lom.SetCopies("some/copy/fqn/2", nil)
-				lom.AddCopy("some/other/copy/fqn/2", nil)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version2")
+				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
@@ -89,6 +111,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(lom.GetCopies()).To(HaveLen(2))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 		})
@@ -98,10 +121,10 @@ var _ = Describe("LOM Xattributes", func() {
 				createTestFile(localFQN, testFileSize)
 				lom1 := NewBasicLom(localFQN, tMock)
 				lom2 := NewBasicLom(localFQN, tMock)
-				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
-				lom1.SetVersion("dummyversion")
-				lom1.SetCopies("some/copy/fqn", nil)
-				lom1.AddCopy("some/other/copy/fqn", nil)
+				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom1.SetVersion("dummy_version")
+				lom1.SetCopies(fqns[0], copyMpathInfo)
+				lom1.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom1.Persist()).NotTo(HaveOccurred())
 				err := lom2.LoadMetaFromFS()
@@ -109,16 +132,17 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom1.Cksum()).To(BeEquivalentTo(lom2.Cksum()))
 				Expect(lom1.Version()).To(BeEquivalentTo(lom2.Version()))
+				Expect(lom1.GetCopies()).To(HaveLen(2))
 				Expect(lom1.GetCopies()).To(BeEquivalentTo(lom2.GetCopies()))
 			})
 
 			It("should fail when checksum does not match", func() {
 				createTestFile(localFQN, testFileSize)
 				lom := NewBasicLom(localFQN, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
-				lom.SetVersion("dummyversion")
-				lom.SetCopies("some/copy/fqn/", nil)
-				lom.AddCopy("some/other/copy/fqn", nil)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version")
+				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
@@ -136,10 +160,10 @@ var _ = Describe("LOM Xattributes", func() {
 				// not with nil pointer exception / panic
 				createTestFile(localFQN, testFileSize)
 				lom := NewBasicLom(localFQN, tMock)
-				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "testchecksum"))
-				lom.SetVersion("dummyversion")
-				lom.SetCopies("some/copy/fqn/", nil)
-				lom.AddCopy("some/other/copy/fqn", nil)
+				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
+				lom.SetVersion("dummy_version")
+				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
