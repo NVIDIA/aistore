@@ -22,21 +22,56 @@ func TestLsblk(t *testing.T) {
 	rawJSON := jsoniter.RawMessage(
 		`{
 			"blockdevices": [
-			{"name": "sda", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B",
+			{"name": "sda", "alignment": "0", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline",
 			"children": [
-			{"name": "sda1", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"},
-			{"name": "sda2", "alignment": "0", "min-io": "262144", "opt-io": "262144", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"}
+			{"name": "sda1", "alignment": "0", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline"},
+			{"name": "sda2", "alignment": "0", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline"}
 			]
 		},
-		{"name": "sdb", "alignment": "0", "min-io": "262144", "opt-io": "1048576", "phy-sec": "512", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"}]
+		{"name": "sdb", "alignment": "0", "min-io": "262144", "opt-io": "1048576", "phy-sec": "1024", "log-sec": "512", "rota": "1", "sched": "deadline", "rq-size": "4096", "ra": "1024", "wsame": "0B"}]
 	}`)
 	out, _ := jsoniter.Marshal(&rawJSON)
 	jsoniter.Unmarshal(out, &lsblk)
 	if len(lsblk.BlockDevices) != 2 {
 		t.Fatalf("expected 2 block devices, got %d", len(lsblk.BlockDevices))
 	}
-	if lsblk.BlockDevices[1].PhySec != "512" {
-		t.Fatalf("expected 512 sector, got %s", lsblk.BlockDevices[1].PhySec)
+	if sec, _ := lsblk.BlockDevices[0].PhySec.Int64(); sec != 512 {
+		t.Fatalf("expected 512 sector, got %d", sec)
+	}
+	if sec, _ := lsblk.BlockDevices[1].PhySec.Int64(); sec != 1024 {
+		t.Fatalf("expected 1024 sector, got %d", sec)
+	}
+	if lsblk.BlockDevices[0].BlockDevices[1].Name != "sda2" {
+		t.Fatalf("expected sda2 device, got %s", lsblk.BlockDevices[0].BlockDevices[1].Name)
+	}
+	if len(lsblk.BlockDevices[0].BlockDevices) != 2 {
+		t.Fatalf("expected 2 block children devices, got %d", len(lsblk.BlockDevices[0].BlockDevices))
+	}
+}
+
+// This test is similar to previous one but does not use strings to encode
+// integers for fields like "phy-sec" or "log-sec". Such format should be
+// parsed too.
+func TestLsblkInt(t *testing.T) {
+	var lsblk ios.LsBlk
+	rawJSON := jsoniter.RawMessage(
+		`{
+			"blockdevices": [
+			{"name": "sda", "alignment": 0, "phy-sec": 512, "log-sec": 512, "rota": 1, "sched": "deadline",
+			"children": [
+			{"name": "sda1", "alignment": 0, "phy-sec": 512, "log-sec": 512, "rota": 1, "sched": "deadline"},
+			{"name": "sda2", "alignment": 0, "phy-sec": 512, "log-sec": 512, "rota": 1, "sched": "deadline"}
+			]
+		},
+		{"name": "sdb", "alignment": "0", "min-io": 262144, "opt-io": 1048576, "phy-sec": 1024, "log-sec": 512, "rota": 1, "sched": "deadline", "rq-size": 4096, "ra": 1024, "wsame": "0B"}]
+	}`)
+	out, _ := jsoniter.Marshal(&rawJSON)
+	jsoniter.Unmarshal(out, &lsblk)
+	if len(lsblk.BlockDevices) != 2 {
+		t.Fatalf("expected 2 block devices, got %d", len(lsblk.BlockDevices))
+	}
+	if sec, _ := lsblk.BlockDevices[1].PhySec.Int64(); sec != 1024 {
+		t.Fatalf("expected 1024 sector, got %d", sec)
 	}
 	if lsblk.BlockDevices[0].BlockDevices[1].Name != "sda2" {
 		t.Fatalf("expected sda2 device, got %s", lsblk.BlockDevices[0].BlockDevices[1].Name)

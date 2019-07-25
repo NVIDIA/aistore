@@ -457,11 +457,11 @@ CreateAllShards:
 		if m.Metrics.extended {
 			metrics.Lock()
 			metrics.Limits.Goroutines = m.createAdjuster.gorountinesSema.Size()
-			var avg int64
+			var avg int
 			for _, v := range m.createAdjuster.adjusters {
 				avg += v.funcCallsSema.Size()
 			}
-			avg /= int64(len(m.createAdjuster.adjusters))
+			avg /= len(m.createAdjuster.adjusters)
 			metrics.Limits.Func = avg
 			metrics.Unlock()
 		}

@@ -45,6 +45,11 @@ const (
 	PutRedirLatency = "put.redir.µs"
 	DownloadLatency = "dl.µs"
 
+	DSortCreationReqCount    = "dsort.creation.req.n"
+	DSortCreationReqLatency  = "dsort.creation.req.µs"
+	DSortCreationRespCount   = "dsort.creation.resp.n"
+	DSortCreationRespLatency = "dsort.creation.resp.µs"
+
 	// KindThroughput
 	GetThroughput = "get.bps" // bytes per second
 )

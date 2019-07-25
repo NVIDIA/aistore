@@ -258,7 +258,7 @@ func (t *targetrunner) Run() error {
 		}()
 	}
 
-	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t)
+	dsort.RegisterNode(t.smapowner, t.bmdowner, t.si, t, t.statsif)
 	if err := t.httprunner.run(); err != nil {
 		return err
 	}
@@ -307,6 +307,11 @@ func (t *targetrunner) registerStats() {
 	// download
 	t.statsif.Register(stats.DownloadSize, stats.KindCounter)
 	t.statsif.Register(stats.DownloadLatency, stats.KindLatency)
+	// dsort
+	t.statsif.Register(stats.DSortCreationReqCount, stats.KindCounter)
+	t.statsif.Register(stats.DSortCreationReqLatency, stats.KindLatency)
+	t.statsif.Register(stats.DSortCreationRespCount, stats.KindCounter)
+	t.statsif.Register(stats.DSortCreationRespLatency, stats.KindLatency)
 }
 
 // stop gracefully

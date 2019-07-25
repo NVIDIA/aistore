@@ -1723,6 +1723,8 @@ components:
               type: integer
             disk_util_high_wm:
               type: integer
+            disk_util_max_wm:
+                type: integer
         rebalance:
           type: object
           properties:

@@ -82,8 +82,8 @@ func newDetailedStats() *DetailedStats {
 }
 
 type ConcurrencyLimits struct {
-	Func       int64 `json:"func"`
-	Goroutines int64 `json:"goroutine"`
+	Func       int `json:"func"`
+	Goroutines int `json:"goroutine"`
 }
 
 func newConcurrencyLimits() *ConcurrencyLimits {

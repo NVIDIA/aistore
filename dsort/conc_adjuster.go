@@ -31,10 +31,11 @@ import (
 // significantly (resetRatio).
 
 const (
-	// Default value of initial concurrency limit for functions - defined
-	// per mountpath. This value is used when user provided `0` as concurrency
-	// limit.
+	// Default value of initial concurrency limit for functions - defined per mountpath.
+	// This value is used when user provided `0` as concurrency limit.
 	defaultConcFuncLimit = 10
+	// Determines maximal concurrency limit per disk.
+	maxConcFuncLimit = 120
 
 	// Batch corresponds to number of received update information per mountpath.
 	// Every time the size of the batch is reached, recalculation of limit is
@@ -45,32 +46,19 @@ const (
 	// Defines the maximal batch size - this prevents from growing batch indefinitely.
 	maxBatchSize = 200
 
-	lastInfoCnt = 20 // maximum number of latest adjust information
-
-	// oldUtil / newUtil ratio which will trigger resetting number
-	// of information required to make decision.
-	resetRatio = 1.7
-
-	// High watermark when utilization is considered 'sufficient'.
-	// Going beyond this value could potentially decrease the performance.
-	highUtilWM = 95
+	lastInfoCnt = 30 // maximum number of latest adjust information
 )
 
 type (
-	limitInfo struct {
-		limit int64
-		util  int64
-	}
-
 	mpathAdjuster struct {
 		// Determines how often much information must be processed until we
 		// adjust the concurrency limits.
 		curBatchSize float64 // float64 to not lose precision
 		// Current number updates, as it reaches the curBatchSize
 		// limit update is performed.
-		tickCnt      int
-		curLimitInfo limitInfo
-		lastUtils    []int64
+		tickCnt   int
+		limit     int
+		lastUtils []int64
 		// Semaphore for function calls. On update it is swapped with a new one.
 		funcCallsSema *cmn.DynSemaphore
 	}
@@ -80,27 +68,25 @@ type (
 
 		stopCh cmn.StopCh
 
-		defaultLimit int64 // default limit for new mpath adjusters
+		defaultLimit int // default limit for new mpath adjusters
 		adjusters    map[string]*mpathAdjuster
 
 		// Determines how many goroutines should be allowed per one function call.
-		goroutineLimitCoef int64
+		goroutineLimitCoef int
 		gorountinesSema    *cmn.DynSemaphore
 	}
 )
 
-func newMpathAdjuster(limit int64) *mpathAdjuster {
+func newMpathAdjuster(limit int) *mpathAdjuster {
 	return &mpathAdjuster{
-		curBatchSize: defaultBatchSize,
-		curLimitInfo: limitInfo{
-			limit: limit,
-		},
+		curBatchSize:  defaultBatchSize,
+		limit:         limit,
 		lastUtils:     make([]int64, 0, lastInfoCnt),
 		funcCallsSema: cmn.NewDynSemaphore(limit),
 	}
 }
 
-func newConcAdjuster(limit, goroutineLimitCoef int64) *concAdjuster {
+func newConcAdjuster(limit, goroutineLimitCoef int) *concAdjuster {
 	if limit == 0 {
 		limit = defaultConcFuncLimit
 	}
@@ -118,7 +104,7 @@ func newConcAdjuster(limit, goroutineLimitCoef int64) *concAdjuster {
 		adjusters:    adjusters,
 
 		goroutineLimitCoef: goroutineLimitCoef,
-		gorountinesSema:    cmn.NewDynSemaphore(goroutineLimitCoef * int64(len(availablePaths)) * limit),
+		gorountinesSema:    cmn.NewDynSemaphore(goroutineLimitCoef * len(availablePaths) * limit),
 	}
 }
 
@@ -133,6 +119,7 @@ func (ca *concAdjuster) run() {
 		select {
 		case <-ticker.C:
 			utils := fs.Mountpaths.GetAllMpathUtils(time.Now())
+			config := cmn.GCO.Get()
 			ca.mu.RLock()
 			for mpath, adjuster := range ca.adjusters {
 				util, ok := utils[mpath]
@@ -149,27 +136,17 @@ func (ca *concAdjuster) run() {
 				if float64(adjuster.tickCnt) >= adjuster.curBatchSize {
 					var (
 						totalUtil int64
-						prevLimit = adjuster.curLimitInfo.limit
 					)
-
 					for _, util := range adjuster.lastUtils {
 						totalUtil += util
 					}
 					newUtil := totalUtil / int64(len(adjuster.lastUtils))
-					reset := adjuster.curLimitInfo.recalc(newUtil)
 
-					if adjuster.curLimitInfo.limit != prevLimit {
-						adjuster.funcCallsSema.SetSize(adjuster.curLimitInfo.limit)
-
-						diff := ca.goroutineLimitCoef * (adjuster.curLimitInfo.limit - prevLimit)
+					prevLimit, newLimit := adjuster.recalc(newUtil, config)
+					if prevLimit != newLimit {
+						adjuster.funcCallsSema.SetSize(newLimit)
+						diff := ca.goroutineLimitCoef * (newLimit - prevLimit)
 						ca.gorountinesSema.SetSize(ca.gorountinesSema.Size() + diff)
-					}
-
-					if reset {
-						adjuster.curBatchSize = defaultBatchSize
-					} else {
-						adjuster.curBatchSize = batchIncRatio * adjuster.curBatchSize
-						adjuster.curBatchSize = cmn.MinF64(adjuster.curBatchSize, maxBatchSize)
 					}
 
 					adjuster.tickCnt = 0
@@ -216,21 +193,27 @@ func (ca *concAdjuster) releaseGoroutineSema() {
 	ca.gorountinesSema.Release()
 }
 
-func (li *limitInfo) recalc(newUtil int64) (reset bool) {
-	prevUtil := li.util
-	li.util = newUtil
-
-	// If new utilization is significantly lower than previous one, request reset.
-	if float64(prevUtil)/float64(newUtil) > resetRatio {
-		reset = true
-		return
+func (adjuster *mpathAdjuster) recalc(newUtil int64, config *cmn.Config) (prevLimit, newLimit int) {
+	prevLimit = adjuster.limit
+	switch {
+	case newUtil < config.Disk.DiskUtilLowWM:
+		adjuster.limit *= 2
+		adjuster.curBatchSize *= batchIncRatio
+	case newUtil <= config.Disk.DiskUtilHighWM:
+		adjuster.limit += 2
+		adjuster.curBatchSize *= batchIncRatio
+	case newUtil > config.Disk.DiskUtilMaxWM:
+		adjuster.limit -= 2
+	default:
+		adjuster.limit++
+		adjuster.curBatchSize *= 2 * batchIncRatio
 	}
 
-	if newUtil > highUtilWM {
-		li.limit--
-		li.limit = cmn.MaxI64(li.limit, 1)
-	} else {
-		li.limit++
+	adjuster.curBatchSize = cmn.MinF64(adjuster.curBatchSize, maxBatchSize)
+	if adjuster.limit < 1 {
+		adjuster.limit = 1
+	} else if adjuster.limit > maxConcFuncLimit {
+		adjuster.limit = maxConcFuncLimit
 	}
-	return
+	return prevLimit, adjuster.limit
 }

@@ -21,6 +21,7 @@
 "disk": {
         "disk_util_low_wm":     {{ .disk.disk_util_low_wm }},
         "disk_util_high_wm":    {{ .disk.disk_util_high_wm }},
+        "disk_util_max_wm":     {{ .disk.disk_util_max_wm }},
         "iostat_time_long":     {{ .disk.iostat_time_long | quote }},
         "iostat_time_short":    {{ .disk.iostat_time_short | quote }}
 },

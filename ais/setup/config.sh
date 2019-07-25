@@ -55,7 +55,8 @@ cat > $CONFFILE <<EOL
 	    "iostat_time_long":  "${IOSTAT_TIME_LONG:-2s}",
 	    "iostat_time_short": "${IOSTAT_TIME_SHORT:-100ms}",
 	    "disk_util_low_wm":  20,
-	    "disk_util_high_wm": 80
+	    "disk_util_high_wm": 80,
+	    "disk_util_max_wm":  95
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",

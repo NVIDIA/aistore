@@ -118,7 +118,7 @@ func TestTimeoutGroupStopAndTimeout(t *testing.T) {
 }
 
 func TestDynSemaphore(t *testing.T) {
-	limit := int64(10)
+	limit := 10
 
 	sema := cmn.NewDynSemaphore(limit)
 
@@ -126,7 +126,7 @@ func TestDynSemaphore(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	ch := make(chan int32, 10*limit)
 
-	for j := 0; j < int(10*limit); j++ {
+	for j := 0; j < 10*limit; j++ {
 		sema.Acquire()
 		wg.Add(1)
 		go func() {
@@ -146,7 +146,7 @@ func TestDynSemaphore(t *testing.T) {
 		res = cmn.MaxI32(res, c)
 	}
 
-	if int64(res) != limit {
+	if int(res) != limit {
 		t.Fatalf("acutall limit %d was different than expected %d", res, limit)
 	}
 }

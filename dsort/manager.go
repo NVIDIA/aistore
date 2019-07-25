@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	jsoniter "github.com/json-iterator/go"
@@ -71,6 +72,7 @@ type dsortContext struct {
 	bmdowner cluster.Bowner
 	node     *cluster.Snode
 	t        cluster.Target
+	stats    stats.Tracker
 }
 
 // progressState abstracts all information meta information about progress of
@@ -148,11 +150,12 @@ type Manager struct {
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
 
-func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, t cluster.Target) {
+func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, t cluster.Target, stats stats.Tracker) {
 	ctx.smap = smap
 	ctx.bmdowner = bmdowner
 	ctx.node = snode
 	ctx.t = t
+	ctx.stats = stats
 }
 
 // init initializes all necessary fields.
@@ -169,7 +172,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	m.ctx.smap.Listeners().Reg(m)
 
-	targetCount := int64(m.smap.CountTargets())
+	targetCount := m.smap.CountTargets()
 
 	m.rs = rs
 	m.Metrics = newMetrics(rs.Description, rs.ExtendedMetrics)
@@ -259,7 +262,7 @@ func (m *Manager) initStreams() error {
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
 	reqSbArgs := transport.SBArgs{
-		Multiplier: streamMultiplier,
+		Multiplier: 10,
 		Network:    reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -983,9 +986,15 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 					cbErr = err
 				}
 				if m.Metrics.extended {
+					delta := time.Since(beforeSend)
 					metrics.Lock()
-					metrics.RequestStats.updateTime(time.Since(beforeSend))
+					metrics.RequestStats.updateTime(delta)
 					metrics.Unlock()
+
+					m.ctx.stats.AddMany(
+						stats.NamedVal64{Name: stats.DSortCreationReqCount, Val: 1},
+						stats.NamedVal64{Name: stats.DSortCreationReqLatency, Val: int64(delta)},
+					)
 				}
 				wg.Done()
 			}
@@ -1020,9 +1029,15 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}
 
 			if m.Metrics.extended {
+				delta := time.Since(beforeRecv)
 				metrics.Lock()
-				metrics.ResponseStats.updateTime(time.Since(beforeRecv))
+				metrics.ResponseStats.updateTime(delta)
 				metrics.Unlock()
+
+				m.ctx.stats.AddMany(
+					stats.NamedVal64{Name: stats.DSortCreationRespCount, Val: 1},
+					stats.NamedVal64{Name: stats.DSortCreationRespLatency, Val: int64(delta)},
+				)
 			}
 
 			// If we timed out or were stopped but we didn't manage to pull the
@@ -1047,6 +1062,10 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 			}
 
 			return writer.n, writer.err
+		}
+
+		if m.aborted() {
+			return 0, newAbortError(m.ManagerUUID)
 		}
 
 		if rec.DaemonID != m.ctx.node.DaemonID { // File source contents are located on a different target.

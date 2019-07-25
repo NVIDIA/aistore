@@ -129,7 +129,7 @@ func MinDur(a, b time.Duration) time.Duration {
 	return b
 }
 
-func AbsI64(a int64) int64 {
+func Abs(a int) int {
 	if a < 0 {
 		return -a
 	}

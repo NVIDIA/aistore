@@ -385,6 +385,7 @@ type LRUConf struct {
 type DiskConf struct {
 	DiskUtilLowWM   int64         `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
 	DiskUtilHighWM  int64         `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
+	DiskUtilMaxWM   int64         `json:"disk_util_max_wm"`  // Max beyond which workload must be throttled
 	IostatTimeLong  time.Duration `json:"-"`
 	IostatTimeShort time.Duration `json:"-"`
 
@@ -699,9 +700,9 @@ func validKeepaliveType(t string) bool {
 }
 
 func (c *DiskConf) Validate(_ *Config) (err error) {
-	lwm, hwm := c.DiskUtilLowWM, c.DiskUtilHighWM
-	if lwm <= 0 || hwm <= lwm || hwm > 100 {
-		return fmt.Errorf("invalid disk (disk_util_lwm, disk_util_hwm) configuration %+v", c)
+	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
+	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
+		return fmt.Errorf("invalid disk (disk_util_lwm, disk_util_hwm, disk_util_maxwm) configuration %+v", c)
 	}
 
 	if c.IostatTimeLong, err = time.ParseDuration(c.IostatTimeLongStr); err != nil {
@@ -1180,6 +1181,8 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.Disk, updateValue(&conf.Disk.DiskUtilLowWM)
 	case "disk_util_high_wm", "disk.disk_util_high_wm":
 		return &conf.Disk, updateValue(&conf.Disk.DiskUtilHighWM)
+	case "disk_util_max_wm", "disk.disk_util_max_wm":
+		return &conf.Disk, updateValue(&conf.Disk.DiskUtilMaxWM)
 	case "iostat_time_long", "disk.iostat_time_long":
 		return &conf.Disk, updateValue(&conf.Disk.IostatTimeLongStr)
 	case "iostat_time_short", "disk.iostat_time_short":
@@ -1277,6 +1280,7 @@ var ConfigPropList = map[string]bool{
 	"periodic.stats_time":                    false,
 	"disk.disk_util_low_wm":                  false,
 	"disk.disk_util_high_wm":                 false,
+	"disk.disk_util_max_wm":                  false,
 	"disk.iostat_time_long":                  false,
 	"disk.iostat_time_short":                 false,
 	"rebalance.dest_retry_time":              false,

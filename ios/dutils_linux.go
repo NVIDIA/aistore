@@ -8,7 +8,6 @@ package ios
 import (
 	"flag"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -23,18 +22,9 @@ type fsDisks map[string]int64 // disk name => sector size
 
 // `lsblk -Jt` structure
 type BlockDevice struct {
-	Name         string         `json:"name"`
-	Alligment    string         `json:"alignment"`
-	MinIO        string         `json:"min-io"`
-	OptIO        string         `json:"opt-io"`
-	PhySec       string         `json:"phy-sec"`
-	LogSec       string         `json:"log-sec"`
-	Rota         string         `json:"rota"`
-	Sched        string         `json:"sched"`
-	RqSize       string         `json:"rq-size"`
-	RA           string         `json:"ra"`
-	Wsame        string         `json:"wsame"`
-	BlockDevices []*BlockDevice `json:"children"`
+	Name         string          `json:"name"`
+	PhySec       jsoniter.Number `json:"phy-sec"`
+	BlockDevices []*BlockDevice  `json:"children"`
 }
 
 // fs2disks is used when a mountpath is added to
@@ -81,20 +71,21 @@ func childMatches(devList []*BlockDevice, device string) bool {
 }
 
 func findDevDisks(devList []*BlockDevice, device string, disks fsDisks) {
-	add := func(bd *BlockDevice) {
+	addDisk := func(bd *BlockDevice) {
 		var err error
-		if disks[bd.Name], err = strconv.ParseInt(bd.PhySec, 10, 0); err != nil {
+		if disks[bd.Name], err = bd.PhySec.Int64(); err != nil {
 			glog.Errorf("%s[%v]: %v", bd.Name, bd, err)
 			disks[bd.Name] = 512
 		}
 	}
+
 	for _, bd := range devList {
 		if bd.Name == device {
-			add(bd)
+			addDisk(bd)
 			continue
 		}
 		if len(bd.BlockDevices) > 0 && childMatches(bd.BlockDevices, device) {
-			add(bd)
+			addDisk(bd)
 		}
 	}
 }

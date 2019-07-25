@@ -38,8 +38,8 @@ type (
 
 	// DynSemaphore implements sempahore which can change its size during usage.
 	DynSemaphore struct {
-		size int64
-		cur  int64
+		size int
+		cur  int
 		c    *sync.Cond
 		mu   sync.Mutex
 	}
@@ -118,7 +118,7 @@ func (sc *StopCh) Close() {
 	})
 }
 
-func NewDynSemaphore(n int64) *DynSemaphore {
+func NewDynSemaphore(n int) *DynSemaphore {
 	sema := &DynSemaphore{
 		size: n,
 	}
@@ -126,14 +126,14 @@ func NewDynSemaphore(n int64) *DynSemaphore {
 	return sema
 }
 
-func (s *DynSemaphore) Size() int64 {
+func (s *DynSemaphore) Size() int {
 	s.mu.Lock()
 	size := s.size
 	s.mu.Unlock()
 	return size
 }
 
-func (s *DynSemaphore) SetSize(n int64) {
+func (s *DynSemaphore) SetSize(n int) {
 	Assert(n >= 1)
 	s.mu.Lock()
 	s.size = n

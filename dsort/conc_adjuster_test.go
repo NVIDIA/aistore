@@ -17,7 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func calcSemaLimit(acquire func(), release func()) int64 {
+func calcSemaLimit(acquire func(), release func()) int {
 	var i atomic.Int32
 	wg := &sync.WaitGroup{}
 	ch := make(chan int32, 200)
@@ -42,7 +42,7 @@ func calcSemaLimit(acquire func(), release func()) int64 {
 		res = cmn.MaxI32(res, c)
 	}
 
-	return int64(res)
+	return int(res)
 }
 
 var _ = Describe("newConcAdjuster", func() {
@@ -57,6 +57,9 @@ var _ = Describe("newConcAdjuster", func() {
 
 		config := cmn.GCO.BeginUpdate()
 		config.Disk.IostatTimeShort = 10 * time.Millisecond
+		config.Disk.DiskUtilLowWM = 70
+		config.Disk.DiskUtilHighWM = 80
+		config.Disk.DiskUtilMaxWM = 95
 		cmn.GCO.CommitUpdate(config)
 	})
 
@@ -68,19 +71,21 @@ var _ = Describe("newConcAdjuster", func() {
 	It("should not have more goroutines than specified", func() {
 		var (
 			adjuster      = newConcAdjuster(10, 3)
-			expectedLimit = int64(30) // 10 * 3 * num_paths (num_paths = 1)
+			expectedLimit = 30 // 10 * 3 * num_paths (num_paths = 1)
 		)
 
 		limit := calcSemaLimit(adjuster.acquireGoroutineSema, adjuster.releaseGoroutineSema)
 		Expect(limit).To(Equal(expectedLimit))
 	})
 
-	It("should converge to perfect limit by increasing limit", func() {
-		var (
-			perfectLimit int64 = 20
-			perfectUtil  int64 = highUtilWM
+	It("should converge to perfect limit", func() {
+		cfg := cmn.GCO.Get()
 
-			defaultLimit int64 = 10
+		var (
+			perfectLimit = 42
+			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
+
+			defaultLimit = 10
 		)
 		availablePaths, _ := fs.Mountpaths.Get()
 		mpathInfo := availablePaths[testingConfigDir]
@@ -98,48 +103,14 @@ var _ = Describe("newConcAdjuster", func() {
 			})
 
 			// If we get enough close we can just break
-			if cmn.AbsI64(curLimit-perfectLimit) < 2 {
+			if cmn.Abs(curLimit-perfectLimit) <= 2 {
 				break
 			}
 
 			curUtil := perfectUtil * curLimit / perfectLimit
-			mios.Utils[testingConfigDir] = curUtil
+			mios.Utils[testingConfigDir] = int64(curUtil)
 
-			time.Sleep(10 * time.Millisecond) // make sure that `adjuster.inform` processed all information
-		}
-	})
-
-	It("should not go beyond high util watermark", func() {
-		var (
-			perfectLimit int64 = 20
-			perfectUtil  int64 = 100
-
-			defaultLimit int64 = 10
-		)
-		availablePaths, _ := fs.Mountpaths.Get()
-		mpathInfo := availablePaths[testingConfigDir]
-
-		adjuster := newConcAdjuster(defaultLimit, defaultLimit)
-
-		adjuster.start()
-		defer adjuster.stop()
-
-		for {
-			curLimit := calcSemaLimit(func() {
-				adjuster.acquireSema(mpathInfo)
-			}, func() {
-				adjuster.releaseSema(mpathInfo)
-			})
-
-			Expect(curLimit).To(BeNumerically("<", highUtilWM))
-
-			curUtil := perfectUtil * curLimit / perfectLimit
-			if curUtil == perfectUtil {
-				break
-			}
-
-			mios.Utils[testingConfigDir] = curUtil
-			time.Sleep(10 * time.Millisecond) // make sure that `adjuster.inform` processed all information
+			time.Sleep(time.Millisecond) // make sure that concurrency adjuster processed all information
 		}
 	})
 })
