@@ -1,5 +1,3 @@
-# Docker
-
 ## Introduction
 
 AIStore can be run as a cluster of Docker containers. There are two modes of operation: development and quick-start. They can be found in the [`deploy/dev/docker`](/deploy/dev/docker) directory.
@@ -23,13 +21,13 @@ For an introduction to Docker, please watch [Docker 101 youtube](https://www.you
 
 1. Uninstall any old versions of docker:
     ```shell
-    $ sudo apt-get remove docker docker-engine docker.io    
+    $ sudo apt-get remove docker docker-engine docker.io
     ```
 It’s OK if apt-get reports that none of these packages are installed.
 
 2. Update the apt package index:
     ```shell
-    $ sudo apt-get update    
+    $ sudo apt-get update
     ```
 
 3. Install packages to allow apt to use a repository over HTTPS:
@@ -38,7 +36,7 @@ It’s OK if apt-get reports that none of these packages are installed.
         apt-transport-https \
         ca-certificates \
         curl \
-        software-properties-common    
+        software-properties-common
     ```
 4. Install Docker
     ``` shell
@@ -49,10 +47,10 @@ It’s OK if apt-get reports that none of these packages are installed.
     ```shell
     $ sudo docker run hello-world
     ```
-6.  Add your current user to the Docker group (but only if you are not the root). After executing the command, restart your machine for it to take effect.    
-    ``` shell   
-    $ sudo usermod -aG docker $(whoami)       
-    ```    
+6.  Add your current user to the Docker group (but only if you are not the root). After executing the command, restart your machine for it to take effect.
+    ``` shell
+    $ sudo usermod -aG docker $(whoami)
+    ```
 7. Install Docker-Compose using python `pip`. Install `pip` if you don't have it:
     ```shell
     $ sudo apt-get install -y python-pip
@@ -237,3 +235,28 @@ Note:
 ```shell
     $ docker rmi $(docker images -q -a)
 ```
+
+## Docker playground
+
+Following is a super-simple presentation to showcase some of the AIS capabilities.
+
+In [Docker playground](../deploy/dev/docker/playground), you can find the scripts to download different popular AI datasets (e.g., MNIST and ImageNet). The datasets are downloaded with the AIS-integrated [Downloader](../downloader/README.md) that stores all downloaded objects directly into the AIStore.
+
+During the download, you can monitor:
+
+ * number of requests made
+ * number of requests failed
+ * number of bytes transferred
+
+In the example below, AIS downloads a handful of ImageNet images and collects/visualizes the corresponding statistics:
+
+```shell
+$ cd path_to/deploy/dev/docker
+$ ./deploy_docker.sh -d=2 -p=2 -t=4 -c=1 -grafana -nocloud # start 2 proxies and 4 targets
+$ ./playground/download_imagenet.sh # download some of ImageNet images into AIS and show stats
+$ # once Downloader will save the files...
+$ ./playground/stress_get.sh imagenet # do gets on saved files (requires jq command)
+$ ./stop_docker.sh -l # stop docker
+```
+
+<img src="images/playground-grafana.png" alt="Playground Grafana dashboard" width="400">
