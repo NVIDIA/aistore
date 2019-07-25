@@ -27,9 +27,9 @@ function check_go_version {
     gobin=$(which go)
     [[ -n "$gobin" ]] || whinge "go not found"
 
-    gover=$(go version)
-    echo "Using $gobin $gover" >&2
-    [[ $gover =~ go1.12 ]] || whinge "Go version 1.12.* is required"
+    ver=$(go version | awk '{print $3}')
+    echo "Using $gobin (go version $ver)" >&2
+    [[ $ver = go1.12.7 ]] || [[ $ver =~ go1.13 ]] || whinge "Go version 1.12.7 or 1.13.* is required"
 }
 
 DEST=$(readlink -f $1)     # need an absolute path for subshell below
@@ -85,7 +85,7 @@ echo "Cloud provider set to: ${CLDPROVIDER}"
 
 (
     cd $GOPATH/src/$AIS_SRC &&
-    GODEBUG=madvdontneed=1 go build \
+    go build \
       -o $DEST \
       -tags="${CLDPROVIDER}" \
       -ldflags "$LDEXTRAFLAGS -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" \
