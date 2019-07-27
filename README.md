@@ -3,23 +3,26 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (aka AIS) is a built from scratch, lightweight, infinitely scalable object store with Map/Reduce extensions. At its core, it's an open-source storage stack tailored for AI. In particular, AIS:
-
-* scales-out with each added drive and each added storage server - linearly, with no downtime and no limitation;
-* supports n-way mirroring (RAID-1), m/k erasure coding, end-to-end data protection;
-* runs on any commodity hardware (no limitations, no special requirements!);
-* implements a proper subset of S3 REST API;
-* leverages Linux 4.15+ storage stack;
-* maintains open format (and freedom to move your data off of AIS at any time);
-* natively supports Amazon and Google Cloud backends;
-* focuses on AI and, specifically:
-* on performance of large-scale (petascale) Distributed Deep Learning: training, inference, and simulation.
-
-At its version 2.x, AIS consistently shows balanced I/O distribution across arbitrary numbers of clustered servers and hard drives (consistently) producing performance charts that look as follows (the picture below *comprises* 120 HDDs):
+AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. At its version 2.x, AIS consistently shows balanced I/O distribution across arbitrary numbers of clustered servers and hard drives (consistently) producing performance charts that look as follows:
 
 <img src="docs/images/ais-disk-throughput-flat.png" alt="I/O distribution" width="600">
 
-> The capability to linearly scale-out for millions of stored objects (often also referred to as *shards*) was, and remains, one of the main incentives to build AIStore. But not the only one: for design philosophy, key concepts, system components, and detailed overview please see [in-depth introduction](docs/overview.md).
+> The picture above *comprises* 120 HDDs.
+
+> The capability to linearly scale-out for millions of stored objects (often also referred to as *shards*) was, and remains, one of the main incentives to build AIStore. But not the only one.
+
+Further, AIS:
+
+* scales-out with no downtime and no limitation;
+* supports n-way mirroring (RAID-1), m/k erasure coding, end-to-end data protection;
+* includes Map/Reduce extension to speed-up shuffle/resize for large datasets;
+* runs on commodity hardware with no limitations and no special requirements;
+* provides a proper subset of S3-like REST API;
+* leverages Linux 4.15+ storage stack;
+* natively supports Amazon S3 and Google Cloud backends;
+* focuses on AI and, specifically, on the performance of large-scale deep learning.
+
+Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `scp` and such. For a detailed introduction that includes design philosophy, key concepts, and system components, please see [AIS overview](docs/overview.md).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
