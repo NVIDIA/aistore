@@ -42,7 +42,10 @@ func (t *targetrunner) initHostIP() {
 	if portStr := os.Getenv("AIS_TARGET_HOSTPORT"); portStr != "" {
 		portNum, err := strconv.Atoi(portStr)
 		cmn.AssertNoErr(err)
-		extPort = portNum
+		cmn.Assert(portNum >= 0)
+		if portNum > 0 {
+			extPort = portNum
+		}
 	}
 	t.si.ExtURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
 	glog.Infof("AIS_HOSTIP: %s[%s]", hostIP, t.si.ExtURL)
