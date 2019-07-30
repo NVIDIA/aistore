@@ -425,7 +425,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, seed int64, baseParams *api.
 		szTotal += sz
 	}
 	if szLen != 0 {
-		t.Logf("Average size on bucket %s: %s\n", bckName, cmn.B2S(szTotal/int64(szLen), 1))
+		t.Logf("Average size of the bucket %s: %s\n", bckName, cmn.B2S(szTotal/int64(szLen), 1))
 	}
 }
 
@@ -1501,7 +1501,6 @@ func TestECDestroyBucket(t *testing.T) {
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(numFiles)
 	errCnt := atomic.NewInt64(0)
 	sucCnt := atomic.NewInt64(0)
 
@@ -1509,6 +1508,7 @@ func TestECDestroyBucket(t *testing.T) {
 		objName := fmt.Sprintf(objPatt, i)
 
 		semaphore <- struct{}{}
+		wg.Add(1)
 		go func(i int) {
 			defer func() {
 				<-semaphore
@@ -1528,9 +1528,11 @@ func TestECDestroyBucket(t *testing.T) {
 		if i == 4*numFiles/5 {
 			// DestroyLocalBucket when put requests are still executing
 			semaphore <- struct{}{}
+			wg.Add(1)
 			go func() {
 				defer func() {
 					<-semaphore
+					wg.Done()
 				}()
 
 				tutils.Logf("Destroying bucket %s\n", bucket)
