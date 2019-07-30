@@ -42,9 +42,11 @@ spec:
           image: "{{ .Values.image.aisnode.repository }}:{{ .Values.image.aisnode.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
+            # required for hostport to operate, or implement a full pod security policy
+            privileged: true
             capabilities:
               add:
-                {{ range .Values.common_config.container_capabilities }}
+                {{ range .Values.ais_k8s.container_capabilities }}
                 - {{ . }}
                 {{ end }}
           env:
@@ -57,10 +59,16 @@ spec:
             # dummy value for target
             - name : TARGETS
               value : "0"
+            - name: AIS_PODIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: AIS_HOSTIP
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: AIS_TARGET_HOSTPORT
+              value: {{ .Values.target.service.hostport | quote }}
             - name: AIS_NODISKIO
               value: {{ .Values.target.config.nodiskio.enabled | quote }}
             - name: AIS_DRYOBJSIZE
@@ -68,12 +76,15 @@ spec:
             - name: PRIMARY_PROXY_SERVICE_HOSTNAME
               value: {{ template "ais.fullname" . }}-initial-primary-proxy
           ports:
-            - name: http
+            - name: aistarget
               containerPort: {{ .Values.target.service.port }}
+              {{ if and .Values.ais_k8s.cluster_cidr .Values.target.service.hostport }}
+              hostPort: {{ .Values.target.service.hostport }}
+              {{ end }}
               protocol: TCP
           volumeMounts:
             - name: etc-mount
-              mountPath: "{{ .Values.common_config.dir }}"
+              mountPath: "{{ .Values.ais_config_common.confdir }}"
             - name: env-mount
               mountPath: "{{ .Values.target.envMountPath.podPath }}"
             - name: config-mount
@@ -105,7 +116,7 @@ spec:
       securityContext:
         sysctls:
         - name: net.core.somaxconn
-          value: {{ .Values.common_config.sysctls.somaxconn | quote }}
+          value: {{ .Values.ais_k8s.sysctls.somaxconn | quote }}
         - name: net.ipv4.ip_local_port_range
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa

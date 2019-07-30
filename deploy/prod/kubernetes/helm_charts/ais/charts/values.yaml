@@ -1,7 +1,6 @@
 # Default values for ais (proxy and target).
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-
 image:
   aisnode:
     repository: quay.io/nvidia/aisnode
@@ -10,38 +9,121 @@ image:
     repository: quay.io/nvidia/ais-kubectl
     tag: stable
   pullPolicy: IfNotPresent
-  pullSecretNames:  # 
+  pullSecretNames:
     - ais-pull-secret
 
-common_config:
-  dir: /etc/ais
-  cloudprovider: aws
-  cloud_buckets: cloud
-  local_buckets: local
-  clusterIP_gw_label: shared
-  rebalance:
-    multiplier: 4
-  mirror:
-    util_tresh: 0
-    enabled: false
-  log:
-    dir: /var/log/ais
-    level : 3
-  disk:
-    iostat_time_long: "2s"
-    iostat_time_short: "100ms"
+#
+# "Common" ais.json config values - actually not genuinely common and applicable to
+# all of electable/nonelectable/target, but since those templates have duplicated
+# sections we may as well avoid also duplicating values.
+#
+# Don't add anything here that does not contribute to ais.json; and only add
+# parametrized elements to _ais_common.json - no literal values there.
+#
+ais_config_common:
   auth:
     secret        : aBitLongSecretKey
     enabled       : false
     creddir       : ""
+  cksum:
+    type: xxhash
+    validate_cold_get: true
+    validate_warm_get: false
+    validate_obj_move: false
+    enable_read_range: false
+  cloudprovider: ""
+  compression:
+    block_size: 262144
+    checksum: false
+  confdir: /etc/ais
+  disk:
+    disk_util_low_wm: 20
+    disk_util_high_wm: 80
+    iostat_time_long: 2s
+    iostat_time_short: 100ms
+  distributed_sort:
+    compression: never
+    duplicated_records: ignore
+    missing_shards: abort
+    ekm_malformed_line: abort
+    ekm_missing_key: abort
+    default_max_mem_usage: 80%
+    call_timeout: 10m
+  downloader:
+    timeout: 1h
+  ec:
+    compression: never
+    objsize_limit: 262144
+    data_slices: 2
+    parity_slices: 2
+    compression: never
+    enabled: false
+  fshc:
+    enabled: true
+    test_files: 4
+    error_limit: 2
+  keepalivetracker:
+    proxy:
+      interval: 10s
+      name: heartbeat
+      factor: 3
+    target:
+      interval: 10s
+      name: heartbeat
+      factor: 3
+    retry_factor: 5
+    timeout_factor: 3
+  log:
+    dir: /var/log/ais
+    level : 3
+    max_size: 4194304
+    max_total: 67108864
+  lru:
+    lowwm: 75
+    highwm: 90
+    out_of_space: 95
+    dont_evict_time: 120m
+    capacity_upd_time: 10m
+    local_buckets: false
+    enabled: true
+  mirror:
+    copies: 2
+    burst_buffer: 512
+    util_thresh: 0
+    optimize_put: false
+    enabled: false
+  periodic:
+    stats_time: 10s
+    retry_sync_time: 2s
+  rebalance:
+    compression: never
+    dest_retry_time: 2m
+    enabled: true
+    multiplier: 4
+  timeout:
+    default_timeout: 10s
+    default_long_timeout: 30m
+    list_timeout: 10m
+    max_keepalive: 4s
+    proxy_ping: 100ms
+    cplane_operation: 2s
+    send_file_time: 5m
+    startup_time: 1m
+  versioning:
+    enabled: true
+    validate_warm_get: false
+
+ais_k8s:
+  cluster_cidr: ""
+  clusterIP_gw_label: shared
   container_capabilities:
     # Needed for debug if you wish to run delve within a pod (or look into kubesquash etc)
     #- SYS_PTRACE
   sysctls:
-    somaxconn: "1024"
+    somaxconn: 1024
 
 proxy:
-  name : "proxy"      # A component label for selector
+  name : proxy        # A component label for selector
   gw_label: "shared"  # shared means in proxy clusterIP service
   config:
     proxy:
@@ -52,16 +134,19 @@ proxy:
       instance      : 0
     net:
       ipv4          : ""
-      l4_port       : 8080
       ipv4_intra_control: ""
       ipv4_intra_data: ""
-      l4_port_intra_control: ""
-      l4_port_intra_data: ""
+      l4:
+        port       : 51080
+        port_intra_control: ""
+        port_intra_data: ""
+        sndrcv_buf_size: 131072
       http:
         use_https   : false
+        chunked_transfer: true
   service:
     type: ClusterIP
-    port: 8080
+    port: 51080
   nodeSelector:
     key: ais-proxy-type 
     value: "electable"
@@ -90,16 +175,19 @@ ne_proxy:
       instance      : 0
     net:
       ipv4          : ""
-      l4_port       : 8080
       ipv4_intra_control: ""
       ipv4_intra_data: ""
-      l4_port_intra_control: ""
-      l4_port_intra_data: ""
+      l4:
+        port       : 51080
+        port_intra_control: ""
+        port_intra_data: ""
+        sndrcv_buf_size: 131072
       http:
         use_https   : false
+        chunked_transfer: true
   service:
     type: ClusterIP
-    port: 8080      # must match that of proxy since they go behind same clusterIP service
+    port: 51080      # must match that of proxy since they go behind same clusterIP service
   nodeSelector:
     key: ais-proxy-type 
     value: "nonelectable"
@@ -125,16 +213,19 @@ target:
       dryobjsize: "8M"
     net:
       ipv4          : ""
-      l4_port       : 8081
       ipv4_intra_control: ""
       ipv4_intra_data: ""
-      l4_port_intra_control: ""
-      l4_port_intra_data: ""
+      l4:
+        port       : 51081
+        port_intra_control: ""
+        port_intra_data: ""
+        sndrcv_buf_size: 0
       http:
         use_https   : false
         chunked_transfer: true
   service:
-    port: 8081
+    port: 51081
+    hostport: 0
   nodeSelector:
     key: ais-target-node 
     value: "yes"
@@ -146,7 +237,6 @@ target:
     hostPath: /tmp/
     podPath:  /var/ais_env
   mountPaths:
-    # XXX should require these via helm install - dangerous default?
     - /ais/sda
     - /ais/sdb
     - /ais/sdc
@@ -158,7 +248,17 @@ target:
     - /ais/sdi
     - /ais/sdj
     
-ingress: {}
+ingress:
+  proxy:
+    #
+    # Planning for gateway LoadBalancer service - implemented manually for now
+    #
+    service:
+      name: ais-gw
+      type: LoadBalancer
+      port: 51080
+      targetPort: 51080
+      externalTrafficPolicy: Local
 
 #
 # Note that out target/proxy/ne_proxy DaemonSets use any resource values from their

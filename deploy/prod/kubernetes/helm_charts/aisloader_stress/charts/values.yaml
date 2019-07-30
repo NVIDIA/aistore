@@ -48,7 +48,7 @@ aisloaderArg:
     # no default - see above
     specific: []
   port:
-    default: "8080"
+    default: "51080"
     specific: []
   minsize:
     default: "8M"

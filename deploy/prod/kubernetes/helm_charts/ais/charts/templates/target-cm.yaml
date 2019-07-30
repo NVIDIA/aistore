@@ -4,6 +4,16 @@ metadata:
   name: {{ template "ais.name" . }}-target
 data:
   ais.json: |-
-{{ include "target.config" .   | indent 4 }}
+    {
+{{- include "common.config" . | indent 6 }},
+{{ with .Values.target.config -}}
+{{ include "common_net.config" . | indent 6 }},
+{{- end }} "proxy": {
+              "non_electable": {{ .Values.target.config.proxy.non_electable }},
+              "primary_url":   "http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4.port }}",
+              "original_url":  "http://{{ template "ais.fullname" . }}-initial-primary-proxy:{{ .Values.proxy.config.net.l4.port }}",
+              "discovery_url": "{{ .Values.target.config.proxy.discovery_url }}"
+      }
+    }
   set_uuid_env.sh: |-
 {{ include "common.set_uuid_env" . | indent 4 }}

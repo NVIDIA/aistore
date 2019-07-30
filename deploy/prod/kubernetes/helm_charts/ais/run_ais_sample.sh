@@ -8,6 +8,10 @@
 DRY=""
 # DRY="--debug --dry-run"
 
+	# --set target.resources.limits.cpu=20 \
+	# --set ais_k8s.cluster_cidr="192.168.0.0/18" \
+	# --set target.service.hostport=51081 \
+
 helm install \
 	--name=demo \
 	--set image.aisnode.repository=quay.io/nvidia/aisnode \

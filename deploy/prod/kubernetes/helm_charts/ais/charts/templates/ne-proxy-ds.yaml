@@ -48,7 +48,7 @@ spec:
           securityContext:
             capabilities:
               add:
-                {{ range .Values.common_config.container_capabilities }}
+                {{ range .Values.ais_k8s.container_capabilities }}
                 - {{ . }}
                 {{ end }}
           env:
@@ -76,7 +76,7 @@ spec:
             - name: env-mount
               mountPath: "{{ .Values.ne_proxy.envMountPath.podPath }}"
             - name: etc-mount
-              mountPath: "{{ .Values.common_config.dir }}"
+              mountPath: "{{ .Values.ais_config_common.confdir }}"
             - name: statsd-config
               mountPath: "/var/statsd_config"
           livenessProbe:
@@ -100,7 +100,7 @@ spec:
       securityContext:
         sysctls:
         - name: net.core.somaxconn
-          value: {{ .Values.common_config.sysctls.somaxconn | quote }}
+          value: {{ .Values.ais_k8s.sysctls.somaxconn | quote }}
         - name: net.ipv4.ip_local_port_range
           value: "10240 65535"
       serviceAccount: {{ template "ais.name" . }}-sa
