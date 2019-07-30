@@ -358,10 +358,13 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI(daemonType string) {
-	var s string
-	config := cmn.GCO.Get()
-	allowLoopback, _ := cmn.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
-	addrList, err := getLocalIPv4List(allowLoopback)
+	var (
+		s                string
+		config           = cmn.GCO.Get()
+		port             = config.Net.L4.Port
+		allowLoopback, _ = cmn.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
+		addrList, err    = getLocalIPv4List(allowLoopback)
+	)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)
 	}
@@ -416,7 +419,7 @@ func (h *httprunner) initSI(daemonType string) {
 
 	publicAddr := &net.TCPAddr{
 		IP:   ipAddr,
-		Port: config.Net.L4.Port,
+		Port: port,
 	}
 	intraControlAddr := &net.TCPAddr{
 		IP:   ipAddrIntraControl,

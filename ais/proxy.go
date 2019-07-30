@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -74,6 +75,15 @@ type proxyrunner struct {
 		p     *httputil.ReverseProxy            // requests that modify cluster-level metadata => current primary gateway
 		u     string                            // URL of the current primary
 		tmap  map[string]*httputil.ReverseProxy // map of reverse proxies keyed by target DaemonIDs
+	}
+}
+
+func (p *proxyrunner) initClusterCIDR() {
+	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
+		_, network, err := net.ParseCIDR(nodeCIDR)
+		p.si.LocalNet = network
+		cmn.AssertNoErr(err)
+		glog.Infof("local network: %+v", *network)
 	}
 }
 
@@ -322,7 +332,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	pReq, err := http.NewRequest(r.Method, redirectURL, r.Body)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -383,7 +393,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 		}
-		redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 	}
 	p.statsif.Add(stats.GetCount, 1)
@@ -416,7 +426,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		bmd := p.bmdowner.get()
 		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objName, si)
 	}
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.PutCount, 1)
@@ -534,7 +544,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 	}
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.DeleteCount, 1)
@@ -937,7 +947,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si)
 	}
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
@@ -1285,7 +1295,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	if checkCached {
 		redirectURL += fmt.Sprintf("&%s=true", cmn.URLParamCheckCached)
 	}
@@ -1489,12 +1499,30 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 	}
 }
 
-func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time) (redirect string) {
+func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, netName string) (redirect string) {
 	var (
-		query = url.Values{}
-		bmd   = p.bmdowner.get()
+		nodeURL string
+		query   = url.Values{}
+		bmd     = p.bmdowner.get()
 	)
-	redirect = to + r.URL.Path + "?"
+	if p.si.LocalNet == nil {
+		nodeURL = si.URL(cmn.NetworkPublic)
+	} else {
+		var local bool
+		remote := r.RemoteAddr
+		if colon := strings.Index(remote, ":"); colon != -1 {
+			remote = remote[:colon]
+		}
+		if ip := net.ParseIP(remote); ip != nil {
+			local = p.si.LocalNet.Contains(ip)
+		}
+		if local {
+			nodeURL = si.URL(netName)
+		} else {
+			nodeURL = si.ExtURL
+		}
+	}
+	redirect = nodeURL + r.URL.Path + "?"
 	if r.URL.RawQuery != "" {
 		redirect += r.URL.RawQuery + "&"
 	}
@@ -1897,7 +1925,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.RenameCount, 1)

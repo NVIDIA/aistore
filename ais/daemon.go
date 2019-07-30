@@ -223,6 +223,7 @@ func aisinit(version, build string) {
 	if clivars.role == cmn.Proxy {
 		p := &proxyrunner{}
 		p.initSI(cmn.Proxy)
+		p.initClusterCIDR()
 		nodeCtx.rg.add(p, cmn.Proxy)
 
 		ps := &stats.Prunner{}
@@ -234,6 +235,7 @@ func aisinit(version, build string) {
 	} else {
 		t := &targetrunner{}
 		t.initSI(cmn.Target)
+		t.initHostIP()
 		nodeCtx.rg.add(t, cmn.Target)
 
 		ts := &stats.Trunner{T: t} // iostat below

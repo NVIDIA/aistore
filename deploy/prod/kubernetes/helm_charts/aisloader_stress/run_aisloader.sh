@@ -103,7 +103,7 @@ echo "Performing helm install"
 helm install \
 	--name loader \
 	--set ais_release=demo \
-	--set image.tag=23 \
+	--set image.tag=27 \
 	--set image.pullSecret=gmaltby-pull-secret \
 	--set aisloaderArg.bucket.default=$BUCKETSPEC \
 	--set aisloaderArg.pctput.default=$PCTPUT \

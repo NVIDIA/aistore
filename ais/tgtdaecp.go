@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,6 +27,26 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
+
+func (t *targetrunner) initHostIP() {
+	var hostIP string
+	if hostIP = os.Getenv("AIS_HOSTIP"); hostIP == "" {
+		return
+	}
+	var (
+		config  = cmn.GCO.Get()
+		port    = config.Net.L4.Port
+		extAddr = net.ParseIP(hostIP)
+		extPort = port
+	)
+	if portStr := os.Getenv("AIS_TARGET_HOSTPORT"); portStr != "" {
+		portNum, err := strconv.Atoi(portStr)
+		cmn.AssertNoErr(err)
+		extPort = portNum
+	}
+	t.si.ExtURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+	glog.Infof("AIS_HOSTIP: %s[%s]", hostIP, t.si.ExtURL)
+}
 
 // target registration with proxy
 func (t *targetrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
