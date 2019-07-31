@@ -4,8 +4,8 @@
 FROM ubuntu:bionic
 ARG start_script
 RUN apt-get update && apt-get install -y wget sysstat python-pip curl nodejs git iputils-ping netcat make coreutils
+RUN apt-get install -y net-tools iproute2 tcptrack
 RUN mkdir -p /usr/local/bin
-RUN pip install awscli
 RUN cd /opt && git clone git://github.com/etsy/statsd.git
 COPY $start_script /ais_docker_start.sh
 RUN chmod a+x /ais_docker_start.sh

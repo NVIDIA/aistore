@@ -8,6 +8,28 @@
 # etc.
 #
 
+PROG=$0
+rc=0
+
+#
+# Uses our Ansible inventory convention of {cpu,gpu}-worker-node to
+# identify GPU worker nodes.
+#
+cpunode=true
+gpunode=false
+{% if 'gpu-worker-node' in group_names %}
+cpunode=false
+gpunode=true
+{% endif %}
+
+#
+# Complain and arrange to exit indicating failure, but don't exit now
+#
+function bleat {
+    echo "$PROG ERROR: $@" >&2
+    rc=1
+}
+
 #
 # first arg is path relative to /sys/block/sd*, eg 'queue/scheduler'
 # second arg is the value to write to all paths /sys/block/sd*
@@ -25,7 +47,7 @@ function update_blk_sd_value {
 
     for p in /sys/block/sd*/$what
     do
-        echo "$val" > $p
+        echo "$val" > $p || bleat "failed to set $p to value $val"
     done
 
     echo "sd*/$what values after:"
@@ -43,7 +65,8 @@ function do_blk_sd {
 # Apply ethtool tweaks. These used to go in /etc/network/interfaces, no longer consulted
 # under netplan but sadly netplan syntax doesn't seem to support command hooks. This could
 # go in a networkd-dispatcher hook directory, but they're messy to restart on changes to
-# the script - so a good old rc script it it.
+# the script - so a good old rc script it is. ethtool returns 0 for success, 80 for
+# "no changes required" and other values for errors (eg 81 for illegal value).
 #
 function do_ethtool {
     for link in $(ip -brief link ls | awk '{print $1}')
@@ -57,6 +80,7 @@ function do_ethtool {
             {% for item in ethtool.mlx5_core.ring %}
             echo "Setting ring params to {{ item }} for $link" >&2
             ethtool -G $link {{ item }}
+            [ $? -eq 0 -o $? -eq 80 ] || bleat "failed: ethtool -G $link {{ item }}"
             {% endfor %}
             {% endif %}
 
@@ -65,6 +89,7 @@ function do_ethtool {
             # vars have something to say - go with that
             {% for item in ethtool.mlx5_core.channel %}
             ethtool -L $link {{ item }}
+            [ $? -eq 0 -o $? -eq 80 ] || bleat "failed: ethtool -L $link {{ item }}"
             {% endfor %}
 
             {% else %}
@@ -76,8 +101,9 @@ function do_ethtool {
                 channels=$(( $skts * $coresperskt ))
                 echo "$skts sockets and $coresperskt cores/socket, setting channels to $channels for $link" >&2
                 ethtool -L $link combined $channels
+                [ $? -eq 0 -o $? -eq 80 ] || bleat "failed: ethtool -L $link combined $channels"
             else
-                echo "Failed to calculate number of physical cores in system" >&2
+                bleat "Failed to calculate number of physical cores in system"
             fi
             {% endif %}
             ;;
@@ -87,7 +113,7 @@ function do_ethtool {
     done
 }
 
-do_blk_sd
+$cpunode && do_blk_sd
 do_ethtool
 
-exit 0
+exit $rc

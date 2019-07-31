@@ -187,9 +187,12 @@ mlx5_driver:
 # Block device tweaks suitable for xfs on scsi HDD
 # See e.g. https://www.beegfs.io/wiki/StorageServerTuning
 # and https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-storage_and_file_systems-configuration_tools
+#
+# Note: the maximum for nr_requests is 4096 for single-queue deadline, 2048 for mq-deadline
+#
 blkdevtune:
   queue/scheduler: mq-deadline
-  queue/nr_requests: 4096
+  queue/nr_requests: 2048
   queue/read_ahead_kb: 4096
   queue/rq_affinity: 2
   queue/max_sectors_kb: 16383
