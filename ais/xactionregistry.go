@@ -608,8 +608,31 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg, cached bool) *xactBckListTask {
+func (r *xactionsRegistry) removeFinishedByID(id int64) error {
+	item, ok := r.byID.Load(id)
+	if !ok {
+		return nil
+	}
+
+	xact := item.(xactionEntry)
+	if !xact.Get().Finished() {
+		return fmt.Errorf("xaction %s(%d, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
+	}
+
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Found finished xaction %d with id %d. Deleting", xact.Get(), id)
+	}
+	r.byID.Delete(id)
+	r.byIDSize.Dec()
+	return nil
+}
+
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
 	id := msg.TaskID
+	if err := r.removeFinishedByID(id); err != nil {
+		return nil, err
+	}
+
 	e := &bckListTaskEntry{
 		id:      id,
 		t:       t,
@@ -619,17 +642,14 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 		ctx:     ctx,
 		cached:  cached,
 	}
-	// TODO: duplicated ID - what to do? Just replace old one?
-	_, ok := r.byID.Load(e.id)
-	cmn.Assert(!ok)
 
 	if err := e.Start(id); err != nil {
-		return nil
+		return nil, err
 	}
 
 	r.taskXacts.Store(e.Kind(), e)
 	r.storeByID(e.Get().ID(), e)
-	return e.xact
+	return e.xact, nil
 }
 
 func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {

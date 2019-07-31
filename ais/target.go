@@ -885,13 +885,14 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
-		ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt)
-		if ok {
-			delta := time.Since(started)
-			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
-			}
+		if ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt); !ok {
+			return
+		}
+
+		delta := time.Since(started)
+		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
 		}
 	case cmn.ActMakeNCopies:
 		copies, err := t.parseValidateNCopies(msgInt.Value)

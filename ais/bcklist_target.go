@@ -51,8 +51,9 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 	ctx := t.contextWithAuth(r.Header)
 	// create task call
 	if taskAction == cmn.ListTaskStart {
-		xact := t.xactions.renewBckListXact(ctx, t, bucket, bckIsLocal, msg, useCache)
-		if xact == nil {
+		_, err := t.xactions.renewBckListXact(ctx, t, bucket, bckIsLocal, msg, useCache)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 			return false
 		}
 
@@ -125,7 +126,5 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 		return t.writeJSON(w, r, body, "listbucket")
 	}
 
-	// default action: return task status 200 = successfully completed
-	w.WriteHeader(http.StatusOK)
 	return true
 }
