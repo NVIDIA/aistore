@@ -91,10 +91,6 @@ type (
 			records []*Records // records received from other targets which are waiting to be merged
 		}
 	}
-
-	ShardManager struct {
-		Shards []*Shard
-	}
 )
 
 func init() {
@@ -195,7 +191,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 				dst = args.w
 			}
 
-			if _, err := io.CopyBuffer(dst, args.r, args.buf); err != nil {
+			if _, err := io.CopyBuffer(dst, r, args.buf); err != nil {
 				return 0, errors.WithStack(err)
 			}
 		}
@@ -410,16 +406,6 @@ func (rm *RecordManager) Cleanup() {
 		return true
 	})
 	rm.contents = nil
-}
-
-func NewShardManager() *ShardManager {
-	return &ShardManager{
-		Shards: make([]*Shard, 0, 1000),
-	}
-}
-
-func (sm *ShardManager) Cleanup() {
-	sm.Shards = nil
 }
 
 func copyMetadataAndData(dst io.Writer, src io.Reader, metadata []byte, buf []byte) (int64, error) {

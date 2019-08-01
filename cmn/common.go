@@ -132,7 +132,7 @@ func init() {
 	shortid.SetDefault(sid)
 	rtie.Store(1013)
 
-	bucketReg = regexp.MustCompile(`^[\.a-zA-Z0-9_-]*$`)
+	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)
 }
 
 func GenTie() string {

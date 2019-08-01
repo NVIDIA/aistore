@@ -493,7 +493,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		decoder := js.NewDecoder(r.Body)
-		if err := decoder.Decode(&dsortManager.shardManager.Shards); err != nil {
+		if err := decoder.Decode(&dsortManager.creationPhase.metadata); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}

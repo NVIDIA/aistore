@@ -28,14 +28,14 @@ type singleMemoryWatcher struct {
 }
 
 // memoryWatcher is responsible for monitoring memory changes and decide
-// wether specific action should happen or not. It may also decide to return
+// whether specific action should happen or not. It may also decide to return
 type memoryWatcher struct {
 	m *Manager
 
 	excess, reserved  *singleMemoryWatcher
 	maxMemoryToUse    uint64
 	reservedMemory    atomic.Uint64
-	memoryUsed        atomic.Uint64 // memory used in specifc point in time, it is refreshed once in a while
+	memoryUsed        atomic.Uint64 // memory used in specific point in time, it is refreshed once in a while
 	unreserveMemoryCh chan uint64
 }
 
@@ -56,15 +56,6 @@ func newMemoryWatcher(m *Manager, maxMemoryUsage uint64) *memoryWatcher {
 		maxMemoryToUse:    maxMemoryUsage,
 		unreserveMemoryCh: make(chan uint64, unreserveMemoryBufferSize),
 	}
-}
-
-func (mw *memoryWatcher) freeMemory() uint64 {
-	curMem, err := sys.Mem()
-	if err != nil {
-		return 0
-	}
-
-	return mw.maxMemoryToUse - curMem.ActualUsed
 }
 
 func (mw *memoryWatcher) watch() error {
@@ -213,4 +204,43 @@ func (mw *memoryWatcher) stop() {
 	mw.stopWatchingExcess()
 	mw.stopWatchingReserved()
 	close(mw.unreserveMemoryCh)
+}
+
+type inmemShardAllocator struct {
+	mtx  *sync.Mutex
+	cond *sync.Cond
+
+	maxAllocated uint64
+	allocated    uint64
+}
+
+func newInmemShardAllocator(maxAllocated uint64) *inmemShardAllocator {
+	x := &inmemShardAllocator{
+		mtx:          &sync.Mutex{},
+		maxAllocated: maxAllocated,
+	}
+	x.cond = sync.NewCond(x.mtx)
+	return x
+}
+
+func (sa *inmemShardAllocator) alloc(size uint64) {
+	sa.mtx.Lock()
+
+	for sa.freeMem() < size {
+		sa.cond.Wait()
+	}
+
+	sa.allocated += size
+	sa.mtx.Unlock()
+}
+
+func (sa *inmemShardAllocator) free(size uint64) {
+	sa.mtx.Lock()
+	sa.allocated -= size
+	sa.cond.Signal()
+	sa.mtx.Unlock()
+}
+
+func (sa *inmemShardAllocator) freeMem() uint64 {
+	return sa.maxAllocated - sa.allocated
 }

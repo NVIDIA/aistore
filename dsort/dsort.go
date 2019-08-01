@@ -37,6 +37,29 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type (
+	dsorter interface {
+		init() error
+		start() error
+		postExtraction()
+		postRecordDistribution()
+		createShardsLocally() (err error)
+		preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error
+		postShardCreation(mpathInfo *fs.MountpathInfo)
+		cleanup()
+		finalCleanup() error
+
+		loadContent() extract.LoadContentFunc
+
+		makeRecvRequestFunc() transport.Receive
+
+		preShardExtraction(expectedUncompressedSize uint64) (toDisk bool)
+		postShardExtraction(expectedUncompressedSize uint64)
+
+		onAbort()
+	}
+)
+
 var js = jsoniter.ConfigFastest
 
 func (m *Manager) start() (err error) {
@@ -57,8 +80,7 @@ func (m *Manager) start() (err error) {
 
 	glog.Infof("starting %s %s", cmn.DSortName, m.ManagerUUID)
 
-	// start watching memory
-	if err := m.mw.watch(); err != nil {
+	if err := m.dsorter.start(); err != nil {
 		return err
 	}
 
@@ -101,7 +123,7 @@ func (m *Manager) start() (err error) {
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
-	if err := m.createShardsLocally(); err != nil {
+	if err := m.dsorter.createShardsLocally(); err != nil {
 		return err
 	}
 
@@ -114,9 +136,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		var (
 			warnPossibleOOM          bool
 			estimateTotalRecordsSize uint64
+			phaseInfo                = &m.extractionPhase
 		)
 
-		defer m.extractAdjuster.releaseGoroutineSema()
+		defer phaseInfo.adjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
 		si, err := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
@@ -129,7 +152,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		lom, err := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket}.Init(m.rs.BckProvider)
 		if err == nil {
-			err = lom.Load() // Load(false)?
+			err = lom.Load(false)
 		}
 		if err != nil {
 			return err
@@ -138,20 +161,20 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return m.react(cfg.MissingShards, msg)
 		}
 
-		m.extractAdjuster.acquireSema(lom.ParsedFQN.MpathInfo)
+		phaseInfo.adjuster.acquireSema(lom.ParsedFQN.MpathInfo)
 		if m.aborted() {
-			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			return newAbortError(m.ManagerUUID)
 		}
 		if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
-			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			return errors.New("out of space")
 		}
 
 		cluster.ObjectLocker.Lock(lom.Uname(), false)
 		f, err := os.Open(lom.FQN)
 		if err != nil {
-			m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			cluster.ObjectLocker.Unlock(lom.Uname(), false)
 			return errors.Errorf("unable to open local file, err: %v", err)
 		}
@@ -161,7 +184,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		}
 
 		expectedUncompressedSize := uint64(float64(lom.Size()) / m.avgCompressionRatio())
-		toDisk := m.mw.reserveMem(expectedUncompressedSize)
+		toDisk := m.dsorter.preShardExtraction(expectedUncompressedSize)
 
 		beforeExtraction := time.Now()
 		reader := io.NewSectionReader(f, 0, lom.Size())
@@ -175,10 +198,10 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			m.addCompressionSizes(compressedSize, extractedSize)
 		}
 
-		m.extractAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+		phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 		cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
-		m.mw.unreserveMem(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
+		m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
 			f.Close()
 			return errors.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
@@ -196,7 +219,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			// don't calculate estimates only for single node.
 			recordSize := int(m.recManager.Records.RecordMemorySize())
 			estimateTotalRecordsSize = uint64(metrics.TotalCnt * extractedCount * recordSize)
-			if estimateTotalRecordsSize > m.mw.freeMemory() {
+			if estimateTotalRecordsSize > m.freeMemory() {
 				warnPossibleOOM = true
 			}
 		}
@@ -214,7 +237,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 
 		if warnPossibleOOM {
 			msg := fmt.Sprintf("(estimated) total size of records (%d) will possibly exceed available memory (%s) during sorting phase", estimateTotalRecordsSize, m.rs.MaxMemUsage)
-			m.react(cmn.WarnReaction, msg)
+			return m.react(cmn.WarnReaction, msg)
 		}
 
 		return nil
@@ -225,11 +248,12 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 // calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
 	var (
-		cfg = &cmn.GCO.Get().DSort
+		cfg       = &cmn.GCO.Get().DSort
+		phaseInfo = &m.extractionPhase
 	)
 
-	m.extractAdjuster.start()
-	defer m.extractAdjuster.stop()
+	phaseInfo.adjuster.start()
+	defer phaseInfo.adjuster.stop()
 
 	// Metrics
 	metrics := m.Metrics.Extraction
@@ -253,7 +277,7 @@ ExtractAllShards:
 		default:
 		}
 
-		m.extractAdjuster.acquireGoroutineSema()
+		phaseInfo.adjuster.acquireGoroutineSema()
 		group.Go(m.extractShard(name, metrics, cfg))
 	}
 	if err := group.Wait(); err != nil {
@@ -261,7 +285,7 @@ ExtractAllShards:
 	}
 
 	// We will no longer reserve any memory
-	m.mw.stopWatchingReserved()
+	m.dsorter.postExtraction()
 
 	metrics.Lock()
 	totalExtractedCount := metrics.ExtractedRecordCnt
@@ -272,7 +296,7 @@ ExtractAllShards:
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
 	var (
-		loadContent = m.loadContent()
+		loadContent = m.dsorter.loadContent()
 		metrics     = m.Metrics.Creation
 
 		// object related variables
@@ -296,8 +320,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	default:
 	}
 
-	m.createAdjuster.acquireSema(lom.ParsedFQN.MpathInfo)
-	defer m.createAdjuster.releaseSema(lom.ParsedFQN.MpathInfo)
+	if err := m.dsorter.preShardCreation(s.Name, lom.ParsedFQN.MpathInfo); err != nil {
+		return err
+	}
+	defer m.dsorter.postShardCreation(lom.ParsedFQN.MpathInfo)
 
 	if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
 		return errors.New("out of space")
@@ -418,66 +444,6 @@ exit:
 	return nil
 }
 
-// createShardsLocally waits until it's given the signal to start creating
-// shards, then creates shards in parallel.
-func (m *Manager) createShardsLocally() (err error) {
-	// Wait for signal to start shard creations. This will happen when manager
-	// notice that specification for shards to be created locally was received.
-	select {
-	case <-m.startShardCreation:
-		break
-	case <-m.listenAborted():
-		return newAbortError(m.ManagerUUID)
-	}
-
-	m.createAdjuster.start()
-	defer m.createAdjuster.stop()
-
-	metrics := m.Metrics.Creation
-	metrics.begin()
-	defer metrics.finish()
-	metrics.Lock()
-	metrics.ToCreate = len(m.shardManager.Shards)
-	metrics.Unlock()
-
-	group, ctx := errgroup.WithContext(context.Background())
-
-CreateAllShards:
-	for _, s := range m.shardManager.Shards {
-		select {
-		case <-m.listenAborted():
-			group.Wait()
-			return newAbortError(m.ManagerUUID)
-		case <-ctx.Done():
-			break CreateAllShards // context was canceled, therefore we have an error
-		default:
-		}
-
-		m.createAdjuster.acquireGoroutineSema()
-		if m.Metrics.extended {
-			metrics.Lock()
-			metrics.Limits.Goroutines = m.createAdjuster.gorountinesSema.Size()
-			var avg int
-			for _, v := range m.createAdjuster.adjusters {
-				avg += v.funcCallsSema.Size()
-			}
-			avg /= len(m.createAdjuster.adjusters)
-			metrics.Limits.Func = avg
-			metrics.Unlock()
-		}
-
-		group.Go(func(s *extract.Shard) func() error {
-			return func() error {
-				err := m.createShard(s)
-				m.createAdjuster.releaseGoroutineSema()
-				return err
-			}
-		}(s))
-	}
-
-	return group.Wait()
-}
-
 // participateInRecordDistribution coordinates the distributed merging and
 // sorting of each target's SortedRecords based on the order defined by
 // targetOrder. It returns a bool, currentTargetIsFinal, which is true iff the
@@ -525,11 +491,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 
 		if i%2 == 0 {
-			// In shard creation we should not expect memory increase (at least
-			// not from dSort). Also it would be really hard to have concurrent
-			// sends and memory cleanup. We must stop before sending records
-			// because it affects content of the records.
-			m.mw.stopWatchingExcess()
+			m.dsorter.postRecordDistribution()
 
 			beforeSend := time.Now()
 			body, e := js.Marshal(m.recManager.Records)
@@ -598,7 +560,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 	}
 
 	err = sortRecords(m.recManager.Records, m.rs.Algorithm)
-	m.mw.stopWatchingExcess()
+	m.dsorter.postRecordDistribution()
 	return true, err
 }
 
@@ -757,11 +719,14 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 		wg             = &sync.WaitGroup{}
 		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountTargets())
-		errCh          = make(chan error, m.smap.CountTargets())
+		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountTargets())
+
+		errCh = make(chan error, m.smap.CountTargets())
 	)
 
 	for _, d := range m.smap.Tmap {
 		shardsToTarget[d] = nil
+		sendOrder[d.DaemonID] = make(map[string]*extract.Shard, 100)
 	}
 
 	if m.rs.OrderFileURL != "" {
@@ -796,15 +761,36 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		si, err := cluster.HrwTarget(m.rs.OutputBucket, s.Name, m.smap)
 		cmn.AssertNoErr(err)
 		shardsToTarget[si] = append(shardsToTarget[si], s)
+
+		singleSendOrder := make(map[string]*extract.Shard)
+		for _, record := range s.Records.All() {
+			shard, ok := singleSendOrder[record.DaemonID]
+			if !ok {
+				shard = &extract.Shard{
+					Name:    s.Name,
+					Records: extract.NewRecords(100),
+				}
+				singleSendOrder[record.DaemonID] = shard
+			}
+			shard.Records.Insert(record)
+		}
+
+		for daemonID, shard := range singleSendOrder {
+			sendOrder[daemonID][shard.Name] = shard
+		}
 	}
 
 	m.recManager.Records.Drain()
 
 	for si, s := range shardsToTarget {
 		wg.Add(1)
-		go func(si *cluster.Snode, s []*extract.Shard) {
+		go func(si *cluster.Snode, s []*extract.Shard, order map[string]*extract.Shard) {
 			defer wg.Done()
-			body, err := js.Marshal(s)
+
+			body, err := js.Marshal(creationPhaseMetadata{
+				Shards:    s,
+				SendOrder: order,
+			})
 			if err != nil {
 				errCh <- err
 				return
@@ -823,7 +809,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 				errCh <- err
 				return
 			}
-		}(si, s)
+		}(si, s, sendOrder[si.DaemonID])
 	}
 
 	wg.Wait()

@@ -113,6 +113,10 @@ func (r *Record) TotalSize() int64 {
 	return size
 }
 
+func (r *Record) MakeUniqueName(obj *RecordObj) string {
+	return r.Name + obj.Extension
+}
+
 // NewRecords creates new instance of Records struct and allocates n places for
 // the actual Record's
 func NewRecords(n int) *Records {

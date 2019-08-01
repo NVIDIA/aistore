@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 	"unsafe"
@@ -25,13 +24,10 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 )
 
 const (
-	pkgName = "dsort"
-
 	// Stream names
 	recvReqStreamNameFmt  = cmn.DSortNameLowercase + "-%s-recv_req"
 	recvRespStreamNameFmt = cmn.DSortNameLowercase + "-%s-recv_resp"
@@ -67,88 +63,109 @@ var (
 	_ cluster.Slistener = &Manager{}
 )
 
-type dsortContext struct {
-	smap     cluster.Sowner
-	bmdowner cluster.Bowner
-	node     *cluster.Snode
-	t        cluster.Target
-	stats    stats.Tracker
-}
-
-// progressState abstracts all information meta information about progress of
-// the job.
-type progressState struct {
-	inProgress bool
-	aborted    bool
-	cleaned    uint8      // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
-	cleanWait  *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
-	wg         *sync.WaitGroup
-	// doneCh is closed when the job is aborted so that goroutines know when
-	// they need to stop.
-	doneCh chan struct{}
-}
-
-type streamWriter struct {
-	w   io.Writer
-	n   int64
-	err error
-	wg  *cmn.TimeoutGroup
-}
-
-type remoteRequest struct {
-	DaemonID  string             `json:"d"`
-	Record    *extract.Record    `json:"r"`
-	RecordObj *extract.RecordObj `json:"o"`
-}
-
-// Manager maintains all the state required for a single run of a distributed archive file shuffle.
-type Manager struct {
-	// Fields with json tags are the only fields which are persisted
-	// into the disk once the dSort is finished.
-	ManagerUUID string   `json:"manager_uuid"`
-	Metrics     *Metrics `json:"metrics"`
-
-	mu   sync.Mutex
-	ctx  dsortContext
-	smap *cluster.Smap
-
-	recManager         *extract.RecordManager
-	shardManager       *extract.ShardManager
-	extractCreator     extract.ExtractCreator
-	startShardCreation chan struct{}
-	rs                 *ParsedRequestSpec
-
-	client        *http.Client // Client for sending records metadata
-	fileExtension string
-	compression   struct {
-		compressed   atomic.Int64 // Total compressed size
-		uncompressed atomic.Int64 // Total uncompressed size
+type (
+	dsortContext struct {
+		smap     cluster.Sowner
+		bmdowner cluster.Bowner
+		node     *cluster.Snode
+		t        cluster.Target
+		stats    stats.Tracker
 	}
-	received struct {
-		count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
-		ch    chan int32
-	}
-	refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup
-	state           progressState
-	extractAdjuster *concAdjuster
-	createAdjuster  *concAdjuster
-	streams         struct {
-		request  *transport.StreamBundle
-		response *transport.StreamBundle
-		shards   *transport.StreamBundle // streams for pushing streams to other targets if the fqn is non-local
-	}
-	streamWriters struct {
-		mu      sync.Mutex
-		writers map[string]*streamWriter
-	}
-	finishedAck struct {
-		mu sync.Mutex
-		m  map[string]struct{} // finished acks: daemonID -> ack
-	}
-	mw *memoryWatcher
 
-	callTimeout time.Duration // Maximal time we will wait for other node to respond
-}
+	creationPhaseMetadata struct {
+		Shards    []*extract.Shard          `json:"shards"`
+		SendOrder map[string]*extract.Shard `json:"send_order"`
+	}
+
+	buildingShardInfo struct {
+		ShardName string `json:"shard_name"`
+	}
+
+	// progressState abstracts all information meta information about progress of
+	// the job.
+	progressState struct {
+		inProgress bool
+		aborted    bool
+		cleaned    uint8      // current state of the cleanliness - no cleanup, initial cleanup, final cleanup
+		cleanWait  *sync.Cond // waiting room for `cleanup` and `finalCleanup` method so then can run in correct order
+		wg         *sync.WaitGroup
+		// doneCh is closed when the job is aborted so that goroutines know when
+		// they need to stop.
+		doneCh chan struct{}
+	}
+
+	remoteResponse struct {
+		Record    *extract.Record    `json:"r"`
+		RecordObj *extract.RecordObj `json:"o"`
+	}
+
+	rwConnection struct {
+		r   io.Reader
+		wgr *cmn.TimeoutGroup
+		// In case the reader is first to connect, the data is copied into SGL
+		// so that the reader will not block on the connection.
+		sgl *memsys.SGL
+
+		w   io.Writer
+		wgw *sync.WaitGroup
+
+		n int64
+	}
+
+	rwConnector struct {
+		mu          sync.Mutex
+		m           *Manager
+		connections map[string]*rwConnection
+	}
+
+	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
+	Manager struct {
+		// Fields with json tags are the only fields which are persisted
+		// into the disk once the dSort is finished.
+		ManagerUUID string   `json:"manager_uuid"`
+		Metrics     *Metrics `json:"metrics"`
+
+		mu   sync.Mutex
+		ctx  dsortContext
+		smap *cluster.Smap
+
+		recManager     *extract.RecordManager
+		extractCreator extract.ExtractCreator
+
+		startShardCreation chan struct{}
+		rs                 *ParsedRequestSpec
+
+		client        *http.Client // Client for sending records metadata
+		fileExtension string
+		compression   struct {
+			compressed   atomic.Int64 // Total compressed size
+			uncompressed atomic.Int64 // Total uncompressed size
+		}
+		received struct {
+			count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
+			ch    chan int32
+		}
+		refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup
+		state           progressState
+		extractionPhase struct {
+			adjuster *concAdjuster
+		}
+		streams struct {
+			shards *transport.StreamBundle // streams for pushing streams to other targets if the fqn is non-local
+		}
+		creationPhase struct {
+			metadata creationPhaseMetadata
+		}
+		finishedAck struct {
+			mu sync.Mutex
+			m  map[string]struct{} // finished acks: daemonID -> ack
+		}
+
+		dsorter dsorter
+
+		callTimeout time.Duration // Maximal time we will wait for other node to respond
+	}
+)
 
 func RegisterNode(smap cluster.Sowner, bmdowner cluster.Bowner, snode *cluster.Snode, t cluster.Target, stats stats.Tracker) {
 	ctx.smap = smap
@@ -178,8 +195,18 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.Metrics = newMetrics(rs.Description, rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
 
+	if err := m.setDSorter(); err != nil {
+		return err
+	}
+
+	if err := m.dsorter.init(); err != nil {
+		return err
+	}
+
 	// Set extract creator depending on extension provided by the user
-	m.setExtractCreator()
+	if err := m.setExtractCreator(); err != nil {
+		return err
+	}
 
 	// NOTE: Total size of the records metadata can sometimes be large
 	// and so this is why we need such a long timeout.
@@ -206,8 +233,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	//
 	// Coefficient for extraction should be larger and depends on target count
 	// because we will skip a lot shards (which do not belong to us).
-	m.extractAdjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
-	m.createAdjuster = newConcAdjuster(rs.CreateConcLimit, 2 /*goroutineLimitCoef*/)
+	m.extractionPhase.adjuster = newConcAdjuster(rs.ExtractConcLimit, 3*targetCount /*goroutineLimitCoef*/)
 
 	// Fill ack map with current daemons. Once the finished ack is received from
 	// another daemon we will remove it from the map until len(ack) == 0 (then
@@ -221,16 +247,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.setAbortedTo(false)
 	m.state.cleanWait = sync.NewCond(&m.mu)
 
-	m.streamWriters.writers = make(map[string]*streamWriter, 10000)
 	m.callTimeout = cmn.GCO.Get().DSort.CallTimeout
-
-	// Memory watcher
-	mem, err := sys.Mem()
-	if err != nil {
-		return err
-	}
-	maxMemoryToUse := calcMaxMemoryUsage(rs.MaxMemUsage, mem)
-	m.mw = newMemoryWatcher(m, maxMemoryToUse)
 
 	return nil
 }
@@ -239,63 +256,24 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 // create streams once and have them available for all the dSort jobs so they
 // would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
-	// Requests are usually small packets, no more 1KB that is why we want to
-	// utilize intraControl network
-	config := cmn.GCO.Get()
-	reqNetwork := cmn.NetworkIntraControl
-	if !config.Net.UseIntraControl {
-		reqNetwork = cmn.NetworkPublic
-	}
+	cfg := cmn.GCO.Get()
+
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetworkIntraData
-	if !config.Net.UseIntraData {
+	if !cfg.Net.UseIntraData {
 		respNetwork = cmn.NetworkPublic
 	}
 
-	client := transport.NewDefaultClient()
-
-	streamMultiplier := transport.IntraBundleMultiplier
-	if m.rs.StreamMultiplier != 0 {
-		streamMultiplier = m.rs.StreamMultiplier
-	}
-
-	trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
-	reqSbArgs := transport.SBArgs{
-		Multiplier: 10,
-		Network:    reqNetwork,
-		Trname:     trname,
-		Ntype:      cluster.Targets,
-	}
-	if _, err := transport.Register(reqNetwork, trname, m.makeRecvRequestFunc()); err != nil {
-		return errors.WithStack(err)
-	}
-
-	trname = fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
-	respSbArgs := transport.SBArgs{
-		Multiplier: streamMultiplier,
-		Network:    respNetwork,
-		Trname:     trname,
-		Ntype:      cluster.Targets,
-		Extra: &transport.Extra{
-			Compression: config.DSort.Compression,
-			Config:      config,
-			Mem2:        mm,
-		},
-	}
-	if _, err := transport.Register(respNetwork, trname, m.makeRecvResponseFunc()); err != nil {
-		return errors.WithStack(err)
-	}
-
-	trname = fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
+	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := transport.SBArgs{
 		Multiplier: transport.IntraBundleMultiplier,
 		Network:    respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{
-			Compression: config.DSort.Compression,
-			Config:      config,
+			Compression: cfg.DSort.Compression,
+			Config:      cfg,
 			Mem2:        mm,
 		},
 	}
@@ -303,37 +281,18 @@ func (m *Manager) initStreams() error {
 		return errors.WithStack(err)
 	}
 
-	m.streams.request = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, reqSbArgs)
-	m.streams.response = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, respSbArgs)
+	client := transport.NewDefaultClient()
 	m.streams.shards = transport.NewStreamBundle(m.ctx.smap, m.ctx.node, client, shardsSbArgs)
 	return nil
 }
 
 func (m *Manager) cleanupStreams() error {
-	config := cmn.GCO.Get()
-	reqNetwork := cmn.NetworkIntraControl
-	if !config.Net.UseIntraControl {
-		reqNetwork = cmn.NetworkPublic
-	}
+	cfg := cmn.GCO.Get()
 	// Responses to the other targets are objects that is why we want to use
 	// intraData network.
 	respNetwork := cmn.NetworkIntraData
-	if !config.Net.UseIntraData {
+	if !cfg.Net.UseIntraData {
 		respNetwork = cmn.NetworkPublic
-	}
-
-	if m.streams.request != nil {
-		trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
-		if err := transport.Unregister(reqNetwork, trname); err != nil {
-			return errors.WithStack(err)
-		}
-	}
-
-	if m.streams.response != nil {
-		trname := fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
-		if err := transport.Unregister(respNetwork, trname); err != nil {
-			return errors.WithStack(err)
-		}
 	}
 
 	if m.streams.shards != nil {
@@ -343,7 +302,7 @@ func (m *Manager) cleanupStreams() error {
 		}
 	}
 
-	for _, streamBundle := range []*transport.StreamBundle{m.streams.request, m.streams.response, m.streams.shards} {
+	for _, streamBundle := range []*transport.StreamBundle{m.streams.shards} {
 		if streamBundle != nil {
 			streamBundle.Close(false)
 		}
@@ -364,7 +323,7 @@ func (m *Manager) cleanup() {
 		return // do not clean if already scheduled
 	}
 
-	m.mw.stop()
+	m.dsorter.cleanup()
 	glog.Infof("%s %s has started a cleanup", cmn.DSortName, m.ManagerUUID)
 	now := time.Now()
 
@@ -377,9 +336,6 @@ func (m *Manager) cleanup() {
 
 	cmn.AssertMsg(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
-	m.streamWriters.writers = nil
-
-	m.shardManager.Cleanup()
 	m.extractCreator = nil
 	m.client = nil
 
@@ -419,11 +375,18 @@ func (m *Manager) finalCleanup() {
 		glog.Error(err)
 	}
 
+	if err := m.dsorter.finalCleanup(); err != nil {
+		glog.Error(err)
+	}
+
 	// The reason why this is not in regular cleanup is because we are only sure
 	// that this can be freed once we cleanup streams - streams are asynchronous
 	// and we may have race between in-flight request and cleanup.
 	m.recManager.Cleanup()
 	extract.FreeMemory()
+
+	m.creationPhase.metadata.SendOrder = nil
+	m.creationPhase.metadata.Shards = nil
 
 	m.finishedAck.m = nil
 
@@ -459,6 +422,7 @@ func (m *Manager) abort(errs ...error) {
 
 	// If job has already finished we just free resources.
 	if inProgress {
+		m.dsorter.onAbort()
 		m.waitForFinish()
 	}
 
@@ -466,6 +430,24 @@ func (m *Manager) abort(errs ...error) {
 		m.cleanup()
 		m.finalCleanup() // on abort always perform final cleanup
 	}()
+}
+
+// setDSorter sets what type of dsorter implementation should be used
+func (m *Manager) setDSorter() (err error) {
+	switch m.rs.DSorterType {
+	case DSorterGeneralType:
+		m.dsorter, err = newDSorterGeneral(m)
+	case DSorterMemType:
+		m.dsorter = newDSorterMem(m)
+	default:
+		mem, _ := sys.Mem()
+		if mem.Total > 100*cmn.GiB {
+			m.dsorter = newDSorterMem(m)
+		} else {
+			m.dsorter, err = newDSorterGeneral(m)
+		}
+	}
+	return
 }
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
@@ -511,7 +493,6 @@ func (m *Manager) setExtractCreator() (err error) {
 	}
 
 	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.BckProvider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
-	m.shardManager = extract.NewShardManager()
 
 	return nil
 }
@@ -646,27 +627,7 @@ func (m *Manager) unlock() {
 	m.mu.Unlock()
 }
 
-func (m *Manager) newStreamWriter(pathToContents string, w io.Writer) *streamWriter {
-	writer := &streamWriter{
-		w:  w,
-		wg: cmn.NewTimeoutGroup(),
-	}
-	writer.wg.Add(1)
-	m.streamWriters.mu.Lock()
-	m.streamWriters.writers[pathToContents] = writer
-	m.streamWriters.mu.Unlock()
-	return writer
-}
-
-func (m *Manager) pullStreamWriter(objName string) *streamWriter {
-	m.streamWriters.mu.Lock()
-	writer := m.streamWriters.writers[objName]
-	delete(m.streamWriters.writers, objName)
-	m.streamWriters.mu.Unlock()
-	return writer
-}
-
-func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
+func (m *Manager) sentCallback(hdr transport.Header, rc io.ReadCloser, x unsafe.Pointer, err error) {
 	if m.Metrics.extended {
 		dur := time.Since(*(*time.Time)(x))
 		m.Metrics.Creation.Lock()
@@ -681,154 +642,6 @@ func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, x uns
 	m.decrementRef(1)
 	if err != nil {
 		m.abort(err)
-	}
-}
-
-func (m *Manager) makeRecvRequestFunc() transport.Receive {
-	errHandler := func(err error, hdr transport.Header, node *cluster.Snode) {
-		hdr.Opaque = []byte(err.Error())
-		hdr.ObjAttrs.Size = 0
-		if err = m.streams.response.SendV(hdr, nil, nil, nil /* cmpl ptr */, node); err != nil {
-			m.abort(err)
-		}
-	}
-
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		req := remoteRequest{}
-		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-			m.abort(fmt.Errorf("received damaged request: %s", err))
-			return
-		}
-
-		fromNode := m.smap.GetTarget(req.DaemonID)
-		if fromNode == nil {
-			glog.Errorf("received request from node %q which is not present in the smap", req.DaemonID)
-			return
-		}
-
-		if err != nil {
-			errHandler(err, hdr, fromNode)
-			return
-		}
-
-		respHdr := transport.Header{
-			Objname: req.Record.Name,
-		}
-
-		if m.aborted() {
-			return
-		}
-
-		var beforeSend time.Time
-		if m.Metrics.extended {
-			beforeSend = time.Now()
-		}
-
-		fullContentPath := m.recManager.FullContentPath(req.RecordObj)
-
-		if m.rs.DryRun {
-			lr := cmn.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
-			r := cmn.NopOpener(ioutil.NopCloser(lr))
-			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
-				m.abort(err)
-			}
-			return
-		}
-
-		switch req.RecordObj.StoreType {
-		case extract.OffsetStoreType:
-			f, err := cmn.NewFileHandle(fullContentPath)
-			if err != nil {
-				errHandler(err, respHdr, fromNode)
-				return
-			}
-			respHdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			r, err := cmn.NewFileSectionHandle(f, req.RecordObj.Offset-req.RecordObj.MetadataSize, respHdr.ObjAttrs.Size, 0)
-			if err != nil {
-				f.Close()
-				errHandler(err, respHdr, fromNode)
-				return
-			}
-
-			if err := m.streams.response.SendV(respHdr, r, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
-				f.Close()
-				m.abort(err)
-			}
-		case extract.SGLStoreType:
-			v, ok := m.recManager.RecordContents().Load(fullContentPath)
-			cmn.AssertMsg(ok, fullContentPath)
-			m.recManager.RecordContents().Delete(fullContentPath)
-			sgl := v.(*memsys.SGL)
-			respHdr.ObjAttrs.Size = sgl.Size()
-			if err := m.streams.response.SendV(respHdr, sgl, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
-				sgl.Free()
-				m.abort(err)
-			}
-		case extract.DiskStoreType:
-			f, err := cmn.NewFileHandle(fullContentPath)
-			if err != nil {
-				errHandler(err, respHdr, fromNode)
-				return
-			}
-			fi, err := f.Stat()
-			if err != nil {
-				f.Close()
-				errHandler(err, respHdr, fromNode)
-				return
-			}
-			respHdr.ObjAttrs.Size = fi.Size()
-			if err := m.streams.response.SendV(respHdr, f, m.responseCallback, unsafe.Pointer(&beforeSend) /* cmpl ptr */, fromNode); err != nil {
-				f.Close()
-				m.abort(err)
-			}
-		default:
-			cmn.Assert(false)
-		}
-	}
-}
-
-func (m *Manager) makeRecvResponseFunc() transport.Receive {
-	metrics := m.Metrics.Creation
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		if err != nil {
-			m.abort(err)
-			return
-		}
-
-		defer io.Copy(ioutil.Discard, object) // drain to prevent unnecessary stream errors
-
-		writer := m.pullStreamWriter(hdr.Objname)
-		if writer == nil { // was removed after timing out
-			return
-		}
-
-		if len(hdr.Opaque) > 0 {
-			writer.n, writer.err = 0, errors.New(string(hdr.Opaque))
-			writer.wg.Done()
-			return
-		}
-
-		var beforeSend time.Time
-		if m.Metrics.extended {
-			beforeSend = time.Now()
-		}
-
-		slab, err := mm.GetSlab2(memsys.MaxSlabSize)
-		cmn.AssertNoErr(err)
-		buf := slab.Alloc()
-
-		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
-		writer.wg.Done()
-		slab.Free(buf)
-
-		if m.Metrics.extended {
-			dur := time.Since(beforeSend)
-			metrics.Lock()
-			metrics.LocalRecvStats.updateTime(dur)
-			metrics.LocalRecvStats.updateThroughput(writer.n, dur)
-			metrics.Unlock()
-		}
 	}
 }
 
@@ -870,210 +683,6 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			m.abort(err)
 			return
 		}
-	}
-}
-
-// loadLocalContent returns function to load content from local storage (either disk or memory).
-func (m *Manager) loadContent() extract.LoadContentFunc {
-	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
-		loadLocal := func(w io.Writer) (written int64, err error) {
-			var (
-				slab      *memsys.Slab2
-				buf       []byte
-				storeType = obj.StoreType
-			)
-
-			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				slab, err = mm.GetSlab2(memsys.MaxSlabSize)
-				cmn.AssertNoErr(err)
-				buf = slab.Alloc()
-			}
-
-			defer func() {
-				if slab != nil {
-					slab.Free(buf)
-				}
-				m.decrementRef(1)
-			}()
-
-			fullContentPath := m.recManager.FullContentPath(obj)
-
-			if m.rs.DryRun {
-				r := cmn.NopReader(obj.MetadataSize + obj.Size)
-				written, err = io.CopyBuffer(w, r, buf)
-				return
-			}
-
-			var n int64
-			switch obj.StoreType {
-			case extract.OffsetStoreType:
-				f, err := os.Open(fullContentPath) // TODO: it should be open always
-				if err != nil {
-					return written, errors.WithMessage(err, "(offset) open local content failed")
-				}
-				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
-				if err != nil {
-					f.Close()
-					return written, errors.WithMessage(err, "(offset) seek local content failed")
-				}
-				if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
-					f.Close()
-					return written, errors.WithMessage(err, "(offset) copy local content failed")
-				}
-				f.Close()
-			case extract.SGLStoreType:
-				v, ok := m.recManager.RecordContents().Load(fullContentPath)
-				cmn.AssertMsg(ok, fullContentPath)
-				m.recManager.RecordContents().Delete(fullContentPath)
-				sgl := v.(*memsys.SGL)
-				if n, err = io.CopyBuffer(w, sgl, buf); err != nil {
-					sgl.Free()
-					return written, errors.WithMessage(err, "(sgl) copy local content failed")
-				}
-				sgl.Free()
-			case extract.DiskStoreType:
-				f, err := os.Open(fullContentPath)
-				if err != nil {
-					return written, errors.WithMessage(err, "(disk) open local content failed")
-				}
-				if n, err = io.CopyBuffer(w, f, buf); err != nil {
-					f.Close()
-					return written, errors.WithMessage(err, "(disk) copy local content failed")
-				}
-				f.Close()
-			default:
-				cmn.Assert(false)
-			}
-
-			cmn.Dassert(n > 0, pkgName)
-			written += n
-			return
-		}
-
-		loadRemote := func(w io.Writer, daemonID string) (int64, error) {
-			var (
-				cbErr      error
-				beforeRecv time.Time
-				beforeSend time.Time
-
-				wg      = cmn.NewTimeoutGroup()
-				writer  = m.newStreamWriter(rec.Name, w)
-				metrics = m.Metrics.Creation
-
-				toNode = m.smap.GetTarget(daemonID)
-			)
-
-			if toNode == nil {
-				return 0, errors.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
-			}
-
-			req := remoteRequest{
-				DaemonID:  m.ctx.node.DaemonID,
-				Record:    rec,
-				RecordObj: obj,
-			}
-			opaque := cmn.MustMarshal(req)
-			hdr := transport.Header{
-				Opaque: opaque,
-			}
-
-			if m.Metrics.extended {
-				beforeSend = time.Now()
-			}
-
-			cb := func(hdr transport.Header, r io.ReadCloser, _ unsafe.Pointer, err error) {
-				if err != nil {
-					cbErr = err
-				}
-				if m.Metrics.extended {
-					delta := time.Since(beforeSend)
-					metrics.Lock()
-					metrics.RequestStats.updateTime(delta)
-					metrics.Unlock()
-
-					m.ctx.stats.AddMany(
-						stats.NamedVal64{Name: stats.DSortCreationReqCount, Val: 1},
-						stats.NamedVal64{Name: stats.DSortCreationReqLatency, Val: int64(delta)},
-					)
-				}
-				wg.Done()
-			}
-
-			wg.Add(1)
-			if err := m.streams.request.SendV(hdr, nil, cb, nil /* cmpl ptr */, toNode); err != nil {
-				return 0, errors.WithStack(err)
-			}
-
-			// Send should be synchronous to make sure that 'wait timeout' is
-			// calculated only for receive side.
-			wg.Wait()
-
-			if cbErr != nil {
-				return 0, errors.WithStack(cbErr)
-			}
-
-			if m.Metrics.extended {
-				beforeRecv = time.Now()
-			}
-
-			// It may happen that the target we are trying to contact was
-			// aborted or for some reason is not responding. Thus we need to do
-			// some precaution and wait for the content only for limited time or
-			// until we receive abort signal.
-			var pulled bool
-			timed, stopped := writer.wg.WaitTimeoutWithStop(m.callTimeout, m.listenAborted())
-			if timed || stopped {
-				// In case of time out or abort we need to pull the writer to
-				// avoid concurrent Close and Write on `writer.w`.
-				pulled = m.pullStreamWriter(rec.Name) != nil
-			}
-
-			if m.Metrics.extended {
-				delta := time.Since(beforeRecv)
-				metrics.Lock()
-				metrics.ResponseStats.updateTime(delta)
-				metrics.Unlock()
-
-				m.ctx.stats.AddMany(
-					stats.NamedVal64{Name: stats.DSortCreationRespCount, Val: 1},
-					stats.NamedVal64{Name: stats.DSortCreationRespLatency, Val: int64(delta)},
-				)
-			}
-
-			// If we timed out or were stopped but we didn't manage to pull the
-			// writer then this means that someone else did it and we barely
-			// missed. In this case we should wait for the job to be finished -
-			// in case of being stopped we should receive error anyway.
-			if !pulled {
-				if timed || stopped {
-					writer.wg.Wait()
-				}
-			} else {
-				// We managed to pull the writer, we can safely return error.
-				var err error
-				if stopped {
-					err = errors.Errorf("wait for remote content was aborted")
-				} else if timed {
-					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
-				} else {
-					cmn.AssertMsg(false, "pulled but not stopped or timed?!")
-				}
-				return 0, err
-			}
-
-			return writer.n, writer.err
-		}
-
-		if m.aborted() {
-			return 0, newAbortError(m.ManagerUUID)
-		}
-
-		if rec.DaemonID != m.ctx.node.DaemonID { // File source contents are located on a different target.
-			return loadRemote(w, rec.DaemonID)
-		}
-
-		// Load from local source
-		return loadLocal(w)
 	}
 }
 
@@ -1153,6 +762,16 @@ func (m *Manager) ListenSmapChanged(ch chan int64) {
 
 func (m *Manager) String() string {
 	return m.ManagerUUID
+}
+
+func (m *Manager) freeMemory() uint64 {
+	curMem, err := sys.Mem()
+	if err != nil {
+		return 0
+	}
+
+	maxMemoryToUse := calcMaxMemoryUsage(m.rs.MaxMemUsage, curMem)
+	return maxMemoryToUse - curMem.ActualUsed
 }
 
 func (m *Manager) react(reaction, msg string) error {

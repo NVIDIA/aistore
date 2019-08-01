@@ -33,11 +33,15 @@ const (
 
 var (
 	dsortDescCurPrefix = fmt.Sprintf("%s-%d-", dsortDescAllPrefix, os.Getpid())
+
+	dsorterTypes = []string{dsort.DSorterGeneralType, dsort.DSorterMemType}
 )
 
 type (
 	dsortFramework struct {
 		m *ioContext
+
+		dsorterType string
 
 		outputBucket string
 		inputPrefix  string
@@ -121,6 +125,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		ExtractConcLimit: 10,
 		CreateConcLimit:  10,
 		MaxMemUsage:      df.maxMemUsage,
+		DSorterType:      df.dsorterType,
 		DryRun:           df.dryRun,
 	}
 }
@@ -514,89 +519,99 @@ func TestDistributedSort(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "99%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: t.Name() + "input",
-		}
-		df = &dsortFramework{
-			m:                m,
-			outputBucket:     t.Name() + "output",
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "99%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: "dsort-bucket-input",
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					outputBucket:     "dsort-bucket-output",
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			df.init()
+			df.clearDSortList()
+
+			// Create local output bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
+
+			tutils.Logln("starting distributed sort...")
+			rs := df.gen()
+			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
+				t.Errorf("expected %s job to fail when input bucket does not exist", cmn.DSortName)
+			}
+
+			// Now destroy output bucket and create input bucket
+			tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			tutils.Logln("starting second distributed sort...")
+			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
+				t.Errorf("expected %s job to fail when output bucket does not exist", cmn.DSortName)
+			}
+
+			df.checkDSortList(0)
+		})
 	}
-
-	df.init()
-	df.clearDSortList()
-
-	// Create local output bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
-
-	tutils.Logln("starting distributed sort...")
-	rs := df.gen()
-	if _, err := api.StartDSort(df.baseParams, rs); err == nil {
-		t.Errorf("expected %s job to fail when input bucket does not exist", cmn.DSortName)
-	}
-
-	// Now destroy output bucket and create input bucket
-	tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	tutils.Logln("starting second distributed sort...")
-	if _, err := api.StartDSort(df.baseParams, rs); err == nil {
-		t.Errorf("expected %s job to fail when output bucket does not exist", cmn.DSortName)
-	}
-
-	df.checkDSortList(0)
 }
 
 func TestDistributedSortWithOutputBucket(t *testing.T) {
@@ -604,49 +619,54 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: t.Name() + "input",
-		}
-		df = &dsortFramework{
-			m:                m,
-			outputBucket:     t.Name() + "output",
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "99%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: "dsort-bucket-input",
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					outputBucket:     "dsort-bucket-output",
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local buckets
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			// Create local output bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local buckets
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	// Create local output bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 // TestDistributedSortParallel runs multiple dSorts in parallel
@@ -655,38 +675,45 @@ func TestDistributedSortParallel(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df          = &dsortFramework{m: m}
-		dSortsCount = 5
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:           m,
+					dsorterType: dsorterType,
+				}
+				dSortsCount = 5
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			df.clearDSortList()
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			wg := &sync.WaitGroup{}
+			for i := 0; i < dSortsCount; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					dispatchDSortJob(m, i)
+				}(i)
+			}
+			wg.Wait()
+
+			df.checkDSortList(dSortsCount)
+		})
 	}
-
-	df.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	wg := &sync.WaitGroup{}
-	for i := 0; i < dSortsCount; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			dispatchDSortJob(m, i)
-		}(i)
-	}
-	wg.Wait()
-
-	df.checkDSortList(dSortsCount)
 }
 
 // TestDistributedSortChain runs multiple dSorts one after another
@@ -695,163 +722,185 @@ func TestDistributedSortChain(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df          = &dsortFramework{m: m}
-		dSortsCount = 5
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:           m,
+					dsorterType: dsorterType,
+				}
+				dSortsCount = 5
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			df.clearDSortList()
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			for i := 0; i < dSortsCount; i++ {
+				dispatchDSortJob(m, i)
+			}
+
+			df.checkDSortList(dSortsCount)
+		})
 	}
-
-	df.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	for i := 0; i < dSortsCount; i++ {
-		dispatchDSortJob(m, i)
-	}
-
-	df.checkDSortList(dSortsCount)
 }
 
 func TestDistributedSortShuffle(t *testing.T) {
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			algorithm:        &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
-			tarballCnt:       1000,
-			fileInTarballCnt: 10,
-			maxMemUsage:      "99%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					algorithm:        &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
+					tarballCnt:       1000,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "99%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithDisk(t *testing.T) {
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			outputTempl:      "output-{0..1000}",
-			tarballCnt:       100,
-			fileInTarballCnt: 10,
-			maxMemUsage:      "1KB",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					outputTempl:      "output-{0..1000}",
+					tarballCnt:       100,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "1KB",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort with spilling to disk...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			allMetrics := df.checkMetrics(false /* expectAbort */)
+			for target, metrics := range allMetrics {
+				if metrics.Extraction.ExtractedToDiskCnt == 0 && metrics.Extraction.ExtractedCnt > 0 {
+					t.Errorf("target %s did not extract any files do disk", target)
+				}
+			}
+
+			df.checkOutputShards(0)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort with spilling to disk...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	allMetrics := df.checkMetrics(false /* expectAbort */)
-	for target, metrics := range allMetrics {
-		if metrics.Extraction.ExtractedToDiskCnt == 0 && metrics.Extraction.ExtractedCnt > 0 {
-			t.Errorf("target %s did not extract any files do disk", target)
-		}
-	}
-
-	df.checkOutputShards(0)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       200,
-			fileInTarballCnt: 50,
-			extension:        dsort.ExtTarTgz,
-			maxMemUsage:      "1KB",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       200,
+					fileInTarballCnt: 50,
+					extension:        dsort.ExtTarTgz,
+					maxMemUsage:      "1KB",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort with compression (.tar.gz)...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort with compression (.tar.gz)...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
@@ -866,6 +915,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		}
 		df = &dsortFramework{
 			m:                 m,
+			dsorterType:       dsort.DSorterGeneralType,
 			tarballCnt:        500,
 			fileInTarballSize: cmn.MiB,
 			fileInTarballCnt:  5,
@@ -932,6 +982,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 		}
 		df = &dsortFramework{
 			m:                 m,
+			dsorterType:       dsort.DSorterGeneralType,
 			tarballCnt:        400,
 			fileInTarballSize: cmn.MiB,
 			fileInTarballCnt:  3,
@@ -992,45 +1043,50 @@ func TestDistributedSortZip(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			extension:        ".zip",
-			maxMemUsage:      "60%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					extension:        ".zip",
+					maxMemUsage:      "60%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort with compression (.zip)...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort with compression (.zip)...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithCompression(t *testing.T) {
@@ -1038,45 +1094,50 @@ func TestDistributedSortWithCompression(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 50,
-			extension:        dsort.ExtTarTgz,
-			maxMemUsage:      "60%",
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 50,
+					extension:        dsort.ExtTarTgz,
+					maxMemUsage:      "60%",
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort with compression (.tar.gz)...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort with compression (.tar.gz)...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
 }
 
 func TestDistributedSortWithContent(t *testing.T) {
@@ -1084,41 +1145,108 @@ func TestDistributedSortWithContent(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		cases = []struct {
-			extension   string
-			formatType  string
-			missingKeys bool
-		}{
-			{".loss", extract.FormatTypeInt, false},
-			{".cls", extract.FormatTypeFloat, false},
-			{".smth", extract.FormatTypeString, false},
-
-			{".loss", extract.FormatTypeInt, true},
-			{".cls", extract.FormatTypeFloat, true},
-			{".smth", extract.FormatTypeString, true},
-		}
-	)
-
-	for _, entry := range cases {
-		test := fmt.Sprintf("%s-%v", entry.formatType, entry.missingKeys)
-		t.Run(test, func(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
 			var (
-				m = &ioContext{
+				cases = []struct {
+					extension   string
+					formatType  string
+					missingKeys bool
+				}{
+					{".loss", extract.FormatTypeInt, false},
+					{".cls", extract.FormatTypeFloat, false},
+					{".smth", extract.FormatTypeString, false},
+
+					{".loss", extract.FormatTypeInt, true},
+					{".cls", extract.FormatTypeFloat, true},
+					{".smth", extract.FormatTypeString, true},
+				}
+			)
+
+			for _, entry := range cases {
+				test := fmt.Sprintf("%s-%v", entry.formatType, entry.missingKeys)
+				t.Run(test, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
+						}
+						df = &dsortFramework{
+							m:           m,
+							dsorterType: dsorterType,
+							algorithm: &dsort.SortAlgorithm{
+								Kind:       dsort.SortKindContent,
+								Extension:  entry.extension,
+								FormatType: entry.formatType,
+							},
+							missingKeys:      entry.missingKeys,
+							tarballCnt:       1000,
+							fileInTarballCnt: 100,
+							maxMemUsage:      "90%",
+						}
+					)
+
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					}
+
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+					df.init()
+					df.clearDSortList()
+					df.createInputShards()
+
+					tutils.Logln("starting distributed sort...")
+					df.start()
+
+					aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
+					if entry.missingKeys && !aborted {
+						t.Errorf("%s was not aborted", cmn.DSortName)
+					}
+
+					tutils.Logln("checking metrics...")
+					allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+					tassert.CheckFatal(t, err)
+					if len(allMetrics) != m.originalTargetCount {
+						t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+					}
+
+					for target, metrics := range allMetrics {
+						if entry.missingKeys && !metrics.Aborted {
+							t.Errorf("%s was not aborted by target: %s", target, cmn.DSortName)
+						}
+					}
+
+					if !entry.missingKeys {
+						df.checkOutputShards(5)
+					}
+					df.checkDSortList()
+				})
+			}
+		})
+	}
+}
+
+func TestDistributedSortAbort(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
 				df = &dsortFramework{
-					m: m,
-					algorithm: &dsort.SortAlgorithm{
-						Kind:       dsort.SortKindContent,
-						Extension:  entry.extension,
-						FormatType: entry.formatType,
-					},
-					missingKeys:      entry.missingKeys,
+					m:                m,
+					dsorterType:      dsorterType,
 					tarballCnt:       1000,
-					fileInTarballCnt: 100,
-					maxMemUsage:      "90%",
+					fileInTarballCnt: 10,
+					maxMemUsage:      "60%",
 				}
 			)
 
@@ -1139,75 +1267,18 @@ func TestDistributedSortWithContent(t *testing.T) {
 			tutils.Logln("starting distributed sort...")
 			df.start()
 
-			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tutils.Logln("aborting distributed sort...")
+			err = api.AbortDSort(df.baseParams, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			if entry.missingKeys && !aborted {
-				t.Errorf("%s was not aborted", cmn.DSortName)
-			}
 
-			tutils.Logln("checking metrics...")
-			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+			tutils.Logln("waiting for distributed sort to finish up...")
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			if len(allMetrics) != m.originalTargetCount {
-				t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
-			}
 
-			for target, metrics := range allMetrics {
-				if entry.missingKeys && !metrics.Aborted {
-					t.Errorf("%s was not aborted by target: %s", target, cmn.DSortName)
-				}
-			}
-
-			if !entry.missingKeys {
-				df.checkOutputShards(5)
-			}
+			df.checkMetrics(true /* expectAbort */)
 			df.checkDSortList()
 		})
 	}
-}
-
-func TestDistributedSortAbort(t *testing.T) {
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 10,
-			maxMemUsage:      "60%",
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	tutils.Logln("aborting distributed sort...")
-	err = api.AbortDSort(df.baseParams, df.managerUUID)
-	tassert.CheckFatal(t, err)
-
-	tutils.Logln("waiting for distributed sort to finish up...")
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-
-	df.checkMetrics(true /* expectAbort */)
-	df.checkDSortList()
 }
 
 func TestDistributedSortAbortDuringPhases(t *testing.T) {
@@ -1215,50 +1286,55 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	for _, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
-		t.Run(phase, func(t *testing.T) {
-			var (
-				m = &ioContext{
-					t:      t,
-					bucket: TestLocalBucketName,
-				}
-				df = &dsortFramework{
-					m:                m,
-					tarballCnt:       1000,
-					fileInTarballCnt: 200,
-					maxMemUsage:      "40%",
-				}
-			)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			for _, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
+				t.Run(phase, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
+						}
+						df = &dsortFramework{
+							m:                m,
+							dsorterType:      dsorterType,
+							tarballCnt:       1000,
+							fileInTarballCnt: 200,
+							maxMemUsage:      "40%",
+						}
+					)
 
-			// Initialize ioContext
-			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					}
+
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+					df.init()
+					df.clearDSortList()
+					df.createInputShards()
+
+					tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
+					df.start()
+
+					waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
+						tutils.Logln("aborting distributed sort...")
+						err := api.AbortDSort(df.baseParams, df.managerUUID)
+						tassert.CheckFatal(t, err)
+					})
+
+					tutils.Logln("waiting for distributed sort to finish up...")
+					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
+
+					df.checkMetrics(true /* expectAbort */)
+					df.checkDSortList()
+				})
 			}
-
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-			df.init()
-			df.clearDSortList()
-			df.createInputShards()
-
-			tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
-			df.start()
-
-			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
-				tutils.Logln("aborting distributed sort...")
-				err := api.AbortDSort(df.baseParams, df.managerUUID)
-				tassert.CheckFatal(t, err)
-			})
-
-			tutils.Logln("waiting for distributed sort to finish up...")
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckFatal(t, err)
-
-			df.checkMetrics(true /* expectAbort */)
-			df.checkDSortList()
 		})
 	}
 }
@@ -1268,71 +1344,76 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	for idx, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
-		t.Run(phase, func(t *testing.T) {
-			var (
-				m = &ioContext{
-					t:      t,
-					bucket: TestLocalBucketName,
-				}
-				df = &dsortFramework{
-					m:                m,
-					outputTempl:      "output-{0..100000}",
-					tarballCnt:       1000,
-					fileInTarballCnt: 200,
-					maxMemUsage:      "40%",
-				}
-			)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			for idx, phase := range []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase} {
+				t.Run(phase, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
+						}
+						df = &dsortFramework{
+							m:                m,
+							dsorterType:      dsorterType,
+							outputTempl:      "output-{0..100000}",
+							tarballCnt:       1000,
+							fileInTarballCnt: 200,
+							maxMemUsage:      "40%",
+						}
+					)
 
-			// Initialize ioContext
-			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					}
+					targets := tutils.ExtractTargetNodes(m.smap)
+
+					df.init()
+					df.clearDSortList()
+
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+					df.createInputShards()
+
+					tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
+					df.start()
+
+					waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
+						tutils.Logln("killing target...")
+						err := tutils.UnregisterNode(m.proxyURL, targets[idx].DaemonID)
+						tassert.CheckFatal(t, err)
+					})
+
+					tutils.Logln("waiting for distributed sort to finish up...")
+					aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckError(t, err)
+					if !aborted {
+						t.Errorf("%s was not aborted", cmn.DSortName)
+					}
+
+					tutils.Logln("checking metrics...")
+					allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+					tassert.CheckError(t, err)
+					if len(allMetrics) == m.originalTargetCount {
+						t.Errorf("number of metrics %d is same as number of original targets %d", len(allMetrics), m.originalTargetCount)
+					}
+
+					for target, metrics := range allMetrics {
+						if !metrics.Aborted {
+							t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
+						}
+					}
+
+					m.reregisterTarget(targets[idx])
+					time.Sleep(time.Second)
+
+					df.checkDSortList()
+				})
 			}
-			targets := tutils.ExtractTargetNodes(m.smap)
-
-			df.init()
-			df.clearDSortList()
-
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-			df.createInputShards()
-
-			tutils.Logf("starting distributed sort (abort on: %s)...\n", phase)
-			df.start()
-
-			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
-				tutils.Logln("killing target...")
-				err := tutils.UnregisterNode(m.proxyURL, targets[idx].DaemonID)
-				tassert.CheckFatal(t, err)
-			})
-
-			tutils.Logln("waiting for distributed sort to finish up...")
-			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckError(t, err)
-			if !aborted {
-				t.Errorf("%s was not aborted", cmn.DSortName)
-			}
-
-			tutils.Logln("checking metrics...")
-			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
-			tassert.CheckError(t, err)
-			if len(allMetrics) == m.originalTargetCount {
-				t.Errorf("number of metrics %d is same as number of original targets %d", len(allMetrics), m.originalTargetCount)
-			}
-
-			for target, metrics := range allMetrics {
-				if !metrics.Aborted {
-					t.Errorf("%s was not aborted by target: %s", cmn.DSortName, target)
-				}
-			}
-
-			m.reregisterTarget(targets[idx])
-			time.Sleep(time.Second)
-
-			df.checkDSortList()
 		})
 	}
 }
@@ -1344,117 +1425,118 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 	const newMountpath = "/tmp/ais/mountpath"
 
-	var (
-		cases = []struct {
-			phase  string
-			adding bool
-		}{
-			{dsort.ExtractionPhase, false},
-			{dsort.SortingPhase, false},
-			{dsort.CreationPhase, false},
-
-			{dsort.ExtractionPhase, true},
-			{dsort.SortingPhase, true},
-			{dsort.CreationPhase, true},
-		}
-		baseParams = tutils.DefaultBaseAPIParams(t)
-	)
-
-	for _, entry := range cases {
-		test := fmt.Sprintf("%s-%v", entry.phase, entry.adding)
-		t.Run(test, func(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
 			var (
-				m = &ioContext{
-					t:      t,
-					bucket: TestLocalBucketName,
-				}
-				df = &dsortFramework{
-					m:                m,
-					outputTempl:      "output-{0..100000}",
-					tarballCnt:       2000,
-					fileInTarballCnt: 200,
-					maxMemUsage:      "1%",
-				}
+				cases = []struct {
+					phase  string
+					adding bool
+				}{
+					{dsort.ExtractionPhase, false},
+					{dsort.SortingPhase, false},
+					{dsort.CreationPhase, false},
 
-				mountpaths = make(map[*cluster.Snode]string)
+					{dsort.ExtractionPhase, true},
+					{dsort.SortingPhase, true},
+					{dsort.CreationPhase, true},
+				}
+				baseParams = tutils.DefaultBaseAPIParams(t)
 			)
 
-			// Initialize ioContext
-			m.saveClusterState()
-			if m.originalTargetCount < 3 {
-				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-			}
+			defer os.RemoveAll(newMountpath)
 
-			targets := tutils.ExtractTargetNodes(m.smap)
-			for idx, target := range targets {
-				if entry.adding {
-					mpath := fmt.Sprintf("%s-%d", newMountpath, idx)
-					if containers.DockerRunning() {
-						err := containers.DockerCreateMpathDir(0, mpath)
-						tassert.CheckFatal(t, err)
-					} else {
-						err := cmn.CreateDir(mpath)
-						tassert.CheckFatal(t, err)
-					}
-
-					defer func() {
-						if !containers.DockerRunning() {
-							os.RemoveAll(mpath)
+			for _, entry := range cases {
+				test := fmt.Sprintf("%s-%v", entry.phase, entry.adding)
+				t.Run(test, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
 						}
-					}()
+						df = &dsortFramework{
+							m:                m,
+							dsorterType:      dsorterType,
+							outputTempl:      "output-{0..100000}",
+							tarballCnt:       2000,
+							fileInTarballCnt: 200,
+							maxMemUsage:      "1%",
+						}
 
-					mountpaths[target] = mpath
-				} else {
-					targetMountpaths, err := api.GetMountpaths(baseParams, target)
-					tassert.CheckFatal(t, err)
-					mountpaths[target] = targetMountpaths.Available[0]
-				}
-			}
+						mountpaths = make(map[*cluster.Snode]string)
+					)
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-			df.init()
-			df.clearDSortList()
-			df.createInputShards()
-
-			tutils.Logf("starting distributed sort (abort on: %s)...\n", entry.phase)
-			df.start()
-
-			waitForDSortPhase(t, m.proxyURL, df.managerUUID, entry.phase, func() {
-				for target, mpath := range mountpaths {
-					if entry.adding {
-						tutils.Logf("adding new mountpath %q to %s...\n", mpath, target.DaemonID)
-						err := api.AddMountpath(baseParams, target, mpath)
-						tassert.CheckFatal(t, err)
-					} else {
-						tutils.Logf("removing mountpath %q from %s...\n", mpath, target.DaemonID)
-						err := api.RemoveMountpath(baseParams, target.ID(), mpath)
-						tassert.CheckFatal(t, err)
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
-				}
-			})
 
-			tutils.Logln("waiting for distributed sort to finish up...")
-			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckError(t, err)
+					targets := tutils.ExtractTargetNodes(m.smap)
+					for idx, target := range targets {
+						if entry.adding {
+							mpath := fmt.Sprintf("%s-%d", newMountpath, idx)
+							if containers.DockerRunning() {
+								err := containers.DockerCreateMpathDir(0, mpath)
+								tassert.CheckFatal(t, err)
+							} else {
+								err := cmn.CreateDir(mpath)
+								tassert.CheckFatal(t, err)
+							}
 
-			df.checkMetrics(true /* expectAbort */)
+							mountpaths[target] = mpath
+						} else {
+							targetMountpaths, err := api.GetMountpaths(baseParams, target)
+							tassert.CheckFatal(t, err)
+							mountpaths[target] = targetMountpaths.Available[0]
+						}
+					}
 
-			for target, mpath := range mountpaths {
-				if entry.adding {
-					tutils.Logf("removing mountpath %q to %s...\n", mpath, target.DaemonID)
-					err := api.RemoveMountpath(baseParams, target.ID(), mpath)
-					tassert.CheckFatal(t, err)
-				} else {
-					tutils.Logf("adding mountpath %q to %s...\n", mpath, target.DaemonID)
-					err := api.AddMountpath(baseParams, target, mpath)
-					tassert.CheckFatal(t, err)
-				}
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+					df.init()
+					df.clearDSortList()
+					df.createInputShards()
+
+					tutils.Logf("starting distributed sort (abort on: %s)...\n", entry.phase)
+					df.start()
+
+					waitForDSortPhase(t, m.proxyURL, df.managerUUID, entry.phase, func() {
+						for target, mpath := range mountpaths {
+							if entry.adding {
+								tutils.Logf("adding new mountpath %q to %s...\n", mpath, target.DaemonID)
+								err := api.AddMountpath(baseParams, target, mpath)
+								tassert.CheckFatal(t, err)
+							} else {
+								tutils.Logf("removing mountpath %q from %s...\n", mpath, target.DaemonID)
+								err := api.RemoveMountpath(baseParams, target.ID(), mpath)
+								tassert.CheckFatal(t, err)
+							}
+						}
+					})
+
+					tutils.Logln("waiting for distributed sort to finish up...")
+					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckError(t, err)
+
+					df.checkMetrics(true /* expectAbort */)
+
+					for target, mpath := range mountpaths {
+						if entry.adding {
+							tutils.Logf("removing mountpath %q to %s...\n", mpath, target.DaemonID)
+							err := api.RemoveMountpath(baseParams, target.ID(), mpath)
+							tassert.CheckFatal(t, err)
+						} else {
+							tutils.Logf("adding mountpath %q to %s...\n", mpath, target.DaemonID)
+							err := api.AddMountpath(baseParams, target, mpath)
+							tassert.CheckFatal(t, err)
+						}
+					}
+
+					df.checkDSortList()
+				})
 			}
-
-			df.checkDSortList()
 		})
 	}
 }
@@ -1464,211 +1546,8 @@ func TestDistributedSortAddTarget(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			outputTempl:      "output-{0..100000}",
-			tarballCnt:       4000,
-			fileInTarballCnt: 200,
-			maxMemUsage:      "1KB",
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-	targets := tutils.ExtractTargetNodes(m.smap)
-
-	df.init()
-	df.clearDSortList()
-
-	tutils.Logln("killing target...")
-	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
-	tassert.CheckFatal(t, err)
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
-		// Reregister target 0
-		m.reregisterTarget(targets[0])
-		tutils.Logln("reregistering complete")
-	})
-
-	tutils.Logln("waiting for distributed sort to finish up...")
-	aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	if !aborted {
-		t.Errorf("%s was not aborted", cmn.DSortName)
-	}
-
-	tutils.Logln("checking metrics...")
-	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	if len(allMetrics) != m.originalTargetCount-1 {
-		t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), cmn.DSortName, m.originalTargetCount-1)
-	}
-
-	df.checkDSortList()
-}
-
-func TestDistributedSortMetricsAfterFinish(t *testing.T) {
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			outputTempl:      "output-{0..1000}",
-			tarballCnt:       50,
-			fileInTarballCnt: 10,
-			maxMemUsage:      "40%",
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(0)
-
-	tutils.Logln("checking if metrics are still accessible after some time..")
-	time.Sleep(time.Second * 2)
-
-	// Check if metrics can be fetched after some time
-	df.checkMetrics(false /* expectAbort */)
-	df.checkDSortList()
-}
-
-func TestDistributedSortSelfAbort(t *testing.T) {
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "99%",
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-
-	tutils.Logln("starting distributed sort without any files generated...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	// Wait a while for all targets to abort
-	time.Sleep(2 * time.Second)
-
-	df.checkMetrics(true /* expectAbort */)
-	df.checkDSortList()
-}
-
-func TestDistributedSortOnOOM(t *testing.T) {
-	t.Skip("test can take more than couple minutes, run it only when necessary")
-
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                 m,
-			fileInTarballCnt:  200,
-			fileInTarballSize: 10 * cmn.MiB,
-			maxMemUsage:       "80%",
-		}
-	)
-
-	mem, err := sys.Mem()
-	tassert.CheckFatal(t, err)
-
-	// Calculate number of shards to cause OOM and overestimate it to make sure
-	// that if dSort doesn't prevent it, it will happen. Notice that maxMemUsage
-	// is 80% so dSort should never go above this number in memory usage.
-	df.tarballCnt = int(float64(mem.ActualFree/uint64(df.fileInTarballSize)/uint64(df.fileInTarballCnt)) * 1.4)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkOutputShards(5)
-	df.checkDSortList()
-}
-
-func TestDistributedSortMissingShards(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
-	for _, reaction := range cmn.SupportedReactions {
-		t.Run(reaction, func(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
@@ -1676,11 +1555,76 @@ func TestDistributedSortMissingShards(t *testing.T) {
 				}
 				df = &dsortFramework{
 					m:                m,
+					dsorterType:      dsorterType,
 					outputTempl:      "output-{0..100000}",
-					tarballCnt:       1000,
-					tarballCntToSkip: 50,
+					tarballCnt:       4000,
 					fileInTarballCnt: 200,
-					extension:        ".tar",
+					maxMemUsage:      "1KB",
+				}
+			)
+
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+			targets := tutils.ExtractTargetNodes(m.smap)
+
+			df.init()
+			df.clearDSortList()
+
+			tutils.Logln("killing target...")
+			err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
+			tassert.CheckFatal(t, err)
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			waitForDSortPhase(t, m.proxyURL, df.managerUUID, dsort.ExtractionPhase, func() {
+				// Reregister target 0
+				m.reregisterTarget(targets[0])
+				tutils.Logln("reregistering complete")
+			})
+
+			tutils.Logln("waiting for distributed sort to finish up...")
+			aborted, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			if !aborted {
+				t.Errorf("%s was not aborted", cmn.DSortName)
+			}
+
+			tutils.Logln("checking metrics...")
+			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			if len(allMetrics) != m.originalTargetCount-1 {
+				t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), cmn.DSortName, m.originalTargetCount-1)
+			}
+
+			df.checkDSortList()
+		})
+	}
+}
+
+func TestDistributedSortMetricsAfterFinish(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					outputTempl:      "output-{0..1000}",
+					tarballCnt:       50,
+					fileInTarballCnt: 10,
 					maxMemUsage:      "40%",
 				}
 			)
@@ -1694,8 +1638,6 @@ func TestDistributedSortMissingShards(t *testing.T) {
 			// Create local bucket
 			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-			defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
 			df.init()
 			df.clearDSortList()
@@ -1708,33 +1650,33 @@ func TestDistributedSortMissingShards(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tutils.Logln("finished distributed sort")
 
-			df.checkReactionResult(reaction, df.tarballCntToSkip)
-			df.checkDSortList()
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(0)
 
+			tutils.Logln("checking if metrics are still accessible after some time..")
+			time.Sleep(time.Second * 2)
+
+			// Check if metrics can be fetched after some time
+			df.checkMetrics(false /* expectAbort */)
+			df.checkDSortList()
 		})
 	}
 }
 
-func TestDistributedSortDuplications(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
-	for _, reaction := range cmn.SupportedReactions {
-		t.Run(reaction, func(t *testing.T) {
+func TestDistributedSortSelfAbort(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
 					bucket: TestLocalBucketName,
 				}
 				df = &dsortFramework{
-					m:                     m,
-					outputTempl:           "output-{0..100000}",
-					tarballCnt:            1000,
-					fileInTarballCnt:      200,
-					recordDuplicationsCnt: 50,
-					extension:             ".tar",
-					maxMemUsage:           "40%",
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
 				}
 			)
 
@@ -1747,8 +1689,328 @@ func TestDistributedSortDuplications(t *testing.T) {
 			// Create local bucket
 			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-			defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
-			setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+
+			df.init()
+			df.clearDSortList()
+
+			tutils.Logln("starting distributed sort without any files generated...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			// Wait a while for all targets to abort
+			time.Sleep(2 * time.Second)
+
+			df.checkMetrics(true /* expectAbort */)
+			df.checkDSortList()
+		})
+	}
+}
+
+func TestDistributedSortOnOOM(t *testing.T) {
+	t.Skip("test can take more than couple minutes, run it only when necessary")
+
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                 m,
+					dsorterType:       dsorterType,
+					fileInTarballCnt:  200,
+					fileInTarballSize: 10 * cmn.MiB,
+					maxMemUsage:       "80%",
+				}
+			)
+
+			mem, err := sys.Mem()
+			tassert.CheckFatal(t, err)
+
+			// Calculate number of shards to cause OOM and overestimate it to make sure
+			// that if dSort doesn't prevent it, it will happen. Notice that maxMemUsage
+			// is 80% so dSort should never go above this number in memory usage.
+			df.tarballCnt = int(float64(mem.ActualFree/uint64(df.fileInTarballSize)/uint64(df.fileInTarballCnt)) * 1.4)
+
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+			df.checkDSortList()
+		})
+	}
+}
+
+func TestDistributedSortMissingShards(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			for _, reaction := range cmn.SupportedReactions {
+				t.Run(reaction, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
+						}
+						df = &dsortFramework{
+							m:                m,
+							dsorterType:      dsorterType,
+							outputTempl:      "output-{0..100000}",
+							tarballCnt:       1000,
+							tarballCntToSkip: 50,
+							fileInTarballCnt: 200,
+							extension:        ".tar",
+							maxMemUsage:      "40%",
+						}
+					)
+
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					}
+
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
+					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
+
+					df.init()
+					df.clearDSortList()
+					df.createInputShards()
+
+					tutils.Logln("starting distributed sort...")
+					df.start()
+
+					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
+					tutils.Logln("finished distributed sort")
+
+					df.checkReactionResult(reaction, df.tarballCntToSkip)
+					df.checkDSortList()
+
+				})
+			}
+		})
+	}
+}
+
+func TestDistributedSortDuplications(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			for _, reaction := range cmn.SupportedReactions {
+				t.Run(reaction, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t:      t,
+							bucket: TestLocalBucketName,
+						}
+						df = &dsortFramework{
+							m:                     m,
+							dsorterType:           dsorterType,
+							outputTempl:           "output-{0..100000}",
+							tarballCnt:            1000,
+							fileInTarballCnt:      200,
+							recordDuplicationsCnt: 50,
+							extension:             ".tar",
+							maxMemUsage:           "40%",
+						}
+					)
+
+					// Initialize ioContext
+					m.saveClusterState()
+					if m.originalTargetCount < 3 {
+						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+					}
+
+					// Create local bucket
+					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
+					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
+
+					df.init()
+					df.clearDSortList()
+					df.createInputShards()
+
+					tutils.Logln("starting distributed sort...")
+					df.start()
+
+					_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
+					tutils.Logln("finished distributed sort")
+
+					df.checkReactionResult(reaction, df.recordDuplicationsCnt)
+					df.checkDSortList()
+				})
+			}
+		})
+	}
+}
+
+func TestDistributedSortOrderFile(t *testing.T) {
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				err error
+				m   = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				dsortFW = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					outputBucket:     TestLocalBucketName + "output",
+					tarballCnt:       100,
+					fileInTarballCnt: 10,
+					maxMemUsage:      "40%",
+				}
+
+				orderFileName = "orderFileName"
+				ekm           = make(map[string]string, 10)
+				shardFmts     = []string{
+					"shard-%d-suf",
+					"input-%d-pref",
+					"smth-%d",
+				}
+			)
+
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+			baseParams := tutils.BaseAPIParams(proxyURL)
+
+			// Set URL for order file (points to the object in cluster)
+			dsortFW.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bucket, orderFileName)
+
+			dsortFW.init()
+			dsortFW.clearDSortList()
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			// Create local output bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+
+			dsortFW.createInputShards()
+
+			// Generate content for the orderFile
+			tutils.Logln("generating and putting order file into cluster...")
+			var (
+				buffer       bytes.Buffer
+				shardRecords = dsortFW.getRecordNames(m.bucket)
+			)
+			for _, shard := range shardRecords {
+				for idx, recordName := range shard.recordNames {
+					buffer.WriteString(fmt.Sprintf("%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)]))
+					ekm[recordName] = shardFmts[idx%len(shardFmts)]
+				}
+			}
+			args := api.PutObjectArgs{BaseParams: baseParams, Bucket: m.bucket, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
+			err = api.PutObject(args)
+			tassert.CheckFatal(t, err)
+
+			tutils.Logln("starting distributed sort...")
+			rs := dsortFW.gen()
+			managerUUID, err := api.StartDSort(baseParams, rs)
+			tassert.CheckFatal(t, err)
+
+			_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+			tassert.CheckFatal(t, err)
+			if len(allMetrics) != m.originalTargetCount {
+				t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
+			}
+
+			tutils.Logln("checking if all records are in specified shards...")
+			shardRecords = dsortFW.getRecordNames(dsortFW.outputBucket)
+			for _, shard := range shardRecords {
+				for _, recordName := range shard.recordNames {
+					match := false
+					// Some shard with specified format contains the record
+					for i := 0; i < 30; i++ {
+						match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
+					}
+					if !match {
+						t.Errorf("record %q was not part of any shard with format %q but was in shard %q", recordName, ekm[recordName], shard.name)
+					}
+				}
+			}
+
+			dsortFW.checkDSortList()
+		})
+	}
+}
+
+func TestDistributedSortDryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
+					dryRun:           true,
+				}
+			)
+
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1761,150 +2023,10 @@ func TestDistributedSortDuplications(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tutils.Logln("finished distributed sort")
 
-			df.checkReactionResult(reaction, df.recordDuplicationsCnt)
+			df.checkMetrics(false /* expectAbort */)
 			df.checkDSortList()
 		})
 	}
-}
-
-func TestDistributedSortOrderFile(t *testing.T) {
-	var (
-		err error
-		m   = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		dsortFW = &dsortFramework{
-			m:                m,
-			outputBucket:     t.Name() + "output",
-			tarballCnt:       100,
-			fileInTarballCnt: 10,
-			maxMemUsage:      "40%",
-		}
-
-		orderFileName = "orderFileName"
-		ekm           = make(map[string]string, 10)
-		shardFmts     = []string{
-			"shard-%d-suf",
-			"input-%d-pref",
-			"smth-%d",
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-	baseParams := tutils.BaseAPIParams(proxyURL)
-
-	// Set URL for order file (points to the object in cluster)
-	dsortFW.orderFileURL = fmt.Sprintf("%s/%s/%s/%s/%s", proxyURL, cmn.Version, cmn.Objects, m.bucket, orderFileName)
-
-	dsortFW.init()
-	dsortFW.clearDSortList()
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	// Create local output bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
-
-	dsortFW.createInputShards()
-
-	// Generate content for the orderFile
-	tutils.Logln("generating and putting order file into cluster...")
-	var (
-		buffer       bytes.Buffer
-		shardRecords = dsortFW.getRecordNames(m.bucket)
-	)
-	for _, shard := range shardRecords {
-		for idx, recordName := range shard.recordNames {
-			buffer.WriteString(fmt.Sprintf("%s\t%s\n", recordName, shardFmts[idx%len(shardFmts)]))
-			ekm[recordName] = shardFmts[idx%len(shardFmts)]
-		}
-	}
-	args := api.PutObjectArgs{BaseParams: baseParams, Bucket: m.bucket, Object: orderFileName, Reader: tutils.NewBytesReader(buffer.Bytes())}
-	err = api.PutObject(args)
-	tassert.CheckFatal(t, err)
-
-	tutils.Logln("starting distributed sort...")
-	rs := dsortFW.gen()
-	managerUUID, err := api.StartDSort(baseParams, rs)
-	tassert.CheckFatal(t, err)
-
-	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
-	tassert.CheckFatal(t, err)
-	if len(allMetrics) != m.originalTargetCount {
-		t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), m.originalTargetCount)
-	}
-
-	tutils.Logln("checking if all records are in specified shards...")
-	shardRecords = dsortFW.getRecordNames(dsortFW.outputBucket)
-	for _, shard := range shardRecords {
-		for _, recordName := range shard.recordNames {
-			match := false
-			// Some shard with specified format contains the record
-			for i := 0; i < 30; i++ {
-				match = match || fmt.Sprintf(ekm[recordName], i) == shard.name
-			}
-			if !match {
-				t.Errorf("record %q was not part of any shard with format %q but was in shard %q", recordName, ekm[recordName], shard.name)
-			}
-		}
-	}
-
-	dsortFW.checkDSortList()
-}
-
-func TestDistributedSortDryRun(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "99%",
-			dryRun:           true,
-		}
-	)
-
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
-	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkDSortList()
 }
 
 func TestDistributedSortDryRunDisk(t *testing.T) {
@@ -1912,41 +2034,46 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	var (
-		m = &ioContext{
-			t:      t,
-			bucket: TestLocalBucketName,
-		}
-		df = &dsortFramework{
-			m:                m,
-			tarballCnt:       1000,
-			fileInTarballCnt: 100,
-			maxMemUsage:      "1KB",
-			dryRun:           true,
-		}
-	)
+	for _, dsorterType := range dsorterTypes {
+		t.Run(dsorterType, func(t *testing.T) {
+			var (
+				m = &ioContext{
+					t:      t,
+					bucket: TestLocalBucketName,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       1000,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "1KB",
+					dryRun:           true,
+				}
+			)
 
-	// Initialize ioContext
-	m.saveClusterState()
-	if m.originalTargetCount < 3 {
-		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			// Initialize ioContext
+			m.saveClusterState()
+			if m.originalTargetCount < 3 {
+				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+			}
+
+			// Create local bucket
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+			df.init()
+			df.clearDSortList()
+			df.createInputShards()
+
+			tutils.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tutils.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkDSortList()
+		})
 	}
-
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
-
-	df.init()
-	df.clearDSortList()
-	df.createInputShards()
-
-	tutils.Logln("starting distributed sort...")
-	df.start()
-
-	_, err := tutils.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-	tassert.CheckFatal(t, err)
-	tutils.Logln("finished distributed sort")
-
-	df.checkMetrics(false /* expectAbort */)
-	df.checkDSortList()
 }

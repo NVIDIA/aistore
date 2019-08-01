@@ -95,7 +95,10 @@ type RequestSpec struct {
 	CreateConcLimit   int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
 	StreamMultiplier  int           `json:"stream_multiplier"`         // Default: transport.IntraBundleMultiplier
 	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
-	DryRun            bool          `json:"dry_run"`                   // Default: false
+
+	// debug
+	DSorterType string `json:"dsorter_type"`
+	DryRun      bool   `json:"dry_run"` // Default: false
 }
 
 type ParsedRequestSpec struct {
@@ -117,7 +120,10 @@ type ParsedRequestSpec struct {
 	CreateConcLimit   int                   `json:"create_concurrency_limit"`  // TODO: should be removed
 	StreamMultiplier  int                   `json:"stream_multiplier"`         // TODO: should be removed
 	ExtendedMetrics   bool                  `json:"extended_metrics"`
-	DryRun            bool                  `json:"dry_run"`
+
+	// debug
+	DSorterType string `json:"dsorter_type"`
+	DryRun      bool   `json:"dry_run"`
 }
 
 type SortAlgorithm struct {
@@ -215,6 +221,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
 	parsedRS.StreamMultiplier = rs.StreamMultiplier
 	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
+	parsedRS.DSorterType = rs.DSorterType
 	parsedRS.DryRun = rs.DryRun
 	return parsedRS, nil
 }
