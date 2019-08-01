@@ -178,7 +178,7 @@ const (
 		"{{$obj := .FSpaths.Paths}}" +
 		"{{range $key, $val := $obj}}" +
 		"{{$key}}: {{$val}}\n" +
-		"{{end}}\n"
+		"{{end}}"
 	TestFSPConfTmpl = "\n{{$obj := .TestFSP}}Test File System Paths Config\n" +
 		" Root: {{$obj.Root}}\n" +
 		" Count: {{$obj.Count}}\n" +

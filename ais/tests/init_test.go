@@ -128,11 +128,11 @@ func TestMain(m *testing.M) {
 	}
 	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test.
 	// finds who is the current primary proxy
-	url, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
+	primary, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
 		cmn.ExitInfof("Failed to get primary proxy, err = %v", err)
 	}
-	proxyURLReadOnly = url
+	proxyURLReadOnly = primary.URL(cmn.NetworkPublic)
 
 	if proxyURLReadOnly == proxyNextTierURLReadOnly {
 		cmn.ExitInfof("Proxy URL for first and next tier cluster cannot be the same")

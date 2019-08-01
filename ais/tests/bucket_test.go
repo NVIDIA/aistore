@@ -23,7 +23,7 @@ import (
 
 func testBucketProps(t *testing.T) *cmn.BucketProps {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	globalConfig := getDaemonConfig(t, proxyURL)
+	globalConfig := getClusterConfig(t, proxyURL)
 
 	return &cmn.BucketProps{
 		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
@@ -35,7 +35,7 @@ func TestDefaultBucketProps(t *testing.T) {
 	const dataSlices = 7
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		globalConfig = getDaemonConfig(t, proxyURL)
+		globalConfig = getClusterConfig(t, proxyURL)
 	)
 
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
@@ -67,7 +67,7 @@ func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		globalProps  cmn.BucketProps
-		globalConfig = getDaemonConfig(t, proxyURL)
+		globalConfig = getClusterConfig(t, proxyURL)
 	)
 
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
@@ -572,8 +572,8 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 
 	{
 		targets := tutils.ExtractTargetNodes(m.smap)
-		baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
-		mpList, err := api.GetMountpaths(baseParams)
+		baseParams := tutils.DefaultBaseAPIParams(t)
+		mpList, err := api.GetMountpaths(baseParams, targets[0])
 		tassert.CheckFatal(t, err)
 
 		l := len(mpList.Available)
@@ -589,11 +589,12 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 	{
 		var (
 			bucketProps = defaultBucketProps()
-			config      *cmn.Config
-			err         error
 		)
+		primary, err := tutils.GetPrimaryProxy(proxyURLReadOnly)
+		tassert.CheckFatal(t, err)
+
 		baseParams := tutils.DefaultBaseAPIParams(t)
-		config, err = api.GetDaemonConfig(baseParams)
+		config, err := api.GetDaemonConfig(baseParams, primary.ID())
 		tassert.CheckFatal(t, err)
 
 		// copy default config and change one field
@@ -710,14 +711,13 @@ func TestCloudMirror(t *testing.T) {
 	}
 	smap := getClusterMap(t, baseParams.URL)
 	{
-		targets := tutils.ExtractTargetNodes(smap)
-		baseTgtParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
-		mpList, err := api.GetMountpaths(baseTgtParams)
+		target := tutils.ExtractTargetNodes(smap)[0]
+		mpList, err := api.GetMountpaths(baseParams, target)
 		tassert.CheckFatal(t, err)
 
 		numps := len(mpList.Available)
 		if numps < 4 {
-			t.Skipf("test %q requires at least 4 mountpaths (target %s has %d)", t.Name(), targets[0], numps)
+			t.Skipf("test %q requires at least 4 mountpaths (target %s has %d)", t.Name(), target.ID(), numps)
 		}
 	}
 

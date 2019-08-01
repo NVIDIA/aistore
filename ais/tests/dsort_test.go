@@ -1357,6 +1357,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 			{dsort.SortingPhase, true},
 			{dsort.CreationPhase, true},
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	for _, entry := range cases {
@@ -1404,8 +1405,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 					mountpaths[target] = mpath
 				} else {
-					baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-					targetMountpaths, err := api.GetMountpaths(baseParams)
+					targetMountpaths, err := api.GetMountpaths(baseParams, target)
 					tassert.CheckFatal(t, err)
 					mountpaths[target] = targetMountpaths.Available[0]
 				}
@@ -1424,14 +1424,13 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 
 			waitForDSortPhase(t, m.proxyURL, df.managerUUID, entry.phase, func() {
 				for target, mpath := range mountpaths {
-					baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 					if entry.adding {
 						tutils.Logf("adding new mountpath %q to %s...\n", mpath, target.DaemonID)
-						err := api.AddMountpath(baseParams, mpath)
+						err := api.AddMountpath(baseParams, target, mpath)
 						tassert.CheckFatal(t, err)
 					} else {
 						tutils.Logf("removing mountpath %q from %s...\n", mpath, target.DaemonID)
-						err := api.RemoveMountpath(baseParams, mpath)
+						err := api.RemoveMountpath(baseParams, target.ID(), mpath)
 						tassert.CheckFatal(t, err)
 					}
 				}
@@ -1444,14 +1443,13 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 			df.checkMetrics(true /* expectAbort */)
 
 			for target, mpath := range mountpaths {
-				baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 				if entry.adding {
 					tutils.Logf("removing mountpath %q to %s...\n", mpath, target.DaemonID)
-					err := api.RemoveMountpath(baseParams, mpath)
+					err := api.RemoveMountpath(baseParams, target.ID(), mpath)
 					tassert.CheckFatal(t, err)
 				} else {
 					tutils.Logf("adding mountpath %q to %s...\n", mpath, target.DaemonID)
-					err := api.AddMountpath(baseParams, mpath)
+					err := api.AddMountpath(baseParams, target, mpath)
 					tassert.CheckFatal(t, err)
 				}
 			}

@@ -49,6 +49,25 @@ type (
 		BMD  *bucketMD      `json:"bmd"`
 		SI   *cluster.Snode `json:"si"`
 	}
+
+	reverseProxy struct {
+		cloud   *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
+		primary struct {
+			sync.Mutex
+			rp  *httputil.ReverseProxy // requests that modify cluster-level metadata => current primary gateway
+			url string                 // URL of the current primary
+		}
+		nodes sync.Map // map of reverse proxies keyed by node DaemonIDs
+	}
+
+	// proxy runner
+	proxyrunner struct {
+		httprunner
+		authn      *authManager
+		startedUp  atomic.Bool
+		metasyncer *metasyncer
+		rproxy     reverseProxy
+	}
 )
 
 func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
@@ -59,22 +78,15 @@ func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.Handle
 	return h
 }
 
-//===========================================================================
-//
-// proxy runner
-//
-//===========================================================================
-type proxyrunner struct {
-	httprunner
-	authn      *authManager
-	startedUp  atomic.Bool
-	metasyncer *metasyncer
-	rproxy     struct {
-		sync.Mutex
-		cloud *httputil.ReverseProxy            // unmodified GET requests => storage.googleapis.com
-		p     *httputil.ReverseProxy            // requests that modify cluster-level metadata => current primary gateway
-		u     string                            // URL of the current primary
-		tmap  map[string]*httputil.ReverseProxy // map of reverse proxies keyed by target DaemonIDs
+func (rp *reverseProxy) init() {
+	cfg := cmn.GCO.Get()
+	if cfg.Net.HTTP.RevProxy == cmn.RevProxyCloud {
+		rp.cloud = &httputil.ReverseProxy{
+			Director: func(r *http.Request) {},
+			Transport: cmn.NewTransport(cmn.TransportArgs{
+				UseHTTPS: cfg.Net.HTTP.UseHTTPS,
+			}),
+		}
 	}
 }
 
@@ -116,14 +128,7 @@ func (p *proxyrunner) Run() error {
 		version:       1,
 	}
 
-	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
-		p.rproxy.cloud = &httputil.ReverseProxy{
-			Director: func(r *http.Request) {},
-			Transport: cmn.NewTransport(cmn.TransportArgs{
-				UseHTTPS: config.Net.HTTP.UseHTTPS,
-			}),
-		}
-	}
+	p.rproxy.init()
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -142,6 +147,8 @@ func (p *proxyrunner) Run() error {
 	}
 
 	networkHandlers := []networkHandler{
+		networkHandler{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
+
 		networkHandler{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
 		networkHandler{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
 		networkHandler{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
@@ -386,7 +393,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
 		}
-		p.reverseDP(w, r, si)
+		p.reverseNodeRequest(w, r, si)
 		delta := time.Since(started)
 		p.statsif.Add(stats.GetLatency, int64(delta))
 	} else {
@@ -565,7 +572,8 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
-	if p.smapowner.get().isPrimary(p.si) {
+	smap := p.smapowner.get()
+	if smap.isPrimary(p.si) {
 		vote := p.xactions.globalXactRunning(cmn.ActElection)
 		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)
@@ -592,6 +600,17 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
+
+		// When some node was removed from the cluster we need to clean up the
+		// reverse proxy structure.
+		p.rproxy.nodes.Range(func(key, _ interface{}) bool {
+			nodeID := key.(string)
+			if smap.containsID(nodeID) && !newSmap.containsID(nodeID) {
+				p.rproxy.nodes.Delete(nodeID)
+			}
+			return true
+		})
+
 		if !newSmap.isPresent(p.si) {
 			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si, newSmap.pp())
 			glog.Errorln(s)
@@ -1322,44 +1341,50 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *cmn
 	if body == nil {
 		body = cmn.MustMarshal(msg)
 	}
-	p.rproxy.Lock()
-	if p.rproxy.u != smap.ProxySI.PublicNet.DirectURL {
-		p.rproxy.u = smap.ProxySI.PublicNet.DirectURL
+	primary := &p.rproxy.primary
+	primary.Lock()
+	if primary.url != smap.ProxySI.PublicNet.DirectURL {
+		primary.url = smap.ProxySI.PublicNet.DirectURL
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
 		cmn.AssertNoErr(err)
-		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
-		p.rproxy.p.Transport = cmn.NewTransport(cmn.TransportArgs{
+		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
+		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
 		})
 	}
-	p.rproxy.Unlock()
+	primary.Unlock()
 	if len(body) > 0 {
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // directly setting content-length
 	}
 	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si.Name(), msg.Action, s, smap.ProxySI)
-	p.rproxy.p.ServeHTTP(w, r)
+	primary.rp.ServeHTTP(w, r)
 	return true
 }
 
-// reverse-proxy GET object request
-func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *cluster.Snode) {
-	p.rproxy.Lock()
-	if p.rproxy.tmap == nil {
-		smap := p.smapowner.get()
-		p.rproxy.tmap = make(map[string]*httputil.ReverseProxy, smap.CountTargets())
-	}
-	rproxy, ok := p.rproxy.tmap[tsi.DaemonID]
-	if !ok || rproxy == nil {
-		uparsed, err := url.Parse(tsi.PublicNet.DirectURL)
-		cmn.AssertNoErr(err)
-		rproxy = httputil.NewSingleHostReverseProxy(uparsed)
+// reverse-proxy request
+func (p *proxyrunner) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
+	parsedURL, err := url.Parse(si.URL(cmn.NetworkPublic))
+	cmn.AssertNoErr(err)
+	p.reverseRequest(w, r, si.ID(), parsedURL)
+}
+
+func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nodeID string, parsedURL *url.URL) {
+	var (
+		rproxy *httputil.ReverseProxy
+	)
+
+	val, ok := p.rproxy.nodes.Load(nodeID)
+	if ok {
+		rproxy = val.(*httputil.ReverseProxy)
+	} else {
+		rproxy = httputil.NewSingleHostReverseProxy(parsedURL)
 		rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
 			UseHTTPS: cmn.GCO.Get().Net.HTTP.UseHTTPS,
 		})
-		p.rproxy.tmap[tsi.DaemonID] = rproxy
+		p.rproxy.nodes.Store(nodeID, rproxy)
 	}
-	p.rproxy.Unlock()
+
 	rproxy.ServeHTTP(w, r)
 }
 
@@ -2075,6 +2100,47 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 		h.ServeHTTP(w, r)
 	}
 	return wrappedFunc
+}
+
+func (p *proxyrunner) reverseHandler(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Reverse)
+	if err != nil {
+		return
+	}
+
+	// rewrite URL path (removing `cmn.Reverse`)
+	r.URL.Path = cmn.URLPath(cmn.Version, apiItems[0])
+
+	nodeID := r.Header.Get(cmn.HeaderNodeID)
+	if nodeID == "" {
+		p.invalmsghdlr(w, r, "node_id was not provided in header")
+		return
+	}
+	si := p.smapowner.get().GetNode(nodeID)
+	if si != nil {
+		p.reverseNodeRequest(w, r, si)
+		return
+	}
+
+	// Node not found but maybe we could contact it directly. This is for
+	// special case where we need to contact target which is not part of the
+	// cluster eg. mountpaths: when target is not part of the cluster after
+	// removing all mountpaths.
+	nodeURL := r.Header.Get(cmn.HeaderNodeURL)
+	if nodeURL == "" {
+		msg := fmt.Sprintf("node with provided id (%s) does not exists", nodeID)
+		p.invalmsghdlr(w, r, msg)
+		return
+	}
+
+	parsedURL, err := url.Parse(nodeURL)
+	if err != nil {
+		msg := fmt.Sprintf("provided node_url is invalid: %s", nodeURL)
+		p.invalmsghdlr(w, r, msg)
+		return
+	}
+
+	p.reverseRequest(w, r, nodeID, parsedURL)
 }
 
 //======================

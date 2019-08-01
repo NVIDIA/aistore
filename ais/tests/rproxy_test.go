@@ -103,7 +103,7 @@ func TestRProxyGCS(t *testing.T) {
 	const coeff = 3 // cached download speed must be at least coeff times faster
 
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 
 	// the test requires very specific configuration that cannot be enabled
 	// on the fly. That is why it is not Fatal error

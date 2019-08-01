@@ -847,8 +847,9 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 			num:             10000,
 			numGetsEachFile: 3,
 		}
-		targetURL  string
-		killTarget *cluster.Snode
+		baseParams     = tutils.DefaultBaseAPIParams(t)
+		selectedTarget *cluster.Snode
+		killTarget     *cluster.Snode
 	)
 
 	// Init. ioContext
@@ -864,15 +865,14 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// select a random target to disable one of its mountpaths,
 	// and another random target to unregister
 	for _, target := range m.smap.Tmap {
-		if targetURL == "" {
-			targetURL = target.PublicNet.DirectURL
+		if selectedTarget == nil {
+			selectedTarget = target
 		} else {
 			killTarget = target
 			break
 		}
 	}
-	baseParams := tutils.BaseAPIParams(targetURL)
-	mpList, err := api.GetMountpaths(baseParams)
+	mpList, err := api.GetMountpaths(baseParams, selectedTarget)
 	tassert.CheckFatal(t, err)
 
 	if len(mpList.Available) < 2 {
@@ -881,8 +881,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
-	tutils.Logf("Disable mountpath on target %s\n", targetURL)
-	err = api.DisableMountpath(baseParams, mpath)
+	tutils.Logf("Disable mountpath on target %s\n", selectedTarget.ID())
+	err = api.DisableMountpath(baseParams, selectedTarget.ID(), mpath)
 	tassert.CheckFatal(t, err)
 
 	// Unregister another target
@@ -914,7 +914,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// enable mountpath
-	err = api.EnableMountpath(baseParams, mpath)
+	err = api.EnableMountpath(baseParams, selectedTarget, mpath)
 	tassert.CheckFatal(t, err)
 
 	// wait until GETs are done while 2 rebalance are running
@@ -930,7 +930,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(m.t, err)
 
-	mpListAfter, err := api.GetMountpaths(baseParams)
+	mpListAfter, err := api.GetMountpaths(baseParams, selectedTarget)
 	tassert.CheckFatal(t, err)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
@@ -956,6 +956,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 			num:             20000,
 			numGetsEachFile: 1,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Init. ioContext
@@ -968,9 +969,8 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
-	targets := tutils.ExtractTargetNodes(m.smap)
-	baseParams := tutils.BaseAPIParams(targets[0].URL(cmn.NetworkPublic))
-	mpList, err := api.GetMountpaths(baseParams)
+	target := tutils.ExtractTargetNodes(m.smap)[0]
+	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	if len(mpList.Available) < 2 {
@@ -985,7 +985,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
-		err = api.DisableMountpath(baseParams, mp)
+		err = api.DisableMountpath(baseParams, target.ID(), mp)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -999,13 +999,13 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	for _, mp := range mpaths {
 		// sleep for a while before enabling another mountpath
 		time.Sleep(50 * time.Millisecond)
-		err = api.EnableMountpath(baseParams, mp)
+		err = api.EnableMountpath(baseParams, target, mp)
 		tassert.CheckFatal(t, err)
 	}
 
 	m.wg.Wait()
 
-	mpListAfter, err := api.GetMountpaths(baseParams)
+	mpListAfter, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
@@ -1281,6 +1281,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1289,18 +1290,17 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 	target := tutils.ExtractTargetNodes(m.smap)[0]
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	// Remove all mountpaths for one target
-	oldMountpaths, err := api.GetMountpaths(baseParams)
+	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	for _, mpath := range oldMountpaths.Available {
-		err = api.RemoveMountpath(baseParams, mpath)
+		err = api.RemoveMountpath(baseParams, target.ID(), mpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually removed
-	mountpaths, err := api.GetMountpaths(baseParams)
+	mountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
@@ -1313,12 +1313,12 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
-		err = api.AddMountpath(baseParams, mpath)
+		err = api.AddMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually added
-	mountpaths, err = api.GetMountpaths(baseParams)
+	mountpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
@@ -1347,6 +1347,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1378,8 +1379,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.puts()
 
 	// Add new mountpath to target
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-	err := api.AddMountpath(baseParams, newMountpath)
+	err := api.AddMountpath(baseParams, target, newMountpath)
 	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, tutils.BaseAPIParams(m.proxyURL), rebalanceTimeout)
@@ -1391,12 +1391,11 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Remove new mountpath from target
 	if containers.DockerRunning() {
-		baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-		if err := api.RemoveMountpath(baseParams, newMountpath); err != nil {
+		if err := api.RemoveMountpath(baseParams, target.ID(), newMountpath); err != nil {
 			t.Error(err.Error())
 		}
 	} else {
-		err = api.RemoveMountpath(baseParams, newMountpath)
+		err = api.RemoveMountpath(baseParams, target.ID(), newMountpath)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -1418,6 +1417,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 			num:             10000,
 			numGetsEachFile: 5,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1444,8 +1444,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err := containers.DockerCreateMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-			err = api.AddMountpath(baseParams, newMountpath)
+			err = api.AddMountpath(baseParams, target, newMountpath)
 			tassert.CheckFatal(t, err)
 		}
 	} else {
@@ -1453,8 +1452,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			cmn.CreateDir(mountpath)
-			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-			err := api.AddMountpath(baseParams, mountpath)
+			err := api.AddMountpath(baseParams, target, mountpath)
 			tassert.CheckFatal(t, err)
 		}
 	}
@@ -1471,8 +1469,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err := containers.DockerRemoveMpathDir(0, newMountpath)
 		tassert.CheckFatal(t, err)
 		for _, target := range targets {
-			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-			if err := api.RemoveMountpath(baseParams, newMountpath); err != nil {
+			if err := api.RemoveMountpath(baseParams, target.ID(), newMountpath); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -1480,8 +1477,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			os.RemoveAll(mountpath)
-			baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
-			if err := api.RemoveMountpath(baseParams, mountpath); err != nil {
+			if err := api.RemoveMountpath(baseParams, target.ID(), mountpath); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -1497,6 +1493,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1505,18 +1502,17 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 	target := tutils.ExtractTargetNodes(m.smap)[0]
-	baseParams := tutils.BaseAPIParams(target.URL(cmn.NetworkPublic))
 	// Remove all mountpaths for one target
-	oldMountpaths, err := api.GetMountpaths(baseParams)
+	oldMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	for _, mpath := range oldMountpaths.Available {
-		err := api.DisableMountpath(baseParams, mpath)
+		err := api.DisableMountpath(baseParams, target.ID(), mpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually disabled
-	mountpaths, err := api.GetMountpaths(baseParams)
+	mountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != 0 {
@@ -1533,12 +1529,12 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
-		err := api.EnableMountpath(baseParams, mpath)
+		err := api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	// Check if mountpaths were actually enabled
-	mountpaths, err = api.GetMountpaths(baseParams)
+	mountpaths, err = api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {

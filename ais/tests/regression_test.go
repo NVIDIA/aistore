@@ -624,13 +624,13 @@ func TestGetClusterStats(t *testing.T) {
 
 func TestConfig(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	oconfig := getDaemonConfig(t, proxyURL)
+	oconfig := getClusterConfig(t, proxyURL)
 	olruconfig := oconfig.LRU
 	operiodic := oconfig.Periodic
 
 	setClusterConfig(t, proxyURL, configRegression)
 
-	nconfig := getDaemonConfig(t, proxyURL)
+	nconfig := getClusterConfig(t, proxyURL)
 	nlruconfig := nconfig.LRU
 	nperiodic := nconfig.Periodic
 
@@ -714,7 +714,7 @@ func TestLRU(t *testing.T) {
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
-		cfg := getDaemonConfig(t, di.URL(cmn.NetworkPublic))
+		cfg := getDaemonConfig(t, proxyURL, di.ID())
 		lwms[k] = cfg.LRU.LowWM
 		hwms[k] = cfg.LRU.HighWM
 	}
@@ -741,7 +741,7 @@ func TestLRU(t *testing.T) {
 		t.Skip("skipping - cannot test LRU.")
 		return
 	}
-	oconfig := getDaemonConfig(t, proxyURL)
+	oconfig := getClusterConfig(t, proxyURL)
 	if t.Failed() {
 		return
 	}
@@ -765,7 +765,7 @@ func TestLRU(t *testing.T) {
 
 			lwmStr, err := cmn.ConvertToString(lwms[k])
 			tassert.CheckFatal(t, err)
-			setDaemonConfig(t, di.URL(cmn.NetworkPublic), cmn.SimpleKVs{
+			setDaemonConfig(t, proxyURL, di.ID(), cmn.SimpleKVs{
 				"highwm": hwmStr,
 				"lowwm":  lwmStr,
 			})
@@ -1448,17 +1448,23 @@ func getClusterMap(t *testing.T, url string) cluster.Smap {
 	return smap
 }
 
-func getDaemonConfig(t *testing.T, url string) (config *cmn.Config) {
+func getClusterConfig(t *testing.T, proxyURL string) (config *cmn.Config) {
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
+	tassert.CheckFatal(t, err)
+	return getDaemonConfig(t, proxyURL, primary.ID())
+}
+
+func getDaemonConfig(t *testing.T, proxyURL string, nodeID string) (config *cmn.Config) {
 	var err error
-	baseParams := tutils.BaseAPIParams(url)
-	config, err = api.GetDaemonConfig(baseParams)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	config, err = api.GetDaemonConfig(baseParams, nodeID)
 	tassert.CheckFatal(t, err)
 	return
 }
 
-func setDaemonConfig(t *testing.T, daemonURL string, nvs cmn.SimpleKVs) {
-	baseParams := tutils.BaseAPIParams(daemonURL)
-	err := api.SetDaemonConfig(baseParams, nvs)
+func setDaemonConfig(t *testing.T, proxyURL string, nodeID string, nvs cmn.SimpleKVs) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.SetDaemonConfig(baseParams, nodeID, nvs)
 	tassert.CheckFatal(t, err)
 }
 

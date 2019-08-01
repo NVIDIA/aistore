@@ -1842,9 +1842,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	tassert.CheckFatal(t, ecSliceNumInit(t, smap))
 
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
-	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
-
-	mpathList, err := api.GetMountpaths(tgtParams)
+	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
 	if len(mpathList.Available) < 2 {
 		t.Fatalf("%s requires 2 or more mountpaths", t.Name())
@@ -1909,12 +1907,12 @@ func TestECEmergencyMpath(t *testing.T) {
 	mpathID := rnd.Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
-	err = api.DisableMountpath(tgtParams, removeMpath)
+	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		// Enable mountpah
 		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
-		err = api.EnableMountpath(tgtParams, removeMpath)
+		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
 

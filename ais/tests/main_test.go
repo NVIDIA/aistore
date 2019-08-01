@@ -609,7 +609,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		dataCloud     = []byte("I'm from the cloud!")
 		defLocalProps cmn.BucketProps
 		defCloudProps cmn.BucketProps
-		globalConfig  = getDaemonConfig(t, proxyURL)
+		globalConfig  = getClusterConfig(t, proxyURL)
 		msg           = &cmn.SelectMsg{PageSize: int(pagesize), Props: "size,status"}
 		found         = false
 	)
@@ -780,7 +780,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	bcoldget := config.Cksum.ValidateColdGet
 
 	sgl := tutils.Mem2.NewSGL(filesize)
@@ -1228,7 +1228,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		return nil
 	}
 
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	oldWarmGet := config.Cksum.ValidateWarmGet
 	oldChecksum := config.Cksum.Type
 	if !oldWarmGet {
@@ -1418,7 +1418,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	oldWarmGet := config.Cksum.ValidateWarmGet
 	oldChecksum := config.Cksum.Type
 
@@ -1517,7 +1517,7 @@ func TestRangeRead(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	oldEnableReadRangeChecksum := config.Cksum.EnableReadRange
 
 	fileName = <-fileNameCh
@@ -1689,7 +1689,7 @@ func Test_checksum(t *testing.T) {
 	}
 
 	// Get Current Config
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	ocoldget := config.Cksum.ValidateColdGet
 	ochksum := config.Cksum.Type
 
@@ -1839,12 +1839,11 @@ func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
 }
 
 func getPrimaryURL(t *testing.T, proxyURL string) string {
-	url, err := tutils.GetPrimaryProxy(proxyURL)
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {
 		t.Fatalf("Failed to get primary proxy URL: %v", err)
 	}
-
-	return url
+	return primary.URL(cmn.NetworkPublic)
 }
 
 func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {

@@ -139,21 +139,20 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 //
 
 // Populates the proxy and target maps
-func fillMap(url string) error {
+func fillMap(url string) (*cluster.Smap, error) {
 	var (
 		baseParams = cliAPIParams(url)
 		wg         = &sync.WaitGroup{}
 	)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Get the primary proxy's smap
-	primaryURL := smap.ProxySI.PublicNet.DirectURL
-	baseParams.URL = primaryURL
+	baseParams.URL = smap.ProxySI.PublicNet.DirectURL
 	smapPrimary, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	proxyCount := len(smapPrimary.Pmap)
@@ -161,39 +160,38 @@ func fillMap(url string) error {
 	errCh := make(chan error, proxyCount+targetCount)
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(smapPrimary.Pmap, proxy, wg, errCh)
-	retrieveStatus(smapPrimary.Tmap, target, wg, errCh)
+	retrieveStatus(baseParams, smapPrimary.Pmap, proxy, wg, errCh)
+	retrieveStatus(baseParams, smapPrimary.Tmap, target, wg, errCh)
 	wg.Wait()
 	close(errCh)
 
 	for err := range errCh {
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return &smapPrimary, nil
 }
 
-func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
-	for _, dae := range nodeMap {
-		go func(d *cluster.Snode) {
-			errCh <- fill(d, daeMap)
+func retrieveStatus(baseParams *api.BaseParams, nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
+	fill := func(dae *cluster.Snode) error {
+		obj, err := api.GetDaemonStatus(baseParams, dae.ID())
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		daeMap[dae.ID()] = obj
+		mu.Unlock()
+		return nil
+	}
+
+	for _, si := range nodeMap {
+		go func(si *cluster.Snode) {
+			errCh <- fill(si)
 			wg.Done()
-		}(dae)
+		}(si)
 	}
-}
-
-func fill(dae *cluster.Snode, daeMap map[string]*stats.DaemonStatus) error {
-	baseParams := cliAPIParams(dae.URL(cmn.NetworkPublic))
-	obj, err := api.GetDaemonStatus(baseParams)
-	if err != nil {
-		return err
-	}
-	mu.Lock()
-	daeMap[dae.DaemonID] = obj
-	mu.Unlock()
-	return nil
 }
 
 //

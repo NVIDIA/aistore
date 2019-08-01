@@ -417,7 +417,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	chkVersion := true
 
-	config := getDaemonConfig(t, proxyURL)
+	config := getClusterConfig(t, proxyURL)
 	oldChkVersion := config.Ver.ValidateWarmGet
 	oldVersioning := config.Ver.Enabled
 

@@ -24,11 +24,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/stats"
-
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
@@ -486,7 +486,6 @@ func ListObjectsFast(proxyURL, bucket, bckProvider, prefix string) ([]string, er
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
-
 	tctx := newTraceCtx()
 
 	url := server + cmn.URLPath(cmn.Version, cmn.Daemon)
@@ -511,15 +510,15 @@ func GetConfig(server string) (HTTPLatencies, error) {
 }
 
 // GetPrimaryProxy returns the primary proxy's url of a cluster
-func GetPrimaryProxy(proxyURL string) (string, error) {
-	readProxyURL = proxyURL //Sets the appropriate proxy url based on local, docker or AISURL environment var
+func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
+	readProxyURL = proxyURL // Sets the appropriate proxy url based on local, docker or AISURL environment var
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return smap.ProxySI.PublicNet.DirectURL, nil
+	return smap.ProxySI, nil
 }
 
 func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
@@ -807,9 +806,9 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 }
 
 func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
-	primaryURL, err := GetPrimaryProxy(readProxyURL)
+	primary, err := GetPrimaryProxy(readProxyURL)
 	tassert.CheckFatal(t, err)
-	return BaseAPIParams(primaryURL)
+	return BaseAPIParams(primary.URL(cmn.NetworkPublic))
 }
 
 func BaseAPIParams(url string) *api.BaseParams {

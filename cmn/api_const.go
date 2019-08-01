@@ -138,6 +138,9 @@ const (
 	HeaderCallerName        = "caller.name"
 	HeaderCallerSmapVersion = "caller.smap.ver"
 
+	HeaderNodeID  = "node.id"
+	HeaderNodeURL = "node.url"
+
 	// intra-cluster: streams
 	HeaderSessID   = "session.id"
 	HeaderCompress = "compress" // LZ4Compression, etc.
@@ -281,6 +284,8 @@ const (
 	Health    = "health"
 	Vote      = "vote"
 	Transport = "transport"
+	Reverse   = "reverse"
+
 	// l3
 	SyncSmap     = "syncsmap"
 	Keepalive    = "keepalive"

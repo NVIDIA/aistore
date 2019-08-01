@@ -49,7 +49,7 @@ var (
 )
 
 func configHandler(c *cli.Context) error {
-	if err := fillMap(ClusterURL); err != nil {
+	if _, err := fillMap(ClusterURL); err != nil {
 		return err
 	}
 
@@ -79,12 +79,7 @@ func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		useJSON  = flagIsSet(c, jsonFlag)
 	)
 
-	newURL, err := daemonDirectURL(daemonID)
-	if err != nil {
-		return err
-	}
-	baseParams.URL = newURL
-	body, err := api.GetDaemonConfig(baseParams)
+	body, err := api.GetDaemonConfig(baseParams, daemonID)
 	if err != nil {
 		return err
 	}
@@ -108,12 +103,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return nil
 	}
 
-	daemonURL, err := daemonDirectURL(daemonID)
-	if err != nil {
-		return err
-	}
-	baseParams.URL = daemonURL
-	if err := api.SetDaemonConfig(baseParams, nvs); err != nil {
+	if err := api.SetDaemonConfig(baseParams, daemonID, nvs); err != nil {
 		return err
 	}
 

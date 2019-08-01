@@ -523,10 +523,10 @@ func TestDownloadStatusError(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		params   = tutils.DefaultBaseAPIParams(t)
-		files    = map[string]string{
+		bucket     = TestLocalBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		files      = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
 			"notFoundFile": "http://releases.ubuntu.com/18.04/amd65.iso",
 		}
@@ -538,13 +538,13 @@ func TestDownloadStatusError(t *testing.T) {
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	id, err := api.DownloadMulti(params, generateDownloadDesc(), bucket, files)
+	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, files)
 	tassert.CheckFatal(t, err)
 
 	// Wait to make sure both files were processed by downloader
 	time.Sleep(3 * time.Second)
 
-	resp, err := api.DownloadStatus(params, id)
+	resp, err := api.DownloadStatus(baseParams, id)
 	tassert.CheckFatal(t, err)
 
 	if resp.Total != len(files) {
@@ -638,10 +638,10 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
+	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, m)
 	tassert.CheckFatal(t, err)
 
-	waitForDownload(t, id, 10*time.Second)
+	waitForDownload(t, id, 30*time.Second)
 
 	// If the file was successfully downloaded, it means that the external checksum was correct. Also because of the
 	// ValidateWarmGet property being set to True, if it was downloaded without errors then the internal checksum was
@@ -672,7 +672,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
-	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
+	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bucket, template)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, time.Minute)
@@ -707,9 +707,10 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 
 func TestDownloadMpathEvents(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
-		objsCnt  = 100
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		bucket     = TestLocalBucketName
+		objsCnt    = 100
 
 		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000050}.tgz"
 		m        = make(map[string]string, objsCnt)
@@ -730,36 +731,35 @@ func TestDownloadMpathEvents(t *testing.T) {
 
 	smap := getClusterMap(t, proxyURL)
 	removeTarget := tutils.ExtractTargetNodes(smap)[0]
-	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
 
-	mpathList, err := api.GetMountpaths(tgtParams)
+	mpathList, err := api.GetMountpaths(baseParams, removeTarget)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(mpathList.Available) >= 2, "%s requires 2 or more mountpaths", t.Name())
 
 	mpathID := cmn.NowRand().Intn(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
 	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
-	err = api.DisableMountpath(tgtParams, removeMpath)
+	err = api.DisableMountpath(baseParams, removeTarget.ID(), removeMpath)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
 		// Enable mountpah
 		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
-		err = api.EnableMountpath(tgtParams, removeMpath)
+		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 	}()
 
 	// wait until downloader is aborted
-	waitForDownloaderToFinish(t, tutils.DefaultBaseAPIParams(t), removeTarget.DaemonID, time.Second*30)
+	waitForDownloaderToFinish(t, baseParams, removeTarget.DaemonID, time.Second*30)
 	// downloader finished on required target, safe to abort the rest
 	tutils.Logf("Aborting download job %s\n", id)
-	err = api.DownloadAbort(tutils.DefaultBaseAPIParams(t), id)
+	err = api.DownloadAbort(baseParams, id)
 
 	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
-	id, err = api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
+	id, err = api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, m)
 	tassert.CheckFatal(t, err)
 	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
 

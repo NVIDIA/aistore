@@ -39,8 +39,8 @@ type checkerMD struct {
 	proxyURL   string
 	bucket     string
 	smap       cluster.Smap
-	mpList     map[string]string
-	allMps     map[string]*cmn.MountpathList
+	mpList     map[string]*cluster.Snode
+	allMps     map[*cluster.Snode]*cmn.MountpathList
 	origAvail  int
 	fileSize   int64
 	baseParams *api.BaseParams
@@ -57,8 +57,8 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		proxyURL: getPrimaryURL(t, proxyURLReadOnly),
 		bucket:   TestLocalBucketName,
 		fileSize: 64 * cmn.KiB,
-		mpList:   make(map[string]string, 10),
-		allMps:   make(map[string]*cmn.MountpathList, 10),
+		mpList:   make(map[string]*cluster.Snode, 10),
+		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
 		chstop:   make(chan struct{}),
 		chfail:   make(chan struct{}),
 		wg:       &sync.WaitGroup{},
@@ -70,24 +70,25 @@ func newCheckerMD(t *testing.T) *checkerMD {
 }
 
 func (md *checkerMD) init() {
+	md.baseParams = tutils.BaseAPIParams(md.proxyURL)
 	md.smap = getClusterMap(md.t, md.proxyURL)
-	for target, tinfo := range md.smap.Tmap {
-		tutils.Logf("Target: %s\n", target)
-		md.baseParams = tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
-		lst, err := api.GetMountpaths(md.baseParams)
+
+	for targetID, tinfo := range md.smap.Tmap {
+		tutils.Logf("Target: %s\n", targetID)
+		lst, err := api.GetMountpaths(md.baseParams, tinfo)
 		tassert.CheckFatal(md.t, err)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
-			md.mpList[fqn] = tinfo.PublicNet.DirectURL
+			md.mpList[fqn] = tinfo
 		}
-		md.allMps[tinfo.PublicNet.DirectURL] = lst
+		md.allMps[tinfo] = lst
 
 		md.origAvail += len(lst.Available)
 	}
 }
 
-func (md *checkerMD) randomTargetMpath() (target string, mpath string, mpathMap *cmn.MountpathList) {
+func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, mpathMap *cmn.MountpathList) {
 	// select random target and mountpath
 	for m, t := range md.mpList {
 		target, mpath = t, m
@@ -97,7 +98,7 @@ func (md *checkerMD) randomTargetMpath() (target string, mpath string, mpathMap 
 	return
 }
 
-func (md *checkerMD) runTestAsync(method, target, mpath string, mpathList *cmn.MountpathList, sgl *memsys.SGL) {
+func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, sgl *memsys.SGL) {
 	md.wg.Add(1)
 	go runAsyncJob(md.t, md.wg, method, mpath, fileNames, md.chfail, md.chstop, sgl, md.bucket)
 	// let the job run for a while and then make a mountpath broken
@@ -113,7 +114,7 @@ func (md *checkerMD) runTestAsync(method, target, mpath string, mpathList *cmn.M
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
 }
 
-func (md *checkerMD) runTestSync(method, target, mpath string, mpathList *cmn.MountpathList, objList []string, sgl *memsys.SGL) {
+func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *cmn.MountpathList, objList []string, sgl *memsys.SGL) {
 	ldir := filepath.Join(LocalSrcDir, fshcDir)
 	os.RemoveAll(mpath)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled))
@@ -144,10 +145,11 @@ func (md *checkerMD) runTestSync(method, target, mpath string, mpathList *cmn.Mo
 
 }
 
-func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen int, failIfDiffer bool, timeout ...time.Duration) bool {
+func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool, timeout ...time.Duration) bool {
 	var (
-		err       error
-		newMpaths *cmn.MountpathList
+		err        error
+		newMpaths  *cmn.MountpathList
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	maxWaitTime := fshcDetectTimeMax
@@ -158,9 +160,8 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(maxWaitTime)
 
-	baseParams := tutils.BaseAPIParams(target)
 	for detectLimit.After(time.Now()) {
-		newMpaths, err = api.GetMountpaths(baseParams)
+		newMpaths, err = api.GetMountpaths(baseParams, target)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -194,8 +195,11 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	return false
 }
 
-func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen int) {
-	var err error
+func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int) {
+	var (
+		err        error
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
 	// cleanup
 	// restore original mountpath
 	os.Remove(mpath)
@@ -203,16 +207,14 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
-	baseParams := tutils.BaseAPIParams(target)
-
-	api.EnableMountpath(baseParams, mpath)
+	api.EnableMountpath(baseParams, target, mpath)
 	tutils.Logf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *cmn.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
-		mpaths, err = api.GetMountpaths(baseParams)
+		mpaths, err = api.GetMountpaths(baseParams, target)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -294,7 +296,9 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Skipf("%s requires direct filesystem access, doesn't work with docker", t.Name())
 	}
 
-	md := newCheckerMD(t)
+	var (
+		md = newCheckerMD(t)
+	)
 
 	if md.origAvail == 0 {
 		t.Fatal("No available mountpaths found")
@@ -312,7 +316,6 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	// generate some filenames to PUT to them in a loop
 	generateRandomData(md.seed, md.numObjs)
 
-	md.baseParams = tutils.BaseAPIParams(selectedTarget)
 	// Checking detection on object PUT
 	md.runTestAsync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, sgl)
 	// Checking detection on object GET
@@ -369,7 +372,6 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		objList = append(objList, objName)
 	}
 
-	md.baseParams = tutils.BaseAPIParams(selectedTarget)
 	// Checking detection on object PUT
 	md.runTestSync(http.MethodPut, selectedTarget, selectedMpath, selectedMap, objList, sgl)
 	// Checking detection on object GET
@@ -379,24 +381,26 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 }
 
 func TestFSCheckerEnablingMpath(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
+	var (
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		smap       = getClusterMap(t, proxyURL)
+		mpList     = make(map[string]*cluster.Snode, 10)
+		allMps     = make(map[*cluster.Snode]*cmn.MountpathList, 10)
+		origAvail  = 0
+		origOff    = 0
+	)
 
-	smap := getClusterMap(t, proxyURL)
-	mpList := make(map[string]string, 10)
-	allMps := make(map[string]*cmn.MountpathList, 10)
-	origAvail := 0
-	origOff := 0
-	for target, tinfo := range smap.Tmap {
-		tutils.Logf("Target: %s\n", target)
-		baseParams := tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
-		lst, err := api.GetMountpaths(baseParams)
+	for targetID, tinfo := range smap.Tmap {
+		tutils.Logf("Target: %s\n", targetID)
+		lst, err := api.GetMountpaths(baseParams, tinfo)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
-			mpList[fqn] = tinfo.PublicNet.DirectURL
+			mpList[fqn] = tinfo
 		}
-		allMps[tinfo.PublicNet.DirectURL] = lst
+		allMps[tinfo] = lst
 
 		origAvail += len(lst.Available)
 		origOff += len(lst.Disabled)
@@ -407,22 +411,24 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	// select random target and mountpath
-	selectedTarget, selectedMpath := "", ""
+	var (
+		selectedTarget *cluster.Snode
+		selectedMpath  string
+	)
 	for m, t := range mpList {
 		selectedTarget, selectedMpath = t, m
 		break
 	}
 
 	// create a local bucket to write to
-	tutils.Logf("mountpath %s of %s is going offline\n", selectedMpath, selectedTarget)
+	tutils.Logf("mountpath %s of %s is going offline\n", selectedMpath, selectedTarget.ID())
 
-	baseParams := tutils.BaseAPIParams(selectedTarget)
-	err := api.EnableMountpath(baseParams, selectedMpath)
+	err := api.EnableMountpath(baseParams, selectedTarget, selectedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
 
-	err = api.EnableMountpath(baseParams, selectedMpath+"some_text")
+	err = api.EnableMountpath(baseParams, selectedTarget, selectedMpath+"some_text")
 	if err == nil {
 		t.Errorf("Enabling non-existing mountpath should return error")
 	} else {
@@ -434,38 +440,42 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 }
 
 func TestFSCheckerTargetDisable(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	smap := getClusterMap(t, proxyURL)
-	proxyCnt := len(smap.Pmap)
-	targetCnt := len(smap.Tmap)
+	var (
+		target *cluster.Snode
+
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		smap       = getClusterMap(t, proxyURL)
+		proxyCnt   = len(smap.Pmap)
+		targetCnt  = len(smap.Tmap)
+	)
+
 	if targetCnt < 2 {
 		t.Skip("The number of targets must be at least 2")
 	}
 
-	tgtURL := ""
 	for _, tinfo := range smap.Tmap {
-		tgtURL = tinfo.PublicNet.DirectURL
+		target = tinfo
 		break
 	}
-	baseParams := tutils.BaseAPIParams(tgtURL)
-	oldMpaths, err := api.GetMountpaths(baseParams)
+	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	if len(oldMpaths.Available) == 0 {
-		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
+		t.Fatalf("Target %s does not have available mountpaths", target)
 	}
 
-	tutils.Logf("Removing all mountpaths from target: %s\n", tgtURL)
+	tutils.Logf("Removing all mountpaths from target: %s\n", target)
 	for _, mpath := range oldMpaths.Available {
-		err = api.DisableMountpath(baseParams, mpath)
+		err = api.DisableMountpath(baseParams, target.ID(), mpath)
 		tassert.CheckFatal(t, err)
 	}
 
 	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Restoring target %s mountpaths\n", tgtURL)
+	tutils.Logf("Restoring target %s mountpaths\n", target.ID())
 	for _, mpath := range oldMpaths.Available {
-		err = api.EnableMountpath(baseParams, mpath)
+		err = api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
 	}
 

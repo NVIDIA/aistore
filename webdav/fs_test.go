@@ -381,14 +381,14 @@ func TestFS(t *testing.T) {
 	if cliAISURL != "" {
 		proxyURL = "http://" + cliAISURL
 	}
-	leader, err := tutils.GetPrimaryProxy(proxyURL)
+	primary, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	leader = strings.TrimPrefix(leader, "http://")
+	primaryURL := strings.TrimPrefix(primary.URL(cmn.NetworkPublic), "http://")
 	existingFilesInTestRoot := readTestRoot(t)
-	fs := NewFS(&url.URL{Scheme: "http", Host: leader}, rootDir)
+	fs := NewFS(&url.URL{Scheme: "http", Host: primaryURL}, rootDir)
 
 	// clean up
 	defer func() {
@@ -885,7 +885,7 @@ func TestFS(t *testing.T) {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)
 		}
 
-		fs1 := NewFS(&url.URL{Scheme: "http", Host: leader}, rootDir)
+		fs1 := NewFS(&url.URL{Scheme: "http", Host: primaryURL}, rootDir)
 		_, err = fs1.Stat(context.Background(), dir30Path) // file6Path)
 		if err != nil {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)

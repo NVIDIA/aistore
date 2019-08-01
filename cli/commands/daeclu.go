@@ -100,7 +100,8 @@ var (
 
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
-	if err := fillMap(ClusterURL); err != nil {
+	smap, err := fillMap(ClusterURL)
+	if err != nil {
 		return err
 	}
 
@@ -124,7 +125,7 @@ func queryHandler(c *cli.Context) (err error) {
 	case daecluDiskStats:
 		err = daemonDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
 	case daecluStatus:
-		err = daemonStatus(c, daemonID, useJSON, hideHeader)
+		err = daemonStatus(c, smap, daemonID, useJSON, hideHeader)
 	case daecluAddNode:
 		err = clusterAddNode(c, baseParams)
 	case daecluRemoveNode:
@@ -209,7 +210,7 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 }
 
 // Displays the status of the cluster or daemon
-func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
+func daemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
@@ -223,11 +224,6 @@ func daemonStatus(c *cli.Context, daemonID string, useJSON, hideHeader bool) err
 		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
 		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
-		baseParams := cliAPIParams(ClusterURL)
-		smap, err := api.GetClusterMap(baseParams)
-		if err != nil {
-			return err
-		}
 		if err := templates.DisplayOutput(proxy, c.App.Writer, templates.ProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
