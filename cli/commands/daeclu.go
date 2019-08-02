@@ -100,7 +100,7 @@ var (
 
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
-	smap, err := fillMap(ClusterURL)
+	primarySmap, err := fillMap(ClusterURL)
 	if err != nil {
 		return err
 	}
@@ -119,13 +119,13 @@ func queryHandler(c *cli.Context) (err error) {
 
 	switch req {
 	case daecluSmap:
-		err = clusterSmap(c, baseParams, daemonID, useJSON)
+		err = clusterSmap(c, baseParams, primarySmap, daemonID, useJSON)
 	case daecluStats:
 		err = daemonStats(c, baseParams, daemonID, useJSON)
 	case daecluDiskStats:
 		err = daemonDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
 	case daecluStatus:
-		err = daemonStatus(c, smap, daemonID, useJSON, hideHeader)
+		err = daemonStatus(c, primarySmap, daemonID, useJSON, hideHeader)
 	case daecluAddNode:
 		err = clusterAddNode(c, baseParams)
 	case daecluRemoveNode:
@@ -137,16 +137,17 @@ func queryHandler(c *cli.Context) (err error) {
 }
 
 // Displays smap of single daemon
-func clusterSmap(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
-	newURL, err := daemonDirectURL(daemonID)
-	if err != nil {
-		return err
-	}
+func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap cluster.Smap, daemonID string, useJSON bool) error {
+	var (
+		smap = primarySmap
+		err  error
+	)
 
-	baseParams.URL = newURL
-	smap, err := api.GetClusterMap(baseParams)
-	if err != nil {
-		return err
+	if daemonID != "" {
+		smap, err = api.GetNodeClusterMap(baseParams, daemonID)
+		if err != nil {
+			return err
+		}
 	}
 
 	extendedURLs := false
@@ -210,7 +211,7 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 }
 
 // Displays the status of the cluster or daemon
-func daemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+func daemonStatus(c *cli.Context, smap cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
@@ -289,14 +290,9 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 	)
 
 	for targetID := range targets {
-		wg.Go(func(targetID string, baseParams *api.BaseParams) func() error {
+		wg.Go(func(targetID string) func() error {
 			return func() (err error) {
-				baseParams.URL, err = daemonDirectURL(targetID)
-				if err != nil {
-					return err
-				}
-
-				diskStats, err := api.GetTargetDiskStats(baseParams)
+				diskStats, err := api.GetTargetDiskStats(baseParams, targetID)
 				if err != nil {
 					return err
 				}
@@ -304,7 +300,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 				statsCh <- targetDiskStats{stats: diskStats, targetID: targetID}
 				return nil
 			}
-		}(targetID, baseParams.Copy()))
+		}(targetID))
 	}
 
 	err := wg.Wait()

@@ -139,20 +139,19 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 //
 
 // Populates the proxy and target maps
-func fillMap(url string) (*cluster.Smap, error) {
+func fillMap(url string) (cluster.Smap, error) {
 	var (
 		baseParams = cliAPIParams(url)
 		wg         = &sync.WaitGroup{}
 	)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return nil, err
+		return cluster.Smap{}, err
 	}
 	// Get the primary proxy's smap
-	baseParams.URL = smap.ProxySI.PublicNet.DirectURL
-	smapPrimary, err := api.GetClusterMap(baseParams)
+	smapPrimary, err := api.GetNodeClusterMap(baseParams, smap.ProxySI.DaemonID)
 	if err != nil {
-		return nil, err
+		return cluster.Smap{}, err
 	}
 
 	proxyCount := len(smapPrimary.Pmap)
@@ -167,11 +166,11 @@ func fillMap(url string) (*cluster.Smap, error) {
 
 	for err := range errCh {
 		if err != nil {
-			return nil, err
+			return cluster.Smap{}, err
 		}
 	}
 
-	return &smapPrimary, nil
+	return smapPrimary, nil
 }
 
 func retrieveStatus(baseParams *api.BaseParams, nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
@@ -537,21 +536,6 @@ func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) err
 		return fmt.Errorf("could not reach %q bucket: %v", bckName, err)
 	}
 	return nil
-}
-
-// Checks if daemon exists and returns it's directURL
-func daemonDirectURL(daemonID string) (string, error) {
-	// Default: use AIS_URL value
-	if daemonID == "" {
-		return ClusterURL, nil
-	}
-	if res, ok := proxy[daemonID]; ok {
-		return res.Snode.URL(cmn.NetworkPublic), nil
-	}
-	if res, ok := target[daemonID]; ok {
-		return res.Snode.URL(cmn.NetworkPublic), nil
-	}
-	return "", fmt.Errorf(invalidDaemonMsg, daemonID)
 }
 
 //

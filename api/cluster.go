@@ -23,21 +23,48 @@ import (
 //
 // GetClusterMap retrieves AIStore cluster map
 func GetClusterMap(baseParams *BaseParams) (smap cluster.Smap, err error) {
-	q := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}
-	query := q.Encode()
-	requestURL := fmt.Sprintf("%s?%s", baseParams.URL+cmn.URLPath(cmn.Version, cmn.Daemon), query)
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Daemon)
+	params := OptionalParams{Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}}
 
-	// Cannot use doHTTPRequestGetResp, since it tries to read the response internally.
-	// In situations where we wait for the primary proxy to restart (TestMultiProxy/CrashAndFastRestore),
-	// `waitForPrimaryProxy` does an additional check for a connection refused error,
-	// which polls until the primary proxy is up. In the meantime, smap will be nil.
-	resp, err := baseParams.Client.Get(requestURL)
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
 		return cluster.Smap{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		return cluster.Smap{}, fmt.Errorf("get Smap, HTTP status %d", resp.StatusCode)
+		return cluster.Smap{}, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return cluster.Smap{}, err
+	}
+	err = json.Unmarshal(body, &smap)
+	if err != nil {
+		return cluster.Smap{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
+	}
+	return smap, nil
+}
+
+// GetNodeClusterMap API
+//
+// GetNodeClusterMap retrieves AIStore cluster map from specific node
+func GetNodeClusterMap(baseParams *BaseParams, nodeID string) (smap cluster.Smap, err error) {
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
+	params := OptionalParams{
+		Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}},
+		Header: http.Header{cmn.HeaderNodeID: []string{nodeID}},
+	}
+
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
+	if err != nil {
+		return cluster.Smap{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return cluster.Smap{}, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -104,11 +131,13 @@ func GetClusterStats(baseParams *BaseParams) (clusterStats stats.ClusterStats, e
 	return clusterStats, nil
 }
 
-func GetTargetDiskStats(baseParams *BaseParams) (map[string]*ios.SelectedDiskStats, error) {
+func GetTargetDiskStats(baseParams *BaseParams, targetID string) (map[string]*ios.SelectedDiskStats, error) {
 	baseParams.Method = http.MethodGet
-	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}}
-	path := cmn.URLPath(cmn.Version, cmn.Daemon)
-	params := OptionalParams{Query: query}
+	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
+	params := OptionalParams{
+		Query:  url.Values{cmn.URLParamWhat: []string{cmn.GetWhatDiskStats}},
+		Header: http.Header{cmn.HeaderNodeID: []string{targetID}},
+	}
 
 	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
