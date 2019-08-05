@@ -216,7 +216,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 		if err != nil {
 			continue
 		}
-		_, err = lom.Load(true)
+		err = lom.Load()
 		if err != nil || !lom.Exists() {
 			continue
 		}

@@ -167,6 +167,9 @@ func (m *BMD) AllowColdGET(b string, local bool, bprops ...*cmn.BucketProps) err
 func (m *BMD) AllowDELETE(b string, local bool, bprops ...*cmn.BucketProps) error {
 	return m.allow(b, bprops, "DELETE", cmn.AccessDELETE, local)
 }
+func (m *BMD) AllowRENAME(b string, local bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "RENAME", cmn.AccessRENAME, local)
+}
 
 func (m *BMD) allow(b string, bprops []*cmn.BucketProps, oper string, bits uint64, local bool) (err error) {
 	var p *cmn.BucketProps

@@ -79,7 +79,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus uint
 		return nil
 	}
 
-	if _, _ = lom.Load(true); !lom.Exists() {
+	if _ = lom.Load(); !lom.Exists() {
 		return nil
 	}
 
@@ -154,7 +154,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 	}
-	_, err = lom.Load(true)
+	err = lom.Load()
 	if !lom.Exists() {
 		return nil
 	}

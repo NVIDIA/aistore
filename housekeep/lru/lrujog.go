@@ -79,50 +79,46 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		h           = lctx.heap
 		bckProvider = cmn.ProviderFromLoc(lctx.bckIsLocal)
 	)
-	lom, err := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
-	if err != nil {
-		return nil
-	}
-
-	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
-	if !lom.LRUEnabled() {
-		return nil
-	}
-	_, err = lom.Load(false)
-	if err != nil {
-		return nil
-	}
-
-	// workfiles: evict old or do nothing
+	// workfiles: remove old or do nothing
 	if lctx.contentType == fs.WorkfileType {
 		_, base := filepath.Split(fqn)
 		_, old, ok := lctx.contentResolver.ParseUniqueFQN(base)
 		if ok && old {
-			fi := &fileInfo{fqn: fqn, lom: lom, old: old}
-			if glog.V(4) {
-				glog.Infof("old-work: %s, fqn=%s", lom, fqn)
-			}
-			lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
+			lctx.oldwork = append(lctx.oldwork, fqn)
 		}
 		return nil
 	}
+
+	lom, err := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
+	if err != nil {
+		return nil
+	}
+	// LRUEnabled is set by lom.Init(), no need to make FS call in Load if not enabled
+	if !lom.LRUEnabled() {
+		return nil
+	}
+	err = lom.Load(false)
+	if err != nil {
+		return nil
+	}
+
 	// objects
 	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
 	if lom.Atime().After(lctx.dontevictime) {
 		return nil
 	}
-
-	// includes post-rebalancing cleanup
-	if lom.Misplaced() {
-		glog.Infof("misplaced: %s, fqn=%s", lom, fqn)
-		fi := &fileInfo{fqn: fqn, lom: lom}
-		lctx.oldwork = append(lctx.oldwork, fi)
+	if lom.IsCopy() {
 		return nil
 	}
+	// includes post-rebalancing cleanup
+	if lom.Misplaced() {
+		lctx.misplaced = append(lctx.misplaced, lom)
+		return nil
+	}
+	// real objects
 	if err = lom.AllowDELETE(); err != nil {
 		return nil
 	}
-
 	// partial optimization:
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
@@ -134,9 +130,8 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if glog.V(4) {
 		glog.Infof("old-obj: %s, fqn=%s", lom, fqn)
 	}
-	fi := &fileInfo{fqn: fqn, lom: lom}
-	heap.Push(h, fi)
-	lctx.cursize += fi.lom.Size()
+	heap.Push(h, lom)
+	lctx.cursize += lom.Size()
 	if lom.Atime().After(lctx.newest) {
 		lctx.newest = lom.Atime()
 	}
@@ -149,28 +144,50 @@ func (lctx *lructx) evict() (err error) {
 		capCheck           int64
 		h                  = lctx.heap
 	)
-	for _, fi := range lctx.oldwork {
-		if !fi.old && lctx.ini.T.IsRebalancing() {
+	// 1.
+	for _, workfqn := range lctx.oldwork {
+		if err = os.Remove(workfqn); err != nil {
+			if !os.IsNotExist(err) {
+				glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
+			}
+		}
+	}
+	lctx.oldwork = lctx.oldwork[:0]
+	// 2.
+	for _, lom := range lctx.misplaced {
+		if lctx.ini.T.IsRebalancing() {
 			continue
 		}
-		if err = os.Remove(fi.fqn); err != nil {
+		// 2.1: remove misplaced obj
+		if err = os.Remove(lom.FQN); err != nil {
 			if !os.IsNotExist(err) {
-				glog.Warningf("Failed to remove old %q: %v", fi.fqn, err)
+				glog.Warningf("%s: %v", lom, err)
 			}
 			continue
 		}
-
-		if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
+		lom.Uncache()
+		// 2.2: for mirrored objects: remove extra copies if any
+		lom, err = cluster.LOM{T: lctx.ini.T, Bucket: lom.Bucket, Objname: lom.Objname}.Init(
+			cmn.ProviderFromLoc(lom.BckIsLocal), lom.Config())
+		if err != nil {
+			glog.Warningf("%s: %v", lom, err)
+		} else if err = lom.Load(false); err != nil {
+			glog.Warningf("%s: %v", lom, err)
+		} else if _, err = lom.DelExtraCopies(); err != nil {
+			glog.Warningf("%s: %v", lom, err)
+		}
+		if capCheck, err = lctx.postRemove(capCheck, lom); err != nil {
 			return
 		}
-		glog.Infof("Removed old %q", fi.fqn)
 	}
+	lctx.misplaced = lctx.misplaced[:0]
+	// 3.
 	for h.Len() > 0 && lctx.totsize > 0 {
-		fi := heap.Pop(h).(*fileInfo)
-		if lctx.evictObj(fi) {
-			bevicted += fi.lom.Size()
+		lom := heap.Pop(h).(*cluster.LOM)
+		if lctx.evictObj(lom) {
+			bevicted += lom.Size()
 			fevicted++
-			if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
+			if capCheck, err = lctx.postRemove(capCheck, lom); err != nil {
 				return
 			}
 		}
@@ -182,9 +199,9 @@ func (lctx *lructx) evict() (err error) {
 	return nil
 }
 
-func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
-	lctx.totsize -= fi.lom.Size()
-	capCheck += fi.lom.Size()
+func (lctx *lructx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) {
+	lctx.totsize -= lom.Size()
+	capCheck += lom.Size()
 	if err := lctx.yieldTerm(); err != nil {
 		return 0, err
 	}
@@ -211,25 +228,15 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 	return capCheck, nil
 }
 
-func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
-	cluster.ObjectLocker.Lock(fi.lom.Uname(), true)
-	// local replica must be go with the object; the replica, however, is
-	// located in a different local FS and belongs, therefore, to a different LRU jogger
-	// (hence, precise size accounting TODO)
-
-	// Don't persist meta as object will be soon removed
-	if err := fi.lom.DelAllCopies(); err != nil {
-		glog.Warningf("remove(%s=>%+v): %s", fi.lom, fi.lom.GetCopies(), err)
-	}
-	if err := os.Remove(fi.lom.FQN); err == nil {
-		glog.Infof("Evicted %s", fi.lom)
-		ok = true
-	} else if os.IsNotExist(err) {
+// remove local copies that "belong" to different LRU joggers; hence, space accounting may be temporarily not precise
+func (lctx *lructx) evictObj(lom *cluster.LOM) (ok bool) {
+	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	if err := lom.Remove(); err == nil {
 		ok = true
 	} else {
-		glog.Errorf("Failed to evict %s, err: %v", fi.lom, err)
+		glog.Errorf("%s: failed to remove, err: %v", lom, err)
 	}
-	cluster.ObjectLocker.Unlock(fi.lom.Uname(), true)
+	cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	return
 }
 
@@ -285,9 +292,7 @@ func (lctx *lructx) yieldTerm() error {
 func (h fileInfoMinHeap) Len() int { return len(h) }
 
 func (h fileInfoMinHeap) Less(i, j int) bool {
-	li := h[i].lom
-	lj := h[j].lom
-	return li.Atime().Before(lj.Atime())
+	return h[i].Atime().Before(h[j].Atime())
 }
 
 func (h fileInfoMinHeap) Swap(i, j int) {
@@ -295,7 +300,7 @@ func (h fileInfoMinHeap) Swap(i, j int) {
 }
 
 func (h *fileInfoMinHeap) Push(x interface{}) {
-	*h = append(*h, x.(*fileInfo))
+	*h = append(*h, x.(*cluster.LOM))
 }
 
 func (h *fileInfoMinHeap) Pop() interface{} {

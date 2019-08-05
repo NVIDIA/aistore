@@ -139,7 +139,7 @@ func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		return nil
 	}
-	if _, err := lom.Load(true); err != nil || !lom.Exists() {
+	if err := lom.Load(); err != nil || !lom.Exists() {
 		return nil
 	}
 	if lom.IsCopy() {

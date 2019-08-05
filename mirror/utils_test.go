@@ -71,7 +71,7 @@ var _ = Describe("Mirror", func() {
 			lom.SetSize(testObjectSize)
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 
-			Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 			clone, err := copyTo(lom, mpathInfo2, copyBuf)
 			Expect(clone.IsCopy()).To(BeTrue())
 			Expect(err).ShouldNot(HaveOccurred())
@@ -85,7 +85,7 @@ var _ = Describe("Mirror", func() {
 			Expect(ok).To(BeTrue())
 
 			newLom := newBasicLom(testFQN, tMock)
-			_, err = newLom.Load(false)
+			err = newLom.Load(false)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(newLom.GetCopies()).To(HaveLen(1))
 			_, ok = newLom.GetCopies()[expectedCopyFQN]
@@ -95,7 +95,7 @@ var _ = Describe("Mirror", func() {
 			lomCopy, err := cluster.LOM{T: tMock, FQN: expectedCopyFQN}.Init("")
 			Expect(err).ShouldNot(HaveOccurred())
 
-			_, err = lomCopy.Load(false)
+			err = lomCopy.Load(false)
 			Expect(err).ShouldNot(HaveOccurred())
 			copyCksm, err := lomCopy.CksumComputeIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())

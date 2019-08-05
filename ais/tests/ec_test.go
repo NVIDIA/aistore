@@ -115,7 +115,7 @@ func ecGetAllLocalSlices(t *testing.T, objName, bucketName string) (map[string]e
 			sliceLom, err := cluster.LOM{FQN: path, T: tMock}.Init(cmn.LocalBs)
 			tassert.CheckFatal(t, err)
 
-			_, err = sliceLom.Load(false)
+			err = sliceLom.Load(false)
 
 			var cksumVal string
 			if strings.Contains(path, ecMetaDir) && err != nil {

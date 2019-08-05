@@ -595,9 +595,7 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 
 	// TODO: configurable delay - postponed or manual object deletion
 	cluster.ObjectLocker.Lock(uname, true)
-	lom.Uncache()
-	_ = lom.DelAllCopies()
-	if err = os.Remove(lom.FQN); err != nil && !os.IsNotExist(err) {
+	if err = lom.Remove(); err != nil {
 		glog.Errorf("%s: error removing %s, err: %v", reb.t.si.Name(), lom, err)
 	}
 	cluster.ObjectLocker.Unlock(uname, true)
@@ -622,7 +620,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, config *cmn.Config) (cnt 
 	for _, lomack := range reb.lomAcks() {
 		lomack.mu.Lock()
 		for uname, lom := range lomack.q {
-			if _, err := lom.Load(false); err != nil {
+			if err := lom.Load(false); err != nil {
 				glog.Errorf("%s: failed loading %s, err: %s", tname, lom, err)
 				delete(lomack.q, uname)
 				continue
@@ -787,7 +785,7 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 	uname := lom.Uname()
 	cluster.ObjectLocker.Lock(uname, false) // NOTE: unlock in objSentCallback()
 
-	_, err = lom.Load(false)
+	err = lom.Load(false)
 	if err != nil || !lom.Exists() || lom.IsCopy() {
 		goto rerr
 	}
@@ -914,7 +912,6 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if rj.xreb.Aborted() {
 		return fmt.Errorf("%s aborted, path %s", rj.xreb, rj.mpath)
 	}
-
 	if err != nil {
 		if err := cmn.PathWalkErr(err); err != nil {
 			glog.Error(err)
@@ -925,73 +922,36 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
+
 	lom, err := cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
 	if err != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s, err %v - skipping #1...", lom, err)
-		}
 		return nil
 	}
-	_, err = lom.Load(false)
-	if err != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s, err %v - skipping #2...", lom, err)
-		}
-		return nil
-	}
-	// skip local copies
-	if !lom.Exists() || lom.IsCopy() {
-		return nil
-	}
-	// check whether locally-misplaced
+	// skip those that are _not_ locally-misplaced
 	if !lom.Misplaced() {
 		return nil
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s => %s", lom, lom.HrwFQN)
-	}
-	dir := filepath.Dir(lom.HrwFQN)
-	if err := cmn.CreateDir(dir); err != nil {
-		glog.Errorf("Failed to create dir: %s", dir)
-		rj.xreb.Abort()
-		rj.m.t.fshc(err, lom.HrwFQN)
+
+	ri := &replicInfo{t: rj.m.t, bucketTo: lom.Bucket, buf: rj.buf, localCopy: true}
+	copied, err := ri.copyObject(lom, lom.Objname)
+	if err != nil {
+		glog.Warningf("%s: %v", lom, err)
 		return nil
 	}
-
-	// Copy the object instead of moving, LRU takes care of obsolete copies.
-	// Note that global rebalance can run at the same time and by copying we
-	// allow local and global rebalance to work in parallel - global rebalance
-	// can still access the old object.
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
+	if !copied {
+		return nil
 	}
-
-	// TODO: we take exclusive lock because the source and destination have
-	// the same uname and we need to have exclusive lock on destination. If
-	// we won't have exclusive we can end up with state where we read the
-	// object but metadata is not yet persisted and it results in error - reproducible.
-	// But taking exclusive lock on source is not a good idea since it will
-	// prevent GETs from happening. Therefore, we need to think of better idea
-	// to lock both source and destination but with different locks - probably
-	// including mpath (whole string or some short hash) to uname, would be a good idea.
+	if lom.HasCopies() {
+		//
+		// punt it to LRU along with extra copies if any; TODO ec cleanup
+		//
+		return nil
+	}
+	// misplaced with no copies? remove right away
 	cluster.ObjectLocker.Lock(lom.Uname(), true)
-	dst, erc := lom.CopyObject(lom.HrwFQN, rj.buf)
-	if erc == nil {
-		erc = dst.Persist()
+	if err = os.Remove(lom.FQN); err != nil {
+		glog.Warningf("%s: %v", lom, err)
 	}
-	if erc != nil {
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
-		if !os.IsNotExist(erc) {
-			rj.xreb.Abort()
-			rj.m.t.fshc(erc, lom.HrwFQN)
-			return erc
-		}
-		return nil
-	}
-	dst.Load(true)
-	//
-	// TODO: remove the object and handle local copies
-	//
 	cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	return nil
 }

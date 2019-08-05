@@ -420,7 +420,7 @@ func TestRenameObjects(t *testing.T) {
 	var (
 		renameStr    = "rename"
 		bucket       = t.Name()
-		numPuts      = 50
+		numPuts      = 1000
 		objsPutCh    = make(chan string, numPuts)
 		errCh        = make(chan error, 2*numPuts)
 		newBaseNames = make([]string, 0, numPuts) // new basenames
@@ -1249,9 +1249,9 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	const filesize = 1024
 	var (
-		numPuts    = 64
+		numPuts    = 128
 		filesPutCh = make(chan string, numPuts)
-		errCh      = make(chan error, 100)
+		errCh      = make(chan error, numPuts)
 		wg         = &sync.WaitGroup{}
 		bucket     = rtd.bucket
 	)

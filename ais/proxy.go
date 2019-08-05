@@ -779,7 +779,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
-	case cmn.ActRenameLB:
+	case cmn.ActCopyLB, cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
@@ -801,7 +801,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if !p.renameLB(bucketFrom, bucketTo, clone, props, &msg, config) {
+		if !p.copyLB(bucketFrom, bucketTo, clone, props, &msg, config) {
 			s := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, s)
 			return
@@ -1388,7 +1388,7 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
+func (p *proxyrunner) copyLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
 	actionMsg *cmn.ActionMsg, config *cmn.Config) bool {
 
 	smap4bcast := p.smapowner.get()
@@ -1416,15 +1416,17 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 
 	for r := range res {
 		if r.err != nil {
-			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
-				r.si.DaemonID, bucketFrom, bucketTo, r.err, r.status)
+			glog.Errorf("Target %s failed to %s %s => %s, err: %v (%d)",
+				r.si.DaemonID, actionMsg.Action, bucketFrom, bucketTo, r.err, r.status)
 			return false // FIXME
 		}
 	}
 
 	p.bmdowner.Lock()
 	clone = p.bmdowner.get().clone()
-	clone.del(bucketFrom, true)
+	if actionMsg.Action == cmn.ActRenameLB {
+		clone.del(bucketFrom, true)
+	}
 	clone.add(bucketTo, true, props)
 	if err := p.savebmdconf(clone, config); err != nil {
 		glog.Error(err)

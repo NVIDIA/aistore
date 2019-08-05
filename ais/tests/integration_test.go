@@ -1211,6 +1211,46 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 }
 
+func TestCopyLocalBucket(t *testing.T) {
+	const (
+		newTestLocalBucketName = TestLocalBucketName + "_new"
+	)
+	var (
+		m = ioContext{
+			t:               t,
+			num:             1000,
+			numGetsEachFile: 2,
+		}
+	)
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+
+	// Put some files
+	m.puts()
+
+	// Rename it
+	oldLocalBucketName := m.bucket
+	m.bucket = newTestLocalBucketName
+	err := api.CopyLocalBucket(tutils.DefaultBaseAPIParams(t), oldLocalBucketName, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	// Gets on copied local bucket
+	m.wg.Add(m.num * m.numGetsEachFile)
+	m.gets()
+	m.wg.Wait()
+	m.ensureNoErrors()
+}
+
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	const (
 		newTestLocalBucketName = TestLocalBucketName + "_new"

@@ -88,9 +88,9 @@ func (lom *LOM) AtimeUnix() int64            { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)       { lom.md.atime = tu }
 func (lom *LOM) ECEnabled() bool             { return lom.BckProps.EC.Enabled }
 func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
-func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN && !lom.IsCopy() } // misplaced (subj to rebalancing)
-func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }                                 // NOTE: internal use!
-func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid }                            // ditto
+func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN } // subj to resilvering
+func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }                // internal use
+func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid }           // ditto
 
 func (lom *LOM) Config() *cmn.Config {
 	if lom.config == nil {
@@ -166,6 +166,7 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 	glog.Error(msg)
 	return true
 }
+
 func (lom *LOM) DelAllCopies() (err error) {
 	if lom._whingeCopy() {
 		return
@@ -190,13 +191,51 @@ func (lom *LOM) DelAllCopies() (err error) {
 	return
 }
 
-func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
+func (lom *LOM) DelExtraCopies() (n int, err error) {
+	if lom._whingeCopy() {
+		return
+	}
+	availablePaths, _ := fs.Mountpaths.Get()
+	for _, mpathInfo := range availablePaths {
+		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+		if _, ok := lom.md.copies[cpyfqn]; ok {
+			continue
+		}
+		if er := os.Remove(cpyfqn); er == nil {
+			n++
+		} else if !os.IsNotExist(er) {
+			err = er
+		}
+	}
+	return
+}
+
+//
+// NOTE: must be called under cluster.ObjectLocker.Lock(lom.Uname(), false)
+//
+func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, isMirroredCopy bool) (dst *LOM, err error) {
 	if lom.IsCopy() {
-		err = fmt.Errorf("%s is a copy", lom)
+		err = fmt.Errorf("%s is a mirrored copy", lom) // copying copies can be allowed when need be
+		return
+	}
+	err = cmn.CopyFile(lom.FQN, workFQN, buf)
+	if err != nil {
 		return
 	}
 	dst = lom.Clone(dstFQN)
-	err = cmn.CopyFile(lom.FQN, dst.FQN, buf)
+	if err = cmn.Rename(workFQN, dstFQN); err != nil {
+		if errRemove := os.Remove(workFQN); errRemove != nil {
+			glog.Errorf("nested err: %v", errRemove)
+		}
+		return
+	}
+	if !isMirroredCopy {
+		if err = dst.Persist(); err != nil {
+			if errRemove := os.Remove(dstFQN); errRemove != nil {
+				glog.Errorf("nested err: %v", errRemove)
+			}
+		}
+	}
 	return
 }
 
@@ -307,89 +346,80 @@ func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
 // * when two objects in the cluster have identical (bucket, object) names and checksums,
 //   they are considered to be full replicas of each other.
 // ==============================================================================
-func (lom *LOM) ValidateChecksum(recompute bool) error {
+
+// ValidateMetaChecksum validates whether checksum stored in lom's in-memory metadata
+// matches checksum stored on disk.
+// Use lom.ValidateContentChecksum() to recompute and check object's content checksum.
+func (lom *LOM) ValidateMetaChecksum() error {
 	var (
-		storedCksum string
-		cksumType   = lom.CksumConf().Type
+		cksumFromFS cmn.Cksummer
+		md          *lmeta
+		err         error
 	)
-	if cksumType == cmn.ChecksumNone {
+	if lom.CksumConf().Type == cmn.ChecksumNone {
 		return nil
 	}
-	if lom.md.cksum != nil {
-		_, storedCksum = lom.md.cksum.Get()
-		cmn.Assert(storedCksum != "")
+	md, err = lom.lmfs(false)
+	if err != nil {
+		return err
 	}
-	{ // FIXME: single xattr-meta
-		var v cmn.Cksummer
-		md, err := lom.lmfs(false)
-		if err != nil {
-			return err
-		}
-		if md != nil {
-			v = md.cksum
-		}
-		if !recompute && lom.md.cksum == nil && v == nil {
-			return nil
-		}
-		// both checksums were missing and recompute requested, go immediately to computing
-		recomputeEmptyCksms := recompute && v == nil && lom.md.cksum == nil
-
-		if !recomputeEmptyCksms && !cmn.EqCksum(lom.md.cksum, v) {
+	if md != nil {
+		cksumFromFS = md.cksum
+	}
+	// different versions may have different checksums
+	if (cksumFromFS != nil || lom.md.cksum != nil) && md.version == lom.md.version {
+		if !cmn.EqCksum(lom.md.cksum, cksumFromFS) {
 			lom.BadCksum = true
-			err = lom.BadCksumErr(v)
+			err = lom.BadCksumErr(cksumFromFS)
 			lom.Uncache()
-			return err
 		}
 	}
-	if storedCksum != "" && !recompute {
-		return nil
-	}
-
-	return lom.ValidateDiskChecksum()
+	return err
 }
 
-// ValidateDiskChecksum validates if checksum stored in lom's metadata matches checksum
-// of object's content stored on a disk. It does not check if lom's metadata checksum matches with
-// checksum in lom's xattributes. This function is supposed to be called only when we know that
-// xattr and meta checksums match, and we want to save one FS read
-func (lom *LOM) ValidateDiskChecksum() (err error) {
+// ValidateDiskChecksum validates if checksum stored in lom's in-memory metadata
+// matches object's content checksum.
+// Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
+func (lom *LOM) ValidateContentChecksum() (err error) {
 	var (
 		storedCksum, computedCksum string
 		cksumType                  = lom.CksumConf().Type
 	)
-
 	if cksumType == cmn.ChecksumNone {
 		return
 	}
+	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
 
 	if lom.md.cksum != nil {
 		_, storedCksum = lom.md.cksum.Get()
-		cmn.Assert(storedCksum != "")
 	}
-
 	// compute
-	cmn.Assert(cksumType == cmn.ChecksumXXHash) // sha256 et al. not implemented yet
 	if computedCksum, err = lom.computeXXHash(lom.FQN, lom.md.size); err != nil {
 		return
 	}
-	if storedCksum == "" {
+	if storedCksum == "" { // store with lom meta on disk
 		oldCksm := lom.md.cksum
 		lom.md.cksum = cmn.NewCksum(cksumType, computedCksum)
 		if err := lom.Persist(); err != nil {
 			lom.md.cksum = oldCksm
 			return err
 		}
-
 		lom.ReCache()
 		return
 	}
 	v := cmn.NewCksum(cksumType, computedCksum)
-	if !cmn.EqCksum(lom.md.cksum, v) {
-		lom.BadCksum = true
-		err = lom.BadCksumErr(v)
-		lom.Uncache()
+	if cmn.EqCksum(lom.md.cksum, v) {
+		return
 	}
-
+	// reload meta and check again
+	if _, err = lom.lmfs(true); err == nil {
+		if cmn.EqCksum(lom.md.cksum, v) {
+			return
+		}
+	}
+	lom.BadCksum = true
+	err = lom.BadCksumErr(v)
+	lom.Uncache()
 	return
 }
 
@@ -485,13 +515,10 @@ func (lom *LOM) init(bckProvider string) (err error) {
 
 // Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
 // instance includes the following steps:
-//
 // 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
 // 2) load persistent state (aka lmeta) from one of the LOM caches or the underlying
-//    filesystem: lom.Load(true/false)
-//    Load(false) also entails removing this LOM from cache, if exists -
-//    useful when you are going delete the corresponding data object, for instance
-//
+//    filesystem: lom.Load(); Load(false) also entails *not adding* LOM to caches
+//    (useful when deleting or moving objects
 // 3) use: via lom.Atime(), lom.Cksum(), lom.Exists() and numerous other accessors
 //    It is illegal to check LOM's existence and, generally, do almost anything
 //    with it prior to loading - see previous
@@ -500,7 +527,6 @@ func (lom *LOM) init(bckProvider string) (err error) {
 // 5) update persistent state on disk: lom.Persist()
 // 6) remove a given LOM instance from cache: lom.Uncache()
 // 7) evict an entire bucket-load of LOM cache: cluster.EvictCache(bucket)
-//
 // 8) periodic (lazy) eviction followed by access-time synchronization: see LomCacheRunner
 // =======================================================================================
 func (lom *LOM) Hkey() (string, int) {
@@ -527,22 +553,22 @@ func (lom *LOM) IsLoaded() (ok bool) {
 	return
 }
 
-func (lom *LOM) Load(add bool) (fromCache bool, err error) {
+func (lom *LOM) Load(adds ...bool) (err error) {
 	// fast path
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
+		add       = true // default: cache it
 	)
+	if len(adds) > 0 {
+		add = adds[0]
+	}
 	lom.loaded = true
 	if lom.FQN == lom.HrwFQN {
 		if md, ok := cache.M.Load(hkey); ok {
-			fromCache = true
 			lom.exists = true
 			lmeta := md.(*lmeta)
 			lom.md = *lmeta
-			if !add { // uncache
-				cache.M.Delete(hkey)
-			}
 			if lom.existsInBucket() {
 				return
 			}
@@ -553,12 +579,12 @@ func (lom *LOM) Load(add bool) (fromCache bool, err error) {
 	// slow path
 	err = lom.FromFS()
 	if err == nil && lom.exists {
-		md := &lmeta{}
 		lom.md.bckID = lom.BckProps.BID
-		*md = lom.md
-		if !add { // ditto
+		if !add {
 			return
 		}
+		md := &lmeta{}
+		*md = lom.md
 		cache.M.Store(hkey, md)
 	}
 	return
@@ -578,7 +604,7 @@ func (lom *LOM) existsInBucket() bool {
 }
 
 func (lom *LOM) ReCache() {
-	cmn.Assert(lom.FQN == lom.HrwFQN) // DEBUG not caching copies
+	cmn.Dassert(!lom.IsCopy(), pkgName) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
@@ -591,7 +617,7 @@ func (lom *LOM) ReCache() {
 }
 
 func (lom *LOM) Uncache() {
-	cmn.Assert(lom.FQN == lom.HrwFQN) // DEBUG not caching copies
+	cmn.Dassert(!lom.IsCopy(), pkgName) // not caching copies
 	var (
 		hkey, idx = lom.Hkey()
 		cache     = lom.ParsedFQN.MpathInfo.LomCache(idx)
@@ -632,6 +658,18 @@ func (lom *LOM) FromFS() error {
 	lom.md.atime = atime.UnixNano()
 	lom.md.atimefs = lom.md.atime
 	return nil
+}
+
+func (lom *LOM) Remove() (err error) {
+	lom.Uncache()
+	if err = lom.DelAllCopies(); err != nil {
+		glog.Errorf("%s: %s", lom, err)
+	}
+	err = os.Remove(lom.FQN)
+	if err != nil && os.IsNotExist(err) {
+		err = nil
+	}
+	return
 }
 
 //
@@ -817,4 +855,7 @@ func (lom *LOM) AllowColdGET() error {
 }
 func (lom *LOM) AllowDELETE() error {
 	return lom.bmd.AllowDELETE(lom.Bucket, lom.BckIsLocal, lom.BckProps)
+}
+func (lom *LOM) AllowRENAME() error {
+	return lom.bmd.AllowRENAME(lom.Bucket, lom.BckIsLocal, lom.BckProps)
 }

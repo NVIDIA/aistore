@@ -227,6 +227,17 @@ Creates a local bucket with a given name
 Error from AIStore in completing the request
 ___
 
+#### CopyLocalBucket
+Create new bucket and copy into it all objects from the existing (old) one
+
+##### Parameters
+| Name       | Type         | Description                                                                           |
+|------------|--------------|---------------------------------------------------------------------------------------|
+| httpClient | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
+| proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
+| oldName    | string       | Name of the existing bucket                                                           |
+| newName    | string       | Name of the new bucket                                                                |
+
 #### RenameLocalBucket
 Rename an existing bucket to the new name provided
 

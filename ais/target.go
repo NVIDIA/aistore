@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -52,12 +51,6 @@ const (
 )
 
 type (
-	renameCtx struct {
-		bucketFrom string
-		bucketTo   string
-		t          *targetrunner
-		pid        string
-	}
 	regstate struct {
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
@@ -620,7 +613,7 @@ func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode i
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: EC-recovered %s", t.si.Name(), lom)
 		}
-		lom.Load(true)
+		lom.Load()
 		return
 	} else if ecErr != ec.ErrorECDisabled {
 		err = fmt.Errorf("%s: failed to EC-recover %s: %v", t.si.Name(), lom, ecErr)
@@ -713,7 +706,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lom.BckIsLocal && lom.VerConf().Enabled {
-		lom.Load(true) // need to know the current version if versionig enabled
+		lom.Load() // need to know the current version if versionig enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
 	if err, errCode := t.doPut(r, lom, started); err != nil {
@@ -860,10 +853,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
-	case cmn.ActRenameLB:
+	case cmn.ActCopyLB, cmn.ActRenameLB:
 		bucketFrom, bucketTo := bucket, msgInt.Name
 
-		t.bmdowner.Lock() // lock#1 begin
+		t.bmdowner.Lock()
 
 		bmd = t.bmdowner.get()
 		props, ok := bmd.Get(bucketFrom, true)
@@ -875,14 +868,14 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		clone := bmd.clone()
 		clone.LBmap[bucketTo] = props
-		t.bmdowner.put(clone) // bmd updated with an added bucket, lock#1 end
+		t.bmdowner.put(clone)
 		t.bmdowner.Unlock()
 
-		if err := t.renameLB(bucketFrom, bucketTo); err != nil {
+		if err := t.copyLB(bucketFrom, bucketTo, msgInt.Action == cmn.ActRenameLB); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("renamed bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
+		glog.Infof("%s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
 		if ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt); !ok {
@@ -918,7 +911,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		t.renameObject(w, r, msg, t.smapowner.get().ProxySI.DaemonID /*to force thru proxy-redirection check*/)
+		t.renameObject(w, r, msg)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -1045,7 +1038,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	cluster.ObjectLocker.Lock(lom.Uname(), false)
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
-	if _, err = lom.Load(true); err != nil { // (doesnotexist -> ok, other)
+	if err = lom.Load(); err != nil { // (doesnotexist -> ok, other)
 		invalidHandler(w, r, err.Error())
 		return
 	}
@@ -1100,80 +1093,6 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (err error) {
-	// ready to receive migrated obj-s _after_ that point
-	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
-	wg := &sync.WaitGroup{}
-
-	pid := t.smapowner.get().ProxySI.DaemonID
-	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan error, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
-	for contentType := range fs.CSM.RegisteredContentTypes {
-		for _, mpathInfo := range availablePaths {
-			// Create directory for new local bucket
-			toDir := mpathInfo.MakePathBucket(contentType, bucketTo, true /*bucket is local*/)
-			if err := cmn.CreateDir(toDir); err != nil {
-				ch <- fmt.Errorf("failed to create dir %s, error: %v", toDir, err)
-				continue
-			}
-
-			wg.Add(1)
-			fromDir := mpathInfo.MakePathBucket(contentType, bucketFrom, true /*bucket is local*/)
-			go func(fromDir string) {
-				time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
-				ch <- t.renameOne(fromDir, bucketFrom, bucketTo, pid)
-				wg.Done()
-			}(fromDir)
-		}
-	}
-	wg.Wait()
-	close(ch)
-	for err = range ch {
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
-func (t *targetrunner) renameOne(fromDir, bucketFrom, bucketTo, pid string) error {
-	rctx := &renameCtx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t, pid: pid}
-	if err := filepath.Walk(fromDir, rctx.walkf); err != nil {
-		return fmt.Errorf("failed to rename %s, err: %v", fromDir, err)
-	}
-	return nil
-}
-
-func (rctx *renameCtx) walkf(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if err := cmn.PathWalkErr(err); err != nil {
-			glog.Error(err)
-			return err
-		}
-		return nil
-	}
-	if osfi.Mode().IsDir() {
-		return nil
-	}
-	// FIXME: workfiles indicate work in progress. Renaming could break ongoing
-	// operations and not renaming it probably result in having file in wrong directory.
-	if !fs.CSM.PermToProcess(fqn) {
-		return nil
-	}
-	// FIXME: ignoring "misplaced" (non-error) and errors that ResolveFQN may return
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
-	contentType, bucket, objName := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
-	if err == nil {
-		if bucket != rctx.bucketFrom {
-			return fmt.Errorf("unexpected: bucket %s != %s bucketFrom", bucket, rctx.bucketFrom)
-		}
-	}
-	if err := rctx.t.renameBucketObject(contentType, bucket, objName, rctx.bucketTo, objName, rctx.pid); err != nil {
-		return err
-	}
-	return nil
-}
-
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
 // should be called only if the local copy exists
 func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
@@ -1386,7 +1305,6 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 // Cloud bucket:
 //  - if the Cloud returns a new version id then save it to xattr
 // In both case a new checksum is saved to xattrs
-// compare with t.Receive()
 func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
 	var (
 		header     = r.Header
@@ -1453,7 +1371,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
-	if _, err := lom.Load(false); err != nil {
+	if err := lom.Load(false); err != nil {
 		return err
 	}
 	delFromAIS := lom.Exists()
@@ -1465,11 +1383,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		}
 	}
 	if delFromAIS {
-		// Don't persist meta as object will be removed soon anyway
-		if err := lom.DelAllCopies(); err != nil {
-			glog.Errorf("%s: %s", lom, err)
-		}
-		errRet = os.Remove(lom.FQN)
+		errRet = lom.Remove()
 		if errRet != nil {
 			if !os.IsNotExist(errRet) {
 				if cloudErr != nil {
@@ -1495,118 +1409,42 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 // RENAME OBJECT //
 ///////////////////
 
-func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg, pid string) {
+func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
 	bucket, objnameFrom := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	if bmd, _ := t.validateBucket(w, r, bucket, bckProvider); bmd == nil {
-		return
-	}
-	objnameTo := msg.Name
-	uname := cluster.Bo2Uname(bucket, objnameFrom)
-	cluster.ObjectLocker.Lock(uname, true)
 
-	if err := t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo, pid); err != nil {
+	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objnameFrom}.Init(bckProvider)
+	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
+		return
 	}
-	cluster.ObjectLocker.Unlock(uname, true)
-}
+	if !lom.BckIsLocal {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
+		return
+	}
+	// TODO -- FIXME: cannot rename erasure-coded
+	if err = lom.AllowRENAME(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
 
-// TODO: cleanup
-func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo, pid string) (err error) {
-	var (
-		file                  *cmn.FileHandle
-		si                    *cluster.Snode
-		newFQN                string
-		cksumType, cksumValue string
-	)
-	if si, err = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); err != nil {
-		return
-	}
-	bmd := t.bmdowner.get()
-	bckIsLocalFrom := bmd.IsLocal(bucketFrom)
-	fqn, _, err := cluster.HrwFQN(contentType, bucketFrom, objnameFrom, bckIsLocalFrom)
-	if err != nil {
-		return
-	}
-	if _, err = os.Stat(fqn); err != nil {
-		err = fmt.Errorf("failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
-		return
-	}
-	// local rename
-	if si.DaemonID == t.si.DaemonID {
-		bckIsLocalTo := bmd.IsLocal(bucketTo)
-		newFQN, _, err = cluster.HrwFQN(contentType, bucketTo, objnameTo, bckIsLocalTo)
-		if err != nil {
-			return
+	buf, slab := nodeCtx.mm.AllocDefault()
+	ri := &replicInfo{smap: t.smapowner.get(), t: t, bucketTo: bucket, buf: buf}
+	if copied, err := ri.copyObject(lom, msg.Name /* new objname */); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+	} else if copied {
+		cluster.ObjectLocker.Lock(lom.Uname(), true)
+		// TODO: additional copies and ec cleanups
+		if err = lom.Remove(); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
 		}
-		if err := fs.MvFile(fqn, newFQN); err != nil {
-			return fmt.Errorf("rename object %s/%s: %v", bucketFrom, objnameFrom, err)
-		}
-
-		t.statsif.Add(stats.RenameCount, 1)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Renamed %s => %s", fqn, newFQN)
-		}
-		return
+		cluster.ObjectLocker.Unlock(lom.Uname(), true)
 	}
-
-	// migrate to another target
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Migrating %s/%s at %s => %s/%s at %s",
-			bucketFrom, objnameFrom, t.si.Name(), bucketTo, objnameTo, si.Name())
-	}
-
-	if file, err = cmn.NewFileHandle(fqn); err != nil {
-		return fmt.Errorf("failed to open %s, err: %v", fqn, err)
-	}
-	defer file.Close()
-
-	lom, err := cluster.LOM{T: t, FQN: fqn}.Init(cmn.ProviderFromLoc(bckIsLocalFrom))
-	if err != nil {
-		return err
-	}
-	if _, err := lom.Load(false); err != nil {
-		return err
-	}
-	if lom.Cksum() != nil {
-		cksumType, cksumValue = lom.Cksum().Get()
-	}
-
-	// PUT object into different target
-	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
-	query.Add(cmn.URLParamProxyID, pid)
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodPut,
-		Base:   si.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucketTo, objnameTo),
-		Query:  query,
-		BodyR:  file,
-	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
-	if err != nil {
-		return fmt.Errorf("unexpected failure to create request, err: %v", err)
-	}
-	defer cancel()
-	req.Header.Set(cmn.HeaderObjCksumType, cksumType)
-	req.Header.Set(cmn.HeaderObjCksumVal, cksumValue)
-	req.Header.Set(cmn.HeaderObjVersion, lom.Version())
-
-	timeInt := lom.Atime().UnixNano()
-	if lom.Atime().IsZero() {
-		timeInt = 0
-	}
-	req.Header.Set(cmn.HeaderObjAtime, strconv.FormatInt(timeInt, 10))
-
-	_, err = t.httpclientLongTimeout.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to PUT to %s, err: %v", reqArgs.URL(), err)
-	}
-	return os.Remove(fqn)
+	slab.Free(buf)
 }
 
 //====================== common for both cold GET and PUT ======================================

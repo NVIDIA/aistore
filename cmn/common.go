@@ -658,13 +658,6 @@ func CopyFile(src, dst string, buf []byte) (err error) {
 	return
 }
 
-func PathWalkErr(err error) error {
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return fmt.Errorf("filepath-walk invoked with err: %v", err)
-}
-
 // Saves the reader directly to a local file
 // `size` is an optional argument, if it is set only first `size` bytes
 // are saved to the file

@@ -132,7 +132,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			// load lom
-			if _, err := lom.Load(true); err != nil {
+			if err := lom.Load(); err != nil {
 				b.Fatal(err)
 			}
 

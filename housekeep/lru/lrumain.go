@@ -50,24 +50,19 @@ type (
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
 		GetFSStats          func(path string) (blocks uint64, bavail uint64, bsize int64, err error)
 	}
-
-	fileInfo struct {
-		fqn string
-		lom *cluster.LOM
-		old bool
-	}
-	fileInfoMinHeap []*fileInfo
+	fileInfoMinHeap []*cluster.LOM
 
 	// lructx represents a single LRU context that runs in a single goroutine (worker)
 	// that traverses and evicts a single given filesystem, or more exactly,
 	// subtree in this filesystem identified by the bucketdir
 	lructx struct {
 		// runtime
-		cursize int64
-		totsize int64
-		newest  time.Time
-		heap    *fileInfoMinHeap
-		oldwork []*fileInfo
+		cursize   int64
+		totsize   int64
+		newest    time.Time
+		heap      *fileInfoMinHeap
+		oldwork   []string
+		misplaced []*cluster.LOM
 		// init-time
 		ini             InitLRU
 		stopCh          chan struct{}
@@ -148,7 +143,8 @@ func InitAndRun(ini *InitLRU) {
 
 func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bckIsLocal bool) *lructx {
 	lctx := &lructx{
-		oldwork:         make([]*fileInfo, 0, 64),
+		oldwork:         make([]string, 0, 64),
+		misplaced:       make([]*cluster.LOM, 0, 64),
 		ini:             *ini,
 		stopCh:          make(chan struct{}, 1),
 		mpathInfo:       mpathInfo,

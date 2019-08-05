@@ -78,7 +78,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				lom.Uncache()
 				newLom := NewBasicLom(localFQN, tMock)
-				_, err = newLom.Load(false)
+				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
@@ -107,7 +107,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				lom.Uncache()
 				newLom := NewBasicLom(localFQN, tMock)
-				_, err = newLom.Load(false)
+				err = newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))

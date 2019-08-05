@@ -5,10 +5,8 @@
 package mirror
 
 import (
-	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -59,17 +57,10 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	parsedFQN := lom.ParsedFQN
 	parsedFQN.MpathInfo = mpathInfo
 	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
-
-	_, err = lom.CopyObject(workFQN, buf)
-	if err != nil {
-		return
-	}
-
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
-	if err = cmn.Rename(workFQN, copyFQN); err != nil {
-		if errRemove := os.Remove(workFQN); errRemove != nil {
-			glog.Errorf("nested err: %v", errRemove)
-		}
+
+	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /* is mirrored copy*/)
+	if err != nil {
 		return
 	}
 	lom.AddCopy(copyFQN, mpathInfo)

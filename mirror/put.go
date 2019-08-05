@@ -80,7 +80,7 @@ func (r *XactPutLRepl) Run() error {
 	for {
 		select {
 		case lom := <-r.workCh:
-			if _, err := lom.Load(true); err != nil {
+			if err := lom.Load(); err != nil {
 				glog.Error(err)
 				break
 			}
@@ -222,8 +222,6 @@ loop:
 
 func (j *xputJogger) addCopy(lom *cluster.LOM) {
 	cluster.ObjectLocker.Lock(lom.Uname(), false)
-	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
-
 	if clone, err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)
 	} else {
@@ -235,4 +233,5 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 		}
 		j.parent.BytesAdd(lom.Size())
 	}
+	cluster.ObjectLocker.Unlock(lom.Uname(), false)
 }

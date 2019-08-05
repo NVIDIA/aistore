@@ -155,7 +155,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, bck
 		glog.Error(err)
 		return
 	}
-	if _, err = lom.Load(true); err != nil {
+	if err = lom.Load(); err != nil {
 		glog.Error(err)
 		return
 	}

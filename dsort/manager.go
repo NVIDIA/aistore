@@ -847,7 +847,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		bckProvider := cmn.ProviderFromLoc(hdr.IsLocal)
 		lom, err := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(bckProvider)
 		if err == nil {
-			_, err = lom.Load(true)
+			err = lom.Load()
 		}
 		if err != nil {
 			m.abort(err)

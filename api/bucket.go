@@ -290,6 +290,21 @@ func DoesLocalBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
 	return exists, nil
 }
 
+// CopyLocalBucket API
+//
+// CopyLocalBucket creates a new local bucket newName and
+// copies into it contents of the existing oldName bucket
+func CopyLocalBucket(baseParams *BaseParams, oldName, newName string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyLB, Name: newName})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}
+
 // RenameLocalBucket API
 //
 // RenameLocalBucket changes the name of a bucket from oldName to newBucketName

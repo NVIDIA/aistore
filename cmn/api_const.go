@@ -43,6 +43,7 @@ const (
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
 	ActRenameLB     = "renamelb"
+	ActCopyLB       = "copylb"
 	ActRegisterCB   = "registercb"
 	ActEvictCB      = "evictcb"
 	ActResetProps   = "resetprops"
@@ -326,6 +327,7 @@ const (
 	AccessPUT
 	AccessColdGET
 	AccessDELETE
+	AccessRENAME
 
 	AllowAnyAccess = 0
 	AllowAllAccess = ^uint64(0)

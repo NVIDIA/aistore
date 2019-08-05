@@ -14,6 +14,13 @@ import (
 	"syscall"
 )
 
+func PathWalkErr(err error) error {
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return fmt.Errorf("filepath-walk invoked with err: %v", err)
+}
+
 // as of 1.9 net/http does not appear to provide any better way..
 func IsErrConnectionRefused(err error) (yes bool) {
 	if uerr, ok := err.(*url.Error); ok {

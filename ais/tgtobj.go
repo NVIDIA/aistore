@@ -312,11 +312,7 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 ////////////////
 
 func (goi *getObjInfo) getObject() (err error, errCode int) {
-	var (
-		fromCache bool
-		retried   bool
-	)
-
+	var retried bool
 	// under lock: lom init, restore from cluster
 	cluster.ObjectLocker.Lock(goi.lom.Uname(), false)
 do:
@@ -326,7 +322,7 @@ do:
 		goto get
 	}
 
-	fromCache, err = goi.lom.Load(true)
+	err = goi.lom.Load()
 	if err != nil {
 		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 		return err, http.StatusInternalServerError
@@ -353,17 +349,16 @@ do:
 
 	// checksum validation, if requested
 	if !coldGet && goi.lom.CksumConf().ValidateWarmGet {
-		if fromCache {
-			err = goi.lom.ValidateChecksum(true)
-		} else {
-			err = goi.lom.ValidateDiskChecksum()
+		err = goi.lom.ValidateMetaChecksum()
+		if err == nil {
+			err = goi.lom.ValidateContentChecksum()
 		}
-
 		if err != nil {
 			if goi.lom.BadCksum {
 				glog.Error(err)
 				if goi.lom.BckIsLocal {
-					if err := os.Remove(goi.lom.FQN); err != nil {
+					// TODO: recover from copies if available
+					if err := goi.lom.Remove(); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", err, err)
 					}
 					cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)

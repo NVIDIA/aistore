@@ -49,7 +49,7 @@ func (t *singleObjectTask) download() {
 	)
 	lom, err := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init(t.bckProvider)
 	if err == nil {
-		_, err = lom.Load(true)
+		err = lom.Load()
 	}
 	if err != nil {
 		t.abort(internalErrorMessage(), err)

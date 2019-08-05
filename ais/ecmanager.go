@@ -279,7 +279,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		LOM:    lom,
 	}
 
-	if _, err := lom.Load(true); err != nil {
+	if err := lom.Load(); err != nil {
 		return err
 	}
 

@@ -187,7 +187,7 @@ func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LO
 
 	lom, err := cluster.LOM{T: d.parent.t, Bucket: job.Bucket(), Objname: obj.Objname}.Init(job.BckProvider())
 	if err == nil {
-		_, err = lom.Load(true)
+		err = lom.Load()
 	}
 	if err != nil {
 		return nil, err

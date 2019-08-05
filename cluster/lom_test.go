@@ -250,7 +250,7 @@ var _ = Describe("LOM", func() {
 				os.Remove(localFQN)
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init("")
 				Expect(err).NotTo(HaveOccurred())
-				_, err = lom.Load(false)
+				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(lom.Exists()).To(BeFalse())
@@ -263,7 +263,7 @@ var _ = Describe("LOM", func() {
 				Expect(err).NotTo(HaveOccurred())
 				lom.SetBMD(bmd)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err = lom.Load(false)
+				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
 				addLocalBucket(bmd, lom)
@@ -284,7 +284,7 @@ var _ = Describe("LOM", func() {
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err = lom.Load(false)
+				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
@@ -297,7 +297,7 @@ var _ = Describe("LOM", func() {
 				lom, err := cluster.LOM{T: tMock, FQN: localFQN}.Init("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err = lom.Load(false)
+				err = lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(lom.Atime()).To(BeEquivalentTo(desiredAtime))
@@ -345,19 +345,19 @@ var _ = Describe("LOM", func() {
 
 					Expect(lom.Cksum()).To(BeNil())
 					newLom := NewBasicLom(lom.FQN, tMock)
-					_, err = newLom.Load(false)
+					err = newLom.Load(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(newLom.Cksum()).To(BeNil())
 				})
 			})
 
-			Describe("ValidateChecksum", func() {
+			Describe("ValidateMetaChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, bucketLocalA, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
-					err := lom.ValidateChecksum(true)
+					err := lom.ValidateMetaChecksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Cksum()).To(BeNil())
 					Expect(lom.BadCksum).To(BeFalse())
@@ -368,17 +368,17 @@ var _ = Describe("LOM", func() {
 					expectedChecksum := getTestFileHash(localFQN)
 
 					fsLOM := NewBasicLom(localFQN, tMock)
-					_, err := fsLOM.Load(false)
+					err := fsLOM.Load(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(fsLOM.Cksum()).To(BeNil())
 
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache()
 
 					Expect(lom.Cksum()).ToNot(BeNil())
 					_, val := lom.Cksum().Get()
 					fsLOM = NewBasicLom(localFQN, tMock)
-					_, err = fsLOM.Load(false)
+					err = fsLOM.Load(false)
 					Expect(err).ShouldNot(HaveOccurred())
 					_, fsVal := fsLOM.Cksum().Get()
 					Expect(fsVal).To(BeEquivalentTo(expectedChecksum))
@@ -387,65 +387,60 @@ var _ = Describe("LOM", func() {
 
 				It("should accept when filesystem and memory checksums match", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
-
-					Expect(lom.ValidateChecksum(false)).NotTo(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
 				It("should accept when both filesystem and memory checksums are nil", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-
-					Expect(lom.ValidateChecksum(false)).NotTo(HaveOccurred())
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when memory has wrong checksum", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
-					Expect(lom.ValidateChecksum(false)).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 					Expect(lom.BadCksum).To(BeTrue())
 				})
 
 				It("should not accept when object content has changed", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
 					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)).To(BeNil())
 
-					Expect(lom.ValidateChecksum(true)).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 					Expect(lom.BadCksum).To(BeTrue())
 				})
 
 				It("should not check object content when recompute false", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
 					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)).To(BeNil())
-
-					Expect(lom.ValidateChecksum(false)).NotTo(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when xattr has wrong checksum", func() {
 					lom := filePut(localFQN, testFileSize, tMock)
-					Expect(lom.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
-					Expect(lom.ValidateChecksum(false)).To(HaveOccurred())
+					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
 					Expect(lom.BadCksum).To(BeTrue())
 				})
 			})
 
-			// copy-paste of some of ValidateChecksum tests, however if there's no
+			// copy-paste of some of ValidateMetaChecksum tests, however if there's no
 			// mocking solution, it's needed to have the same tests for both methods
-			Describe("ValidateDiskChecksum", func() {
+			Describe("ValidateContentChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, bucketLocalA, testObject)
 
 					lom := NewBasicLom(noneFQN, tMock)
-					err := lom.ValidateDiskChecksum()
+					err := lom.ValidateContentChecksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Cksum()).To(BeNil())
 					Expect(lom.BadCksum).To(BeFalse())
@@ -456,18 +451,18 @@ var _ = Describe("LOM", func() {
 					expectedChecksum := getTestFileHash(localFQN)
 
 					fsLOM := NewBasicLom(localFQN, tMock)
-					_, err := fsLOM.Load(false)
+					err := fsLOM.Load(false)
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(fsLOM.Cksum()).To(BeNil())
 
-					Expect(lom.ValidateDiskChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 					lom.Uncache()
 
 					Expect(lom.Cksum()).ToNot(BeNil())
 					_, cksumValue := lom.Cksum().Get()
 
 					fsLOM = NewBasicLom(localFQN, tMock)
-					_, err = fsLOM.Load(false)
+					err = fsLOM.Load(false)
 					Expect(err).ShouldNot(HaveOccurred())
 
 					_, fsCksmVal := fsLOM.Cksum().Get()
@@ -478,25 +473,25 @@ var _ = Describe("LOM", func() {
 				It("should accept when filesystem and memory checksums match", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN, tMock)
-					Expect(lom.ValidateDiskChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 				})
 
 				It("should accept when both filesystem and memory checksums are nil", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN, tMock)
 
-					Expect(lom.ValidateDiskChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when object content has changed", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN, tMock)
-					Expect(lom.ValidateDiskChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
 
 					err := ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)
 					Expect(err).ShouldNot(HaveOccurred())
 
-					Expect(lom.ValidateDiskChecksum()).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
 					Expect(lom.BadCksum).To(BeTrue())
 				})
 			})
@@ -517,7 +512,7 @@ var _ = Describe("LOM", func() {
 					lom2 := NewBasicLom(localFQN, tMock)
 					Expect(lom1.Persist()).NotTo(HaveOccurred())
 
-					Expect(lom1.ValidateChecksum(true)).NotTo(HaveOccurred())
+					Expect(lom1.ValidateContentChecksum()).NotTo(HaveOccurred())
 					Expect(lom1.Persist()).ToNot(HaveOccurred())
 
 					Expect(lom2.FromFS()).ToNot(HaveOccurred())
@@ -539,7 +534,7 @@ var _ = Describe("LOM", func() {
 				lom.SetVersion(desiredVersion)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				_, err := lom.Load(false)
+				err := lom.Load(false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(lom.Version()).To(BeEquivalentTo(desiredVersion))
 			})
@@ -558,7 +553,7 @@ var _ = Describe("LOM", func() {
 				addLocalBucket(bmd, lom)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
-				_, err := lom.Load(false)
+				err := lom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -586,11 +581,11 @@ var _ = Describe("LOM", func() {
 			Expect(lom.Persist()).NotTo(HaveOccurred())
 			lom.Uncache()
 			Expect(err).ToNot(HaveOccurred())
-			_, err = lom.Load(false)
+			err = lom.Load(false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(lom.ValidateChecksum(true)).ToNot(HaveOccurred())
+			Expect(lom.ValidateContentChecksum()).ToNot(HaveOccurred())
 
-			dst, err := lom.CopyObject(copyFQN, make([]byte, testFileSize))
+			dst, err := lom.CopyObject(copyFQN, copyFQN+".~~~", make([]byte, testFileSize), true)
 			Expect(err).ShouldNot(HaveOccurred())
 			_, err = os.Stat(copyFQN)
 			Expect(os.IsNotExist(err)).To(BeFalse())
@@ -614,7 +609,7 @@ var _ = Describe("LOM", func() {
 
 				// Check copy created
 				newLom := NewBasicLom(localFQN, tMock)
-				_, err := newLom.Load(false)
+				err := newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				_, cksumValue := newLom.Cksum().Get()
 				Expect(cksumValue).To(BeEquivalentTo(expectedHash))
@@ -647,7 +642,7 @@ var _ = Describe("LOM", func() {
 
 			lomEmpty, err := cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}.Init("")
 			Expect(err).NotTo(HaveOccurred())
-			_, err = lomEmpty.Load(false)
+			err = lomEmpty.Load(false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
@@ -660,7 +655,7 @@ var _ = Describe("LOM", func() {
 
 			lomLocal, err := cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}.Init(cmn.LocalBs)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = lomLocal.Load(false)
+			err = lomLocal.Load(false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
@@ -673,7 +668,7 @@ var _ = Describe("LOM", func() {
 
 			lomCloud, err := cluster.LOM{T: tMock, Bucket: sameBucketName, Objname: testObject}.Init(cmn.CloudBs)
 			Expect(err).NotTo(HaveOccurred())
-			_, err = lomCloud.Load(false)
+			err = lomCloud.Load(false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
