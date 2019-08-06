@@ -71,6 +71,7 @@ var (
 			prefixFlag,
 			pageSizeFlag,
 		),
+		bucketCopy: {},
 	}
 
 	bucketPropsFlags = map[string][]cli.Flag{
@@ -184,6 +185,14 @@ var (
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
 				},
+				{
+					Name:         bucketCopy,
+					Usage:        "copies the local bucket",
+					ArgsUsage:    bucketRenameArgumentText,
+					Flags:        bucketFlags[bucketCopy],
+					Action:       bucketHandler,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.LocalBs),
+				},
 			},
 		},
 	}
@@ -212,7 +221,7 @@ func bucketHandler(c *cli.Context) (err error) {
 
 	bucket, err := bucketFromArgsOrEnv(c)
 	// In case of subcommandRename validation will be done inside renameBucket
-	if err != nil && command != propsList && command != subcommandRename {
+	if err != nil && command != propsList && command != subcommandRename && command != bucketCopy {
 		return err
 	}
 
@@ -229,6 +238,8 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = configureNCopies(c, baseParams, bucket)
 	case bucketSummary:
 		err = statBucket(c, baseParams, bucket)
+	case bucketCopy:
+		err = copyBucket(c, baseParams)
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
 	}
@@ -304,6 +315,20 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return
 	}
 	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket renamed to %s\n", bucket, newBucket)
+	return
+}
+
+// Copy local bucket
+func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	bucket, newBucket, err := getRenameBucketParameters(c)
+	if err != nil {
+		return err
+	}
+
+	if err = api.CopyLocalBucket(baseParams, bucket, newBucket); err != nil {
+		return
+	}
+	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket copied to %s\n", bucket, newBucket)
 	return
 }
 

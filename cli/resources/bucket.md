@@ -40,6 +40,12 @@ Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
 Renames a local bucket.
 
+### copy
+
+`ais bucket cp BUCKET NEW_BUCKET`
+
+Copies a local bucket content to a new local bucket.
+
 ### objects
 
 `ais bucket objects BUCKET`

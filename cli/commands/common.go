@@ -45,6 +45,7 @@ const (
 	bucketEvict      = subcommandEvict
 	bucketSummary    = "summary"
 	bucketObjects    = "objects"
+	bucketCopy       = "cp"
 
 	// Bucket props
 	commandBucketProps = "props"
