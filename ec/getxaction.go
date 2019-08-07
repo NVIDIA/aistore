@@ -35,14 +35,14 @@ type (
 // XactGet
 //
 
-func NewGetXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+func NewGetXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactGet {
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 
 	runner := &XactGet{
 		getJoggers:  make(map[string]*getJogger, totalPaths),
-		xactECBase:  newXactECBase(t, bmd, smap, si, bucket, reqBundle, respBundle),
+		xactECBase:  newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
 		xactReqBase: newXactReqECBase(),
 	}
 

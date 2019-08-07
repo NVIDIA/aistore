@@ -4,7 +4,10 @@
  */
 package cmn
 
-import "io"
+import (
+	"io"
+	"io/ioutil"
+)
 
 var (
 	_ io.Reader = &nopReader{}
@@ -33,4 +36,10 @@ func (r *nopReader) Read(b []byte) (int, error) {
 	toRead := Min(len(b), left)
 	r.offset += toRead
 	return toRead, nil
+}
+
+// DrainReader reads and discards all the data from a reader.
+func DrainReader(r io.Reader) error {
+	_, err := io.Copy(ioutil.Discard, r)
+	return err
 }

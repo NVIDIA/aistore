@@ -30,13 +30,13 @@ type (
 // XactGet
 //
 
-func NewPutXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+func NewPutXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactPut {
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
-		xactECBase:  newXactECBase(t, bmd, smap, si, bucket, reqBundle, respBundle),
+		xactECBase:  newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
 		xactReqBase: newXactReqECBase(),
 	}
 
@@ -75,6 +75,18 @@ func (r *XactPut) Run() (err error) {
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
+		// Favor aborting the process, otherwise because of random choice
+		// `select` can choose a task from `r.ecCh` while `abort` awaits
+		// for execution.
+		// NOTE: next select should include the same `case`, too. Because
+		// it does not have `default` branch and may stuck
+		select {
+		case <-r.ChanAbort():
+			r.stop()
+			return fmt.Errorf("%s aborted, exiting", r)
+		default:
+		}
+
 		select {
 		case <-tck.C:
 			if s := fmt.Sprintf("%v", r.Stats()); s != "" {

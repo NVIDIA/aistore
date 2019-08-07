@@ -22,11 +22,11 @@ type (
 	}
 )
 
-func NewRespondXact(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+func NewRespondXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
 
 	runner := &XactRespond{
-		xactECBase: newXactECBase(t, bmd, smap, si, bucket, reqBundle, respBundle),
+		xactECBase: newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
 	}
 
 	return runner
@@ -95,7 +95,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
-	bckIsLocal := r.bmd.Get().IsLocal(bucket)
+	bckIsLocal := r.t.GetBowner().Get().IsLocal(bucket)
 	daemonID := iReq.Sender
 
 	switch iReq.Act {
@@ -151,6 +151,12 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
 	uname := unique(iReq.Sender, bucket, objName)
 
+	drain := func() {
+		if err := cmn.DrainReader(object); err != nil {
+			glog.Warningf("Failed to drain reader %s/%s: %v", bucket, objName, err)
+		}
+	}
+
 	switch iReq.Act {
 	case ReqPut:
 		// a remote target sent a replica/slice while it was
@@ -164,11 +170,22 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		// First check if the request is valid: it must contain metadata
 		meta := iReq.Meta
 		if meta == nil {
+			drain()
 			glog.Errorf("No metadata in request for %s/%s", bucket, objName)
 			return
 		}
 
-		bckIsLocal := r.bmd.Get().IsLocal(bucket)
+		// Check if the request is valid (e.g, a request may come after
+		// the bucket is destroyed.
+		bckIsLocal := r.t.GetBowner().Get().IsLocal(bucket)
+		if !bckIsLocal {
+			// TODO: now EC supports only local buckets, so check if a local bucket exists
+			// NOTE: must read and discard otherwise next reads from the stream would fail
+			drain()
+			glog.Warningf("Received an EC slice/replica for non-existing bucket: %s/%s", bucket, objName)
+			return
+		}
+
 		var (
 			objFQN string
 			lom    *cluster.LOM
@@ -181,6 +198,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 			}
 			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
 			if err != nil {
+				drain()
 				glog.Error(err)
 				return
 			}
@@ -192,6 +210,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 			// FIXME: vs. lom.Fill() a few lines below
 			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
 			if err != nil {
+				drain()
 				glog.Error(err)
 				return
 			}
@@ -221,6 +240,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		}
 
 		if err != nil {
+			drain()
 			glog.Errorf("Failed to save %s/%s data to %q: %v",
 				bucket, objName, objFQN, err)
 			slab.Free(buf)

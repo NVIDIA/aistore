@@ -29,7 +29,6 @@ type (
 		cmn.MountpathXact
 		t cluster.Target
 
-		bmd     cluster.Bowner // bucket manager
 		smap    cluster.Sowner // cluster map
 		si      *cluster.Snode // target daemonInfo
 		stats   stats          // EC statistics
@@ -70,12 +69,10 @@ func newXactReqECBase() xactReqBase {
 	}
 }
 
-func newXactECBase(t cluster.Target, bmd cluster.Bowner, smap cluster.Sowner,
+func newXactECBase(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) xactECBase {
 	return xactECBase{
-		t: t,
-
-		bmd:     bmd,
+		t:       t,
 		smap:    smap,
 		si:      si,
 		stats:   stats{bckName: bucket},

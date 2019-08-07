@@ -152,6 +152,15 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		lom.SetVersion(ver)
 	}
 
+	// check if bucket was destroyed while PUT was in the progress.
+	// TODO: support cloud case
+	if lom.BckIsLocal && !poi.t.bmdowner.Get().IsLocal(lom.Bucket) {
+		err = fmt.Errorf("Bucket %s was destroyed while PUTting %s was in the progress",
+			lom.Bucket, lom.Objname)
+		errCode = http.StatusBadRequest
+		return
+	}
+
 	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
 
@@ -165,6 +174,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	if err = lom.DelAllCopies(); err != nil {
 		return
 	}
+
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
 		return fmt.Errorf("Rename failed => %s: %v", lom, err), 0
 	}

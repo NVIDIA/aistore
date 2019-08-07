@@ -124,18 +124,18 @@ func (mgr *ecManager) initECBundles() {
 }
 
 func (mgr *ecManager) newGetXact(bucket string) *ec.XactGet {
-	return ec.NewGetXact(mgr.t, mgr.t.bmdowner,
-		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
+	return ec.NewGetXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *ecManager) newPutXact(bucket string) *ec.XactPut {
-	return ec.NewPutXact(mgr.t, mgr.t.bmdowner,
-		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
+	return ec.NewPutXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *ecManager) newRespondXact(bucket string) *ec.XactRespond {
-	return ec.NewRespondXact(mgr.t, mgr.t.bmdowner,
-		mgr.t.smapowner, mgr.t.si, bucket, mgr.reqBundle, mgr.respBundle)
+	return ec.NewRespondXact(mgr.t, mgr.t.smapowner, mgr.t.si,
+		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
 func (mgr *ecManager) restoreBckGetXact(bckName string) *ec.XactGet {
@@ -252,7 +252,6 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	}
 
 	isECCopy := ec.IsECCopy(lom.Size(), &lom.BckProps.EC)
-
 	targetCnt := mgr.targetCnt.Load()
 
 	// tradeoff: encoding small object might require just 1 additional target available
