@@ -105,6 +105,13 @@ func (e *globalRebEntry) postRenewHook(previousEntry xactionGlobalEntry) {
 	close(xGlobalReb.confirmCh)
 }
 
+func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
+	cmn.Assert(xact == e.xact)
+	e.stats.FillFromXact(e.xact, "")
+	e.stats.FillFromTrunner(getstorstatsrunner())
+	return &e.stats
+}
+
 //
 // local|global reb helper
 //
@@ -233,18 +240,4 @@ func (b *baseGlobalEntry) preRenewHook(previousEntry xactionGlobalEntry) (done b
 
 func (b *baseGlobalEntry) postRenewHook(_ xactionGlobalEntry) {}
 
-//
-// stats
-//
-func (e *globalRebEntry) Stats() stats.XactStats {
-	e.stats.FillFromXact(e.xact, "")
-	e.stats.FillFromTrunner(getstorstatsrunner())
-	return &e.stats
-}
-
-func (e *lruEntry) Stats() stats.XactStats         { return e.stats.FillFromXact(e.xact, "") }
-func (e *localRebEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }
-func (e *electionEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }
-func (e *evictDeleteEntry) Stats() stats.XactStats { return e.stats.FillFromXact(e.xact, "") }
-func (e *downloaderEntry) Stats() stats.XactStats  { return e.stats.FillFromXact(e.xact, "") }
-func (e *prefetchEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }
+func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats { return b.stats.FillFromXact(xact, "") }

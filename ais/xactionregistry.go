@@ -84,7 +84,7 @@ type (
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
 		Get() cmn.Xact
-		Stats() stats.XactStats
+		Stats(xact cmn.Xact) stats.XactStats
 		IsGlobal() bool
 		IsTask() bool
 	}
@@ -288,7 +288,8 @@ func (r *xactionsRegistry) globalXactStats(kind string, onlyRecent bool) (map[in
 	}
 
 	if onlyRecent {
-		return map[int64]stats.XactStats{entry.Get().ID(): entry.Stats()}, nil
+		xact := entry.Get()
+		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
 
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
@@ -320,8 +321,8 @@ func (r *xactionsRegistry) bucketSingleXactStats(kind, bucket string, onlyRecent
 		if entry == nil {
 			return nil, cmn.NewXactionNotFoundError(kind + ", bucket=" + bucket)
 		}
-
-		return map[int64]stats.XactStats{entry.Get().ID(): entry.Stats()}, nil
+		xact := entry.Get()
+		return map[int64]stats.XactStats{xact.ID(): entry.Stats(xact)}, nil
 	}
 
 	return r.matchingXactsStats(func(xact cmn.Xact) bool {
@@ -339,8 +340,9 @@ func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactSt
 
 	// add these xactions which are the most recent ones, even if they are finished
 	r.RLock()
-	for _, stat := range r.globalXacts {
-		matching[stat.Get().ID()] = stat.Stats()
+	for _, entry := range r.globalXacts {
+		xact := entry.Get()
+		matching[xact.ID()] = entry.Stats(xact)
 	}
 	r.RUnlock()
 
@@ -373,8 +375,8 @@ func (r *xactionsRegistry) matchingXactsStats(xactMatches func(xact cmn.Xact) bo
 		if !xactMatches(entry.Get()) {
 			return true
 		}
-
-		sts[entry.Get().ID()] = entry.Stats()
+		xact := entry.Get()
+		sts[xact.ID()] = entry.Stats(xact)
 		return true
 	})
 

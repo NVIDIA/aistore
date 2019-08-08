@@ -338,10 +338,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		var globalRebStats *stats.RebalanceTargetStats
 		entry := t.xactions.GetL(cmn.ActGlobalReb)
-		if entry != nil && entry.Get() != nil {
-			var ok bool
-			globalRebStats, ok = entry.Stats().(*stats.RebalanceTargetStats)
-			cmn.AssertMsg(ok, "Expected global rebalance stats to be of type stast.RebalanceTargetStats")
+		if entry != nil {
+			if xact := entry.Get(); xact != nil {
+				var ok bool
+				globalRebStats, ok = entry.Stats(xact).(*stats.RebalanceTargetStats)
+				cmn.Assert(ok)
+			}
 		}
 
 		msg := &stats.DaemonStatus{

@@ -88,7 +88,8 @@ func (b *bucketXactions) Stats() map[int64]stats.XactStats {
 	statsList := make(map[int64]stats.XactStats, len(b.entries))
 	b.RLock()
 	for _, e := range b.entries {
-		statsList[e.Get().ID()] = e.Stats()
+		xact := e.Get()
+		statsList[xact.ID()] = e.Stats(xact)
 	}
 	b.RUnlock()
 	return statsList
@@ -309,12 +310,6 @@ func (b *baseBckEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool
 
 func (b *baseBckEntry) postRenewHook(_ xactionBucketEntry) {}
 
-//
-// stats
-//
-func (e *ecGetEntry) Stats() stats.XactStats          { return e.stats.FillFromXact(e.xact, e.bckName) }
-func (e *ecPutEntry) Stats() stats.XactStats          { return e.stats.FillFromXact(e.xact, e.bckName) }
-func (e *ecRespondEntry) Stats() stats.XactStats      { return e.stats.FillFromXact(e.xact, e.bckName) }
-func (e *mncEntry) Stats() stats.XactStats            { return e.stats.FillFromXact(e.xact, e.bckName) }
-func (e *putLocReplicasEntry) Stats() stats.XactStats { return e.stats.FillFromXact(e.xact, e.bckName) }
-func (e *loadLomCacheEntry) Stats() stats.XactStats   { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (b *baseBckEntry) Stats(xact cmn.Xact) stats.XactStats {
+	return b.stats.FillFromXact(xact, b.bckName)
+}
