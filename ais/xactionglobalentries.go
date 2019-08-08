@@ -166,6 +166,8 @@ func (e *electionEntry) Start(id int64) error {
 func (e *electionEntry) Get() cmn.Xact { return e.xact }
 func (e *electionEntry) Kind() string  { return cmn.ActElection }
 
+func (e *electionEntry) preRenewHook(previousEntry xactionGlobalEntry) bool { return true }
+
 //
 // evictDeleteEntry
 //
