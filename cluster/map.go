@@ -46,7 +46,6 @@ type Snode struct {
 	PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
 	IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
 	IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
-	ExtURL          string  `json:"ext_url"`
 	idDigest        uint64
 	LocalNet        *net.IPNet `json:"-"`
 }

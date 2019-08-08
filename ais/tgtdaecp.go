@@ -47,8 +47,10 @@ func (t *targetrunner) initHostIP() {
 			extPort = portNum
 		}
 	}
-	t.si.ExtURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
-	glog.Infof("AIS_HOSTIP: %s[%s]", hostIP, t.si.ExtURL)
+	t.si.PublicNet.NodeIPAddr = extAddr.String()
+	t.si.PublicNet.DaemonPort = strconv.Itoa(extPort)
+	t.si.PublicNet.DirectURL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+	glog.Infof("AIS_HOSTIP[Public Network]: %s[%s]", hostIP, t.si.URL(cmn.NetworkPublic))
 }
 
 // target registration with proxy

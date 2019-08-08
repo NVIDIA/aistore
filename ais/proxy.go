@@ -1567,7 +1567,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 		if local {
 			nodeURL = si.URL(netName)
 		} else {
-			nodeURL = si.ExtURL
+			nodeURL = si.URL(cmn.NetworkPublic)
 		}
 	}
 	redirect = nodeURL + r.URL.Path + "?"
