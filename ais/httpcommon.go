@@ -83,13 +83,9 @@ type (
 	// actionMsgInternal is an extended ActionMsg with extra information for node <=> node control plane communications
 	actionMsgInternal struct {
 		cmn.ActionMsg
-		BMDVersion  int64 `json:"bmdversion"`
-		SmapVersion int64 `json:"smapversion"`
-
-		// special field: used when new target is registered to primary proxy
-		// storage targets make use of NewDaemonID,
-		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
-		NewDaemonID string `json:"newdaemonid"`
+		BMDVersion  int64  `json:"bmdversion"`
+		SmapVersion int64  `json:"smapversion"`
+		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
 	}
 
 	// http server and http runner (common for proxy and target)

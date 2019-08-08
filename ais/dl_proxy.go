@@ -211,8 +211,9 @@ func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpDownloadPost(w, r)
 	default:
-		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid method %s for /download path; expected one of %s, %s, %s", r.Method, http.MethodGet, http.MethodDelete, http.MethodPost))
-
+		s := fmt.Sprintf("invalid method %s for /download path; expected one of %s, %s, %s",
+			r.Method, http.MethodGet, http.MethodDelete, http.MethodPost)
+		cmn.InvalidHandlerWithMsg(w, r, s)
 	}
 }
 
@@ -240,7 +241,9 @@ func (p *proxyrunner) httpDownloadAdmin(w http.ResponseWriter, r *http.Request) 
 
 		path = items[0]
 		if path != cmn.Abort && path != cmn.Remove {
-			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).", items[0], cmn.Abort, cmn.Remove))
+			s := fmt.Sprintf("Invalid action for DELETE request: %s (expected either %s or %s).",
+				items[0], cmn.Abort, cmn.Remove)
+			cmn.InvalidHandlerWithMsg(w, r, s)
 			return
 		}
 	}
@@ -352,7 +355,8 @@ func (p *proxyrunner) handleUnknownCB(bucket string) error {
 
 	// This is the primary proxy, update the CBmap
 	if smap.isPrimary(p.si) {
-		err := p.createBucket(&actionMsg, bucket, false)
+		config := cmn.GCO.Get()
+		err := p.createBucket(&actionMsg, bucket, config, false)
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			return err
 		}

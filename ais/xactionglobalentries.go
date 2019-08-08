@@ -15,17 +15,17 @@ import (
 
 type xactionGlobalEntry interface {
 	xactionEntry
-	// returns if renew should be canceled when previous entry exists
-	EndRenewOnPrevious(entry xactionGlobalEntry) (end bool)
-	// performs some actions before returning from renew, when previous entry exists, for example Renew()
-	ActOnPrevious(entr xactionGlobalEntry)
-	// CleanupPrevious is supposed to perform necessary cleanup on previous entry,
-	// when this one in successfully stored. Done under Lock
-	CleanupPrevious(entry xactionGlobalEntry)
+	// pre-renew: returns true iff the current active one exists and is either
+	// - ok to keep running as is, or
+	// - has been renew(ed) and is still ok
+	preRenewHook(previousEntry xactionGlobalEntry) (done bool)
+	// post-renew hook
+	postRenewHook(previousEntry xactionGlobalEntry)
 }
 
-// Global entries
-
+//
+// lruEntry
+//
 type lruEntry struct {
 	baseGlobalEntry
 	xact *lru.Xaction
@@ -39,12 +39,17 @@ func (e *lruEntry) Start(id int64) error {
 func (e *lruEntry) Kind() string  { return cmn.ActLRU }
 func (e *lruEntry) Get() cmn.Xact { return e.xact }
 
+func (e *lruEntry) preRenewHook(_ xactionGlobalEntry) bool { return true }
+
 type prefetchEntry struct {
 	baseGlobalEntry
 	xact *xactPrefetch
 	r    *stats.Trunner
 }
 
+//
+// prefetchEntry
+//
 func (e *prefetchEntry) Start(id int64) error {
 	e.xact = &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch), r: e.r}
 	return nil
@@ -52,6 +57,11 @@ func (e *prefetchEntry) Start(id int64) error {
 func (e *prefetchEntry) Kind() string  { return cmn.ActPrefetch }
 func (e *prefetchEntry) Get() cmn.Xact { return e.xact }
 
+func (e *prefetchEntry) preRenewHook(_ xactionGlobalEntry) bool { return true }
+
+//
+// globalRebEntry
+//
 type globalRebEntry struct {
 	baseGlobalEntry
 	xact        *xactGlobalReb
@@ -71,40 +81,44 @@ func (e *globalRebEntry) Start(id int64) error {
 }
 func (e *globalRebEntry) Kind() string  { return cmn.ActGlobalReb }
 func (e *globalRebEntry) Get() cmn.Xact { return e.xact }
-func (e *globalRebEntry) EndRenewOnPrevious(entry xactionGlobalEntry) (end bool) {
-	if entry == nil {
-		return
-	}
 
-	xGlobalReb := entry.(*globalRebEntry).xact
+func (e *globalRebEntry) preRenewHook(previousEntry xactionGlobalEntry) (keep bool) {
+	xGlobalReb := previousEntry.(*globalRebEntry).xact
 	if xGlobalReb.smapVersion > e.smapVersion {
 		glog.Errorf("(reb: %s) Smap v%d is greater than v%d", xGlobalReb, xGlobalReb.smapVersion, e.smapVersion)
-		return true
+		keep = true
 	} else if xGlobalReb.smapVersion == e.smapVersion {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s already running, nothing to do", xGlobalReb)
 		}
-		return true
+		keep = true
 	}
 	return
 }
-func (e *globalRebEntry) ActOnPrevious(_ xactionGlobalEntry) {}
-func (e *globalRebEntry) CleanupPrevious(entry xactionGlobalEntry) {
-	// Function called with lock
-	if entry == nil {
-		return
-	}
-	xGlobalReb := entry.(*globalRebEntry).xact
 
-	if !xGlobalReb.Finished() {
-		xGlobalReb.Abort()
-		for i := 0; i < xGlobalReb.runnerCnt; i++ {
-			<-xGlobalReb.confirmCh
-		}
-		close(xGlobalReb.confirmCh)
+func (e *globalRebEntry) postRenewHook(previousEntry xactionGlobalEntry) {
+	xGlobalReb := previousEntry.(*globalRebEntry).xact
+	xGlobalReb.Abort()
+	for i := 0; i < xGlobalReb.runnerCnt; i++ {
+		<-xGlobalReb.confirmCh
+	}
+	close(xGlobalReb.confirmCh)
+}
+
+//
+// local|global reb helper
+//
+func makeXactRebBase(id int64, kind string, runnerCnt int) xactRebBase {
+	return xactRebBase{
+		XactBase:  *cmn.NewXactBase(id, kind),
+		runnerCnt: runnerCnt,
+		confirmCh: make(chan struct{}, runnerCnt),
 	}
 }
 
+//
+// localRebEntry
+//
 type localRebEntry struct {
 	baseGlobalEntry
 	xact      *xactLocalReb
@@ -118,27 +132,21 @@ func (e *localRebEntry) Start(id int64) error {
 	e.xact = xLocalReb
 	return nil
 }
-func (e *localRebEntry) Get() cmn.Xact                                          { return e.xact }
-func (e *localRebEntry) Kind() string                                           { return cmn.ActLocalReb }
-func (e *localRebEntry) EndRenewOnPrevious(entry xactionGlobalEntry) (end bool) { return false }
-func (e *localRebEntry) ActOnPrevious(entry xactionGlobalEntry)                 {}
+func (e *localRebEntry) Get() cmn.Xact { return e.xact }
+func (e *localRebEntry) Kind() string  { return cmn.ActLocalReb }
 
-func (e *localRebEntry) CleanupPrevious(entry xactionGlobalEntry) {
-	if entry == nil {
-		return
+func (e *localRebEntry) postRenewHook(previousEntry xactionGlobalEntry) {
+	lRebEntry := previousEntry.(*localRebEntry)
+	lRebEntry.xact.Abort()
+	for i := 0; i < lRebEntry.xact.runnerCnt; i++ {
+		<-lRebEntry.xact.confirmCh
 	}
-
-	lRebEntry := entry.(*localRebEntry)
-	if !lRebEntry.xact.Finished() {
-		lRebEntry.xact.Abort()
-
-		for i := 0; i < lRebEntry.xact.runnerCnt; i++ {
-			<-lRebEntry.xact.confirmCh
-		}
-		close(lRebEntry.xact.confirmCh)
-	}
+	close(lRebEntry.xact.confirmCh)
 }
 
+//
+// electionEntry
+//
 type electionEntry struct {
 	baseGlobalEntry
 	xact *xactElection
@@ -158,6 +166,9 @@ func (e *electionEntry) Start(id int64) error {
 func (e *electionEntry) Get() cmn.Xact { return e.xact }
 func (e *electionEntry) Kind() string  { return cmn.ActElection }
 
+//
+// evictDeleteEntry
+//
 type evictDeleteEntry struct {
 	baseGlobalEntry
 	xact  *xactEvictDelete
@@ -176,8 +187,8 @@ func (e *evictDeleteEntry) Kind() string {
 	}
 	return cmn.ActDelete
 }
-func (e *evictDeleteEntry) EndRenewOnPrevious(entry xactionGlobalEntry) (end bool) { return false }
-func (e *evictDeleteEntry) ActOnPrevious(entry xactionGlobalEntry)                 {}
+
+func (e *evictDeleteEntry) preRenewHook(previousEntry xactionGlobalEntry) bool { return true }
 
 type downloaderEntry struct {
 	baseGlobalEntry
@@ -194,51 +205,44 @@ func (e *downloaderEntry) Start(id int64) error {
 func (e *downloaderEntry) Get() cmn.Xact { return e.xact }
 func (e *downloaderEntry) Kind() string  { return cmn.ActDownload }
 
-// Base implementations
-
+//
+// base*Entry
+//
 type (
 	baseEntry struct {
 		stats stats.BaseXactStats
 	}
-
 	baseGlobalEntry struct {
 		baseEntry
 	}
 )
 
-func (*baseGlobalEntry) IsGlobal() bool                             { return true }
-func (*baseGlobalEntry) IsTask() bool                               { return false }
-func (b *baseGlobalEntry) CleanupPrevious(entry xactionGlobalEntry) {}
-func (b *baseGlobalEntry) EndRenewOnPrevious(entry xactionGlobalEntry) (end bool) {
-	return !entry.Get().Finished()
-}
-func (b *baseGlobalEntry) ActOnPrevious(entry xactionGlobalEntry) {
-	if demandEntry, ok := entry.Get().(cmn.XactDemand); ok {
+func (*baseGlobalEntry) IsGlobal() bool { return true }
+func (*baseGlobalEntry) IsTask() bool   { return false }
+
+func (b *baseGlobalEntry) preRenewHook(previousEntry xactionGlobalEntry) (done bool) {
+	e := previousEntry.Get()
+	if demandEntry, ok := e.(cmn.XactDemand); ok {
 		demandEntry.Renew()
+		done = true
 	}
+	return
 }
 
-// HELPERS
+func (b *baseGlobalEntry) postRenewHook(_ xactionGlobalEntry) {}
 
-func makeXactRebBase(id int64, kind string, runnerCnt int) xactRebBase {
-	return xactRebBase{
-		XactBase:  *cmn.NewXactBase(id, kind),
-		runnerCnt: runnerCnt,
-		confirmCh: make(chan struct{}, runnerCnt),
-	}
-}
-
-// STATS
-
+//
+// stats
+//
 func (e *globalRebEntry) Stats() stats.XactStats {
-	e.stats.FromXact(e.xact, "")
+	e.stats.FillFromXact(e.xact, "")
 	e.stats.FillFromTrunner(getstorstatsrunner())
 	return &e.stats
 }
 
-func (e *lruEntry) Stats() stats.XactStats         { return e.stats.FromXact(e.xact, "") }
-func (e *localRebEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.xact, "") }
-func (e *electionEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.xact, "") }
-func (e *evictDeleteEntry) Stats() stats.XactStats { return e.stats.FromXact(e.xact, "") }
-func (e *downloaderEntry) Stats() stats.XactStats  { return e.stats.FromXact(e.xact, "") }
-func (e *prefetchEntry) Stats() stats.XactStats    { return e.stats.FromXact(e.xact, "") }
+func (e *lruEntry) Stats() stats.XactStats         { return e.stats.FillFromXact(e.xact, "") }
+func (e *localRebEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }
+func (e *electionEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }
+func (e *evictDeleteEntry) Stats() stats.XactStats { return e.stats.FillFromXact(e.xact, "") }
+func (e *downloaderEntry) Stats() stats.XactStats  { return e.stats.FillFromXact(e.xact, "") }
+func (e *prefetchEntry) Stats() stats.XactStats    { return e.stats.FillFromXact(e.xact, "") }

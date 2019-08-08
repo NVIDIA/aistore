@@ -28,7 +28,7 @@ type replicInfo struct {
 	uncache   bool
 }
 
-func (t *targetrunner) copyLB(bucketFrom, bucketTo string, rename bool) (err error) {
+func (t *targetrunner) copyRenameLB(bucketFrom, bucketTo string, rename bool) (err error) {
 	var (
 		wg                = &sync.WaitGroup{}
 		smap              = t.smapowner.get()

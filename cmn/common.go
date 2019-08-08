@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -117,8 +118,9 @@ type (
 )
 
 var (
-	rtie  atomic.Int32
-	sid64 *shortid.Shortid
+	rtie      atomic.Int32
+	sid64     *shortid.Shortid
+	bucketReg *regexp.Regexp
 )
 
 func init() {
@@ -128,6 +130,8 @@ func init() {
 	// should fork it and change it to the newer date?
 	shortid.SetDefault(sid)
 	rtie.Store(1013)
+
+	bucketReg = regexp.MustCompile(`^[\.a-zA-Z0-9_-]*$`)
 }
 
 func GenTie() string {
@@ -1196,5 +1200,22 @@ func S2Time(timeStr string) (t time.Time, err error) {
 		return
 	}
 	t = time.Unix(0, tunix)
+	return
+}
+
+//
+// bucket
+//
+func ValidateBucketName(bucket string) (err error) {
+	const nameErr = "may only contain letters, numbers, dashes (-), underscores (_), and dots (.)"
+	if bucket == "" {
+		return errors.New("bucket name is empty")
+	}
+	if !bucketReg.MatchString(bucket) {
+		return fmt.Errorf("bucket name %s is invalid: %s", bucket, nameErr)
+	}
+	if strings.Contains(bucket, "..") {
+		return fmt.Errorf("bucket name %s cannot contain '..'", bucket)
+	}
 	return
 }

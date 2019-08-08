@@ -6,15 +6,13 @@ package cluster
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (
-	BisLocalBit   = uint64(1 << 63)
-	bucketNameErr = "must contain lowercase letters, numbers, dashes (-), underscores (_), and dots (.)"
+	BisLocalBit = uint64(1 << 63)
 )
 
 // interface to Get current bucket-metadata instance
@@ -99,29 +97,26 @@ func (m *BMD) Get(b string, local bool) (p *cmn.BucketProps, present bool) {
 }
 
 func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err error) {
-	if !validateBucketName(bucket) {
-		err = fmt.Errorf("bucket name %s is invalid (%s)", bucket, bucketNameErr)
+	if err = cmn.ValidateBucketName(bucket); err != nil {
 		return
 	}
-	config := cmn.GCO.Get()
-
 	normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
 	if err != nil {
-		return false, err
+		return
 	}
-
-	bckIsLocal := m.IsLocal(bucket)
+	var (
+		config     = cmn.GCO.Get()
+		bckIsLocal = m.IsLocal(bucket)
+	)
 	switch normalizedBckProvider {
 	case cmn.LocalBs:
-		// Check if local bucket does exist
 		if !bckIsLocal {
 			return false, fmt.Errorf("local bucket %q %s", bucket, cmn.DoesNotExist)
 		}
 		isLocal = true
 	case cmn.CloudBs:
-		// Check if user does have the associated cloud
 		if bckProvider != config.CloudProvider && bckProvider != cmn.CloudBs {
-			err = fmt.Errorf("cluster cloud provider %q, mis-match bucket provider %q", config.CloudProvider, bckProvider)
+			err = fmt.Errorf("cluster cloud provider %q, mismatch bucket provider %q", config.CloudProvider, bckProvider)
 			return
 		}
 		isLocal = false
@@ -129,23 +124,6 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 		isLocal = bckIsLocal
 	}
 	return
-}
-
-func validateBucketName(bucket string) bool {
-	if bucket == "" {
-		return false
-	}
-	reg := regexp.MustCompile(`^[\.a-zA-Z0-9_-]*$`)
-	if !reg.MatchString(bucket) {
-		return false
-	}
-	// Reject bucket name containing only dots
-	for _, c := range bucket {
-		if c != '.' {
-			return true
-		}
-	}
-	return false
 }
 
 //

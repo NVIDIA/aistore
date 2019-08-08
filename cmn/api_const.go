@@ -88,6 +88,13 @@ const (
 	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
+// action phases: 2-phase commit
+const (
+	ActBegin  = "begin"
+	ActCommit = "commit"
+	ActAbort  = "abort"
+)
+
 // Header Key enum - conventions:
 // - the constant equals the path of a value in BucketProps structure
 // - if a property is a root one, then the constant is just a lowercased propery name

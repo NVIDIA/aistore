@@ -501,9 +501,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			cmn.NetworkIntraControl,
 			cluster.Targets,
 		)
-		for result := range results {
-			if result.err != nil {
-				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, result.err))
+		for res := range results {
+			if res.err != nil {
+				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, res.err))
 				return
 			}
 		}
@@ -625,7 +625,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	if newBMD != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			caller := r.Header.Get(cmn.HeaderCallerName)
-			glog.Infof("new BMD v%d from %s", newBMD.version(), caller)
+			glog.Infof("new %s v%d from %s", bmdTermName, newBMD.version(), caller)
 		}
 		if err = p.receiveBucketMD(newBMD, actionLB); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
@@ -662,9 +662,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, local bool) error {
-	config := cmn.GCO.Get()
-
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, config *cmn.Config, local bool) error {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bucketProps := cmn.DefaultBucketProps(local)
@@ -771,7 +769,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if err := p.createBucket(&msg, bucket, true); err != nil {
+		if err := cmn.ValidateBucketName(bucket); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		if err := p.createBucket(&msg, bucket, config, true); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
@@ -784,29 +786,18 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketFrom, bucketTo := bucket, msg.Name
-		if bucketFrom == "" || bucketTo == "" {
-			s := fmt.Sprintf("invalid rename local bucket request: empty name %q or %q", bucketFrom, bucketTo)
+		if bucketFrom == bucketTo {
+			s := fmt.Sprintf("invalid %s request: duplicate bucket name %q", msg.Action, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		clone := p.bmdowner.get().clone()
-		props, ok := clone.Get(bucketFrom, true)
-		if !ok {
-			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucketFrom)
-			p.invalmsghdlr(w, r, s, http.StatusNotFound)
+		if err := cmn.ValidateBucketName(bucketTo); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if _, ok = clone.Get(bucketTo, true); ok {
-			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
-			p.invalmsghdlr(w, r, s)
-			return
+		if err := p.copyRenameLB(bucketFrom, bucketTo, &msg, config); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
 		}
-		if !p.copyLB(bucketFrom, bucketTo, clone, props, &msg, config) {
-			s := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
-			p.invalmsghdlr(w, r, s)
-			return
-		}
-		glog.Infof("renamed local bucket %s => %s, %s v%d", bucketFrom, bucketTo, bmdTermName, clone.version())
 	case cmn.ActSyncLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
@@ -817,7 +808,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if err := p.createBucket(&msg, bucket, false); err != nil {
+		if err := p.createBucket(&msg, bucket, config, false); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
@@ -847,28 +838,28 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request,
-	bucket, bckProvider string, actionMsg cmn.ActionMsg, started time.Time, fastListing bool) {
+	bucket, bckProvider string, amsg cmn.ActionMsg, started time.Time, fastListing bool) {
 	var (
-		err     error
-		msg     = cmn.SelectMsg{}
-		bckList *cmn.BucketList
-		query   = r.URL.Query()
 		taskID  int64
+		err     error
+		bckList *cmn.BucketList
+		smsg    = cmn.SelectMsg{}
+		query   = r.URL.Query()
 	)
 
-	listMsgJSON := cmn.MustMarshal(actionMsg.Value)
-	if err := jsoniter.Unmarshal(listMsgJSON, &msg); err != nil {
+	listMsgJSON := cmn.MustMarshal(amsg.Value)
+	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
 	// override fastListing if it set
 	if fastListing {
-		msg.Fast = fastListing
+		smsg.Fast = fastListing
 	}
 	// override prefix if it is set in URL query values
 	if prefix := query.Get(cmn.URLParamPrefix); prefix != "" {
-		msg.Prefix = prefix
+		smsg.Prefix = prefix
 	}
 
 	idstr := r.URL.Query().Get(cmn.URLParamTaskID)
@@ -878,10 +869,10 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid task id: %s", idstr))
 			return
 		}
-		msg.TaskID = id
+		smsg.TaskID = id
 	}
 
-	if bckList, taskID, err = p.listBucket(r, bucket, bckProvider, msg); err != nil {
+	if bckList, taskID, err = p.listBucket(r, bucket, bckProvider, smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1388,65 +1379,95 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) copyLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
-	actionMsg *cmn.ActionMsg, config *cmn.Config) bool {
+func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
+	smap := p.smapowner.get()
+	bmd := p.bmdowner.get().clone()
 
-	smap4bcast := p.smapowner.get()
-	p.bmdowner.Lock()
-	clone.add(bucketTo, true, props)
-	if err := p.savebmdconf(clone, config); err != nil {
-		glog.Error(err)
+	// 1. validate
+	bprops, ok := bmd.Get(bucketFrom, true)
+	if !ok {
+		return fmt.Errorf("local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
-	msgInt := p.newActionMsgInternal(actionMsg, smap4bcast, clone)
-	body := cmn.MustMarshal(msgInt)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
+	if _, ok = bmd.Get(bucketTo, true); ok {
+		return fmt.Errorf("local bucket %s already exists", bucketTo)
+	}
 
-	res := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom),
-		nil, // query
+	// 2. begin
+	msgInt := p.newActionMsgInternal(msg, smap, bmd)
+	body := cmn.MustMarshal(msgInt)
+	results := p.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActBegin),
+		nil, // query TODO -- FIXME
 		http.MethodPost,
 		body,
-		smap4bcast,
-		config.Timeout.Default,
+		smap,
+		config.Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
-
-	for r := range res {
-		if r.err != nil {
-			glog.Errorf("Target %s failed to %s %s => %s, err: %v (%d)",
-				r.si.DaemonID, actionMsg.Action, bucketFrom, bucketTo, r.err, r.status)
-			return false // FIXME
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
+			glog.Errorln(err.Error())
 		}
+	}
+	if err != nil {
+		return
+	}
+
+	// 3. commit
+	msgInt = p.newActionMsgInternal(msg, smap, bmd)
+	body = cmn.MustMarshal(msgInt)
+	results = p.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActCommit),
+		nil, // query
+		http.MethodPost,
+		body,
+		smap,
+		config.Timeout.Default, // TODO -- FIXME
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
+			glog.Errorln(err.Error())
+		}
+	}
+	if err != nil {
+		return
 	}
 
 	p.bmdowner.Lock()
-	clone = p.bmdowner.get().clone()
-	if actionMsg.Action == cmn.ActRenameLB {
-		clone.del(bucketFrom, true)
+	nbmd := p.bmdowner.get().clone()
+	nbmd.add(bucketTo, true, bprops)
+	if msg.Action == cmn.ActRenameLB {
+		nbmd.del(bucketFrom, true)
+	} else {
+		nbmd.Version++
 	}
-	clone.add(bucketTo, true, props)
-	if err := p.savebmdconf(clone, config); err != nil {
+	p.bmdowner.put(nbmd)
+	p.bmdowner.Unlock()
+
+	// 4. finalize
+	if err = p.savebmdconf(nbmd, config); err != nil {
 		glog.Error(err)
 	}
-	p.bmdowner.put(clone)
-	p.bmdowner.Unlock()
-	msgInt = p.newActionMsgInternal(actionMsg, smap4bcast, clone)
-	p.metasyncer.sync(true, revspair{clone, msgInt})
-	return true
+	msgInt = p.newActionMsgInternal(msg, nil, nbmd)
+	p.metasyncer.sync(true, revspair{nbmd, msgInt})
+	glog.Infof("%s local bucket %s => %s, %s v%d", msg.Action, bucketFrom, bucketTo, bmdTermName, nbmd.version())
+	return
 }
 
 func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket string,
-	actionMsg *cmn.ActionMsg, cfg *cmn.Config, bckIsLocal bool) {
-	copies, err := p.parseValidateNCopies(actionMsg.Value)
+	msg *cmn.ActionMsg, cfg *cmn.Config, bckIsLocal bool) {
+	copies, err := p.parseValidateNCopies(msg.Value)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	smap := p.smapowner.get()
-	msgInt := p.newActionMsgInternal(actionMsg, smap, nil)
+	msgInt := p.newActionMsgInternal(msg, smap, nil)
 	body := cmn.MustMarshal(msgInt)
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
@@ -1579,13 +1600,13 @@ func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
 		timeout: defaultTimeout,
 	}
 
-	resp := p.call(args)
+	res := p.call(args)
 
-	if resp.err != nil && resp.status != http.StatusNotFound {
-		return false, fmt.Errorf("failed to check if bucket exists contacting %s: %v", si.URL(cmn.NetworkIntraData), resp.err)
+	if res.err != nil && res.status != http.StatusNotFound {
+		return false, fmt.Errorf("failed to check if bucket exists contacting %s: %v", si.URL(cmn.NetworkIntraData), res.err)
 	}
 
-	return resp.status != http.StatusNotFound, nil
+	return res.status != http.StatusNotFound, nil
 }
 
 func (p *proxyrunner) initBckListQuery(headerID string, msg *cmn.SelectMsg) (bool, url.Values, error) {
@@ -1621,15 +1642,15 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 	// check response codes of all targets
 	// Target that has completed its async task returns 200, and 202 otherwise
 	allOK, allNotFound := true, true
-	for result := range results {
-		if result.status == http.StatusNotFound {
+	for res := range results {
+		if res.status == http.StatusNotFound {
 			continue
 		}
 		allNotFound = false
-		if result.err != nil {
-			return false, result.err
+		if res.err != nil {
+			return false, res.err
 		}
-		if result.status != http.StatusOK {
+		if res.status != http.StatusOK {
 			allOK = false
 			break
 		}
@@ -1700,18 +1721,18 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, he
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-	for resp := range results {
-		if resp.err != nil {
-			return nil, 0, resp.err
+	for res := range results {
+		if res.err != nil {
+			return nil, 0, res.err
 		}
-		if len(resp.outjson) == 0 {
+		if len(res.outjson) == 0 {
 			continue
 		}
 		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-		if err = jsoniter.Unmarshal(resp.outjson, &bucketList); err != nil {
+		if err = jsoniter.Unmarshal(res.outjson, &bucketList); err != nil {
 			return
 		}
-		resp.outjson = nil
+		res.outjson = nil
 
 		if len(bucketList.Entries) == 0 {
 			continue
@@ -1756,7 +1777,8 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, he
 	return allEntries, 0, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID string, msg cmn.SelectMsg) (allEntries *cmn.BucketList, code int64, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID string,
+	msg cmn.SelectMsg) (allEntries *cmn.BucketList, code int64, err error) {
 	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
 	if msg.PageSize > maxPageSize {
 		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bucket, maxPageSize)
@@ -1850,21 +1872,21 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
 	var pageMarker string
-	for resp := range results {
-		if resp.status == http.StatusNotFound {
+	for res := range results {
+		if res.status == http.StatusNotFound {
 			continue
 		}
-		if resp.err != nil {
-			return nil, 0, resp.err
+		if res.err != nil {
+			return nil, 0, res.err
 		}
-		if len(resp.outjson) == 0 {
+		if len(res.outjson) == 0 {
 			continue
 		}
 		bucketList := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-		if err = jsoniter.Unmarshal(resp.outjson, bucketList); err != nil {
+		if err = jsoniter.Unmarshal(res.outjson, bucketList); err != nil {
 			return
 		}
-		resp.outjson = nil
+		res.outjson = nil
 
 		if len(bucketList.Entries) == 0 {
 			continue
@@ -1958,7 +1980,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	p.statsif.Add(stats.RenameCount, 1)
 }
 
-func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method, bckProvider string) {
+func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, method, bckProvider string) {
 	var (
 		err   error
 		query = r.URL.Query()
@@ -1972,20 +1994,20 @@ func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, a
 	if bmd, _ := p.validateBucket(w, r, bucket, bckProvider); bmd == nil {
 		return
 	}
-	if err := p.listRange(method, bucket, actionMsg, query); err != nil {
+	if err := p.listRange(method, bucket, msg, query); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 }
 
-func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg, query url.Values) error {
+func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
 	var (
 		timeout time.Duration
 		results chan callResult
 	)
 
 	wait := false
-	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
+	if jsmap, ok := msg.Value.(map[string]interface{}); !ok {
 		return fmt.Errorf("failed to unmarshal JSMAP: Not a map[string]interface")
 	} else if waitstr, ok := jsmap["wait"]; ok {
 		if wait, ok = waitstr.(bool); !ok {
@@ -1995,7 +2017,7 @@ func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg,
 	// Send json message to all
 	smap := p.smapowner.get()
 	bmd := p.bmdowner.get()
-	msgInt := p.newActionMsgInternal(actionMsg, smap, bmd)
+	msgInt := p.newActionMsgInternal(msg, smap, bmd)
 	body := cmn.MustMarshal(msgInt)
 	if wait {
 		timeout = cmn.GCO.Get().Timeout.ListBucket
@@ -2013,15 +2035,9 @@ func (p *proxyrunner) listRange(method, bucket string, actionMsg *cmn.ActionMsg,
 		cmn.NetworkIntraData,
 		cluster.Targets,
 	)
-
-	for result := range results {
-		if result.err != nil {
-			return fmt.Errorf(
-				"failed to execute List/Range request: %v (%d: %s)",
-				result.err,
-				result.status,
-				result.details,
-			)
+	for res := range results {
+		if res.err != nil {
+			return fmt.Errorf("failed to List/Range: %v (%d: %s)", res.err, res.status, res.details)
 		}
 	}
 	return nil
@@ -2498,9 +2514,9 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
-	for result := range results {
-		if result.err != nil {
-			s := fmt.Sprintf("Failed to set primary %s: err %v from %s in the prepare phase", proxyid, result.err, result.si)
+	for res := range results {
+		if res.err != nil {
+			s := fmt.Sprintf("Failed to set primary %s: err %v from %s in the prepare phase", proxyid, res.err, res.si)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -2531,13 +2547,13 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	)
 
 	// FIXME: retry
-	for result := range results {
-		if result.err != nil {
-			if result.si.DaemonID == proxyid {
-				glog.Fatalf("Commit phase failure: new primary %s returned err %v", proxyid, result.err)
+	for res := range results {
+		if res.err != nil {
+			if res.si.DaemonID == proxyid {
+				glog.Fatalf("Commit phase failure: new primary %s returned err %v", proxyid, res.err)
 			} else {
 				glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
-					result.si.DaemonID, result.err, proxyid)
+					res.si.DaemonID, res.err, proxyid)
 			}
 		}
 	}
@@ -2688,16 +2704,16 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 		cluster.Targets,
 	)
 	targetResults := make(map[string]jsoniter.RawMessage, smapX.CountTargets())
-	for result := range results {
-		if result.err != nil {
+	for res := range results {
+		if res.err != nil {
 			if silent {
-				p.invalmsghdlrsilent(w, r, result.details)
+				p.invalmsghdlrsilent(w, r, res.details)
 			} else {
-				p.invalmsghdlr(w, r, result.details)
+				p.invalmsghdlr(w, r, res.details)
 			}
 			return nil, false
 		}
-		targetResults[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
+		targetResults[res.si.DaemonID] = jsoniter.RawMessage(res.outjson)
 	}
 	return targetResults, true
 }
@@ -2716,11 +2732,11 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 			broadcastType,
 		)
 		sysInfoMap := make(map[string]jsoniter.RawMessage, expectedNodes)
-		for result := range results {
-			if result.err != nil {
-				return nil, result.details
+		for res := range results {
+			if res.err != nil {
+				return nil, res.details
 			}
-			sysInfoMap[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
+			sysInfoMap[res.si.DaemonID] = jsoniter.RawMessage(res.outjson)
 		}
 		return sysInfoMap, ""
 	}
@@ -3102,10 +3118,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				cmn.NetworkIntraControl,
 				cluster.AllNodes,
 			)
-			for result := range results {
-				if result.err != nil {
-					p.invalmsghdlr(w, r, result.err.Error())
-					p.keepalive.onerr(err, result.status)
+			for res := range results {
+				if res.err != nil {
+					p.invalmsghdlr(w, r, res.err.Error())
+					p.keepalive.onerr(err, res.status)
 					return
 				}
 			}
@@ -3146,14 +3162,14 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			cmn.NetworkIntraControl,
 			cluster.AllNodes,
 		)
-		for result := range results {
-			if result.err != nil {
+		for res := range results {
+			if res.err != nil {
 				p.invalmsghdlr(
 					w,
 					r,
-					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.details),
+					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details),
 				)
-				p.keepalive.onerr(err, result.status)
+				p.keepalive.onerr(err, res.status)
 				return
 			}
 		}
@@ -3265,7 +3281,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 //    Force=false: use targets' BMD only if they are of the same version
 // 4. Set primary's BMD version to be greater than any target's one
 // 4. Metasync the merged BMD
-func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg) {
+func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatBucketMetaX)
@@ -3284,27 +3300,19 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, act
 	)
 
 	bmdList := make([]*bucketMD, 0, len(results))
-	for result := range results {
-		if result.err != nil || result.status >= http.StatusBadRequest {
-			glog.Errorf(
-				"failed to execute list buckets request: %v (%d: %s)",
-				result.err,
-				result.status,
-				result.details,
-			)
+	for res := range results {
+		if res.err != nil || res.status >= http.StatusBadRequest {
+			glog.Errorf("failed to execute list buckets request: %v (%d: %s)", res.err, res.status, res.details)
 			continue
 		}
-
 		bmd := &bucketMD{}
-		err := jsoniter.Unmarshal(result.outjson, bmd)
+		err := jsoniter.Unmarshal(res.outjson, bmd)
 		if err != nil {
-			glog.Errorf("Failed to unmarshal bmd from %s: %v", result.si.DaemonID, err)
+			glog.Errorf("Failed to unmarshal %s from %s: %v", bmdTermName, res.si.DaemonID, err)
 			continue
 		}
-
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Received BMD from %s (version %d):\n%s",
-				result.si.DaemonID, bmd.Version, string(result.outjson))
+			glog.Infof("Received %s from %s (version %d):\n%s", bmdTermName, res.si.DaemonID, bmd.Version, string(res.outjson))
 		}
 
 		bmdList = append(bmdList, bmd)
@@ -3335,6 +3343,6 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, act
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 
-	msgInt := p.newActionMsgInternal(actionMsg, nil, clone)
+	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 }

@@ -49,7 +49,7 @@ func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
 func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
 func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
 func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
-func (b *BaseXactStats) FromXact(xact cmn.Xact, bucket string) *BaseXactStats {
+func (b *BaseXactStats) FillFromXact(xact cmn.Xact, bucket string) *BaseXactStats {
 	b.IDX = xact.ID()
 	b.KindX = xact.Kind()
 	b.StartTimeX = xact.StartTime()

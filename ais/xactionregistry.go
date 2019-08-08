@@ -357,7 +357,7 @@ func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactSt
 		taskXact := val.(*bckListTaskEntry)
 
 		stat := &stats.BaseXactStats{}
-		stat.FromXact(taskXact.xact, "")
+		stat.FillFromXact(taskXact.xact, "")
 		matching[taskXact.xact.ID()] = stat
 		return true
 	})
@@ -492,69 +492,65 @@ func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
 	return res
 }
 
-func (r *xactionsRegistry) Update(e xactionGlobalEntry) (stored bool, err error) {
-	r.Lock()
-	defer r.Unlock()
-
-	previousEntry := r.globalXacts[e.Kind()]
-	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
-		e.ActOnPrevious(previousEntry)
-		return false, nil
-	}
-
-	if err := e.Start(r.uniqueID()); err != nil {
-		return false, err
-	}
-
-	r.globalXacts[e.Kind()] = e
-	r.storeByID(e.Get().ID(), e)
-	e.CleanupPrevious(previousEntry)
-	return true, nil
-}
-
-func (r *xactionsRegistry) RenewGlobalXact(e xactionGlobalEntry) (stored bool, err error) {
+func (r *xactionsRegistry) renewGlobalXaction(e xactionGlobalEntry) (stored bool, err error) {
 	r.RLock()
 	previousEntry := r.globalXacts[e.Kind()]
 
-	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
-		e.ActOnPrevious(previousEntry)
-		r.RUnlock()
-		return false, nil
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			r.RUnlock()
+			return false, nil
+		}
 	}
-
 	r.RUnlock()
-	return r.Update(e)
+
+	r.Lock()
+	defer r.Unlock()
+	previousEntry = r.globalXacts[e.Kind()]
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			return false, nil
+		}
+	}
+	if err := e.Start(r.uniqueID()); err != nil {
+		return false, err
+	}
+	r.globalXacts[e.Kind()] = e
+	r.storeByID(e.Get().ID(), e)
+
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		e.postRenewHook(previousEntry)
+	}
+	return true, nil
 }
 
 func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
 	e := &prefetchEntry{r: tr}
-	stored, _ := r.RenewGlobalXact(e)
+	stored, _ := r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*prefetchEntry)
 
 	if !stored && !entry.xact.Finished() {
 		// previous prefetch is still running
 		return nil
 	}
-
 	return entry.xact
 }
 
 func (r *xactionsRegistry) renewLRU() *lru.Xaction {
 	e := &lruEntry{}
-	stored, _ := r.RenewGlobalXact(e)
+	stored, _ := r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*lruEntry)
 
 	if !stored && !entry.xact.Finished() {
 		// previous LRU is still running
 		return nil
 	}
-
 	return entry.xact
 }
 
 func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactGlobalReb {
 	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
-	stored, _ := r.RenewGlobalXact(e)
+	stored, _ := r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*globalRebEntry)
 
 	if !stored {
@@ -566,7 +562,7 @@ func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xac
 
 func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
 	e := &localRebEntry{runnerCnt: runnerCnt}
-	stored, _ := r.RenewGlobalXact(e)
+	stored, _ := r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*localRebEntry)
 
 	if !stored {
@@ -578,32 +574,30 @@ func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
 
 func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
 	e := &electionEntry{p: p, vr: vr}
-	stored, _ := r.RenewGlobalXact(e)
+	stored, _ := r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*electionEntry)
 
 	if !stored && !entry.xact.Finished() {
 		// previous election is still running
 		return nil
 	}
-
 	return entry.xact
 }
 
 func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
 	e := &downloaderEntry{t: t}
-	_, err := r.RenewGlobalXact(e)
+	_, err := r.renewGlobalXaction(e)
 
 	if err != nil {
 		return nil, err
 	}
-
 	entry := r.GetL(e.Kind()).(*downloaderEntry)
 	return entry.xact, nil
 }
 
 func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	e := &evictDeleteEntry{evict: evict}
-	_, _ = r.RenewGlobalXact(e)
+	_, _ = r.renewGlobalXaction(e)
 	entry := r.GetL(e.Kind()).(*evictDeleteEntry)
 	return entry.xact
 }
@@ -618,7 +612,6 @@ func (r *xactionsRegistry) removeFinishedByID(id int64) error {
 	if !xact.Get().Finished() {
 		return fmt.Errorf("xaction %s(%d, %T) is running - duplicate ID?", xact.Kind(), id, xact.Get())
 	}
-
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Found finished xaction %d with id %d. Deleting", xact.Get(), id)
 	}
@@ -642,11 +635,9 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 		ctx:     ctx,
 		cached:  cached,
 	}
-
 	if err := e.Start(id); err != nil {
 		return nil, err
 	}
-
 	r.taskXacts.Store(e.Kind(), e)
 	r.storeByID(e.Get().ID(), e)
 	return e.xact, nil
@@ -674,7 +665,6 @@ func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 			return cleanupInterval
 		}
 	}
-
 	anyTaskDeleted := false
 	r.byID.Range(func(k, v interface{}) bool {
 		entry := v.(xactionEntry)
@@ -729,6 +719,7 @@ func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 func (r *xactBckListTask) IsGlobal() bool        { return false }
 func (r *xactBckListTask) IsTask() bool          { return true }
 func (r *xactBckListTask) IsMountpathXact() bool { return false }
+
 func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
 	if err == nil {
@@ -737,6 +728,7 @@ func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	r.res.Store(unsafe.Pointer(res))
 	r.EndTime(time.Now())
 }
+
 func (r *xactBckListTask) Run() {
 	walk := objwalk.NewWalk(r.ctx, r.bucket, r.isLocal, r.msg, r.t)
 	if r.isLocal {

@@ -27,10 +27,12 @@ type (
 
 	xactionBucketEntry interface {
 		xactionEntry
-		// returns if renew should be canceled when previous entry exists
-		EndRenewOnPrevious(entry xactionBucketEntry) (end bool)
-		// performs some actions before returning from renew, when previous entry exists, for example Renew()
-		ActOnPrevious(entry xactionBucketEntry)
+		// pre-renew: returns true iff the current active one exists and is either
+		// - ok to keep running as is, or
+		// - has been renew(ed) and is still ok
+		preRenewHook(previousEntry xactionBucketEntry) (keep bool)
+		// post-renew hook
+		postRenewHook(previousEntry xactionBucketEntry)
 	}
 )
 
@@ -50,37 +52,36 @@ func (b *bucketXactions) GetL(kind string) xactionBucketEntry {
 	return b.entries[kind]
 }
 
-func (b *bucketXactions) Update(e xactionBucketEntry) error {
-	b.Lock()
-	defer b.Unlock()
-
-	previousEntry := b.entries[e.Kind()]
-	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
-		e.ActOnPrevious(previousEntry)
-		return nil
-	}
-
-	if err := e.Start(b.uniqueID()); err != nil {
-		return err
-	}
-
-	b.entries[e.Kind()] = e
-	b.r.storeByID(e.Get().ID(), e)
-	return nil
-}
-
 func (b *bucketXactions) renewBucketXaction(e xactionBucketEntry) (err error) {
 	b.RLock()
 	previousEntry := b.entries[e.Kind()]
 
-	if previousEntry != nil && e.EndRenewOnPrevious(previousEntry) {
-		e.ActOnPrevious(previousEntry)
-		b.RUnlock()
-		return nil
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			b.RUnlock()
+			return nil
+		}
 	}
-
 	b.RUnlock()
-	return b.Update(e)
+
+	b.Lock()
+	defer b.Unlock()
+	previousEntry = b.entries[e.Kind()]
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			return nil
+		}
+	}
+	if err := e.Start(b.uniqueID()); err != nil {
+		return err
+	}
+	b.entries[e.Kind()] = e
+	b.r.storeByID(e.Get().ID(), e)
+
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		e.postRenewHook(previousEntry)
+	}
+	return nil
 }
 
 func (b *bucketXactions) Stats() map[int64]stats.XactStats {
@@ -117,8 +118,9 @@ func (b *bucketXactions) AbortAll() bool {
 	return sleep
 }
 
-// Buckets entries
-
+//
+// ecGetEntry
+//
 type ecGetEntry struct {
 	baseBckEntry
 	xact *ec.XactGet
@@ -132,6 +134,7 @@ func (e *ecGetEntry) Start(id int64) error {
 
 	return nil
 }
+
 func (*ecGetEntry) Kind() string    { return cmn.ActECGet }
 func (e *ecGetEntry) Get() cmn.Xact { return e.xact }
 func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
@@ -142,6 +145,9 @@ func (r *xactionsRegistry) renewGetEC(bucket string) *ec.XactGet {
 	return b.GetL(e.Kind()).Get().(*ec.XactGet)
 }
 
+//
+// ecPutEntry
+//
 type ecPutEntry struct {
 	baseBckEntry
 	xact *ec.XactPut
@@ -163,6 +169,9 @@ func (r *xactionsRegistry) renewPutEC(bucket string) *ec.XactPut {
 	return b.GetL(e.Kind()).Get().(*ec.XactPut)
 }
 
+//
+// ecRespondEntry
+//
 type ecRespondEntry struct {
 	baseBckEntry
 	xact *ec.XactRespond
@@ -184,12 +193,15 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 	return b.GetL(e.Kind()).Get().(*ec.XactRespond)
 }
 
+//
+// mncEntry
+//
 type mncEntry struct {
 	baseBckEntry
 	t          *targetrunner
+	xact       *mirror.XactBckMakeNCopies
 	copies     int
 	bckIsLocal bool
-	xact       *mirror.XactBckMakeNCopies
 }
 
 func (e *mncEntry) Start(id int64) error {
@@ -209,6 +221,9 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 	_ = b.renewBucketXaction(e)
 }
 
+//
+// loadLomCacheEntry
+//
 type loadLomCacheEntry struct {
 	baseBckEntry
 	t          cluster.Target
@@ -230,12 +245,14 @@ func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target,
 	if true {
 		return
 	}
-
 	b := r.bucketsXacts(bucket)
 	e := &loadLomCacheEntry{t: t, bckIsLocal: bckIsLocal, baseBckEntry: baseBckEntry{bckName: bucket}}
 	b.renewBucketXaction(e)
 }
 
+//
+// putLocReplicasEntry
+//
 type putLocReplicasEntry struct {
 	baseBckEntry
 	lom  *cluster.LOM
@@ -270,29 +287,34 @@ func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPut
 	return putLocRepEntry.(*putLocReplicasEntry).xact
 }
 
-// Base implementation
-
+//
+// baseBckEntry
+//
 type baseBckEntry struct {
 	baseEntry
 	bckName string
 }
 
-func (*baseBckEntry) IsGlobal() bool  { return false }
-func (*baseBckEntry) IsTask() bool    { return false }
-func (b *baseBckEntry) IsEmpty() bool { return b == nil }
-func (b *baseBckEntry) EndRenewOnPrevious(entry xactionBucketEntry) (end bool) {
-	return !entry.Get().Finished()
-}
-func (b *baseBckEntry) ActOnPrevious(entry xactionBucketEntry) {
-	if demandEntry, ok := entry.Get().(cmn.XactDemand); ok {
+func (*baseBckEntry) IsGlobal() bool { return false }
+func (*baseBckEntry) IsTask() bool   { return false }
+
+func (b *baseBckEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool) {
+	e := previousEntry.Get()
+	if demandEntry, ok := e.(cmn.XactDemand); ok {
 		demandEntry.Renew()
+		keep = true
 	}
+	return
 }
 
-// STATS
-func (e *ecGetEntry) Stats() stats.XactStats          { return e.stats.FromXact(e.xact, e.bckName) }
-func (e *ecPutEntry) Stats() stats.XactStats          { return e.stats.FromXact(e.xact, e.bckName) }
-func (e *ecRespondEntry) Stats() stats.XactStats      { return e.stats.FromXact(e.xact, e.bckName) }
-func (e *mncEntry) Stats() stats.XactStats            { return e.stats.FromXact(e.xact, e.bckName) }
-func (e *putLocReplicasEntry) Stats() stats.XactStats { return e.stats.FromXact(e.xact, e.bckName) }
-func (e *loadLomCacheEntry) Stats() stats.XactStats   { return e.stats.FromXact(e.xact, e.bckName) }
+func (b *baseBckEntry) postRenewHook(_ xactionBucketEntry) {}
+
+//
+// stats
+//
+func (e *ecGetEntry) Stats() stats.XactStats          { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (e *ecPutEntry) Stats() stats.XactStats          { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (e *ecRespondEntry) Stats() stats.XactStats      { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (e *mncEntry) Stats() stats.XactStats            { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (e *putLocReplicasEntry) Stats() stats.XactStats { return e.stats.FillFromXact(e.xact, e.bckName) }
+func (e *loadLomCacheEntry) Stats() stats.XactStats   { return e.stats.FillFromXact(e.xact, e.bckName) }

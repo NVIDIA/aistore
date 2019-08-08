@@ -350,7 +350,6 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	if err != nil {
 		return
 	}
-	// hashtype and hash could be empty for legacy objects.
 	bckProvider, _ := cmn.ProviderFromStr(cmn.CloudBs)
 	lom, err = cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
 	if err != nil {

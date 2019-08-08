@@ -5,6 +5,7 @@
 package cluster
 
 import (
+	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -14,8 +15,8 @@ var _ = Describe("BMD", func() {
 	Describe("validateBucketName", func() {
 		DescribeTable("should accept bucket name",
 			func(bucket string) {
-				valid := validateBucketName(bucket)
-				Expect(valid).To(BeTrue())
+				err := cmn.ValidateBucketName(bucket)
+				Expect(err).NotTo(HaveOccurred())
 			},
 			Entry(
 				"regular name bucket",
@@ -33,8 +34,8 @@ var _ = Describe("BMD", func() {
 
 		DescribeTable("should reject bucket name",
 			func(bucket string) {
-				valid := validateBucketName(bucket)
-				Expect(valid).To(BeFalse())
+				err := cmn.ValidateBucketName(bucket)
+				Expect(err).To(HaveOccurred())
 			},
 			Entry(
 				"empty bucket",

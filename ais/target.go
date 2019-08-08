@@ -827,17 +827,19 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		started = time.Now()
 		msgInt  actionMsgInternal
 		bmd     *bucketMD
+		started = time.Now()
 	)
 	if cmn.ReadJSON(w, r, &msgInt) != nil {
 		return
 	}
-	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apitems, err := t.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
+
+	t.ensureLatestMD(msgInt)
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
@@ -845,7 +847,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if bmd == nil {
 		return
 	}
-	t.ensureLatestMD(msgInt)
+
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
 		// validation done in proxy.go
@@ -854,28 +856,35 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActCopyLB, cmn.ActRenameLB:
+		phase := apitems[1]
 		bucketFrom, bucketTo := bucket, msgInt.Name
 
-		t.bmdowner.Lock()
+		if phase == cmn.ActBegin {
+			glog.Infof("BEGIN %s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
+			t.bmdowner.Lock()
 
-		bmd = t.bmdowner.get()
-		props, ok := bmd.Get(bucketFrom, true)
-		if !ok {
+			bmd = t.bmdowner.get()
+			props, ok := bmd.Get(bucketFrom, true)
+			if !ok {
+				t.bmdowner.Unlock()
+				s := fmt.Sprintf("bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
+				t.invalmsghdlr(w, r, s)
+				return
+			}
+			clone := bmd.clone()
+			clone.LBmap[bucketTo] = props
+			t.bmdowner.put(clone)
 			t.bmdowner.Unlock()
-			s := fmt.Sprintf("bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
-			t.invalmsghdlr(w, r, s)
-			return
+			return // TODO -- FIXME: create xaction
 		}
-		clone := bmd.clone()
-		clone.LBmap[bucketTo] = props
-		t.bmdowner.put(clone)
-		t.bmdowner.Unlock()
 
-		if err := t.copyLB(bucketFrom, bucketTo, msgInt.Action == cmn.ActRenameLB); err != nil {
+		cmn.Assert(phase == cmn.ActCommit)
+		if err := t.copyRenameLB(bucketFrom, bucketTo, msgInt.Action == cmn.ActRenameLB); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("%s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, clone.version())
+		bmd := t.bmdowner.get()
+		glog.Infof("%s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
 		if ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt); !ok {
