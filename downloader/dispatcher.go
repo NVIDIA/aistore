@@ -355,6 +355,7 @@ func (d *dispatcher) dispatchList(req *request) {
 		respMap[r.ID] = cmn.DlJobInfo{
 			ID:          r.ID,
 			Description: r.Description,
+			NumErrors:   int(r.ErrorCnt.Load()),
 			NumPending:  d.parent.getNumPending(r.ID),
 			Aborted:     r.Aborted.Load(),
 		}

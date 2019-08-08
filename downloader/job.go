@@ -75,6 +75,7 @@ type (
 		FinishedCnt  atomic.Int32 `json:"finished"`
 		ScheduledCnt atomic.Int32 `json:"scheduled"`
 		Total        int          `json:"total"`
+		ErrorCnt     atomic.Int32 `json:"errors"`
 
 		Aborted       atomic.Bool `json:"aborted"`
 		AllDispatched atomic.Bool `json:"all_dispatched"`

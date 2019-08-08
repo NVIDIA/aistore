@@ -175,6 +175,9 @@ func (t *singleObjectTask) abort(statusMsg string, err error) {
 	dbErr := dlStore.persistError(t.id, t.obj.Objname, statusMsg)
 	cmn.AssertNoErr(dbErr)
 
+	dbErr = dlStore.incErrorCnt(t.id)
+	cmn.AssertNoErr(dbErr)
+
 	t.finishedCh <- err
 }
 

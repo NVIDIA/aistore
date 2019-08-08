@@ -61,12 +61,12 @@ func (d *DlStatusResp) Print(verbose bool) string {
 		return sb.String()
 	}
 
+	sb.WriteString("\n")
 	if len(d.CurrentTasks) != 0 {
 		sort.Slice(d.CurrentTasks, func(i, j int) bool {
 			return d.CurrentTasks[i].Name < d.CurrentTasks[j].Name
 		})
 
-		sb.WriteString("\n")
 		sb.WriteString("Progress of files that are currently being downloaded:\n")
 		for _, task := range d.CurrentTasks {
 			sb.WriteString(fmt.Sprintf("\t%s: ", task.Name))
@@ -99,11 +99,13 @@ func (d *DlStatusResp) TotalCnt() int {
 type DlJobInfo struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
+	NumErrors   int    `json:"num_errors"`
 	NumPending  int    `json:"num_pending"`
 	Aborted     bool   `json:"aborted"`
 }
 
 func (j *DlJobInfo) Aggregate(rhs DlJobInfo) {
+	j.NumErrors += rhs.NumErrors
 	j.NumPending += rhs.NumPending
 }
 

@@ -246,11 +246,11 @@ const (
 		"{{$p.Name}}\t{{$p.Val}}\n" +
 		"{{end}}\n"
 
-	DownloadListHeader = "JobID\t Status\t Description\n"
+	DownloadListHeader = "JobID\t Status\t Errors\t Description\n"
 	DownloadListBody   = "{{$value.ID}}\t " +
 		"{{if (eq $value.Aborted true) }}Aborted" +
 		"{{else}}{{if (eq $value.NumPending 0) }}Finished{{else}}{{$value.NumPending}} pending{{end}}" +
-		"{{end}} \t {{$value.Description}}\n"
+		"{{end}}\t {{$value.NumErrors}}\t {{$value.Description}}\n"
 	DownloadListTmpl = DownloadListHeader + "{{ range $key, $value := . }}" + DownloadListBody + "{{end}}"
 
 	DSortListHeader = "JobID\t Status\t Start\t Finish\t Description\n"
