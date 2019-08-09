@@ -109,7 +109,6 @@ func (is *infoStore) incScheduled(id string) error {
 	}
 
 	jInfo.ScheduledCnt.Inc()
-	is.jobInfo[id] = jInfo
 	return nil
 }
 
@@ -121,7 +120,6 @@ func (is *infoStore) incErrorCnt(id string) error {
 	}
 
 	jInfo.ErrorCnt.Inc()
-	is.jobInfo[id] = jInfo
 	return nil
 }
 
@@ -133,7 +131,6 @@ func (is *infoStore) setAllDispatched(id string, dispatched bool) error {
 	}
 
 	jInfo.AllDispatched.Store(dispatched)
-	is.jobInfo[id] = jInfo
 	return nil
 }
 
