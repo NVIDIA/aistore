@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	osuser "os/user"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -614,6 +615,19 @@ func (f *FileSectionHandle) Read(buf []byte) (n int, err error) {
 }
 
 func (f *FileSectionHandle) Close() error { return nil }
+
+// ExpandPath replaces common abbreviations in file path:
+// - `~` with absolute path to the current user home directory
+func ExpandPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		user, err := osuser.Current()
+		if err != nil {
+			return path
+		}
+		path = strings.Replace(path, "~", user.HomeDir, 1)
+	}
+	return path
+}
 
 // CreateDir creates directory if does not exists. Does not return error when
 // directory already exists.

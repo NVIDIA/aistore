@@ -161,18 +161,21 @@ var (
 	fileCountFlag     = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
 
 	// Object
-	deadlineFlag = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
-	fileFlag     = cli.StringFlag{Name: "file", Usage: "filepath for content of the object"}
-	lengthFlag   = cli.StringFlag{Name: "length", Usage: "object read length"}
-	listFlag     = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
-	nameFlag     = cli.StringFlag{Name: "name", Usage: "name of object"}
-	newNameFlag  = cli.StringFlag{Name: "new-name", Usage: "new name of object"}
-	outFileFlag  = cli.StringFlag{Name: "out-file", Usage: "name of the file where the contents will be saved"}
-	offsetFlag   = cli.StringFlag{Name: "offset", Usage: "object read offset"}
-	rangeFlag    = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
-	cachedFlag   = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
-	checksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
-	waitFlag     = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
+	deadlineFlag  = cli.StringFlag{Name: "deadline", Usage: "amount of time (Go Duration string) before the request expires", Value: "0s"}
+	fileFlag      = cli.StringFlag{Name: "file", Usage: "filepath for content of the object"}
+	lengthFlag    = cli.StringFlag{Name: "length", Usage: "object read length"}
+	listFlag      = cli.StringFlag{Name: "list", Usage: "comma separated list of object names, eg. 'o1,o2,o3'"}
+	nameFlag      = cli.StringFlag{Name: "name", Usage: "name of object"}
+	newNameFlag   = cli.StringFlag{Name: "new-name", Usage: "new name of object"}
+	outFileFlag   = cli.StringFlag{Name: "out-file", Usage: "name of the file where the contents will be saved"}
+	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset"}
+	rangeFlag     = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
+	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
+	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+	waitFlag      = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
+	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	baseFlag      = cli.StringFlag{Name: "base", Usage: "a common part of a path for all objects that is not used to generate object name"}
+	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 )
 
 // Command argument texts

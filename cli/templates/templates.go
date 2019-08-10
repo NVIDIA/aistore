@@ -283,6 +283,13 @@ const (
 		"{{end}}" +
 		"{{end}}"
 	BucketStatTmpl = "Value\tTotal\tData\tLocal\n{{range $p := . }}{{$p.Name}}\t{{$p.Total}}\t{{$p.Data}}\t{{$p.Local}}\n{{end}}"
+	// For `object put` mass uploader. A caller adds to the template
+	// total count and size. That is why the template ends with \t
+	ExtensionTmpl = "Files to upload:\nExtension\tCount\tSize\n" +
+		"{{range $k, $v := . }}" +
+		"{{$k}}\t{{$v.Cnt}}\t{{FormatBytesSigned $v.Size 2}}\n" +
+		"{{end}}" +
+		"TOTAL\t"
 )
 
 var (

@@ -12,11 +12,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cli/templates"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -25,6 +28,15 @@ import (
 const (
 	outFileStdout = "-"
 )
+
+type uploadParams struct {
+	bucket    string
+	provider  string
+	files     []fileToObj
+	workerCnt int
+	refresh   time.Duration
+	totalSize int64
+}
 
 var (
 	baseObjectFlags = []cli.Flag{
@@ -46,6 +58,12 @@ var (
 		objPut: append(
 			baseObjectFlags,
 			fileFlag,
+			recursiveFlag,
+			baseFlag,
+			concurrencyFlag,
+			refreshFlag,
+			verboseFlag,
+			yesFlag,
 		),
 		objGet: append(
 			baseObjectFlags,
@@ -271,36 +289,190 @@ func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckPr
 	return nil
 }
 
+func uploadFiles(c *cli.Context, baseParams *api.BaseParams, p uploadParams) error {
+	var (
+		errCount      atomic.Int32 // uploads failed so far
+		processedCnt  atomic.Int32 // files processed so far
+		processedSize atomic.Int64 // size of already processed files
+		mx            sync.Mutex
+	)
+
+	wg := &sync.WaitGroup{}
+	lastReport := time.Now()
+	reportEvery := p.refresh
+	sema := cmn.NewDynSemaphore(p.workerCnt)
+	verbose := flagIsSet(c, verboseFlag)
+
+	finalizePut := func(f fileToObj) {
+		wg.Done()
+		total := int(processedCnt.Inc())
+		size := processedSize.Add(f.size)
+		sema.Release()
+		if reportEvery == 0 {
+			return
+		}
+
+		// lock after releasing semaphore, so the next file can start
+		// uploading even if we are stuck on mutex for a while
+		mx.Lock()
+		if time.Since(lastReport) > reportEvery {
+			fmt.Fprintf(c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%)\n",
+				total, 100*total/len(p.files),
+				cmn.B2S(size, 1), 100*size/p.totalSize)
+			lastReport = time.Now()
+		}
+		mx.Unlock()
+	}
+
+	putOneFile := func(f fileToObj) {
+		defer finalizePut(f)
+
+		reader, err := cmn.NewFileHandle(f.path)
+		if err != nil {
+			_, _ = fmt.Fprintf(c.App.Writer, "Failed to open file %s: %v\n", f.path, err)
+			errCount.Inc()
+			return
+		}
+
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: p.bucket, BucketProvider: p.provider, Object: f.name, Reader: reader}
+		if err := api.PutObject(putArgs); err != nil {
+			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %s: %v\n", f.name, err)
+			errCount.Inc()
+		} else if verbose {
+			_, _ = fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
+		}
+	}
+
+	for _, f := range p.files {
+		sema.Acquire()
+		wg.Add(1)
+		putOneFile(f)
+	}
+	wg.Wait()
+
+	if failed := errCount.Load(); failed != 0 {
+		return fmt.Errorf("Failed to upload: %d object(s)", failed)
+	}
+
+	_, _ = fmt.Fprintf(c.App.Writer, "%d objects put into %q bucket\n", len(p.files), p.bucket)
+	return nil
+}
+
+func calcPutRefresh(c *cli.Context) (time.Duration, error) {
+	refresh := 5 * time.Second
+	if flagIsSet(c, verboseFlag) && !flagIsSet(c, refreshFlag) {
+		return 0, nil
+	}
+
+	if flagIsSet(c, refreshFlag) {
+		r, err := calcRefreshRate(c)
+		if err != nil {
+			return 0, err
+		}
+		refresh = r
+	}
+	return refresh, nil
+}
+
 // Put object into bucket
 func objectPut(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
 	if err := checkFlags(c, []cli.Flag{fileFlag}); err != nil {
 		return err
 	}
 
-	source := parseStrFlag(c, fileFlag)
+	source := cmn.ExpandPath(parseStrFlag(c, fileFlag))
+	path, err := filepath.Abs(source)
+	if err != nil {
+		return err
+	}
 
-	objName := parseStrFlag(c, nameFlag)
+	customName := parseStrFlag(c, nameFlag)
+	objName := customName
 	if objName == "" {
 		// If name was not provided use the last element of the object's path as object's name
 		objName = filepath.Base(source)
 	}
 
-	path, err := filepath.Abs(source)
+	base := parseStrFlag(c, baseFlag)
+	if base != "" {
+		base = cmn.ExpandPath(base)
+		base, err = filepath.Abs(base)
+		if err != nil {
+			return err
+		}
+	}
+
+	// corner case: user sets custom object name, force one file to upload.
+	// No wildcard support in this case
+	if customName != "" {
+		reader, err := cmn.NewFileHandle(path)
+		if err != nil {
+			return err
+		}
+
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, BucketProvider: bckProvider, Object: objName, Reader: reader}
+		if err := api.PutObject(putArgs); err != nil {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
+		return nil
+	}
+
+	// here starts the mass upload.
+	// first, get all files that are to be uploaded. Since it may take
+	// some, show a message to a user
+	_, _ = fmt.Fprintf(c.App.Writer, "Enumerating files\n")
+	files, err := generateFileList(path, base, flagIsSet(c, recursiveFlag))
 	if err != nil {
 		return err
 	}
-	reader, err := cmn.NewFileHandle(path)
+	if len(files) == 0 {
+		return fmt.Errorf("No files found")
+	}
+
+	// second,check for bucket is not empty: request only first object
+	msg := cmn.SelectMsg{PageSize: 1}
+	bckList, err := api.ListBucket(baseParams, bucket, &msg, 1)
 	if err != nil {
 		return err
 	}
 
-	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, BucketProvider: bckProvider, Object: objName, Reader: reader}
-	if err := api.PutObject(putArgs); err != nil {
+	// third, calculate total size and group by extensions
+	totalSize, extSizes := groupByExt(files)
+	totalCount := int64(len(files))
+	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
+	if err := templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
-	return nil
+	if len(bckList.Entries) != 0 {
+		fmt.Fprintf(c.App.Writer, "\nWARNING: destination bucket %q is not empty\n\n", bucket)
+	}
+
+	// ask a user for confirmation if '-y' is not set in command line
+	if !flagIsSet(c, yesFlag) {
+		var input string
+		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
+		fmt.Scanln(&input)
+		if ok, _ := cmn.ParseBool(input); !ok {
+			return fmt.Errorf("Operation canceled")
+		}
+	}
+	refresh, err := calcPutRefresh(c)
+	if err != nil {
+		return err
+	}
+	workers := parseIntFlag(c, concurrencyFlag)
+	params := uploadParams{
+		bucket:    bucket,
+		provider:  bckProvider,
+		files:     files,
+		workerCnt: workers,
+		refresh:   refresh,
+		totalSize: totalSize,
+	}
+	return uploadFiles(c, baseParams, params)
 }
 
 // Deletes object from bucket
