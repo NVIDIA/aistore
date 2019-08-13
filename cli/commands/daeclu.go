@@ -225,7 +225,11 @@ func daemonStatus(c *cli.Context, smap cluster.Smap, daemonID string, useJSON, h
 		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
 		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
 	} else if daemonID == "" {
-		if err := templates.DisplayOutput(proxy, c.App.Writer, templates.ProxyInfoTmpl, useJSON); err != nil {
+		body := templates.StatusTemplateHelper{
+			Smap:   smap,
+			Status: proxy,
+		}
+		if err := templates.DisplayOutput(body, c.App.Writer, templates.AllProxyInfoTmpl, useJSON); err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintf(c.App.Writer, "\n")

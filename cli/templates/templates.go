@@ -21,11 +21,14 @@ import (
 // Templates for output
 // ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
+	primarySuffix      = "[P]"
+	nonElectableSuffix = "[-]"
+
 	// Smap
 	SmapHeader = "DaemonID\t Type\t PublicURL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t IntraControlURL\t IntraDataURL{{end}}" +
 		"\n"
-	SmapBody = "{{$value.DaemonID}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
+	SmapBody = "{{FormatDaemonID $value.DaemonID $.Smap}}\t {{$value.DaemonType}}\t {{$value.PublicNet.DirectURL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.IntraControlNet.DirectURL}}\t {{$value.IntraDataNet.DirectURL}}{{end}}" +
 		"\n"
 
@@ -47,6 +50,12 @@ const (
 	ProxyInfoTmpl           = ProxyInfoHeader + ProxyInfoBodyTmpl
 	ProxyInfoSingleBodyTmpl = "{{$value := . }}" + ProxyInfoBody
 	ProxyInfoSingleTmpl     = ProxyInfoHeader + ProxyInfoSingleBodyTmpl
+
+	AllProxyInfoBody = "{{FormatDaemonID $value.Snode.DaemonID $.Smap}}\t {{$value.SysInfo.PctMemUsed | printf `%6.2f`}}\t " +
+		"{{FormatBytesUnsigned $value.SysInfo.MemAvail 2}}\t {{$value.SysInfo.PctCPUUsed | printf `%6.2f`}}\t " +
+		"{{FormatDur (ExtractStat $value.Stats `up.µs.time`)}}\n"
+	AllProxyInfoBodyTmpl = "{{ range $key, $value := .Status }}" + AllProxyInfoBody + "{{end}}"
+	AllProxyInfoTmpl     = ProxyInfoHeader + AllProxyInfoBodyTmpl
 
 	// Target Info
 	TargetInfoHeader = "Target\t %MemUsed\t MemAvail\t %CapUsed\t CapAvail\t %CpuUsed\t Rebalance\n"
@@ -330,6 +339,7 @@ var (
 		"FormatXactStatus":    fmtXactStatus,
 		"FormatObjStatus":     fmtObjStatus,
 		"FormatObjIsCached":   fmtObjIsCached,
+		"FormatDaemonID":      fmtDaemonID,
 	}
 )
 
@@ -347,6 +357,11 @@ type ObjectStatTemplateHelper struct {
 type SmapTemplateHelper struct {
 	Smap         cluster.Smap
 	ExtendedURLs bool
+}
+
+type StatusTemplateHelper struct {
+	Smap   cluster.Smap
+	Status map[string]*stats.DaemonStatus
 }
 
 // Gets the associated value from CoreStats
@@ -418,6 +433,16 @@ func fmtObjTime(t time.Time) string {
 func fmtDuration(d int64) string {
 	dNano := time.Duration(d * int64(time.Microsecond))
 	return dNano.Round(time.Second).String()
+}
+
+func fmtDaemonID(id string, smap cluster.Smap) string {
+	if id == smap.ProxySI.DaemonID {
+		return id + primarySuffix
+	}
+	if _, ok := smap.NonElects[id]; ok {
+		return id + nonElectableSuffix
+	}
+	return id
 }
 
 // Displays the output in either JSON or tabular form
