@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
@@ -17,8 +18,15 @@ import (
 
 // Bash Completion
 func daemonList(c *cli.Context) {
-	if c.NArg() > 0 {
+	if c.NArg() > 1 {
 		flagList(c)
+		return
+	}
+
+	if c.NArg() == 1 {
+		for k := range templates.ConfigSectionTmpl {
+			fmt.Println(k)
+		}
 		return
 	}
 

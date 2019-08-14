@@ -122,97 +122,97 @@ const (
 
 	// Config
 	MirrorConfTmpl = "\n{{$obj := .Mirror}}Mirror Config\n" +
-		" Copies: {{$obj.Copies}}\n" +
-		" Burst: {{$obj.Burst}}\n" +
-		" UtilThresh: {{$obj.UtilThresh}}\n" +
-		" OptimizePUT: {{$obj.OptimizePUT}}\n" +
-		" Enabled: {{$obj.Enabled}}\n"
-	ReadaheadConfTmpl = "\n{{$obj := .Readahead}}Readahead Config\n" +
-		" ObjectMem: {{$obj.ObjectMem}}\n" +
-		" TotalMem: {{$obj.TotalMem}}\n" +
-		" ByProxy: {{$obj.ByProxy}}\n" +
-		" Discard: {{$obj.Discard}}\n" +
-		" Enabled: {{$obj.Discard}}\n"
+		" Copies:\t{{$obj.Copies}}\n" +
+		" Burst:\t{{$obj.Burst}}\n" +
+		" Utilization Threshold:\t{{$obj.UtilThresh}}\n" +
+		" Optimize PUT:\t{{$obj.OptimizePUT}}\n" +
+		" Enabled:\t{{$obj.Enabled}}\n"
 	LogConfTmpl = "\n{{$obj := .Log}}Log Config\n" +
-		" Dir: {{$obj.Dir}}\n" +
-		" Level: {{$obj.Level}}\n" +
-		" MaxSize: {{$obj.MaxSize}}\n" +
-		" MaxTotal: {{$obj.MaxTotal}}\n"
+		" Dir:\t{{$obj.Dir}}\n" +
+		" Level:\t{{$obj.Level}}\n" +
+		" Maximum Log File Size:\t{{$obj.MaxSize}}\n" +
+		" Maximum Total Size:\t{{$obj.MaxTotal}}\n"
 	PeriodConfTmpl = "\n{{$obj := .Periodic}}Period Config\n" +
-		" Stats Time: {{$obj.StatsTimeStr}}\n" +
-		" Retry Sync Time: {{$obj.RetrySyncTimeStr}}\n"
+		" Stats Time:\t{{$obj.StatsTimeStr}}\n" +
+		" Retry Sync Time:\t{{$obj.RetrySyncTimeStr}}\n"
 	TimeoutConfTmpl = "\n{{$obj := .Timeout}}Timeout Config\n" +
-		" Default Timeout: {{$obj.DefaultStr}}\n" +
-		" Default Long Timeout: {{$obj.DefaultLongStr}}\n" +
-		" Max Keep Alive: {{$obj.MaxKeepaliveStr}}\n" +
-		" Proxy Ping: {{$obj.ProxyPingStr}}\n" +
-		" Control Plane Operation: {{$obj.CplaneOperationStr}}\n" +
-		" List Time: {{$obj.ListBucketStr}}\n" +
-		" Send File Time: {{$obj.SendFileStr}}\n" +
-		" Startup Time: {{$obj.StartupStr}}\n"
+		" Default Timeout:\t{{$obj.DefaultStr}}\n" +
+		" Default Long Timeout:\t{{$obj.DefaultLongStr}}\n" +
+		" Max Keep Alive:\t{{$obj.MaxKeepaliveStr}}\n" +
+		" Proxy Ping:\t{{$obj.ProxyPingStr}}\n" +
+		" Control Plane Operation:\t{{$obj.CplaneOperationStr}}\n" +
+		" List Time:\t{{$obj.ListBucketStr}}\n" +
+		" Send File Time:\t{{$obj.SendFileStr}}\n" +
+		" Startup Time:\t{{$obj.StartupStr}}\n"
 	ProxyConfTmpl = "\n{{$obj := .Proxy}}Proxy Config\n" +
-		" Non Electable: {{$obj.NonElectable}}\n" +
-		" Primary URL: {{$obj.PrimaryURL}}\n" +
-		" Original URL: {{$obj.OriginalURL}}\n" +
-		" Discovery URL: {{$obj.DiscoveryURL}}\n"
+		" Non Electable:\t{{$obj.NonElectable}}\n" +
+		" Primary URL:\t{{$obj.PrimaryURL}}\n" +
+		" Original URL:\t{{$obj.OriginalURL}}\n" +
+		" Discovery URL:\t{{$obj.DiscoveryURL}}\n"
 	LRUConfTmpl = "\n{{$obj := .LRU}}LRU Config\n" +
-		" Low WM: {{$obj.LowWM}}\n" +
-		" High WM: {{$obj.HighWM}}\n" +
-		" Out-of-Space: {{$obj.OOS}}\n" +
-		" Dont Evict Time: {{$obj.DontEvictTimeStr}}\n" +
-		" Capacity Update Time: {{$obj.CapacityUpdTimeStr}}\n" +
-		" Local Buckets: {{$obj.LocalBuckets}}\n" +
-		" Enabled: {{$obj.Enabled}}\n"
+		" Low WM:\t{{$obj.LowWM}}\n" +
+		" High WM:\t{{$obj.HighWM}}\n" +
+		" Out-of-Space:\t{{$obj.OOS}}\n" +
+		" Don't Evict Time:\t{{$obj.DontEvictTimeStr}}\n" +
+		" Capacity Update Time:\t{{$obj.CapacityUpdTimeStr}}\n" +
+		" Local Buckets:\t{{$obj.LocalBuckets}}\n" +
+		" Enabled:\t{{$obj.Enabled}}\n"
 	DiskConfTmpl = "\n{{$obj := .Disk}}Disk Config\n" +
-		" Disk Until Low WM: {{$obj.DiskUtilLowWM}}\n" +
-		" Disk Until High WM: {{$obj.DiskUtilHighWM}}\n" +
-		" IO Stats Time Long: {{$obj.IostatTimeLongStr}}\n" +
-		" IO Stats Time Short: {{$obj.IostatTimeShortStr}}\n"
+		" Disk Utilization Low WM:\t{{$obj.DiskUtilLowWM}}\n" +
+		" Disk Utilization High WM:\t{{$obj.DiskUtilHighWM}}\n" +
+		" Disk Utilization Max WM:\t{{$obj.DiskUtilMaxWM}}\n" +
+		" IO Stats Time Long:\t{{$obj.IostatTimeLongStr}}\n" +
+		" IO Stats Time Short:\t{{$obj.IostatTimeShortStr}}\n"
 	RebalanceConfTmpl = "\n{{$obj := .Rebalance}}Rebalance Config\n" +
-		" Destination Retry Time: {{$obj.DestRetryTimeStr}}\n" +
-		" Enabled: {{$obj.Enabled}}\n"
-	ReplicationConfTmpl = "\n{{$obj := .Replication}}Replication Config\n" +
-		" On Cold Get: {{$obj.OnColdGet}}\n" +
-		" On Put: {{$obj.OnPut}}\n" +
-		" On LRU Eviction: {{$obj.OnLRUEviction}}\n"
+		" Destination Retry Time:\t{{$obj.DestRetryTimeStr}}\n" +
+		" Enabled:\t{{$obj.Enabled}}\n" +
+		" Multiplier:\t{{$obj.Multiplier}}\n" +
+		" Compression:\t{{$obj.Compression}}\n"
 	CksumConfTmpl = "\n{{$obj := .Cksum}}Checksum Config\n" +
-		" Type: {{$obj.Type}}\n" +
-		" Validate Cold Get: {{$obj.ValidateColdGet}}\n" +
-		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n" +
-		" Validate Object Migration: {{$obj.ValidateObjMove}}\n" +
-		" Enable Read Range: {{$obj.EnableReadRange}}\n"
+		" Type:\t{{$obj.Type}}\n" +
+		" Validate On Cold Get:\t{{$obj.ValidateColdGet}}\n" +
+		" Validate On Warm Get:\t{{$obj.ValidateWarmGet}}\n" +
+		" Validate On Object Migration:\t{{$obj.ValidateObjMove}}\n" +
+		" Enable For Read Range:\t{{$obj.EnableReadRange}}\n"
 	VerConfTmpl = "\n{{$obj := .Ver}}Version Config\n" +
-		" Validate Warm Get: {{$obj.ValidateWarmGet}}\n"
+		" Enabled:\t{{$obj.Enabled}}\n" +
+		" Type:\t{{$obj.Type}}\n" +
+		" Validate Warm Get:\t{{$obj.ValidateWarmGet}}\n"
 	FSpathsConfTmpl = "\nFile System Paths Config\n" +
 		"{{$obj := .FSpaths.Paths}}" +
 		"{{range $key, $val := $obj}}" +
-		"{{$key}}: {{$val}}\n" +
+		"{{$key}}:\t{{$val}}\n" +
 		"{{end}}"
 	TestFSPConfTmpl = "\n{{$obj := .TestFSP}}Test File System Paths Config\n" +
-		" Root: {{$obj.Root}}\n" +
-		" Count: {{$obj.Count}}\n" +
-		" Instance: {{$obj.Instance}}\n"
+		" Root:\t{{$obj.Root}}\n" +
+		" Count:\t{{$obj.Count}}\n" +
+		" Instance:\t{{$obj.Instance}}\n"
 	NetConfTmpl = "\n{{$obj := .Net}}Network Config\n" +
-		" IPv4: {{$obj.IPv4}}\n" +
-		" IPv4 IntraControl: {{$obj.IPv4IntraControl}}\n" +
-		" IPv4 IntraData: {{$obj.IPv4IntraData}}\n" +
-		" Use IntraControl: {{$obj.UseIntraControl}}\n" +
-		" Use IntraData: {{$obj.UseIntraData}}\n" +
-		" \tHTTP\t \tL4\n" +
-		" \tProtocol: {{$obj.HTTP.Proto}}\t \tProtocol: {{$obj.L4.Proto}}\n" +
-		" \tReverse Proxy: {{$obj.HTTP.RevProxy}}\t \tPort: {{$obj.L4.PortStr}}\n" +
-		" \tReverse Proxy Cache: {{$obj.HTTP.RevProxyCache}}\t \tIntraControl Port: {{$obj.L4.PortIntraControlStr}}\n" +
-		" \tCertificate: {{$obj.HTTP.Certificate}}\t \tIntraData Port: {{$obj.L4.PortIntraDataStr}}\n" +
-		" \tKey: {{$obj.HTTP.Key}}\t \t\n" +
-		" \tUseHTTPS: {{$obj.HTTP.UseHTTPS}}\t \t\n"
+		" IPv4:\t{{$obj.IPv4}}\n" +
+		" IPv4 IntraControl:\t{{$obj.IPv4IntraControl}}\n" +
+		" IPv4 IntraData:\t{{$obj.IPv4IntraData}}\n\n" +
+		" HTTP\n" +
+		" Protocol:\t{{$obj.HTTP.Proto}}\n" +
+		" Reverse Proxy:\t{{$obj.HTTP.RevProxy}}\n" +
+		" Reverse Proxy Cache:\t{{$obj.HTTP.RevProxyCache}}\n" +
+		" Certificate:\t{{$obj.HTTP.Certificate}}\n" +
+		" Key:\t{{$obj.HTTP.Key}}\n" +
+		" UseHTTPS:\t{{$obj.HTTP.UseHTTPS}}\n" +
+		" Chunked Transfer:\t{{$obj.HTTP.Chunked}}\n\n" +
+		" L4\n" +
+		" Protocol:\t{{$obj.L4.Proto}}\n" +
+		" Port:\t{{$obj.L4.PortStr}}\n" +
+		" IntraControl Port:\t{{$obj.L4.PortIntraControlStr}}\n" +
+		" IntraData Port:\t{{$obj.L4.PortIntraDataStr}}\n" +
+		" Send/Receive buffer size:\t{{$obj.L4.SndRcvBufSize}}\n"
 	FSHCConfTmpl = "\n{{$obj := .FSHC}}FSHC Config\n" +
-		" Enabled: {{$obj.Enabled}}\n" +
-		" Test File Count: {{$obj.TestFileCount}}\n" +
-		" Error Limit: {{$obj.ErrorLimit}}\n"
+		" Enabled:\t{{$obj.Enabled}}\n" +
+		" Test File Count:\t{{$obj.TestFileCount}}\n" +
+		" Error Limit:\t{{$obj.ErrorLimit}}\n"
 	AuthConfTmpl = "\n{{$obj := .Auth}}Authentication Config\n" +
-		" Secret: {{$obj.Secret}}\n" +
-		" Enabled: {{$obj.Enabled}}\n" +
-		" Credential Dir: {{$obj.CredDir}}\n"
+		" Secret:\t{{$obj.Secret}}\n" +
+		" Enabled:\t{{$obj.Enabled}}\n" +
+		" Credential Dir:\t{{$obj.CredDir}}\n"
 	KeepaliveConfTmpl = "\n{{$obj := .KeepaliveTracker}}Keep Alive Tracker Config\n" +
 		" Retry Factor:{{$obj.RetryFactor}}\t  Timeout Factor:{{$obj.TimeoutFactor}}\n" +
 		" \tProxy\t \tTarget\n" +
@@ -223,23 +223,41 @@ const (
 		" Object Size Limit:{{$obj.ObjSizeLimit}}\t  Data Slices:{{$obj.DataSlices}}\n" +
 		" Parity Slice:{{$obj.ParitySlices}}\t Enabled:{{$obj.Enabled}}\n"
 	BucketVerConfTmpl = "\n{{$obj := .Versioning}}Bucket Versioning\n" +
-		" Type:{{$obj.Type}}\n Validate Warm Get:{{$obj.ValidateWarmGet}}\t Enabled:{{$obj.Enabled}}\n"
+		" Type:{{$obj.Type}}\n Validate Warm Get:{{$obj.ValidateWarmGet}}\n Enabled:{{$obj.Enabled}}\n"
 	DownloaderConfTmpl = "\n{{$obj := .Downloader}}Downloader Config\n" +
 		" Timeout: {{$obj.TimeoutStr}}\n"
 	DSortConfTmpl = "\n{{$obj := .DSort}}Distributed Sort Config\n" +
-		" Duplicated Records: {{$obj.DuplicatedRecords}}\n" +
-		" Missing Shards: {{$obj.MissingShards}}\n"
+		" Duplicated Records:\t{{$obj.DuplicatedRecords}}\n" +
+		" Missing Shards:\t{{$obj.MissingShards}}\n" +
+		" EKM Malformed Line:\t{{$obj.EKMMalformedLine}}\n" +
+		" EKM Missing Key:\t{{$obj.EKMMissingKey}}\n" +
+		" Call Timeout:\t{{$obj.CallTimeoutStr}}\n" +
+		" Compression:\t{{$obj.Compression}}\n"
 	CompressionTmpl = "\n{{$obj := .Compression}}Compression\n" +
 		" BlockSize:\t{{$obj.BlockMaxSize}}\n" +
 		" Checksum:\t{{$obj.Checksum}}\n"
 	ECTmpl = "\n{{$obj := .EC}}EC\n" +
 		" Enabled:\t{{$obj.Enabled}}\n" +
-		" Minimum object for EC:\t{{$obj.ObjSizeLimit}}\n" +
+		" Minimum object size for EC:\t{{$obj.ObjSizeLimit}}\n" +
 		" Number of data slices:\t{{$obj.DataSlices}}\n" +
 		" Number of parity slices:\t{{$obj.ParitySlices}}\n" +
 		" Compression options:\t{{$obj.Compression}}\n"
+	GlobalConfTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n"
 
-	ConfigTmpl = "Config Directory: {{.Confdir}}\nCloud Provider: {{.CloudProvider}}\n" +
+	// hidden config sections: replication and readahead.
+	// Application Config has this sections but setup/config.sh does not expose them
+	ReplicationConfTmpl = "\n{{$obj := .Replication}}Replication Config\n" +
+		" On Cold Get:\t{{$obj.OnColdGet}}\n" +
+		" On Put:\t{{$obj.OnPut}}\n" +
+		" On LRU Eviction:\t{{$obj.OnLRUEviction}}\n"
+	ReadaheadConfTmpl = "\n{{$obj := .Readahead}}Readahead Config\n" +
+		" ObjectMem:\t{{$obj.ObjectMem}}\n" +
+		" TotalMem:\t{{$obj.TotalMem}}\n" +
+		" ByProxy:\t{{$obj.ByProxy}}\n" +
+		" Discard:\t{{$obj.Discard}}\n" +
+		" Enabled:\t{{$obj.Discard}}\n"
+
+	ConfigTmpl = GlobalConfTmpl +
 		MirrorConfTmpl + ReadaheadConfTmpl + LogConfTmpl + PeriodConfTmpl + TimeoutConfTmpl +
 		ProxyConfTmpl + LRUConfTmpl + DiskConfTmpl + RebalanceConfTmpl +
 		ReplicationConfTmpl + CksumConfTmpl + VerConfTmpl + FSpathsConfTmpl +
@@ -410,6 +428,34 @@ func fmtObjStatus(obj *cmn.BucketEntry) string {
 	}
 	return "Moved"
 }
+
+var (
+	ConfigSectionTmpl = map[string]string{
+		"global":               GlobalConfTmpl,
+		"mirror":               MirrorConfTmpl,
+		"log":                  LogConfTmpl,
+		"periodic":             PeriodConfTmpl,
+		"timeout":              TimeoutConfTmpl,
+		"proxy":                ProxyConfTmpl,
+		"lru":                  LRUConfTmpl,
+		"disk":                 DiskConfTmpl,
+		"rebalance":            RebalanceConfTmpl,
+		"checksum":             CksumConfTmpl,
+		"versioning":           VerConfTmpl,
+		"fspath":               FSpathsConfTmpl,
+		"testfs":               TestFSPConfTmpl,
+		"network":              NetConfTmpl,
+		"fshc":                 FSHCConfTmpl,
+		"auth":                 AuthConfTmpl,
+		"keepalive":            KeepaliveConfTmpl,
+		"downloader":           DownloaderConfTmpl,
+		cmn.DSortNameLowercase: DSortConfTmpl,
+		"compression":          CompressionTmpl,
+		"ec":                   ECTmpl,
+		"readahead":            ReadaheadConfTmpl,
+		"replication":          ReplicationConfTmpl,
+	}
+)
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
 	if obj.IsCached() {

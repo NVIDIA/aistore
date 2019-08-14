@@ -76,6 +76,7 @@ func configHandler(c *cli.Context) error {
 func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 	var (
 		daemonID = c.Args().First()
+		section  = c.Args().Get(1)
 		useJSON  = flagIsSet(c, jsonFlag)
 	)
 
@@ -84,7 +85,16 @@ func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	return templates.DisplayOutput(body, c.App.Writer, templates.ConfigTmpl, useJSON)
+	template := templates.ConfigTmpl
+	if section != "" {
+		if t, ok := templates.ConfigSectionTmpl[section]; ok {
+			template = strings.TrimPrefix(t, "\n")
+		} else {
+			return fmt.Errorf("config section %q not found", section)
+		}
+	}
+
+	return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
 }
 
 // Sets config of specific daemon or cluster
