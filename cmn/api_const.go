@@ -43,7 +43,6 @@ const (
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
 	ActRenameLB     = "renamelb"
-	ActFastRenameLB = "fast-renamelb"
 	ActCopyLB       = "copylb"
 	ActRegisterCB   = "registercb"
 	ActEvictCB      = "evictcb"

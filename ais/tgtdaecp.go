@@ -1233,7 +1233,7 @@ func (t *targetrunner) enable() error {
 //
 
 func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
-	if action == cmn.ActFastRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
+	if action == cmn.ActRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
 		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bucketFrom)
 	}
 	t.bmdowner.Lock()
@@ -1244,19 +1244,15 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 		return fmt.Errorf("source bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
 	}
 	switch action {
-	case cmn.ActFastRenameLB:
+	case cmn.ActRenameLB:
 		_, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
 		if err == nil {
 			err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, true /*destroy*/)
 		}
-	case cmn.ActRenameLB:
-		err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, false /*destroy=false*/)
-		if err == nil {
-			_, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
-		}
+	case cmn.ActCopyLB:
+		_, err = t.xactions.renewBckCopy(bucketFrom, bucketTo, t, action, cmn.ActBegin)
 	default:
-		cmn.Assert(action == cmn.ActCopyLB)
-		_, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+		cmn.Assert(false)
 	}
 	if err == nil {
 		// add bucketTo to this target's BMD wo/ increasing the version
@@ -1290,7 +1286,7 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 		return
 	}
 	switch action {
-	case cmn.ActFastRenameLB, cmn.ActRenameLB:
+	case cmn.ActRenameLB:
 		tag := cmn.ActAbort + ":" + action
 		fs.Mountpaths.CreateDestroyLocalBuckets(tag, false /*false=destroy*/, bucketTo)
 	default:
@@ -1305,7 +1301,7 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 
 func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
 	switch action {
-	case cmn.ActFastRenameLB: // rename back
+	case cmn.ActRenameLB: // rename back
 		var xact *xactFastRen
 		xact, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActCommit)
 		if err != nil {
@@ -1318,9 +1314,9 @@ func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (
 			break
 		}
 		go xact.run() // do the work
-	case cmn.ActRenameLB, cmn.ActCopyLB:
-		var xact *mirror.XactBckCopyRename
-		xact, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActCommit)
+	case cmn.ActCopyLB:
+		var xact *mirror.XactBckCopy
+		xact, err = t.xactions.renewBckCopy(bucketFrom, bucketTo, t, action, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // unexpected at commit time
 			break

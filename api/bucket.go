@@ -309,7 +309,7 @@ func CopyLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 //
 // RenameLocalBucket changes the name of a bucket from oldName to newBucketName
 func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActFastRenameLB, Name: newName})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
 	if err != nil {
 		return err
 	}

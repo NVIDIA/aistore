@@ -12,18 +12,17 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// XactBckCopyRename copies or renames a bucket
+// XactBckCopy copies a bucket locally within the same cluster
 
 type (
-	XactBckCopyRename struct {
+	XactBckCopy struct {
 		xactBckBase
 		slab     *memsys.Slab2
 		bucketTo string
-		rename   bool
 	}
-	bcrJogger struct { // one per mountpath
+	bccJogger struct { // one per mountpath
 		joggerBckBase
-		parent *XactBckCopyRename
+		parent *XactBckCopy
 		buf    []byte
 	}
 )
@@ -33,16 +32,15 @@ type (
 //
 
 func NewXactBCR(id int64, bucketFrom, bucketTo, action string, t cluster.Target, slab *memsys.Slab2,
-	local bool) *XactBckCopyRename {
-	return &XactBckCopyRename{
+	local bool) *XactBckCopy {
+	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, action, bucketFrom, t, local),
 		slab:        slab,
 		bucketTo:    bucketTo,
-		rename:      action == cmn.ActRenameLB,
 	}
 }
 
-func (r *XactBckCopyRename) Run() (err error) {
+func (r *XactBckCopy) Run() (err error) {
 	var numjs int
 	if numjs, err = r.init(); err != nil {
 		return
@@ -55,50 +53,47 @@ func (r *XactBckCopyRename) Run() (err error) {
 // private methods
 //
 
-func (r *XactBckCopyRename) init() (numjs int, err error) {
+func (r *XactBckCopy) init() (numjs int, err error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	r.xactBckBase.init(availablePaths)
 	numjs = len(availablePaths)
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
-		bcrJogger := newBcrJogger(r, mpathInfo, config)
+		bccJogger := newBccJogger(r, mpathInfo, config)
 		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
-		r.mpathers[mpathLC] = bcrJogger
-		go bcrJogger.jog()
+		r.mpathers[mpathLC] = bccJogger
+		go bccJogger.jog()
 	}
 	return
 }
 
-func (r *XactBckCopyRename) Description() string {
-	if r.Kind() == cmn.ActRenameLB {
-		return "rename local bucket"
-	}
+func (r *XactBckCopy) Description() string {
 	cmn.Assert(r.Kind() == cmn.ActCopyLB)
 	return "copy local bucket"
 }
 
 //
-// mpath bcrJogger - as mpather
+// mpath bccJogger - as mpather
 //
 
-func newBcrJogger(parent *XactBckCopyRename, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bcrJogger {
+func newBccJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bccJogger {
 	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config, skipLoad: true}
-	j := &bcrJogger{joggerBckBase: jbase, parent: parent}
+	j := &bccJogger{joggerBckBase: jbase, parent: parent}
 	j.joggerBckBase.callback = j.copyObject
 	return j
 }
 
 //
-// mpath bcrJogger - main
+// mpath bccJogger - main
 //
-func (j *bcrJogger) jog() {
+func (j *bccJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)
 }
 
-func (j *bcrJogger) copyObject(lom *cluster.LOM) error {
-	return j.parent.Target().CopyObject(lom, j.parent.bucketTo, j.buf, j.parent.rename)
+func (j *bccJogger) copyObject(lom *cluster.LOM) error {
+	return j.parent.Target().CopyObject(lom, j.parent.bucketTo, j.buf, false /*uncache=false*/)
 }

@@ -357,7 +357,7 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	tassert.CheckFatal(t, err)
 
 	time.Sleep(time.Second) // NOTE: no need to wait - GFN must make it work
-	// waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
+	// waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
 
 	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 	tassert.CheckFatal(t, err)

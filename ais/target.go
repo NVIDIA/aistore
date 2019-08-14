@@ -751,7 +751,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
-	case cmn.ActCopyLB, cmn.ActFastRenameLB, cmn.ActRenameLB:
+	case cmn.ActCopyLB, cmn.ActRenameLB:
 		var (
 			phase                = apitems[1]
 			bucketFrom, bucketTo = bucket, msgInt.Name
@@ -761,9 +761,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			err = t.beginCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
 		case cmn.ActAbort:
 			err = t.abortCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
-		default:
-			cmn.Assert(phase == cmn.ActCommit)
+		case cmn.ActCommit:
 			err = t.commitCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+		default:
+			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msgInt.Action, bucketFrom, bucketTo)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())

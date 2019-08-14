@@ -632,7 +632,7 @@ func ExpandPath(path string) string {
 // CreateDir creates directory if does not exists. Does not return error when
 // directory already exists.
 func CreateDir(dir string) error {
-	return os.MkdirAll(dir, 0644)
+	return os.MkdirAll(dir, 0755)
 }
 
 // CreateFile creates file and ensures that the directories for the file will be

@@ -292,7 +292,7 @@ func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPut
 type bcrEntry struct {
 	baseBckEntry
 	t        *targetrunner
-	xact     *mirror.XactBckCopyRename
+	xact     *mirror.XactBckCopy
 	bucketTo string
 	action   string
 	phase    string
@@ -318,8 +318,8 @@ func (e *bcrEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, er
 	return
 }
 
-func (r *xactionsRegistry) renewBckCopyRename(bucketFrom, bucketTo string, t *targetrunner,
-	action, phase string) (*mirror.XactBckCopyRename, error) {
+func (r *xactionsRegistry) renewBckCopy(bucketFrom, bucketTo string, t *targetrunner,
+	action, phase string) (*mirror.XactBckCopy, error) {
 	b := r.bucketsXacts(bucketFrom)
 	e := &bcrEntry{baseBckEntry: baseBckEntry{bckName: bucketFrom},
 		t:        t,
@@ -331,7 +331,7 @@ func (r *xactionsRegistry) renewBckCopyRename(bucketFrom, bucketTo string, t *ta
 	if err != nil {
 		return nil, err
 	}
-	return ee.Get().(*mirror.XactBckCopyRename), nil
+	return ee.Get().(*mirror.XactBckCopy), nil
 }
 
 //

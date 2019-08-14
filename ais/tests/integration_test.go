@@ -1202,7 +1202,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	err := api.RenameLocalBucket(baseParams, oldLocalBucketName, m.bucket)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, oldLocalBucketName, baseParams, time.Second*10)
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, oldLocalBucketName, baseParams, time.Second*10)
 
 	// Gets on renamed local bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1298,7 +1298,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	err := api.RenameLocalBucket(baseParams, m.bucket, newTestLocalBucketName)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, m.bucket, baseParams, time.Second*10)
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, m.bucket, baseParams, time.Second*10)
 
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("old bucket dir was not deleted")

@@ -766,7 +766,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActCreateLB:
 		actLocal = true
 		bckIsLocal = bckProvider == "" || cmn.IsProviderLocal(bckProvider)
-	case cmn.ActCopyLB, cmn.ActRenameLB, cmn.ActFastRenameLB, cmn.ActSyncLB:
+	case cmn.ActCopyLB, cmn.ActRenameLB, cmn.ActSyncLB:
 		actLocal = true
 	}
 	if actLocal && !bckIsLocal {
@@ -787,7 +787,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
-	case cmn.ActCopyLB, cmn.ActFastRenameLB, cmn.ActRenameLB:
+	case cmn.ActCopyLB, cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
@@ -1394,11 +1394,13 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	if !ok {
 		return fmt.Errorf("local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 	}
-	// allow to copy into existing bucket
-	if _, ok = bmd.Get(bucketTo, true); ok && msg.Action == cmn.ActRenameLB {
-		return fmt.Errorf("local bucket %s already exists", bucketTo)
+	if _, ok = bmd.Get(bucketTo, true); ok {
+		if msg.Action == cmn.ActRenameLB {
+			return fmt.Errorf("%s already exists, cannot rename %s=>%s", bucketTo, bucketFrom, bucketTo)
+		}
+		// allow to copy into existing bucket
+		glog.Warningf("%s already exists, proceeding to %s %s=>%s anyway", bucketTo, msg.Action, bucketFrom, bucketTo)
 	}
-
 	// begin
 	msgInt := p.newActionMsgInternal(msg, smap, bmd)
 	body := cmn.MustMarshal(msgInt)
@@ -1441,7 +1443,7 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
 	nbmd.add(bucketTo, true, bprops)
-	if msg.Action == cmn.ActFastRenameLB {
+	if msg.Action == cmn.ActRenameLB {
 		nbmd.del(bucketFrom, true)
 	}
 	p.bmdowner.put(nbmd)
