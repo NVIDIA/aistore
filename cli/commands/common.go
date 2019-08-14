@@ -81,9 +81,9 @@ const (
 	dsortList   = subcommandList
 
 	// Lru
-	lruStart  = subcommandStart
-	lruStop   = "stop"
-	lruStatus = subcommandStatus
+	lruStart  = cmn.ActXactStart
+	lruStop   = cmn.ActXactStop
+	lruStatus = cmn.ActXactStats
 
 	// Object
 	objGet      = subcommandGet
