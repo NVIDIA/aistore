@@ -302,6 +302,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 	)
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 	tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
 
@@ -320,7 +321,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	const filesize = 1024
 	var (
-		numPuts    = 512 // TODO -- FIXME: deadlock at 1024?
+		numPuts    = 2036
 		filesPutCh = make(chan string, numPuts)
 		errCh      = make(chan error, numPuts)
 		wg         = &sync.WaitGroup{}
@@ -356,8 +357,8 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(time.Second) // NOTE: no need to wait - GFN must make it work
-	// waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
+	// time.Sleep(time.Second * 1) // NOTE: no need to wait - GFN must make it work
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
 
 	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 	tassert.CheckFatal(t, err)
@@ -380,25 +381,21 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
 	}
 
-	// objs, err := tutils.ListObjects(proxyURL, rtd.renamedBucket, cmn.LocalBs, "", numPuts+1)
-	objs, err := tutils.ListObjectsFast(proxyURL, rtd.renamedBucket, cmn.LocalBs, "") // NOTE: either one should work
+	bckList, err := api.ListBucket(baseParams, rtd.renamedBucket, &cmn.SelectMsg{}, 0)
 	tassert.CheckFatal(t, err)
-
-	if len(objs) != numPuts {
+	unique := make(map[string]bool)
+	for _, e := range bckList.Entries {
+		base := filepath.Base(e.Name)
+		unique[base] = true
+	}
+	if len(unique) != numPuts {
 		for name := range filesPutCh {
-			found := false
-			for _, n := range objs {
-				if strings.Contains(n, name) || strings.Contains(name, n) {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if _, ok := unique[name]; !ok {
 				tutils.Logf("not found: %s\n", name)
 			}
 		}
 		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
-			rtd.bucket, rtd.renamedBucket, numPuts, len(objs))
+			rtd.bucket, rtd.renamedBucket, numPuts, len(unique))
 	}
 }
 

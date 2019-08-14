@@ -122,34 +122,23 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
+	items, err := api.ListBucket(baseParams, bucket, msg, 0)
+	if err != nil {
+		errCh <- err
+		t.Error(err)
+		return
+	}
+	if items == nil {
+		errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
+		// not considered as a failure, just can't do the test
+		return
+	}
+	files := make([]string, 0)
+	for _, it := range items.Entries {
+		files = append(files, it.Name)
+	}
+
 	for i := 0; i < numGets; i++ {
-		items, err := api.ListBucket(baseParams, bucket, msg, 0)
-		if err != nil {
-			errCh <- err
-			t.Error(err)
-			return
-		}
-
-		if items == nil {
-			errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
-			// not considered as a failure, just can't do the test
-			return
-		}
-
-		files := make([]string, 0)
-		for _, it := range items.Entries {
-			// directories show up as files with '/' endings - filter them out
-			if it.Name[len(it.Name)-1] != '/' {
-				files = append(files, it.Name)
-			}
-		}
-
-		if len(files) == 0 {
-			errCh <- fmt.Errorf("cannot retrieve from an empty bucket %s", bucket)
-			// not considered as a failure, just can't do the test
-			return
-		}
-
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
 		go func() {
