@@ -64,7 +64,6 @@ type (
 		proxyrunner *proxyrunner
 		vr          *VoteRecord
 	}
-
 	taskState struct {
 		Err    error       `json:"error"`
 		Result interface{} `json:"res"`
@@ -79,7 +78,6 @@ type (
 		isLocal bool
 		cached  bool
 	}
-
 	xactionEntry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
 		Kind() string
@@ -88,7 +86,6 @@ type (
 		IsGlobal() bool
 		IsTask() bool
 	}
-
 	xactionsRegistry struct {
 		sync.RWMutex
 		globalXacts   map[string]xactionGlobalEntry
@@ -100,24 +97,25 @@ type (
 	}
 )
 
-func (xact *xactRebBase) Description() string   { return "base for rebalance xactions" }
-func (xact *xactGlobalReb) Description() string { return "responsible for cluster-wide rebalancing" }
-func (xact *xactGlobalReb) String() string {
-	return fmt.Sprintf("%s, Smap v%d", xact.xactRebBase.String(), xact.smapVersion)
-}
+//
+// global descriptions
+//
+
+func (xact *xactRebBase) Description() string     { return "base for rebalance xactions" }
+func (xact *xactGlobalReb) Description() string   { return "cluster-wide global rebalancing" }
+func (xact *xactBckListTask) Description() string { return "asynchronous bucket list task" }
+func (xact *xactEvictDelete) Description() string { return "evict or delete objects" }
+func (xact *xactElection) Description() string    { return "elect new primary proxy/gateway" }
 func (xact *xactLocalReb) Description() string {
-	return "responsible for the mountpath-added and mountpath-enabled events that are handled locally within (and by) each storage target"
+	return "resilver local storage upon mountpath-change events"
 }
-func (xact *xactEvictDelete) Description() string {
-	return "responsible for evicting or deleting objects"
-}
-func (xact *xactElection) Description() string {
-	return "responsible for election of a new primary proxy in case of failure of previous one"
-}
-func (xact *xactBckListTask) Description() string {
-	return "asynchronous bucket list task"
+func (xact *xactPrefetch) Description() string {
+	return "prefetch a list or a range of objects from Cloud bucket"
 }
 
+//
+// misc methods
+//
 func (xact *xactPrefetch) ObjectsCnt() int64 {
 	v := xact.r.Core.Tracker[stats.PrefetchCount]
 	v.RLock()
@@ -130,9 +128,14 @@ func (xact *xactPrefetch) BytesCnt() int64 {
 	defer v.RUnlock()
 	return xact.r.Core.Tracker[stats.PrefetchCount].Value
 }
-func (xact *xactPrefetch) Description() string {
-	return "responsible for prefetching a flexibly-defined list or range of objects from any given Cloud bucket"
+
+func (xact *xactGlobalReb) String() string {
+	return fmt.Sprintf("%s, Smap v%d", xact.xactRebBase.String(), xact.smapVersion)
 }
+
+//
+// xactionsRegistry
+//
 
 func newXactions() *xactionsRegistry {
 	xar := &xactionsRegistry{
@@ -141,6 +144,24 @@ func newXactions() *xactionsRegistry {
 	hk.Housekeeper.Register("xactions", xar.cleanUpFinished)
 	return xar
 }
+
+func (r *xactionsRegistry) GetTaskXact(id int64) xactionEntry {
+	val, loaded := r.byID.Load(id)
+
+	if loaded {
+		return val.(xactionEntry)
+	}
+	return nil
+}
+
+func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
+	r.RLock()
+	res := r.globalXacts[kind]
+	r.RUnlock()
+	return res
+}
+
+// xactionsRegistry - private methods
 
 func (r *xactionsRegistry) abortAllBuckets(removeFromRegistry bool, buckets ...string) {
 	wg := &sync.WaitGroup{}
@@ -476,134 +497,6 @@ func (r *xactionsRegistry) bucketsXacts(bucket string) *bucketXactions {
 	return val.(*bucketXactions)
 }
 
-// GLOBAL RENEW METHODS
-
-func (r *xactionsRegistry) GetTaskXact(id int64) xactionEntry {
-	val, loaded := r.byID.Load(id)
-
-	if loaded {
-		return val.(xactionEntry)
-	}
-	return nil
-}
-
-func (r *xactionsRegistry) GetL(kind string) xactionGlobalEntry {
-	r.RLock()
-	res := r.globalXacts[kind]
-	r.RUnlock()
-	return res
-}
-
-func (r *xactionsRegistry) renewGlobalXaction(e xactionGlobalEntry) (stored bool, err error) {
-	r.RLock()
-	previousEntry := r.globalXacts[e.Kind()]
-
-	if previousEntry != nil && !previousEntry.Get().Finished() {
-		if e.preRenewHook(previousEntry) {
-			r.RUnlock()
-			return false, nil
-		}
-	}
-	r.RUnlock()
-
-	r.Lock()
-	defer r.Unlock()
-	previousEntry = r.globalXacts[e.Kind()]
-	if previousEntry != nil && !previousEntry.Get().Finished() {
-		if e.preRenewHook(previousEntry) {
-			return false, nil
-		}
-	}
-	if err := e.Start(r.uniqueID()); err != nil {
-		return false, err
-	}
-	r.globalXacts[e.Kind()] = e
-	r.storeByID(e.Get().ID(), e)
-
-	if previousEntry != nil && !previousEntry.Get().Finished() {
-		e.postRenewHook(previousEntry)
-	}
-	return true, nil
-}
-
-func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
-	e := &prefetchEntry{r: tr}
-	stored, _ := r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*prefetchEntry)
-
-	if !stored && !entry.xact.Finished() {
-		// previous prefetch is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *xactionsRegistry) renewLRU() *lru.Xaction {
-	e := &lruEntry{}
-	stored, _ := r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*lruEntry)
-
-	if !stored && !entry.xact.Finished() {
-		// previous LRU is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactGlobalReb {
-	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
-	stored, _ := r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*globalRebEntry)
-
-	if !stored {
-		// previous global rebalance is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
-	e := &localRebEntry{runnerCnt: runnerCnt}
-	stored, _ := r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*localRebEntry)
-
-	if !stored {
-		// previous local rebalance is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
-	e := &electionEntry{p: p, vr: vr}
-	stored, _ := r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*electionEntry)
-
-	if !stored && !entry.xact.Finished() {
-		// previous election is still running
-		return nil
-	}
-	return entry.xact
-}
-
-func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
-	e := &downloaderEntry{t: t}
-	_, err := r.renewGlobalXaction(e)
-
-	if err != nil {
-		return nil, err
-	}
-	entry := r.GetL(e.Kind()).(*downloaderEntry)
-	return entry.xact, nil
-}
-
-func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
-	e := &evictDeleteEntry{evict: evict}
-	_, _ = r.renewGlobalXaction(e)
-	entry := r.GetL(e.Kind()).(*evictDeleteEntry)
-	return entry.xact
-}
-
 func (r *xactionsRegistry) removeFinishedByID(id int64) error {
 	item, ok := r.byID.Load(id)
 	if !ok {
@@ -620,29 +513,6 @@ func (r *xactionsRegistry) removeFinishedByID(id int64) error {
 	r.byID.Delete(id)
 	r.byIDSize.Dec()
 	return nil
-}
-
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string, isLocal bool, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
-	id := msg.TaskID
-	if err := r.removeFinishedByID(id); err != nil {
-		return nil, err
-	}
-
-	e := &bckListTaskEntry{
-		id:      id,
-		t:       t,
-		bucket:  bucket,
-		isLocal: isLocal,
-		msg:     msg,
-		ctx:     ctx,
-		cached:  cached,
-	}
-	if err := e.Start(id); err != nil {
-		return nil, err
-	}
-	r.taskXacts.Store(e.Kind(), e)
-	r.storeByID(e.Get().ID(), e)
-	return e.xact, nil
 }
 
 func (r *xactionsRegistry) storeByID(id int64, entry xactionEntry) {
@@ -717,6 +587,140 @@ func (r *xactionsRegistry) cleanUpFinished() time.Duration {
 	}
 	return cleanupInterval
 }
+
+//
+// renew methods
+//
+
+func (r *xactionsRegistry) renewGlobalXaction(e xactionGlobalEntry) (ee xactionGlobalEntry, keep bool, err error) {
+	r.RLock()
+	previousEntry := r.globalXacts[e.Kind()]
+
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			r.RUnlock()
+			ee, keep = previousEntry, true
+			return
+		}
+	}
+	r.RUnlock()
+
+	r.Lock()
+	defer r.Unlock()
+	previousEntry = r.globalXacts[e.Kind()]
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		if e.preRenewHook(previousEntry) {
+			ee, keep = previousEntry, true
+			return
+		}
+	}
+	if err = e.Start(r.uniqueID()); err != nil {
+		return
+	}
+	r.globalXacts[e.Kind()] = e
+	r.storeByID(e.Get().ID(), e)
+
+	if previousEntry != nil && !previousEntry.Get().Finished() {
+		e.postRenewHook(previousEntry)
+	}
+	ee = e
+	return
+}
+
+func (r *xactionsRegistry) renewPrefetch(tr *stats.Trunner) *xactPrefetch {
+	e := &prefetchEntry{r: tr}
+	ee, keep, _ := r.renewGlobalXaction(e)
+	entry := ee.(*prefetchEntry)
+	if keep { // previous prefetch is still running
+		return nil
+	}
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewLRU() *lru.Xaction {
+	e := &lruEntry{}
+	ee, keep, _ := r.renewGlobalXaction(e)
+	entry := ee.(*lruEntry)
+	if keep { // previous LRU is still running
+		return nil
+	}
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactGlobalReb {
+	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
+	ee, keep, _ := r.renewGlobalXaction(e)
+	entry := ee.(*globalRebEntry)
+	if keep { // previous global rebalance is still running
+		return nil
+	}
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewLocalReb(runnerCnt int) *xactLocalReb {
+	e := &localRebEntry{runnerCnt: runnerCnt}
+	ee, keep, _ := r.renewGlobalXaction(e)
+	entry := ee.(*localRebEntry)
+	if keep {
+		// previous local rebalance is still running
+		return nil
+	}
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
+	e := &electionEntry{p: p, vr: vr}
+	ee, keep, _ := r.renewGlobalXaction(e)
+	entry := ee.(*electionEntry)
+	if keep { // previous election is still running
+		return nil
+	}
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewDownloader(t *targetrunner) (*downloader.Downloader, error) {
+	e := &downloaderEntry{t: t}
+	ee, _, err := r.renewGlobalXaction(e)
+	if err != nil {
+		return nil, err
+	}
+	entry := ee.(*downloaderEntry)
+	return entry.xact, nil
+}
+
+func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
+	e := &evictDeleteEntry{evict: evict}
+	ee, _, _ := r.renewGlobalXaction(e)
+	entry := ee.(*evictDeleteEntry)
+	return entry.xact
+}
+
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string,
+	isLocal bool, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
+	id := msg.TaskID
+	if err := r.removeFinishedByID(id); err != nil {
+		return nil, err
+	}
+	e := &bckListTaskEntry{
+		id:      id,
+		t:       t,
+		bucket:  bucket,
+		isLocal: isLocal,
+		msg:     msg,
+		ctx:     ctx,
+		cached:  cached,
+	}
+	if err := e.Start(id); err != nil {
+		return nil, err
+	}
+	r.taskXacts.Store(e.Kind(), e)
+	r.storeByID(e.Get().ID(), e)
+	return e.xact, nil
+}
+
+//
+// xactBckListTask
+//
 
 func (r *xactBckListTask) IsGlobal() bool        { return false }
 func (r *xactBckListTask) IsTask() bool          { return true }

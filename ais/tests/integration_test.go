@@ -1180,6 +1180,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 			num:             1000,
 			numGetsEachFile: 2,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1198,8 +1199,10 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	// Rename it
 	oldLocalBucketName := m.bucket
 	m.bucket = newTestLocalBucketName
-	err := api.RenameLocalBucket(tutils.DefaultBaseAPIParams(t), oldLocalBucketName, m.bucket)
+	err := api.RenameLocalBucket(baseParams, oldLocalBucketName, m.bucket)
 	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, oldLocalBucketName, baseParams, time.Second*10)
 
 	// Gets on renamed local bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1221,6 +1224,7 @@ func TestCopyLocalBucket(t *testing.T) {
 			num:             1000,
 			numGetsEachFile: 2,
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 	// Initialize ioContext
 	m.saveClusterState()
@@ -1235,14 +1239,14 @@ func TestCopyLocalBucket(t *testing.T) {
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 	defer tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
-	// Put some files
 	m.puts()
 
-	// Rename it
-	oldLocalBucketName := m.bucket
+	srcBucketName := m.bucket
 	m.bucket = newTestLocalBucketName
-	err := api.CopyLocalBucket(tutils.DefaultBaseAPIParams(t), oldLocalBucketName, m.bucket)
+	err := api.CopyLocalBucket(baseParams, srcBucketName, m.bucket)
 	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActCopyLB /* = kind */, srcBucketName, baseParams, rebalanceTimeout)
 
 	// Gets on copied local bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1260,6 +1264,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 			t:  t,
 			wg: &sync.WaitGroup{},
 		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	// Initialize ioContext
@@ -1280,34 +1285,30 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 		return nil
 	}
 	filepath.Walk(rootDir, fsWalkFunc)
-	tutils.Logf("Found local bucket's directory: %s\n", localBucketDir)
-	bucketFQN := filepath.Join(localBucketDir, m.bucket)
-	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
+	tutils.Logf("local bucket's dir: %s\n", localBucketDir)
 
-	// Create local bucket
 	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
+	bucketFQN := filepath.Join(localBucketDir, m.bucket)
 	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
-		t.Fatalf("local bucket folder was not created")
+		t.Fatalf("local bucket dir was not created")
 	}
 
-	// Rename local bucket
-	err := api.RenameLocalBucket(tutils.DefaultBaseAPIParams(m.t), m.bucket, newTestLocalBucketName)
+	err := api.RenameLocalBucket(baseParams, m.bucket, newTestLocalBucketName)
 	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, m.bucket, baseParams, time.Second*10)
+
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
-		t.Fatalf("local bucket folder was not deleted")
+		t.Fatalf("old bucket dir was not deleted")
 	}
+	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
 
 	if _, err := os.Stat(newBucketFQN); os.IsNotExist(err) {
-		t.Fatalf("new local bucket folder was not created")
+		t.Fatalf("new local bucket dir was not created")
 	}
-
-	// Destroy renamed local bucket
 	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
-	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
-		t.Fatalf("new local bucket folder was not deleted")
-	}
 }
 
 func TestAddAndRemoveMountpath(t *testing.T) {
@@ -1442,7 +1443,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.ensureNoErrors()
 }
 
-func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
+func TestLocalAndGlobalRebalanceAfterAddingMountpath(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}

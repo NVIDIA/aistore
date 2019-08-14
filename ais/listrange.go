@@ -367,11 +367,14 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bck
 }
 
 func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvider string, listMsg *cmn.ListMsg, f listf) error {
-	var err error
-	bucket := apitems[0]
-	objs := make([]string, 0, len(listMsg.Objnames))
+	var (
+		err    error
+		bucket = apitems[0]
+		objs   = make([]string, 0, len(listMsg.Objnames))
+		smap   = t.smapowner.get()
+	)
 	for _, obj := range listMsg.Objnames {
-		si, err := hrwTarget(bucket, obj, t.smapowner.get())
+		si, err := cluster.HrwTarget(bucket, obj, &smap.Smap)
 		if err != nil {
 			return err
 		}

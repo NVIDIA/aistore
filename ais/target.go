@@ -25,8 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/filter"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/housekeep/lru"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
@@ -321,110 +319,9 @@ func (t *targetrunner) Stop(err error) {
 	}
 }
 
-//===========================================================================================
-//
-// targetrunner's API for external packages
-//
-//===========================================================================================
-
-// implements cluster.Target interfaces
-var _ cluster.Target = &targetrunner{}
-
-func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
-	if len(used) > 0 {
-		t.capUsed.Lock()
-		t.capUsed.used = used[0]
-		if t.capUsed.oos && t.capUsed.used < int32(config.LRU.HighWM) {
-			t.capUsed.oos = false
-		} else if !t.capUsed.oos && t.capUsed.used > int32(config.LRU.OOS) {
-			t.capUsed.oos = true
-		}
-		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
-		t.capUsed.Unlock()
-	} else {
-		t.capUsed.RLock()
-		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
-		t.capUsed.RUnlock()
-	}
-	return
-}
-
-func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactions.isRebalancing(cmn.ActGlobalReb)
-	_, runningLocal := t.xactions.isRebalancing(cmn.ActLocalReb)
-	return running || runningLocal
-}
-
-// gets triggered by the stats evaluation of a remaining capacity
-// and then runs in a goroutine - see stats package, target_stats.go
-func (t *targetrunner) RunLRU() {
-	if t.IsRebalancing() {
-		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
-		return
-	}
-	xlru := t.xactions.renewLRU()
-	if xlru == nil {
-		return
-	}
-	ini := lru.InitLRU{
-		Xlru:                xlru,
-		Statsif:             t.statsif,
-		T:                   t,
-		GetFSUsedPercentage: ios.GetFSUsedPercentage,
-		GetFSStats:          ios.GetFSStats,
-	}
-	lru.InitAndRun(&ini) // blocking
-
-	xlru.EndTime(time.Now())
-}
-
-func (t *targetrunner) PrefetchQueueLen() int { return len(t.prefetchQueue) }
-
-func (t *targetrunner) Prefetch() {
-	xpre := t.xactions.renewPrefetch(getstorstatsrunner())
-
-	if xpre == nil {
-		return
-	}
-loop:
-	for {
-		select {
-		case fwd := <-t.prefetchQueue:
-			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
-				continue
-			}
-			bckIsLocal, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.bckProvider)
-			if bckIsLocal {
-				glog.Errorf("prefetch: bucket %s is local, nothing to do", fwd.bucket)
-			} else {
-				for _, objname := range fwd.objnames {
-					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.bckProvider)
-				}
-			}
-			// Signal completion of prefetch
-			if fwd.done != nil {
-				fwd.done <- struct{}{}
-			}
-		default:
-			// When there is nothing left to fetch, the prefetch routine ends
-			break loop
-
-		}
-	}
-	xpre.EndTime(time.Now())
-}
-
-func (t *targetrunner) GetBowner() cluster.Bowner   { return t.bmdowner }
-func (t *targetrunner) FSHC(err error, path string) { t.fshc(err, path) }
-func (t *targetrunner) GetMem2() *memsys.Mem2       { return nodeCtx.mm }
-func (t *targetrunner) GetFSPRG() fs.PathRunGroup   { return &t.fsprg }
-func (t *targetrunner) GetSmap() *cluster.Smap      { return t.smapowner.Get() }
-
-//===========================================================================================
 //
 // http handlers: data and metadata
 //
-//===========================================================================================
 
 // verb /v1/buckets
 func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
@@ -849,42 +746,31 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msgInt.Action {
-	case cmn.ActPrefetch:
-		// validation done in proxy.go
+	case cmn.ActPrefetch: // validation done in proxy.go
 		if err := t.listRangeOperation(r, apitems, bckProvider, &msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
-	case cmn.ActCopyLB, cmn.ActRenameLB:
-		phase := apitems[1]
-		bucketFrom, bucketTo := bucket, msgInt.Name
-
-		if phase == cmn.ActBegin {
-			glog.Infof("BEGIN %s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
-			t.bmdowner.Lock()
-
-			bmd = t.bmdowner.get()
-			props, ok := bmd.Get(bucketFrom, true)
-			if !ok {
-				t.bmdowner.Unlock()
-				s := fmt.Sprintf("bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
-				t.invalmsghdlr(w, r, s)
-				return
-			}
-			clone := bmd.clone()
-			clone.LBmap[bucketTo] = props
-			t.bmdowner.put(clone)
-			t.bmdowner.Unlock()
-			return // TODO -- FIXME: create xaction
+	case cmn.ActCopyLB, cmn.ActFastRenameLB, cmn.ActRenameLB:
+		var (
+			phase                = apitems[1]
+			bucketFrom, bucketTo = bucket, msgInt.Name
+		)
+		switch phase {
+		case cmn.ActBegin:
+			err = t.beginCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+		case cmn.ActAbort:
+			err = t.abortCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+		default:
+			cmn.Assert(phase == cmn.ActCommit)
+			err = t.commitCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
 		}
-
-		cmn.Assert(phase == cmn.ActCommit)
-		if err := t.copyRenameLB(bucketFrom, bucketTo, msgInt.Action == cmn.ActRenameLB); err != nil {
+		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		bmd := t.bmdowner.get()
-		glog.Infof("%s bucket %s => %s, %s v%d", msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
+		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
 		if ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt); !ok {
@@ -1097,11 +983,10 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//====================================================================================
 //
 // supporting methods and misc
 //
-//====================================================================================
+
 // checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
 // should be called only if the local copy exists
 func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) (vchanged bool, err error, errCode int) {
@@ -1188,61 +1073,6 @@ func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
 	lom.ReCache()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("Success: %s (%s, %s) from %s", lom, cmn.B2S(lom.Size(), 1), lom.Cksum(), neighsi)
-	}
-	return
-}
-
-// FIXME: recomputes checksum if called with a bad one (optimize)
-func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
-	if prefetch {
-		if !cluster.ObjectLocker.TryLock(lom.Uname(), true) {
-			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
-			return cmn.NewSkipError(), 0
-		}
-	} else {
-		cluster.ObjectLocker.Lock(lom.Uname(), true) // one cold-GET at a time
-	}
-	var (
-		vchanged, crace bool
-		workFQN         = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileColdget)
-	)
-	if err, errCode = t.cloud.getObj(ct, workFQN, lom); err != nil {
-		err = fmt.Errorf("%s: GET failed, err: %v", lom, err)
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
-		return
-	}
-	defer func() {
-		if err != nil {
-			cluster.ObjectLocker.Unlock(lom.Uname(), true)
-			if errRemove := os.Remove(workFQN); errRemove != nil {
-				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
-				t.fshc(errRemove, workFQN)
-			}
-		}
-	}()
-	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
-		err = fmt.Errorf("unexpected failure to rename %s => %s, err: %v", workFQN, lom.FQN, err)
-		t.fshc(err, lom.FQN)
-		return
-	}
-	if err = lom.Persist(); err != nil {
-		return
-	}
-	lom.ReCache()
-
-	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
-	if prefetch {
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
-	} else {
-		if vchanged {
-			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1},
-				stats.NamedVal64{stats.GetColdSize, lom.Size()},
-				stats.NamedVal64{stats.VerChangeSize, lom.Size()},
-				stats.NamedVal64{stats.VerChangeCount, 1})
-		} else if !crace {
-			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, lom.Size()})
-		}
-		cluster.ObjectLocker.DowngradeLock(lom.Uname())
 	}
 	return
 }
@@ -1497,14 +1327,6 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	getfshealthchecker().OnErr(filepath)
 }
 
-func (t *targetrunner) HRWTarget(bucket, objname string) (si *cluster.Snode, err error) {
-	return hrwTarget(bucket, objname, t.smapowner.get())
-}
-
-func (t *targetrunner) Snode() *cluster.Snode {
-	return t.si
-}
-
 func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
@@ -1515,8 +1337,4 @@ func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 		}
 	}
 	return
-}
-
-func (t *targetrunner) Cloud() cluster.CloudProvider {
-	return t.cloud
 }

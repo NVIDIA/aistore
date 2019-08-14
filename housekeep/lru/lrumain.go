@@ -166,5 +166,5 @@ func stopAll(joggers map[string]*lructx, exceptMpath string) {
 }
 
 func (xact *Xaction) Description() string {
-	return "responsible for LRU-based cache eviction that depends on cluster and bucket configuration and the remaining free capacity"
+	return "LRU-based cache eviction and free capacity management"
 }

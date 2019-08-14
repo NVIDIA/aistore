@@ -8,12 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
-	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -28,67 +24,9 @@ type replicInfo struct {
 	uncache   bool
 }
 
-func (t *targetrunner) copyRenameLB(bucketFrom, bucketTo string, rename bool) (err error) {
-	var (
-		wg                = &sync.WaitGroup{}
-		smap              = t.smapowner.get()
-		availablePaths, _ = fs.Mountpaths.Get()
-		errCh             = make(chan error, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
-	)
-	//
-	// NOTE: only objects; TODO for contentType := range fs.CSM.RegisteredContentTypes
-	//
-	for _, mpathInfo := range availablePaths {
-		toDir := mpathInfo.MakePathBucket(fs.ObjectType, bucketTo, true /*bucket is local*/)
-		if err := cmn.CreateDir(toDir); err != nil {
-			errCh <- err
-			continue
-		}
-		fromDir := mpathInfo.MakePathBucket(fs.ObjectType, bucketFrom, true /*bucket is local*/)
-		wg.Add(1)
-		go func(fromDir string) {
-			buf, slab := nodeCtx.mm.AllocDefault()
-			ri := &replicInfo{smap: smap, bucketTo: bucketTo, t: t, buf: buf, uncache: rename}
-			errCh <- filepath.Walk(fromDir, ri.walkCopyLB)
-			wg.Done()
-			slab.Free(buf)
-		}(fromDir)
-	}
-	wg.Wait()
-	close(errCh)
-	for err = range errCh {
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
 //
-// replicInfo methods
+// replicInfo
 //
-
-func (ri *replicInfo) walkCopyLB(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if err := cmn.PathWalkErr(err); err != nil {
-			glog.Error(err)
-			return err
-		}
-		return nil
-	}
-	if osfi.Mode().IsDir() {
-		return nil
-	}
-	lom, err := cluster.LOM{T: ri.t, FQN: fqn}.Init(cmn.ProviderFromLoc(true /*is local*/))
-	if err != nil {
-		return nil
-	}
-	_, err = ri.copyObject(lom, lom.Objname)
-	if err != nil {
-		glog.Error(err)
-	}
-	return nil
-}
 
 func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied bool, err error) {
 	var (
@@ -98,7 +36,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	)
 	if ri.smap != nil {
 		cmn.Assert(!ri.localCopy)
-		if si, err = hrwTarget(ri.bucketTo, objnameTo, ri.smap); err != nil {
+		if si, err = cluster.HrwTarget(ri.bucketTo, objnameTo, &ri.smap.Smap); err != nil {
 			return
 		}
 	} else {

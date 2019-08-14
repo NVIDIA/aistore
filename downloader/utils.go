@@ -29,7 +29,7 @@ func BuildDownloaderInput(t cluster.Target, id string, payload *cmn.DlBase, obje
 func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bucket string, cloud bool) ([]cmn.DlObj, error) {
 	// Filter out objects that will be handled by other targets
 	dlObjs := make([]cmn.DlObj, 0, len(objects))
-
+	smap := t.GetSmap()
 	for objName, link := range objects {
 		// Make sure that objName doesn't contain "?query=smth" suffix.
 		objName, err := cmn.NormalizeObjName(objName)
@@ -39,7 +39,7 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bucket string, clo
 		// Make sure that link contains protocol (absence of protocol can result in errors).
 		link = cmn.PrependProtocol(link)
 
-		si, err := t.HRWTarget(bucket, objName)
+		si, err := cluster.HrwTarget(bucket, objName, smap)
 		if err != nil {
 			return nil, err
 		}

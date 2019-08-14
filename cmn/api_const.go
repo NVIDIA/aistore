@@ -43,6 +43,7 @@ const (
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
 	ActRenameLB     = "renamelb"
+	ActFastRenameLB = "fast-renamelb"
 	ActCopyLB       = "copylb"
 	ActRegisterCB   = "registercb"
 	ActEvictCB      = "evictcb"
@@ -88,7 +89,7 @@ const (
 	ActPersist = "persist" // store a piece of metadata or configuration
 )
 
-// action phases: 2-phase commit
+// xaction begin-commit phases
 const (
 	ActBegin  = "begin"
 	ActCommit = "commit"

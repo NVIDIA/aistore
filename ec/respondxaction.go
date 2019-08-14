@@ -272,7 +272,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 }
 
 func (r *XactRespond) Description() string {
-	return "responsible for returning stored EC files on requests from other targets"
+	return "return locally stored EC objects upon requests from other targets"
 }
 
 func (r *XactRespond) Stop(error) { r.Abort() }

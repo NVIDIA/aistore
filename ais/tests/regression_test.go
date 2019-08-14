@@ -313,6 +313,95 @@ func TestRenameLocalBuckets(t *testing.T) {
 	})
 }
 
+//
+// doBucketRe*
+//
+
+func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
+	const filesize = 1024
+	var (
+		numPuts    = 512 // TODO -- FIXME: deadlock at 1024?
+		filesPutCh = make(chan string, numPuts)
+		errCh      = make(chan error, numPuts)
+		wg         = &sync.WaitGroup{}
+		bucket     = rtd.bucket
+	)
+
+	sgl := tutils.Mem2.NewSGL(filesize)
+	defer sgl.Free()
+
+	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
+	close(filesPutCh)
+	selectErr(errCh, "put", t, true)
+	if rtd.rename {
+		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesPutCh)
+		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
+		bucket = rtd.renamedBucket
+	}
+
+	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, errCh)
+	selectErr(errCh, "get", t, false)
+	tutils.Logf("Deleting %d objects\n", len(filesPutCh))
+	for fname := range filesPutCh {
+		wg.Add(1)
+		go tutils.Del(proxyURL, bucket, "smoke/"+fname, "", wg, errCh, true /* silent */)
+	}
+	wg.Wait()
+	selectErr(errCh, "delete", t, abortonerr)
+	close(errCh)
+}
+
+func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
+	tassert.CheckFatal(t, err)
+
+	time.Sleep(time.Second) // NOTE: no need to wait - GFN must make it work
+	// waitForBucketXactionToComplete(t, cmn.ActFastRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
+
+	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
+	tassert.CheckFatal(t, err)
+
+	if len(buckets.Local) != rtd.numLocalBuckets {
+		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %+v)",
+			rtd.numLocalBuckets, buckets.Local)
+	}
+
+	renamedBucketExists := false
+	for _, b := range buckets.Local {
+		if b == rtd.renamedBucket {
+			renamedBucketExists = true
+		} else if b == rtd.bucket {
+			t.Fatalf("original local bucket %s still exists after rename", rtd.bucket)
+		}
+	}
+
+	if !renamedBucketExists {
+		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
+	}
+
+	// objs, err := tutils.ListObjects(proxyURL, rtd.renamedBucket, cmn.LocalBs, "", numPuts+1)
+	objs, err := tutils.ListObjectsFast(proxyURL, rtd.renamedBucket, cmn.LocalBs, "") // NOTE: either one should work
+	tassert.CheckFatal(t, err)
+
+	if len(objs) != numPuts {
+		for name := range filesPutCh {
+			found := false
+			for _, n := range objs {
+				if strings.Contains(n, name) || strings.Contains(name, n) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				tutils.Logf("not found: %s\n", name)
+			}
+		}
+		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
+			rtd.bucket, rtd.renamedBucket, numPuts, len(objs))
+	}
+}
+
 func TestListObjectsPrefix(t *testing.T) {
 	const fileSize = 1024
 	var (
@@ -1199,85 +1288,6 @@ func TestStressDeleteRange(t *testing.T) {
 	tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 }
 
-func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
-	tassert.CheckFatal(t, err)
-
-	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
-	tassert.CheckFatal(t, err)
-
-	if len(buckets.Local) != rtd.numLocalBuckets {
-		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %+v)",
-			rtd.numLocalBuckets, buckets.Local)
-	}
-
-	renamedBucketExists := false
-	for _, b := range buckets.Local {
-		if b == rtd.renamedBucket {
-			renamedBucketExists = true
-		} else if b == rtd.bucket {
-			t.Fatalf("original local bucket %s still exists after rename", rtd.bucket)
-		}
-	}
-
-	if !renamedBucketExists {
-		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
-	}
-
-	objs, err := tutils.ListObjects(proxyURL, rtd.renamedBucket, cmn.LocalBs, "", numPuts+1)
-	tassert.CheckFatal(t, err)
-
-	if len(objs) != numPuts {
-		for name := range filesPutCh {
-			found := false
-			for _, n := range objs {
-				if strings.Contains(n, name) || strings.Contains(name, n) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				tutils.Logf("not found: %s\n", name)
-			}
-		}
-		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
-			rtd.bucket, rtd.renamedBucket, numPuts, len(objs))
-	}
-}
-
-func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
-	const filesize = 1024
-	var (
-		numPuts    = 128
-		filesPutCh = make(chan string, numPuts)
-		errCh      = make(chan error, numPuts)
-		wg         = &sync.WaitGroup{}
-		bucket     = rtd.bucket
-	)
-
-	sgl := tutils.Mem2.NewSGL(filesize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
-	close(filesPutCh)
-	selectErr(errCh, "put", t, true)
-	if rtd.rename {
-		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesPutCh)
-		tutils.Logf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
-		bucket = rtd.renamedBucket
-	}
-
-	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, errCh)
-	selectErr(errCh, "get", t, false)
-	for fname := range filesPutCh {
-		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, "smoke/"+fname, "", wg, errCh, !testing.Verbose())
-	}
-	wg.Wait()
-	selectErr(errCh, "delete", t, abortonerr)
-	close(errCh)
-}
-
 //========
 //
 // Helpers
@@ -1304,6 +1314,40 @@ func checkXactAPIErr(t *testing.T, err error) {
 		} else if httpErr.Status != http.StatusNotFound {
 			t.Fatalf("Unable to get global rebalance stats. Error: [%v]", err)
 		}
+	}
+}
+
+func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams *api.BaseParams, timeout time.Duration) {
+	var (
+		wg    = &sync.WaitGroup{}
+		ch    = make(chan error, 1)
+		sleep = time.Second
+		i     time.Duration
+	)
+	wg.Add(1)
+	go func() {
+		for {
+			time.Sleep(sleep)
+			i++
+			stats, err := tutils.GetXactionStats(baseParams, kind, bucket)
+			checkXactAPIErr(t, err)
+			if allCompleted(stats) {
+				break
+			}
+			if i == 1 {
+				tutils.Logf("Wait for %s to finish\n", kind)
+			}
+			if i*sleep > timeout {
+				ch <- errors.New(kind + ": timeout")
+				break
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+	close(ch)
+	for err := range ch {
+		t.Fatal(err)
 	}
 }
 

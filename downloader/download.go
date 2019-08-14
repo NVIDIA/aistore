@@ -240,7 +240,7 @@ func (d *Downloader) ReqRemoveMountpath(mpath string)  { d.mpathReqCh <- fs.Moun
 func (d *Downloader) ReqEnableMountpath(mpath string)  {}
 func (d *Downloader) ReqDisableMountpath(mpath string) {}
 func (d *Downloader) Description() string {
-	return "responsible for downloading objects into a bucket based on provided link"
+	return "download objects into a bucket"
 }
 
 /*

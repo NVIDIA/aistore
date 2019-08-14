@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"flag"
 	"io/ioutil"
 	"os"
 	"path"
@@ -29,6 +30,8 @@ var (
 )
 
 func init() {
+	flag.Parse()
+
 	// file system
 	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()

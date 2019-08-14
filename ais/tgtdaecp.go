@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -1227,10 +1228,104 @@ func (t *targetrunner) enable() error {
 	return nil
 }
 
-// Disable implements fspathDispatcher interface
-func (t *targetrunner) Disable(mountpath string, why string) (disabled bool, err error) {
-	// TODO: notify admin that the mountpath is gone
-	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	t.xactions.stopMountpathXactions()
-	return t.fsprg.disableMountpath(mountpath)
+//
+// copy-rename bucket: 2-phase commit
+//
+
+func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
+	if action == cmn.ActFastRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
+		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bucketFrom)
+	}
+	t.bmdowner.Lock()
+	bmd := t.bmdowner.get()
+	props, ok := bmd.Get(bucketFrom, true /*is local*/)
+	if !ok {
+		t.bmdowner.Unlock()
+		return fmt.Errorf("source bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
+	}
+	switch action {
+	case cmn.ActFastRenameLB:
+		_, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+		if err == nil {
+			err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, true /*destroy*/)
+		}
+	case cmn.ActRenameLB:
+		err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, false /*destroy=false*/)
+		if err == nil {
+			_, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+		}
+	default:
+		cmn.Assert(action == cmn.ActCopyLB)
+		_, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+	}
+	if err == nil {
+		// add bucketTo to this target's BMD wo/ increasing the version
+		clone := bmd.clone()
+		clone.LBmap[bucketTo] = props
+		t.bmdowner.put(clone)
+	}
+	t.bmdowner.Unlock()
+	return
+}
+
+func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
+	t.bmdowner.Lock()
+	defer t.bmdowner.Unlock()
+
+	bmd := t.bmdowner.get()
+	_, ok := bmd.Get(bucketTo, true /*is local*/)
+	if !ok {
+		return
+	}
+	b := t.xactions.bucketsXacts(bucketFrom)
+	if b == nil {
+		return
+	}
+	e := b.GetL(action /* kind */)
+	if e == nil {
+		return
+	}
+	ee := e.(*fastRenEntry)
+	if ee.bckName != bucketFrom {
+		return
+	}
+	switch action {
+	case cmn.ActFastRenameLB, cmn.ActRenameLB:
+		tag := cmn.ActAbort + ":" + action
+		fs.Mountpaths.CreateDestroyLocalBuckets(tag, false /*false=destroy*/, bucketTo)
+	default:
+		cmn.Assert(action == cmn.ActCopyLB)
+	}
+	// rm bucketTo to this target's BMD wo/ increasing the version
+	clone := bmd.clone()
+	delete(clone.LBmap, bucketTo)
+	t.bmdowner.put(clone)
+	return
+}
+
+func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
+	switch action {
+	case cmn.ActFastRenameLB: // rename back
+		var xact *xactFastRen
+		xact, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActCommit)
+		if err != nil {
+			glog.Error(err) // must not happen at commit time
+			break
+		}
+		err = fs.Mountpaths.RenameBucketDirs(bucketFrom, bucketTo, true /*is local*/)
+		if err != nil {
+			glog.Error(err) // ditto
+			break
+		}
+		go xact.run() // do the work
+	case cmn.ActRenameLB, cmn.ActCopyLB:
+		var xact *mirror.XactBckCopyRename
+		xact, err = t.xactions.renewBckCopyRename(bucketFrom, bucketTo, t, action, cmn.ActCommit)
+		if err != nil {
+			glog.Error(err) // unexpected at commit time
+			break
+		}
+		go xact.Run()
+	}
+	return
 }

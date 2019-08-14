@@ -32,7 +32,7 @@ type (
 		slab   *memsys.Slab2
 		copies int
 	}
-	xcopyJogger struct { // one per mountpath
+	mncJogger struct { // one per mountpath
 		joggerBckBase
 		parent *XactBckMakeNCopies
 		buf    []byte
@@ -92,40 +92,40 @@ func (r *XactBckMakeNCopies) init() (numjs int, err error) {
 	numjs = len(availablePaths)
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
-		xcopyJogger := newXcopyJogger(r, mpathInfo, config)
+		mncJogger := newMncJogger(r, mpathInfo, config)
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
-		r.mpathers[mpathLC] = xcopyJogger
-		go xcopyJogger.jog()
+		r.mpathers[mpathLC] = mncJogger
+		go mncJogger.jog()
 	}
 	return
 }
 
 func (r *XactBckMakeNCopies) Description() string {
-	return "responsible for deleting or adding object's copies within a target"
+	return "delete or add local object copies (replicas)"
 }
 
 //
-// mpath xcopyJogger - as mpather
+// mpath mncJogger - as mpather
 //
 
-func newXcopyJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *xcopyJogger {
+func newMncJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
 	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config}
-	j := &xcopyJogger{joggerBckBase: jbase, parent: parent}
+	j := &mncJogger{joggerBckBase: jbase, parent: parent}
 	j.joggerBckBase.callback = j.delAddCopies
 	return j
 }
 
 //
-// mpath xcopyJogger - main
+// mpath mncJogger - main
 //
-func (j *xcopyJogger) jog() {
+func (j *mncJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.buf = j.parent.slab.Alloc()
 	j.joggerBckBase.jog()
 	j.parent.slab.Free(j.buf)
 }
 
-func (j *xcopyJogger) delAddCopies(lom *cluster.LOM) (err error) {
+func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	var size int64
 	if n := lom.NumCopies(); n == j.parent.copies {
 		return nil
@@ -158,7 +158,7 @@ func (j *xcopyJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	return
 }
 
-func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
+func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 	cluster.ObjectLocker.Lock(lom.Uname(), true)
 	if j.parent.copies == 1 {
 		size += lom.Size() * int64(lom.NumCopies()-1)
@@ -196,7 +196,7 @@ func (j *xcopyJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 	return
 }
 
-func (j *xcopyJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
+func (j *mncJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
 			cluster.ObjectLocker.Lock(lom.Uname(), false)

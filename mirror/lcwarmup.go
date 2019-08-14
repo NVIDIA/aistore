@@ -57,7 +57,7 @@ func (r *XactBckLoadLomCache) init() (numjs int, err error) {
 }
 
 func (r *XactBckLoadLomCache) Description() string {
-	return "responsible for populating objects' metadata into in-memory cache"
+	return "load object metadata into in-memory cache"
 }
 
 //

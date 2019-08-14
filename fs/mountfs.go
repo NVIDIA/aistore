@@ -191,25 +191,6 @@ func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname strin
 // MountedFS
 //
 
-// global init
-func InitMountedFS() {
-	Mountpaths = NewMountedFS()
-	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
-		glog.SetV(glog.SmoduleFS, logLvl)
-	}
-}
-
-// new instance
-func NewMountedFS(iostater ...ios.IOStater) *MountedFS {
-	mfs := &MountedFS{fsIDs: make(map[syscall.Fsid]string, 10), checkFsID: true}
-	if len(iostater) > 0 {
-		mfs.ios = iostater[0]
-	} else {
-		mfs.ios = ios.NewIostatContext()
-	}
-	return mfs
-}
-
 func (mfs *MountedFS) LoadBalanceGET(objfqn, objmpath string, copies MPI, now time.Time) (fqn string) {
 	var (
 		mpathUtils, mpathRRs = mfs.ios.GetAllMpathUtils(now)
@@ -401,7 +382,6 @@ func (mfs *MountedFS) Enable(mpath string) (enabled bool, err error) {
 	if _, ok := availablePaths[cleanMpath]; ok {
 		return false, nil
 	}
-
 	if mp, ok := disabledPaths[cleanMpath]; ok {
 		availablePaths[cleanMpath] = mp
 		mfs.ios.AddMpath(cleanMpath, mp.FileSystem)
@@ -446,25 +426,25 @@ func (mfs *MountedFS) Disable(mpath string) (disabled bool, err error) {
 
 // Returns number of available mountpaths
 func (mfs *MountedFS) NumAvail() int {
-	available := (*MPI)(mfs.available.Load())
-	return len(*available)
+	availablePaths := (*MPI)(mfs.available.Load())
+	return len(*availablePaths)
 }
 
 // Mountpaths returns both available and disabled mountpaths.
 func (mfs *MountedFS) Get() (MPI, MPI) {
-	available := (*MPI)(mfs.available.Load())
-	disabled := (*MPI)(mfs.disabled.Load())
-	if available == nil {
+	var (
+		availablePaths = (*MPI)(mfs.available.Load())
+		disabledPaths  = (*MPI)(mfs.disabled.Load())
+	)
+	if availablePaths == nil {
 		tmp := make(MPI, 10)
-		available = &tmp
+		availablePaths = &tmp
 	}
-
-	if disabled == nil {
+	if disabledPaths == nil {
 		tmp := make(MPI, 10)
-		disabled = &tmp
+		disabledPaths = &tmp
 	}
-
-	return *available, *disabled
+	return *availablePaths, *disabledPaths
 }
 
 // DisableFsIDCheck disables fsid checking when adding new mountpath
@@ -477,12 +457,10 @@ func (mfs *MountedFS) CreateDestroyLocalBuckets(op string, create bool, buckets 
 		createstr  = "create-local-bucket-dir"
 		destroystr = "destroy-local-bucket-dir"
 	)
-
 	text := createstr
 	if !create {
 		text = destroystr
 	}
-
 	failMsg := fmt.Sprintf(fmt1, op, text)
 	passMsg := fmt.Sprintf(fmt2, op, text)
 
@@ -494,41 +472,87 @@ func (mfs *MountedFS) EvictCloudBucket(bucket string) {
 		passMsg = "evict cloud bucket"
 		failMsg = "failed: evict cloud bucket"
 	)
-
 	mfs.createDestroyBuckets(false, false, passMsg, failMsg, bucket)
 }
 
 func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
-	fsInfo := cmn.FSInfo{}
-
-	availableMountpaths, _ := mfs.Get()
-
-	visitedFS := make(map[syscall.Fsid]struct{})
-
-	for mpath := range availableMountpaths {
+	var (
+		fsInfo            = cmn.FSInfo{}
+		availablePaths, _ = mfs.Get()
+		visitedFS         = make(map[syscall.Fsid]struct{})
+	)
+	for mpath := range availablePaths {
 		statfs := &syscall.Statfs_t{}
 
 		if err := syscall.Statfs(mpath, statfs); err != nil {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
 			continue
 		}
-
 		if _, ok := visitedFS[statfs.Fsid]; ok {
 			continue
 		}
-
 		visitedFS[statfs.Fsid] = struct{}{}
-
 		fsInfo.FSUsed += (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
 		fsInfo.FSCapacity += statfs.Blocks * uint64(statfs.Bsize)
 	}
-
 	if fsInfo.FSCapacity > 0 {
-		//FIXME: assuming that each mountpath has the same capacity and gets distributed the same files
+		// FIXME: assuming all mountpaths have approx. the same capacity
 		fsInfo.PctFSUsed = float64(fsInfo.FSUsed*100) / float64(fsInfo.FSCapacity)
 	}
-
 	return fsInfo
+}
+
+// NOTE: caller is responsible to serialize per bucket TODO -- FIXME
+func (mfs *MountedFS) CreateBucketDirs(bucket string, isLocal, destroyUponRet bool) (err error) {
+	availablePaths, _ := mfs.Get()
+	created := make([]string, 0, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
+		bdir := mpathInfo.MakePathBucket(ObjectType, bucket, isLocal)
+		if _, err = os.Stat(bdir); err == nil {
+			err = fmt.Errorf("bucket %s: dir %s already exists", bucket, bdir)
+			break
+		}
+		if err = cmn.CreateDir(bdir); err != nil {
+			err = fmt.Errorf("bucket %s: failed to create dir %s: %v", bucket, bdir, err)
+			break
+		}
+		created = append(created, bdir)
+	}
+	if err != nil || destroyUponRet {
+		for _, bdir := range created {
+			if erd := os.RemoveAll(bdir); erd != nil {
+				glog.Error(erd)
+				if err == nil {
+					err = erd
+				}
+			}
+		}
+	}
+	return
+}
+
+func (mfs *MountedFS) RenameBucketDirs(bucketFrom, bucketTo string, isLocal bool) (err error) {
+	availablePaths, _ := mfs.Get()
+	renamed := make([]*MountpathInfo, 0, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
+		from := mpathInfo.MakePathBucket(ObjectType, bucketFrom, isLocal)
+		to := mpathInfo.MakePathBucket(ObjectType, bucketTo, isLocal)
+		if err = os.Rename(from, to); err != nil {
+			break
+		}
+		renamed = append(renamed, mpathInfo)
+	}
+	if err == nil {
+		return
+	}
+	for _, mpathInfo := range renamed {
+		from := mpathInfo.MakePathBucket(ObjectType, bucketTo, isLocal)
+		to := mpathInfo.MakePathBucket(ObjectType, bucketFrom, isLocal)
+		if erd := os.Rename(from, to); erd != nil {
+			glog.Error(erd)
+		}
+	}
+	return
 }
 
 //
@@ -582,25 +606,23 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, loc bool, passMsg string
 
 // mountpathsCopy returns shallow copy of current mountpaths
 func (mfs *MountedFS) mountpathsCopy() (MPI, MPI) {
-	available, disabled := mfs.Get()
-	availableCopy := make(MPI, len(available))
-	disabledCopy := make(MPI, len(available))
+	availablePaths, disabledPaths := mfs.Get()
+	availableCopy := make(MPI, len(availablePaths))
+	disabledCopy := make(MPI, len(availablePaths))
 
-	for mpath, mpathInfo := range available {
+	for mpath, mpathInfo := range availablePaths {
 		availableCopy[mpath] = mpathInfo
 	}
-
-	for mpath, mpathInfo := range disabled {
+	for mpath, mpathInfo := range disabledPaths {
 		disabledCopy[mpath] = mpathInfo
 	}
-
 	return availableCopy, disabledCopy
 }
 
 func (mfs *MountedFS) String() string {
-	available, _ := mfs.Get()
+	availablePaths, _ := mfs.Get()
 	s := "\n"
-	for _, mpathInfo := range available {
+	for _, mpathInfo := range availablePaths {
 		s += mpathInfo.String() + "\n"
 	}
 	return strings.TrimSuffix(s, "\n")
@@ -619,7 +641,6 @@ func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
 	if len(*avail) == 0 {
 		return nil, fmt.Errorf("no mountpath available")
 	}
-
 	maxVal := uint64(0)
 	for _, m := range *avail {
 		if m.PathDigest > maxVal {
@@ -630,7 +651,6 @@ func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
 	if mpath == nil {
 		return nil, fmt.Errorf("failed to choose a mountpath")
 	}
-
 	if glog.FastV(4, glog.SmoduleFS) {
 		glog.Infof("Mountpath %q selected for storing BMD in xattrs", mpath.Path)
 	}

@@ -180,8 +180,9 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 	j.pageMarker = msg.PageMarker
 
 	objects := make(cmn.SimpleKVs, cmn.DefaultPageSize)
+	smap := j.t.GetSmap()
 	for _, entry := range bckList.Entries {
-		si, err := j.t.HRWTarget(j.bucket, entry.Name)
+		si, err := cluster.HrwTarget(j.bucket, entry.Name, smap)
 		if err != nil {
 			return err
 		}

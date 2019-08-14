@@ -297,26 +297,6 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	return nil
 }
 
-// slight variation vs t.doPut() above
-func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *cluster.LOM,
-	recvType cluster.RecvType, cksum cmn.Cksummer, started time.Time) error {
-
-	poi := &putObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		r:       reader,
-		workFQN: workFQN,
-		ctx:     context.Background(),
-	}
-	if recvType == cluster.ColdGet {
-		poi.cold = true
-		poi.cksumToCheck = cksum
-	}
-	err, _ := poi.putObject()
-	return err
-}
-
 ////////////////
 // GET OBJECT //
 ////////////////
@@ -559,17 +539,4 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 		stats.NamedVal64{Name: stats.GetCount, Val: 1},
 	)
 	return
-}
-
-// slight variation vs t.httpobjget()
-func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Time) error {
-	goi := &getObjInfo{
-		started: started,
-		t:       t,
-		lom:     lom,
-		w:       w,
-		ctx:     context.Background(),
-	}
-	err, _ := goi.getObject()
-	return err
 }

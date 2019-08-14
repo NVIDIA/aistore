@@ -334,7 +334,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := hrwTarget(bucket, objname, smap)
+	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -383,7 +383,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := hrwTarget(bucket, objname, smap)
+	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -424,7 +424,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := hrwTarget(bucket, objName, smap)
+	si, err := cluster.HrwTarget(bucket, objName, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -543,7 +543,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := hrwTarget(bucket, objname, smap)
+	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -719,10 +719,10 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var (
-		msg                 cmn.ActionMsg
-		bucket, bckProvider string
-		bmd                 *bucketMD
-		bckIsLocal          bool
+		msg                  cmn.ActionMsg
+		bucket, bckProvider  string
+		bmd                  *bucketMD
+		bckIsLocal, actLocal bool
 	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -730,9 +730,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// detect bucket name if it is single-bucket request
+	bckProvider = r.URL.Query().Get(cmn.URLParamBckProvider)
 	if len(apitems) != 0 {
 		bucket = apitems[0]
-		bckProvider = r.URL.Query().Get(cmn.URLParamBckProvider)
 		if bmd, bckIsLocal = p.validateBucket(w, r, bucket, bckProvider); bmd == nil {
 			return
 		}
@@ -762,15 +762,21 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
+	switch msg.Action {
+	case cmn.ActCreateLB:
+		actLocal = true
+		bckIsLocal = bckProvider == "" || cmn.IsProviderLocal(bckProvider)
+	case cmn.ActCopyLB, cmn.ActRenameLB, cmn.ActFastRenameLB, cmn.ActSyncLB:
+		actLocal = true
+	}
+	if actLocal && !bckIsLocal {
+		p.invalmsghdlr(w, r, msg.Action+": invalid bucket provider "+bckProvider)
+		return
+	}
 	config := cmn.GCO.Get()
 	switch msg.Action {
 	case cmn.ActCreateLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
-			return
-		}
-		if err := cmn.ValidateBucketName(bucket); err != nil {
-			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
 		if err := p.createBucket(&msg, bucket, config, true); err != nil {
@@ -781,7 +787,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
-	case cmn.ActCopyLB, cmn.ActRenameLB:
+	case cmn.ActCopyLB, cmn.ActFastRenameLB, cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
@@ -1297,7 +1303,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	smap := p.smapowner.get()
-	si, err := hrwTarget(bucket, objname, smap)
+	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -1382,52 +1388,46 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
 	smap := p.smapowner.get()
 	bmd := p.bmdowner.get().clone()
+	tout := config.Timeout.Default
 
-	// 1. validate
 	bprops, ok := bmd.Get(bucketFrom, true)
 	if !ok {
 		return fmt.Errorf("local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 	}
-	if _, ok = bmd.Get(bucketTo, true); ok {
+	// allow to copy into existing bucket
+	if _, ok = bmd.Get(bucketTo, true); ok && msg.Action == cmn.ActRenameLB {
 		return fmt.Errorf("local bucket %s already exists", bucketTo)
 	}
 
-	// 2. begin
+	// begin
 	msgInt := p.newActionMsgInternal(msg, smap, bmd)
 	body := cmn.MustMarshal(msgInt)
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActBegin),
-		nil, // query TODO -- FIXME
-		http.MethodPost,
-		body,
-		smap,
-		config.Timeout.CplaneOperation,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
+		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+
+	nr := 0
 	for res := range results {
 		if res.err != nil {
 			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
 			glog.Errorln(err.Error())
+			nr++
 		}
 	}
 	if err != nil {
+		// abort
+		if nr < len(results) {
+			_ = p.broadcastTo(
+				cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActAbort),
+				nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+		}
 		return
 	}
 
-	// 3. commit
-	msgInt = p.newActionMsgInternal(msg, smap, bmd)
-	body = cmn.MustMarshal(msgInt)
+	// commit
 	results = p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActCommit),
-		nil, // query
-		http.MethodPost,
-		body,
-		smap,
-		config.Timeout.Default, // TODO -- FIXME
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
+		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
 	for res := range results {
 		if res.err != nil {
 			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
@@ -1441,15 +1441,13 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
 	nbmd.add(bucketTo, true, bprops)
-	if msg.Action == cmn.ActRenameLB {
+	if msg.Action == cmn.ActFastRenameLB {
 		nbmd.del(bucketFrom, true)
-	} else {
-		nbmd.Version++
 	}
 	p.bmdowner.put(nbmd)
 	p.bmdowner.Unlock()
 
-	// 4. finalize
+	// finalize
 	if err = p.savebmdconf(nbmd, config); err != nil {
 		glog.Error(err)
 	}
@@ -1908,7 +1906,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 
 	if msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
-			si, err := hrwTarget(bucket, e.Name, smap)
+			si, err := cluster.HrwTarget(bucket, e.Name, &smap.Smap)
 			if err == nil {
 				e.TargetURL = si.URL(cmn.NetworkPublic)
 			}
@@ -1962,7 +1960,7 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	smap := p.smapowner.get()
-	si, err := hrwTarget(lbucket, objname, smap)
+	si, err := cluster.HrwTarget(lbucket, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

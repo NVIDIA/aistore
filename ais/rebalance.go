@@ -64,14 +64,14 @@ type (
 		streams    *transport.StreamBundle
 		acks       *transport.StreamBundle
 		lomacks    [fs.LomCacheMask + 1]*LomAcks
-		ackrc      atomic.Int64
 		tcache     struct { // not to recompute very often
 			tmap cluster.NodeMap
 			ts   time.Time
 			mu   *sync.Mutex
 		}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
-		stage      atomic.Uint32  // rebStage* enum
+		laterx     atomic.Bool
+		stage      atomic.Uint32 // rebStage* enum
 	}
 	rebJoggerBase struct {
 		m     *rebManager
@@ -81,7 +81,7 @@ type (
 	}
 	globalRebJogger struct {
 		rebJoggerBase
-		smap  *smapX // cluster.Smap?
+		smap  *smapX
 		sema  chan struct{}
 		errCh chan error
 		ver   int64
@@ -163,7 +163,7 @@ func (reb *rebManager) fillinStatus(status *rebStatus) {
 	for _, lomack := range reb.lomAcks() {
 		lomack.mu.Lock()
 		for _, lom := range lomack.q {
-			tsi, err := hrwTarget(lom.Bucket, lom.Objname, rsmap)
+			tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &rsmap.Smap)
 			if err != nil {
 				continue
 			}
@@ -288,7 +288,7 @@ wack:
 				cnt += l
 				if !logged {
 					for _, lom := range lomack.q {
-						tsi, err := hrwTarget(lom.Bucket, lom.Objname, smap)
+						tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
 						if err == nil {
 							glog.Infof("waiting for %s ACK from %s", lom, tsi)
 							logged = true
@@ -336,17 +336,17 @@ wack:
 	}
 
 term:
-	// 10. close streams, end xaction, deactivate GFN (FIXME: hardcoded (3, 10))
+	// 10. close streams, end xaction, deactivate GFN (FIXME: hardcoded sleep)
 	reb.stage.Store(rebStageFin)
 	maxwt, curwt = sleep*16, 0 // wait for ack cmpl refcount to zero out
 	quiescent := 0             // and stay zeroed out for a while
 	for curwt < maxwt {
-		if rc := reb.ackrc.Load(); rc <= 0 {
+		if !reb.laterx.CAS(true, false) {
 			quiescent++
 		} else {
 			quiescent = 0
 		}
-		if quiescent >= 3 {
+		if quiescent >= 4 {
 			break
 		}
 		time.Sleep(sleep)
@@ -429,7 +429,7 @@ func (reb *rebManager) serialize(smap *smapX, config *cmn.Config) (newerSmap, al
 	return
 }
 
-func (reb *rebManager) abortGlobalReb() { reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb) }
+func (reb *rebManager) abortGlobalReb() bool { return reb.t.xactions.abortGlobalXact(cmn.ActGlobalReb) }
 
 func (reb *rebManager) getStats() (s *stats.ExtRebalanceStats) {
 	s = &stats.ExtRebalanceStats{}
@@ -475,7 +475,7 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 		Trname:       rebalanceAcksName,
 	}
 	reb.acks = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, clientAcks, sbArgs)
-	reb.ackrc.Store(0)
+	reb.laterx.Store(false)
 }
 
 func (reb *rebManager) endStreams() {
@@ -525,8 +525,13 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	if stage := reb.stage.Load(); stage >= rebStageFin { // TODO: store as pending and handle elsewhere
-		glog.Errorf("%s: late receive from %s %s (stage %s)", reb.t.si.Name(), tsid, lom, rebStage[stage])
+	if stage := reb.stage.Load(); stage >= rebStageFin {
+		reb.laterx.Store(true)
+		f := glog.Warningf
+		if stage > rebStageFin {
+			f = glog.Errorf
+		}
+		f("%s: late receive from %s %s (stage %s)", reb.t.si.Name(), tsid, lom, rebStage[stage])
 	} else if stage < rebStageTraverse {
 		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t.si.Name(), tsid, lom, rebStage[stage])
 	}
@@ -555,20 +560,13 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 	if tsi == nil {
 		return
 	}
-	if stage := reb.stage.Load(); stage < rebStageFin && stage != rebStageInactive {
+	if stage := reb.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
 		hdr.Opaque = []byte(reb.t.si.DaemonID) // self == src
 		hdr.ObjAttrs.Size = 0
-		if err := reb.acks.SendV(hdr, nil /*reader*/, reb.ackSentCallback, nil /*ptr*/, tsi); err != nil {
-			// TODO: collapse same-type errors e.g.: "src-id=>network: destination mismatch ..."
-			glog.Error(err)
-		} else {
-			reb.ackrc.Inc()
+		if err := reb.acks.SendV(hdr, nil /*reader*/, nil /*callback*/, nil /*ptr*/, tsi); err != nil {
+			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
-}
-
-func (reb *rebManager) ackSentCallback(_ transport.Header, _ io.ReadCloser, _ unsafe.Pointer, _ error) {
-	reb.ackrc.Dec()
 }
 
 func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
@@ -630,7 +628,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, config *cmn.Config) (cnt 
 				delete(lomack.q, uname)
 				continue
 			}
-			tsi, _ := hrwTarget(lom.Bucket, lom.Objname, smap)
+			tsi, _ := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
 			// HEAD obj
 			args := callArgs{
 				si: tsi,
@@ -734,7 +732,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	}
 
 	// rebalance, maybe
-	tsi, err = hrwTarget(lom.Bucket, lom.Objname, rj.smap)
+	tsi, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &rj.smap.Smap)
 	if err != nil {
 		return err
 	}
@@ -850,9 +848,6 @@ func (reb *rebManager) runLocalReb() {
 		pmarker           = persistentMarker(cmn.ActLocalReb)
 		file, err         = cmn.CreateFile(pmarker)
 	)
-	// deactivate local GFN
-	reb.t.gfn.local.deactivate()
-
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""
@@ -887,6 +882,7 @@ func (reb *rebManager) runLocalReb() {
 			}
 		}
 	}
+	reb.t.gfn.local.deactivate()
 	xreb.EndTime(time.Now())
 }
 
@@ -922,13 +918,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-
 	lom, err := cluster.LOM{T: rj.m.t, FQN: fqn}.Init("")
 	if err != nil {
 		return nil
 	}
-	// skip those that are _not_ locally-misplaced
-	if !lom.Misplaced() {
+	smap := rj.m.t.smapowner.get()
+	if _, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap); err != nil {
+		return err
+	}
+	// NOTE: optionally, skip those that must be globally rebalanced and/or do not delete misplaced ones
+
+	if !lom.Misplaced() { // skip those that are _not_ locally misplaced
 		return nil
 	}
 
@@ -941,10 +941,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if !copied {
 		return nil
 	}
-	if lom.HasCopies() {
-		//
-		// punt it to LRU along with extra copies if any; TODO ec cleanup
-		//
+	if lom.HasCopies() { // TODO: punt to LRU; ec cleanup
 		return nil
 	}
 	// misplaced with no copies? remove right away

@@ -179,7 +179,7 @@ func (r *XactPutLRepl) stop() {
 }
 
 func (r *XactPutLRepl) Description() string {
-	return "responsible for creating local object replicas upon PUT into a mirrored bucket"
+	return "create local object replicas upon PUT into a mirrored bucket"
 }
 
 //
