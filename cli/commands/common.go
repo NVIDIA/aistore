@@ -138,6 +138,7 @@ var (
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	propsFlag         = cli.BoolFlag{Name: "props", Usage: "properties of a bucket"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
+	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xaction"}
 
 	// Daeclu
 	countFlag      = cli.IntFlag{Name: "count", Usage: "total number of generated reports", Value: countDefault}

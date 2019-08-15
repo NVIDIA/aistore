@@ -314,7 +314,10 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket renamed to %s\n", bucket, newBucket)
+	msg := fmt.Sprintf("Renaming bucket %s to %s in progress\n"+
+		"To check the status, run 'ais xaction stats -bucket %s %s'\n",
+		bucket, newBucket, bucket, cmn.ActRenameLB)
+	_, _ = fmt.Fprintf(c.App.Writer, msg)
 	return
 }
 
@@ -328,7 +331,10 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.CopyLocalBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket copied to %s\n", bucket, newBucket)
+	msg := fmt.Sprintf("Copying bucket %s to %s in progress\n"+
+		"To check the status, run 'ais xaction stats -bucket %s %s'\n",
+		bucket, newBucket, bucket, cmn.ActCopyLB)
+	_, _ = fmt.Fprintf(c.App.Writer, msg)
 	return
 }
 

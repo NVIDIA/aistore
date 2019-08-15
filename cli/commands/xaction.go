@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 )
 
@@ -21,7 +22,7 @@ var (
 	xactFlags = map[string][]cli.Flag{
 		xactStart: baseXactFlags,
 		xactStop:  baseXactFlags,
-		xactStats: append(baseXactFlags, jsonFlag, allFlag),
+		xactStats: append(baseXactFlags, jsonFlag, allFlag, activeFlag),
 	}
 
 	bucketXactions = bucketXactionNames()
@@ -109,6 +110,20 @@ func xactHandler(c *cli.Context) (err error) {
 			_, _ = fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xaction)
 		}
 	case xactStats:
+		if flagIsSet(c, activeFlag) {
+			for key, val := range xactStatsMap {
+				if len(val) == 0 {
+					continue
+				}
+				newVal := make([]*stats.BaseXactStatsExt, 0, len(val))
+				for _, xact := range val {
+					if xact.Running() {
+						newVal = append(newVal, xact)
+					}
+				}
+				xactStatsMap[key] = newVal
+			}
+		}
 		for key, val := range xactStatsMap {
 			if len(val) == 0 {
 				delete(xactStatsMap, key)
