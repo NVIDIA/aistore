@@ -1444,10 +1444,13 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	nbmd := p.bmdowner.get().clone()
 	nbmd.add(bucketTo, true, bprops)
 	p.bmdowner.put(nbmd)
+	if msg.Action == cmn.ActRenameLB {
+		if nbmd.renamedLB == nil {
+			nbmd.renamedLB = make(cmn.SimpleKVs)
+		}
+		nbmd.renamedLB[bucketFrom] = ""
+	}
 	p.bmdowner.Unlock()
-
-	// if msg.Action == cmn.ActRenameLB {
-	// TODO -- FIXME: remove bucketFrom upon completion of the (local, global) rebalancing
 
 	// finalize
 	if err = p.savebmdconf(nbmd, config); err != nil {
@@ -2179,11 +2182,33 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *proxyrunner) handlePendingRenamedLB() {
+	p.bmdowner.Lock()
+	bmd := p.bmdowner.get()
+	if len(bmd.renamedLB) == 0 {
+		p.bmdowner.Unlock()
+		return
+	}
+	bmd = bmd.clone()
+	for b := range bmd.renamedLB {
+		bmd.del(b, true)
+	}
+	bmd.renamedLB = nil
+	p.bmdowner.put(bmd)
+	p.bmdowner.Unlock()
+	if err := p.savebmdconf(bmd, cmn.GCO.Get()); err != nil {
+		glog.Error(err)
+	}
+}
+
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	httpdaeWhat := "httpdaeget-" + getWhat
 	switch getWhat {
-	case cmn.GetWhatConfig, cmn.GetWhatBucketMeta, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
+	case cmn.GetWhatBucketMeta:
+		p.handlePendingRenamedLB()
+		fallthrough
+	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		pst := getproxystatsrunner()

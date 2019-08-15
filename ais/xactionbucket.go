@@ -366,12 +366,7 @@ func (r *xactFastRen) run() {
 	r.t.rebManager.runLocalReb(true /*skipGplaced*/, r.bucketTo)
 	r.t.rebManager.runGlobalReb(r.t.smapowner.get())
 
-	r.t.bmdowner.Lock()
-	bmd := r.t.bmdowner.get()
-	clone := bmd.clone()
-	delete(clone.LBmap, r.Bucket())
-	r.t.bmdowner.put(clone)
-	r.t.bmdowner.Unlock()
+	r.t.bmdVersionFixup() // and let proxy handle pending renames
 
 	r.EndTime(time.Now())
 }

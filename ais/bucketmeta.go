@@ -41,14 +41,15 @@ const bmdTermName = "BMD"
 
 type bucketMD struct {
 	cluster.BMD
-	vstr string // itoa(Version), to have it handy for http redirects
+	vstr      string // itoa(Version), to have it handy for http redirects
+	renamedLB cmn.SimpleKVs
 }
 
 // c-tor
 func newBucketMD() *bucketMD {
 	lbmap := make(map[string]*cmn.BucketProps)
 	cbmap := make(map[string]*cmn.BucketProps)
-	return &bucketMD{cluster.BMD{LBmap: lbmap, CBmap: cbmap}, ""}
+	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap}}
 }
 
 func (m *bucketMD) add(b string, local bool, p *cmn.BucketProps) bool {
@@ -130,6 +131,7 @@ func (m *bucketMD) deepCopy(dst *bucketMD) {
 			mm[name] = p
 		}
 	}
+	dst.renamedLB = m.renamedLB
 }
 
 //
