@@ -1316,6 +1316,7 @@ func checkXactAPIErr(t *testing.T, err error) {
 	}
 }
 
+//nolint:unparam
 func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParams *api.BaseParams, timeout time.Duration) {
 	var (
 		wg    = &sync.WaitGroup{}

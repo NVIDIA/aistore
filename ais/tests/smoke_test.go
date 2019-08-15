@@ -128,9 +128,9 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		t.Error(err)
 		return
 	}
-	if items == nil {
+	if len(items.Entries) == 0 {
 		errCh <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
-		// not considered as a failure, just can't do the test
+		// not considered a failure
 		return
 	}
 	files := make([]string, 0)
