@@ -1202,7 +1202,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	err := api.RenameLocalBucket(baseParams, oldLocalBucketName, m.bucket)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, oldLocalBucketName, baseParams, time.Second*10)
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, oldLocalBucketName, baseParams, rebalanceTimeout)
 
 	// Gets on renamed local bucket
 	m.wg.Add(m.num * m.numGetsEachFile)

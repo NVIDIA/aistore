@@ -245,7 +245,7 @@ func (t *targetrunner) Run() error {
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")
-			t.rebManager.runLocalReb()
+			t.rebManager.runLocalReb(false /*skipGplaced=false*/)
 		}()
 	}
 

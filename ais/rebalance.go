@@ -88,8 +88,9 @@ type (
 	}
 	localRebJogger struct {
 		rebJoggerBase
-		slab *memsys.Slab2
-		buf  []byte
+		slab        *memsys.Slab2
+		buf         []byte
+		skipGplaced bool
 	}
 	LomAcks struct {
 		mu *sync.Mutex
@@ -840,19 +841,23 @@ rerr:
 //
 //======================================================================================
 
-func (reb *rebManager) runLocalReb() {
+func (reb *rebManager) runLocalReb(skipGplaced bool, buckets ...string) {
 	var (
 		availablePaths, _ = fs.Mountpaths.Get()
 		runnerCnt         = len(availablePaths) * 2
 		xreb              = reb.t.xactions.renewLocalReb(runnerCnt)
 		pmarker           = persistentMarker(cmn.ActLocalReb)
 		file, err         = cmn.CreateFile(pmarker)
+		bucket            string
 	)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""
 	} else {
 		_ = file.Close()
+	}
+	if len(buckets) > 0 {
+		bucket = buckets[0] // special case: local bucket
 	}
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
@@ -861,15 +866,24 @@ func (reb *rebManager) runLocalReb() {
 
 	// TODO: support non-object content types
 	for _, mpathInfo := range availablePaths {
-		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
-		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.xactRebBase, wg: wg},
-			slab: slab}
-		wg.Add(1)
-		go jogger.jog()
+		if bucket == "" {
+			mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+			jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.xactRebBase, wg: wg},
+				slab:        slab,
+				skipGplaced: skipGplaced,
+			}
+			wg.Add(1)
+			go jogger.jog()
+		}
 
 		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
-		jogger = &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.xactRebBase, wg: wg},
-			slab: slab}
+		if bucket != "" {
+			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, true /*is local*/)
+		}
+		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.xactRebBase, wg: wg},
+			slab:        slab,
+			skipGplaced: skipGplaced,
+		}
 		wg.Add(1)
 		go jogger.jog()
 	}
@@ -922,13 +936,17 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if err != nil {
 		return nil
 	}
-	smap := rj.m.t.smapowner.get()
-	if _, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap); err != nil {
-		return err
+	// optionally, skip those that must be globally rebalanced
+	if rj.skipGplaced {
+		smap := rj.m.t.smapowner.get()
+		if tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap); err == nil {
+			if tsi.DaemonID != rj.m.t.si.DaemonID {
+				return nil
+			}
+		}
 	}
-	// NOTE: optionally, skip those that must be globally rebalanced and/or do not delete misplaced ones
-
-	if !lom.Misplaced() { // skip those that are _not_ locally misplaced
+	// skip those that are _not_ locally misplaced
+	if !lom.Misplaced() {
 		return nil
 	}
 
@@ -941,7 +959,7 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if !copied {
 		return nil
 	}
-	if lom.HasCopies() { // TODO: punt to LRU; ec cleanup
+	if lom.HasCopies() { // TODO: punt replicated and erasure copied to LRU
 		return nil
 	}
 	// misplaced with no copies? remove right away

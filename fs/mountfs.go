@@ -509,11 +509,15 @@ func (mfs *MountedFS) CreateBucketDirs(bucket string, isLocal, destroyUponRet bo
 	for _, mpathInfo := range availablePaths {
 		bdir := mpathInfo.MakePathBucket(ObjectType, bucket, isLocal)
 		if _, err = os.Stat(bdir); err == nil {
-			err = fmt.Errorf("bucket %s: dir %s already exists", bucket, bdir)
+			if isDirEmpty(bdir) {
+				created = append(created, bdir)
+				continue
+			}
+			err = fmt.Errorf("bucket %s: directory %s already exists", bucket, bdir)
 			break
 		}
 		if err = cmn.CreateDir(bdir); err != nil {
-			err = fmt.Errorf("bucket %s: failed to create dir %s: %v", bucket, bdir, err)
+			err = fmt.Errorf("bucket %s: failed to create directory %s: %v", bucket, bdir, err)
 			break
 		}
 		created = append(created, bdir)

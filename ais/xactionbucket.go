@@ -363,17 +363,16 @@ func (r *xactFastRen) run() {
 	if aborted := r.t.rebManager.abortGlobalReb(); aborted {
 		glog.Infof("%s: restarting global rebalance upon rename...", r)
 	}
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		r.t.rebManager.runLocalReb()
-		wg.Done()
-	}()
-
-	time.Sleep(time.Second)
+	r.t.rebManager.runLocalReb(true /*skipGplaced*/, r.bucketTo)
 	r.t.rebManager.runGlobalReb(r.t.smapowner.get())
 
-	wg.Wait()
+	r.t.bmdowner.Lock()
+	bmd := r.t.bmdowner.get()
+	clone := bmd.clone()
+	delete(clone.LBmap, r.Bucket())
+	r.t.bmdowner.put(clone)
+	r.t.bmdowner.Unlock()
+
 	r.EndTime(time.Now())
 }
 

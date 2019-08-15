@@ -396,7 +396,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLRU:
 			go t.RunLRU()
 		case cmn.ActLocalReb:
-			go t.rebManager.runLocalReb()
+			go t.rebManager.runLocalReb(false /*skipGplaced=false*/)
 		case cmn.ActGlobalReb:
 			go t.rebManager.runGlobalReb(t.smapowner.get())
 		case cmn.ActPrefetch:
@@ -1242,6 +1242,10 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	if !ok {
 		t.bmdowner.Unlock()
 		return fmt.Errorf("source bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
+	}
+	if _, ok = bmd.Get(bucketTo, true /*is local*/); ok {
+		t.bmdowner.Unlock()
+		return fmt.Errorf("destination bucket %s already exists", bmd.Bstring(bucketTo, true))
 	}
 	switch action {
 	case cmn.ActRenameLB:

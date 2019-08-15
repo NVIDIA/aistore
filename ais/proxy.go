@@ -1443,11 +1443,11 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
 	nbmd.add(bucketTo, true, bprops)
-	if msg.Action == cmn.ActRenameLB {
-		nbmd.del(bucketFrom, true)
-	}
 	p.bmdowner.put(nbmd)
 	p.bmdowner.Unlock()
+
+	// if msg.Action == cmn.ActRenameLB {
+	// TODO -- FIXME: remove bucketFrom upon completion of the (local, global) rebalancing
 
 	// finalize
 	if err = p.savebmdconf(nbmd, config); err != nil {
