@@ -34,6 +34,21 @@ var (
 	baseBucketFlags = []cli.Flag{
 		bckProviderFlag,
 	}
+	listObjectFlags = []cli.Flag{
+		regexFlag,
+		templateFlag,
+		prefixFlag,
+		pageSizeFlag,
+		objPropsFlag,
+		objLimitFlag,
+		showUnmatchedFlag,
+		allFlag,
+		fastFlag,
+		noHeaderFlag,
+		pagedFlag,
+		maxPagesFlag,
+		markerFlag,
+	}
 
 	bucketFlags = map[string][]cli.Flag{
 		bucketCreate: {},
@@ -46,19 +61,7 @@ var (
 		subcommandRename: {},
 		bucketObjects: append(
 			baseBucketFlags,
-			regexFlag,
-			templateFlag,
-			prefixFlag,
-			pageSizeFlag,
-			objPropsFlag,
-			objLimitFlag,
-			showUnmatchedFlag,
-			allFlag,
-			fastFlag,
-			noHeaderFlag,
-			pagedFlag,
-			maxPagesFlag,
-			markerFlag,
+			listObjectFlags...,
 		),
 		bucketNWayMirror: append(
 			baseBucketFlags,

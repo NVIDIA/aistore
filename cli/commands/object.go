@@ -98,6 +98,11 @@ var (
 			bucketFlag,
 			nameFlag,
 		),
+		subcommandList: append(
+			listObjectFlags,
+			bckProviderFlag,
+			bucketFlag,
+		),
 	}
 
 	objectBasicUsageText = "%s object %s --bucket <value> --name <value>"
@@ -108,6 +113,7 @@ var (
 	objectRenameUsage    = fmt.Sprintf("%s object %s --bucket <value> --name <value> --new-name <value> ", cliName, subcommandRename)
 	objectPrefetchUsage  = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objPrefetch)
 	objectEvictUsage     = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objEvict)
+	objectListUsage      = fmt.Sprintf("%s object %s --bucket <value> [--prefix <value> --regex <value>]", cliName, subcommandList)
 
 	objectCmds = []cli.Command{
 		{
@@ -170,6 +176,14 @@ var (
 					Action:       objectHandler,
 					BashComplete: flagList,
 				},
+				{
+					Name:         subcommandList,
+					Usage:        "lists bucket objects",
+					UsageText:    objectListUsage,
+					Flags:        objectFlags[subcommandList],
+					Action:       objectHandler,
+					BashComplete: flagList,
+				},
 			},
 		},
 	}
@@ -206,6 +220,8 @@ func objectHandler(c *cli.Context) (err error) {
 		err = objectPrefetch(c, baseParams, bucket, bckProvider)
 	case objEvict:
 		err = objectEvict(c, baseParams, bucket, bckProvider)
+	case subcommandList:
+		err = listBucketObj(c, baseParams, bucket)
 	default:
 		return fmt.Errorf(invalidCmdMsg, commandName)
 	}
