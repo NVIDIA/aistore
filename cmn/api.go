@@ -232,6 +232,9 @@ type BucketProps struct {
 
 	// unique bucket ID
 	BID uint64
+
+	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
+	Renamed string
 }
 
 type TierConf struct {

@@ -366,7 +366,7 @@ func (r *xactFastRen) run() {
 	r.t.rebManager.runLocalReb(true /*skipGplaced*/, r.bucketTo)
 	r.t.rebManager.runGlobalReb(r.t.smapowner.get())
 
-	r.t.bmdVersionFixup() // and let proxy handle pending renames
+	r.t.bmdVersionFixup(r.Bucket()) // piggyback bucket renaming (last step) on getting updated BMD
 
 	r.EndTime(time.Now())
 }

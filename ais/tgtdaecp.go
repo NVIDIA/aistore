@@ -899,7 +899,7 @@ func (t *targetrunner) detectMpathChanges() {
 	}
 }
 
-func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (err error) {
+func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed ...string) (err error) {
 	smap := t.smapowner.get()
 	if smap == nil || !smap.isValid() {
 		return errors.New("smap nil or missing")
@@ -907,6 +907,9 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}) (err e
 	psi := smap.ProxySI
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, what)
+	if len(renamed) > 0 {
+		q.Add(whatRenamedLB, renamed[0])
+	}
 	args := callArgs{
 		si: psi,
 		req: cmn.ReqArgs{
@@ -942,9 +945,9 @@ func (t *targetrunner) smapVersionFixup() {
 	t.receiveSmap(newSmap, msgInt, "")
 }
 
-func (t *targetrunner) bmdVersionFixup() {
+func (t *targetrunner) bmdVersionFixup(renamed ...string) {
 	newBucketMD := &bucketMD{}
-	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD)
+	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD, renamed...)
 	if err != nil {
 		glog.Error(err)
 		return

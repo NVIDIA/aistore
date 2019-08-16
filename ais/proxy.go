@@ -38,6 +38,9 @@ import (
 const (
 	tokenStart = "Bearer"
 )
+const (
+	whatRenamedLB = "renamedlb"
+)
 
 type (
 	ClusterMountpathsRaw struct {
@@ -1442,14 +1445,14 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
+	if msg.Action == cmn.ActRenameLB {
+		var bpropsRenamed = &cmn.BucketProps{}
+		cmn.CopyStruct(bpropsRenamed, bprops)
+		bpropsRenamed.Renamed = cmn.ActRenameLB
+		nbmd.set(bucketFrom, true, bpropsRenamed)
+	}
 	nbmd.add(bucketTo, true, bprops)
 	p.bmdowner.put(nbmd)
-	if msg.Action == cmn.ActRenameLB {
-		if nbmd.renamedLB == nil {
-			nbmd.renamedLB = make(cmn.SimpleKVs)
-		}
-		nbmd.renamedLB[bucketFrom] = ""
-	}
 	p.bmdowner.Unlock()
 
 	// finalize
@@ -2182,18 +2185,21 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) handlePendingRenamedLB() {
+func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	if len(bmd.renamedLB) == 0 {
+	bprops, ok := bmd.Get(renamedBucket, true)
+	if !ok {
+		p.bmdowner.Unlock() // already removed via the the very first target calling here..
+		return
+	}
+	if bprops.Renamed == "" {
+		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p.si.Name(), renamedBucket, *bprops)
 		p.bmdowner.Unlock()
 		return
 	}
 	bmd = bmd.clone()
-	for b := range bmd.renamedLB {
-		bmd.del(b, true)
-	}
-	bmd.renamedLB = nil
+	bmd.del(renamedBucket, true)
 	p.bmdowner.put(bmd)
 	p.bmdowner.Unlock()
 	if err := p.savebmdconf(bmd, cmn.GCO.Get()); err != nil {
@@ -2202,11 +2208,16 @@ func (p *proxyrunner) handlePendingRenamedLB() {
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
-	httpdaeWhat := "httpdaeget-" + getWhat
+	var (
+		q           = r.URL.Query()
+		getWhat     = q.Get(cmn.URLParamWhat)
+		httpdaeWhat = "httpdaeget-" + getWhat
+	)
 	switch getWhat {
 	case cmn.GetWhatBucketMeta:
-		p.handlePendingRenamedLB()
+		if renamedBucket := q.Get(whatRenamedLB); renamedBucket != "" {
+			p.handlePendingRenamedLB(renamedBucket)
+		}
 		fallthrough
 	case cmn.GetWhatConfig, cmn.GetWhatSmapVote, cmn.GetWhatSnode:
 		p.httprunner.httpdaeget(w, r)
