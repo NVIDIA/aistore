@@ -29,6 +29,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// This is general implementation of dsort, for all types of workloads.
+// Historically, it is the first implementation of dsorter ever created.
+// It tries to use memory in extraction phase to pull as most of the data
+// into memory as possible. This way, later, dsorter will use it later in
+// creation phase. It means that if the data takes less space than the available
+// memory in the cluster, we can extract whole data into memory and make
+// the creation phase super fast.
+
 const (
 	DSorterGeneralType = "dsort_general"
 
@@ -107,6 +115,8 @@ func (ds *dsorterGeneral) pullStreamWriter(objName string) *streamWriter {
 	ds.creationPhase.streamWriters.mu.Unlock()
 	return writer
 }
+
+func (ds *dsorterGeneral) name() string { return DSorterGeneralType }
 
 func (ds *dsorterGeneral) init() error {
 	ds.creationPhase.adjuster = newConcAdjuster(ds.m.rs.CreateConcLimit, 1 /*goroutineLimitCoef*/)

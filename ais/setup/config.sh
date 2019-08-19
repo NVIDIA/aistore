@@ -141,6 +141,7 @@ cat > $CONFFILE <<EOL
 		"ekm_malformed_line":    "abort",
 		"ekm_missing_key":       "abort",
 		"default_max_mem_usage": "80%",
+		"dsorter_mem_threshold": "100GB",
 		"compression":		"${COMPRESSION:-never}",
 		"call_timeout":          "10m"
 	}

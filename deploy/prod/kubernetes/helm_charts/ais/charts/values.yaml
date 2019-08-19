@@ -49,6 +49,7 @@ ais_config_common:
     ekm_malformed_line: abort
     ekm_missing_key: abort
     default_max_mem_usage: 80%
+    dsorter_mem_threshold: 100GB
     call_timeout: 10m
   downloader:
     timeout: 1h

@@ -506,14 +506,15 @@ type DownloaderConf struct {
 }
 
 type DSortConf struct {
-	DuplicatedRecords  string        `json:"duplicated_records"`
-	MissingShards      string        `json:"missing_shards"`
-	EKMMalformedLine   string        `json:"ekm_malformed_line"`
-	EKMMissingKey      string        `json:"ekm_missing_key"`
-	DefaultMaxMemUsage string        `json:"default_max_mem_usage"`
-	CallTimeoutStr     string        `json:"call_timeout"`
-	Compression        string        `json:"compression"` // see CompressAlways, etc. enum
-	CallTimeout        time.Duration `json:"-"`           // determines how long target should wait for other target to respond
+	DuplicatedRecords   string        `json:"duplicated_records"`
+	MissingShards       string        `json:"missing_shards"`
+	EKMMalformedLine    string        `json:"ekm_malformed_line"`
+	EKMMissingKey       string        `json:"ekm_missing_key"`
+	DefaultMaxMemUsage  string        `json:"default_max_mem_usage"`
+	CallTimeoutStr      string        `json:"call_timeout"`
+	Compression         string        `json:"compression"` // see CompressAlways, etc. enum
+	DSorterMemThreshold string        `json:"dsorter_mem_threshold"`
+	CallTimeout         time.Duration `json:"-"` // determines how long target should wait for other target to respond
 }
 
 type FSPathsConf struct {
@@ -963,6 +964,9 @@ func (c *DSortConf) Validate(_ *Config) (err error) {
 	}
 	if c.CallTimeout, err = time.ParseDuration(c.CallTimeoutStr); err != nil {
 		return fmt.Errorf("bad distributed_sort.call_timeout: %s", c.CallTimeoutStr)
+	}
+	if _, err := S2B(c.DSorterMemThreshold); err != nil {
+		return fmt.Errorf("bad distributed_sort.dsorter_mem_threshold: %s (err: %s)", c.DSorterMemThreshold, err)
 	}
 	return nil
 }

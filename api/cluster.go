@@ -11,10 +11,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/NVIDIA/aistore/ios"
-
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )

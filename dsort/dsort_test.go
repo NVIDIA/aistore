@@ -140,6 +140,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 			FormatType: extract.FormatTypeString,
 		},
 		MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
+		DSorterType: DSorterGeneralType,
 	}
 
 	dsortManagers := NewManagerGroup()
@@ -430,6 +431,7 @@ var _ = Describe("Distributed Sort", func() {
 							},
 							Extension:   ExtTar,
 							MaxMemUsage: cmn.ParsedQuantity{Type: cmn.QuantityPercent, Value: 0},
+							DSorterType: DSorterGeneralType,
 						}
 						ctx.node = ctx.smap.Get().Tmap[target.daemonID]
 						err := manager.init(rs)

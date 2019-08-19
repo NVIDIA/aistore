@@ -21,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -89,6 +91,12 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	} else if err = bmd.AllowPUT(parsedRS.OutputBucket, outIsLocal); err != nil {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+
+	parsedRS.DSorterType, err = determineDSorterType(parsedRS)
+	if err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
@@ -759,4 +767,80 @@ func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, item
 	}
 
 	return items, err
+}
+
+// Determine what dsorter type we should use. We need to make this decision
+// based on eg. how much memory targets have.
+func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
+	if parsedRS.DSorterType != "" {
+		return parsedRS.DSorterType, nil // in case the dsorter type is already set, we need to respect it
+	}
+
+	// Get memory stats from targets
+	var (
+		cfg  = cmn.GCO.Get().DSort
+		path = cmn.URLPath(cmn.Version, cmn.Daemon)
+
+		totalAvailMemory  = uint64(0)
+		moreThanThreshold = true
+	)
+
+	dsorterMemThreshold, err := cmn.S2B(cfg.DSorterMemThreshold)
+	cmn.AssertNoErr(err)
+
+	query := make(url.Values)
+	query.Add(cmn.URLParamWhat, cmn.GetWhatDaemonStatus)
+	responses := broadcast(http.MethodGet, path, query, nil, ctx.smap.Get().Tmap)
+	for _, response := range responses {
+		if response.err != nil {
+			return "", response.err
+		}
+
+		daemonStatus := stats.DaemonStatus{}
+		if err := jsoniter.Unmarshal(response.res, &daemonStatus); err != nil {
+			return "", err
+		}
+
+		memStat := sys.MemStat{Total: daemonStatus.SysInfo.MemAvail + daemonStatus.SysInfo.MemUsed}
+		dsortAvailMemory := calcMaxMemoryUsage(parsedRS.MaxMemUsage, memStat)
+		totalAvailMemory += dsortAvailMemory
+		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
+	}
+
+	// TODO: currently we have import cycle: dsort -> api -> dsort. Need to
+	// think of a way to get the total size of bucket without copy-and-paste
+	// the API code.
+	//
+	//baseParams := &api.BaseParams{
+	//	Client: http.DefaultClient,
+	//	URL:    ctx.smap.Get().ProxySI.URL(cmn.NetworkIntraControl),
+	//}
+	//msg := &cmn.SelectMsg{Props: "size,status", PageSize: cmn.DefaultPageSize}
+	//objList, err := api.ListBucket(baseParams, parsedRS.Bucket, msg, 0)
+	//if err != nil {
+	//	return "", err
+	//}
+	//
+	//totalBucketSize := uint64(0)
+	//for _, obj := range objList.Entries {
+	//	if obj.IsStatusOK() {
+	//		totalBucketSize += uint64(obj.Size)
+	//	}
+	//}
+	//
+	//if totalBucketSize < totalAvailMemory {
+	//	// "general type" is capable of extracting whole dataset into memory
+	//	// In this case the creation phase is super fast.
+	//	return DSorterGeneralType, nil
+	//}
+
+	if moreThanThreshold {
+		// If there is enough memory to use "memory type", we should do that.
+		// It behaves better for cases when we have a lot of memory available.
+		return DSorterMemType, nil
+	}
+
+	// For all other cases we should use "general type", as we don't know
+	// exactly what to expect, so we should prepare for the worst.
+	return DSorterGeneralType, nil
 }

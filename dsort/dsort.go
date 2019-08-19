@@ -39,6 +39,8 @@ import (
 
 type (
 	dsorter interface {
+		name() string
+
 		init() error
 		start() error
 		postExtraction()
@@ -78,7 +80,7 @@ func (m *Manager) start() (err error) {
 		return err
 	}
 
-	glog.Infof("starting %s %s", cmn.DSortName, m.ManagerUUID)
+	glog.Infof("starting %s %s with dsorter: %q", cmn.DSortName, m.ManagerUUID, m.dsorter.name())
 
 	if err := m.dsorter.start(); err != nil {
 		return err

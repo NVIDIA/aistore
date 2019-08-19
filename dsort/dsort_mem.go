@@ -24,11 +24,39 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// This implementation of dsorter focuses on creation phase and maximizing
+// memory usage in that phase. It has an active push mechanism which instead
+// of waiting for requests, it sends all the record objects it has for the
+// shard other target is building. The requirement for using this dsorter
+// implementation is a lot of memory available. In creation phase target
+// needs to have enough memory to build a given shard all in memory otherwise
+// it would be easy to deadlock when targets would send the record objects in
+// incorrect order.
+
 const (
 	DSorterMemType = "dsort_mem"
 )
 
 type (
+	rwConnection struct {
+		r   io.Reader
+		wgr *cmn.TimeoutGroup
+		// In case the reader is first to connect, the data is copied into SGL
+		// so that the reader will not block on the connection.
+		sgl *memsys.SGL
+
+		w   io.Writer
+		wgw *sync.WaitGroup
+
+		n int64
+	}
+
+	rwConnector struct {
+		mu          sync.Mutex
+		m           *Manager
+		connections map[string]*rwConnection
+	}
+
 	dsorterMem struct {
 		m *Manager
 
@@ -149,6 +177,8 @@ func newDSorterMem(m *Manager) *dsorterMem {
 		m: m,
 	}
 }
+
+func (ds *dsorterMem) name() string { return DSorterMemType }
 
 func (ds *dsorterMem) init() error {
 	ds.creationPhase.connector = newRWConnector(ds.m)

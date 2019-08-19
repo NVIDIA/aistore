@@ -298,3 +298,45 @@ Example output for single node:
 
 You can use the [AIS's CLI](/cli/README.md) to start, abort, retrieve metrics or list dSort jobs.
 It is also possible generate random dataset to test dSort's capabilities.
+
+## Config
+
+| Config value | Default value | Description |
+|---|---|---|
+| `duplicated_records` | "ignore" | what to do when duplicated records are found: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `missing_shards` | "ignore" | what to do when missing shards are detected: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `ekm_malformed_line` | "abort" | what to do when extraction key map notices a malformed line: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `ekm_missing_key` | "abort" | what to do when extraction key map have a missing key: "ignore" - ignore and continue, "warn" - notify a user and continue, "abort" - abort dSort operation |
+| `call_timeout` | "10m" | a maximum time a target waits for another target to respond |
+| `default_max_mem_usage` | "80%" | a maximum amount of memory used by running dSort. Can be set as a percent of total memory(e.g `80%`) or as the number of bytes(e.g, `12G`) |
+| `dsorter_mem_threshold` | "100GB" | minimum free memory threshold which will activate specialized dsorter type which uses memory in creation phase - benchmarks shows that this type of dsorter behaves better than general type |
+| `compression` | "never" | LZ4 compression parameters used when dSort sends its shards over network. Values: "never" - disables, "always" - compress all data, or a set of rules for LZ4, e.g "ratio=1.2" means enable compression from the start but disable when average compression ratio drops below 1.2 to save CPU resources |
+
+
+To clear what these values means we have couple examples to showcase certain scenarios.
+
+### Examples
+
+#### `default_max_mem_usage`
+
+Lets assume that we have `N` targets, where each target has `Y`GB of RAM and `default_max_mem_usage` is set to `80%`.
+So dSort can allocate memory until the number of memory used (total in the system) is below `80% * Y`GB.
+What this means is that regardless of how much other subsystems or programs working at the same instance use memory, the dSort will never allocate memory if the watermark is reached.
+For example if some other program already allocated `90% * Y`GB memory (only `10%` is left), then dSort will not allocate any memory since it will notice that the watermark is already exceeded.
+
+#### `dsorter_mem_threshold`
+
+DSort has implemented for now 2 different types of so called "dsorter": `dsorter_mem` and `dsorter_general`.
+These two implementations use memory, disks and network a little bit differently and are designated to different use cases.
+
+By default `dsorter_general` is used as it was implemented for all types of workloads.
+It is allocates memory during the first phase of dSort and uses it in the last phase.
+
+`dsorter_mem` was implemented in mind to speed up the creation phase which is usually a biggest bottleneck.
+It has specific way of building shards in memory and then persisting them do the disk.
+This makes this dsorter memory oriented and it is required for it to have enough memory to build the shards.
+
+To determine which dsorter to use we have introduced a heuristic which tries to determine when it is best to use `dsorter_mem` instead of `dsorter_general`.
+Config value `dsorter_mem_threshold` sets the threshold above which the `dsorter_mem` will be used.
+If **all** targets have max memory usage (see `default_max_mem_usage`) above the `dsorter_mem_threshold` then `dsorter_mem` is chosen for the dSort job.
+For example if each target has `Y`GB of RAM, `default_max_mem_usage` is set to `80%` and `dsorter_mem_threshold` is set to `100GB` then as long as on all targets `80% * Y > 100GB` then `dsorter_mem` will be used.

@@ -32,6 +32,7 @@
         "ekm_malformed_line":           {{ .distributed_sort.ekm_malformed_line | quote }},
         "ekm_missing_key":              {{ .distributed_sort.ekm_missing_key | quote }},
         "default_max_mem_usage":        {{ .distributed_sort.default_max_mem_usage | quote }},
+        "dsorter_mem_threshold":        {{ .distributed_sort.dsorter_mem_threshold | quote }},
         "call_timeout":                 {{ .distributed_sort.call_timeout | quote }}
 },
 "downloader": {

@@ -519,7 +519,9 @@ func TestDistributedSort(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	for _, dsorterType := range dsorterTypes {
+	// Include empty ("") type - in this case type must be selected automatically.
+	tmpDSorterTypes := append(dsorterTypes, "")
+	for _, dsorterType := range tmpDSorterTypes {
 		t.Run(dsorterType, func(t *testing.T) {
 			var (
 				m = &ioContext{

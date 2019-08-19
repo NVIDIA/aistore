@@ -99,25 +99,6 @@ type (
 		RecordObj *extract.RecordObj `json:"o"`
 	}
 
-	rwConnection struct {
-		r   io.Reader
-		wgr *cmn.TimeoutGroup
-		// In case the reader is first to connect, the data is copied into SGL
-		// so that the reader will not block on the connection.
-		sgl *memsys.SGL
-
-		w   io.Writer
-		wgw *sync.WaitGroup
-
-		n int64
-	}
-
-	rwConnector struct {
-		mu          sync.Mutex
-		m           *Manager
-		connections map[string]*rwConnection
-	}
-
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
 	Manager struct {
 		// Fields with json tags are the only fields which are persisted
@@ -440,12 +421,7 @@ func (m *Manager) setDSorter() (err error) {
 	case DSorterMemType:
 		m.dsorter = newDSorterMem(m)
 	default:
-		mem, _ := sys.Mem()
-		if mem.Total > 100*cmn.GiB {
-			m.dsorter = newDSorterMem(m)
-		} else {
-			m.dsorter, err = newDSorterGeneral(m)
-		}
+		cmn.AssertMsg(false, fmt.Sprintf("dsorter type is invalid: %q", m.rs.DSorterType))
 	}
 	return
 }

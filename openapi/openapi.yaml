@@ -1851,6 +1851,8 @@ components:
               type: string
             default_max_mem_usage:
               type: string
+            dsorter_mem_threshold:
+              type: string
             call_timeout:
               type: string
     XactionDetails:
