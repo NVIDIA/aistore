@@ -74,7 +74,6 @@ var toBiBytes = map[string]int64{
 
 const (
 	DoesNotExist = "does not exist"
-	NotSupported = "not supported yet"
 	NoMountpaths = "no mountpaths"
 
 	GcsUA     = "gcloud-golang-storage/20151204" // NOTE: taken from cloud.google.com/go/storage/storage.go (userAgent)

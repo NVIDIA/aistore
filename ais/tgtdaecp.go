@@ -1244,7 +1244,7 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	props, ok := bmd.Get(bucketFrom, true /*is local*/)
 	if !ok {
 		t.bmdowner.Unlock()
-		return fmt.Errorf("source bucket %s %s", bmd.Bstring(bucketFrom, true), cmn.DoesNotExist)
+		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
 	}
 	if _, ok = bmd.Get(bucketTo, true /*is local*/); ok {
 		t.bmdowner.Unlock()

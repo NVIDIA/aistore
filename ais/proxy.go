@@ -689,9 +689,8 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 	bmd := p.bmdowner.get()
 	if local {
 		if !bmd.IsLocal(bucket) {
-			err := fmt.Errorf("bucket %s does not appear to be local or %s", bucket, cmn.DoesNotExist)
 			p.bmdowner.Unlock()
-			return bmd, err, http.StatusNotFound
+			return bmd, cmn.NewErrorLocalBucketDoesNotExist(bucket), http.StatusNotFound
 		}
 	} else if !bmd.IsCloud(bucket) {
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -703,7 +702,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 	clone := bmd.clone()
 	if !clone.del(bucket, local) {
 		p.bmdowner.Unlock()
-		return nil, fmt.Errorf("bucket %s %s", bucket, cmn.DoesNotExist), http.StatusNotFound
+		return nil, cmn.NewErrorLocalBucketDoesNotExist(bucket), http.StatusNotFound
 	}
 	if err := p.savebmdconf(clone, cmn.GCO.Get()); err != nil {
 		p.bmdowner.Unlock()
@@ -748,7 +747,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.listBucketAndCollectStats(w, r, bucket, bckProvider, msg, started, true /* fast listing */)
 			return
 		default:
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid bucket action: %s", apitems[1]))
+			p.invalmsghdlr(w, r, fmt.Sprintf("invalid bucket action: %s", apitems[1]))
 			return
 		}
 	}
@@ -773,7 +772,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		actLocal = true
 	}
 	if actLocal && !bckIsLocal {
-		p.invalmsghdlr(w, r, msg.Action+": invalid bucket provider "+bckProvider)
+		if bckProvider == "" {
+			err := cmn.NewErrorLocalBucketDoesNotExist(bucket)
+			p.invalmsghdlr(w, r, err.Error())
+		} else {
+			p.invalmsghdlr(w, r, fmt.Sprintf("invalid bucket provider: %q", bckProvider))
+		}
 		return
 	}
 	config := cmn.GCO.Get()
@@ -1395,7 +1399,7 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 
 	bprops, ok := bmd.Get(bucketFrom, true)
 	if !ok {
-		return fmt.Errorf("local bucket %s %s", bucketFrom, cmn.DoesNotExist)
+		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
 	}
 	if _, ok = bmd.Get(bucketTo, true); ok {
 		if msg.Action == cmn.ActRenameLB {

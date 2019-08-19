@@ -75,10 +75,14 @@ func configHandler(c *cli.Context) error {
 // Displays the config of a daemon
 func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 	var (
-		daemonID = c.Args().First()
+		daemonID = c.Args().Get(0)
 		section  = c.Args().Get(1)
 		useJSON  = flagIsSet(c, jsonFlag)
 	)
+
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "daemon ID")
+	}
 
 	body, err := api.GetDaemonConfig(baseParams, daemonID)
 	if err != nil {

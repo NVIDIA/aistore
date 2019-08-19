@@ -497,7 +497,7 @@ func (lom *LOM) init(bckProvider string) (err error) {
 	}
 	lom.BckProps, bckPresent = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
 	if lom.BckIsLocal && !bckPresent {
-		return fmt.Errorf("local bucket '%s' %s", lom.Bucket, cmn.DoesNotExist)
+		return cmn.NewErrorLocalBucketDoesNotExist(lom.Bucket)
 	}
 	if !fromFQN {
 		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = hrwMpath(lom.Bucket, lom.Objname)
