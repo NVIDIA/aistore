@@ -249,7 +249,12 @@ func clusterAddNode(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	socketAddr := parseStrFlag(c, publicAddrFlag)
 	socketAddrParts := strings.Split(socketAddr, ":")
 	if len(socketAddrParts) != 2 {
-		return fmt.Errorf("Invalid socket address, should be in format: 'IP:PORT'")
+		return fmt.Errorf("invalid socket address, should be in format: 'IP:PORT'. Check '--help' flag for more info")
+	}
+
+	if daemonID == "" {
+		// By default generate random string
+		daemonID = cmn.RandString(8)
 	}
 
 	ip, port := socketAddrParts[0], socketAddrParts[1]
@@ -268,7 +273,7 @@ func clusterAddNode(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err := api.RegisterNode(baseParams, nodeInfo); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s has been added to the cluster successfully\n", daemonID)
+	_, _ = fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster\n", daemonID)
 	return nil
 }
 
@@ -277,7 +282,7 @@ func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID stri
 	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s has been removed from the cluster successfully\n", daemonID)
+	_, _ = fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
 	return nil
 }
 

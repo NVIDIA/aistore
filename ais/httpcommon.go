@@ -585,14 +585,12 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	resp, err := client.Do(req)
-
 	if err != nil {
 		if resp != nil && resp.StatusCode > 0 {
 			details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): status %s, err %v", sid, args.req.Method, args.req.URL(), resp.Status, err)
 			status = resp.StatusCode
 			return callResult{args.si, outjson, err, details, status}
 		}
-
 		details = fmt.Sprintf("Failed to HTTP-call %s (%s %s): err %v", sid, args.req.Method, args.req.URL(), err)
 		return callResult{args.si, outjson, err, details, status}
 	}

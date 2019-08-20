@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -759,6 +760,7 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckPr
 	isBckLocal := cmn.IsProviderLocal(bckProvider)
 	if isBckLocal || bckProvider == "" {
 		localBuckets := regexFilter(regex, bucketNames.Local)
+		sort.Strings(localBuckets) // sort by name
 		if showHeaders {
 			_, _ = fmt.Fprintf(c.App.Writer, "Local Buckets (%d)\n", len(localBuckets))
 		}
@@ -774,6 +776,7 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckPr
 	}
 
 	cloudBuckets := regexFilter(regex, bucketNames.Cloud)
+	sort.Strings(cloudBuckets) // sort by name
 	if showHeaders {
 		_, _ = fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n", len(cloudBuckets))
 	}

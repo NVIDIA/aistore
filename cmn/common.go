@@ -12,6 +12,7 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/url"
 	"os"
 	osuser "os/user"
@@ -123,7 +124,13 @@ var (
 	bucketReg *regexp.Regexp
 )
 
+const (
+	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+)
+
 func init() {
+	rand.Seed(time.Now().UnixNano())
+
 	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
 	sid64 = shortid.MustNew(u64idWorker, uuidABC, uuidSeed)
 	// NOTE: `shortid` library uses 01/2016 as starting timestamp, maybe we
@@ -140,6 +147,14 @@ func GenTie() string {
 	b1 := uuidABC[-tie&0x3f]
 	b2 := uuidABC[(tie>>2)&0x3f]
 	return string([]byte{b0, b1, b2})
+}
+
+func RandString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
+	}
+	return string(b)
 }
 
 func NewSimpleKVs(entries ...SimpleKVsEntry) SimpleKVs {

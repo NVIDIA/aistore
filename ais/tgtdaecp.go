@@ -1240,15 +1240,19 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bucketFrom)
 	}
 	t.bmdowner.Lock()
+	defer t.bmdowner.Unlock()
+
 	bmd := t.bmdowner.get()
 	props, ok := bmd.Get(bucketFrom, true /*is local*/)
 	if !ok {
-		t.bmdowner.Unlock()
 		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
 	}
 	if _, ok = bmd.Get(bucketTo, true /*is local*/); ok {
-		t.bmdowner.Unlock()
-		return fmt.Errorf("destination bucket %s already exists", bmd.Bstring(bucketTo, true))
+		if action == cmn.ActRenameLB {
+			return fmt.Errorf("destination bucket %s already exists", bucketTo)
+		}
+		// allow to copy into existing bucket
+		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bucketTo, action, bucketFrom, bucketTo)
 	}
 	switch action {
 	case cmn.ActRenameLB:
@@ -1267,7 +1271,6 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 		clone.LBmap[bucketTo] = props
 		t.bmdowner.put(clone)
 	}
-	t.bmdowner.Unlock()
 	return
 }
 

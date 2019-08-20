@@ -1403,10 +1403,10 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	}
 	if _, ok = bmd.Get(bucketTo, true); ok {
 		if msg.Action == cmn.ActRenameLB {
-			return fmt.Errorf("%s already exists, cannot rename %s=>%s", bucketTo, bucketFrom, bucketTo)
+			return fmt.Errorf("destination bucket %s already exists, cannot rename %s => %s", bucketTo, bucketFrom, bucketTo)
 		}
 		// allow to copy into existing bucket
-		glog.Warningf("%s already exists, proceeding to %s %s=>%s anyway", bucketTo, msg.Action, bucketFrom, bucketTo)
+		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bucketTo, msg.Action, bucketFrom, bucketTo)
 	}
 	// begin
 	msgInt := p.newActionMsgInternal(msg, smap, bmd)
@@ -2903,7 +2903,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
-		s := fmt.Sprintf("register %s: invalid IP address %v", nsi.Name(), nsi.PublicNet.NodeIPAddr)
+		s := fmt.Sprintf("failed to register %s: invalid IP address %v", nsi.Name(), nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2928,6 +2928,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.smapowner.Unlock()
 			return
 		}
+
 		if register {
 			if glog.V(3) {
 				glog.Infof("register %s (num targets before %d)", nsi.Name(), smap.CountTargets())
@@ -2943,8 +2944,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
-				errstr := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.details)
-				p.invalmsghdlr(w, r, errstr, res.status)
+				msg := fmt.Sprintf("Failed to register %s: %v, %s", nsi.Name(), res.err, res.details)
+				// Special case when it is not possible to contact specific instance.
+				if cmn.IsErrConnectionRefused(res.err) {
+					msg = fmt.Sprintf("Failed to contact %s on %s:%s", nsi.Name(), nsi.PublicNet.NodeIPAddr, nsi.PublicNet.DaemonPort)
+				}
+				p.invalmsghdlr(w, r, msg, res.status)
 				return
 			}
 		}
