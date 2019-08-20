@@ -59,7 +59,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
 
-	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /* is mirrored copy*/)
+	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK=false*/)
 	if err != nil {
 		return
 	}

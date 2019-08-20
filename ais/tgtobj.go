@@ -7,11 +7,13 @@ package ais
 import (
 	"context"
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/OneOfOne/xxhash"
@@ -65,7 +68,7 @@ type (
 		// starting from provided offset.
 		length int64
 		// Determines if it is GFN request
-		gfn bool
+		isGFN bool
 		// true: chunked transfer (en)coding as per https://tools.ietf.org/html/rfc7230#page-36
 		chunked bool
 	}
@@ -302,7 +305,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 ////////////////
 
 func (goi *getObjInfo) getObject() (err error, errCode int) {
-	var retried bool
+	var doubleCheck, retry, retried bool
 	// under lock: lom init, restore from cluster
 	cluster.ObjectLocker.Lock(goi.lom.Uname(), false)
 do:
@@ -320,21 +323,34 @@ do:
 
 	coldGet = !goi.lom.Exists()
 	if coldGet && goi.lom.BckIsLocal {
-		// does not exist in the local bucket: restore from neighbors
-		if err, errCode = goi.t.restoreObjLBNeigh(goi.lom); err != nil {
-			cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
+		// try lookup and restore
+		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
+		doubleCheck, err, errCode = goi.getFromAny(goi.lom)
+		if doubleCheck && err != nil {
+			lom2, er2 := cluster.LOM{T: goi.t, Bucket: goi.lom.Bucket, Objname: goi.lom.Objname}.Init(cmn.ProviderFromLoc(goi.lom.BckIsLocal))
+			if er2 == nil {
+				er2 = lom2.Load()
+				if er2 == nil && lom2.Exists() {
+					goi.lom = lom2
+					err = nil
+				}
+			}
+		}
+		if err != nil {
 			return
 		}
+		cluster.ObjectLocker.Lock(goi.lom.Uname(), false)
 		goto get
 	}
 	if !coldGet && !goi.lom.BckIsLocal { // exists && cloud-bucket : check ver if requested
+		cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()
-				cluster.ObjectLocker.Unlock(goi.lom.Uname(), false)
 				return
 			}
 		}
+		cluster.ObjectLocker.Lock(goi.lom.Uname(), false)
 	}
 
 	// checksum validation, if requested
@@ -377,7 +393,7 @@ do:
 
 	// 4. get locally and stream back
 get:
-	_, retry, err, errCode := goi.finalize(coldGet)
+	retry, err, errCode = goi.finalize(coldGet)
 	if retry && !retried {
 		glog.Warningf("GET %s: uncaching and retrying...", goi.lom)
 		retried = true
@@ -389,16 +405,160 @@ get:
 	return
 }
 
-func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err error, errCode int) {
+// an attempt to restore an object that is missing in the local bucket - from:
+//     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
+//		targets using erasure coding (if enabled)
+func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error, errCode int) {
 	var (
-		file   *os.File
-		sgl    *memsys.SGL
-		slab   *memsys.Slab2
-		buf    []byte
-		reader io.Reader
-		hdr    http.Header // if it is http request we will write also header
+		tsi              *cluster.Snode
+		smap             = goi.t.smapowner.get()
+		tname            = goi.t.si.Name()
+		aborted, running = goi.t.xactions.isRebalancing(cmn.ActLocalReb)
+		gfnActive        = goi.t.gfn.local.active()
 	)
+	tsi, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
+	if err != nil {
+		return
+	}
+	if aborted || running || gfnActive {
+		if lom.CopyObjectFromAny() { // get-from-neighbor local variety
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s restored", lom)
+			}
+			return
+		}
+		doubleCheck = running
+	}
 
+	// FIXME: if there're not enough EC targets to restore an sliced object, we might be able to restore it
+	// if it was replicated. In this case even just one additional target might be sufficient
+	// This won't succeed if an object was sliced, neither will ecmanager.RestoreObject(lom)
+	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
+
+	// cluster-wide lookup ("get from neighbor")
+	aborted, running = goi.t.xactions.isRebalancing(cmn.ActGlobalReb)
+	if running {
+		doubleCheck = true
+	}
+	gfnActive = goi.t.gfn.global.active()
+	if running && tsi.DaemonID != goi.t.si.DaemonID { // TODO -- FIXME: needed?
+		if goi.t.lookupRemote(lom, tsi) {
+			if goi.getFromNeighbor(lom, tsi) {
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("%s: GFN %s <= %s", tname, lom, tsi.Name())
+				}
+				return
+			}
+		}
+	}
+	if running || aborted || gfnActive || !enoughECRestoreTargets {
+		tsi = goi.t.locateObject(lom, smap)
+		if tsi != nil {
+			if goi.getFromNeighbor(lom, tsi) {
+				if glog.FastV(4, glog.SmoduleAIS) {
+					glog.Infof("%s: GFN %s <= %s", tname, lom, tsi.Name())
+				}
+				return
+			}
+		}
+	}
+	// restore from existing EC slices if possible
+	if ecErr := goi.t.ecmanager.RestoreObject(lom); ecErr == nil {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%s: EC-recovered %s", tname, lom)
+		}
+		lom.Load()
+		return
+	} else if ecErr != ec.ErrorECDisabled {
+		err = fmt.Errorf("%s: failed to EC-recover %s: %v", tname, lom, ecErr)
+	}
+
+	s := fmt.Sprintf("GET local: %s(%s) %s", lom, lom.FQN, cmn.DoesNotExist)
+	if err != nil {
+		err = fmt.Errorf("%s => [%v]", s, err)
+	} else {
+		err = errors.New(s)
+	}
+	if errCode == 0 {
+		errCode = http.StatusNotFound
+	}
+	return
+}
+
+func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+	query := url.Values{}
+	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
+	query.Add(cmn.URLParamIsGFNRequest, "true")
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   tsi.URL(cmn.NetworkIntraData),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+		Query:  query,
+	}
+	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
+	if err != nil {
+		glog.Errorf("failed to create request, err: %v", err)
+		return
+	}
+	defer cancel()
+
+	resp, err := goi.t.httpclientLongTimeout.Do(req)
+	if err != nil {
+		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
+		return
+	}
+	var (
+		cksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
+		cksumType  = resp.Header.Get(cmn.HeaderObjCksumType)
+		cksum      = cmn.NewCksum(cksumType, cksumValue)
+		version    = resp.Header.Get(cmn.HeaderObjVersion)
+		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
+		atimeStr   = resp.Header.Get(cmn.HeaderObjAtime)
+	)
+	// The string in the header is an int represented as a string, NOT a formatted date string.
+	atime, err := cmn.S2TimeUnix(atimeStr)
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	lom.SetCksum(cksum)
+	lom.SetVersion(version)
+	lom.SetAtimeUnix(atime)
+	poi := &putObjInfo{
+		t:        goi.t,
+		lom:      lom,
+		workFQN:  workFQN,
+		r:        resp.Body,
+		migrated: true,
+	}
+	if err = poi.writeToFile(); err != nil {
+		glog.Error(err)
+		return
+	}
+	// commit
+	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
+		glog.Error(err)
+		return
+	}
+	if err = lom.Persist(); err != nil {
+		glog.Error(err)
+		return
+	}
+	lom.ReCache()
+	ok = true
+	return
+}
+
+func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode int) {
+	var (
+		file    *os.File
+		sgl     *memsys.SGL
+		slab    *memsys.Slab2
+		buf     []byte
+		reader  io.Reader
+		hdr     http.Header // if it is http request we will write also header
+		written int64
+	)
 	defer func() {
 		if file != nil {
 			file.Close()
@@ -455,7 +615,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	}
 
 	fqn := goi.lom.FQN
-	if !coldGet && !goi.gfn {
+	if !coldGet && !goi.isGFN {
 		// best-effort GET load balancing (see also mirror.findLeastUtilized())
 		// (TODO: check whether the timestamp is not too old)
 		fqn = goi.lom.LoadBalanceGET(goi.started)
@@ -513,7 +673,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	}
 
 	// GFN: atime must be already set
-	if !coldGet && !goi.gfn {
+	if !coldGet && !goi.isGFN {
 		goi.lom.SetAtimeUnix(goi.started.UnixNano())
 		goi.lom.ReCache() // GFN and cold GETs already did this
 	}
@@ -521,7 +681,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (written int64, retry bool, err er
 	// Update objects which were sent during GFN. Thanks to this we will not
 	// have to resend them in global rebalance. In case of race between rebalance
 	// and GFN, the former wins and it will result in double send.
-	if goi.gfn {
+	if goi.isGFN {
 		goi.t.rebManager.filterGFN.Insert([]byte(goi.lom.Uname()))
 	}
 

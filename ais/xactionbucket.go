@@ -358,16 +358,25 @@ func (r *xactFastRen) Description() string {
 }
 func (r *xactFastRen) IsMountpathXact() bool { return false }
 
+//
+// TODO -- FIXME: if rebalancing don't "scope" it to a bucket
+//
 func (r *xactFastRen) run() {
+	var wg = &sync.WaitGroup{}
 	glog.Infoln(r.String(), r.Bucket(), "=>", r.bucketTo)
-	if aborted := r.t.rebManager.abortGlobalReb(); aborted {
+	if r.t.xactions.abortGlobalXact(cmn.ActGlobalReb) {
 		glog.Infof("%s: restarting global rebalance upon rename...", r)
 	}
-	r.t.rebManager.runLocalReb(true /*skipGplaced*/, r.bucketTo)
+	// run in parallel
+	wg.Add(1)
+	go func() {
+		r.t.rebManager.runLocalReb(true /*skipGlobMisplaced*/, r.bucketTo)
+		wg.Done()
+	}()
 	r.t.rebManager.runGlobalReb(r.t.smapowner.get())
+	wg.Wait()
 
 	r.t.bmdVersionFixup(r.Bucket()) // piggyback bucket renaming (last step) on getting updated BMD
-
 	r.EndTime(time.Now())
 }
 

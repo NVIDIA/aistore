@@ -46,6 +46,7 @@ type regressionTestData struct {
 	renamedBucket   string
 	numLocalBuckets int
 	rename          bool
+	wait            bool
 }
 
 const (
@@ -294,26 +295,27 @@ func TestRegressionLocalBuckets(t *testing.T) {
 
 }
 
-func TestRenameLocalBuckets(t *testing.T) {
+func TestRenameLocalBucket(t *testing.T) {
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestLocalBucketName
 		renamedBucket = bucket + "_renamed"
 	)
+	for _, wait := range []bool{true, false} {
+		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
+			tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+			tutils.DestroyLocalBucket(t, proxyURL, renamedBucket) // cleanup post Ctrl-C etc.
+			defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+			defer tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	tutils.DestroyLocalBucket(t, proxyURL, renamedBucket) // cleanup post Ctrl-C etc.
+			b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.LocalBs)
+			tassert.CheckFatal(t, err)
 
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
-	tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
-
-	b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.LocalBs)
-	tassert.CheckFatal(t, err)
-
-	doBucketRegressionTest(t, proxyURL, regressionTestData{
-		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
-	})
+			doBucketRegressionTest(t, proxyURL, regressionTestData{
+				bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true, wait: wait,
+			})
+		})
+	}
 }
 
 //
@@ -326,7 +328,6 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		numPuts    = 2036
 		filesPutCh = make(chan string, numPuts)
 		errCh      = make(chan error, numPuts)
-		wg         = &sync.WaitGroup{}
 		bucket     = rtd.bucket
 	)
 
@@ -335,32 +336,51 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 
 	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	close(filesPutCh)
+	filesPut := make([]string, 0, len(filesPutCh))
+	for fname := range filesPutCh {
+		filesPut = append(filesPut, fname)
+	}
 	selectErr(errCh, "put", t, true)
 	if rtd.rename {
-		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesPutCh)
+		baseParams := tutils.BaseAPIParams(proxyURL)
+		err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
+		tassert.CheckFatal(t, err)
 		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
+		if rtd.wait {
+			postRenameWaitAndCheck(t, proxyURL, rtd, numPuts, filesPut)
+		}
 		bucket = rtd.renamedBucket
 	}
-
+	sema := make(chan struct{}, 16)
+	del := func() {
+		tutils.Logf("Deleting %d objects\n", len(filesPut))
+		wg := &sync.WaitGroup{}
+		for _, fname := range filesPut {
+			wg.Add(1)
+			sema <- struct{}{}
+			go func(fn string) {
+				tutils.Del(proxyURL, bucket, "smoke/"+fn, "", wg, errCh, true /* silent */)
+				<-sema
+			}(fname)
+		}
+		wg.Wait()
+		selectErr(errCh, "delete", t, abortonerr)
+		close(errCh)
+	}
 	getRandomFiles(proxyURL, numPuts, bucket, SmokeStr+"/", t, errCh)
 	selectErr(errCh, "get", t, false)
-	tutils.Logf("Deleting %d objects\n", len(filesPutCh))
-	for fname := range filesPutCh {
-		wg.Add(1)
-		go tutils.Del(proxyURL, bucket, "smoke/"+fname, "", wg, errCh, true /* silent */)
+	if !rtd.rename || rtd.wait {
+		del()
+	} else {
+		postRenameWaitAndCheck(t, proxyURL, rtd, numPuts, filesPut)
+		del()
 	}
-	wg.Wait()
-	selectErr(errCh, "delete", t, abortonerr)
-	close(errCh)
 }
 
-func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
+func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh []string) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
-	tassert.CheckFatal(t, err)
-
-	// time.Sleep(time.Second * 1) // NOTE: no need to wait - GFN must make it work
 	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
+	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bucket, rtd.renamedBucket)
 
 	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
 	tassert.CheckFatal(t, err)
@@ -391,7 +411,7 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		unique[base] = true
 	}
 	if len(unique) != numPuts {
-		for name := range filesPutCh {
+		for _, name := range filesPutCh {
 			if _, ok := unique[name]; !ok {
 				tutils.Logf("not found: %s\n", name)
 			}

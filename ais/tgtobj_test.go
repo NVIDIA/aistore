@@ -148,7 +148,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				ctx:     nil,
 				offset:  0,
 				length:  0,
-				gfn:     false,
+				isGFN:   false,
 			}
 
 			b.ResetTimer()

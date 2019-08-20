@@ -184,24 +184,20 @@ func TestCopyFile(t *testing.T) {
 
 	// creates a file of random bytes
 	cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
-	if err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
+	if _, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
 		t.Error(err)
 	}
-
 	srcData, err := ioutil.ReadFile(srcFilename)
 	if err != nil {
 		t.Error(err)
 	}
-
 	dstData, err := ioutil.ReadFile(dstFilename)
 	if err != nil {
 		t.Error(err)
 	}
-
 	if !reflect.DeepEqual(srcData, dstData) {
-		t.Error("Contents of copied file are different than source file")
+		t.Error("copied and source files are different")
 	}
-
 	os.Remove(srcFilename)
 	os.Remove(dstFilename)
 }

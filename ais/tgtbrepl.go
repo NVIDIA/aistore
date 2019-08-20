@@ -63,8 +63,22 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		if err != nil {
 			return
 		}
+
+		// lock for writing; check if already exists and is identical
+		if lom.Uname() != dst.Uname() {
+			cluster.ObjectLocker.Lock(dst.Uname(), true)
+			defer cluster.ObjectLocker.Unlock(dst.Uname(), true)
+		}
+		if err = dst.Load(false); err == nil && dst.Exists() {
+			if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
+				copied = true
+				return
+			}
+		}
+
+		// do
 		workFQN := fs.CSM.GenContentParsedFQN(dst.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-		_, err = lom.CopyObject(dst.FQN, workFQN, ri.buf, false /*  object, not a mirrored copy */)
+		_, err = lom.CopyObject(dst.FQN, workFQN, ri.buf, false /*dstIsCopy=false*/, true /*srcCopyOK*/)
 		if err == nil {
 			copied = true
 			ri.t.putMirror(dst)

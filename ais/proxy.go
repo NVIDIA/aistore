@@ -1450,10 +1450,9 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
 	if msg.Action == cmn.ActRenameLB {
-		var bpropsRenamed = &cmn.BucketProps{}
-		cmn.CopyStruct(bpropsRenamed, bprops)
-		bpropsRenamed.Renamed = cmn.ActRenameLB
-		nbmd.set(bucketFrom, true, bpropsRenamed)
+		bpropsFrom, _ := nbmd.Get(bucketFrom, true)
+		bpropsFrom.Renamed = cmn.ActRenameLB
+		nbmd.set(bucketFrom, true, bpropsFrom)
 	}
 	nbmd.add(bucketTo, true, bprops)
 	p.bmdowner.put(nbmd)

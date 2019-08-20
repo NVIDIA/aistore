@@ -585,7 +585,7 @@ var _ = Describe("LOM", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(lom.ValidateContentChecksum()).ToNot(HaveOccurred())
 
-			dst, err := lom.CopyObject(copyFQN, copyFQN+".~~~", make([]byte, testFileSize), true)
+			dst, err := lom.CopyObject(copyFQN, copyFQN+".~~~", make([]byte, testFileSize), true, false)
 			Expect(err).ShouldNot(HaveOccurred())
 			_, err = os.Stat(copyFQN)
 			Expect(os.IsNotExist(err)).To(BeFalse())

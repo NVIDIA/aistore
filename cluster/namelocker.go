@@ -47,10 +47,6 @@ var (
 	ObjectLocker NameLocker
 )
 
-func init() {
-	ObjectLocker = newRTNameMap()
-}
-
 //
 // methods
 //

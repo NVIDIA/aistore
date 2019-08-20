@@ -130,7 +130,10 @@ func (xact *xactPrefetch) BytesCnt() int64 {
 }
 
 func (xact *xactGlobalReb) String() string {
-	return fmt.Sprintf("%s, Smap v%d", xact.xactRebBase.String(), xact.smapVersion)
+	return fmt.Sprintf("%s(%d), Smap v%d", xact.xactRebBase.String(), xact.runnerCnt, xact.smapVersion)
+}
+func (xact *xactLocalReb) String() string {
+	return fmt.Sprintf("%s(%d)", xact.xactRebBase.String(), xact.runnerCnt)
 }
 
 //

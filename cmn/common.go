@@ -668,13 +668,12 @@ func Rename(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
-func CopyFile(src, dst string, buf []byte) (err error) {
+func CopyFile(src, dst string, buf []byte) (written int64, err error) {
 	var (
 		reader *os.File
 		writer *os.File
 	)
 	if reader, err = os.Open(src); err != nil {
-		glog.Errorf("Failed to open %s: %v", src, err)
 		return
 	}
 	if writer, err = CreateFile(dst); err != nil {
@@ -682,7 +681,7 @@ func CopyFile(src, dst string, buf []byte) (err error) {
 		reader.Close()
 		return
 	}
-	if _, err = io.CopyBuffer(writer, reader, buf); err != nil {
+	if written, err = io.CopyBuffer(writer, reader, buf); err != nil {
 		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
 	}
 	writer.Close()

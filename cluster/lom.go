@@ -66,6 +66,8 @@ type (
 )
 
 func init() {
+	ObjectLocker = newRTNameMap()
+
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		glog.SetV(glog.SmoduleCluster, logLvl)
 	}
@@ -210,15 +212,41 @@ func (lom *LOM) DelExtraCopies() (n int, err error) {
 	return
 }
 
-//
-// NOTE: must be called under cluster.ObjectLocker.Lock(lom.Uname(), false)
-//
-func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, isMirroredCopy bool) (dst *LOM, err error) {
-	if lom.IsCopy() {
-		err = fmt.Errorf("%s is a mirrored copy", lom) // copying copies can be allowed when need be
+func (lom *LOM) CopyObjectFromAny() (copied bool) {
+	availablePaths, _ := fs.Mountpaths.Get()
+	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	buf, slab := lom.T.GetMem2().AllocDefault()
+	for path, mpathInfo := range availablePaths {
+		if path == lom.ParsedFQN.MpathInfo.Path {
+			continue
+		}
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+		if _, err := os.Stat(fqn); err != nil {
+			continue
+		}
+		src := lom.Clone(fqn)
+
+		ObjectLocker.Lock(lom.Uname(), true)
+		_, err := src.CopyObject(lom.FQN, workFQN, buf, false, true)
+		ObjectLocker.Unlock(lom.Uname(), true)
+
+		if err == nil {
+			copied = true
+			break
+		}
+	}
+	slab.Free(buf)
+	return
+}
+
+// NOTE: caller is responsible for locking
+func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, dstIsCopy, srcCopyOK bool) (dst *LOM, err error) {
+	var written int64
+	if !srcCopyOK && lom.IsCopy() {
+		err = fmt.Errorf("%s is a mirrored copy", lom)
 		return
 	}
-	err = cmn.CopyFile(lom.FQN, workFQN, buf)
+	written, err = cmn.CopyFile(lom.FQN, workFQN, buf)
 	if err != nil {
 		return
 	}
@@ -229,11 +257,17 @@ func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, isMirroredCopy bo
 		}
 		return
 	}
-	if !isMirroredCopy {
-		if err = dst.Persist(); err != nil {
-			if errRemove := os.Remove(dstFQN); errRemove != nil {
-				glog.Errorf("nested err: %v", errRemove)
-			}
+	if dstIsCopy {
+		return
+	}
+	// TODO -- FIXME: md.size and md.copies
+	dst.SetSize(written)
+	dst.SetCksum(lom.Cksum())
+	dst.SetVersion(lom.Version())
+	dst.SetAtimeUnix(time.Now().UnixNano())
+	if err = dst.Persist(); err != nil {
+		if errRemove := os.Remove(dstFQN); errRemove != nil {
+			glog.Errorf("nested err: %v", errRemove)
 		}
 	}
 	return
@@ -460,6 +494,7 @@ func (lom *LOM) computeXXHash(fqn string, size int64) (cksumValue string, err er
 func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
+	dst.md = lom.md
 	dst.FQN = fqn
 	return dst
 }
@@ -591,16 +626,29 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 }
 
 func (lom *LOM) Exists() bool {
-	cmn.Assert(lom.loaded)
+	cmn.Dassert(lom.loaded, pkgName)
+	if !lom.BckIsLocal || !lom.exists {
+		return lom.exists
+	}
+	if lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
+		return true
+	}
 	return lom.existsInBucket()
 }
 func (lom *LOM) existsInBucket() bool {
-	if lom.BckIsLocal && lom.exists && !lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
-		lom.Uncache()
-		lom.exists = false
-		return false
+	// reinit lom.bmd and retry only once
+	bowner := lom.T.GetBowner()
+	lom.bmd = bowner.Get()
+	lom.BckProps, _ = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
+	if lom.BckProps != nil {
+		lom.md.bckID = lom.BckProps.BID
+		if lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
+			return true
+		}
 	}
-	return lom.exists
+	lom.Uncache()
+	lom.exists = false
+	return false
 }
 
 func (lom *LOM) ReCache() {
@@ -629,15 +677,17 @@ func (lom *LOM) FromFS() error {
 	lom.exists = true
 	if _, err := lom.lmfs(true); err != nil {
 		lom.exists = false
+		if os.IsNotExist(err) {
+			return nil
+		}
 		if err == syscall.ENODATA || err == syscall.ENOENT {
-			if _, errex := os.Stat(lom.FQN); os.IsNotExist(errex) {
-				return nil
-			}
+			return nil
 		}
-		if !os.IsNotExist(err) {
-			err = fmt.Errorf("%s: errmeta %v", lom.StringEx(), err)
-			lom.T.FSHC(err, lom.FQN)
+		if _, errex := os.Stat(lom.FQN); os.IsNotExist(errex) {
+			return nil
 		}
+		err = fmt.Errorf("%s: errmeta %v, %T", lom.StringEx(), err, err)
+		lom.T.FSHC(err, lom.FQN)
 		return err
 	}
 	// fstat & atime

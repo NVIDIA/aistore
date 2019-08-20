@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -38,11 +37,6 @@ const (
 	maxBytesInMem   = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
 	maxBMDXattrSize = 128 * 1024
 
-	// GET-from-neighbors tunables
-	getFromNeighRetries   = 10
-	getFromNeighSleep     = 300 * time.Millisecond
-	getFromNeighAfterJoin = time.Second * 30
-
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
 	bucketMDRegister = "register"
@@ -53,16 +47,17 @@ type (
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
-
+	baseGFN struct {
+		lookup atomic.Bool
+		tag    string
+	}
 	// The state that may influence GET logic when mountpath is added/enabled
 	localGFN struct {
-		lookup atomic.Bool
+		baseGFN
 	}
-
 	// The state that may influence GET logic when new target joins cluster
 	globalGFN struct {
-		lookup       atomic.Bool
-		stopDeadline atomic.Int64 // (reg-time + const) when we stop trying to GET from neighbors
+		baseGFN
 	}
 
 	capUsed struct {
@@ -91,45 +86,9 @@ type (
 	}
 )
 
-func (gfn *localGFN) active() bool {
-	return gfn.lookup.Load()
-}
-
-func (gfn *localGFN) activate() {
-	gfn.lookup.Store(true)
-	glog.Infof("global GFN has been activated")
-}
-
-func (gfn *localGFN) deactivate() {
-	gfn.lookup.Store(false)
-	glog.Infof("local GFN has been deactivated")
-}
-
-func (gfn *globalGFN) active() bool {
-	if !gfn.lookup.Load() {
-		return false
-	}
-
-	// Deadline exceeded - probably primary proxy notified about new smap
-	// but did not update it due to some failures.
-	if time.Now().UnixNano() > gfn.stopDeadline.Load() {
-		gfn.deactivate()
-		return false
-	}
-
-	return true
-}
-
-func (gfn *globalGFN) activate() {
-	gfn.stopDeadline.Store(time.Now().UnixNano() + getFromNeighAfterJoin.Nanoseconds())
-	gfn.lookup.Store(true)
-	glog.Infof("global GFN has been activated")
-}
-
-func (gfn *globalGFN) deactivate() {
-	gfn.lookup.Store(false)
-	glog.Infof("global GFN has been deactivated")
-}
+func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
+func (gfn *baseGFN) activate()    { gfn.lookup.Store(true); glog.Infoln(gfn.tag, "activated") }
+func (gfn *baseGFN) deactivate()  { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
 
 //
 // target runner
@@ -143,6 +102,7 @@ func (t *targetrunner) Run() error {
 	t.httprunner.keepalive = gettargetkeepalive()
 
 	dryinit()
+	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
 	bmd := newBucketMD()
 	t.bmdowner.put(bmd)
@@ -245,7 +205,7 @@ func (t *targetrunner) Run() error {
 	if aborted {
 		go func() {
 			glog.Infoln("resuming local rebalance...")
-			t.rebManager.runLocalReb(false /*skipGplaced=false*/)
+			t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
 		}()
 	}
 
@@ -447,7 +407,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		ctx:     t.contextWithAuth(r.Header),
 		offset:  rangeOff,
 		length:  rangeLen,
-		gfn:     isGFNRequest,
+		isGFN:   isGFNRequest,
 		chunked: config.Net.HTTP.Chunked,
 	}
 	if err, errCode := goi.getObject(); err != nil {
@@ -459,76 +419,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//
-// 3a. attempt to restore an object that is missing in the LOCAL BUCKET - from:
-//     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
-//		targets using erasure coding(if it is on)
-// FIXME: must be done => (getfqn, and under write lock)
-//
-func (t *targetrunner) restoreObjLBNeigh(lom *cluster.LOM) (err error, errCode int) {
-	// check FS-wide if local rebalance is running
-	aborted, running := t.xactions.isRebalancing(cmn.ActLocalReb)
-	gfnActive := t.gfn.local.active()
-	if aborted || running || gfnActive {
-		oldFQN, oldSize := getFromOtherLocalFS(lom)
-		if oldFQN != "" {
-			lom.FQN = oldFQN
-			lom.SetSize(oldSize)
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("restored from LFS %s (%s)", lom, cmn.B2S(oldSize, 1))
-			}
-			return
-		}
-	}
-
-	// HACK: if there's not enough EC targets to restore an sliced object, we might be able to restore it
-	// if it was replicated. In this case even just one additional target might be sufficient
-	// This won't succeed if an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= t.smapowner.Get().CountTargets()
-
-	// check cluster-wide ("ask neighbors")
-	aborted, running = t.xactions.isRebalancing(cmn.ActGlobalReb)
-	gfnActive = t.gfn.global.active()
-	if aborted || running || gfnActive || !enoughECRestoreTargets {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: GFN (aborted=%t, running=%t, active=%t)", t.si.Name(), aborted, running, gfnActive)
-		}
-		// retry in case the object is being moved right now
-		for retry := 0; retry < getFromNeighRetries; retry++ {
-			if err := t.getFromNeighbor(lom); err != nil {
-				time.Sleep(getFromNeighSleep)
-				continue
-			}
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: GFN restored %s (%s)", t.si.Name(), lom, cmn.B2S(lom.Size(), 1))
-			}
-			return
-		}
-	}
-	// restore from existing EC slices if possible
-	if ecErr := t.ecmanager.RestoreObject(lom); ecErr == nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: EC-recovered %s", t.si.Name(), lom)
-		}
-		lom.Load()
-		return
-	} else if ecErr != ec.ErrorECDisabled {
-		err = fmt.Errorf("%s: failed to EC-recover %s: %v", t.si.Name(), lom, ecErr)
-	}
-
-	s := fmt.Sprintf("GET local: %s(%s) %s", lom, lom.FQN, cmn.DoesNotExist)
-	if err != nil {
-		err = fmt.Errorf("%s => [%v]", s, err)
-	} else {
-		err = errors.New(s)
-	}
-	if errCode == 0 {
-		errCode = http.StatusNotFound
-	}
-	return
-}
-
-func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64, buf []byte) (cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, err error) {
+func (t *targetrunner) rangeCksum(r io.ReaderAt, fqn string, offset, length int64,
+	buf []byte) (cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, err error) {
 	rangeReader = io.NewSectionReader(r, offset, length)
 	if length <= maxBytesInMem {
 		sgl = nodeCtx.mm.NewSGL(length)
@@ -911,7 +803,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 
 		errCode        int
 		exists         bool
-		checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached)) // establish local presence, ignore obj attrs
+		checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
 		silent, _      = cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	)
 
@@ -931,22 +823,33 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler(w, r, err.Error())
 		return
 	}
-	cluster.ObjectLocker.Lock(lom.Uname(), false)
-	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
 
+	cluster.ObjectLocker.Lock(lom.Uname(), false)
 	if err = lom.Load(); err != nil { // (doesnotexist -> ok, other)
+		cluster.ObjectLocker.Unlock(lom.Uname(), false)
 		invalidHandler(w, r, err.Error())
 		return
 	}
+	cluster.ObjectLocker.Unlock(lom.Uname(), false)
+
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, lom.StringEx(), pid)
 	}
 
 	exists = lom.Exists()
+
+	// NOTE: DEFINITION
+	// * checkCached establishes local presence by looking up all mountpaths (and not only the current (hrw))
+	// * checkCached also copies (i.e., effectively, recovers) misplaced object if it finds one
+	// * see also: GFN
+	if !exists && checkCached {
+		exists = lom.CopyObjectFromAny()
+	}
+
 	if lom.BckIsLocal || checkCached {
 		if !exists {
-			invalidHandler(w, r, fmt.Sprintf("no such object %s in bucket %s", objName, bucket), http.StatusNotFound)
+			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
 		}
 		if checkCached {
@@ -1004,101 +907,6 @@ func (t *targetrunner) checkCloudVersion(ctx context.Context, lom *cluster.LOM) 
 		}
 	}
 	return
-}
-
-func (t *targetrunner) getFromNeighbor(lom *cluster.LOM) (err error) {
-	smap := t.smapowner.get()
-	neighsi := t.lookupRemotely(lom, smap)
-	if neighsi == nil {
-		err = fmt.Errorf("failed cluster-wide lookup %s", lom)
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Found %s at %s", lom, neighsi)
-	}
-
-	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
-	query.Add(cmn.URLParamIsGFNRequest, "true")
-	reqArgs := cmn.ReqArgs{
-		Method: http.MethodGet,
-		Base:   neighsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
-		Query:  query,
-	}
-
-	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
-	if err != nil {
-		return fmt.Errorf("failed to create request, err: %v", err)
-	}
-	defer cancel()
-
-	resp, err := t.httpclientLongTimeout.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to GET redirect URL %q, err: %v", reqArgs.URL(), err)
-	}
-	var (
-		cksumValue = resp.Header.Get(cmn.HeaderObjCksumVal)
-		cksumType  = resp.Header.Get(cmn.HeaderObjCksumType)
-		cksum      = cmn.NewCksum(cksumType, cksumValue)
-		version    = resp.Header.Get(cmn.HeaderObjVersion)
-		workFQN    = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
-		atimeStr   = resp.Header.Get(cmn.HeaderObjAtime)
-	)
-
-	// The string in the header is an int represented as a string, NOT a formatted date string.
-	atime, err := cmn.S2TimeUnix(atimeStr)
-	if err != nil {
-		return
-	}
-	lom.SetCksum(cksum)
-	lom.SetVersion(version)
-	lom.SetAtimeUnix(atime)
-	poi := &putObjInfo{
-		t:        t,
-		lom:      lom,
-		workFQN:  workFQN,
-		r:        resp.Body,
-		migrated: true,
-	}
-	if err = poi.writeToFile(); err != nil {
-		return
-	}
-	// commit
-	if err = cmn.Rename(workFQN, lom.FQN); err != nil {
-		return
-	}
-	if err = lom.Persist(); err != nil {
-		return
-	}
-	lom.ReCache()
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Success: %s (%s, %s) from %s", lom, cmn.B2S(lom.Size(), 1), lom.Cksum(), neighsi)
-	}
-	return
-}
-
-func (t *targetrunner) lookupRemotely(lom *cluster.LOM, smap *smapX) *cluster.Snode {
-	query := make(url.Values)
-	query.Add(cmn.URLParamSilent, "true")
-	res := t.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
-		query,
-		http.MethodHead,
-		nil,
-		smap,
-		lom.Config().Timeout.MaxKeepalive,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
-
-	for r := range res {
-		if r.err == nil {
-			return r.si
-		}
-	}
-
-	return nil
 }
 
 func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) {
@@ -1326,16 +1134,4 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsdC.Send(keyName+".io.errors", 1, metric{statsd.Counter, "count", 1})
 	getfshealthchecker().OnErr(filepath)
-}
-
-func getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
-	availablePaths, _ := fs.Mountpaths.Get()
-	for _, mpathInfo := range availablePaths {
-		filePath := mpathInfo.MakePathBucketObject(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsLocal)
-		stat, err := os.Stat(filePath)
-		if err == nil {
-			return filePath, stat.Size()
-		}
-	}
-	return
 }

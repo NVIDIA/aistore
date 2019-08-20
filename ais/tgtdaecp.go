@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/fs"
@@ -396,7 +397,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLRU:
 			go t.RunLRU()
 		case cmn.ActLocalReb:
-			go t.rebManager.runLocalReb(false /*skipGplaced=false*/)
+			go t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
 		case cmn.ActGlobalReb:
 			go t.rebManager.runGlobalReb(t.smapowner.get())
 		case cmn.ActPrefetch:
@@ -777,7 +778,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 			case cmn.RebStart:
 				go t.rebManager.runGlobalReb(newsmap)
 			case cmn.RebAbort:
-				t.rebManager.abortGlobalReb()
+				t.xactions.abortGlobalXact(cmn.ActGlobalReb)
 			default:
 				err = fmt.Errorf("Expecting %q or %q in the action message value, getting %s",
 					cmn.RebStart, cmn.RebAbort, cmd)
@@ -1094,7 +1095,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	getRebStatus, _ := cmn.ParseBool(query.Get(cmn.URLParamRebStatus))
 	if getRebStatus {
 		status := &rebStatus{}
-		t.rebManager.fillinStatus(status)
+		t.rebManager.getGlobStatus(status)
 		body := cmn.MustMarshal(status)
 		if ok := t.writeJSON(w, r, body, "rebalance-status"); !ok {
 			return
@@ -1234,7 +1235,6 @@ func (t *targetrunner) enable() error {
 //
 // copy-rename bucket: 2-phase commit
 //
-
 func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
 	if action == cmn.ActRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
 		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bucketFrom)
@@ -1243,7 +1243,7 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	defer t.bmdowner.Unlock()
 
 	bmd := t.bmdowner.get()
-	props, ok := bmd.Get(bucketFrom, true /*is local*/)
+	bprops, ok := bmd.Get(bucketFrom, true /*is local*/)
 	if !ok {
 		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
 	}
@@ -1268,7 +1268,7 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	if err == nil {
 		// add bucketTo to this target's BMD wo/ increasing the version
 		clone := bmd.clone()
-		clone.LBmap[bucketTo] = props
+		clone.LBmap[bucketTo] = bprops
 		t.bmdowner.put(clone)
 	}
 	return
@@ -1323,7 +1323,11 @@ func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (
 			glog.Error(err) // ditto
 			break
 		}
-		go xact.run() // do the work
+
+		t.gfn.local.activate()
+		t.gfn.global.activate()
+		go xact.run()                      // do the work
+		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
 	case cmn.ActCopyLB:
 		var xact *mirror.XactBckCopy
 		xact, err = t.xactions.renewBckCopy(bucketFrom, bucketTo, t, action, cmn.ActCommit)
@@ -1334,4 +1338,44 @@ func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (
 		go xact.Run()
 	}
 	return
+}
+
+func (t *targetrunner) lookupRemote(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+	query := make(url.Values)
+	query.Add(cmn.URLParamSilent, "true")
+	args := callArgs{
+		si: tsi,
+		req: cmn.ReqArgs{
+			Method: http.MethodHead,
+			Base:   tsi.URL(cmn.NetworkIntraControl),
+			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+			Query:  query,
+		},
+		timeout: lom.Config().Timeout.CplaneOperation,
+	}
+	res := t.call(args)
+	ok = res.err == nil
+	return
+}
+
+func (t *targetrunner) locateObject(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+	query := make(url.Values)
+	query.Add(cmn.URLParamSilent, "true")
+	query.Add(cmn.URLParamCheckCached, "true") // lookup all mountpaths _and_ copy if misplaced
+	res := t.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+		query,
+		http.MethodHead,
+		nil,
+		smap,
+		lom.Config().Timeout.CplaneOperation,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+	for r := range res {
+		if r.err == nil {
+			return r.si
+		}
+	}
+	return nil
 }
