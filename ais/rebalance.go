@@ -530,6 +530,12 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
+	aborted, running := reb.t.xactions.isRebalancing(cmn.ActGlobalReb)
+	if aborted || !running {
+		io.Copy(ioutil.Discard, objReader) // drain the reader
+		return
+	}
+
 	if stage := reb.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
 		f := glog.Warningf

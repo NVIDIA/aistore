@@ -201,13 +201,15 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, config *cmn.Config, v
 		return
 	}
 	if tver < ver || rver < ver {
-		glog.Warningf("%s Smap v%d: %s has older Smap (v%d, v%d) - aborting...", tname, ver, tsi.Name(), tver, rver)
+		glog.Warningf("%s Smap v%d: %s has older Smap (v%d, v%d) - keep waiting...", tname, ver, tsi.Name(), tver, rver)
+		return
 	}
 	if status.Stage >= desiredStage {
 		ok = true
 		return
 	}
-	glog.Infof("%s %s: %s %s - keep waiting",
-		tname, rebStage[reb.stage.Load()], tsi.Name(), rebStage[status.Stage])
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s: %s %s - keep waiting", tname, rebStage[reb.stage.Load()], tsi.Name(), rebStage[status.Stage])
+	}
 	return
 }

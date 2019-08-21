@@ -402,11 +402,14 @@ func (mgr *ecManager) ListenSmapChanged(newSmapVersionChannel chan int64) {
 		// respond xaction is never stopped as it should respond regardless of the other targets
 		for bckName, bckProps := range mgr.bckMD.LBmap {
 			bckXacts := mgr.getBckXacts(bckName)
+			if !bckProps.EC.Enabled {
+				continue
+			}
 			if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
-				glog.Warningf("Not enough targets for EC encoding for bucket %s; actual: %v, expected: %v", bckName, targetCnt, required)
+				glog.Warningf("Not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
+					bckName, targetCnt, required)
 				bckXacts.StopPut()
 			}
-
 			// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
 			// if one target was killed, and a new one joined, this condition will be satisfied even though
 			// slices of the object are not present on the new target
