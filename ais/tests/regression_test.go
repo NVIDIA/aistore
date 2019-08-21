@@ -545,14 +545,17 @@ func TestRenameObjects(t *testing.T) {
 	tutils.PutRandObjs(proxyURL, bucket, "", readerType, "", 0, numPuts, errCh, objsPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(objsPutCh)
-
+	i := 0
 	for objName := range objsPutCh {
 		newObjName := path.Join(renameStr, objName) + ".renamed" // objname fqn
 		newBaseNames = append(newBaseNames, newObjName)
 		if err := api.RenameObject(baseParams, bucket, objName, newObjName); err != nil {
 			t.Fatalf("Failed to rename object from %s => %s, err: %v", objName, newObjName, err)
 		}
-		tutils.Logln(fmt.Sprintf("Rename %s => %s successful", objName, newObjName))
+		i++
+		if i%50 == 0 {
+			tutils.Logf("Renamed %s => %s\n", objName, newObjName)
+		}
 	}
 
 	// get renamed objects
