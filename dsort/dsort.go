@@ -173,11 +173,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return errors.New("out of space")
 		}
 
-		cluster.ObjectLocker.Lock(lom.Uname(), false)
+		lom.Lock(false)
 		f, err := os.Open(lom.FQN)
 		if err != nil {
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			cluster.ObjectLocker.Unlock(lom.Uname(), false)
+			lom.Unlock(false)
 			return errors.Errorf("unable to open local file, err: %v", err)
 		}
 		var compressedSize int64
@@ -201,7 +201,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		}
 
 		phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-		cluster.ObjectLocker.Unlock(lom.Uname(), false)
+		lom.Unlock(false)
 
 		m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
 		if err != nil {
@@ -389,8 +389,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
 	if si.DaemonID != m.ctx.node.DaemonID && !m.rs.DryRun {
-		cluster.ObjectLocker.Lock(lom.Uname(), false)
-		defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
+		lom.Lock(false)
+		defer lom.Unlock(false)
 
 		file, err := cmn.NewFileHandle(lom.FQN)
 		if err != nil {

@@ -230,13 +230,13 @@ func (lctx *lructx) postRemove(capCheck int64, lom *cluster.LOM) (int64, error) 
 
 // remove local copies that "belong" to different LRU joggers; hence, space accounting may be temporarily not precise
 func (lctx *lructx) evictObj(lom *cluster.LOM) (ok bool) {
-	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	lom.Lock(true)
 	if err := lom.Remove(); err == nil {
 		ok = true
 	} else {
 		glog.Errorf("%s: failed to remove, err: %v", lom, err)
 	}
-	cluster.ObjectLocker.Unlock(lom.Uname(), true)
+	lom.Unlock(true)
 	return
 }
 

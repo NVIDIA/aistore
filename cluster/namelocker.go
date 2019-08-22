@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -12,79 +12,72 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-// NameLocker interface locks and unlocks (and try-locks, etc.)
-// arbitrary strings.
-// NameLocker is currently utilized to lock objects stored in the cluster
-// when there's a pending GET, PUT, etc. transaction and we don't want
-// the object in question to get updated or evicted concurrently.
-// Objects are locked by their unique (string) names aka unames.
+// nameLocker is a 2-level structure utilized to lock objects of *any* kind
+// as long as object has a (string) name and an (int) digest.
+// In most cases, the digest will be some sort a hash of the name itself
+// (does not necessarily need to be cryptographic).
 // The lock can be exclusive (write) or shared (read).
 type (
-	NameLocker interface {
-		TryLock(uname string, exclusive bool) bool
-		Lock(uname string, exclusive bool)
-		DowngradeLock(uname string)
-		Unlock(uname string, exclusive bool)
+	nameLocker []nlc
+	nlc        struct {
+		mu sync.Mutex
+		m  map[string]*lockInfo
 	}
-
 	lockInfo struct {
 		rc        int
 		exclusive bool
 	}
-
-	rtNameMap struct {
-		mu sync.Mutex
-		m  map[string]*lockInfo
-	}
 )
 
 const (
-	pollInterval = time.Millisecond * 100
+	pollInterval = 100 * time.Millisecond
 	initCapacity = 128
 )
 
-var (
-	ObjectLocker NameLocker
-)
+//
+// namelocker
+//
 
-//
-// methods
-//
-func newRTNameMap() *rtNameMap {
-	return &rtNameMap{
-		m: make(map[string]*lockInfo, initCapacity),
+func (nl nameLocker) init() {
+	for idx := 0; idx < len(nl); idx++ {
+		nlc := &nl[idx]
+		nlc.m = make(map[string]*lockInfo, initCapacity)
 	}
 }
 
-func (rt *rtNameMap) TryLock(uname string, exclusive bool) bool {
-	rt.mu.Lock()
+//
+// nlc
+//
 
-	realInfo, found := rt.m[uname]
+func (nlc *nlc) TryLock(uname string, exclusive bool) bool {
+	nlc.mu.Lock()
+
+	realInfo, found := nlc.m[uname]
 	info := &lockInfo{}
 	if exclusive {
 		if found {
-			rt.mu.Unlock()
+			nlc.mu.Unlock()
 			return false
 		}
 
-		rt.m[uname] = info
+		nlc.m[uname] = info
 		info.exclusive = true
-		rt.mu.Unlock()
+		nlc.mu.Unlock()
 		return true
 	}
 
 	// rlock
 	if found {
 		if realInfo.exclusive {
-			rt.mu.Unlock()
+			nlc.mu.Unlock()
 			return false
 		}
 	} else {
-		rt.m[uname] = info // the 1st rlock
+		nlc.m[uname] = info // the 1st rlock
 		realInfo = info
 	}
 	realInfo.rc++
-	rt.mu.Unlock()
+	nlc.mu.Unlock()
 	return true
 }
 
@@ -96,13 +89,13 @@ func (rt *rtNameMap) TryLock(uname string, exclusive bool) bool {
 // for Unlock - none of the above.
 // Use TryLock() to support any such semantics that makes sense.
 
-func (rt *rtNameMap) Lock(uname string, exclusive bool) {
-	if rt.TryLock(uname, exclusive) {
+func (nlc *nlc) Lock(uname string, exclusive bool) {
+	if nlc.TryLock(uname, exclusive) {
 		return
 	}
 	for {
 		time.Sleep(pollInterval)
-		if rt.TryLock(uname, exclusive) {
+		if nlc.TryLock(uname, exclusive) {
 			if glog.FastV(4, glog.SmoduleCluster) {
 				glog.Infof("Lock %s(%t) - success", uname, exclusive)
 			}
@@ -114,29 +107,29 @@ func (rt *rtNameMap) Lock(uname string, exclusive bool) {
 	}
 }
 
-func (rt *rtNameMap) DowngradeLock(uname string) {
-	rt.mu.Lock()
-	info, found := rt.m[uname]
+func (nlc *nlc) DowngradeLock(uname string) {
+	nlc.mu.Lock()
+	info, found := nlc.m[uname]
 	cmn.Assert(found && info.exclusive)
 	info.exclusive = false
 	info.rc++
 	cmn.Assert(info.rc == 1)
-	rt.mu.Unlock()
+	nlc.mu.Unlock()
 }
 
-func (rt *rtNameMap) Unlock(uname string, exclusive bool) {
-	rt.mu.Lock()
-	info, found := rt.m[uname]
+func (nlc *nlc) Unlock(uname string, exclusive bool) {
+	nlc.mu.Lock()
+	info, found := nlc.m[uname]
 	cmn.Assert(found)
 	if exclusive {
 		cmn.Assert(info.exclusive)
-		delete(rt.m, uname)
-		rt.mu.Unlock()
+		delete(nlc.m, uname)
+		nlc.mu.Unlock()
 		return
 	}
 	info.rc--
 	if info.rc == 0 {
-		delete(rt.m, uname)
+		delete(nlc.m, uname)
 	}
-	rt.mu.Unlock()
+	nlc.mu.Unlock()
 }

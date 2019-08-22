@@ -823,13 +823,13 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cluster.ObjectLocker.Lock(lom.Uname(), false)
+	lom.Lock(false)
 	if err = lom.Load(); err != nil { // (doesnotexist -> ok, other)
-		cluster.ObjectLocker.Unlock(lom.Uname(), false)
+		lom.Unlock(false)
 		invalidHandler(w, r, err.Error())
 		return
 	}
-	cluster.ObjectLocker.Unlock(lom.Uname(), false)
+	lom.Unlock(false)
 
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
@@ -1012,8 +1012,8 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 		errRet   error
 	)
 
-	cluster.ObjectLocker.Lock(lom.Uname(), true)
-	defer cluster.ObjectLocker.Unlock(lom.Uname(), true)
+	lom.Lock(true)
+	defer lom.Unlock(true)
 
 	delFromCloud := !lom.BckIsLocal && !evict
 	if err := lom.Load(false); err != nil {
@@ -1082,12 +1082,12 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	if copied, err := ri.copyObject(lom, msg.Name /* new objname */); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 	} else if copied {
-		cluster.ObjectLocker.Lock(lom.Uname(), true)
+		lom.Lock(true)
 		// TODO: additional copies and ec cleanups
 		if err = lom.Remove(); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
+		lom.Unlock(true)
 	}
 	slab.Free(buf)
 }

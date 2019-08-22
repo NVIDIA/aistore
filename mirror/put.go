@@ -226,7 +226,7 @@ loop:
 }
 
 func (j *xputJogger) addCopy(lom *cluster.LOM) {
-	cluster.ObjectLocker.Lock(lom.Uname(), false)
+	lom.Lock(false)
 	if clone, err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
 		glog.Errorln(err)
 	} else {
@@ -238,5 +238,5 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 		}
 		j.parent.BytesAdd(lom.Size())
 	}
-	cluster.ObjectLocker.Unlock(lom.Uname(), false)
+	lom.Unlock(false)
 }

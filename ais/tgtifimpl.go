@@ -160,12 +160,12 @@ func (t *targetrunner) CopyObject(lom *cluster.LOM, bucketTo string, buf []byte,
 // FIXME: recomputes checksum if called with a bad one (optimize)
 func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bool) (err error, errCode int) {
 	if prefetch {
-		if !cluster.ObjectLocker.TryLock(lom.Uname(), true) {
+		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
 			return cmn.NewSkipError(), 0
 		}
 	} else {
-		cluster.ObjectLocker.Lock(lom.Uname(), true) // one cold-GET at a time
+		lom.Lock(true) // one cold-GET at a time
 	}
 	var (
 		vchanged, crace bool
@@ -173,12 +173,12 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	)
 	if err, errCode = t.cloud.getObj(ct, workFQN, lom); err != nil {
 		err = fmt.Errorf("%s: GET failed, err: %v", lom, err)
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
+		lom.Unlock(true)
 		return
 	}
 	defer func() {
 		if err != nil {
-			cluster.ObjectLocker.Unlock(lom.Uname(), true)
+			lom.Unlock(true)
 			if errRemove := os.Remove(workFQN); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
 				t.fshc(errRemove, workFQN)
@@ -197,7 +197,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 
 	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
 	if prefetch {
-		cluster.ObjectLocker.Unlock(lom.Uname(), true)
+		lom.Unlock(true)
 	} else {
 		if vchanged {
 			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1},
@@ -207,7 +207,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 		} else if !crace {
 			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, lom.Size()})
 		}
-		cluster.ObjectLocker.DowngradeLock(lom.Uname())
+		lom.DowngradeLock()
 	}
 	return
 }

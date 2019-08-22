@@ -65,9 +65,13 @@ type (
 	}
 )
 
-func init() {
-	ObjectLocker = newRTNameMap()
+var (
+	lomLocker nameLocker
+)
 
+func init() {
+	lomLocker = make(nameLocker, fs.LomCacheMask+1)
+	lomLocker.init()
 	if logLvl, ok := cmn.CheckDebug(pkgName); ok {
 		glog.SetV(glog.SmoduleCluster, logLvl)
 	}
@@ -226,9 +230,9 @@ func (lom *LOM) CopyObjectFromAny() (copied bool) {
 		}
 		src := lom.Clone(fqn)
 
-		ObjectLocker.Lock(lom.Uname(), true)
+		lom.Lock(true)
 		_, err := src.CopyObject(lom.FQN, workFQN, buf, false, true)
-		ObjectLocker.Unlock(lom.Uname(), true)
+		lom.Unlock(true)
 
 		if err == nil {
 			copied = true
@@ -908,4 +912,40 @@ func (lom *LOM) AllowDELETE() error {
 }
 func (lom *LOM) AllowRENAME() error {
 	return lom.bmd.AllowRENAME(lom.Bucket, lom.BckIsLocal, lom.BckProps)
+}
+
+//
+// lock/unlock
+//
+
+func getLomLocker(idx int) *nlc { return &lomLocker[idx] }
+
+func (lom *LOM) TryLock(exclusive bool) bool {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	return nlc.TryLock(lom.Uname(), exclusive)
+}
+func (lom *LOM) Lock(exclusive bool) {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	cmn.Assert(lom.Uname() != "") // TODO: remove
+	nlc.Lock(lom.Uname(), exclusive)
+}
+func (lom *LOM) DowngradeLock() {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	nlc.DowngradeLock(lom.Uname())
+}
+func (lom *LOM) Unlock(exclusive bool) {
+	var (
+		_, idx = lom.Hkey()
+		nlc    = getLomLocker(idx)
+	)
+	nlc.Unlock(lom.Uname(), exclusive)
 }

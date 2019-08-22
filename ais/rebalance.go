@@ -595,19 +595,18 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 	}
 	var (
 		_, idx = lom.Hkey()
-		uname  = lom.Uname()
 		lomack = reb.lomAcks()[idx]
 	)
 	lomack.mu.Lock()
-	delete(lomack.q, uname)
+	delete(lomack.q, lom.Uname())
 	lomack.mu.Unlock()
 
 	// TODO: configurable delay - postponed or manual object deletion
-	cluster.ObjectLocker.Lock(uname, true)
+	lom.Lock(true)
 	if err = lom.Remove(); err != nil {
 		glog.Errorf("%s: error removing %s, err: %v", reb.t.si.Name(), lom, err)
 	}
-	cluster.ObjectLocker.Unlock(uname, true)
+	lom.Unlock(true)
 }
 
 func (reb *rebManager) retransmit(xreb *xactGlobalReb) (cnt int) {
@@ -685,11 +684,10 @@ func (rj *globalRebJogger) jog() {
 func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser, lomptr unsafe.Pointer, err error) {
 	var (
 		lom   = (*cluster.LOM)(lomptr)
-		uname = lom.Uname()
 		t     = rj.m.t
 		tname = t.si.Name()
 	)
-	cluster.ObjectLocker.Unlock(uname, false)
+	lom.Unlock(false)
 
 	if err != nil {
 		glog.Errorf("%s: failed to send o[%s/%s], err: %v", tname, hdr.Bucket, hdr.Objname, err)
@@ -780,8 +778,7 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 		lomack                *LomAcks
 		idx                   int
 	)
-	uname := lom.Uname()
-	cluster.ObjectLocker.Lock(uname, false) // NOTE: unlock in objSentCallback()
+	lom.Lock(false) // NOTE: unlock in objSentCallback()
 
 	err = lom.Load(false)
 	if err != nil || !lom.Exists() || lom.IsCopy() {
@@ -814,18 +811,18 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 	_, idx = lom.Hkey()
 	lomack = rj.m.lomAcks()[idx]
 	lomack.mu.Lock()
-	lomack.q[uname] = lom
+	lomack.q[lom.Uname()] = lom
 	lomack.mu.Unlock()
 	// transmit
 	if err := rj.m.t.rebManager.streams.SendV(hdr, file, rj.objSentCallback, unsafe.Pointer(lom) /* cmpl ptr */, tsi); err != nil {
 		lomack.mu.Lock()
-		delete(lomack.q, uname)
+		delete(lomack.q, lom.Uname())
 		lomack.mu.Unlock()
 		goto rerr
 	}
 	return nil
 rerr:
-	cluster.ObjectLocker.Unlock(uname, false)
+	lom.Unlock(false)
 	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Errorf("%s, err: %v", lom, err)
@@ -970,11 +967,11 @@ func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 	// misplaced with no copies? remove right away
-	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	lom.Lock(true)
 	if err = os.Remove(lom.FQN); err != nil {
 		glog.Warningf("%s: %v", lom, err)
 	}
-	cluster.ObjectLocker.Unlock(lom.Uname(), true)
+	lom.Unlock(true)
 	return nil
 }
 

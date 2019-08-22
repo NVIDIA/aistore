@@ -162,7 +162,7 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 }
 
 func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
-	cluster.ObjectLocker.Lock(lom.Uname(), true)
+	lom.Lock(true)
 	if j.parent.copies == 1 {
 		size += lom.Size() * int64(lom.NumCopies()-1)
 		if err = lom.DelAllCopies(); err == nil {
@@ -195,25 +195,25 @@ func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 		}
 	}
 	lom.ReCache()
-	cluster.ObjectLocker.Unlock(lom.Uname(), true)
+	lom.Unlock(true)
 	return
 }
 
 func (j *mncJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
 		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
-			cluster.ObjectLocker.Lock(lom.Uname(), false)
+			lom.Lock(false)
 			var clone *cluster.LOM
 			if clone, err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
 				glog.Errorln(err)
-				cluster.ObjectLocker.Unlock(lom.Uname(), false)
+				lom.Unlock(false)
 				return
 			}
 			size += lom.Size()
 			if glog.FastV(4, glog.SmoduleMirror) {
 				glog.Infof("copied %s=>%s", lom, clone)
 			}
-			cluster.ObjectLocker.Unlock(lom.Uname(), false)
+			lom.Unlock(false)
 		} else {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return

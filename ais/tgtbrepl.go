@@ -42,8 +42,8 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	} else {
 		cmn.Assert(ri.localCopy)
 	}
-	cluster.ObjectLocker.Lock(lom.Uname(), false)
-	defer cluster.ObjectLocker.Unlock(lom.Uname(), false)
+	lom.Lock(false)
+	defer lom.Unlock(false)
 
 	if err = lom.Load(false); err != nil {
 		err = fmt.Errorf("%s: err: %v", lom, err)
@@ -66,8 +66,8 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 
 		// lock for writing; check if already exists and is identical
 		if lom.Uname() != dst.Uname() {
-			cluster.ObjectLocker.Lock(dst.Uname(), true)
-			defer cluster.ObjectLocker.Unlock(dst.Uname(), true)
+			dst.Lock(true)
+			defer dst.Unlock(true)
 		}
 		if err = dst.Load(false); err == nil && dst.Exists() {
 			if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {

@@ -118,14 +118,13 @@ func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: 
 //
 
 func newMountpath(cleanPath, origPath string, fsid syscall.Fsid, fs string) *MountpathInfo {
-	mi := &MountpathInfo{
+	return &MountpathInfo{
 		Path:       cleanPath,
 		OrigPath:   origPath,
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, cmn.MLCG32),
 	}
-	return mi
 }
 
 func (mi *MountpathInfo) LomCache(idx int) *LomCache { x := &mi.lomcaches; return &x[idx] }
