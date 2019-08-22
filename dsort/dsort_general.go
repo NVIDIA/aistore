@@ -247,7 +247,7 @@ func (ds *dsorterGeneral) createShardsLocally() (err error) {
 	)
 
 	ds.creationPhase.adjuster.start()
-	defer ds.creationPhase.adjuster.start()
+	defer ds.creationPhase.adjuster.stop()
 
 	metrics := ds.m.Metrics.Creation
 	metrics.begin()

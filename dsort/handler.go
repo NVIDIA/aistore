@@ -657,7 +657,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dsortManager.Metrics.update()
-	body := cmn.MustMarshal(dsortManager.Metrics)
+	body := dsortManager.Metrics.Marshal()
 	if _, err := w.Write(body); err != nil {
 		glog.Error(err)
 		// When we fail write we cannot call InvalidHandler since it will be

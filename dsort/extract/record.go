@@ -243,6 +243,8 @@ func (r *Records) objectCount() int {
 }
 
 func (r *Records) RecordMemorySize() (size uint64) {
+	r.Lock()
+	defer r.Unlock()
 	for _, record := range r.arr {
 		size = uint64(unsafe.Sizeof(*record))
 		size += uint64(len(record.DaemonID))
@@ -259,7 +261,6 @@ func (r *Records) RecordMemorySize() (size uint64) {
 			return size
 		}
 	}
-
 	return
 }
 

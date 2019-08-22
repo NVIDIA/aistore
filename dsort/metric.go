@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -265,6 +266,14 @@ func (m *Metrics) update() {
 		m.Creation.Elapsed = time.Since(m.Creation.Start) / time.Second
 	}
 	m.unlock()
+}
+
+func (m *Metrics) Marshal() []byte {
+	m.lock()
+	b, err := jsoniter.Marshal(m)
+	m.unlock()
+	cmn.AssertNoErr(err)
+	return b
 }
 
 // JobInfo is a struct that contains stats that represent the DSort run in a list
