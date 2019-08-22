@@ -91,7 +91,7 @@ func newPrimary() *proxyrunner {
 	cmn.GCO.CommitUpdate(config)
 
 	p.httpclientLongTimeout = &http.Client{}
-	p.keepalive = newProxyKeepaliveRunner(&p)
+	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
 
 	p.bmdowner = newBmdowner()
 	p.bmdowner.put(newBucketMD())

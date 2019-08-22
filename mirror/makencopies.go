@@ -95,6 +95,9 @@ func (r *XactBckMakeNCopies) init() (numjs int, err error) {
 		mncJogger := newMncJogger(r, mpathInfo, config)
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
 		r.mpathers[mpathLC] = mncJogger
+	}
+	for _, mpather := range r.mpathers {
+		mncJogger := mpather.(*mncJogger)
 		go mncJogger.jog()
 	}
 	return

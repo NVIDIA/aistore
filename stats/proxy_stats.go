@@ -8,6 +8,7 @@ package stats
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
@@ -39,11 +40,18 @@ var proxyLogIdleItems = []string{"kalive.µs.min", "kalive.µs", "kalive.µs.max
 //
 // Prunner
 //
-func (r *Prunner) Run() error            { return r.runcommon(r) }
-func (r *Prunner) Get(name string) int64 { return r.Core.Tracker[name].Value }
+func (r *Prunner) Run() error { return r.runcommon(r) }
+
+func (r *Prunner) Get(name string) (val int64) {
+	v := r.Core.Tracker[name]
+	v.RLock()
+	val = v.Value
+	v.RUnlock()
+	return
+}
 
 // All stats that proxy currently has are CoreStats which are registered at startup
-func (r *Prunner) Init(daemonStr, daemonID string) {
+func (r *Prunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(24)
 	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime
@@ -51,8 +59,10 @@ func (r *Prunner) Init(daemonStr, daemonID string) {
 	r.Core.initStatsD(daemonStr, daemonID)
 
 	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(r.Core.statsTime))
+	r.statsRunner.daemonStarted = daemonStarted
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
+	return &r.statsRunner.startedUp
 }
 
 func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {

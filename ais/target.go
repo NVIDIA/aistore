@@ -74,7 +74,6 @@ type (
 		clusterStarted atomic.Bool
 		fsprg          fsprungroup
 		readahead      readaheader
-		xputlrep       *mirror.XactPutLRepl
 		ecmanager      *ecManager
 		rebManager     *rebManager
 		capUsed        capUsed
@@ -990,18 +989,16 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		}
 		return
 	}
-	if t.xputlrep == nil || t.xputlrep.Finished() || !t.xputlrep.SameBucket(lom) {
-		t.xputlrep = t.xactions.renewPutLocReplicas(lom)
-	}
-	if t.xputlrep == nil {
+	xputlrep := t.xactions.renewPutLocReplicas(lom)
+	if xputlrep == nil {
 		return
 	}
-	err := t.xputlrep.Repl(lom)
+	err := xputlrep.Repl(lom)
 	// retry upon race vs (just finished/timedout)
 	if _, ok := err.(*cmn.ErrXpired); ok {
-		t.xputlrep = t.xactions.renewPutLocReplicas(lom)
-		if t.xputlrep != nil {
-			err = t.xputlrep.Repl(lom)
+		xputlrep = t.xactions.renewPutLocReplicas(lom)
+		if xputlrep != nil {
+			err = xputlrep.Repl(lom)
 		}
 	}
 	if err != nil {

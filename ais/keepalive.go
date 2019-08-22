@@ -69,6 +69,7 @@ type keepalive struct {
 	primaryKeepaliveInProgress atomic.Int64 // A toggle used only by the primary proxy.
 	interval                   time.Duration
 	maxKeepaliveTime           float64
+	startedUp                  *atomic.Bool
 }
 
 type timeoutTracker struct {
@@ -110,11 +111,12 @@ func keepaliveRetryDuration(cs ...*cmn.Config) time.Duration {
 	return c.Timeout.CplaneOperation * time.Duration(c.KeepaliveTracker.RetryFactor)
 }
 
-func newTargetKeepaliveRunner(t *targetrunner) *targetKeepaliveRunner {
+func newTargetKeepaliveRunner(t *targetrunner, startedUp *atomic.Bool) *targetKeepaliveRunner {
 	config := cmn.GCO.Get()
 
 	tkr := &targetKeepaliveRunner{t: t}
 	tkr.keepalive.k = tkr
+	tkr.keepalive.startedUp = startedUp
 	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target, &t.statsdC)
 	tkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	tkr.controlCh = make(chan controlSignal, 1)
@@ -123,11 +125,12 @@ func newTargetKeepaliveRunner(t *targetrunner) *targetKeepaliveRunner {
 	return tkr
 }
 
-func newProxyKeepaliveRunner(p *proxyrunner) *proxyKeepaliveRunner {
+func newProxyKeepaliveRunner(p *proxyrunner, startedUp *atomic.Bool) *proxyKeepaliveRunner {
 	config := cmn.GCO.Get()
 
 	pkr := &proxyKeepaliveRunner{p: p}
 	pkr.keepalive.k = pkr
+	pkr.keepalive.startedUp = startedUp
 	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy, &p.statsdC)
 	pkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	pkr.controlCh = make(chan controlSignal, 1)
@@ -358,6 +361,9 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 }
 
 func (k *keepalive) Run() error {
+	// wait for stats runner to start
+	cmn.WaitStartup(cmn.GCO.Get(), k.startedUp)
+
 	glog.Infof("Starting %s", k.Getname())
 	ticker := time.NewTicker(k.interval)
 	lastCheck := time.Time{}

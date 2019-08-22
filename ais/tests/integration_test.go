@@ -1170,10 +1170,12 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 }
 
 func TestRenameNonEmptyLocalBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
 	const (
 		newTestLocalBucketName = TestLocalBucketName + "_new"
 	)
-
 	var (
 		m = ioContext{
 			t:               t,

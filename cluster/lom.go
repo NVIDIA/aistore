@@ -118,6 +118,8 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 
 //
 // local copy management
+// TODO -- FIXME: lom.md.copies are not protected and are subject to races
+//                the caller to use lom.Lock/Unlock (as in mirror)
 //
 func (lom *LOM) HasCopies() bool   { return !lom.IsCopy() && lom.NumCopies() > 1 }
 func (lom *LOM) NumCopies() int    { return len(lom.md.copies) + 1 }
@@ -137,8 +139,6 @@ func (lom *LOM) AddCopy(cpyfqn string, mpi *fs.MountpathInfo) {
 	if lom.md.copies == nil {
 		lom.SetCopies(cpyfqn, mpi)
 	} else {
-		_, ok := lom.md.copies[cpyfqn]
-		cmn.Assert(!ok) // DEBUG  FIXME -- TODO -- FIXME
 		lom.md.copies[cpyfqn] = mpi
 	}
 }

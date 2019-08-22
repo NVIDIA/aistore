@@ -17,6 +17,7 @@ func NewTrackerMock() Tracker {
 	return &TrackerMock{}
 }
 
+func (*TrackerMock) StartedUp() bool                       { return true }
 func (*TrackerMock) Add(name string, val int64)            {}
 func (*TrackerMock) Get(name string) int64                 { return 0 }
 func (*TrackerMock) AddErrorHTTP(method string, val int64) {}

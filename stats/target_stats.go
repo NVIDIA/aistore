@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -69,7 +70,8 @@ type (
 		Capacity map[string]*fscapacity `json:"capacity"`
 		// inner state
 		timecounts struct {
-			capLimit, capIdx int64 // update capacity: time interval counting
+			capLimit atomic.Int64
+			capIdx   int64 // update capacity: time interval counting
 		}
 		lines []string
 	}
@@ -95,10 +97,17 @@ type (
 //
 
 func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
-func (r *Trunner) Get(name string) int64             { return r.Core.Tracker[name].Value }
 func (r *Trunner) Run() error                        { return r.runcommon(r) }
 
-func (r *Trunner) Init(daemonStr, daemonID string) {
+func (r *Trunner) Get(name string) (val int64) {
+	v := r.Core.Tracker[name]
+	v.RLock()
+	val = v.Value
+	v.RUnlock()
+	return
+}
+
+func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
 	r.Core = &CoreStats{}
 	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
 	r.Core.initStatsD(daemonStr, daemonID)
@@ -108,16 +117,20 @@ func (r *Trunner) Init(daemonStr, daemonID string) {
 
 	config := cmn.GCO.Get()
 	r.Core.statsTime = config.Periodic.StatsTime
-	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+	lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+	r.timecounts.capLimit.Store(lim)
 	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
+	r.statsRunner.daemonStarted = daemonStarted
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
+	return &r.statsRunner.startedUp
 }
 
 func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
 	r.Core.statsTime = newConf.Periodic.StatsTime
-	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
+	lim := cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
+	r.timecounts.capLimit.Store(lim)
 }
 
 func (r *Trunner) GetWhatStats() []byte {
@@ -143,7 +156,7 @@ func (r *Trunner) log(uptime time.Duration) (runlru bool) {
 	// 2. capacity
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	r.timecounts.capIdx++
-	if r.timecounts.capIdx >= r.timecounts.capLimit {
+	if r.timecounts.capIdx >= r.timecounts.capLimit.Load() {
 		runlru = r.UpdateCapacityOOS(availableMountpaths)
 		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
@@ -212,15 +225,17 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 	_, oosNow := r.T.AvgCapUsed(config, usedNow)
 
 	if oosPrv && !oosNow {
-		r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+		lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+		r.timecounts.capLimit.Store(lim)
 		glog.Infof("OOS resolved: avg used = %d%% < (hwm %d%%) across %d mountpath(s)",
 			usedNow, config.LRU.HighWM, l)
-		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
+		t := time.Duration(lim) * config.Periodic.StatsTime
 		glog.Infof("PUTs are allowed to proceed, next capacity check in %v", t)
 	} else if !oosPrv && oosNow {
-		r.timecounts.capLimit = cmn.MinI64(r.timecounts.capLimit, 2)
+		lim := cmn.MinI64(r.timecounts.capLimit.Load(), 2)
+		r.timecounts.capLimit.Store(lim)
 		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", usedNow, config.LRU.OOS, l)
-		t := time.Duration(r.timecounts.capLimit) * config.Periodic.StatsTime
+		t := time.Duration(lim) * config.Periodic.StatsTime
 		glog.Warningf("OOS: disallowing new PUTs and checking capacity every %v", t)
 	}
 	return

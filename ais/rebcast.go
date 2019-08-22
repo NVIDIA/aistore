@@ -83,8 +83,9 @@ func (reb *rebManager) pingTarget(tsi *cluster.Snode, config *cmn.Config, ver in
 // wait for target to get ready to receive objects (type rebSyncCallback)
 func (reb *rebManager) rxReady(tsi *cluster.Snode, config *cmn.Config, ver int64, xreb *xactGlobalReb) (ok bool) {
 	var (
-		sleep = config.Timeout.CplaneOperation
-		maxwt = config.Rebalance.DestRetryTime
+		tname = reb.t.si.Name()
+		sleep = config.Timeout.CplaneOperation * 2
+		maxwt = config.Rebalance.DestRetryTime + config.Rebalance.DestRetryTime/2
 		curwt time.Duration
 	)
 	for curwt < maxwt {
@@ -98,6 +99,7 @@ func (reb *rebManager) rxReady(tsi *cluster.Snode, config *cmn.Config, ver int64
 		time.Sleep(sleep)
 		curwt += sleep
 	}
+	glog.Errorf("%s: timed out waiting for %s to reach receive-ready state", tname, tsi.Name())
 	return
 }
 

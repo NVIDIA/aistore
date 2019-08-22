@@ -67,14 +67,16 @@ func (b *bucketXactions) AbortAll() bool {
 	wg := &sync.WaitGroup{}
 	b.RLock()
 	for _, e := range b.entries {
-		if !e.Get().Finished() {
-			sleep = true
-			wg.Add(1)
-			go func() {
-				e.Get().Abort()
-				wg.Done()
-			}()
+		xact := e.Get()
+		if xact.Finished() {
+			continue
 		}
+		sleep = true
+		wg.Add(1)
+		go func(xact cmn.Xact) {
+			xact.Abort()
+			wg.Done()
+		}(xact)
 	}
 	b.RUnlock()
 	wg.Wait()

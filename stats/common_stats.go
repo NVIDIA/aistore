@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -76,6 +77,7 @@ var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type (
 	Tracker interface {
+		StartedUp() bool
 		Add(name string, val int64)
 		Get(name string) int64
 		AddErrorHTTP(method string, val int64)
@@ -122,12 +124,14 @@ type (
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
 		cmn.Named
-		stopCh   chan struct{}
-		workCh   chan NamedVal64
-		ticker   *time.Ticker
-		ctracker copyTracker // to avoid making it at runtime
-		logLimit int64       // check log size
-		logIdx   int64       // time interval counting
+		stopCh        chan struct{}
+		workCh        chan NamedVal64
+		ticker        *time.Ticker
+		ctracker      copyTracker // to avoid making it at runtime
+		logLimit      int64       // check log size
+		logIdx        int64       // time interval counting
+		daemonStarted *atomic.Bool
+		startedUp     atomic.Bool
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -357,12 +361,16 @@ var (
 )
 
 func (r *statsRunner) runcommon(logger statslogger) error {
+	// wait for the daemon (proxy or target) to start
+	cmn.WaitStartup(cmn.GCO.Get(), r.daemonStarted)
+
 	r.stopCh = make(chan struct{}, 4)
 	r.workCh = make(chan NamedVal64, 256)
 
 	glog.Infof("Starting %s", r.Getname())
 	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)
 	startTime := time.Now()
+	r.startedUp.Store(true)
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -378,6 +386,8 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 		}
 	}
 }
+
+func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
 
 func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {

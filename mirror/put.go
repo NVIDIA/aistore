@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -25,10 +26,11 @@ type (
 		workCh   chan *cluster.LOM
 		mpathers map[string]mpather
 		// init
-		mirror         cmn.MirrorConf
-		slab           *memsys.Slab2
-		wg             *sync.WaitGroup
-		total, dropped int64
+		mirror  cmn.MirrorConf
+		slab    *memsys.Slab2
+		wg      *sync.WaitGroup
+		total   atomic.Int64
+		dropped int64
 	}
 	xputJogger struct { // one per mountpath
 		parent    *XactPutLRepl
@@ -62,11 +64,14 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 	//
 	r.wg = &sync.WaitGroup{}
 	r.wg.Add(1)
-	go r.Run()
 	for _, mpathInfo := range availablePaths {
 		xputJogger := &xputJogger{parent: r, mpathInfo: mpathInfo}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
 		r.mpathers[mpathLC] = xputJogger
+	}
+	go r.Run()
+	for _, mpather := range r.mpathers {
+		xputJogger := mpather.(*xputJogger)
 		r.wg.Add(1)
 		go xputJogger.jog()
 	}
@@ -113,7 +118,7 @@ func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 		err = cmn.NewErrXpired("Cannot replicate: " + r.String())
 		return
 	}
-	r.total++
+	r.total.Inc()
 	// [throttle]
 	// when the optimization objective is write perf,
 	// we start dropping requests to make sure callers don't block
@@ -122,7 +127,7 @@ func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 		if pending > 1 && pending >= max {
 			r.dropped++
 			if (r.dropped % logNumProcessed) == 0 {
-				glog.Errorf("%s: pending=%d, total=%d, dropped=%d", r, pending, r.total, r.dropped)
+				glog.Errorf("%s: pending=%d, total=%d, dropped=%d", r, pending, r.total.Load(), r.dropped)
 			}
 			return
 		}
@@ -229,7 +234,7 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 			glog.Infof("copied %s=>%s", lom, clone)
 		}
 		if v := j.parent.ObjectsInc(); (v % logNumProcessed) == 0 {
-			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)
+			glog.Infof("%s: total=%d, copied=%d", j.parent.String(), j.parent.total.Load(), v)
 		}
 		j.parent.BytesAdd(lom.Size())
 	}

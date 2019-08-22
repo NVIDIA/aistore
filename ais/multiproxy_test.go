@@ -38,7 +38,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	cmn.GCO.CommitUpdate(config)
-	p.keepalive = newProxyKeepaliveRunner(&p)
+	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
 	return &p
 }
 

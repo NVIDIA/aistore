@@ -299,7 +299,8 @@ func TestRenameLocalBucket(t *testing.T) {
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestLocalBucketName
-		renamedBucket = bucket + "_renamed"
+		guid, _       = cmn.GenUUID()
+		renamedBucket = bucket + "_" + guid
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
