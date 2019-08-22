@@ -243,8 +243,12 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 }
 
 func (server *netServer) shutdown() {
-	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.Default)
-	if err := server.s.Shutdown(contextwith); err != nil {
+	if server.s == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.Default)
+	if err := server.s.Shutdown(ctx); err != nil {
 		glog.Infof("Stopped server, err: %v", err)
 	}
 	cancel()
@@ -485,9 +489,6 @@ func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.Getname(), err)
 
 	h.statsdC.Close()
-	if h.publicServer.s == nil {
-		return
-	}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

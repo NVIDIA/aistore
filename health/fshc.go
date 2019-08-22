@@ -75,7 +75,7 @@ func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2, ctxResolver *fs.ContentSpe
 	return &FSHC{
 		mountpaths:    mounts,
 		mem2:          mem2,
-		stopCh:        make(chan struct{}, 4),
+		stopCh:        make(chan struct{}), // NOTE: unbuffered, we need to make sure that stop is done safely
 		fileListCh:    make(chan string, 32),
 		reqCh:         make(chan fs.ChangeReq), // NOTE: unbuffered
 		mpathCheckers: make(map[string]*mountpathChecker),
@@ -107,12 +107,14 @@ func (f *FSHC) Run() error {
 
 func (f *FSHC) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", f.Getname(), err)
+
+	// Stop getting any requests. We need to make sure that no mpathCheckers
+	// will be added/removed at this point
+	f.stopCh <- struct{}{}
+
 	for _, r := range f.mpathCheckers {
 		r.stopCh <- struct{}{}
 	}
-
-	f.stopCh <- struct{}{}
-	close(f.stopCh)
 }
 
 func (f *FSHC) OnErr(fqn string) {

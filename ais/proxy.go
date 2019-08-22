@@ -244,7 +244,7 @@ func (p *proxyrunner) Stop(err error) {
 		}
 	}
 
-	if p.publicServer.s != nil && !isPrimary {
+	if !isPrimary {
 		_, unregerr := p.unregister()
 		if unregerr != nil {
 			glog.Warningf("Failed to unregister when terminating: %v", unregerr)
