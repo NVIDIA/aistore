@@ -354,10 +354,11 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	metrics.Unlock()
 
 	var (
-		wg    = &sync.WaitGroup{}
-		errCh = make(chan error, 2)
+		wg     = &sync.WaitGroup{}
+		errCh  = make(chan error, 2)
+		stopCh = cmn.NewStopCh()
 	)
-	wg.Add(2)
+	defer stopCh.Close()
 
 	mem, err := sys.Mem()
 	if err != nil {
@@ -367,11 +368,10 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	sa := newInmemShardAllocator(maxMemoryToUse - mem.ActualUsed)
 
 	// read
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
 		group, ctx := errgroup.WithContext(context.Background())
-
 	SendAllShards:
 		for {
 			// If that was last shard to send we need to break and we will
@@ -410,10 +410,14 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 
 				delete(phaseInfo.metadata.SendOrder, shardName)
 			case <-ds.m.listenAborted():
+				stopCh.Close()
 				group.Wait()
 				errCh <- newAbortError(ds.m.ManagerUUID)
 				return
-			case <-ctx.Done():
+			case <-ctx.Done(): // context was canceled, therefore we have an error
+				stopCh.Close()
+				break SendAllShards
+			case <-stopCh.Listen(): // writing side stopped we need to do the same
 				break SendAllShards
 			}
 		}
@@ -422,6 +426,7 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 	}()
 
 	// write
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		group, ctx := errgroup.WithContext(context.Background())
@@ -429,11 +434,15 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 		for _, s := range phaseInfo.metadata.Shards {
 			select {
 			case <-ds.m.listenAborted():
+				stopCh.Close()
 				group.Wait()
 				errCh <- newAbortError(ds.m.ManagerUUID)
 				return
-			case <-ctx.Done():
-				break CreateAllShards // context was canceled, therefore we have an error
+			case <-ctx.Done(): // context was canceled, therefore we have an error
+				stopCh.Close()
+				break CreateAllShards
+			case <-stopCh.Listen():
+				break CreateAllShards // reading side stopped we need to do the same
 			default:
 			}
 
