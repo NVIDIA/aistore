@@ -38,6 +38,7 @@ type (
 	statsVars struct {
 		sizeEpoch int64
 		sizeTotal int64
+		timeTotal time.Duration
 	}
 )
 
@@ -113,16 +114,15 @@ ml:
 		started := time.Now()
 		epoch(fileNames, perm, wg, sema) // do the work
 		wg.Wait()
+
 		epochWritten := atomic.LoadInt64(&stats.sizeEpoch)
-		atomic.AddInt64(&stats.sizeTotal, epochWritten)
+		stats.sizeTotal += epochWritten
+		epochTime := time.Since(started)
+		stats.timeTotal += epochTime
+
 		if cliv.verbose {
-			mbs := float64(epochWritten) / 1024 / 1024
-			elp := time.Since(started)
-			thr := float64(0)
-			if elp > 0 {
-				thr = mbs * float64(time.Second) / float64(elp)
-			}
-			fmt.Printf("Epoch #%d:\t%.2fMB/s\n", en, thr)
+			sthr := formatThroughput(epochWritten, epochTime)
+			fmt.Printf("Epoch #%d:\t%s\n", en, sthr)
 		}
 		if cliv.maxTime != 0 {
 			if time.Since(now) > cliv.maxTime {
@@ -136,14 +136,30 @@ ml:
 			break
 		}
 	}
+	elapsed := time.Since(now)
+	sthr := formatThroughput(stats.sizeTotal, stats.timeTotal) // total-bytes / total-effective-time
+	fmt.Println("ok", elapsed)
+	fmt.Printf("%-12s%-18s%-30s\n", "Epochs", "Time", "Average Throughput")
+	fmt.Printf("%-12d%-18v%-30s\n", en, stats.timeTotal, sthr)
+}
 
-	mbs := float64(atomic.LoadInt64(&stats.sizeTotal)) / 1024 / 1024
-	elp := time.Since(now)
-	thr := float64(0)
-	if elp > 0 {
-		thr = mbs * float64(time.Second) / float64(elp)
+func formatThroughput(bytes int64, duration time.Duration) (sthr string) {
+	var (
+		gbs    float64
+		mbs    = float64(bytes) / 1024 / 1024
+		suffix = "MB/s"
+		thr    = mbs * float64(time.Second) / float64(duration)
+	)
+	if duration == 0 {
+		return "-"
 	}
-	fmt.Printf("\nEpochs: %d Run Time: %v Average Throughput: %.2fMB/s\n", en, elp, thr)
+	if thr > 1024 {
+		gbs = float64(bytes) / 1024 / 1024 / 1024
+		suffix = "GB/s"
+		thr = gbs * float64(time.Second) / float64(duration)
+	}
+	sthr = fmt.Sprintf("%.3f%s", thr, suffix)
+	return
 }
 
 func epoch(fileNames []string, perm []int, wg *sync.WaitGroup, sema chan struct{}) {
