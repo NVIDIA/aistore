@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -60,7 +61,7 @@ func doGetConfig(wo *workOrder) {
 	wo.latencies, wo.err = tutils.GetConfig(wo.proxyURL)
 }
 
-func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup) {
+func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {
 	defer wg.Done()
 
 	for {
@@ -76,6 +77,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doPut(wo)
 		case opGet:
 			doGet(wo)
+			numGets.Inc()
 		case opConfig:
 			doGetConfig(wo)
 		default:

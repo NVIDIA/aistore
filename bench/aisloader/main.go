@@ -167,6 +167,7 @@ type (
 		numWorkers        int
 		batchSize         int // batch is used for bootstraping(list) and delete
 		loaderIDHashLen   uint
+		numEpochs         uint
 
 		getLoaderID    bool
 		randomObjName  bool
@@ -228,6 +229,8 @@ var (
 
 	suffixIDMaskLen uint
 	suffixID        uint64
+
+	numGets atomic.Int64
 
 	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
 	dockerHostIP = envVars["PRIMARY_HOST_IP"]              // Host IP of primary cluster
@@ -322,6 +325,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.readOffStr, "readoff", "", "Read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
+	f.UintVar(&p.numEpochs, "epochs", 0, "Number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
 
 	//
 	// object naming
@@ -753,7 +757,7 @@ func main() {
 	workOrderResults = make(chan *workOrder, runParams.numWorkers)
 	for i := 0; i < runParams.numWorkers; i++ {
 		wg.Add(1)
-		go worker(workOrders, workOrderResults, &wg)
+		go worker(workOrders, workOrderResults, &wg, &numGets)
 	}
 
 	var statsTicker *time.Ticker
@@ -820,7 +824,11 @@ L:
 				accumulatedStats.aggregate(intervalStats)
 				intervalStats = newStats(time.Now())
 			}
-
+			if runParams.numEpochs > 0 { // if defined
+				if numGets.Load() > int64(runParams.numEpochs)*int64(bucketObjsNames.Len()) {
+					break L
+				}
+			}
 			if err := newWorkOrder(); err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, err.Error())
 				break L

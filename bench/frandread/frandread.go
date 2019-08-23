@@ -1,3 +1,4 @@
+// Package frandread is a file-reading benchmark that makes a special effort to visit the files randomly and equally.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
