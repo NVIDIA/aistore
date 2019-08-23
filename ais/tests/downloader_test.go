@@ -528,7 +528,7 @@ func TestDownloadStatusError(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		files      = map[string]string{
 			"invalidURL":   "http://some.invalid.url",
-			"notFoundFile": "http://releases.ubuntu.com/18.04/amd65.iso",
+			"notFoundFile": "https://google.com/404.tar",
 		}
 	)
 
