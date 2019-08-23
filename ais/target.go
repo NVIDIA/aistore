@@ -194,8 +194,6 @@ func (t *targetrunner) Run() error {
 
 	t.initRebManager(config)
 
-	getfshealthchecker().SetDispatcher(t)
-
 	ec.Init()
 	t.ecmanager = newECM(t)
 

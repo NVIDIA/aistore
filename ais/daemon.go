@@ -265,9 +265,8 @@ func aisinit(version, build string) {
 			}
 		}
 
-		fshc := health.NewFSHC(fs.Mountpaths, nodeCtx.mm, fs.CSM)
+		fshc := health.NewFSHC(t, fs.Mountpaths, nodeCtx.mm, fs.CSM)
 		nodeCtx.rg.add(fshc, xfshc)
-		t.fsprg.Reg(fshc)
 
 		t.readahead = &dummyreadahead{}
 

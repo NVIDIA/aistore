@@ -6,6 +6,7 @@
 package health
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -37,10 +38,8 @@ type (
 	}
 	FSHC struct {
 		cmn.NamedID
-		stopCh        chan struct{}
-		fileListCh    chan string
-		reqCh         chan fs.ChangeReq
-		mpathCheckers map[string]*mountpathChecker
+		stopCh     chan struct{}
+		fileListCh chan string
 
 		// pointers to common data
 		mountpaths *fs.MountedFS
@@ -52,53 +51,37 @@ type (
 		// temp file name generator
 		ctxResolver *fs.ContentSpecMgr
 	}
-	mountpathChecker struct {
-		stopCh chan struct{}
-		fileCh chan string
-		mpath  string
-	}
 )
 
 //
 // public API
 //
 
-// as an fs.PathRunner
-var _ fs.PathRunner = &FSHC{}
-
-func (f *FSHC) ReqAddMountpath(mpath string)     { f.reqCh <- fs.MountpathAdd(mpath) }
-func (f *FSHC) ReqRemoveMountpath(mpath string)  { f.reqCh <- fs.MountpathRem(mpath) }
-func (f *FSHC) ReqEnableMountpath(mpath string)  {}
-func (f *FSHC) ReqDisableMountpath(mpath string) {}
-
-func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2, ctxResolver *fs.ContentSpecMgr) *FSHC {
+func NewFSHC(dispatcher fspathDispatcher, mountpaths *fs.MountedFS, mem2 *memsys.Mem2, ctxResolver *fs.ContentSpecMgr) *FSHC {
 	return &FSHC{
-		mountpaths:    mounts,
-		mem2:          mem2,
-		stopCh:        make(chan struct{}), // NOTE: unbuffered, we need to make sure that stop is done safely
-		fileListCh:    make(chan string, 32),
-		reqCh:         make(chan fs.ChangeReq), // NOTE: unbuffered
-		mpathCheckers: make(map[string]*mountpathChecker),
-		ctxResolver:   ctxResolver,
+		mountpaths:  mountpaths,
+		mem2:        mem2,
+		stopCh:      make(chan struct{}),
+		fileListCh:  make(chan string, 100),
+		dispatcher:  dispatcher,
+		ctxResolver: ctxResolver,
 	}
 }
 
 // as a runner
 func (f *FSHC) Run() error {
 	glog.Infof("Starting %s", f.Getname())
-	f.init()
 
 	for {
 		select {
-		case filepath := <-f.fileListCh:
-			f.checkFile(filepath)
-		case request := <-f.reqCh:
-			switch request.Action {
-			case fs.Add:
-				f.addmp(request.Path)
-			case fs.Remove:
-				f.delmp(request.Path)
+		case filePath := <-f.fileListCh:
+			mpathInfo, _ := f.mountpaths.Path2MpathInfo(filePath)
+			if mpathInfo == nil {
+				glog.Errorf("Failed to get mountpath for file %s", filePath)
+				break
 			}
+
+			f.runMpathTest(mpathInfo.Path, filePath)
 		case <-f.stopCh:
 			return nil
 		}
@@ -107,14 +90,7 @@ func (f *FSHC) Run() error {
 
 func (f *FSHC) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", f.Getname(), err)
-
-	// Stop getting any requests. We need to make sure that no mpathCheckers
-	// will be added/removed at this point
 	f.stopCh <- struct{}{}
-
-	for _, r := range f.mpathCheckers {
-		r.stopCh <- struct{}{}
-	}
 }
 
 func (f *FSHC) OnErr(fqn string) {
@@ -125,156 +101,47 @@ func (f *FSHC) OnErr(fqn string) {
 	f.fileListCh <- fqn
 }
 
-//
-// private methods
-//
+//////////
+// FSHC //
+//////////
 
-func (f *FSHC) init() {
-	availablePaths, disabledPaths := f.mountpaths.Get()
-	for mpath := range availablePaths {
-		f.addmp(mpath)
-	}
-
-	for mpath := range disabledPaths {
-		f.addmp(mpath)
-	}
-}
-
-// gets a base directory and looks for a random file inside it.
-// Returns an error if any directory cannot be read
-func getRandomFileName(basePath string) (string, error) {
-	file, err := os.Open(basePath)
-	if err != nil {
-		return "", err
-	}
-
-	files, err := file.Readdir(fshcMaxFileList)
-	if err == nil {
-		fmap := make(map[string]os.FileInfo, len(files))
-		for _, ff := range files {
-			fmap[ff.Name()] = ff
-		}
-
-		// look for a non-empty random entry
-		for k, info := range fmap {
-			// it is a file - return its fqn
-			if !info.IsDir() {
-				return filepath.Join(basePath, k), nil
-			}
-			// it is a directory - return a random file from it
-			chosen, err := getRandomFileName(filepath.Join(basePath, k))
-			if chosen != "" {
-				return chosen, nil
-			}
-			if err != nil {
-				return "", err
-			}
-		}
-	}
-
-	if err == io.EOF {
-		err = nil
-	}
-
-	return "", err
-}
-
-func newMountpathChecker(mpath string) *mountpathChecker {
-	return &mountpathChecker{
-		stopCh: make(chan struct{}, 1),
-		fileCh: make(chan string),
-		mpath:  mpath,
-	}
-}
-
-func (f *FSHC) SetDispatcher(dispatcher fspathDispatcher) {
-	f.dispatcher = dispatcher
-}
-
-func (f *FSHC) runMountpathChecker(r *mountpathChecker) {
-	for {
-		select {
-		case filename := <-r.fileCh:
-			f.runMpathTest(r.mpath, filename)
-		case <-r.stopCh:
-			return
-		}
-	}
-}
-
-func (f *FSHC) delmp(mpath string) {
-	mpathChecker, ok := f.mpathCheckers[mpath]
-	if !ok {
-		glog.Error("wanted to remove mountpath which was not registered")
-		return
-	}
-
-	delete(f.mpathCheckers, mpath)
-	mpathChecker.stopCh <- struct{}{} // stop mpathChecker
-}
-
-func (f *FSHC) addmp(mpath string) {
-	mpathChecker := newMountpathChecker(mpath)
-	f.mpathCheckers[mpath] = mpathChecker
-	go f.runMountpathChecker(mpathChecker)
-}
-
-func (f *FSHC) isTestPassed(mpath string, readErrors,
-	writeErrors int, available bool) (passed bool, whyFailed string) {
+func (f *FSHC) isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
 	config := &cmn.GCO.Get().FSHC
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
 		readErrors, config.ErrorLimit, fshcFileSize,
 		writeErrors, config.ErrorLimit)
+
 	if !available {
-		return false, "Mountpath is unavailable"
+		return false, errors.New("mountpath is unavailable")
 	}
 
 	passed = readErrors < config.ErrorLimit && writeErrors < config.ErrorLimit
 	if !passed {
-		whyFailed = fmt.Sprintf("Too many errors: %d read error(s), %d write error(s)", readErrors, writeErrors)
+		err = fmt.Errorf("too many errors: %d read error(s), %d write error(s)", readErrors, writeErrors)
 	}
-
-	return passed, whyFailed
+	return passed, err
 }
 
 func (f *FSHC) runMpathTest(mpath, filepath string) {
+	var (
+		passed    bool
+		whyFailed error
+	)
+
 	config := &cmn.GCO.Get().FSHC
 	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
 
-	if passed, why := f.isTestPassed(mpath, readErrs, writeErrs, exists); !passed {
-		glog.Errorf("Disabling mountpath %s...", mpath)
-
-		if f.dispatcher != nil {
-			disabled, err := f.dispatcher.DisableMountpath(mpath, why)
-			if err != nil {
-				glog.Errorf("Failed to disable mountpath: %s", err.Error())
-			} else if !disabled {
-				glog.Errorf("Failed to disabled mountpath: %s. Mountpath already disabled", mpath)
-			}
-		}
-	}
-}
-
-func (f *FSHC) checkFile(filepath string) {
-	mpathInfo, _ := f.mountpaths.Path2MpathInfo(filepath)
-	if mpathInfo == nil {
-		glog.Errorf("Failed to get mountpath for file %s", filepath)
-		return
-	}
-	mpath := mpathInfo.Path
-
-	r, ok := f.mpathCheckers[mpath]
-	if !ok {
-		glog.Errorf("Invalid mountpath %s for file %s", mpath, filepath)
+	if passed, whyFailed = f.isTestPassed(mpath, readErrs, writeErrs, exists); passed {
 		return
 	}
 
-	select {
-	case r.fileCh <- filepath:
-		// do nothing - queue is empty
-	default:
-		glog.Warningf("Mountpath %s test is running already", mpath)
+	glog.Errorf("Disabling mountpath %s...", mpath)
+	disabled, err := f.dispatcher.DisableMountpath(mpath, whyFailed.Error())
+	if err != nil {
+		glog.Errorf("Failed to disable mountpath: %s", err.Error())
+	} else if !disabled {
+		glog.Errorf("Failed to disabled mountpath: %s. Mountpath already disabled", mpath)
 	}
 }
 
@@ -318,7 +185,7 @@ func (f *FSHC) isMpathDisabled(mpath string) bool {
 
 // creates a random file in a random directory inside a mountpath
 func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) error {
-	// do not test a mountpath if it is already disabled. To avoid a race
+	// Do not test a mountpath if it is already disabled. To avoid a race
 	// when a lot of PUTs fails and each of them calls FSHC, FSHC disables
 	// the mountpath on the first run, so all other tryWriteFile are redundant
 	if f.isMpathDisabled(mountpath) {
@@ -336,8 +203,9 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 			glog.Errorf("Failed to clean up temporary directory: %v", err)
 		}
 	}()
-	tmpfilename := f.ctxResolver.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), fs.WorkfileType, fs.WorkfileFSHC)
-	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+
+	tmpFileName := f.ctxResolver.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), fs.WorkfileType, fs.WorkfileFSHC)
+	tmpFile, err := os.OpenFile(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)
 		return err
@@ -347,8 +215,8 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 	buf := slab.Alloc()
 	defer func() {
 		slab.Free(buf)
-		if err := tmpfile.Close(); err != nil {
-			glog.Errorf("Failed to close tempory file %s: %v", tmpfile.Name(), err)
+		if err := tmpFile.Close(); err != nil {
+			glog.Errorf("Failed to close temporary file %s: %v", tmpFile.Name(), err)
 		}
 	}()
 
@@ -357,12 +225,12 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 	bufSize := len(buf)
 	for bytesLeft > 0 {
 		if bytesLeft > bufSize {
-			_, err = tmpfile.Write(buf)
+			_, err = tmpFile.Write(buf)
 		} else {
-			_, err = tmpfile.Write(buf[:bytesLeft])
+			_, err = tmpFile.Write(buf[:bytesLeft])
 		}
 		if err != nil {
-			glog.Errorf("Failed to write to file %s: %v", tmpfile.Name(), err)
+			glog.Errorf("Failed to write to file %s: %v", tmpFile.Name(), err)
 			return err
 		}
 
@@ -379,7 +247,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 // The function returns the number of read/write errors, and if the mountpath
 //   is accessible. When the specified local directory is inaccessible the
 //   function returns immediately without any read/write operations
-func (f *FSHC) testMountpath(filepath, mountpath string,
+func (f *FSHC) testMountpath(filePath, mountpath string,
 	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
 	if glog.V(4) {
 		glog.Infof("Testing mountpath %s", mountpath)
@@ -393,14 +261,14 @@ func (f *FSHC) testMountpath(filepath, mountpath string,
 	defer sgl.Free()
 
 	totalReads, totalWrites := 0, 0
-	// first, read the file that causes the error, if it is defined
-	if filepath != "" {
-		if stat, err := os.Stat(filepath); err == nil && !stat.IsDir() {
+
+	// 1. Read the file that causes the error, if it is defined
+	if filePath != "" {
+		if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
 			totalReads++
-			err := f.tryReadFile(filepath, sgl)
+			err := f.tryReadFile(filePath, sgl)
 			if err != nil {
-				glog.Errorf("Checking file %s result: %#v, mountpath: %d",
-					filepath, err, readFails)
+				glog.Errorf("Checking file %s result: %#v, mountpath: %d", filePath, err, readFails)
 				if cmn.IsIOError(err) {
 					readFails++
 				}
@@ -408,7 +276,7 @@ func (f *FSHC) testMountpath(filepath, mountpath string,
 		}
 	}
 
-	// second, read a few more files up to maxReads files
+	// 2. Read a few more files up to maxReads files
 	for totalReads < maxTestFiles {
 		fqn, err := getRandomFileName(mountpath)
 		if err == io.EOF {
@@ -437,11 +305,10 @@ func (f *FSHC) testMountpath(filepath, mountpath string,
 			}
 		}
 
-		glog.Infof("%s, files read: %d, failures: %d",
-			mountpath, totalReads, readFails)
+		glog.Infof("%s, files read: %d, failures: %d", mountpath, totalReads, readFails)
 	}
 
-	// third, try to creare a few random files inside the mountpath
+	// 3. Try to create a few random files inside the mountpath
 	for totalWrites < maxTestFiles {
 		totalWrites++
 		err := f.tryWriteFile(mountpath, fileSize, sgl)
@@ -459,4 +326,38 @@ func (f *FSHC) testMountpath(filepath, mountpath string,
 	}
 
 	return readFails, writeFails, true
+}
+
+// gets a base directory and looks for a random file inside it.
+// Returns an error if any directory cannot be read
+func getRandomFileName(basePath string) (string, error) {
+	file, err := os.Open(basePath)
+	if err != nil {
+		return "", err
+	}
+
+	files, err := file.Readdir(fshcMaxFileList)
+	if err == nil {
+		fmap := make(map[string]os.FileInfo, len(files))
+		for _, ff := range files {
+			fmap[ff.Name()] = ff
+		}
+
+		// look for a non-empty random entry
+		for k, info := range fmap {
+			// it is a file - return its fqn
+			if !info.IsDir() {
+				return filepath.Join(basePath, k), nil
+			}
+			// it is a directory - return a random file from it
+			chosen, err := getRandomFileName(filepath.Join(basePath, k))
+			if err != nil {
+				return "", err
+			}
+			if chosen != "" {
+				return chosen, nil
+			}
+		}
+	}
+	return "", err
 }

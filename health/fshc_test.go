@@ -70,15 +70,17 @@ func testCheckerCleanup() {
 	os.RemoveAll(fsCheckerTmpDir)
 }
 
-func TestFSCheckerMain(t *testing.T) {
+func TestFSChecker(t *testing.T) {
 	mem2 := memsys.GMM()
 	defer mem2.Release()
 
 	updateTestConfig()
-	fshc := NewFSHC(testCheckerMountPaths(), mem2, fs.CSM)
-	if fshc == nil {
-		t.Error("Failed to create fshc")
-	}
+
+	var (
+		failedMpath = fsCheckerTmpDir + "/3"
+		dispatcher  = newMockFSDispatcher(failedMpath)
+		fshc        = NewFSHC(dispatcher, testCheckerMountPaths(), mem2, fs.CSM)
+	)
 
 	// initial state = 2 available FSes - must pass
 	availablePaths, disabledPaths := fshc.mountpaths.Get()
@@ -95,9 +97,6 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 
 	// failed mountpath must be disabled
-	failedMpath := fsCheckerTmpDir + "/3"
-	dispatcher := newMockFSDispatcher(failedMpath)
-	fshc.SetDispatcher(dispatcher)
 	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
 
 	if !dispatcher.faultDetected {
@@ -120,14 +119,12 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 
 	for _, tst := range testList {
-		fmt.Printf("Test: %s.\n", tst.title)
-		res, _ := fshc.isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
-		if res == tst.result {
-			fmt.Printf("    PASSED\n")
-		} else {
-			fmt.Printf("    FAILED\n")
-			t.Errorf("%s failed. %v expected but %v got", tst.title, tst.result, res)
-		}
+		t.Run(tst.title, func(t *testing.T) {
+			res, _ := fshc.isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
+			if res != tst.result {
+				t.Errorf("%s failed. %v expected but %v got", tst.title, tst.result, res)
+			}
+		})
 	}
 
 	testCheckerCleanup()
