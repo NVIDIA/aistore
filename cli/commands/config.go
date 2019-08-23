@@ -113,7 +113,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 			return err
 		}
 
-		_, _ = fmt.Fprintln(c.App.Writer)
+		_, _ = fmt.Fprintf(c.App.Writer, "Config has been updated successfully.\n")
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(c.App.Writer)
+	_, _ = fmt.Fprintf(c.App.Writer, "Config for node %q has been updated successfully.\n", daemonID)
 	return nil
 }
 

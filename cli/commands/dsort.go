@@ -701,17 +701,17 @@ func printCondensedStats(w io.Writer, baseParams *api.BaseParams, id string) err
 		}
 	}
 
+	if aborted {
+		_, _ = fmt.Fprintf(w, "DSort job was aborted. Check detailed metrics for encountered errors.\n")
+		return nil
+	}
+
 	if finished {
 		_, _ = fmt.Fprintf(
 			w,
 			"DSort job has finished successfully in %v:\n  Longest extraction:\t%v\n  Longest sorting:\t%v\n  Longest creation:\t%v\n",
 			elapsedTime, extractionTime, sortingTime, creationTime,
 		)
-		return nil
-	}
-
-	if aborted {
-		_, _ = fmt.Fprintf(w, "DSort job was aborted. Check detailed metrics for encountered errors.\n")
 		return nil
 	}
 
