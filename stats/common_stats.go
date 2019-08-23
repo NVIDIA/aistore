@@ -175,6 +175,14 @@ func (s *CoreStats) UpdateUptime(d time.Duration) {
 func (s *CoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
 func (s *CoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
 
+func (s *CoreStats) get(name string) (val int64) {
+	v := s.Tracker[name]
+	v.RLock()
+	val = v.Value
+	v.RUnlock()
+	return
+}
+
 //
 // NOTE naming convention: ".n" for the count and ".µs" for microseconds
 //
@@ -318,7 +326,9 @@ func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmars
 //
 
 func (tracker statsTracker) register(key string, kind string, isCommon ...bool) {
-	cmn.AssertMsg(kind == KindCounter || kind == KindLatency || kind == KindThroughput || kind == KindSpecial, "Invalid stats kind '"+kind+"'")
+	if ok := kind == KindCounter || kind == KindLatency || kind == KindThroughput || kind == KindSpecial; !ok {
+		cmn.AssertMsg(false, "Invalid stats kind '"+kind+"'")
+	}
 	tracker[key] = &statsValue{kind: kind}
 	if len(isCommon) > 0 {
 		tracker[key].isCommon = isCommon[0]
@@ -361,14 +371,35 @@ var (
 )
 
 func (r *statsRunner) runcommon(logger statslogger) error {
-	// wait for the daemon (proxy or target) to start
-	cmn.WaitStartup(cmn.GCO.Get(), r.daemonStarted)
+	const sleep = 300 * time.Millisecond
+	config := cmn.GCO.Get()
 
-	r.stopCh = make(chan struct{}, 4)
-	r.workCh = make(chan NamedVal64, 256)
+	// drain workCh until the daemon (proxy or target) starts up
+	var i time.Duration
+	ticker := time.NewTicker(sleep)
+dummy:
+	for {
+		select {
+		case <-r.workCh:
+		case <-r.stopCh:
+			ticker.Stop()
+			return nil
+		case <-ticker.C:
+			if r.daemonStarted.Load() {
+				break dummy
+			}
+			i++
+			if i*sleep > config.Timeout.Startup {
+				glog.Errorf("waiting unusually long time...")
+				i = 0
+			}
+		}
+	}
+	ticker.Stop()
 
+	// for real now
 	glog.Infof("Starting %s", r.Getname())
-	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)
+	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 	startTime := time.Now()
 	r.startedUp.Store(true)
 	for {
@@ -403,7 +434,7 @@ func (r *statsRunner) Stop(err error) {
 	close(r.stopCh)
 }
 
-// statslogger interface impl
+// common impl
 func (r *statsRunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
 func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
 func (r *statsRunner) Get(name string) int64             { cmn.Assert(false); return 0 }

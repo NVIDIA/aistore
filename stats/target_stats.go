@@ -98,14 +98,7 @@ type (
 
 func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
 func (r *Trunner) Run() error                        { return r.runcommon(r) }
-
-func (r *Trunner) Get(name string) (val int64) {
-	v := r.Core.Tracker[name]
-	v.RLock()
-	val = v.Value
-	v.RUnlock()
-	return
-}
+func (r *Trunner) Get(name string) (val int64)       { return r.Core.get(name) }
 
 func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
 	r.Core = &CoreStats{}
@@ -119,8 +112,13 @@ func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *
 	r.Core.statsTime = config.Periodic.StatsTime
 	lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 	r.timecounts.capLimit.Store(lim)
+
 	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(config.Periodic.StatsTime))
 	r.statsRunner.daemonStarted = daemonStarted
+
+	r.statsRunner.stopCh = make(chan struct{}, 4)
+	r.statsRunner.workCh = make(chan NamedVal64, 256)
+
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 	return &r.statsRunner.startedUp
@@ -128,9 +126,13 @@ func (r *Trunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *
 
 func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 	r.statsRunner.ConfigUpdate(oldConf, newConf)
-	r.Core.statsTime = newConf.Periodic.StatsTime
-	lim := cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
-	r.timecounts.capLimit.Store(lim)
+	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
+		r.Core.statsTime = newConf.Periodic.StatsTime
+	}
+	if oldConf.LRU.CapacityUpdTime != newConf.LRU.CapacityUpdTime {
+		lim := cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
+		r.timecounts.capLimit.Store(lim)
+	}
 }
 
 func (r *Trunner) GetWhatStats() []byte {

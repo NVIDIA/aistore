@@ -74,19 +74,11 @@ type ExtRebalanceStats struct {
 }
 
 func (s *RebalanceTargetStats) FillFromTrunner(r *Trunner) {
-	vr := r.Core.Tracker[RxRebCount]
-	vt := r.Core.Tracker[TxRebCount]
-	vr.RLock()
-	vt.RLock()
-
-	s.Ext.RxRebSize = r.Core.Tracker[RxRebSize].Value
-	s.Ext.RxRebCount = r.Core.Tracker[RxRebCount].Value
-	s.Ext.TxRebSize = r.Core.Tracker[TxRebSize].Value
-	s.Ext.TxRebCount = r.Core.Tracker[TxRebCount].Value
+	s.Ext.RxRebSize = r.Core.get(RxRebSize)
+	s.Ext.RxRebCount = r.Core.get(RxRebCount)
+	s.Ext.TxRebSize = r.Core.get(TxRebSize)
+	s.Ext.TxRebCount = r.Core.get(TxRebCount)
 
 	s.ObjCountX = s.Ext.RxRebCount + s.Ext.TxRebCount
 	s.BytesCountX = s.Ext.RxRebSize + s.Ext.TxRebSize
-
-	vt.RUnlock()
-	vr.RUnlock()
 }

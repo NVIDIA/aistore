@@ -40,15 +40,8 @@ var proxyLogIdleItems = []string{"kalive.µs.min", "kalive.µs", "kalive.µs.max
 //
 // Prunner
 //
-func (r *Prunner) Run() error { return r.runcommon(r) }
-
-func (r *Prunner) Get(name string) (val int64) {
-	v := r.Core.Tracker[name]
-	v.RLock()
-	val = v.Value
-	v.RUnlock()
-	return
-}
+func (r *Prunner) Run() error                  { return r.runcommon(r) }
+func (r *Prunner) Get(name string) (val int64) { return r.Core.get(name) }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *atomic.Bool {
@@ -60,6 +53,10 @@ func (r *Prunner) Init(daemonStr, daemonID string, daemonStarted *atomic.Bool) *
 
 	r.statsRunner.logLimit = cmn.DivCeil(int64(logsMaxSizeCheckTime), int64(r.Core.statsTime))
 	r.statsRunner.daemonStarted = daemonStarted
+
+	r.statsRunner.stopCh = make(chan struct{}, 4)
+	r.statsRunner.workCh = make(chan NamedVal64, 256)
+
 	// subscribe to config changes
 	cmn.GCO.Subscribe(r)
 	return &r.statsRunner.startedUp

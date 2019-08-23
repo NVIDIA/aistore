@@ -2907,9 +2907,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.statsif.StartedUp() {
-		p.statsif.Add(stats.PostCount, 1)
-	}
+	p.statsif.Add(stats.PostCount, 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
