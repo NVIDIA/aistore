@@ -1804,6 +1804,8 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
 					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
+					tutils.Logf("changed `missing_shards` config to: %s\n", reaction)
+
 					df.init()
 					df.clearDSortList()
 					df.createInputShards()
