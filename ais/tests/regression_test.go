@@ -665,7 +665,7 @@ func TestRebalance(t *testing.T) {
 		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", randomTarget.DaemonID, l)
 		return
 	}
-	tutils.Logf("Re-registered %s: the cluster is now back to %d targets\n", randomTarget.DaemonID, l)
+	tutils.Logf("Registered %s: the cluster is now back to %d targets\n", randomTarget.DaemonID, l)
 	//
 	// step 5. wait for rebalance to run its course
 	//
@@ -1322,7 +1322,7 @@ func allCompleted(targetsStats map[string][]*stats.BaseXactStatsExt) bool {
 		for _, xaction := range targetStats {
 			if xaction.Running() {
 				tutils.Logf("%s(%d) in progress for %s (started %s)\n",
-					xaction.Kind(), xaction.ID(), target, xaction.StartTime().Format(time.StampMilli))
+					xaction.Kind(), xaction.ShortID(), target, xaction.StartTime().Format(time.StampMilli))
 				return false
 			}
 		}
@@ -1359,7 +1359,7 @@ func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 				break
 			}
 			if i == 1 {
-				tutils.Logf("Wait for %s to finish\n", kind)
+				tutils.Logf("waiting for %s\n", kind)
 			}
 			if i*sleep > timeout {
 				ch <- errors.New(kind + ": timeout")
@@ -1403,7 +1403,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 				return
 			}
 			if !logged {
-				tutils.Logf("Wait for global rebalance to finish\n")
+				tutils.Logf("waiting for global rebalance\n")
 				logged = true
 			}
 
@@ -1426,7 +1426,7 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 				return
 			}
 			if !logged {
-				tutils.Logf("Wait for local rebalance to finish\n")
+				tutils.Logf("waiting for local rebalance\n")
 				logged = true
 			}
 

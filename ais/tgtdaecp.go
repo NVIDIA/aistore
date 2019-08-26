@@ -399,7 +399,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActLocalReb:
 			go t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
 		case cmn.ActGlobalReb:
-			go t.rebManager.runGlobalReb(t.smapowner.get())
+			go t.rebManager.runGlobalReb(t.smapowner.get(), 0) // TODO -- FIXME: version and glob ID
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
@@ -776,7 +776,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		if cmd, ok := msgInt.Value.(string); ok {
 			switch cmd {
 			case cmn.RebStart:
-				go t.rebManager.runGlobalReb(newsmap)
+				go t.rebManager.runGlobalReb(newsmap, msgInt.GlobRebID)
 			case cmn.RebAbort:
 				t.xactions.abortGlobalXact(cmn.ActGlobalReb)
 			default:
@@ -794,11 +794,11 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 		return
 	}
 	glog.Infof("%s receiveSmap: go rebalance(newTargetID=%s)", t.si.Name(), newTargetID)
-	go t.rebManager.runGlobalReb(newsmap)
+	go t.rebManager.runGlobalReb(newsmap, msgInt.GlobRebID)
 	return
 }
 
-func (t *targetrunner) ensureLatestMD(msgInt actionMsgInternal) {
+func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	smap := t.smapowner.Get()
 	smapVersion := msgInt.SmapVersion
 	if smap.Version < smapVersion {
@@ -1256,12 +1256,12 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	}
 	switch action {
 	case cmn.ActRenameLB:
-		_, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+		_, err = t.xactions.renewBckFastRename(t, bucketFrom, bucketTo, cmn.ActBegin)
 		if err == nil {
 			err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, true /*destroy*/)
 		}
 	case cmn.ActCopyLB:
-		_, err = t.xactions.renewBckCopy(bucketFrom, bucketTo, t, action, cmn.ActBegin)
+		_, err = t.xactions.renewBckCopy(t, bucketFrom, bucketTo, cmn.ActBegin)
 	default:
 		cmn.Assert(false)
 	}
@@ -1309,11 +1309,11 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	return
 }
 
-func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
-	switch action {
-	case cmn.ActRenameLB: // rename back
+func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo string, msgInt *actionMsgInternal) (err error) {
+	switch msgInt.Action {
+	case cmn.ActRenameLB:
 		var xact *xactFastRen
-		xact, err = t.xactions.renewBckFastRename(bucketFrom, bucketTo, t, action, cmn.ActCommit)
+		xact, err = t.xactions.renewBckFastRename(t, bucketFrom, bucketTo, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // must not happen at commit time
 			break
@@ -1326,11 +1326,11 @@ func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo, action string) (
 
 		t.gfn.local.activate()
 		t.gfn.global.activate()
-		go xact.run()                      // do the work
+		go xact.run(msgInt.GlobRebID)      // do the work
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
 	case cmn.ActCopyLB:
 		var xact *mirror.XactBckCopy
-		xact, err = t.xactions.renewBckCopy(bucketFrom, bucketTo, t, action, cmn.ActCommit)
+		xact, err = t.xactions.renewBckCopy(t, bucketFrom, bucketTo, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // unexpected at commit time
 			break

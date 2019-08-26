@@ -33,7 +33,7 @@ func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap)
 
 func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
-	Logf("Removing a target: %s\n", removeTarget.DaemonID)
+	Logf("Removing target %s\n", removeTarget.DaemonID)
 	err := UnregisterNode(proxyURL, removeTarget.DaemonID)
 	tassert.CheckFatal(t, err)
 	smap, err = WaitForPrimaryProxy(
@@ -102,12 +102,20 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 
 	if verbose {
 		if totalProxies > 0 {
-			Logf("Waiting for %d proxies\n", totalProxies)
+			a := "proxies"
+			if totalProxies == 1 {
+				a = "proxy"
+			}
+			Logf("waiting for %d %s\n", totalProxies, a)
 		}
 		if totalTargets > 0 {
-			Logf("Waiting for %d targets\n", totalTargets)
+			a := "targets"
+			if totalTargets == 1 {
+				a = "target"
+			}
+			Logf("waiting for %d %s\n", totalTargets, a)
 		}
-		Logf("Waiting for the cluster %s [Smap version > %d]\n", reason, origVersion)
+		Logf("waiting for the cluster [%s, Smap version > %d]\n", reason, origVersion)
 	}
 
 	var loopCnt int
@@ -221,7 +229,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
 		}
 
-		fmt.Printf("wait for Smap > v%d: %s\n", prevVersion, url)
+		fmt.Printf("waiting for Smap > v%d: %s\n", prevVersion, url)
 		time.Sleep(time.Second)
 	}
 	return nil

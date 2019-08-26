@@ -41,6 +41,7 @@ type BaseXactStatsExt struct {
 }
 
 func (b *BaseXactStats) ID() int64            { return b.IDX }
+func (b *BaseXactStats) ShortID() uint32      { return cmn.ShortID(b.IDX) }
 func (b *BaseXactStats) Kind() string         { return b.KindX }
 func (b *BaseXactStats) Bucket() string       { return b.BucketX }
 func (b *BaseXactStats) StartTime() time.Time { return b.StartTimeX }

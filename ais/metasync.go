@@ -287,15 +287,13 @@ outer:
 	for _, pair := range pairs {
 		var (
 			revs, msgInt, tag = pair.revs, pair.msgInt, pair.revs.tag()
-			s                 = fmt.Sprintf("%s, action=%s, version=%d", tag, msgInt.Action, revs.version())
+			s                 = fmt.Sprintf("[%s, action=%s, version=%d]", tag, msgInt.Action, revs.version())
 		)
 		// vs current Smap
 		if tag == smaptag {
-			v := smap.version()
-			if revsReqType == revsReqSync && revs.version() > v {
-				cmn.AssertMsg(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
-			} else if revs.version() < v {
-				glog.Warningf("Warning: %s: using newer Smap v%d to broadcast", s, v)
+			if revsReqType == revsReqSync && revs.version() > smap.version() {
+				ers := fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, smap.version())
+				cmn.AssertMsg(false, ers)
 			}
 		}
 		// vs the last sync-ed: enforcing non-decremental versioning on the wire

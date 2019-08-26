@@ -70,6 +70,7 @@ type (
 		startedUp  atomic.Bool
 		metasyncer *metasyncer
 		rproxy     reverseProxy
+		globRebID  atomic.Int64
 	}
 )
 
@@ -181,6 +182,12 @@ func (p *proxyrunner) Run() error {
 
 	dsort.RegisterNode(p.smapowner, p.bmdowner, p.si, nil, p.statsif)
 	return p.httprunner.run()
+}
+
+func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal) {
+	ngid := smap.version() * 100
+	p.globRebID.Store(ngid)
+	msgInt.GlobRebID = ngid
 }
 
 func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
@@ -1434,6 +1441,10 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	}
 
 	// commit
+	if msg.Action == cmn.ActRenameLB {
+		msgInt.GlobRebID = p.globRebID.Inc()
+		body = cmn.MustMarshal(msgInt)
+	}
 	results = p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActCommit),
 		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
@@ -2503,6 +2514,8 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 		return
 	}
 	p.smapowner.put(clone)
+	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
+	p.setGlobRebID(clone, msgInt)
 	p.smapowner.Unlock()
 
 	bmd := p.bmdowner.get()
@@ -2510,7 +2523,6 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 		glog.Infof("Distributing Smap v%d with the newly elected primary %s(self)", clone.version(), p.si.Name())
 		glog.Infof("Distributing %s v%d as well", bmdTermName, bmd.version())
 	}
-	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
 	p.metasyncer.sync(true, revspair{clone, msgInt}, revspair{bmd, msgInt})
 	return
 }
@@ -2977,8 +2989,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		clone := p.smapowner.get().clone()
 		clone.putNode(nsi, nonElectable)
 
-		// Notify proxies and targets about new node. Targets probably need
-		// to set up GFN.
+		// Notify all nodes about a new one (targets probably need to set up GFN)
 		notifyMsgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActStartGFN}, clone, nil)
 		notifyPairs := revspair{clone, notifyMsgInt}
 		failCnt := p.metasyncer.notify(true, notifyPairs)
@@ -2994,11 +3005,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if err := p.smapowner.persist(clone, true); err != nil {
 			glog.Error(err)
 		}
+		msgInt := p.newActionMsgInternal(msg, clone, nil)
+		p.setGlobRebID(clone, msgInt)
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
-		// storage targets make use of msgInt.NewDaemonID,
-		// to figure out whether to rebalance the cluster, and how to execute the rebalancing
-		msgInt := p.newActionMsgInternal(msg, clone, nil)
 		msgInt.NewDaemonID = nsi.DaemonID
 
 		// metasync
@@ -3126,6 +3136,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
+	p.setGlobRebID(clone, msgInt)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 

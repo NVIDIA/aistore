@@ -147,7 +147,7 @@ func formatThroughput(bytes int64, duration time.Duration) (sthr string) {
 	var (
 		gbs    float64
 		mbs    = float64(bytes) / 1024 / 1024
-		suffix = "MB/s"
+		suffix = "MiB/s"
 		thr    = mbs * float64(time.Second) / float64(duration)
 	)
 	if duration == 0 {
@@ -155,7 +155,7 @@ func formatThroughput(bytes int64, duration time.Duration) (sthr string) {
 	}
 	if thr > 1024 {
 		gbs = float64(bytes) / 1024 / 1024 / 1024
-		suffix = "GB/s"
+		suffix = "GiB/s"
 		thr = gbs * float64(time.Second) / float64(duration)
 	}
 	sthr = fmt.Sprintf("%.3f%s", thr, suffix)

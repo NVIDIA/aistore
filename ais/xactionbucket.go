@@ -320,13 +320,12 @@ func (e *bcrEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, er
 	return
 }
 
-func (r *xactionsRegistry) renewBckCopy(bucketFrom, bucketTo string, t *targetrunner,
-	action, phase string) (*mirror.XactBckCopy, error) {
+func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bucketFrom, bucketTo string, phase string) (*mirror.XactBckCopy, error) {
 	b := r.bucketsXacts(bucketFrom)
 	e := &bcrEntry{baseBckEntry: baseBckEntry{bckName: bucketFrom},
 		t:        t,
 		bucketTo: bucketTo,
-		action:   action, // kind
+		action:   cmn.ActCopyLB, // kind
 		phase:    phase,
 	}
 	ee, err := b.renewBucketXaction(e)
@@ -363,19 +362,27 @@ func (r *xactFastRen) IsMountpathXact() bool { return false }
 //
 // TODO -- FIXME: if rebalancing don't "scope" it to a bucket
 //
-func (r *xactFastRen) run() {
-	var wg = &sync.WaitGroup{}
+func (r *xactFastRen) run(globRebID int64) {
+	var (
+		wg               = &sync.WaitGroup{}
+		gbucket, lbucket = r.bucketTo, r.bucketTo // scoping
+		_, lrunning      = r.t.xactions.isRebalancing(cmn.ActLocalReb)
+	)
 	glog.Infoln(r.String(), r.Bucket(), "=>", r.bucketTo)
 	if r.t.xactions.abortGlobalXact(cmn.ActGlobalReb) {
 		glog.Infof("%s: restarting global rebalance upon rename...", r)
+		gbucket = ""
+	}
+	if lrunning {
+		lbucket = ""
 	}
 	// run in parallel
 	wg.Add(1)
 	go func() {
-		r.t.rebManager.runLocalReb(true /*skipGlobMisplaced*/, r.bucketTo)
+		r.t.rebManager.runLocalReb(true /*skipGlobMisplaced*/, lbucket)
 		wg.Done()
 	}()
-	r.t.rebManager.runGlobalReb(r.t.smapowner.get())
+	r.t.rebManager.runGlobalReb(r.t.smapowner.get(), globRebID, gbucket)
 	wg.Wait()
 
 	r.t.bmdVersionFixup(r.Bucket()) // piggyback bucket renaming (last step) on getting updated BMD
@@ -412,12 +419,12 @@ func (e *fastRenEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool
 	return
 }
 
-func (r *xactionsRegistry) renewBckFastRename(bucketFrom, bucketTo string, t *targetrunner, action, phase string) (*xactFastRen, error) {
+func (r *xactionsRegistry) renewBckFastRename(t *targetrunner, bucketFrom, bucketTo string, phase string) (*xactFastRen, error) {
 	b := r.bucketsXacts(bucketFrom)
 	e := &fastRenEntry{baseBckEntry: baseBckEntry{bckName: bucketFrom},
 		t:        t,
 		bucketTo: bucketTo,
-		action:   action, // kind
+		action:   cmn.ActRenameLB, // kind
 		phase:    phase,
 	}
 	ee, err := b.renewBucketXaction(e)

@@ -192,8 +192,7 @@ func (t *targetrunner) Run() error {
 	}
 	t.registerNetworkHandlers(networkHandlers)
 
-	// rebalance Rx endpoints
-	t.setupRebalanceRx(config)
+	t.initRebManager(config)
 
 	getfshealthchecker().SetDispatcher(t)
 
@@ -215,8 +214,9 @@ func (t *targetrunner) Run() error {
 	return nil
 }
 
-func (t *targetrunner) setupRebalanceRx(config *cmn.Config) {
+func (t *targetrunner) initRebManager(config *cmn.Config) {
 	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	// Rx endpoints
 	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
 		reb.netd = cmn.NetworkIntraData
@@ -230,6 +230,10 @@ func (t *targetrunner) setupRebalanceRx(config *cmn.Config) {
 	if _, err := transport.Register(reb.netc, rebalanceAcksName, reb.recvAck); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
+	// serialization: one at a time
+	reb.semaCh = make(chan struct{}, 1)
+	reb.semaCh <- struct{}{}
+
 	t.rebManager = reb
 }
 
@@ -506,7 +510,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket  string
-		msgInt  actionMsgInternal
+		msgInt  = &actionMsgInternal{}
 		started = time.Now()
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -526,7 +530,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 
 	if err == nil && len(b) > 0 {
-		err = jsoniter.Unmarshal(b, &msgInt)
+		err = jsoniter.Unmarshal(b, msgInt)
 	}
 	t.ensureLatestMD(msgInt)
 	if err != nil {
@@ -547,7 +551,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		fs.Mountpaths.EvictCloudBucket(bucket) // validation handled in proxy.go
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, apitems, bckProvider, &msgInt)
+			err := t.listRangeOperation(r, apitems, bckProvider, msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
@@ -615,11 +619,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		msgInt  actionMsgInternal
 		bmd     *bucketMD
+		msgInt  = &actionMsgInternal{}
 		started = time.Now()
 	)
-	if cmn.ReadJSON(w, r, &msgInt) != nil {
+	if cmn.ReadJSON(w, r, msgInt) != nil {
 		return
 	}
 	apitems, err := t.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
@@ -638,7 +642,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	switch msgInt.Action {
 	case cmn.ActPrefetch: // validation done in proxy.go
-		if err := t.listRangeOperation(r, apitems, bckProvider, &msgInt); err != nil {
+		if err := t.listRangeOperation(r, apitems, bckProvider, msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 			return
 		}
@@ -653,7 +657,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActAbort:
 			err = t.abortCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
 		case cmn.ActCommit:
-			err = t.commitCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+			err = t.commitCopyRenameLB(bucketFrom, bucketTo, msgInt)
 		default:
 			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msgInt.Action, bucketFrom, bucketTo)
 		}
@@ -665,7 +669,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bucket, bckIsLocal, &msgInt); !ok {
+		if ok := t.listbucket(w, r, bucket, bckIsLocal, msgInt); !ok {
 			return
 		}
 

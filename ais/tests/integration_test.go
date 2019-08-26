@@ -60,7 +60,7 @@ func (m *ioContext) saveClusterState() {
 	m.smap = getClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)
-	tutils.Logf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
+	tutils.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
 func (m *ioContext) init() {
@@ -207,7 +207,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 	)
 
 	// T1
-	tutils.Logf("Re-registering target %s...\n", target.DaemonID)
+	tutils.Logf("Registering target %s...\n", target.DaemonID)
 	smap := getClusterMap(m.t, m.proxyURL)
 	err := tutils.RegisterNode(m.proxyURL, target, smap)
 	tassert.CheckFatal(m.t, err)
@@ -218,7 +218,7 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			// T2
 			smap = getClusterMap(m.t, m.proxyURL)
 			if _, ok := smap.Tmap[target.DaemonID]; ok {
-				tutils.Logf("T2: re-registered target %s\n", target.DaemonID)
+				tutils.Logf("T2: registered target %s\n", target.DaemonID)
 			}
 		} else {
 			baseParams.URL = m.proxyURL
@@ -230,20 +230,20 @@ func (m *ioContext) reregisterTarget(target *cluster.Snode) {
 			tassert.CheckFatal(m.t, err)
 			// T3
 			if cmn.StrSlicesEqual(proxyLBNames.Local, targetLBNames.Local) {
-				tutils.Logf("T3: re-registered target %s got updated with the new bucket-ioContext\n", target.DaemonID)
+				tutils.Logf("T3: registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
 				return
 			}
 		}
 	}
 
-	m.t.Fatalf("failed to reregister target %s. Either is not in the smap or did not receive bucket ioContext", target.DaemonID)
+	m.t.Fatalf("failed to register target %s: not in the Smap or did not receive bucket-metadata", target.DaemonID)
 }
 
 // Intended for a deployment with multiple targets
 // 1. Unregister target T
 // 2. Create local bucket
 // 3. PUT large amount of objects into the local bucket
-// 4. GET the objects while simultaneously re-registering the target T
+// 4. GET the objects while simultaneously registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -307,7 +307,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 1. Unregister a target
 // 2. Create a local bucket
 // 3. Crash the primary proxy and PUT in parallel
-// 4. Failback to the original primary proxy, re-register target, and GET in parallel
+// 4. Failback to the original primary proxy, register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -394,7 +394,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 1. Kill registered target and wait for Smap to updated
 // 2. Create local bucket
 // 3. PUT large amounts of objects into local bucket
-// 4. Get the objects while simultaneously re-registering the target
+// 4. Get the objects while simultaneously registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -762,7 +762,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Register target 1 to bring cluster to original state
 	m.reregisterTarget(targets[1])
-	tutils.Logln("reregistering complete")
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
@@ -1588,7 +1587,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		t.Fatalf("Not all disabled mountpaths were enabled")
 	}
 
-	tutils.Logf("Waiting for local bucket %s appears on all targets\n", m.bucket)
+	tutils.Logf("waiting for local bucket %s to appear on all targets\n", m.bucket)
 	err = tutils.WaitForLocalBucket(m.proxyURL, m.bucket, true /*exists*/)
 	tassert.CheckFatal(t, err)
 
@@ -1693,7 +1692,7 @@ func TestAtimeRebalance(t *testing.T) {
 		objNames[entry.Name] = entry.Atime
 	}
 
-	// re-register target
+	// register target
 	err = tutils.RegisterNode(m.proxyURL, target, m.smap)
 	tassert.CheckFatal(t, err)
 
@@ -1890,7 +1889,6 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Reregister target 0
 	m.reregisterTarget(targets[0])
-	tutils.Logln("reregistering complete")
 
 	// Do puts
 	m.puts()
@@ -1947,7 +1945,6 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 
 	// Reregister target 0
 	m.reregisterTarget(targets[0])
-	tutils.Logln("reregistering complete")
 
 	// Wait for rebalance and do gets
 	baseParams := tutils.BaseAPIParams(m.proxyURL)

@@ -89,6 +89,7 @@ func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsLocal bool
 }
 
 func (xact *XactBase) ID() int64                  { return xact.id }
+func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) BckIsLocal() bool           { return xact.bckIsLocal }
@@ -100,11 +101,11 @@ func (xact *XactBase) String() string {
 	stime := xact.StartTime()
 	stimestr := stime.Format(timeStampFormat)
 	if !xact.Finished() {
-		return fmt.Sprintf("%s(%d) started %s", xact.Kind(), xact.ID(), stimestr)
+		return fmt.Sprintf("%s(%d) started %s", xact.Kind(), xact.ShortID(), stimestr)
 	}
 	etime := xact.EndTime()
 	d := etime.Sub(stime)
-	return fmt.Sprintf("%s(%d) started %s ended %s (%v)", xact.Kind(), xact.ID(), stimestr, etime.Format(timeStampFormat), d)
+	return fmt.Sprintf("%s(%d) started %s ended %s (%v)", xact.Kind(), xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {

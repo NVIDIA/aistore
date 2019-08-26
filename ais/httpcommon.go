@@ -86,6 +86,7 @@ type (
 		BMDVersion  int64  `json:"bmdversion"`
 		SmapVersion int64  `json:"smapversion"`
 		NewDaemonID string `json:"newdaemonid"` // used when a node joins cluster
+		GlobRebID   int64  `json:"glob_reb_id"`
 	}
 
 	// http server and http runner (common for proxy and target)

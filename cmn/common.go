@@ -149,6 +149,8 @@ func GenTie() string {
 	return string([]byte{b0, b1, b2})
 }
 
+func ShortID(id int64) uint32 { return uint32(id & int64(0xfffff)) }
+
 func RandString(n int) string {
 	b := make([]byte, n)
 	for i := range b {

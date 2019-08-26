@@ -37,8 +37,9 @@ const (
 type (
 	xactRebBase struct {
 		cmn.XactBase
-		runnerCnt int
 		confirmCh chan struct{}
+		bucket    string
+		runnerCnt int
 	}
 	xactGlobalReb struct {
 		xactRebBase
@@ -129,11 +130,30 @@ func (xact *xactPrefetch) BytesCnt() int64 {
 	return xact.r.Core.Tracker[stats.PrefetchCount].Value
 }
 
+func (xact *xactRebBase) String() string {
+	s := xact.XactBase.String()
+	if xact.bucket != "" {
+		s += ", bucket " + xact.bucket
+	}
+	return s
+}
 func (xact *xactGlobalReb) String() string {
 	return fmt.Sprintf("%s(%d), Smap v%d", xact.xactRebBase.String(), xact.runnerCnt, xact.smapVersion)
 }
 func (xact *xactLocalReb) String() string {
 	return fmt.Sprintf("%s(%d)", xact.xactRebBase.String(), xact.runnerCnt)
+}
+
+func (xact *xactGlobalReb) abortedAfter(d time.Duration) (aborted bool) {
+	sleep := time.Second / 2
+	steps := (d + sleep/2) / sleep
+	for i := 0; i < int(steps); i++ {
+		time.Sleep(sleep)
+		if xact.Aborted() {
+			return true
+		}
+	}
+	return
 }
 
 //
@@ -243,7 +263,8 @@ func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
 	if entry == nil {
 		return
 	}
-	running = !entry.Get().Finished()
+	xact := entry.Get()
+	running = !xact.Finished()
 	if running {
 		aborted = false
 	}

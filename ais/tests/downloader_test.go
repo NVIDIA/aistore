@@ -125,9 +125,9 @@ func waitForDownloaderToFinish(t *testing.T, baseParams *api.BaseParams, targetI
 	}
 
 	if targetID != "" {
-		tutils.Logf("Waiting for %s for downloader to finish on target %s \n", timeout, targetID)
+		tutils.Logf("waiting %s for downloader to finish on target %s\n", timeout, targetID)
 	} else {
-		tutils.Logf("Waiting for downloader to finish on all targets for %s\n", timeout, targetID)
+		tutils.Logf("waiting %s for downloader to finish\n", timeout)
 	}
 	// additional sleep before querying targets
 	time.Sleep(time.Second * 2)

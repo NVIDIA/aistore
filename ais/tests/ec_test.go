@@ -601,7 +601,7 @@ func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName 
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Waiting for %s\n", objPath)
+	tutils.Logf("waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, false, objName, bucket)
 
 	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
@@ -646,7 +646,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("Waiting for %s\n", objPath)
+	tutils.Logf("waiting for %s\n", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket)
 
 	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
@@ -1280,7 +1280,7 @@ func TestECExtraStress(t *testing.T) {
 		foundParts, _ = ecGetAllLocalSlices(t, objStart, bucket)
 		if len(foundParts) == int(totalSlices.Load()) {
 			delta := time.Since(startedWaiting)
-			t.Logf("Waiting for EC completed after all object are PUT %v\n", delta)
+			t.Logf("waiting %v for EC to complete\n", delta)
 			break
 		}
 		time.Sleep(time.Millisecond * 30)
@@ -1373,7 +1373,7 @@ func TestECXattrs(t *testing.T) {
 		err = api.PutObject(putArgs)
 		tassert.CheckFatal(t, err)
 
-		tutils.Logf("Waiting for %s\n", objPath)
+		tutils.Logf("waiting for %s\n", objPath)
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket)
 
 		ecCheckSlices(t, foundParts, fullPath+objName,
