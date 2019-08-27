@@ -127,6 +127,13 @@ func (gc *collector) Pop() interface{} {
 func (gc *collector) do() {
 	for _, s := range gc.streams {
 		if s.Terminated() {
+			if cnt := s.time.posted.Swap(0); cnt > 0 {
+				for cnt > 0 {
+					cnt = gc.drain(s)
+				}
+				s.time.ticks = 1
+				continue
+			}
 			s.time.ticks--
 			if s.time.ticks <= 0 {
 				delete(gc.streams, s.lid)
@@ -160,4 +167,20 @@ func (gc *collector) do() {
 	// at this point the following must be true for each i = range gc.heap:
 	// 1. heap[i].index == i
 	// 2. heap[i+1].ticks >= heap[i].ticks
+}
+
+// drain terminated stream
+func (gc *collector) drain(s *Stream) (cnt int64) {
+	// time.Sleep(10 * time.Millisecond)
+	for {
+		select {
+		case obj, ok := <-s.workCh:
+			if ok {
+				s.objDone(&obj, s.term.err)
+				cnt++
+			}
+		default:
+			return
+		}
+	}
 }
