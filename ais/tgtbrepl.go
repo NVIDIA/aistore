@@ -81,6 +81,8 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		_, err = lom.CopyObject(dst.FQN, workFQN, ri.buf, false /*dstIsCopy=false*/, true /*srcCopyOK*/)
 		if err == nil {
 			copied = true
+			dst.SetBID(dst.BckProps.BID)
+			dst.ReCache()
 			ri.t.putMirror(dst)
 		}
 		// TODO: EC via ecmanager.EncodeObject

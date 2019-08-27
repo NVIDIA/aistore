@@ -608,7 +608,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 			lom.exists = true
 			lmeta := md.(*lmeta)
 			lom.md = *lmeta
-			if lom.existsInBucket() {
+			if lom.Exists() {
 				return
 			}
 		}
@@ -629,30 +629,23 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	return
 }
 
+// this code does an extra check only for a local bucket
 func (lom *LOM) Exists() bool {
-	cmn.Dassert(lom.loaded, pkgName)
-	if !lom.BckIsLocal || !lom.exists {
-		return lom.exists
-	}
-	if lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
-		return true
-	}
-	return lom.existsInBucket()
-}
-func (lom *LOM) existsInBucket() bool {
-	// reinit lom.bmd and retry only once
-	bowner := lom.T.GetBowner()
-	lom.bmd = bowner.Get()
-	lom.BckProps, _ = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
-	if lom.BckProps != nil {
-		lom.md.bckID = lom.BckProps.BID
-		if lom.bmd.Exists(lom.Bucket, lom.md.bckID, lom.BckIsLocal) {
+	cmn.Dassert(lom.loaded, pkgName) // cannot check existence without first calling lom.Load()
+	if lom.BckIsLocal && lom.exists {
+		bowner := lom.T.GetBowner()
+		lom.bmd = bowner.Get()
+		lom.BckProps, _ = lom.bmd.Get(lom.Bucket, lom.BckIsLocal)
+		if lom.BckProps != nil && lom.md.bckID == lom.BckProps.BID {
 			return true
 		}
+		// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
+		lom.Uncache()
+		lom.exists = false
+		return false
 	}
-	lom.Uncache()
-	lom.exists = false
-	return false
+	// not yet enforcing Cloud buckets pre-(PUT/cold-GET)-existence
+	return lom.exists
 }
 
 func (lom *LOM) ReCache() {
@@ -867,9 +860,9 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 		local, exists   bool
 	)
 	lom = &LOM{Bucket: bucket, Objname: objName}
-	if bmd.Exists(bucket, md.bckID, true) {
+	if bmd.Exists(bucket, md.bckID, true /*local*/) {
 		local, exists = true, true
-	} else if bmd.Exists(bucket, md.bckID, false) {
+	} else if bmd.Exists(bucket, md.bckID, false /*cloud*/) {
 		local, exists = false, true
 	}
 	lom.exists = exists

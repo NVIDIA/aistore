@@ -735,5 +735,5 @@ func addLocalBucket(bmd *cluster.BMD, lom *cluster.LOM) {
 	p := cmn.DefaultBucketProps(true)
 	p.BID = bmd.GenBucketID(true)
 	lom.SetBID(p.BID)
-	bmd.LBmap[lom.Bucket] = p
+	lom.BckProps.BID = p.BID
 }
