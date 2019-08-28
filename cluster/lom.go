@@ -499,7 +499,11 @@ func (lom *LOM) Clone(fqn string) *LOM {
 	dst := &LOM{}
 	*dst = *lom
 	dst.md = lom.md
-	dst.FQN = fqn
+	if fqn == lom.FQN {
+		dst.ParsedFQN = lom.ParsedFQN
+	} else {
+		dst.FQN = fqn
+	}
 	return dst
 }
 

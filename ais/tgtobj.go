@@ -388,7 +388,8 @@ do:
 		if err, errCode := goi.t.GetCold(goi.ctx, goi.lom, false); err != nil {
 			return err, errCode
 		}
-		goi.t.putMirror(goi.lom)
+		lom := goi.lom.Clone(goi.lom.FQN)
+		goi.t.putMirror(lom)
 	}
 
 	// 4. get locally and stream back
