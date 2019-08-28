@@ -3142,7 +3142,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-// TODO -- FIXME start/stop/exec
+// '{"action": cmn.ActXactStart}' /v1/cluster
+// '{"action": cmn.ActXactStop}' /v1/cluster
 // '{"action": cmn.ActGlobalReb}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
@@ -3227,8 +3228,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActGlobalReb:
-		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.smapowner.Lock()
+		smap = p.smapowner.get()
+		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.setGlobRebID(smap, msgInt, true)
 		p.smapowner.Unlock()
 		p.metasyncer.sync(false, revspair{smap, msgInt})
