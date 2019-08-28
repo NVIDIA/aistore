@@ -125,18 +125,17 @@ func (gc *collector) Pop() interface{} {
 
 // collector's main method
 func (gc *collector) do() {
-	for _, s := range gc.streams {
+	for lid, s := range gc.streams {
 		if s.Terminated() {
-			if cnt := s.time.posted.Swap(0); cnt > 0 {
-				for cnt > 0 {
-					cnt = gc.drain(s)
-				}
+			if s.time.sendCalled.Swap(false) {
+				gc.drain(s)
 				s.time.ticks = 1
 				continue
 			}
+
 			s.time.ticks--
 			if s.time.ticks <= 0 {
-				delete(gc.streams, s.lid)
+				delete(gc.streams, lid)
 				close(s.workCh) // delayed close
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
@@ -154,7 +153,7 @@ func (gc *collector) do() {
 			continue
 		}
 		gc.update(s, int(s.time.idleOut/tickUnit))
-		if s.time.posted.Swap(0) > 0 {
+		if s.time.sendCalled.Swap(false) {
 			continue
 		}
 		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
@@ -170,17 +169,14 @@ func (gc *collector) do() {
 }
 
 // drain terminated stream
-func (gc *collector) drain(s *Stream) (cnt int64) {
-	// time.Sleep(10 * time.Millisecond)
+func (gc *collector) drain(s *Stream) {
+DrainFor:
 	for {
 		select {
-		case obj, ok := <-s.workCh:
-			if ok {
-				s.objDone(&obj, s.term.err)
-				cnt++
-			}
+		case obj := <-s.workCh:
+			s.objDone(&obj, s.term.err)
 		default:
-			return
+			break DrainFor
 		}
 	}
 }

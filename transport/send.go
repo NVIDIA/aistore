@@ -72,11 +72,11 @@ type (
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
-			start   atomic.Int64  // to support idle(%)
-			idleOut time.Duration // idle timeout
-			posted  atomic.Int64  // num posted since the last GC do()
-			ticks   int           // num 1s ticks until idle timeout
-			index   int           // heap stuff
+			start      atomic.Int64  // to support idle(%)
+			idleOut    time.Duration // idle timeout
+			sendCalled atomic.Bool   // determines if there was any Send() invocation since the last pass by StreamCollector (gc)
+			ticks      int           // num 1s ticks until idle timeout
+			index      int           // heap stuff
 		}
 		wg        sync.WaitGroup
 		sendoff   sendoff
@@ -319,13 +319,16 @@ func (s *Stream) compressed() bool { return s.lz4s.s == s }
 //
 // ---------------------------------------------------------------------------------------
 func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, cmplPtr unsafe.Pointer, prc ...*atomic.Int64) (err error) {
+	// This needs to be updated before terminated check to avoid any races which
+	// occur between the terminated check and setting called to 'true'.
+	s.time.sendCalled.Store(true)
+
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
 			s, *s.term.reason, s.term.err, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
 		glog.Errorln(err)
 		return
 	}
-	s.time.posted.Inc()
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
 		if glog.FastV(4, glog.SmoduleTransport) {
