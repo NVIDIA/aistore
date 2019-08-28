@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	jsoniter "github.com/json-iterator/go"
 )
 
 //
@@ -28,8 +27,8 @@ type (
 		Target map[string]*Trunner `json:"target"`
 	}
 	ClusterStatsRaw struct {
-		Proxy  *CoreStats                     `json:"proxy"`
-		Target map[string]jsoniter.RawMessage `json:"target"`
+		Proxy  *CoreStats      `json:"proxy"`
+		Target cmn.JSONRawMsgs `json:"target"`
 	}
 )
 

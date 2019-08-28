@@ -38,7 +38,6 @@ func MakeXactGetRequest(baseParams *BaseParams, kind, action, bucket string, all
 	if err != nil {
 		return nil, err
 	}
-
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	optParams.Query = url.Values{cmn.URLParamWhat: []string{cmn.GetWhatXaction}}
@@ -57,7 +56,6 @@ func MakeXactGetRequest(baseParams *BaseParams, kind, action, bucket string, all
 		}
 		return xactStats, nil
 	}
-
 	return nil, nil
 }
 

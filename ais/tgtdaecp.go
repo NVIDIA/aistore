@@ -191,6 +191,26 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 	case cmn.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	case cmn.ActXactStart, cmn.ActXactStop:
+		var (
+			kind   = msg.Name
+			bucket string
+		)
+		bucket, _ = msg.Value.(string)
+		// TODO -- FIXME: enforce bucket != "" for xactionbucket kinds
+		if msg.Action == cmn.ActXactStart {
+			if kind == cmn.ActGlobalReb {
+				// see p.httpcluput()
+				t.invalmsghdlr(w, r, "Invalid API request: expecting action="+cmn.ActGlobalReb)
+				return
+			}
+			if err := t.xactsStartRequest(kind, bucket); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+			}
+		} else {
+			t.xactions.doAbort(kind, bucket)
+		}
+		return
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
@@ -281,11 +301,9 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			err  error
 			msg  cmn.ActionMsg
 		)
-
 		if cmn.ReadJSON(w, r, &msg) != nil {
 			return
 		}
-
 		xactMsg, err := cmn.ReadXactionRequestMessage(&msg)
 		if err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse xaction action message: %s", err.Error()), http.StatusBadRequest)
@@ -305,14 +323,6 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				}
 				return
 			}
-		case cmn.ActXactStop:
-			t.xactions.doAbort(kind, bucket)
-			return
-		case cmn.ActXactStart:
-			if err := t.xactsStartRequest(kind, bucket); err != nil {
-				t.invalmsghdlr(w, r, err.Error())
-			}
-			return
 		default:
 			t.invalmsghdlr(w, r, fmt.Sprintf("Unrecognized xaction action %s", msg.Action), http.StatusBadRequest)
 			return
@@ -398,8 +408,6 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 			go t.RunLRU()
 		case cmn.ActLocalReb:
 			go t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
-		case cmn.ActGlobalReb:
-			go t.rebManager.runGlobalReb(t.smapowner.get(), 0) // TODO -- FIXME: version and glob ID
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
@@ -772,19 +780,9 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msgInt *actionMsgInternal, ca
 	if err = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); err != nil {
 		return
 	}
-	if msgInt.Action == cmn.ActGlobalReb {
-		if cmd, ok := msgInt.Value.(string); ok {
-			switch cmd {
-			case cmn.RebStart:
-				go t.rebManager.runGlobalReb(newsmap, msgInt.GlobRebID)
-			case cmn.RebAbort:
-				t.xactions.abortGlobalXact(cmn.ActGlobalReb)
-			default:
-				err = fmt.Errorf("Expecting %q or %q in the action message value, getting %s",
-					cmn.RebStart, cmn.RebAbort, cmd)
-			}
-			return
-		}
+	if msgInt.Action == cmn.ActGlobalReb { // manual
+		go t.rebManager.runGlobalReb(newsmap, msgInt.GlobRebID)
+		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")

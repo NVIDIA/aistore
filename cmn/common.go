@@ -85,6 +85,7 @@ const (
 type (
 	StringSet      map[string]struct{}
 	SimpleKVs      map[string]string
+	JSONRawMsgs    map[string]jsoniter.RawMessage
 	SimpleKVsEntry struct {
 		Key   string
 		Value string
@@ -113,8 +114,8 @@ type (
 		Target map[string]*TSysInfo `json:"target"`
 	}
 	ClusterSysInfoRaw struct {
-		Proxy  map[string]jsoniter.RawMessage `json:"proxy"`
-		Target map[string]jsoniter.RawMessage `json:"target"`
+		Proxy  JSONRawMsgs `json:"proxy"`
+		Target JSONRawMsgs `json:"target"`
 	}
 )
 

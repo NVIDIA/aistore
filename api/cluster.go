@@ -199,7 +199,6 @@ func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
 func SetClusterConfig(baseParams *BaseParams, nvs cmn.SimpleKVs) error {
 	optParams := OptionalParams{}
 	q := url.Values{}
-
 	for key, val := range nvs {
 		q.Add(key, val)
 	}
@@ -207,5 +206,24 @@ func SetClusterConfig(baseParams *BaseParams, nvs cmn.SimpleKVs) error {
 	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.ActSetConfig)
 	optParams.Query = q
 	_, err := DoHTTPRequest(baseParams, path, nil, optParams)
+	return err
+}
+
+// Exec Xaction API
+//
+// Executes a given command on xaction of a given (kind [, bucket])
+func ExecXaction(baseParams *BaseParams, kind, command, bucket string) error {
+	actMsg := &cmn.ActionMsg{
+		Action: command,
+		Name:   kind,
+		Value:  bucket,
+	}
+	msg, err := jsoniter.Marshal(actMsg)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }

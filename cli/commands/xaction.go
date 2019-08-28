@@ -68,48 +68,48 @@ var (
 func xactHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		command    = c.Command.Name
-		bucket     = parseStrFlag(c, bucketFlag)
-		xaction    = c.Args().First()
+		command    = c.Command.Name              // aka action
+		bucket     = parseStrFlag(c, bucketFlag) // bucket-specific (non-global) xactions
+		xaction    = c.Args().First()            // aka xaction kind
 	)
-
 	if command == xactStart {
 		if c.NArg() == 0 {
 			return missingArgumentsError(c, "xaction name")
 		}
 		if !bucketXactions.Contains(xaction) && flagIsSet(c, bucketFlag) {
-			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, but bucket name provided. Ignoring the bucket name.\n", xaction)
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name %s\n", xaction, bucket)
 			bucket = ""
 		}
 	}
-
 	if c.NArg() > 0 && bucketXactions.Contains(xaction) {
-		if err := checkFlags(c, []cli.Flag{bucketFlag}, fmt.Sprintf("%s is xaction that operates on buckets", xaction)); err != nil {
-			return err
+		if err = checkFlags(c, []cli.Flag{bucketFlag}, fmt.Sprintf("%s is xaction that operates on buckets", xaction)); err != nil {
+			return
 		}
 	}
-
-	_, ok := cmn.ValidXact(xaction)
-
-	if !ok && xaction != "" {
+	if _, ok := cmn.ValidXact(xaction); !ok && xaction != "" {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	}
-
-	xactStatsMap, err := api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlag))
-	if err != nil {
-		return err
-	}
-
 	switch command {
 	case xactStart:
+		if err = api.ExecXaction(baseParams, xaction, command, bucket); err != nil {
+			return
+		}
 		_, _ = fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
 	case xactStop:
+		if err = api.ExecXaction(baseParams, xaction, command, bucket); err != nil {
+			return
+		}
 		if xaction == "" {
 			_, _ = fmt.Fprintln(c.App.Writer, "stopped all xactions")
 		} else {
 			_, _ = fmt.Fprintf(c.App.Writer, "stopped %q xaction\n", xaction)
 		}
 	case xactStats:
+		var xactStatsMap map[string][]*stats.BaseXactStatsExt
+		xactStatsMap, err = api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlag))
+		if err != nil {
+			return
+		}
 		if flagIsSet(c, activeFlag) {
 			for key, val := range xactStatsMap {
 				if len(val) == 0 {
@@ -131,10 +131,9 @@ func xactHandler(c *cli.Context) (err error) {
 		}
 		err = templates.DisplayOutput(xactStatsMap, c.App.Writer, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
 	default:
-		return fmt.Errorf(invalidCmdMsg, command)
+		err = fmt.Errorf(invalidCmdMsg, command)
 	}
-
-	return err
+	return
 }
 
 func buildXactKindsMsg() string {

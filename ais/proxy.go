@@ -44,7 +44,7 @@ const (
 
 type (
 	ClusterMountpathsRaw struct {
-		Targets map[string]jsoniter.RawMessage `json:"targets"`
+		Targets cmn.JSONRawMsgs `json:"targets"`
 	}
 	// two pieces of metadata a self-registering (joining) target wants to know right away
 	targetRegMeta struct {
@@ -70,7 +70,7 @@ type (
 		startedUp  atomic.Bool
 		metasyncer *metasyncer
 		rproxy     reverseProxy
-		globRebID  atomic.Int64
+		globRebID  int64
 	}
 )
 
@@ -184,10 +184,15 @@ func (p *proxyrunner) Run() error {
 	return p.httprunner.run()
 }
 
-func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal) {
+// NOTE: caller is responsible to take smapowner lock
+func (p *proxyrunner) setGlobRebID(smap *smapX, msgInt *actionMsgInternal, inc bool) {
 	ngid := smap.version() * 100
-	p.globRebID.Store(ngid)
-	msgInt.GlobRebID = ngid
+	if inc && p.globRebID >= ngid {
+		p.globRebID++
+	} else {
+		p.globRebID = ngid
+	}
+	msgInt.GlobRebID = p.globRebID
 }
 
 func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
@@ -1442,7 +1447,9 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 
 	// commit
 	if msg.Action == cmn.ActRenameLB {
-		msgInt.GlobRebID = p.globRebID.Inc()
+		p.smapowner.Lock()
+		p.setGlobRebID(smap, msgInt, true) // FIXME: race vs change in membership
+		p.smapowner.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
 	results = p.broadcastTo(
@@ -2515,7 +2522,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	}
 	p.smapowner.put(clone)
 	msgInt := p.newActionMsgInternalStr(cmn.ActNewPrimary, clone, nil)
-	p.setGlobRebID(clone, msgInt)
+	p.setGlobRebID(clone, msgInt, true)
 	p.smapowner.Unlock()
 
 	bmd := p.bmdowner.get()
@@ -2722,39 +2729,34 @@ func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return false
 	}
-
 	body := cmn.MustMarshal(results)
 	return p.writeJSON(w, r, body, "getXaction")
 }
 
-func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request,
-	silent bool) (map[string]jsoniter.RawMessage, bool) {
-	smapX := p.smapowner.get()
-
+func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *http.Request, silent bool) (cmn.JSONRawMsgs, bool) {
 	var (
-		msgBody []byte
-		err     error
+		err  error
+		body []byte
+		smap = p.smapowner.get()
 	)
-
 	if r.Body != nil {
-		msgBody, err = cmn.ReadBytes(r)
+		body, err = cmn.ReadBytes(r)
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return nil, false
 		}
 	}
-
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
 		r.URL.Query(),
 		r.Method,
-		msgBody, // message
-		smapX,
+		body, // message
+		smap,
 		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
-	targetResults := make(map[string]jsoniter.RawMessage, smapX.CountTargets())
+	targetResults := make(cmn.JSONRawMsgs, smap.CountTargets())
 	for res := range results {
 		if res.err != nil {
 			if silent {
@@ -2770,19 +2772,19 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 }
 
 func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http.Request) bool {
-	smapX := p.smapowner.get()
-	fetchResults := func(broadcastType int, expectedNodes int) (map[string]jsoniter.RawMessage, string) {
+	smap := p.smapowner.get()
+	fetchResults := func(broadcastType int, expectedNodes int) (cmn.JSONRawMsgs, string) {
 		results := p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
 			r.URL.Query(),
 			r.Method,
 			nil, // message
-			smapX,
+			smap,
 			cmn.GCO.Get().Timeout.Default,
 			cmn.NetworkIntraControl,
 			broadcastType,
 		)
-		sysInfoMap := make(map[string]jsoniter.RawMessage, expectedNodes)
+		sysInfoMap := make(cmn.JSONRawMsgs, expectedNodes)
 		for res := range results {
 			if res.err != nil {
 				return nil, res.details
@@ -2794,7 +2796,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 	out := &cmn.ClusterSysInfoRaw{}
 
-	proxyResults, err := fetchResults(cluster.Proxies, smapX.CountProxies())
+	proxyResults, err := fetchResults(cluster.Proxies, smap.CountProxies())
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
 		return false
@@ -2802,7 +2804,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 	out.Proxy = proxyResults
 
-	targetResults, err := fetchResults(cluster.Targets, smapX.CountTargets())
+	targetResults, err := fetchResults(cluster.Targets, smap.CountTargets())
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
 		return false
@@ -2819,14 +2821,11 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
 	targetStats, ok := p.invokeHTTPSelectMsgOnTargets(w, r, false /*not silent*/)
 	if !ok {
-		errstr := fmt.Sprintf(
-			"Unable to invoke cmn.SelectMsg on targets. Query: [%s]",
-			r.URL.RawQuery)
+		errstr := fmt.Sprintf("Unable to invoke cmn.SelectMsg on targets. Query: [%s]", r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
 		return false
 	}
-
 	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
 	rr := getproxystatsrunner()
@@ -2854,6 +2853,7 @@ func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *h
 }
 
 // register|keepalive target|proxy
+// start|stop xaction
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		regReq                            targetRegMeta
@@ -2864,7 +2864,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	switch apiItems[0] {
 	case cmn.Register: // manual by user (API)
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
@@ -3006,7 +3005,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			glog.Error(err)
 		}
 		msgInt := p.newActionMsgInternal(msg, clone, nil)
-		p.setGlobRebID(clone, msgInt)
+		p.setGlobRebID(clone, msgInt, true)
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
 		msgInt.NewDaemonID = nsi.DaemonID
@@ -3129,23 +3128,28 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.smapowner.put(clone)
-	p.smapowner.Unlock()
 
 	if isPrimary := p.smapowner.get().isPrimary(p.si); !isPrimary {
+		p.smapowner.Unlock()
 		return
 	}
-
 	msgInt := p.newActionMsgInternal(msg, clone, nil)
-	p.setGlobRebID(clone, msgInt)
+	p.setGlobRebID(clone, msgInt, true)
+	p.smapowner.Unlock()
+
 	p.metasyncer.sync(true, revspair{clone, msgInt})
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+// TODO -- FIXME start/stop/exec
 // '{"action": cmn.ActGlobalReb}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	var msg cmn.ActionMsg
+	var (
+		msg  = &cmn.ActionMsg{}
+		smap = p.smapowner.get()
+	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
 		return
@@ -3165,14 +3169,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			}
 			results := p.broadcastTo(
 				cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
-				query,
-				http.MethodPut,
-				nil,
-				p.smapowner.get(),
-				defaultTimeout,
-				cmn.NetworkIntraControl,
-				cluster.AllNodes,
-			)
+				query, http.MethodPut, nil, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
 			for res := range results {
 				if res.err != nil {
 					p.invalmsghdlr(w, r, res.err.Error())
@@ -3183,13 +3180,16 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if cmn.ReadJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, msg) != nil {
 		return
 	}
-	if p.forwardCP(w, r, &msg, "", nil) {
+	if p.forwardCP(w, r, msg, "", nil) {
 		return
 	}
-
+	if msg.Action == cmn.ActXactStart && msg.Name /*kind*/ == cmn.ActGlobalReb {
+		msg.Action = cmn.ActGlobalReb
+	}
+	// handle the action
 	switch msg.Action {
 	case cmn.ActSetConfig:
 		var (
@@ -3209,47 +3209,34 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		body := cmn.MustMarshal(msg) // same message -> all targets and proxies
 		results := p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
-			nil, // query
-			http.MethodPut,
-			body,
-			p.smapowner.get(),
-			defaultTimeout,
-			cmn.NetworkIntraControl,
-			cluster.AllNodes,
-		)
+			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
 		for res := range results {
 			if res.err != nil {
-				p.invalmsghdlr(
-					w,
-					r,
-					fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details),
-				)
+				s := fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
+				p.invalmsghdlr(w, r, s)
 				p.keepalive.onerr(err, res.status)
 				return
 			}
 		}
-
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		body := cmn.MustMarshal(msg) // same message -> all targets
+		body := cmn.MustMarshal(msg)
 		p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
-			nil, // query
-			http.MethodPut,
-			body,
-			p.smapowner.get(),
-			defaultTimeout,
-			cmn.NetworkIntraControl,
-			cluster.AllNodes,
-		)
-
+			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActGlobalReb:
-		smap := p.smapowner.get()
-		msgInt := p.newActionMsgInternal(&msg, smap, nil)
+		msgInt := p.newActionMsgInternal(msg, smap, nil)
+		p.smapowner.Lock()
+		p.setGlobRebID(smap, msgInt, true)
+		p.smapowner.Unlock()
 		p.metasyncer.sync(false, revspair{smap, msgInt})
-
+	case cmn.ActXactStart, cmn.ActXactStop:
+		body := cmn.MustMarshal(msg)
+		_ = p.broadcastTo(
+			cmn.URLPath(cmn.Version, cmn.Daemon),
+			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -3340,7 +3327,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatBucketMetaX)
-	smapX := p.smapowner.get()
+	smap := p.smapowner.get()
 
 	// request all targets for their BMD saved to xattrs
 	results := p.broadcastTo(
@@ -3348,7 +3335,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 		query,
 		http.MethodGet,
 		nil, // message
-		smapX,
+		smap,
 		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,

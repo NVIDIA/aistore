@@ -271,7 +271,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	}
 	bmd := p.bmdowner.get()
 	msgInt := p.newActionMsgInternalStr(metaction2, smap, bmd)
-	p.setGlobRebID(smap, msgInt)
+	p.setGlobRebID(smap, msgInt, false /*set*/)
 	p.metasyncer.sync(false, revspair{smap, msgInt}, revspair{bmd, msgInt})
 
 	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d", p.si.Name(), smap.version(), smap.CountTargets())
