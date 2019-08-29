@@ -38,6 +38,7 @@ const (
 	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 	readerType              = tutils.ReaderTypeSG
 	rebalanceTimeout        = 5 * time.Minute
+	rebalanceStartTimeout   = 10 * time.Second
 )
 
 var (

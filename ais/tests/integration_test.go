@@ -1957,3 +1957,73 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.ensureNoErrors()
 	m.assertClusterState()
 }
+
+func TestRenewRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	var (
+		m = ioContext{
+			t:                   t,
+			num:                 10000,
+			numGetsEachFile:     5,
+			otherTasksToTrigger: 1,
+		}
+	)
+
+	m.saveClusterState()
+	if m.originalTargetCount < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Step 1: Unregister a target
+	target := tutils.ExtractTargetNodes(m.smap)[0]
+	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
+	tassert.CheckFatal(t, err)
+
+	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
+
+	// Step 2: Create a local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Step 3: PUT objects in the bucket
+	m.puts()
+
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	// Step 4: Re-register target (triggers rebalance)
+	m.reregisterTarget(target)
+	waitForGlobalRebalanceToStart(t, baseParams, rebalanceStartTimeout)
+	tutils.Logf("automatic global rebalance started\n")
+
+	m.wg.Add(m.num*m.numGetsEachFile + 2)
+	// Step 5: GET objects from the buket
+	go func() {
+		defer m.wg.Done()
+		m.gets()
+	}()
+
+	// Step 6:
+	//   - Start new rebalance manually after some time
+	//   - TODO: Verify that new rebalance xaction has started
+	go func() {
+		defer m.wg.Done()
+
+		<-m.controlCh // wait for half the GETs to complete
+
+		err := api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "")
+		tassert.CheckFatal(t, err)
+		tutils.Logf("manually initiated global rebalance\n")
+	}()
+
+	m.wg.Wait()
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+	m.ensureNoErrors()
+	m.assertClusterState()
+}

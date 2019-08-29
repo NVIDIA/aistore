@@ -1375,6 +1375,42 @@ func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 	}
 }
 
+func waitForGlobalRebalanceToStart(t *testing.T, baseParams *api.BaseParams, timeouts ...time.Duration) {
+	var (
+		start   = time.Now()
+		timeout = time.Duration(0)
+		logged  = false
+	)
+
+	if len(timeouts) > 0 {
+		timeout = timeouts[0]
+	}
+
+	for {
+		time.Sleep(1 * time.Second)
+		globRebStats, err := tutils.GetXactionStats(baseParams, cmn.ActGlobalReb)
+		checkXactAPIErr(t, err)
+
+		for _, targetStats := range globRebStats {
+			for _, xaction := range targetStats {
+				if xaction.Running() {
+					return // global rebalance started
+				}
+			}
+		}
+
+		if !logged {
+			tutils.Logf("waiting for global rebalance to start\n")
+			logged = true
+		}
+
+		if timeout != 0 && time.Since(start) > timeout {
+			t.Fatalf("global rebalance has not started before %s", timeout)
+			return
+		}
+	}
+}
+
 // Waits for both local and global rebalances to complete
 // If they were not started, this function treats them as completed
 // and returns. If timeout set, if any of rebalances doesn't complete before timeout
