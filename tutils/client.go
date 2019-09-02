@@ -173,42 +173,39 @@ func PingURL(url string) (err error) {
 	return
 }
 
-func readResponse(r *http.Response, w io.Writer, err error, src string, validate bool) (int64, string, error) {
+func readResponse(r *http.Response, w io.Writer, src string, validate bool) (int64, string, error) {
 	var (
-		length   int64
+		n        int64
 		cksumVal string
+		err      error
 	)
 
-	// Note: This code can use some cleanup.
-	if err == nil {
-		if r.StatusCode >= http.StatusBadRequest {
-			bytes, err := ioutil.ReadAll(r.Body)
-			if err == nil {
-				return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
-			}
-			return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
+	if r.StatusCode >= http.StatusBadRequest {
+		bytes, err := ioutil.ReadAll(r.Body)
+		if err == nil {
+			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
 		}
-
-		buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
-		defer slab.Free(buf)
-		if validate {
-			length, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)
-			if err != nil {
-				return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-			}
-		} else if length, err = io.CopyBuffer(w, r.Body, buf); err != nil {
-			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
-		}
-	} else {
-		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
+		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
 	}
 
-	return length, cksumVal, nil
+	buf, slab := Mem2.AllocForSize(cmn.DefaultBufSize)
+	defer slab.Free(buf)
+
+	if validate {
+		n, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)
+		if err != nil {
+			return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
+		}
+	} else if n, err = io.CopyBuffer(w, r.Body, buf); err != nil {
+		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
+	}
+
+	return n, cksumVal, nil
 }
 
-func discardResponse(r *http.Response, err error, src string) (int64, error) {
-	len, _, err := readResponse(r, ioutil.Discard, err, src, false /* validate */)
-	return len, err
+func discardResponse(r *http.Response, src string) (int64, error) {
+	n, _, err := readResponse(r, ioutil.Discard, src, false /* validate */)
+	return n, err
 }
 
 func emitError(r *http.Response, err error, errCh chan error) {
@@ -228,7 +225,6 @@ func emitError(r *http.Response, err error, errCh chan error) {
 func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, length int64) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
-		w                        = ioutil.Discard
 	)
 
 	tctx := newTraceCtx()
@@ -246,21 +242,19 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+	if err != nil {
+		return 0, HTTPLatencies{}, err
+	}
+	defer resp.Body.Close()
 
 	tctx.tr.tsHTTPEnd = time.Now()
-
-	if validate && resp != nil {
+	if validate {
 		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
 		hdhashtype = resp.Header.Get(cmn.HeaderObjCksumType)
 	}
 
 	v := hdhashtype == cmn.ChecksumXXHash
-	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
+	n, hash, err := readResponse(resp, ioutil.Discard, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
@@ -270,7 +264,7 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 		}
 	}
 
-	l := HTTPLatencies{
+	latencies := HTTPLatencies{
 		ProxyConn:           cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
 		Proxy:               cmn.TimeDelta(tctx.tr.tsRedirect, tctx.tr.tsProxyConn),
 		TargetConn:          cmn.TimeDelta(tctx.tr.tsTargetConn, tctx.tr.tsRedirect),
@@ -283,7 +277,7 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 		TargetWroteRequest:  cmn.TimeDelta(tctx.tr.tsTargetWroteRequest, tctx.tr.tsTargetWroteHeaders),
 		TargetFirstResponse: cmn.TimeDelta(tctx.tr.tsTargetFirstResponse, tctx.tr.tsTargetWroteRequest),
 	}
-	return len, l, err
+	return n, latencies, err
 }
 
 // Put sends a PUT request to url
@@ -327,11 +321,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 		return HTTPLatencies{}, fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
 	}
 
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+	defer resp.Body.Close()
 	tctx.tr.tsHTTPEnd = time.Now()
 
 	if resp.StatusCode >= http.StatusBadRequest {
@@ -494,13 +484,12 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+	if err != nil {
+		return HTTPLatencies{}, err
+	}
+	defer resp.Body.Close()
 
-	_, err = discardResponse(resp, err, fmt.Sprintf("Get config"))
+	_, err = discardResponse(resp, fmt.Sprintf("Get config"))
 	emitError(resp, err, nil)
 	l := HTTPLatencies{
 		ProxyConn: cmn.TimeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
@@ -824,7 +813,6 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	dlim := "="
 	data, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		Logf("Could not read file: %v\n", err)
 		return nil
 	}
 

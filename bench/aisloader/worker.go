@@ -27,7 +27,7 @@ func doPut(wo *workOrder) {
 			// we will experience 'read after free'. Sleep time is number taken
 			// from thin air - increase if panics are still happening.
 			go func() {
-				time.Sleep(5 * time.Second)
+				time.Sleep(4 * time.Second)
 				sgl.Free()
 			}()
 		}()
