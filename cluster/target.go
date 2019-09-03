@@ -36,7 +36,7 @@ type Target interface {
 	Snode() *Snode
 	Cloud() CloudProvider
 	PrefetchQueueLen() int
-	IsRebalancing() bool
+	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
 	RunLRU()
 	Prefetch()
@@ -45,4 +45,9 @@ type Target interface {
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
 	CopyObject(lom *LOM, bucketTo string, buf []byte, uncache bool) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
+}
+
+type RebalanceInfo struct {
+	IsRebalancing bool
+	GlobalRebID   int64
 }

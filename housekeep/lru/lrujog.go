@@ -155,7 +155,7 @@ func (lctx *lructx) evict() (err error) {
 	lctx.oldwork = lctx.oldwork[:0]
 	// 2.
 	for _, lom := range lctx.misplaced {
-		if lctx.ini.T.IsRebalancing() {
+		if lctx.ini.T.RebalanceInfo().IsRebalancing {
 			continue
 		}
 		// 2.1: remove misplaced obj

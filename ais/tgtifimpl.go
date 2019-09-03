@@ -36,10 +36,13 @@ func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
 func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueue) }
 
-func (t *targetrunner) IsRebalancing() bool {
+func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
 	_, running := t.xactions.isRebalancing(cmn.ActGlobalReb)
 	_, runningLocal := t.xactions.isRebalancing(cmn.ActLocalReb)
-	return running || runningLocal
+	return cluster.RebalanceInfo{
+		IsRebalancing: running || runningLocal,
+		GlobalRebID:   t.rebManager.globRebID.Load(),
+	}
 }
 
 func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
@@ -64,7 +67,7 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU() {
-	if t.IsRebalancing() {
+	if t.RebalanceInfo().IsRebalancing {
 		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
 		return
 	}

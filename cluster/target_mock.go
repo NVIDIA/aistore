@@ -34,13 +34,19 @@ func (*TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int
 	return 0, false
 }
 func (*TargetMock) Snode() *Snode               { return nil }
-func (*TargetMock) IsRebalancing() bool         { return false }
 func (*TargetMock) RunLRU()                     {}
 func (*TargetMock) PrefetchQueueLen() int       { return 0 }
 func (*TargetMock) Prefetch()                   {}
 func (t *TargetMock) GetBowner() Bowner         { return t.BO }
 func (*TargetMock) FSHC(err error, path string) {}
 func (*TargetMock) GetMem2() *memsys.Mem2       { return memsys.GMM() }
+
+func (*TargetMock) RebalanceInfo() RebalanceInfo {
+	return RebalanceInfo{
+		IsRebalancing: false,
+		GlobalRebID:   0,
+	}
+}
 
 func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int) {
 	return nil, http.StatusOK

@@ -398,6 +398,7 @@ func (reb *rebManager) getStats() (s *stats.ExtRebalanceStats) {
 	s.RxRebCount = statsRunner.Get(stats.RxRebCount)
 	s.TxRebSize = statsRunner.Get(stats.TxRebSize)
 	s.RxRebSize = statsRunner.Get(stats.RxRebSize)
+	s.GlobalRebID = reb.globRebID.Load()
 	return
 }
 
