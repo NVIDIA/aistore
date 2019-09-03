@@ -35,11 +35,11 @@ type ecManager struct {
 
 	xacts map[string]*ec.BckXacts // bckName -> xact map, only local buckets allowed, no naming collisions
 
-	bndlOnce   sync.Once
-	netReq     string // network used to send object request
-	netResp    string // network used to send/receive slices
-	reqBundle  *transport.StreamBundle
-	respBundle *transport.StreamBundle
+	bundleEnabled atomic.Bool // to disable and enable on the fly
+	netReq        string      // network used to send object request
+	netResp       string      // network used to send/receive slices
+	reqBundle     *transport.StreamBundle
+	respBundle    *transport.StreamBundle
 }
 
 var ECM *ecManager
@@ -71,7 +71,7 @@ func newECM(t *targetrunner) *ecManager {
 
 	for _, bck := range ECM.bckMD.LBmap {
 		if bck.EC.Enabled {
-			ECM.bndlOnce.Do(ECM.initECBundles)
+			ECM.initECBundles()
 			break
 		}
 	}
@@ -90,6 +90,9 @@ func newECM(t *targetrunner) *ecManager {
 }
 
 func (mgr *ecManager) initECBundles() {
+	if !mgr.bundleEnabled.CAS(false, true) {
+		return
+	}
 	cmn.AssertMsg(mgr.reqBundle == nil && mgr.respBundle == nil, "EC Bundles have been already initialized")
 
 	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
@@ -121,6 +124,16 @@ func (mgr *ecManager) initECBundles() {
 
 	mgr.reqBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, reqSbArgs)
 	mgr.respBundle = transport.NewStreamBundle(mgr.t.smapowner, mgr.t.si, client, respSbArgs)
+}
+
+func (mgr *ecManager) closeECBundles() {
+	if !mgr.bundleEnabled.CAS(true, false) {
+		return
+	}
+	mgr.reqBundle.Close(false)
+	mgr.reqBundle = nil
+	mgr.respBundle.Close(false)
+	mgr.respBundle = nil
 }
 
 func (mgr *ecManager) newGetXact(bucket string) *ec.XactGet {
@@ -355,7 +368,9 @@ func (mgr *ecManager) BucketsMDChanged() {
 		// init EC streams if there were not initialized on the start
 		// no need to close them when last EC bucket is disabled
 		// as they close itself on idle
-		mgr.bndlOnce.Do(mgr.initECBundles)
+		mgr.initECBundles()
+	} else if !newBckMD.ecUsed() {
+		mgr.closeECBundles()
 	}
 
 	for bckName, newBck := range newBckMD.LBmap {
