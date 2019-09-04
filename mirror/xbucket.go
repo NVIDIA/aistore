@@ -6,8 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -116,7 +114,11 @@ func (j *joggerBckBase) jog() {
 	j.stopCh = make(chan struct{}, 1)
 	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckIsAIS())
 	j.provider = cmn.ProviderFromBool(j.parent.BckIsAIS())
-	if err := filepath.Walk(dir, j.walk); err != nil {
+	opts := &fs.Options{
+		Callback: j.walk,
+		Sorted:   false,
+	}
+	if err := fs.Walk(dir, opts); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
 			glog.Infof("%s: stopping traversal: %s", dir, s)
@@ -127,15 +129,8 @@ func (j *joggerBckBase) jog() {
 	j.parent.DoneCh() <- struct{}{}
 }
 
-func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if err := cmn.PathWalkErr(err); err != nil {
-			glog.Error(err)
-			return err
-		}
-		return nil
-	}
-	if osfi.Mode().IsDir() {
+func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
+	if de.IsDir() {
 		return nil
 	}
 	lom, err := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(j.provider, j.config)

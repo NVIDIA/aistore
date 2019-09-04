@@ -43,7 +43,11 @@ func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh ch
 	heap.Init(lctx.heap)
 	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totsize, 2))
 	// phase 1: collect
-	if err := filepath.Walk(lctx.bckTypeDir, lctx.walk); err != nil {
+	opts := &fs.Options{
+		Callback: lctx.walk,
+		Sorted:   false,
+	}
+	if err := fs.Walk(lctx.bckTypeDir, opts); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
 			glog.Infof("%s: stopping traversal: %s", lctx.bckTypeDir, s)
@@ -61,15 +65,8 @@ func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh ch
 	}
 }
 
-func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if err1 := cmn.PathWalkErr(err); err1 != nil {
-			glog.Error(err1)
-			return err
-		}
-		return nil
-	}
-	if osfi.Mode().IsDir() {
+func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
+	if de.IsDir() {
 		return nil
 	}
 	if err := lctx.yieldTerm(); err != nil {

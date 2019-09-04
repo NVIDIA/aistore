@@ -5,14 +5,13 @@
 package objwalk
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/karrick/godirwalk"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
@@ -70,7 +69,7 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus uint16) error {
+func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 	relname := lom.FQN[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
@@ -104,7 +103,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus uint
 	if ci.needCopies {
 		fileInfo.Copies = int16(lom.NumCopies())
 	}
-	fileInfo.Size = osfi.Size()
+	fileInfo.Size = lom.Size()
 	ci.objs = append(ci.objs, fileInfo)
 	ci.lastFilePath = lom.FQN
 	return nil
@@ -114,7 +113,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus uint
 // Always returns all objects - no paging required. But the result may have
 // 'ghost' or duplicated  objects.
 // The only supported SelectMsg feature is 'Prefix' - it does not slow down.
-func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
+func (ci *allfinfos) listwalkfFast(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return ci.processDir(fqn)
 	}
@@ -132,18 +131,11 @@ func (ci *allfinfos) listwalkfFast(fqn string, de *godirwalk.Dirent) error {
 	return nil
 }
 
-func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		if err1 := cmn.PathWalkErr(err); err1 != nil {
-			glog.Error(err1)
-			return err
-		}
-		return nil
-	}
+func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if ci.fileCount >= ci.limit {
 		return filepath.SkipDir
 	}
-	if osfi.IsDir() {
+	if de.IsDir() {
 		return ci.processDir(fqn)
 	}
 	// FIXME: check the logic vs local/global rebalance
@@ -176,5 +168,5 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		}
 
 	}
-	return ci.lsObject(lom, osfi, objStatus)
+	return ci.lsObject(lom, objStatus)
 }

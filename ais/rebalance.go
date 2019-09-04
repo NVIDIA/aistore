@@ -602,7 +602,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 				continue
 			}
 			// send obj
-			if err := rj.send(lom, tsi, lom.Size()); err == nil {
+			if err := rj.send(lom, tsi); err == nil {
 				glog.Warningf("%s: resending %s => %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
 				cnt++
 			} else {
@@ -629,7 +629,11 @@ func (rj *globalRebJogger) jog() {
 	if rj.sema != nil {
 		rj.errCh = make(chan error, cap(rj.sema)+1)
 	}
-	if err := filepath.Walk(rj.mpath, rj.walk); err != nil {
+	opts := &fs.Options{
+		Callback: rj.walk,
+		Sorted:   false,
+	}
+	if err := fs.Walk(rj.mpath, opts); err != nil {
 		if rj.xreb.Aborted() || rj.xreb.Finished() {
 			glog.Infof("Aborting %s traversal", rj.mpath)
 		} else {
@@ -658,7 +662,7 @@ func (rj *globalRebJogger) objSentCallback(hdr transport.Header, r io.ReadCloser
 }
 
 // the walking callback is executed by the LRU xaction
-func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err error) {
+func (rj *globalRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var (
 		lom *cluster.LOM
 		tsi *cluster.Snode
@@ -667,17 +671,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	if rj.xreb.Aborted() || rj.xreb.Finished() {
 		return fmt.Errorf("%s: aborted, path %s", rj.xreb, rj.mpath)
 	}
-	if inerr == nil && len(rj.errCh) > 0 {
-		inerr = <-rj.errCh
-	}
-	if inerr != nil {
-		if err := cmn.PathWalkErr(inerr); err != nil {
-			glog.Error(err)
-			return inerr
-		}
-		return nil
-	}
-	if fi.Mode().IsDir() {
+	if de.IsDir() {
 		return nil
 	}
 	lom, err = cluster.LOM{T: t, FQN: fqn}.Init("")
@@ -709,15 +703,18 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 		return nil
 	}
 
+	if err := lom.Load(); err != nil {
+		return err
+	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", lom, t.si.Name(), tsi.Name())
 	}
 	if rj.sema == nil { // rebalance.multiplier == 1
-		err = rj.send(lom, tsi, fi.Size())
+		err = rj.send(lom, tsi)
 	} else { // // rebalance.multiplier > 1
 		rj.sema <- struct{}{}
 		go func() {
-			ers := rj.send(lom, tsi, fi.Size())
+			ers := rj.send(lom, tsi)
 			<-rj.sema
 			if ers != nil {
 				rj.errCh <- ers
@@ -727,7 +724,7 @@ func (rj *globalRebJogger) walk(fqn string, fi os.FileInfo, inerr error) (err er
 	return
 }
 
-func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64) (err error) {
+func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error) {
 	var (
 		file                  *cmn.FileHandle
 		hdr                   transport.Header
@@ -748,9 +745,6 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 	cksumType, cksumValue = cksum.Get()
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		goto rerr
-	}
-	if lom.Size() != size {
-		glog.Errorf("%s: %s %d != %d", rj.m.t.si.Name(), lom, lom.Size(), size) // TODO: remove
 	}
 	hdr = transport.Header{
 		Bucket:   lom.Bucket,
@@ -870,7 +864,11 @@ wait:
 
 func (rj *localRebJogger) jog() {
 	rj.buf = rj.slab.Alloc()
-	if err := filepath.Walk(rj.mpath, rj.walk); err != nil {
+	opts := &fs.Options{
+		Callback: rj.walk,
+		Sorted:   false,
+	}
+	if err := fs.Walk(rj.mpath, opts); err != nil {
 		if rj.xreb.Aborted() {
 			glog.Infof("Aborting %s traversal", rj.mpath)
 		} else {
@@ -882,19 +880,12 @@ func (rj *localRebJogger) jog() {
 	rj.wg.Done()
 }
 
-func (rj *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) error {
+func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	var t = rj.m.t
 	if rj.xreb.Aborted() {
 		return fmt.Errorf("%s aborted, path %s", rj.xreb, rj.mpath)
 	}
-	if err != nil {
-		if err := cmn.PathWalkErr(err); err != nil {
-			glog.Error(err)
-			return err
-		}
-		return nil
-	}
-	if fileInfo.IsDir() {
+	if de.IsDir() {
 		return nil
 	}
 	lom, err := cluster.LOM{T: t, FQN: fqn}.Init("")

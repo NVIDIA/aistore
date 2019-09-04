@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/karrick/godirwalk"
 )
 
 type (
@@ -108,20 +107,25 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		}
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
 		if w.msg.Fast {
-			// return all object names and sizes (and only names and sizes)
-			err := godirwalk.Walk(dir, &godirwalk.Options{
+			err := fs.Walk(dir, &fs.Options{
 				Callback: r.infos.listwalkfFast,
-				Unsorted: true,
+				Sorted:   false,
 			})
 			if err != nil {
 				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 				r.failedPath = dir
 				r.err = err
 			}
-		} else if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
-			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-			r.failedPath = dir
-			r.err = err
+		} else {
+			err := fs.Walk(dir, &fs.Options{
+				Callback: r.infos.listwalkf,
+				Sorted:   true,
+			})
+			if err != nil {
+				glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
+				r.failedPath = dir
+				r.err = err
+			}
 		}
 		ch <- r
 		wg.Done()
