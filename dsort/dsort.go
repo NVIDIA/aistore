@@ -338,7 +338,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		r, w = io.Pipe()
 		n    int64
 	)
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		var err error
 		if !m.rs.DryRun {
@@ -351,27 +351,23 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		wg.Done()
 	}()
 
-	go func() {
-		_, err := m.extractCreator.CreateShard(s, w, loadContent)
-		errCh <- err
-		w.CloseWithError(err) // if `nil`, the writer will close with EOF
-		wg.Done()
-	}()
+	_, err = m.extractCreator.CreateShard(s, w, loadContent)
+	w.CloseWithError(err)
+	if err != nil {
+		r.CloseWithError(err)
+		return err
+	}
 
-	finishes := 0
-	for finishes < 2 && err == nil {
-		select {
-		case err = <-errCh:
-			if err != nil {
-				r.CloseWithError(err)
-				w.CloseWithError(err)
-			}
-			finishes++
-		case <-m.listenAborted():
-			err = newAbortError(m.ManagerUUID)
+	select {
+	case err = <-errCh:
+		if err != nil {
 			r.CloseWithError(err)
 			w.CloseWithError(err)
 		}
+	case <-m.listenAborted():
+		err = newAbortError(m.ManagerUUID)
+		r.CloseWithError(err)
+		w.CloseWithError(err)
 	}
 
 	wg.Wait()

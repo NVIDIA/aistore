@@ -35,7 +35,7 @@ const (
 	// This value is used when user provided `0` as concurrency limit.
 	defaultConcFuncLimit = 10
 	// Determines maximal concurrency limit per disk.
-	maxConcFuncLimit = 120
+	maxConcFuncLimit = 95
 
 	// Batch corresponds to number of received update information per mountpath.
 	// Every time the size of the batch is reached, recalculation of limit is
