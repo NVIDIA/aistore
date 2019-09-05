@@ -254,7 +254,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 			t:               t,
 			num:             50000,
 			numGetsEachFile: 3,
-			fileSize:        cmn.KiB * 10,
+			fileSize:        10 * cmn.KiB,
 		}
 	)
 

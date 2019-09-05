@@ -29,7 +29,7 @@ var (
 	t *targetrunner
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// file system
@@ -55,6 +55,8 @@ func init() {
 	})
 	t.bmdowner.put(bmd)
 	t.statsif = stats.NewTrackerMock()
+
+	os.Exit(m.Run())
 }
 
 func BenchmarkObjPut(b *testing.B) {
@@ -146,6 +148,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				lom:     lom,
 				w:       w,
 				ctx:     nil,
+				chunked: true,
 				offset:  0,
 				length:  0,
 				isGFN:   false,

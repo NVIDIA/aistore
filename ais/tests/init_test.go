@@ -32,7 +32,7 @@ const (
 	DeleteStr               = "delete"
 	SmokeDir                = "/tmp/ais/smoke" // smoke test dir
 	SmokeStr                = "smoke"
-	largefilesize           = 4                            // in MB
+	largeFileSize           = 4 * cmn.MiB
 	proxyURL                = "http://localhost:8080"      // the url for the cluster's proxy (local)
 	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)
 	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
@@ -46,20 +46,13 @@ var (
 	numfiles               int
 	numworkers             int
 	match                  = ".*"
-	props                  string
 	pagesize               int64
 	fnlen                  int
-	objlimit               int64
 	prefix                 string
 	abortonerr             = false
-	prefetchPrefix         = "__bench/test-"
-	prefetchRegex          = "^\\d22\\d?"
 	prefetchRange          = "0:2000"
 	skipdel                bool
 	baseseed               = int64(1062984096)
-	keepaliveSeconds       int64
-	proxyChangeLatency     time.Duration // time for a cluster to stabilize after proxy changes
-	startupGetSmapDelay    int64
 	multiProxyTestDuration time.Duration
 	clichecksum            string
 	cycles                 int
@@ -74,18 +67,14 @@ var (
 	port           = envVars["PORT"]
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.StringVar(&proxyNextTierURLReadOnly, "urlnext", proxyURLNext, "Proxy URL Next Tier")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
-	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
 	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of objects returned in one page")
-	flag.Int64Var(&objlimit, "objlimit", 0, "The maximum number of objects returned in one list bucket call (0 - no limit)")
 	flag.StringVar(&prefix, "prefix", "", "Object name prefix")
 	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
-	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
-	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
 	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
@@ -94,13 +83,10 @@ func init() {
 	// They are given different seeds, as the tests are completely deterministic based on
 	// choice of seed, so they will interfere with each other.
 	flag.Int64Var(&baseseed, "seed", baseseed, "Seed to use for random number generators")
-	flag.Int64Var(&keepaliveSeconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
-	flag.Int64Var(&startupGetSmapDelay, "startupgetsmapdelay", 10, "The Startup Get Smap Delay time for proxies")
 	flag.DurationVar(&multiProxyTestDuration, "duration", 3*time.Minute,
 		"The length to run the Multiple Proxy Stress Test for")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")
-	flag.DurationVar(&proxyChangeLatency, "proxychangelatency", time.Minute*2, "Time for cluster to stabilize after a proxy change")
 
 	flag.Parse()
 
@@ -113,9 +99,6 @@ func init() {
 		proxyNextTierURLReadOnly = "http://" + nextTierHostIP + ":" + port
 	}
 
-}
-
-func TestMain(m *testing.M) {
 	clibucket = os.Getenv("BUCKET")
 	if clibucket == "" {
 		cmn.ExitInfof("Bucket name is empty")
