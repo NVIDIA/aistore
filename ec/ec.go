@@ -263,6 +263,7 @@ func (m *Metadata) marshal() []byte {
 var (
 	mm           = &memsys.Mem2{Name: "ec", MinPctFree: 10}
 	slicePadding = make([]byte, 64) // for padding EC slices
+	XactCount    atomic.Int32       // the number of currently active EC xactions
 
 	ErrorECDisabled          = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile          = errors.New("no metafile")

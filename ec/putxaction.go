@@ -32,6 +32,7 @@ type (
 
 func NewPutXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactPut {
+	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	runner := &XactPut{
@@ -163,6 +164,7 @@ func (r *XactPut) stop() {
 		return
 	}
 
+	XactCount.Dec()
 	r.XactDemandBase.Stop()
 	for _, jog := range r.putJoggers {
 		jog.stop()

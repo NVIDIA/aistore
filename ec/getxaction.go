@@ -37,6 +37,7 @@ type (
 
 func NewGetXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactGet {
+	XactCount.Inc()
 	availablePaths, disabledPaths := fs.Mountpaths.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 
@@ -206,6 +207,7 @@ func (r *XactGet) stop() {
 		return
 	}
 
+	XactCount.Dec()
 	r.XactDemandBase.Stop()
 	for _, jog := range r.getJoggers {
 		jog.stop()

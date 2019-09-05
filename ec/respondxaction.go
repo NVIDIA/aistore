@@ -25,6 +25,7 @@ type (
 func NewRespondXact(t cluster.Target, smap cluster.Sowner,
 	si *cluster.Snode, bucket string, reqBundle, respBundle *transport.StreamBundle) *XactRespond {
 
+	XactCount.Inc()
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bucket, reqBundle, respBundle),
 	}
@@ -283,6 +284,7 @@ func (r *XactRespond) stop() {
 		return
 	}
 
+	XactCount.Dec()
 	r.XactDemandBase.Stop()
 	r.EndTime(time.Now())
 }
