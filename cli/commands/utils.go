@@ -139,23 +139,23 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 //
 
 // Populates the proxy and target maps
-func fillMap(url string) (cluster.Smap, error) {
+func fillMap(url string) (*cluster.Smap, error) {
 	var (
 		baseParams = cliAPIParams(url)
 		wg         = &sync.WaitGroup{}
 	)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 	// Get the primary proxy's smap
 	smapPrimary, err := api.GetNodeClusterMap(baseParams, smap.ProxySI.DaemonID)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 
-	proxyCount := len(smapPrimary.Pmap)
-	targetCount := len(smapPrimary.Tmap)
+	proxyCount := smapPrimary.CountProxies()
+	targetCount := smapPrimary.CountTargets()
 	errCh := make(chan error, proxyCount+targetCount)
 
 	wg.Add(proxyCount + targetCount)
@@ -166,7 +166,7 @@ func fillMap(url string) (cluster.Smap, error) {
 
 	for err := range errCh {
 		if err != nil {
-			return cluster.Smap{}, err
+			return nil, err
 		}
 	}
 

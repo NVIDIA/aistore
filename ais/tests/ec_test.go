@@ -68,8 +68,8 @@ func defaultECBckProps() cmn.BucketProps {
 	}
 }
 
-func ecSliceNumInit(t *testing.T, smap cluster.Smap) error {
-	tCnt := len(smap.Tmap)
+func ecSliceNumInit(t *testing.T, smap *cluster.Smap) error {
+	tCnt := smap.CountTargets()
 	if tCnt < 4 {
 		return fmt.Errorf("%s requires at least 4 targets", t.Name())
 	}
@@ -1688,7 +1688,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	initialSmap := getClusterMap(t, proxyURL)
 
-	if len(initialSmap.Tmap) > 10 {
+	if initialSmap.CountTargets() > 10 {
 		// Reason: calculating main obj directory based on DeamonID
 		// see getOneObj, 'HACK' annotation
 		t.Skip("Test requires at most 10 targets")
@@ -1768,7 +1768,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		defer wg.Done()
 
 		// hack: calculate which targets stored a replica
-		targets, err := cluster.HrwTargetList(bucket, ecTestDir+objName, &initialSmap, ecParitySliceCnt+1)
+		targets, err := cluster.HrwTargetList(bucket, ecTestDir+objName, initialSmap, ecParitySliceCnt+1)
 		tassert.CheckFatal(t, err)
 
 		mainTarget := targets[0]

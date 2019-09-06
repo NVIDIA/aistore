@@ -52,7 +52,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 			glog.Errorf("Failed to get cluster map: %v", err)
 			return &proxy{configPath: configPath, URL: defaultURL}
 		}
-		p.Smap = &smap
+		p.Smap = smap
 		p.saveSmap()
 	}
 
@@ -90,7 +90,7 @@ func (p *proxy) comparePrimaryURL(url string) error {
 
 	if smap.ProxySI.PublicNet.DirectURL != p.URL {
 		p.URL = smap.ProxySI.PublicNet.DirectURL
-		p.Smap = &smap
+		p.Smap = smap
 		p.saveSmap()
 	}
 

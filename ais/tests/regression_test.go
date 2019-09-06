@@ -85,7 +85,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) == 1 {
+	if smap.CountTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
@@ -122,8 +122,8 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		}
 	}
 
-	if len(smap.Tmap) != len(targets) { // The objects should have been distributed to all targets
-		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", len(smap.Tmap), len(targets))
+	if smap.CountTargets() != len(targets) { // The objects should have been distributed to all targets
+		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", smap.CountTargets(), len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -163,7 +163,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) == 1 {
+	if smap.CountTargets() == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
@@ -209,9 +209,9 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}
 
 	// The objects should have been distributed to all targets
-	if len(smap.Tmap) != len(targets) {
+	if smap.CountTargets() != len(targets) {
 		t.Errorf("Expected %d different target URLs, actual: %d different target URLs",
-			len(smap.Tmap), len(targets))
+			smap.CountTargets(), len(targets))
 	}
 
 	// Ensure no target URLs are returned when the property is not requested
@@ -632,7 +632,7 @@ func TestRebalance(t *testing.T) {
 	// step 2. unregister random target
 	//
 	smap := getClusterMap(t, proxyURL)
-	l := len(smap.Tmap)
+	l := smap.CountTargets()
 	if l < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 	}
@@ -657,11 +657,11 @@ func TestRebalance(t *testing.T) {
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(t, proxyURL)
-		if len(smap.Tmap) == l {
+		if smap.CountTargets() == l {
 			break
 		}
 	}
-	if len(smap.Tmap) != l {
+	if smap.CountTargets() != l {
 		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", randomTarget.DaemonID, l)
 		return
 	}
@@ -1544,7 +1544,7 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	return
 }
 
-func getClusterMap(t *testing.T, url string) cluster.Smap {
+func getClusterMap(t *testing.T, url string) *cluster.Smap {
 	baseParams := tutils.BaseAPIParams(url)
 	time.Sleep(time.Second * 2)
 	smap, err := api.GetClusterMap(baseParams)

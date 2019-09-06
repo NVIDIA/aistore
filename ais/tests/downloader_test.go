@@ -478,7 +478,7 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
-	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestLocalBucketName, &m.smap)
+	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestLocalBucketName, m.smap)
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",

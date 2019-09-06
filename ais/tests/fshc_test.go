@@ -38,7 +38,7 @@ type checkerMD struct {
 	numObjs    int
 	proxyURL   string
 	bucket     string
-	smap       cluster.Smap
+	smap       *cluster.Smap
 	mpList     map[string]*cluster.Snode
 	allMps     map[*cluster.Snode]*cmn.MountpathList
 	origAvail  int
@@ -446,8 +446,8 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		smap       = getClusterMap(t, proxyURL)
-		proxyCnt   = len(smap.Pmap)
-		targetCnt  = len(smap.Tmap)
+		proxyCnt   = smap.CountProxies()
+		targetCnt  = smap.CountTargets()
 	)
 
 	if targetCnt < 2 {
@@ -479,6 +479,6 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	smap, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
+	_, err = tutils.WaitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 }

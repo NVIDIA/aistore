@@ -113,7 +113,7 @@ func (rctx *RecipeContext) restoreTargets() {
 			if _, ok := smap.Tmap[k]; ok {
 				continue
 			}
-			if err := tutils.RegisterNode(primaryURL, v, *smap); err != nil {
+			if err := tutils.RegisterNode(primaryURL, v, smap); err != nil {
 				report.Writef(report.SummaryLevel, "got error while re-registering %s: %v", v.DaemonID, err)
 			}
 			missingOne = true
@@ -220,7 +220,7 @@ func bcknameDePrefix(bckName string) (res string) {
 	return ""
 }
 
-//fetchBuckets returns a list of buckets in the proxy without the soakPrefix
+// fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
 	bckNames, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
 
@@ -241,10 +241,8 @@ func fetchBuckets(tag string) []string {
 
 func fetchSmap(tag string) *cluster.Smap {
 	smap, err := api.GetClusterMap(tutils.BaseAPIParams(primaryURL))
-
 	if err != nil {
-		cmn.AssertNoErr(fmt.Errorf("error fetching smap for %v: %v", tag, err))
+		cmn.AssertMsg(false, fmt.Sprintf("failed to fetch smap for %s: %v", tag, err))
 	}
-
-	return &smap
+	return smap
 }

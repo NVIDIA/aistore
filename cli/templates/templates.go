@@ -373,12 +373,12 @@ type ObjectStatTemplateHelper struct {
 }
 
 type SmapTemplateHelper struct {
-	Smap         cluster.Smap
+	Smap         *cluster.Smap
 	ExtendedURLs bool
 }
 
 type StatusTemplateHelper struct {
-	Smap   cluster.Smap
+	Smap   *cluster.Smap
 	Status map[string]*stats.DaemonStatus
 }
 

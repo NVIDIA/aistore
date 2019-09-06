@@ -37,7 +37,7 @@ type repFile struct {
 
 type ioContext struct {
 	t                   *testing.T
-	smap                cluster.Smap
+	smap                *cluster.Smap
 	semaphore           chan struct{}
 	controlCh           chan struct{}
 	repFilenameCh       chan repFile
@@ -91,8 +91,8 @@ func (m *ioContext) assertClusterState() {
 	)
 	tassert.CheckFatal(m.t, err)
 
-	proxyCount := len(smap.Pmap)
-	targetCount := len(smap.Tmap)
+	proxyCount := smap.CountProxies()
+	targetCount := smap.CountTargets()
 	if targetCount != m.originalTargetCount ||
 		proxyCount != m.originalProxyCount {
 		m.t.Errorf(
@@ -272,7 +272,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
 
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -338,14 +338,14 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
 	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", target.URL(cmn.NetworkPublic), n)
 
 	// Step 3.
-	_, newPrimaryURL, err := chooseNextProxy(&m.smap)
+	_, newPrimaryURL, err := chooseNextProxy(m.smap)
 	// use a new proxyURL because primaryCrashElectRestart has a side-effect:
 	// it changes the primary proxy. Without the change tutils.PutRandObjs is
 	// failing while the current primary is restarting and rejoining
@@ -474,7 +474,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	// Unregister target
 	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -485,7 +485,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatal("Unregistering the same target twice must return error 404")
 	}
-	n = len(getClusterMap(t, m.proxyURL).Tmap)
+	n = getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -521,7 +521,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Unregister target 0
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -729,7 +729,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Unregister target 0
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -802,7 +802,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	tutils.Logf("Unregister target %s\n", target.URL(cmn.NetworkPublic))
 	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -1108,7 +1108,7 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	for i := 0; i < unregisterTargetCount; i++ {
 		err := tutils.UnregisterNode(m.proxyURL, targets[i].DaemonID)
 		tassert.CheckError(t, err)
-		n := len(getClusterMap(t, m.proxyURL).Tmap)
+		n := getClusterMap(t, m.proxyURL).CountTargets()
 		if n != m.originalTargetCount-(i+1) {
 			t.Errorf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
 		}
@@ -1618,7 +1618,7 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 2.
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
-	nextProxyID, nextProxyURL, _ := chooseNextProxy(&m.smap)
+	nextProxyID, nextProxyURL, _ := chooseNextProxy(m.smap)
 
 	tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
@@ -1878,7 +1878,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	targets := tutils.ExtractTargetNodes(m.smap)
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -1932,7 +1932,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	// Unregister target 0
 	err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 	tassert.CheckFatal(t, err)
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
@@ -1982,7 +1982,7 @@ func TestRenewRebalance(t *testing.T) {
 	err := tutils.UnregisterNode(m.proxyURL, target.DaemonID)
 	tassert.CheckFatal(t, err)
 
-	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}

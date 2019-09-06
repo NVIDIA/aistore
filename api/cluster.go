@@ -21,27 +21,27 @@ import (
 // GetClusterMap API
 //
 // GetClusterMap retrieves AIStore cluster map
-func GetClusterMap(baseParams *BaseParams) (smap cluster.Smap, err error) {
+func GetClusterMap(baseParams *BaseParams) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Daemon)
 	params := OptionalParams{Query: url.Values{cmn.URLParamWhat: []string{cmn.GetWhatSmap}}}
 
 	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		return cluster.Smap{}, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 	err = json.Unmarshal(body, &smap)
 	if err != nil {
-		return cluster.Smap{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
 	return smap, nil
 }
@@ -49,7 +49,7 @@ func GetClusterMap(baseParams *BaseParams) (smap cluster.Smap, err error) {
 // GetNodeClusterMap API
 //
 // GetNodeClusterMap retrieves AIStore cluster map from specific node
-func GetNodeClusterMap(baseParams *BaseParams, nodeID string) (smap cluster.Smap, err error) {
+func GetNodeClusterMap(baseParams *BaseParams, nodeID string) (smap *cluster.Smap, err error) {
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Reverse, cmn.Daemon)
 	params := OptionalParams{
@@ -59,20 +59,20 @@ func GetNodeClusterMap(baseParams *BaseParams, nodeID string) (smap cluster.Smap
 
 	resp, err := doHTTPRequestGetResp(baseParams, path, nil, params)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		return cluster.Smap{}, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get Smap, HTTP status %d", resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return cluster.Smap{}, err
+		return nil, err
 	}
 	err = json.Unmarshal(body, &smap)
 	if err != nil {
-		return cluster.Smap{}, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal Smap, err: %v", err)
 	}
 	return smap, nil
 }

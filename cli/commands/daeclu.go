@@ -137,7 +137,7 @@ func queryHandler(c *cli.Context) (err error) {
 }
 
 // Displays smap of single daemon
-func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap cluster.Smap, daemonID string, useJSON bool) error {
+func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
 	var (
 		smap = primarySmap
 		err  error
@@ -211,7 +211,7 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 }
 
 // Displays the status of the cluster or daemon
-func daemonStatus(c *cli.Context, smap cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+func daemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
 	if res, proxyOK := proxy[daemonID]; proxyOK {
 		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
 		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)

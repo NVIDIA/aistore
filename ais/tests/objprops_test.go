@@ -226,7 +226,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
 	smap := getClusterMap(t, proxyURL)
-	l := len(smap.Tmap)
+	l := smap.CountTargets()
 	if l < 2 {
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
@@ -240,8 +240,8 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		proxyURL,
 		"target is gone",
 		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)-1,
+		smap.CountProxies(),
+		smap.CountTargets()-1,
 	)
 	tassert.CheckError(t, err)
 
@@ -253,12 +253,12 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterNode(proxyURL, removeTarget, smap)
 	tassert.CheckFatal(t, err)
-	smap, err = tutils.WaitForPrimaryProxy(
+	_, err = tutils.WaitForPrimaryProxy(
 		proxyURL,
 		"to join target back",
 		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)+1,
+		smap.CountProxies(),
+		smap.CountTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)

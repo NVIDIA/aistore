@@ -171,7 +171,7 @@ func (m *smapX) clone() *smapX {
 
 func (m *smapX) deepCopy(dst *smapX) {
 	cmn.CopyStruct(dst, m)
-	dst.init(len(m.Tmap), len(m.Pmap), len(m.NonElects))
+	dst.init(m.CountTargets(), m.CountProxies(), len(m.NonElects))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}

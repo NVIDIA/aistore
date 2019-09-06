@@ -57,7 +57,7 @@ func (p *proxyrunner) broadcastDownloadRequest(method string, path string, body 
 	var (
 		smap        = p.smapowner.get()
 		wg          = &sync.WaitGroup{}
-		targetCnt   = len(smap.Tmap)
+		targetCnt   = smap.CountTargets()
 		responsesCh = make(chan dlResponse, targetCnt)
 	)
 

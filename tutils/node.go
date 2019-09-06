@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
+func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap *cluster.Smap) error {
 	_, ok := smap.Tmap[targetNode.DaemonID]
 	baseParams := BaseAPIParams(proxyURL)
 	if err := api.RegisterNode(baseParams, targetNode); err != nil {
@@ -31,7 +31,7 @@ func RegisterNode(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap)
 	return nil
 }
 
-func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Smap, *cluster.Snode) {
+func RemoveTarget(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
 	removeTarget := ExtractTargetNodes(smap)[0]
 	Logf("Removing target %s\n", removeTarget.DaemonID)
 	err := UnregisterNode(proxyURL, removeTarget.DaemonID)
@@ -40,15 +40,15 @@ func RemoveTarget(t *testing.T, proxyURL string, smap cluster.Smap) (cluster.Sma
 		proxyURL,
 		"target is gone",
 		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)-1,
+		smap.CountProxies(),
+		smap.CountTargets()-1,
 	)
 	tassert.CheckFatal(t, err)
 
 	return smap, removeTarget
 }
 
-func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *cluster.Snode) cluster.Smap {
+func RestoreTarget(t *testing.T, proxyURL string, smap *cluster.Smap, target *cluster.Snode) *cluster.Smap {
 	Logf("Reregistering target %s...\n", target)
 	err := RegisterNode(proxyURL, target, smap)
 	tassert.CheckFatal(t, err)
@@ -56,16 +56,15 @@ func RestoreTarget(t *testing.T, proxyURL string, smap cluster.Smap, target *clu
 		proxyURL,
 		"to join target back",
 		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)+1,
+		smap.CountProxies(),
+		smap.CountTargets()+1,
 	)
 	tassert.CheckFatal(t, err)
-
 	return smap
 }
 
-func ExtractTargetNodes(smap cluster.Smap) []*cluster.Snode {
-	targets := make([]*cluster.Snode, 0, len(smap.Tmap))
+func ExtractTargetNodes(smap *cluster.Smap) []*cluster.Snode {
+	targets := make([]*cluster.Snode, 0, smap.CountTargets())
 	for _, target := range smap.Tmap {
 		targets = append(targets, target)
 	}
@@ -84,7 +83,7 @@ func ExtractTargetNodes(smap cluster.Smap) []*cluster.Snode {
 // It is useful if the test kills more than one proxy/target. In this case the
 // primary proxy may run two metasync calls and we cannot tell if the current SMap
 // is what we are waiting for only by looking at its version.
-func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (cluster.Smap, error) {
+func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (*cluster.Smap, error) {
 	var (
 		lastVersion          int64
 		timeUntil, timeStart time.Time
@@ -123,22 +122,22 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 	for {
 		smap, err := api.GetClusterMap(baseParams)
 		if err != nil && !cmn.IsErrConnectionRefused(err) {
-			return cluster.Smap{}, err
+			return nil, err
 		}
 
-		doCheckSMap := (totalTargets == 0 || len(smap.Tmap) == totalTargets) &&
-			(totalProxies == 0 || len(smap.Pmap) == totalProxies)
+		doCheckSMap := (totalTargets == 0 || smap.CountTargets() == totalTargets) &&
+			(totalProxies == 0 || smap.CountProxies() == totalProxies)
 		if !doCheckSMap {
 			d := time.Since(timeStart)
 			expectedTargets, expectedProxies := totalTargets, totalProxies
 			if totalTargets == 0 {
-				expectedTargets = len(smap.Tmap)
+				expectedTargets = smap.CountTargets()
 			}
 			if totalProxies == 0 {
-				expectedProxies = len(smap.Pmap)
+				expectedProxies = smap.CountProxies()
 			}
 			Logf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyURL, len(smap.Tmap), expectedTargets, len(smap.Pmap), expectedProxies, d.Truncate(time.Second))
+				proxyURL, smap.CountTargets(), expectedTargets, smap.CountProxies(), expectedProxies, d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated
@@ -179,10 +178,10 @@ func WaitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
 	}
 
-	return cluster.Smap{}, fmt.Errorf("timed out waiting for the cluster to stabilize")
+	return nil, fmt.Errorf("timed out waiting for the cluster to stabilize")
 }
 
-func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64, idsToIgnore []string) error {
+func WaitMapVersionSync(timeout time.Time, smap *cluster.Smap, prevVersion int64, idsToIgnore []string) error {
 	inList := func(s string, values []string) bool {
 		for _, v := range values {
 			if s == v {
@@ -193,7 +192,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 		return false
 	}
 
-	checkAwaitingDaemon := func(smap cluster.Smap, idsToIgnore []string) (string, string, bool) {
+	checkAwaitingDaemon := func(smap *cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
 			if !inList(d.DaemonID, idsToIgnore) {
 				return d.DaemonID, d.PublicNet.DirectURL, true
