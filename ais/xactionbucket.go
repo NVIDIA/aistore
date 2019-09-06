@@ -228,13 +228,13 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 //
 type loadLomCacheEntry struct {
 	baseBckEntry
-	t        cluster.Target
-	bckIsAIS bool
-	xact     *mirror.XactBckLoadLomCache
+	t           cluster.Target
+	bckProvider string
+	xact        *mirror.XactBckLoadLomCache
 }
 
 func (e *loadLomCacheEntry) Start(id int64) error {
-	x := mirror.NewXactLLC(id, e.bckName, e.t, e.bckIsAIS)
+	x := mirror.NewXactLLC(e.t, id, e.bckName, e.bckProvider)
 	go x.Run()
 	e.xact = x
 
@@ -245,7 +245,7 @@ func (e *loadLomCacheEntry) Get() cmn.Xact { return e.xact }
 
 func (r *xactionsRegistry) renewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
 	b := r.bucketsXacts(bck.Name)
-	e := &loadLomCacheEntry{t: t, bckIsAIS: bck.IsAIS(), baseBckEntry: baseBckEntry{bckName: bck.Name}}
+	e := &loadLomCacheEntry{t: t, bckProvider: bck.Provider, baseBckEntry: baseBckEntry{bckName: bck.Name}}
 	b.renewBucketXaction(e)
 }
 

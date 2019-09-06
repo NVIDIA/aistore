@@ -122,7 +122,7 @@ func MatchRESTItems(unescapedPath string, itemsAfter int, splitAfter bool, items
 	if splitAfter {
 		split = strings.Split(escaped, "/")
 	} else {
-		split = strings.SplitN(escaped, "/", itemsAfter+len(items))
+		split = strings.SplitN(escaped, "/", len(items)+Max(1, itemsAfter))
 	}
 	apiItems := split[:0] // filtering without allocation
 	for _, item := range split {

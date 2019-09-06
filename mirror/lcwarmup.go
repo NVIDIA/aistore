@@ -25,8 +25,9 @@ type (
 // public methods
 //
 
-func NewXactLLC(id int64, bucket string, t cluster.Target, local bool) *XactBckLoadLomCache {
-	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase(id, cmn.ActLoadLomCache, bucket, t, local)}
+func NewXactLLC(t cluster.Target, id int64, bucket, bckProvider string) *XactBckLoadLomCache {
+	bckIsAIS := bckProvider == "" || cmn.IsProviderAIS(bckProvider)
+	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase(id, cmn.ActLoadLomCache, bucket, t, bckIsAIS)}
 }
 
 func (r *XactBckLoadLomCache) Run() (err error) {

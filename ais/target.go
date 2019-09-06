@@ -324,17 +324,17 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket := apiItems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
+	switch apiItems[0] {
+	case cmn.List:
+		bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	// list bucket names
-	if bucket == cmn.ListAll {
+		normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
 		query := r.URL.Query()
 		what := query.Get(cmn.URLParamWhat)
 		if what == cmn.GetWhatBucketMetaX {
@@ -342,10 +342,10 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		} else {
 			t.getbucketnames(w, r, normalizedBckProvider)
 		}
-		return
+	default:
+		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
+		t.invalmsghdlr(w, r, s)
 	}
-	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
-	t.invalmsghdlr(w, r, s)
 }
 
 // verifyProxyRedirection returns if the http request was redirected from a proxy
@@ -617,21 +617,36 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
+		bucket string
+
 		msgInt  = &actionMsgInternal{}
 		started = time.Now()
 	)
 	if cmn.ReadJSON(w, r, msgInt) != nil {
 		return
 	}
-	apitems, err := t.checkRESTItems(w, r, 1, true, cmn.Version, cmn.Buckets)
+	apiItems, err := t.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
 
 	t.ensureLatestMD(msgInt)
 
-	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	if len(apiItems) == 0 {
+		switch msgInt.Action {
+		case cmn.ActSummaryBucket:
+			bck := &cluster.Bck{Name: "", Provider: bckProvider}
+			if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
+				return
+			}
+		default:
+			t.invalmsghdlr(w, r, "path is too short: bucket name expected")
+		}
+		return
+	}
+
+	bucket = apiItems[0]
 	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
@@ -641,13 +656,13 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
-		if err := t.listRangeOperation(r, apitems, bckProvider, msgInt); err != nil {
+		if err := t.listRangeOperation(r, apiItems, bckProvider, msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch, err: %v", err))
 			return
 		}
 	case cmn.ActCopyLB, cmn.ActRenameLB:
 		var (
-			phase                = apitems[1]
+			phase                = apiItems[1]
 			bucketFrom, bucketTo = bucket, msgInt.Name
 		)
 		switch phase {
@@ -675,6 +690,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
+		}
+	case cmn.ActSummaryBucket:
+		if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
+			return
 		}
 	case cmn.ActMakeNCopies:
 		copies, err := t.parseValidateNCopies(msgInt.Value)

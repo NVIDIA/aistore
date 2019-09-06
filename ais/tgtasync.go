@@ -32,24 +32,55 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *c
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	ok = t.listBucketAsync(w, r, bck, &msg)
+	ok = t.doAsync(w, r, actionMsg.Action, bck, &msg)
 	return
 }
 
-// asynchronous list bucket request
-// - creates a new task that collects objects in background
+func (t *targetrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *actionMsgInternal) (ok bool) {
+	query := r.URL.Query()
+	if glog.FastV(4, glog.SmoduleAIS) {
+		pid := query.Get(cmn.URLParamProxyID)
+		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
+	}
+
+	var msg cmn.SelectMsg
+	getMsgJSON := cmn.MustMarshal(actionMsg.Value)
+	if err := jsoniter.Unmarshal(getMsgJSON, &msg); err != nil {
+		err := fmt.Errorf("unable to unmarshal 'value' in request to a cmn.SelectMsg: %v", actionMsg.Value)
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	ok = t.doAsync(w, r, actionMsg.Action, bck, &msg)
+	return
+}
+
+// asynchronous bucket request
+// - creates a new task that runs in background
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
 // TODO: support cloud buckets
-func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
+func (t *targetrunner) doAsync(w http.ResponseWriter, r *http.Request, action string, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
 	query := r.URL.Query()
 	taskAction := query.Get(cmn.URLParamTaskAction)
 	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
 	silent, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamSilent))
 	ctx := t.contextWithAuth(r.Header)
 	// create task call
-	if taskAction == cmn.ListTaskStart {
-		_, err := t.xactions.renewBckListXact(ctx, t, bck, msg, useCache)
+	if taskAction == cmn.TaskStart {
+		var (
+			err error
+		)
+
+		switch action {
+		case cmn.ActListObjects:
+			_, err = t.xactions.renewBckListXact(ctx, t, bck, msg, useCache)
+		case cmn.ActSummaryBucket:
+			_, err = t.xactions.renewBckSummaryXact(ctx, t, bck, msg, useCache)
+		default:
+			t.invalmsghdlr(w, r, fmt.Sprintf("invalid action: %s", action))
+			return false
+		}
+
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 			return false
@@ -75,28 +106,27 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 		return true
 	}
 	// task has finished
-	xtask, ok := xactStats.Get().(*xactBckListTask)
-	if !ok || xtask == nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Invalid task type: %T", xactStats.Get()), http.StatusInternalServerError)
-		return false
-	}
-	st := (*taskState)(xtask.res.Load())
-	if st.Err != nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Task failed: %v", st.Err), http.StatusInternalServerError)
+	result, err := xactStats.Get().Result()
+	if err != nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Task failed: %v", err), http.StatusInternalServerError)
 		return false
 	}
 
-	if msg.Fast {
-		if bckList, ok := st.Result.(*cmn.BucketList); ok && bckList != nil {
-			const minloaded = 10 // check that many randomly-selected
-			if len(bckList.Entries) > minloaded {
+	switch action {
+	case cmn.ActListObjects:
+		if !msg.Fast {
+			break
+		}
+		if bckList, ok := result.(*cmn.BucketList); ok && bckList != nil {
+			const minLoaded = 10 // check that many randomly-selected
+			if len(bckList.Entries) > minLoaded {
 				go func(bckEntries []*cmn.BucketEntry) {
 					var (
 						l      = len(bckEntries)
-						m      = l / minloaded
+						m      = l / minLoaded
 						loaded int
 					)
-					if l < minloaded {
+					if l < minLoaded {
 						return
 					}
 					for i := 0; i < l; i += m {
@@ -106,9 +136,9 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 							loaded++
 						}
 					}
-					renew := loaded < minloaded/2
+					renew := loaded < minLoaded/2
 					if glog.FastV(4, glog.SmoduleAIS) {
-						glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minloaded, renew)
+						glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minLoaded, renew)
 					}
 					if renew {
 						t.xactions.renewBckLoadLomCache(t, bck)
@@ -116,12 +146,15 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 				}(bckList.Entries)
 			}
 		}
+
+	default:
+		break
 	}
 
-	if taskAction == cmn.ListTaskResult {
+	if taskAction == cmn.TaskResult {
 		// return the final result only if it is requested explicitly
-		body := cmn.MustMarshal(st.Result)
-		return t.writeJSON(w, r, body, "listbucket")
+		body := cmn.MustMarshal(result)
+		return t.writeJSON(w, r, body, "")
 	}
 
 	return true

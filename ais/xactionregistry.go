@@ -13,14 +13,14 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/cluster"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/housekeep/lru"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -37,6 +37,11 @@ const (
 )
 
 type (
+	taskState struct {
+		Result interface{} `json:"res"`
+		Err    error       `json:"error"`
+	}
+
 	xactRebBase struct {
 		cmn.XactBase
 		confirmCh chan struct{}
@@ -67,10 +72,6 @@ type (
 		proxyrunner *proxyrunner
 		vr          *VoteRecord
 	}
-	taskState struct {
-		Err    error       `json:"error"`
-		Result interface{} `json:"res"`
-	}
 	xactBckListTask struct {
 		cmn.XactBase
 		ctx    context.Context
@@ -79,6 +80,15 @@ type (
 		bck    *cluster.Bck
 		msg    *cmn.SelectMsg
 		cached bool
+	}
+	xactBckSummaryTask struct {
+		cmn.XactBase
+		ctx    context.Context
+		t      *targetrunner
+		bck    *cluster.Bck
+		msg    *cmn.SelectMsg
+		cached bool
+		res    atomic.Pointer
 	}
 	xactionEntry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
@@ -103,11 +113,12 @@ type (
 // global descriptions
 //
 
-func (xact *xactRebBase) Description() string     { return "base for rebalance xactions" }
-func (xact *xactGlobalReb) Description() string   { return "cluster-wide global rebalancing" }
-func (xact *xactBckListTask) Description() string { return "asynchronous bucket list task" }
-func (xact *xactEvictDelete) Description() string { return "evict or delete objects" }
-func (xact *xactElection) Description() string    { return "elect new primary proxy/gateway" }
+func (xact *xactRebBase) Description() string        { return "base for rebalance xactions" }
+func (xact *xactGlobalReb) Description() string      { return "cluster-wide global rebalancing" }
+func (xact *xactBckListTask) Description() string    { return "asynchronous bucket list task" }
+func (xact *xactBckSummaryTask) Description() string { return "asynchronous bucket summary task" }
+func (xact *xactEvictDelete) Description() string    { return "evict or delete objects" }
+func (xact *xactElection) Description() string       { return "elect new primary proxy/gateway" }
 func (xact *xactLocalReb) Description() string {
 	return "resilver local storage upon mountpath-change events"
 }
@@ -741,6 +752,27 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 	return e.xact, nil
 }
 
+func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg, cached bool) (*xactBckSummaryTask, error) {
+	id := msg.TaskID
+	if err := r.removeFinishedByID(id); err != nil {
+		return nil, err
+	}
+	e := &bckSummaryTaskEntry{
+		id:     id,
+		ctx:    ctx,
+		t:      t,
+		bck:    bck,
+		msg:    msg,
+		cached: cached,
+	}
+	if err := e.Start(id); err != nil {
+		return nil, err
+	}
+	r.taskXacts.Store(e.Kind(), e)
+	r.storeByID(e.Get().ID(), e)
+	return e.xact, nil
+}
+
 //
 // xactBckListTask
 //
@@ -748,6 +780,15 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 func (r *xactBckListTask) IsGlobal() bool        { return false }
 func (r *xactBckListTask) IsTask() bool          { return true }
 func (r *xactBckListTask) IsMountpathXact() bool { return false }
+
+func (r *xactBckListTask) Run() {
+	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
+	if r.bck.IsAIS() {
+		r.UpdateResult(walk.LocalObjPage())
+	} else {
+		r.UpdateResult(walk.CloudObjPage(r.cached))
+	}
+}
 
 func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	res := &taskState{Err: err}
@@ -758,11 +799,123 @@ func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 	r.EndTime(time.Now())
 }
 
-func (r *xactBckListTask) Run() {
-	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
-	if r.bck.IsAIS() {
-		r.UpdateResult(walk.LocalObjPage())
-	} else {
-		r.UpdateResult(walk.CloudObjPage(r.cached))
+func (r *xactBckListTask) Result() (interface{}, error) {
+	ts := (*taskState)(r.res.Load())
+	if ts == nil {
+		return nil, errors.New("no result to load")
 	}
+	return ts.Result, ts.Err
+}
+
+//
+// xactBckSummaryTask
+//
+
+func (r *xactBckSummaryTask) IsGlobal() bool        { return false }
+func (r *xactBckSummaryTask) IsTask() bool          { return true }
+func (r *xactBckSummaryTask) IsMountpathXact() bool { return false }
+
+func (r *xactBckSummaryTask) Run() {
+	var (
+		buckets []*cluster.Bck
+		bmd     = r.t.bmdowner.get()
+	)
+
+	if r.bck.Name != "" {
+		if err := r.bck.Init(r.t.bmdowner); err != nil {
+			r.UpdateResult(nil, err)
+			return
+		}
+		buckets = append(buckets, &cluster.Bck{Name: r.bck.Name, Provider: r.bck.Provider})
+	} else {
+		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
+			for name := range bmd.LBmap {
+				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.AIS})
+			}
+		}
+		if r.bck.Provider == "" || cmn.IsProviderCloud(r.bck.Provider) {
+			for name := range bmd.CBmap {
+				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.Cloud})
+			}
+		}
+	}
+
+	var (
+		wg        = &sync.WaitGroup{}
+		errCh     = make(chan error, len(buckets))
+		summaries = make(cmn.BucketsSummaries)
+	)
+	wg.Add(len(buckets))
+
+	// TODO: we should have general way to get size of the disk
+	blocks, _, blockSize, err := ios.GetFSStats("/")
+	if err != nil {
+		r.UpdateResult(nil, err)
+		return
+	}
+	totalDisksSize := blocks * uint64(blockSize)
+
+	for _, bck := range buckets {
+		go func(bck *cluster.Bck) {
+			defer wg.Done()
+
+			var (
+				msg = &cmn.SelectMsg{Fast: false}
+			)
+
+			summary := cmn.BucketSummary{
+				Name:     bck.Name,
+				Provider: bck.Provider,
+			}
+
+			for {
+				walk := objwalk.NewWalk(context.Background(), r.t, bck, msg)
+				list, err := walk.LocalObjPage()
+				if err != nil {
+					errCh <- err
+					return
+				}
+
+				for _, v := range list.Entries {
+					summary.Size += uint64(v.Size)
+					summary.ObjCount++
+				}
+
+				if list.PageMarker == "" {
+					break
+				}
+
+				list.Entries = nil
+				msg.PageMarker = list.PageMarker
+			}
+
+			summary.UsedPct = summary.Size * 100 / totalDisksSize
+			summaries[bck.Name] = summary
+		}(bck)
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		r.UpdateResult(nil, err)
+	}
+
+	r.UpdateResult(summaries, nil)
+}
+
+func (r *xactBckSummaryTask) UpdateResult(result interface{}, err error) {
+	res := &taskState{Err: err}
+	if err == nil {
+		res.Result = result
+	}
+	r.res.Store(unsafe.Pointer(res))
+	r.EndTime(time.Now())
+}
+
+func (r *xactBckSummaryTask) Result() (interface{}, error) {
+	ts := (*taskState)(r.res.Load())
+	if ts == nil {
+		return nil, errors.New("no result to load")
+	}
+	return ts.Result, ts.Err
 }

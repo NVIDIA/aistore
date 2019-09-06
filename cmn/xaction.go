@@ -5,6 +5,7 @@
 package cmn
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,6 +32,7 @@ type (
 		Aborted() bool
 		IsMountpathXact() bool
 		Description() string
+		Result() (interface{}, error)
 	}
 	XactBase struct {
 		XactBaseCountStats
@@ -167,6 +169,10 @@ func (xact *XactBase) Abort() {
 	xact.eutime.Store(time.Now().UnixNano())
 	close(xact.abrt)
 	glog.Infof("ABORT: " + xact.String())
+}
+
+func (xact *XactBase) Result() (interface{}, error) {
+	return nil, errors.New("getting result is not implemented")
 }
 
 //

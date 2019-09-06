@@ -309,7 +309,7 @@ const (
 		XactionExtBody +
 		"{{end}}" +
 		"{{end}}"
-	BucketStatTmpl = "Value\tTotal\tData\tLocal\n{{range $p := . }}{{$p.Name}}\t{{$p.Total}}\t{{$p.Data}}\t{{$p.Local}}\n{{end}}"
+	BucketsSummariesTmpl = "Name\tObjects\tSize\tUsed(%)\tProvider\n{{range $k, $v := . }}{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{$v.UsedPct}}%\t{{$v.Provider}}\n{{end}}"
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
 	ExtensionTmpl = "Files to upload:\nExtension\tCount\tSize\n" +

@@ -35,43 +35,44 @@ const (
 
 // ActionMsg.Action enum (includes xactions)
 const (
-	ActShutdown     = "shutdown"
-	ActGlobalReb    = "rebalance" // global cluster-wide rebalance
-	ActLocalReb     = "resilver"  // local rebalance aka resilver
-	ActLRU          = "lru"
-	ActSyncLB       = "synclb"
-	ActCreateLB     = "createlb"
-	ActDestroyLB    = "destroylb"
-	ActRenameLB     = "renamelb"
-	ActCopyLB       = "copylb"
-	ActRegisterCB   = "registercb"
-	ActEvictCB      = "evictcb"
-	ActResetProps   = "resetprops"
-	ActSetConfig    = "setconfig"
-	ActSetProps     = "setprops"
-	ActListObjects  = "listobjects"
-	ActRename       = "rename"
-	ActReplicate    = "replicate"
-	ActEvictObjects = "evictobjects"
-	ActDelete       = "delete"
-	ActPrefetch     = "prefetch"
-	ActDownload     = "download"
-	ActRegTarget    = "regtarget"
-	ActRegProxy     = "regproxy"
-	ActUnregTarget  = "unregtarget"
-	ActUnregProxy   = "unregproxy"
-	ActNewPrimary   = "newprimary"
-	ActRevokeToken  = "revoketoken"
-	ActElection     = "election"
-	ActPutCopies    = "putcopies"
-	ActMakeNCopies  = "makencopies"
-	ActLoadLomCache = "loadlomcache"
-	ActECGet        = "ecget"  // erasure decode objects
-	ActECPut        = "ecput"  // erasure encode objects
-	ActECRespond    = "ecresp" // respond to other targets' EC requests
-	ActStartGFN     = "metasync-start-gfn"
-	ActRecoverBck   = "recoverbck"
-	ActAsyncTask    = "task"
+	ActShutdown      = "shutdown"
+	ActGlobalReb     = "rebalance" // global cluster-wide rebalance
+	ActLocalReb      = "resilver"  // local rebalance aka resilver
+	ActLRU           = "lru"
+	ActSyncLB        = "synclb"
+	ActCreateLB      = "createlb"
+	ActDestroyLB     = "destroylb"
+	ActRenameLB      = "renamelb"
+	ActCopyLB        = "copylb"
+	ActRegisterCB    = "registercb"
+	ActEvictCB       = "evictcb"
+	ActResetProps    = "resetprops"
+	ActSetConfig     = "setconfig"
+	ActSetProps      = "setprops"
+	ActListObjects   = "listobjects"
+	ActSummaryBucket = "summarybck"
+	ActRename        = "rename"
+	ActReplicate     = "replicate"
+	ActEvictObjects  = "evictobjects"
+	ActDelete        = "delete"
+	ActPrefetch      = "prefetch"
+	ActDownload      = "download"
+	ActRegTarget     = "regtarget"
+	ActRegProxy      = "regproxy"
+	ActUnregTarget   = "unregtarget"
+	ActUnregProxy    = "unregproxy"
+	ActNewPrimary    = "newprimary"
+	ActRevokeToken   = "revoketoken"
+	ActElection      = "election"
+	ActPutCopies     = "putcopies"
+	ActMakeNCopies   = "makencopies"
+	ActLoadLomCache  = "loadlomcache"
+	ActECGet         = "ecget"  // erasure decode objects
+	ActECPut         = "ecput"  // erasure encode objects
+	ActECRespond     = "ecresp" // respond to other targets' EC requests
+	ActStartGFN      = "metasync-start-gfn"
+	ActRecoverBck    = "recoverbck"
+	ActAsyncTask     = "task"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -214,9 +215,9 @@ const (
 
 // enum: task action (cmn.URLParamTaskAction)
 const (
-	ListTaskStart  = "start"
-	ListTaskStatus = "status"
-	ListTaskResult = "result"
+	TaskStart  = "start"
+	TaskStatus = "status"
+	TaskResult = "result"
 )
 
 // URLParamWhat enum
@@ -306,7 +307,7 @@ const (
 	Voteres      = "result"
 	VoteInit     = "init"
 	Mountpaths   = "mountpaths"
-	ListAll      = "*"
+	Summary      = "summary"
 
 	// dSort and downloader
 	Init        = "init"
@@ -317,8 +318,8 @@ const (
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished-ack"
-	List        = "list"   // lists running dsort processes
-	Remove      = "remove" // removes a dsort process from history or downloader job form download list
+	List        = "list"
+	Remove      = "remove"
 
 	// CLI
 	Target = "target"

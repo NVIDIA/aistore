@@ -28,7 +28,7 @@ const (
 	readwriteBucketAccess = "rw"
 
 	// max wait time for a function finishes before printing "Please wait"
-	longCommandTime = time.Second * 10
+	longCommandTime = 10 * time.Second
 )
 
 var (
@@ -220,12 +220,15 @@ func bucketHandler(c *cli.Context) (err error) {
 			return err
 		}
 		return destroyBuckets(c, baseParams, buckets)
+	case bucketSummary:
+		bucket, _ := bucketFromArgsOrEnv(c)
+		return summaryBucket(c, baseParams, bucket)
 	default:
 		break
 	}
 
-	bucket, err := bucketFromArgsOrEnv(c)
 	// In case of subcommandRename validation will be done inside renameBucket
+	bucket, err := bucketFromArgsOrEnv(c)
 	if err != nil && command != propsList && command != subcommandRename && command != bucketCopy {
 		return err
 	}
@@ -241,8 +244,6 @@ func bucketHandler(c *cli.Context) (err error) {
 		err = listBucketObj(c, baseParams, bucket)
 	case bucketNWayMirror:
 		err = configureNCopies(c, baseParams, bucket)
-	case bucketSummary:
-		err = statBucket(c, baseParams, bucket)
 	case bucketCopy:
 		err = copyBucket(c, baseParams)
 	default:
@@ -481,67 +482,28 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 }
 
 // show bucket statistics
-func statBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
-	// make new function to capture arguments
-	fStats := func() error {
-		return statsBucketSync(c, baseParams, bucket)
-	}
-	return cmn.WaitForFunc(fStats, longCommandTime)
-}
-
-// show bucket statistics
-func statsBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
-	prefix := parseStrFlag(c, prefixFlag)
-	props := "name,size,status,copies,iscached"
-
-	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
-	query.Add(cmn.URLParamPrefix, prefix)
-
-	msg := &cmn.SelectMsg{Props: props, Prefix: prefix, PageSize: cmn.DefaultPageSize}
-	objList, err := api.ListBucket(baseParams, bucket, msg, 0, query)
+func summaryBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
 	if err != nil {
 		return err
 	}
 
-	var regex *regexp.Regexp
-	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
-		if err != nil {
-			return err
-		}
+	// make new function to capture arguments
+	fStats := func() error {
+		return summaryBucketSync(c, baseParams, bucket, bckProvider)
+	}
+	return cmn.WaitForFunc(fStats, longCommandTime)
+
+}
+
+// show bucket statistics
+func summaryBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
+	summary, err := api.GetBucketsSummaries(baseParams, bucket, bckProvider, nil)
+	if err != nil {
+		return err
 	}
 
-	totalCnt, localCnt, dataCnt := int64(0), int64(0), int64(0)
-	totalSz, localSz, dataSz := int64(0), int64(0), int64(0)
-	for _, obj := range objList.Entries {
-		if regex != nil && !regex.MatchString(obj.Name) {
-			continue
-		}
-
-		totalCnt++
-		totalSz += obj.Size
-		if obj.IsStatusOK() {
-			dataCnt++
-			dataSz += obj.Size
-		}
-		if obj.IsCached() {
-			localCnt++
-			localSz += obj.Size
-		}
-	}
-
-	statList := []struct {
-		Name  string
-		Total string
-		Data  string
-		Local string
-	}{
-		{"Object count", strconv.FormatInt(totalCnt, 10), strconv.FormatInt(dataCnt, 10), strconv.FormatInt(localCnt, 10)},
-		{"Object size", cmn.B2S(totalSz, 2), cmn.B2S(dataSz, 2), cmn.B2S(localSz, 2)},
-	}
-
-	return templates.DisplayOutput(statList, c.App.Writer, templates.BucketStatTmpl)
+	return templates.DisplayOutput(summary, c.App.Writer, templates.BucketsSummariesTmpl)
 }
 
 // replace user-friendly properties like `access=ro` with real values

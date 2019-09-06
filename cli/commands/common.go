@@ -157,7 +157,7 @@ const (
 var (
 	// Common
 	bucketFlag      = cli.StringFlag{Name: "bucket", Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
-	bckProviderFlag = cli.StringFlag{Name: "provider",
+	bckProviderFlag = cli.StringFlag{Name: "provider", Value: cmn.ProviderAIS,
 		Usage:  "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically",
 		EnvVar: aisBucketProviderEnvVar,
 	}

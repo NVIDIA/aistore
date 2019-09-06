@@ -515,11 +515,7 @@ func TestBucketInvalidName(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	invalidNames := []string{
-		cmn.ListAll, ".", "", " ", "bucket and name",
-		"bucket/name",
-	}
-
+	invalidNames := []string{"*", ".", "", " ", "bucket and name", "bucket/name"}
 	for _, name := range invalidNames {
 		if err := api.CreateBucket(baseParams, name); err == nil {
 			tutils.DestroyBucket(t, proxyURL, name)

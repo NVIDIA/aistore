@@ -15,12 +15,12 @@ import (
 
 type bckListTaskEntry struct {
 	baseEntry
+	ctx    context.Context
 	xact   *xactBckListTask
 	t      *targetrunner
 	id     int64
 	msg    *cmn.SelectMsg
 	bck    *cluster.Bck
-	ctx    context.Context
 	cached bool
 }
 
@@ -43,6 +43,40 @@ func (e *bckListTaskEntry) IsGlobal() bool { return false }
 func (e *bckListTaskEntry) IsTask() bool   { return true }
 func (e *bckListTaskEntry) Get() cmn.Xact  { return e.xact }
 func (e *bckListTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
+	cmn.Assert(e.xact == xact)
+	return e.stats.FillFromXact(e.xact, "")
+}
+
+type bckSummaryTaskEntry struct {
+	baseEntry
+	ctx    context.Context
+	xact   *xactBckSummaryTask
+	t      *targetrunner
+	id     int64
+	msg    *cmn.SelectMsg
+	bck    *cluster.Bck
+	cached bool
+}
+
+func (e *bckSummaryTaskEntry) Start(_ int64) error {
+	xact := &xactBckSummaryTask{
+		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
+		t:        e.t,
+		msg:      e.msg,
+		bck:      e.bck,
+		ctx:      e.ctx,
+		cached:   e.cached,
+	}
+	e.xact = xact
+	go xact.Run()
+	return nil
+}
+
+func (e *bckSummaryTaskEntry) Kind() string   { return cmn.ActAsyncTask }
+func (e *bckSummaryTaskEntry) IsGlobal() bool { return false }
+func (e *bckSummaryTaskEntry) IsTask() bool   { return true }
+func (e *bckSummaryTaskEntry) Get() cmn.Xact  { return e.xact }
+func (e *bckSummaryTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(e.xact == xact)
 	return e.stats.FillFromXact(e.xact, "")
 }

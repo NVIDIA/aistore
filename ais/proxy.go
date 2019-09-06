@@ -317,26 +317,27 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
+
 	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apiItems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
+	switch apiItems[0] {
+	case cmn.List:
+		bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	// list bucket names
-	if bucket == cmn.ListAll {
+		normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
 		p.getbucketnames(w, r, normalizedBckProvider)
-		return
+	default:
+		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
+		p.invalmsghdlr(w, r, s)
 	}
-	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
-	p.invalmsghdlr(w, r, s)
 }
 
 // Used for redirecting ReverseProxy GCP/AWS GET request to target
@@ -727,7 +728,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg cmn.ActionMsg
 	)
-	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
+	apitems, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
@@ -735,6 +736,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guestAccess := r.Header.Get(cmn.HeaderGuestAccess) == "1"
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
 	// 1. "all buckets"
 	if len(apitems) == 0 {
@@ -753,6 +755,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			bmd := p.bmdowner.get()
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 			p.metasyncer.sync(false, revspair{bmd, msgInt})
+		case cmn.ActSummaryBucket:
+			p.bucketSummary(w, r, "", bckProvider, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
 		}
@@ -760,26 +764,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := apitems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
-
-	// 2. path: bucket/action
-	if len(apitems) > 1 {
-		switch apitems[1] {
-		case cmn.ActListObjects:
-			if err = bck.Init(p.bmdowner); err != nil {
-				if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
-					return
-				}
-			}
-			started := time.Now()
-			p.listBucketAndCollectStats(w, r, bck, msg, started, true /* fast listing */)
-		default:
-			p.invalmsghdlr(w, r, fmt.Sprintf("invalid bucket action: %s", apitems[1]))
-		}
-		return
-	}
-
 	config := cmn.GCO.Get()
 
 	if msg.Action != cmn.ActListObjects && guestAccess {
@@ -809,6 +794,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	if err = bck.Init(p.bmdowner); err != nil {
 		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
@@ -862,6 +848,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActListObjects:
 		started := time.Now()
 		p.listBucketAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
+	case cmn.ActSummaryBucket:
+		p.bucketSummary(w, r, bucket, bckProvider, msg)
 	case cmn.ActMakeNCopies:
 		p.makeNCopies(w, r, bck, &msg, config)
 	default:
@@ -936,6 +924,129 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 			glog.Infof("LIST: %s%s, %d µs", bck.Name, s, lat)
 		}
 	}
+}
+
+func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bucket, bckProvider string, amsg cmn.ActionMsg) {
+	var (
+		taskID    int64
+		err       error
+		summaries cmn.BucketsSummaries
+		smsg      = cmn.SelectMsg{}
+	)
+
+	listMsgJSON := cmn.MustMarshal(amsg.Value)
+	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	idstr := r.URL.Query().Get(cmn.URLParamTaskID)
+	if idstr != "" {
+		id, err := strconv.ParseInt(idstr, 10, 64)
+		if err != nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid task id: %s", idstr))
+			return
+		}
+		smsg.TaskID = id
+	}
+
+	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
+	if summaries, taskID, err = p.gatherBucketSummary(bucket, bckProvider, smsg, headerID); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	// taskID == 0 means that async runner has completed and the result is available
+	// otherwise it is an ID of a still running task
+	if taskID != 0 {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(strconv.FormatInt(taskID, 10)))
+		return
+	}
+
+	b := cmn.MustMarshal(summaries)
+	p.writeJSON(w, r, b, "bucket_summary")
+}
+
+func (p *proxyrunner) gatherBucketSummary(bucket, bckProvider string, msg cmn.SelectMsg, headerID string) (summaries cmn.BucketsSummaries, code int64, err error) {
+	var (
+		cfg        = cmn.GCO.Get()
+		smap       = p.smapowner.get()
+		reqTimeout = cfg.Timeout.ListBucket
+	)
+
+	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
+	// it is a request to start a new async task
+	isNew, q, err := p.initAsyncQuery(headerID, &msg)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	q.Add(cmn.URLParamBckProvider, bckProvider)
+
+	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, nil, nil)
+	msgBytes := cmn.MustMarshal(msgInt)
+	results := p.broadcastTo(
+		urlPath,
+		q,
+		http.MethodPost,
+		msgBytes,
+		smap,
+		reqTimeout,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+
+	allOK, err := p.checkBckTaskResp(msg.TaskID, results)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// some targets are still executing their tasks or it is request to start
+	// an async task. The proxy returns only taskID to a caller
+	if !allOK || isNew {
+		return nil, msg.TaskID, nil
+	}
+
+	// all targets are ready, prepare the final result
+	q = url.Values{}
+	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
+	q.Add(cmn.URLParamBckProvider, bckProvider)
+	q.Set(cmn.URLParamSilent, "true")
+	results = p.broadcastTo(
+		urlPath,
+		q,
+		http.MethodPost,
+		msgBytes,
+		smap,
+		reqTimeout,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+
+	summaries = make(cmn.BucketsSummaries)
+	for result := range results {
+		if result.err != nil {
+			return nil, 0, result.err
+		}
+
+		var targetSummary cmn.BucketsSummaries
+		if err := jsoniter.Unmarshal(result.outjson, &targetSummary); err != nil {
+			return nil, 0, err
+		}
+
+		for bckName, v := range targetSummary {
+			if prevV, ok := summaries[bckName]; !ok {
+				summaries[bckName] = v
+			} else {
+				prevV.Aggregate(v)
+				summaries[bckName] = prevV
+			}
+		}
+	}
+
+	return summaries, 0, nil
 }
 
 // POST { action } /v1/objects/bucket-name
@@ -1542,7 +1653,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 		si: si,
 		req: cmn.ReqArgs{
 			Method: r.Method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.List),
 			Query:  r.URL.Query(),
 			Header: r.Header,
 		},
@@ -1648,12 +1759,12 @@ func (p *proxyrunner) cbExists(bucket string) (err error) {
 	return
 }
 
-func (p *proxyrunner) initBckListQuery(headerID string, msg *cmn.SelectMsg) (bool, url.Values, error) {
+func (p *proxyrunner) initAsyncQuery(headerID string, msg *cmn.SelectMsg) (bool, url.Values, error) {
 	isNew := headerID == "" && msg.TaskID == 0
 	q := url.Values{}
 	if isNew {
 		msg.TaskID, _ = cmn.GenUUID64()
-		q.Set(cmn.URLParamTaskAction, cmn.ListTaskStart)
+		q.Set(cmn.URLParamTaskAction, cmn.TaskStart)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: starting new async task %d", msg.TaskID)
 		}
@@ -1668,7 +1779,7 @@ func (p *proxyrunner) initBckListQuery(headerID string, msg *cmn.SelectMsg) (boo
 		}
 		// first request is always 'Status' to avoid wasting gigabytes of
 		// traffic in case when few targets have finished their tasks
-		q.Set(cmn.URLParamTaskAction, cmn.ListTaskStatus)
+		q.Set(cmn.URLParamTaskAction, cmn.TaskStatus)
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("proxy: reading async task %d result", msg.TaskID)
 		}
@@ -1710,7 +1821,7 @@ func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerI
 
 	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
 	// it is a request to start a new async task
-	isNew, q, err := p.initBckListQuery(headerID, &msg)
+	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1745,7 +1856,7 @@ func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerI
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
+	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	results = p.broadcastTo(
 		urlPath,
@@ -1829,7 +1940,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 
 	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
 	// it is a request to start a new async task
-	isNew, q, err := p.initBckListQuery(headerID, &msg)
+	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1891,7 +2002,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
-	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
+	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
 	q.Set(cmn.URLParamBckProvider, cmn.Cloud)
 	if useCache {
@@ -3346,7 +3457,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 
 	// request all targets for their BMD saved to xattrs
 	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll),
+		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.List),
 		query,
 		http.MethodGet,
 		nil, // message

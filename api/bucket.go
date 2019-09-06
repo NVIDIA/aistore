@@ -235,7 +235,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
 	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.ListAll)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.List)
 	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
 	optParams := OptionalParams{Query: query}
 
@@ -251,6 +251,52 @@ func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketName
 		return nil, fmt.Errorf("empty response instead of empty bucket list from %s", baseParams.URL)
 	}
 	return bucketNames, nil
+}
+
+// GetBucketsSummaries API
+//
+// bckProvider takes one of "" (empty), "cloud" or "local". If bckProvider is empty, return all summaries of all buckets.
+// Otherwise return "cloud" or "local" buckets.
+func GetBucketsSummaries(baseParams *BaseParams, bucket, bckProvider string, msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
+	var (
+		q    = url.Values{}
+		path = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	)
+
+	if msg == nil {
+		msg = &cmn.SelectMsg{}
+	}
+
+	baseParams.Method = http.MethodPost
+	q.Add(cmn.URLParamBckProvider, bckProvider)
+
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg})
+	if err != nil {
+		return nil, err
+	}
+
+	optParams := OptionalParams{
+		Header: http.Header{"Content-Type": []string{"application/json"}},
+		Query:  q,
+	}
+
+	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActSummaryBucket, path, msg, optParams)
+	if err != nil {
+		return nil, err
+	}
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	if err = jsoniter.Unmarshal(respBody, &summaries); err != nil {
+		return nil, fmt.Errorf("failed to json-unmarshal, err: %v [%s]", err, string(b))
+	}
+
+	return summaries, nil
+
 }
 
 // CreateBucket API
@@ -407,8 +453,8 @@ func EvictCloudBucket(baseParams *BaseParams, bucket string, query ...url.Values
 // 3. Breaks loop on error
 // 4. If the destination returns status code StatusOK, it means the response
 //    contains the real data and the function returns the response to the caller
-func waitForAsyncReqComplete(baseParams *BaseParams, path string, origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: origMsg})
+func waitForAsyncReqComplete(baseParams *BaseParams, action, path string, origMsg *cmn.SelectMsg, optParams OptionalParams) (*http.Response, error) {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: origMsg})
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +487,7 @@ func waitForAsyncReqComplete(baseParams *BaseParams, path string, origMsg *cmn.S
 			msg := cmn.SelectMsg{}
 			msg = *origMsg
 			msg.TaskID = id
-			b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg})
+			b, err = jsoniter.Marshal(cmn.ActionMsg{Action: action, Value: &msg})
 			if err != nil {
 				return nil, err
 			}
@@ -512,7 +558,7 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 			Query:  q,
 		}
 
-		resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+		resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
 		if err != nil {
 			return nil, err
 		}
@@ -567,7 +613,7 @@ func ListBucketPage(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		Query: q,
 	}
 
-	resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
 	if err != nil {
 		return nil, err
 	}
@@ -596,14 +642,19 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		err error
 	)
 	baseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket, cmn.ActListObjects)
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	reslist := &cmn.BucketList{}
-	if msg != nil {
-		b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
-		if err != nil {
-			return nil, err
-		}
+
+	if msg == nil {
+		msg = &cmn.SelectMsg{}
 	}
+
+	msg.Fast = true
+	b, err = jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
+	if err != nil {
+		return nil, err
+	}
+
 	q := url.Values{}
 	if len(query) > 0 {
 		q = query[0]
@@ -613,7 +664,7 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 		Header: http.Header{"Content-Type": []string{"application/json"}},
 		Query:  q,
 	}
-	resp, err := waitForAsyncReqComplete(baseParams, path, msg, optParams)
+	resp, err := waitForAsyncReqComplete(baseParams, cmn.ActListObjects, path, msg, optParams)
 	if err != nil {
 		return nil, err
 	}
