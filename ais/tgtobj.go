@@ -343,14 +343,14 @@ do:
 		goto get
 	}
 	if !coldGet && !goi.lom.BckIsAIS { // exists && cloud-bucket : check ver if requested
-		goi.lom.Unlock(false)
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
+			goi.lom.Unlock(false)
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
 				goi.lom.Uncache()
 				return
 			}
+			goi.lom.Lock(false)
 		}
-		goi.lom.Lock(false)
 	}
 
 	// checksum validation, if requested

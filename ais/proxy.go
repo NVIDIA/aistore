@@ -396,6 +396,13 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
+	if !bckIsAIS {
+		if !p.ensureCloudBucketExistence(w, r, bucket) {
+			return // cloud bucket does not exist
+		}
+	}
+
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
@@ -420,7 +427,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	p.statsif.Add(stats.GetCount, 1)
 }
 
-// PUT /v1/objects
+// PUT /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -437,6 +444,13 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
+	if !bckIsAIS {
+		if !p.ensureCloudBucketExistence(w, r, bucket) {
+			return // cloud bucket does not exist
+		}
+	}
+
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objName, &smap.Smap)
 	if err != nil {
@@ -451,6 +465,45 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.PutCount, 1)
+}
+
+// DELETE /v1/objects/bucket-name/object-name
+func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
+	if err != nil {
+		return
+	}
+	bucket, objname := apitems[0], apitems[1]
+	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
+	if bmd == nil {
+		return
+	}
+	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	if !bckIsAIS {
+		if !p.ensureCloudBucketExistence(w, r, bucket) {
+			return // cloud bucket does not exist
+		}
+	}
+
+	smap := p.smapowner.get()
+	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objname, si)
+	}
+	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+
+	p.statsif.Add(stats.DeleteCount, 1)
 }
 
 // DELETE { action } /v1/buckets
@@ -537,38 +590,6 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
-}
-
-// DELETE /v1/objects/object-name
-func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
-	if err != nil {
-		return
-	}
-	bucket, objname := apitems[0], apitems[1]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
-	}
-	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
-	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objname, si)
-	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-
-	p.statsif.Add(stats.DeleteCount, 1)
 }
 
 // [METHOD] /v1/metasync
@@ -785,7 +806,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if actLocal && !bckIsAIS {
 		if bckProvider == "" {
 			err := cmn.NewErrorBucketDoesNotExist(bucket)
-			p.invalmsghdlr(w, r, err.Error())
+			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 		} else {
 			p.invalmsghdlr(w, r, fmt.Sprintf("invalid bucket provider: %q", bckProvider))
 		}
@@ -1609,6 +1630,44 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 	return
 }
 
+func (p *proxyrunner) ensureCloudBucketExistence(w http.ResponseWriter, r *http.Request, bucket string) bool {
+	// If requested bucket is cloud bucket we need to check if it exists
+	// in the bmd. If not we should check if it actually exists, add it
+	// to the metadata and then perform the requested operation.
+	_, present := p.bmdowner.get().Get(bucket, false)
+	if present {
+		return true
+	}
+
+	var (
+		cfg = cmn.GCO.Get()
+		msg = &cmn.ActionMsg{Action: cmn.ActRegisterCB}
+	)
+
+	// This request has to be handled by primary proxy
+	if p.forwardCP(w, r, msg, "ensure_cloud_bucket", nil) {
+		return false
+	}
+
+	exists, err := p.doesCloudBucketExist(bucket)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return false
+	}
+
+	if !exists {
+		p.invalmsghdlr(w, r, cmn.NewErrorCloudBucketDoesNotExist(bucket).Error(), http.StatusNotFound)
+		return false
+	}
+
+	if err := p.createBucket(msg, bucket, cfg, false); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return false
+	}
+
+	return true
+}
+
 func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
 	si, err := p.smapowner.get().GetRandTarget()
 	if err != nil {
@@ -1628,7 +1687,7 @@ func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
 	res := p.call(args)
 
 	if res.err != nil && res.status != http.StatusNotFound {
-		return false, fmt.Errorf("failed to check if bucket exists contacting %s: %v", si.URL(cmn.NetworkIntraData), res.err)
+		return false, fmt.Errorf("%s: failed to get bucket %s properties, err: %v", si.URL(cmn.NetworkIntraData), bucket, res.err)
 	}
 
 	return res.status != http.StatusNotFound, nil
