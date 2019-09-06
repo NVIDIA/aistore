@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func TestPutObjectNoDaemonID(t *testing.T) {
@@ -24,9 +25,9 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		smap         = getClusterMap(t, proxyURL)
 	)
 
-	for sid = range smap.Tmap {
-		break
-	}
+	si, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	sid = si.DaemonID
 
 	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
 	baseParams := tutils.BaseAPIParams(url)

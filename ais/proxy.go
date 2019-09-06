@@ -973,11 +973,11 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if bmd == nil {
 		return
 	}
-	var si *cluster.Snode
-	// Use random map iteration order to choose a random target to redirect to
-	smap := p.smapowner.get()
-	for _, si = range smap.Tmap {
-		break
+
+	si, err := p.smapowner.get().GetRandTarget()
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si)
@@ -1550,11 +1550,12 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 		return
 	}
 
-	var si *cluster.Snode
-	smap := p.smapowner.get()
-	for _, si = range smap.Tmap {
-		break
+	si, err := p.smapowner.get().GetRandTarget()
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
 	}
+
 	args := callArgs{
 		si: si,
 		req: cmn.ReqArgs{
@@ -1610,11 +1611,9 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 }
 
 func (p *proxyrunner) doesCloudBucketExist(bucket string) (bool, error) {
-	var si *cluster.Snode
-	// Use random map iteration order to choose a random target to ask
-	smap := p.smapowner.get()
-	for _, si = range smap.Tmap {
-		break
+	si, err := p.smapowner.get().GetRandTarget()
+	if err != nil {
+		return false, err
 	}
 
 	args := callArgs{

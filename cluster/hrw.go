@@ -17,6 +17,10 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+var (
+	errNoTargets = errors.New("no targets registered in the cluster")
+)
+
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 func Bo2Uname(bucket, objName string) string { return path.Join(bucket, objName) }
@@ -42,7 +46,7 @@ func HrwTarget(bucket, objName string, smap *Smap) (si *Snode, err error) {
 		}
 	}
 	if si == nil {
-		err = errors.New("cluster map is empty: no targets")
+		err = errNoTargets
 	}
 	return
 }

@@ -159,6 +159,16 @@ func (m *Smap) GetTarget(sid string) *Snode {
 	return si
 }
 
+func (m *Smap) GetRandTarget() (si *Snode, err error) {
+	if m.CountTargets() == 0 {
+		return nil, errNoTargets
+	}
+	for _, si = range m.Tmap {
+		break
+	}
+	return
+}
+
 func (m *Smap) GetProxy(pid string) *Snode {
 	pi, ok := m.Pmap[pid]
 	if !ok {
