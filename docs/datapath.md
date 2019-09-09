@@ -18,20 +18,20 @@ very similar if not identical:
        (consistently) the same for the same `(bucket, object)` pair and cluster configuration.
     3. redirect the request to the selected target.
 3. Target parses the bucket and object from the (redirected) request and determines whether the bucket
-   is a AIStore local bucket or a Cloud-based bucket.
+   is an ais bucket or a Cloud-based bucket.
 4. Target then determines a `mountpath` (and therefore, a local filesystem) that will be used to perform
    the I/O operation. This time, the target computes HRW(configured mountpaths, bucket, object) on the
    input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
 5. Once the highest-randomly-weighted `mountpath` is selected, the target then forms a fully-qualified name
    to perform the local read/write operation. For instance, given a `mountpath`  `/a/b/c`, the fully-qualified
-   name may look as `/a/b/c/local/<bucket_name>/<object_name>` for a local bucket,
+   name may look as `/a/b/c/local/<bucket_name>/<object_name>` for an ais bucket,
    or `/a/b/c/cloud/<bucket_name>/<object_name>` for a Cloud bucket.
 
 Beyond these 5 (five) common steps the similarity between `GET` and `PUT` request handling ends, and the remaining steps include:
 
 ### `GET`
 
-5. If the object already exists locally (meaning, it belongs to a AIStore local bucket or the most recent version of a Cloud-based object is cached
+5. If the object already exists locally (meaning, it belongs to an ais bucket or the most recent version of a Cloud-based object is cached
    and resides on a local disk), the target optionally validates the object's checksum and version.
    This type of `GET` is often referred to as a "warm `GET`".
 6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next AIStore tier or from the Cloud.

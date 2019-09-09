@@ -112,7 +112,7 @@ func ecGetAllLocalSlices(t *testing.T, objName, bucketName string) (map[string]e
 		}
 
 		if strings.Contains(path, objName) {
-			sliceLom, err := cluster.LOM{FQN: path, T: tMock}.Init(cmn.LocalBs)
+			sliceLom, err := cluster.LOM{FQN: path, T: tMock}.Init(cmn.AIS)
 			tassert.CheckFatal(t, err)
 
 			err = sliceLom.Load(false)
@@ -454,14 +454,14 @@ func putRandomFile(t *testing.T, baseParams *api.BaseParams, bckName string, obj
 }
 
 func newLocalBckWithProps(t *testing.T, name string, bckProps cmn.BucketProps, seed int64, concurr int, baseParams *api.BaseParams) {
-	tutils.CreateFreshLocalBucket(t, proxyURLReadOnly, name)
+	tutils.CreateFreshBucket(t, proxyURLReadOnly, name)
 
 	tutils.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		ecDataSliceCnt, ecParitySliceCnt, seed, concurr)
 	err := api.SetBucketPropsMsg(baseParams, name, bckProps)
 
 	if err != nil {
-		tutils.DestroyLocalBucket(t, proxyURLReadOnly, name)
+		tutils.DestroyBucket(t, proxyURLReadOnly, name)
 	}
 	tassert.CheckFatal(t, err)
 }
@@ -522,13 +522,13 @@ func objectsExist(t *testing.T, baseParams *api.BaseParams, bckName, objPatt str
 // EC is enabled
 func TestECChange(t *testing.T) {
 	var (
-		bucket      = TestLocalBucketName
+		bucket      = TestBucketName
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	bucketProps.Cksum.Type = "inherit"
 	bucketProps.EC = cmn.ECConf{
@@ -728,7 +728,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		sema     = make(chan struct{}, semaCnt)
 	)
@@ -747,7 +747,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
 
@@ -813,9 +813,9 @@ func TestECChecksum(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		tMock    = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
+		tMock    = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 	)
 
 	smap := getClusterMap(t, proxyURL)
@@ -829,7 +829,7 @@ func TestECChecksum(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	objName1 := fmt.Sprintf(objPatt, 1)
 	objPath1 := ecTestDir + objName1
@@ -880,7 +880,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		sema     = make(chan struct{}, semaCnt)
 	)
@@ -898,7 +898,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	// End of preparation, create files with EC enabled, check if are restored properly
 
@@ -972,7 +972,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		sema     = make(chan struct{}, semaCnt)
 	)
@@ -990,7 +990,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	// End of preparation, create files with EC enabled, check if are restored properly
 
@@ -1108,7 +1108,7 @@ func TestECStress(t *testing.T) {
 	)
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
@@ -1122,7 +1122,7 @@ func TestECStress(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, concurr, baseParams)
 
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	doECPutsAndCheck(t, bucket, seed, baseParams, concurr, objCount)
 
@@ -1143,8 +1143,8 @@ func TestECStressManyBuckets(t *testing.T) {
 	const (
 		objCount = 200
 		concurr  = 12
-		bck1Name = TestLocalBucketName + "1"
-		bck2Name = TestLocalBucketName + "2"
+		bck1Name = TestBucketName + "1"
+		bck2Name = TestBucketName + "2"
 	)
 
 	var proxyURL = getPrimaryURL(t, proxyURLReadOnly)
@@ -1161,8 +1161,8 @@ func TestECStressManyBuckets(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	newLocalBckWithProps(t, bck1Name, defaultECBckProps(), seed1, concurr, baseParams)
 	newLocalBckWithProps(t, bck2Name, defaultECBckProps(), seed2, concurr, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bck1Name)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bck2Name)
+	defer tutils.DestroyBucket(t, proxyURL, bck1Name)
+	defer tutils.DestroyBucket(t, proxyURL, bck2Name)
 
 	// Run EC on different buckets concurrently
 	wg := &sync.WaitGroup{}
@@ -1212,7 +1212,7 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	var (
-		bucket      = TestLocalBucketName
+		bucket      = TestBucketName
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		waitAllTime = time.Minute * 4              // should be enough for all object to complete EC
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
@@ -1231,7 +1231,7 @@ func TestECExtraStress(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(), seed, concurr, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	started := time.Now()
 
@@ -1326,7 +1326,7 @@ func TestECXattrs(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
@@ -1345,7 +1345,7 @@ func TestECXattrs(t *testing.T) {
 	bckProps.Versioning.Enabled = true
 
 	newLocalBckWithProps(t, bucket, bckProps, seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	oneObj := func(idx int, objName string) {
 		delSlice := false // delete only main object
@@ -1483,7 +1483,7 @@ func TestECDestroyBucket(t *testing.T) {
 	}
 
 	var (
-		bucket    = TestLocalBucketName + "-DESTROY"
+		bucket    = TestBucketName + "-DESTROY"
 		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
 		semaphore = make(chan struct{}, concurr) // concurrent EC jobs at a time
 	)
@@ -1526,7 +1526,7 @@ func TestECDestroyBucket(t *testing.T) {
 		}(i)
 
 		if i == 4*numFiles/5 {
-			// DestroyLocalBucket when put requests are still executing
+			// DestroyBucket when put requests are still executing
 			semaphore <- struct{}{}
 			wg.Add(1)
 			go func() {
@@ -1536,7 +1536,7 @@ func TestECDestroyBucket(t *testing.T) {
 				}()
 
 				tutils.Logf("Destroying bucket %s\n", bucket)
-				tutils.DestroyLocalBucket(t, proxyURL, bucket)
+				tutils.DestroyBucket(t, proxyURL, bucket)
 			}()
 		}
 	}
@@ -1546,7 +1546,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 	// create bucket with the same name and check if puts are successful
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 	doECPutsAndCheck(t, bucket, seed, baseParams, concurr, numFiles)
 
 	// check if get requests are successful
@@ -1577,7 +1577,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	}
 
 	var (
-		bucket    = TestLocalBucketName
+		bucket    = TestBucketName
 		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
 		semaphore = make(chan struct{}, concurr) // concurrent EC jobs at a time
 	)
@@ -1597,7 +1597,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	bckProps := defaultECBckProps()
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := &sync.WaitGroup{}
 
@@ -1681,7 +1681,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 	}
 
 	var (
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		sema     = make(chan struct{}, semaCnt)
 	)
@@ -1715,7 +1715,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	bckProps := defaultECBckProps()
 	newLocalBckWithProps(t, bucket, bckProps, seed, 0, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := sync.WaitGroup{}
 
@@ -1832,7 +1832,7 @@ func TestECEmergencyMpath(t *testing.T) {
 	}
 
 	var (
-		bucket     = TestLocalBucketName
+		bucket     = TestBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 		semaphore  = make(chan struct{}, concurr) // concurrent EC jobs at a time
@@ -1857,7 +1857,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	bckProps := defaultECBckProps()
 	newLocalBckWithProps(t, bucket, bckProps, seed, concurr, baseParams)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	wg := &sync.WaitGroup{}
 

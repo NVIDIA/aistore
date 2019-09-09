@@ -61,7 +61,7 @@ func (r *XactBckCopy) init() (numjs int, err error) {
 	for _, mpathInfo := range availablePaths {
 		bccJogger := newBccJogger(r, mpathInfo, config)
 		// only objects; TODO contentType := range fs.CSM.RegisteredContentTypes
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsAIS())
 		r.mpathers[mpathLC] = bccJogger
 		go bccJogger.jog()
 	}
@@ -70,7 +70,7 @@ func (r *XactBckCopy) init() (numjs int, err error) {
 
 func (r *XactBckCopy) Description() string {
 	cmn.Assert(r.Kind() == cmn.ActCopyLB)
-	return "copy local bucket"
+	return "copy ais bucket"
 }
 
 //

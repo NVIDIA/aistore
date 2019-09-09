@@ -19,7 +19,7 @@ AIS Loader allows for configurable PUT and GET tests directly from the command l
  - `-port` - Port number for proxy server
  - `-statsinterval` - Interval to show stats / send statsd in seconds; 0 = disabled
  - `-bucket` - Bucket name
- - `-bckprovider` - "local" for local bucket, "cloud" for cloud bucket
+ - `-bckprovider` - "local" for ais bucket, "cloud" for cloud bucket
  - `-duration` - How long to run the test; 0 = Unbounded
  - `-numworkers` - Number of go routines sending requests in parallel
  - `-pctput` - Percentage of put request (0% - 100%, remaining is allocated for GET)

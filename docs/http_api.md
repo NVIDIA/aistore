@@ -79,7 +79,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Destroy local [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
 | Rename local [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
 | Recover buckets [bucket](bucket.md) (proxy) | POST {"action": "recoverbck"} /v1/buckets?force=true | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' 'http://G/v1/buckets'` |
-| Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mylocalbucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
+| Rename/move object (ais buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mylocalbucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
 | Check if an object *is cached*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?offset=1024&length=512' -o myobject` |
@@ -121,13 +121,13 @@ ___
 
 <a name="ft7">7</a>: The difference between "Set all bucket properties" and "Set bucket properties" is that the "Set bucket properties" action takes in key-value pairs of properties via URL query string. In the case of "Set all bucket properties", the `value` must be correctly-filled `cmn.BucketProps` structure (all fields must be set!). For the list of supported properties, see [API constants](/cmn/api.go) and look for a section titled 'Header Key enum'[↩](#a7)
 
-<a name="ft8">8</a>: This request does not use payload and returns only object names and sizes sorted in alphabetical order. It makes the request much faster for local buckets comparing to getting a list of objects using URL `/v1/buckets/bucket-name` and payload. Requests to cloud buckets do not get any performance boost. The only supported parameter is URL query value `prefix` that filters out from the result objects which names do not start with the prefix. NOTE for local buckets: the request does not do extra checks for object correct location, that may result in the list containing moved or deleted objects that are not accessible any longer. [↩](#a8)
+<a name="ft8">8</a>: This request does not use payload and returns only object names and sizes sorted in alphabetical order. It makes the request much faster for ais buckets comparing to getting a list of objects using URL `/v1/buckets/bucket-name` and payload. Requests to cloud buckets do not get any performance boost. The only supported parameter is URL query value `prefix` that filters out from the result objects which names do not start with the prefix. NOTE for ais buckets: the request does not do extra checks for object correct location, that may result in the list containing moved or deleted objects that are not accessible any longer. [↩](#a8)
 
 ### Bucket Provider
 
 Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS supports user-specified *bucket provider*.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for local buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
 In all those cases users can add an optional `?bprovider=local` or `?bprovider=cloud` query to the GET (PUT, DELETE, List/Range) request.
 

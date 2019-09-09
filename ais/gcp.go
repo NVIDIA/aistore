@@ -350,7 +350,7 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	if err != nil {
 		return
 	}
-	bckProvider, _ := cmn.ProviderFromStr(cmn.CloudBs)
+	bckProvider, _ := cmn.ProviderFromStr(cmn.Cloud)
 	lom, err = cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
 	if err != nil {
 		return

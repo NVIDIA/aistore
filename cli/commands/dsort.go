@@ -168,20 +168,20 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
 	cleanup := flagIsSet(c, cleanupFlag)
 
-	exists, err := api.DoesLocalBucketExist(baseParams, bucket)
+	exists, err := api.DoesBucketExist(baseParams, bucket)
 	if err != nil {
 		return err
 	}
 
 	if exists && cleanup {
-		err := api.DestroyLocalBucket(baseParams, bucket)
+		err := api.DestroyBucket(baseParams, bucket)
 		if err != nil {
 			return err
 		}
 	}
 
 	if !exists || cleanup {
-		if err := api.CreateLocalBucket(baseParams, bucket); err != nil {
+		if err := api.CreateBucket(baseParams, bucket); err != nil {
 			return err
 		}
 	}

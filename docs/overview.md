@@ -45,9 +45,9 @@ Finally, AIS target provides a number of storage services with [S3-like RESTful 
 
 <img src="images/ais-target-20-block.png" alt="AIS target block diagram" width="400">
 
-> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets** or AIS buckets. Cloud-based and local buckets support the same API. AIS (local) buckets are distributed, content-wise, across the entire cluster and all the [supported storage services](storage_svcs.md) equally apply to both kinds of the buckets with a few exceptions: as of v2.1, only local buckets can be renamed and erasure (en)coded.
+> Terminology: AIS differentiates between **Cloud buckets** and ais buckets - the buckets that do not serve as a cache or tier in front of any 3rd party Cloud storage. Cloud-based and ais buckets support the same API. All the [supported storage services](storage_svcs.md) equally apply to both kinds of buckets with a few exceptions: as of v2.1, only ais buckets can be renamed and erasure (en)coded.
 
-> If (and only when) a cloud-based and a local bucket share the same name and are simultaneously accessible, users can explicitly let AIS know via [the API](bucket.md) which bucket to use.
+> If (and only when) a cloud-based and an ais bucket share the same name and are simultaneously accessible, users can explicitly let AIS know via [the API](bucket.md) which bucket to use.
 
 ## Datapath
 In AIS, all inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:

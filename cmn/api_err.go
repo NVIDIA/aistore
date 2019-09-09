@@ -32,16 +32,16 @@ func (e *ErrorCloudBucketDoesNotExist) Error() string {
 	return fmt.Sprintf("cloud bucket %q does not exist", e.bucket)
 }
 
-type ErrorLocalBucketDoesNotExist struct {
+type ErrorBucketDoesNotExist struct {
 	bucket string
 }
 
-func NewErrorLocalBucketDoesNotExist(bucket string) *ErrorLocalBucketDoesNotExist {
-	return &ErrorLocalBucketDoesNotExist{bucket: bucket}
+func NewErrorBucketDoesNotExist(bucket string) *ErrorBucketDoesNotExist {
+	return &ErrorBucketDoesNotExist{bucket: bucket}
 }
 
-func (e *ErrorLocalBucketDoesNotExist) Error() string {
-	return fmt.Sprintf("bucket %q does not appear to be local or does not exist", e.bucket)
+func (e *ErrorBucketDoesNotExist) Error() string {
+	return fmt.Sprintf("%q does not appear to be an ais bucket or does not exist", e.bucket)
 }
 
 type errAccessDenied struct {

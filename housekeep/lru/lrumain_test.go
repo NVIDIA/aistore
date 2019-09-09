@@ -101,7 +101,7 @@ func initConfig() {
 	config.LRU.HighWM = hwm
 	config.LRU.LowWM = lwm
 	config.LRU.Enabled = true
-	config.LRU.LocalBuckets = true
+	config.LRU.Buckets = true
 	cmn.GCO.CommitUpdate(config)
 }
 

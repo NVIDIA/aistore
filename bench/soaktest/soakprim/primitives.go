@@ -57,7 +57,7 @@ func (rctx *RecipeContext) MakeBucket(bucketname string) {
 	tag := rctx.startPrim("MakeBucket")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.CreateLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
+		err := api.CreateBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -143,7 +143,7 @@ func (rctx *RecipeContext) Rename(bucketname string, newname string) {
 	tag := rctx.startPrim("Rename")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.RenameLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), bckNamePrefix(newname))
+		err := api.RenameBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname), bckNamePrefix(newname))
 		cmn.AssertNoErr(err)
 	}()
 }
@@ -152,7 +152,7 @@ func (rctx *RecipeContext) Destroy(bucketname string) {
 	tag := rctx.startPrim("Destroy")
 	go func() {
 		defer rctx.finishPrim(tag)
-		err := api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
+		err := api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bucketname))
 		cmn.AssertNoErr(err)
 	}()
 }

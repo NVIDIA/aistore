@@ -4,7 +4,7 @@
  */
 
 // Limitations:
-// 1. Support local bucket only (not hard to support non local buckets)
+// 1. Support ais bucket only (not hard to support non ais buckets)
 // 2. Empty directories are only support in memory, not persisted
 // 3. ATime: format, how do i know the time format returned (RFC822 or format string)
 // 4. Objects for read and write are downloaded locally first.

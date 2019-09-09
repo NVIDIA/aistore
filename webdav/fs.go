@@ -802,7 +802,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 	var fis []os.FileInfo
 	switch f.typ {
 	case Root:
-		buckets, err := f.fs.proxy.listBuckets(cmn.LocalBs /* local */)
+		buckets, err := f.fs.proxy.listBuckets(cmn.AIS /* local */)
 		if err != nil {
 			return nil, err
 		}

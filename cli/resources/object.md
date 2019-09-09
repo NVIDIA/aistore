@@ -186,7 +186,7 @@ Prefetches the list of objects (`test1.txt`, `test2.txt`, `test3.txt`) from the 
 
 `ais object rename --bucket <value> --name  <value> --new-name <value>`
 
-Rename object from a local bucket.
+Rename object from an ais bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

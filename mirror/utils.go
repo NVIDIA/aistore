@@ -57,7 +57,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	parsedFQN := lom.ParsedFQN
 	parsedFQN.MpathInfo = mpathInfo
 	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
-	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsLocal, lom.Bucket, lom.Objname)
+	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsAIS, lom.Bucket, lom.Objname)
 
 	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK=false*/)
 	if err != nil {

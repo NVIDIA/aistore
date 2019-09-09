@@ -8,12 +8,12 @@
 // For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
 
 // Examples:
-// 1. Destroy existing local bucket. If the bucket is Cloud-based, delete all objects:
+// 1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
 //    aisloader -bucket=nvais -bckprovider=cloud -cleanup=true -duration 0s -totalputsize=0
 // 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 //    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
-// 3. Time-based PUT into local bucket, random objects names:
+// 3. Time-based PUT into ais bucket, random objects names:
 //    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
 // 4. Mixed 30% PUT and 70% GET to/from Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
 //    aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
@@ -238,7 +238,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	f.StringVar(&p.bckProvider, "bckprovider", cmn.LocalBs, "local - for local bucket, cloud - for Cloud based bucket")
+	f.StringVar(&p.bckProvider, "bckprovider", cmn.AIS, "local - for ais bucket, cloud - for Cloud based bucket")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -477,7 +477,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = cmn.IsProviderLocal(p.bckProvider)
+		p.cleanUp.Val = cmn.IsProviderAIS(p.bckProvider)
 	}
 
 	// For Dry-Run on Docker
@@ -539,19 +539,19 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.bckProvider != cmn.LocalBs || runParams.getConfig {
+	if runParams.bckProvider != cmn.AIS || runParams.getConfig {
 		return nil
 	}
 	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-	exists, err := api.DoesLocalBucketExist(baseParams, runParams.bucket)
+	exists, err := api.DoesBucketExist(baseParams, runParams.bucket)
 	if err != nil {
-		return fmt.Errorf("failed to get local bucket lists to check for %s, err = %v", runParams.bucket, err)
+		return fmt.Errorf("failed to get ais bucket lists to check for %s, err = %v", runParams.bucket, err)
 	}
 
 	if !exists {
-		err := api.CreateLocalBucket(baseParams, runParams.bucket)
+		err := api.CreateBucket(baseParams, runParams.bucket)
 		if err != nil {
-			return fmt.Errorf("failed to create local bucket %s, err = %s", runParams.bucket, err)
+			return fmt.Errorf("failed to create ais bucket %s, err = %s", runParams.bucket, err)
 		}
 	}
 
@@ -1063,9 +1063,9 @@ func cleanUp() {
 		wg.Wait()
 	}
 
-	if cmn.IsProviderLocal(runParams.bckProvider) {
+	if cmn.IsProviderAIS(runParams.bckProvider) {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
-		api.DestroyLocalBucket(baseParams, runParams.bucket)
+		api.DestroyBucket(baseParams, runParams.bucket)
 	}
 
 	fmt.Println(prettyTimeStamp() + " Done")

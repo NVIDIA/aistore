@@ -422,8 +422,8 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		return nil
 	}
 
-	if !t.bmdowner.Get().IsLocal(bucket) {
-		return fmt.Errorf("%s bucket is not a local bucket", bucket)
+	if !t.bmdowner.Get().IsAIS(bucket) {
+		return fmt.Errorf("%s bucket is not an ais bucket", bucket)
 	}
 
 	switch kind {
@@ -721,7 +721,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	//       disable mirroring (needed in part for cloud buckets)
 	t.xactions.abortAllBuckets(true, bucketsToDelete...)
 
-	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
 
 	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
@@ -737,7 +737,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 		t.ecmanager.BucketsMDChanged()
 	}
 
-	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*true=create*/, bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, bucketsToCreate...)
 	return
 }
 
@@ -1243,7 +1243,7 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	bmd := t.bmdowner.get()
 	bprops, ok := bmd.Get(bucketFrom, true /*is local*/)
 	if !ok {
-		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
+		return cmn.NewErrorBucketDoesNotExist(bucketFrom)
 	}
 	if _, ok = bmd.Get(bucketTo, true /*is local*/); ok {
 		if action == cmn.ActRenameLB {
@@ -1296,7 +1296,7 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	switch action {
 	case cmn.ActRenameLB:
 		tag := cmn.ActAbort + ":" + action
-		fs.Mountpaths.CreateDestroyLocalBuckets(tag, false /*false=destroy*/, bucketTo)
+		fs.Mountpaths.CreateDestroyBuckets(tag, false /*false=destroy*/, bucketTo)
 	default:
 		cmn.Assert(action == cmn.ActCopyLB)
 	}

@@ -87,10 +87,10 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
-	if outIsLocal, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
+	if outBckIsAIS, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
-	} else if err = bmd.AllowPUT(parsedRS.OutputBucket, outIsLocal); err != nil {
+	} else if err = bmd.AllowPUT(parsedRS.OutputBucket, outBckIsAIS); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}

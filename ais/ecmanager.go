@@ -33,7 +33,7 @@ type ecManager struct {
 	bowner    *bmdowner    // bucket manager
 	bckMD     *bucketMD    // bucket metadata, used to get EC enabled/disabled information
 
-	xacts map[string]*ec.BckXacts // bckName -> xact map, only local buckets allowed, no naming collisions
+	xacts map[string]*ec.BckXacts // bckName -> xact map, only ais buckets allowed, no naming collisions
 
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request

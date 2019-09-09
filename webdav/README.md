@@ -64,7 +64,7 @@ AIStore WebDAV passes basic, copymove, and http groups of the Litmus compliance 
 
 ## Known limitations
 
-- Only local buckets are supported (remote buckets are not difficult to add).
+- Only ais buckets are supported (remote buckets are not difficult to add).
 - Empty directories are not persistent and remain in memory.
 - Permissions, ACLs, O_Flags are not verified.
 - Directory access time and directory size are currently not supported.

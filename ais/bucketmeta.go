@@ -51,24 +51,24 @@ func newBucketMD() *bucketMD {
 	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap}}
 }
 
-func (m *bucketMD) add(b string, local bool, p *cmn.BucketProps) bool {
+func (m *bucketMD) add(b string, isais bool, p *cmn.BucketProps) bool {
 	cmn.Assert(p != nil)
 	mm := m.LBmap
-	if !local {
+	if !isais {
 		mm = m.CBmap
 	}
 	if _, ok := mm[b]; ok {
 		return false
 	}
 	m.Version++
-	p.BID = m.GenBucketID(local)
+	p.BID = m.GenBucketID(isais)
 	mm[b] = p
 	return true
 }
 
-func (m *bucketMD) del(b string, local bool) bool {
+func (m *bucketMD) del(b string, isais bool) bool {
 	mm := m.LBmap
-	if !local {
+	if !isais {
 		mm = m.CBmap
 	}
 	if _, ok := mm[b]; !ok {
@@ -79,9 +79,9 @@ func (m *bucketMD) del(b string, local bool) bool {
 	return true
 }
 
-func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
+func (m *bucketMD) set(b string, isais bool, p *cmn.BucketProps) {
 	mm := m.LBmap
-	if !local {
+	if !isais {
 		mm = m.CBmap
 	}
 	if _, ok := mm[b]; !ok {
@@ -106,7 +106,7 @@ func (m *bucketMD) ecUsed() bool {
 // for the bucket. Returns false if bucket not found
 //nolint:unused
 func (m *bucketMD) ecEnabled(bucket string) bool {
-	p, ok := m.Get(bucket, m.IsLocal(bucket))
+	p, ok := m.Get(bucket, m.IsAIS(bucket))
 	return ok && p.EC.Enabled
 }
 
@@ -218,7 +218,7 @@ func (m *bucketMD) Persist() error {
 }
 
 func (m *bucketMD) Dump() string {
-	s := fmt.Sprintf("BMD Version %d\nLocal buckets: [", m.Version)
+	s := fmt.Sprintf("BMD Version %d\nais buckets: [", m.Version)
 	for name := range m.LBmap {
 		s += name + ", "
 	}

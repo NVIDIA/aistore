@@ -481,7 +481,7 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		tsi  = smap.GetTarget(tsid)
 	)
 	// Rx
-	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
+	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromBool(hdr.BckIsAIS))
 	if err != nil {
 		glog.Error(err)
 		return
@@ -541,7 +541,7 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromLoc(hdr.IsLocal))
+	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromBool(hdr.BckIsAIS))
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
 	}
@@ -753,10 +753,10 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode, size int64
 		glog.Errorf("%s: %s %d != %d", rj.m.t.si.Name(), lom, lom.Size(), size) // TODO: remove
 	}
 	hdr = transport.Header{
-		Bucket:  lom.Bucket,
-		Objname: lom.Objname,
-		IsLocal: lom.BckIsLocal,
-		Opaque:  []byte(rj.m.t.si.DaemonID), // self == src
+		Bucket:   lom.Bucket,
+		Objname:  lom.Objname,
+		BckIsAIS: lom.BckIsAIS,
+		Opaque:   []byte(rj.m.t.si.DaemonID), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
 			Atime:      lom.Atime().UnixNano(),
@@ -812,7 +812,7 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 		_ = file.Close()
 	}
 	if len(buckets) > 0 {
-		bucket = buckets[0] // special case: local bucket
+		bucket = buckets[0] // special case: ais bucket
 	}
 	if bucket != "" {
 		xreb = reb.t.xactions.renewLocalReb(len(availablePaths))

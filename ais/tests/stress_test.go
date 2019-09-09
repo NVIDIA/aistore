@@ -31,10 +31,10 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer func() {
 		startDelete := time.Now()
-		tutils.DestroyLocalBucket(t, proxyURL, bucket)
+		tutils.DestroyBucket(t, proxyURL, bucket)
 		tutils.Logf("Took %v to DELETE bucket with %d total objects\n", time.Since(startDelete), totalObjs)
 	}()
 
@@ -77,7 +77,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		numObjs := (i + 1) * numObjIncrement
 		totalObjs := numObjs * workerCount
 
-		tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+		tutils.CreateFreshBucket(t, proxyURL, bucket)
 
 		// Iterations of PUT
 		startPut := time.Now()
@@ -97,7 +97,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		tutils.Logf("Took %v to PUT %d total objects\n", time.Since(startPut), totalObjs)
 
 		startDelete := time.Now()
-		tutils.DestroyLocalBucket(t, proxyURL, bucket)
+		tutils.DestroyBucket(t, proxyURL, bucket)
 		tutils.Logf("Took %v to DELETE bucket with %d total objects\n", time.Since(startDelete), totalObjs)
 	}
 }

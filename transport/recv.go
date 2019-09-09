@@ -442,7 +442,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.Objname = extString(off, body)
-	off, hdr.IsLocal = extBool(off, body)
+	off, hdr.BckIsAIS = extBool(off, body)
 	off, hdr.Opaque = extByte(off, body)
 	off, hdr.ObjAttrs = extAttrs(off, body)
 	if _, ok := cmn.CheckDebug(pkgName); ok {

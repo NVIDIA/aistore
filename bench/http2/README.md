@@ -31,9 +31,9 @@ Each benchmark has four arguments:
 - `-bucket`: the name of the bucket to put them in (default: local_benchmark_bucket)
 - `-workers`: The number of workers to use to put files (default: 10)
 
-2. [create_local_bucket](./create_local_bucket) creates a local bucket in AIStore. It takes one parameter:
+2. [create_local_bucket](./create_local_bucket) creates an ais bucket in AIStore. It takes one parameter:
 
-- B: The local bucket to create
+- B: The ais bucket to create
 
 #### Examples
 ```bash

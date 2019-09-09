@@ -143,7 +143,7 @@ func (rctx *RecipeContext) PreRecipe(recipeName string) {
 	bckNames := fetchBuckets("PreRecipe")
 	for _, bckName := range bckNames {
 		report.Writef(report.SummaryLevel, "found extraneous bucket: %v\n", bckNamePrefix(bckName))
-		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
+		api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
 	}
 
 	smap := fetchSmap("PreRecipe")
@@ -192,7 +192,7 @@ func (rctx *RecipeContext) PostRecipe() error {
 func cleanupRecipeBuckets() {
 	bckNames := fetchBuckets("PostRecipe")
 	for _, bckName := range bckNames {
-		api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
+		api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckNamePrefix(bckName))
 	}
 }
 
@@ -201,10 +201,10 @@ func cleanupAllRecipeBuckets() {
 		return
 	}
 
-	bckNames, _ := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
-	for _, bckName := range bckNames.Local {
+	bckNames, _ := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.AIS)
+	for _, bckName := range bckNames.AIS {
 		if strings.HasPrefix(bckName, soakPrefix) {
-			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckName)
+			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckName)
 		}
 	}
 }
@@ -222,14 +222,14 @@ func bcknameDePrefix(bckName string) (res string) {
 
 // fetchBuckets returns a list of buckets in the proxy without the soakPrefix
 func fetchBuckets(tag string) []string {
-	bckNames, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
+	bckNames, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.AIS)
 
 	if err != nil {
 		cmn.AssertNoErr(fmt.Errorf("error fetching bucketnames for %v: %v", tag, err.Error()))
 	}
 
 	var res []string
-	for _, bckName := range bckNames.Local {
+	for _, bckName := range bckNames.AIS {
 		if bckName = bcknameDePrefix(bckName); bckName != "" {
 			res = append(res, bckName)
 		}

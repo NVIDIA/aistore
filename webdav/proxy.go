@@ -24,25 +24,25 @@ type proxyServer struct {
 // createBucket creates a new bucket
 func (p *proxyServer) createBucket(bucket string) error {
 	baseParams := tutils.BaseAPIParams(p.url)
-	return api.CreateLocalBucket(baseParams, bucket)
+	return api.CreateBucket(baseParams, bucket)
 }
 
 func (p *proxyServer) deleteBucket(bucket string) error {
 	baseParams := tutils.BaseAPIParams(p.url)
-	return api.DestroyLocalBucket(baseParams, bucket)
+	return api.DestroyBucket(baseParams, bucket)
 }
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {
-	// note: webdav works with local bucket only (at least for now)
+	// note: webdav works with ais bucket only (at least for now)
 	// _, err := api.HeadBucket(p.url, bucket)
 	// return err == nil
 	baseParams := tutils.BaseAPIParams(p.url)
-	bns, err := api.GetBucketNames(baseParams, cmn.LocalBs /* local */)
+	bns, err := api.GetBucketNames(baseParams, cmn.AIS /* local */)
 	if err != nil {
 		return false
 	}
 
-	for _, b := range bns.Local {
+	for _, b := range bns.AIS {
 		if b == bucket {
 			return true
 		}
@@ -53,7 +53,7 @@ func (p *proxyServer) doesBucketExist(bucket string) bool {
 
 // listBuckets returns a slice of names of all buckets
 func (p *proxyServer) listBuckets(bckProvider string) ([]string, error) {
-	if bckProvider == cmn.CloudBs || bckProvider == "" {
+	if bckProvider == cmn.Cloud || bckProvider == "" {
 		return nil, nil
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
@@ -62,7 +62,7 @@ func (p *proxyServer) listBuckets(bckProvider string) ([]string, error) {
 		return nil, err
 	}
 
-	return bns.Local, nil
+	return bns.AIS, nil
 }
 
 // doesObjectExists checks whether a resource exists by querying AIStore.

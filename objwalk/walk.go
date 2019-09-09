@@ -212,7 +212,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 
-		lom, err := cluster.LOM{T: w.t, Bucket: w.bucket, Objname: e.Name}.Init(cmn.CloudBs, config)
+		lom, err := cluster.LOM{T: w.t, Bucket: w.bucket, Objname: e.Name}.Init(cmn.Cloud, config)
 		if err != nil {
 			continue
 		}

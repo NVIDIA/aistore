@@ -31,7 +31,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 }
 
 func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *cmn.SelectMsg,
-	versionEnabled bool, bckIsLocal bool) (newVersions map[string]string) {
+	versionEnabled bool, bckIsAIS bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
 	r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
@@ -70,7 +70,7 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		tutils.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
-		if !m.IsCached() && !bckIsLocal {
+		if !m.IsCached() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 		if !versionEnabled {
@@ -221,7 +221,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsLocal bool) {
+func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.SelectMsg, versionEnabled bool, bckIsAIS bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
@@ -248,7 +248,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.Logf("Target %s [%s] is removed\n", removeTarget.DaemonID, removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
-	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, bckIsLocal)
+	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, bckIsAIS)
 
 	tutils.Logf("Reregistering target...\n")
 	err = tutils.RegisterNode(proxyURL, removeTarget, smap)
@@ -285,7 +285,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 
 		objFound++
 
-		if !m.IsCached() && !bckIsLocal {
+		if !m.IsCached() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 		if m.Atime == "" {
@@ -319,7 +319,7 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 	close(errCh)
 }
 
-func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
+func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 	const (
 		objCountToTest = 15
 		filesize       = cmn.MiB
@@ -369,7 +369,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 		}
 		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
-		if !m.IsCached() && !bckIsLocal {
+		if !m.IsCached() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 
@@ -390,7 +390,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	}
 
 	// rewrite objects and compare versions - they should change
-	newVersions := propsUpdateObjects(t, proxyURL, bucket, fileslist, msg, versionEnabled, bckIsLocal)
+	newVersions := propsUpdateObjects(t, proxyURL, bucket, fileslist, msg, versionEnabled, bckIsAIS)
 	if len(newVersions) != len(fileslist) {
 		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(fileslist), len(newVersions))
 	}
@@ -398,16 +398,16 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsLocal bool) {
 	// check that files are read from cache
 	propsReadObjects(t, proxyURL, bucket, fileslist)
 
-	if !bckIsLocal {
+	if !bckIsAIS {
 		// try to evict some files and check if they are gone
-		propsEvict(t, proxyURL, bucket, cmn.CloudBs, newVersions, msg, versionEnabled)
+		propsEvict(t, proxyURL, bucket, cmn.Cloud, newVersions, msg, versionEnabled)
 
 		// read objects to put them to the cache. After that all objects must have iscached=true
 		propsRecacheObjects(t, proxyURL, bucket, newVersions, msg, versionEnabled)
 	}
 
 	// test rebalance should keep object versions
-	propsRebalance(t, proxyURL, bucket, newVersions, msg, versionEnabled, bckIsLocal)
+	propsRebalance(t, proxyURL, bucket, newVersions, msg, versionEnabled, bckIsAIS)
 
 	// cleanup
 	propsCleanupObjects(t, proxyURL, bucket, newVersions)
@@ -427,7 +427,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 	if oldVersioning != versioning {
 		setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(versioning)})
 	}
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
@@ -438,7 +438,7 @@ func propsMainTest(t *testing.T, versioning bool) {
 			setClusterConfig(t, proxyURL, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: strconv.FormatBool(oldVersioning)})
 		}
 		if created {
-			tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+			tutils.DestroyBucket(t, proxyURL, clibucket)
 		}
 	}()
 
@@ -447,8 +447,8 @@ func propsMainTest(t *testing.T, versioning bool) {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
 	versionEnabled := props.Versioning.Enabled
-	bckIsLocal := props.CloudProvider == cmn.ProviderAIS
-	propsTestCore(t, versionEnabled, bckIsLocal)
+	bckIsAIS := props.CloudProvider == cmn.ProviderAIS
+	propsTestCore(t, versionEnabled, bckIsAIS)
 }
 
 func TestObjPropsVersionEnabled(t *testing.T) {

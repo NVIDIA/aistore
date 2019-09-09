@@ -67,8 +67,8 @@ const (
 
 type (
 	ValidationArgs struct {
-		BckIsLocal bool
-		TargetCnt  int // for EC
+		BckIsAIS  bool
+		TargetCnt int // for EC
 	}
 
 	Validator interface {
@@ -375,8 +375,8 @@ type LRUConf struct {
 	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
 	CapacityUpdTime time.Duration `json:"-"`
 
-	// LocalBuckets: Enables or disables LRU for local buckets
-	LocalBuckets bool `json:"local_buckets"`
+	// Buckets: Enables or disables LRU for ais buckets
+	Buckets bool `json:"local_buckets"`
 
 	// Enabled: LRU will only run when set to true
 	Enabled bool `json:"enabled"`
@@ -807,7 +807,7 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
-	if !args.BckIsLocal {
+	if !args.BckIsAIS {
 		return fmt.Errorf("erasure coding does not support cloud buckets")
 	}
 	if err := c.Validate(nil); err != nil {
@@ -1130,7 +1130,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 	case "capacity_upd_time", HeaderBucketCapUpdTime:
 		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
 	case "lru_local_buckets", "lru.local_buckets":
-		return &conf.LRU, updateValue(&conf.LRU.LocalBuckets)
+		return &conf.LRU, updateValue(&conf.LRU.Buckets)
 
 	// CHECKSUM
 	case "checksum", HeaderBucketChecksumType:

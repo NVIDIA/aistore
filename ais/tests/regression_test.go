@@ -42,18 +42,18 @@ type Test struct {
 }
 
 type regressionTestData struct {
-	bucket          string
-	renamedBucket   string
-	numLocalBuckets int
-	rename          bool
-	wait            bool
+	bucket        string
+	renamedBucket string
+	numBuckets    int
+	rename        bool
+	wait          bool
 }
 
 const (
 	rootDir = "/tmp/ais"
 
 	ListRangeStr              = "__listrange"
-	TestLocalBucketName       = "TESTLOCALBUCKET"
+	TestBucketName            = "TESTAISBUCKET"
 	TestNonexistentBucketName = "SOMETESTNONEXISTENTBUCKET"
 )
 
@@ -75,7 +75,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	const (
 		num      = 1000
 		filesize = 1024
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 	)
 	var (
 		filenameCh = make(chan string, num)
@@ -91,8 +91,8 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	sgl = tutils.Mem2.NewSGL(filesize)
 	defer sgl.Free()
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	tutils.PutRandObjs(proxyURL, bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl, true)
 	selectErr(errCh, "put", t, true)
@@ -178,7 +178,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		for i := 0; i < numberOfFiles; i++ {
 			files[i] = path.Join(prefix, <-fileNameCh)
 		}
-		err := api.DeleteList(tutils.BaseAPIParams(proxyURL), bucketName, cmn.CloudBs, files, true, 0)
+		err := api.DeleteList(tutils.BaseAPIParams(proxyURL), bucketName, cmn.Cloud, files, true, 0)
 		if err != nil {
 			t.Error("Unable to delete files during cleanup from cloud bucket.")
 		}
@@ -247,9 +247,9 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
 	}
 
-	bucket := TestLocalBucketName
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	bucket := TestBucketName
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	sgl = tutils.Mem2.NewSGL(filesize)
 	defer sgl.Free()
@@ -286,34 +286,34 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	}
 }
 
-func TestRegressionLocalBuckets(t *testing.T) {
-	bucket := TestLocalBucketName
+func TestRegressionBuckets(t *testing.T) {
+	bucket := TestBucketName
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
 
 }
 
-func TestRenameLocalBucket(t *testing.T) {
+func TestRenameBucket(t *testing.T) {
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
-		bucket        = TestLocalBucketName
+		bucket        = TestBucketName
 		guid, _       = cmn.GenUUID()
 		renamedBucket = bucket + "_" + guid
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
-			tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-			tutils.DestroyLocalBucket(t, proxyURL, renamedBucket) // cleanup post Ctrl-C etc.
-			defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
-			defer tutils.DestroyLocalBucket(t, proxyURL, renamedBucket)
+			tutils.CreateFreshBucket(t, proxyURL, bucket)
+			tutils.DestroyBucket(t, proxyURL, renamedBucket) // cleanup post Ctrl-C etc.
+			defer tutils.DestroyBucket(t, proxyURL, bucket)
+			defer tutils.DestroyBucket(t, proxyURL, renamedBucket)
 
-			b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.LocalBs)
+			b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), cmn.AIS)
 			tassert.CheckFatal(t, err)
 
 			doBucketRegressionTest(t, proxyURL, regressionTestData{
-				bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true, wait: wait,
+				bucket: bucket, renamedBucket: renamedBucket, numBuckets: len(b.AIS), rename: true, wait: wait,
 			})
 		})
 	}
@@ -344,7 +344,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	selectErr(errCh, "put", t, true)
 	if rtd.rename {
 		baseParams := tutils.BaseAPIParams(proxyURL)
-		err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
+		err := api.RenameBucket(baseParams, rtd.bucket, rtd.renamedBucket)
 		tassert.CheckFatal(t, err)
 		tutils.Logf("Renamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		if rtd.wait {
@@ -383,25 +383,25 @@ func postRenameWaitAndCheck(t *testing.T, proxyURL string, rtd regressionTestDat
 	waitForBucketXactionToComplete(t, cmn.ActRenameLB /* = kind */, rtd.bucket, baseParams, rebalanceTimeout)
 	tutils.Logf("xaction (rename %s=>%s) done\n", rtd.bucket, rtd.renamedBucket)
 
-	buckets, err := api.GetBucketNames(baseParams, cmn.LocalBs)
+	buckets, err := api.GetBucketNames(baseParams, cmn.AIS)
 	tassert.CheckFatal(t, err)
 
-	if len(buckets.Local) != rtd.numLocalBuckets {
-		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %+v)",
-			rtd.numLocalBuckets, buckets.Local)
+	if len(buckets.AIS) != rtd.numBuckets {
+		t.Fatalf("wrong number of ais buckets (names) before and after rename (before: %d. after: %+v)",
+			rtd.numBuckets, buckets.AIS)
 	}
 
 	renamedBucketExists := false
-	for _, b := range buckets.Local {
+	for _, b := range buckets.AIS {
 		if b == rtd.renamedBucket {
 			renamedBucketExists = true
 		} else if b == rtd.bucket {
-			t.Fatalf("original local bucket %s still exists after rename", rtd.bucket)
+			t.Fatalf("original ais bucket %s still exists after rename", rtd.bucket)
 		}
 	}
 
 	if !renamedBucketExists {
-		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
+		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBucket)
 	}
 
 	bckList, err := api.ListBucket(baseParams, rtd.renamedBucket, &cmn.SelectMsg{}, 0)
@@ -447,9 +447,9 @@ func TestListObjectsPrefix(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}
 	} else {
-		tutils.Logf("Recreating the local bucket %s\n", bucket)
-		tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-		defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+		tutils.Logf("Recreating the ais bucket %s\n", bucket)
+		tutils.CreateFreshBucket(t, proxyURL, bucket)
+		defer tutils.DestroyBucket(t, proxyURL, bucket)
 	}
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
@@ -537,8 +537,8 @@ func TestRenameObjects(t *testing.T) {
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	sgl := tutils.Mem2.NewSGL(1024 * 1024)
 	defer sgl.Free()
@@ -571,8 +571,8 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	prefixFileNumber = numfiles
@@ -619,8 +619,8 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 1. config
 	//
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	//
@@ -940,7 +940,7 @@ func TestPrefetchList(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
+		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 
 	// 1. Get initial number of prefetches
@@ -964,11 +964,11 @@ func TestPrefetchList(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err := api.EvictList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
+	err := api.EvictList(baseParams, clibucket, cmn.Cloud, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = api.PrefetchList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
+	err = api.PrefetchList(baseParams, clibucket, cmn.Cloud, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1006,8 +1006,8 @@ func TestDeleteList(t *testing.T) {
 		files    = make([]string, 0, numfiles)
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	// 1. Put files to delete
@@ -1057,7 +1057,7 @@ func TestPrefetchRange(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
+		t.Skipf("Cannot prefetch from ais bucket %s", clibucket)
 	}
 
 	// 1. Get initial number of prefetches
@@ -1107,11 +1107,11 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err = api.EvictRange(baseParams, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = api.EvictRange(baseParams, clibucket, cmn.Cloud, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = api.PrefetchRange(baseParams, clibucket, cmn.CloudBs, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = api.PrefetchRange(baseParams, clibucket, cmn.Cloud, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1147,8 +1147,8 @@ func TestDeleteRange(t *testing.T) {
 		baseParams     = tutils.DefaultBaseAPIParams(t)
 	)
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	// 1. Put files to delete
@@ -1204,7 +1204,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 }
 
-// Testing only local bucket objects since generally not concerned with cloud bucket object deletion
+// Testing only ais bucket objects since generally not concerned with cloud bucket object deletion
 func TestStressDeleteRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
@@ -1227,7 +1227,7 @@ func TestStressDeleteRange(t *testing.T) {
 		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
 
 	// 1. PUT
 	for i := 0; i < numReaders; i++ {
@@ -1246,7 +1246,7 @@ func TestStressDeleteRange(t *testing.T) {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
 				putArgs := api.PutObjectArgs{
 					BaseParams: baseParams,
-					Bucket:     TestLocalBucketName,
+					Bucket:     TestBucketName,
 					Object:     objname,
 					Hash:       reader.XXHash(),
 					Reader:     reader,
@@ -1265,7 +1265,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partialRange)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, partialRange, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.AIS, prefix, regex, partialRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1273,7 +1273,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
+	bktlst, err := api.ListBucket(baseParams, TestBucketName, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bktlst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bktlst.Entries), expectedRemaining)
@@ -1295,20 +1295,20 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestLocalBucketName, cmn.LocalBs, prefix, regex, rnge, true, 0)
+	err = api.DeleteRange(tutils.BaseAPIParams(proxyURL), TestBucketName, cmn.AIS, prefix, regex, rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.SelectMsg{Prefix: prefix, PageSize: int(pagesize)}
-	bktlst, err = api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
+	bktlst, err = api.ListBucket(baseParams, TestBucketName, msg, 0)
 	tassert.CheckFatal(t, err)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
 
-	tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.DestroyBucket(t, proxyURL, TestBucketName)
 }
 
 //========

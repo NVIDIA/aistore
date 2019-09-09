@@ -169,21 +169,21 @@ func (mi *MountpathInfo) String() string {
 	return fmt.Sprintf("mp[%s, fs=%s]", mi.Path, mi.FileSystem)
 }
 
-// returns fqn for a given content-type
-func (mi *MountpathInfo) MakePath(contentType string, bckIsLocal bool) (fqn string) {
-	if bckIsLocal {
-		fqn = filepath.Join(mi.Path, contentType, cmn.LocalBs)
+// returns top directory for a given content-type
+func (mi *MountpathInfo) MakePath(contentType string, bckIsAIS bool) (fqn string) {
+	if bckIsAIS {
+		fqn = filepath.Join(mi.Path, contentType, aisPath)
 	} else {
-		fqn = filepath.Join(mi.Path, contentType, cmn.CloudBs)
+		fqn = filepath.Join(mi.Path, contentType, cloudPath)
 	}
 	return
 }
 
-func (mi *MountpathInfo) MakePathBucket(contentType, bucket string, bckIsLocal bool) string {
-	return filepath.Join(mi.MakePath(contentType, bckIsLocal), bucket)
+func (mi *MountpathInfo) MakePathBucket(contentType, bucket string, bckIsAIS bool) string {
+	return filepath.Join(mi.MakePath(contentType, bckIsAIS), bucket)
 }
-func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname string, bckIsLocal bool) string {
-	return filepath.Join(mi.MakePath(contentType, bckIsLocal), bucket, objname)
+func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, objname string, bckIsAIS bool) string {
+	return filepath.Join(mi.MakePath(contentType, bckIsAIS), bucket, objname)
 }
 
 //
@@ -279,7 +279,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	}
 
 	separator := string(filepath.Separator)
-	for _, bucket := range []string{cmn.LocalBs, cmn.CloudBs} {
+	for _, bucket := range []string{aisPath, cloudPath} {
 		invalidMpath := separator + bucket
 		if strings.HasSuffix(cleanMpath, invalidMpath) {
 			return fmt.Errorf("cannot add fspath %q with suffix %q", mpath, invalidMpath)
@@ -449,12 +449,12 @@ func (mfs *MountedFS) Get() (MPI, MPI) {
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
-func (mfs *MountedFS) CreateDestroyLocalBuckets(op string, create bool, buckets ...string) {
+func (mfs *MountedFS) CreateDestroyBuckets(op string, create bool, buckets ...string) {
 	const (
 		fmt1       = "%s: failed to %s"
 		fmt2       = "%s: %s"
-		createstr  = "create-local-bucket-dir"
-		destroystr = "destroy-local-bucket-dir"
+		createstr  = "create-ais-bucket-dir"
+		destroystr = "destroy-ais-bucket-dir"
 	)
 	text := createstr
 	if !create {

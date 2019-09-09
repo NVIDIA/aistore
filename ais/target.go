@@ -140,10 +140,10 @@ func (t *targetrunner) Run() error {
 		cmn.ExitLogf("%v", err)
 	}
 
-	if err := fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.AIS); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if err := fs.Mountpaths.CreateBucketDir(cmn.CloudBs); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.Cloud); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	t.detectMpathChanges()
@@ -495,7 +495,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if lom.BckIsLocal && lom.VerConf().Enabled {
+	if lom.BckIsAIS && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versionig enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
@@ -517,11 +517,11 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket = apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowDELETE(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -554,7 +554,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("DELETE list|range: %s, %d µs",
-					bmd.Bstring(bucket, bckIsLocal), int64(time.Since(started)/time.Microsecond))
+					bmd.Bstring(bucket, bckIsAIS), int64(time.Since(started)/time.Microsecond))
 			}
 			return
 		}
@@ -633,7 +633,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
@@ -667,14 +667,14 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bucket, bckIsLocal, msgInt); !ok {
+		if ok := t.listbucket(w, r, bucket, bckIsAIS, msgInt); !ok {
 			return
 		}
 
 		delta := time.Since(started)
 		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsLocal), int64(delta/time.Microsecond))
+			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsAIS), int64(delta/time.Microsecond))
 		}
 	case cmn.ActMakeNCopies:
 		copies, err := t.parseValidateNCopies(msgInt.Value)
@@ -686,7 +686,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsLocal)
+		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsAIS)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
 	}
@@ -719,7 +719,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := t.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
@@ -728,7 +728,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	config := cmn.GCO.Get()
-	if !bckIsLocal {
+	if !bckIsAIS {
 		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
 			errMsg := fmt.Sprintf("bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
@@ -745,7 +745,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// include bucket's own config override
-	props, ok := bmd.Get(bucket, bckIsLocal)
+	props, ok := bmd.Get(bucket, bckIsAIS)
 	if props == nil {
 		return
 	}
@@ -770,7 +770,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	// for Cloud buckets correct Versioning.Enabled is combination of
 	// local and cloud settings and it is true only if versioning
 	// is enabled at both sides: Cloud and for local usage
-	if bckIsLocal || !verConf.Enabled {
+	if bckIsAIS || !verConf.Enabled {
 		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
 	} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
 		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
@@ -848,7 +848,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists = lom.CopyObjectFromAny()
 	}
 
-	if lom.BckIsLocal || checkCached {
+	if lom.BckIsAIS || checkCached {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
@@ -879,7 +879,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		_, ckSum := lom.Cksum().Get()
 		objmeta[cmn.HeaderObjCksumVal] = ckSum
 	}
-	objmeta[cmn.HeaderObjIsBckLocal] = strconv.FormatBool(lom.BckIsLocal)
+	objmeta[cmn.HeaderObjBckIsAIS] = strconv.FormatBool(lom.BckIsAIS)
 	objmeta[cmn.HeaderObjPresent] = strconv.FormatBool(exists)
 
 	hdr := w.Header()
@@ -925,14 +925,14 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	var (
 		bmd         = t.bmdowner.get()
 		bucketNames = &cmn.BucketNames{
-			Local: make([]string, 0, len(bmd.LBmap)),
+			AIS:   make([]string, 0, len(bmd.LBmap)),
 			Cloud: make([]string, 0, 64),
 		}
 	)
 
-	if bckProvider != cmn.CloudBs {
+	if bckProvider != cmn.Cloud {
 		for bucket := range bmd.LBmap {
-			bucketNames.Local = append(bucketNames.Local, bucket)
+			bucketNames.AIS = append(bucketNames.AIS, bucket)
 		}
 	}
 
@@ -949,7 +949,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 }
 
 // After putting a new version it updates xattr attributes for the object
-// Local bucket:
+// ais bucket:
 //  - if bucket versioning is enable("all" or "local") then the version is autoincremented
 // Cloud bucket:
 //  - if the Cloud returns a new version id then save it to xattr
@@ -1017,7 +1017,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := !lom.BckIsLocal && !evict
+	delFromCloud := !lom.BckIsAIS && !evict
 	if err := lom.Load(false); err != nil {
 		return err
 	}
@@ -1040,7 +1040,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 			}
 		}
 		if evict {
-			cmn.Assert(!lom.BckIsLocal)
+			cmn.Assert(!lom.BckIsAIS)
 			t.statsif.AddMany(
 				stats.NamedVal64{stats.LruEvictCount, 1},
 				stats.NamedVal64{stats.LruEvictSize, lom.Size()})
@@ -1069,7 +1069,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if !lom.BckIsLocal {
+	if !lom.BckIsAIS {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
 		return
 	}

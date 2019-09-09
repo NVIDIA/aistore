@@ -1,8 +1,8 @@
 ## Table of Contents
 - [Bucket](#bucket)
     - [Bucket Provider](#bucket-provider)
-- [Local Bucket](#local-bucket)
-    - [Curl examples: create, rename and, destroy local bucket](#curl-examples-create-rename-and-destroy-local-bucket)
+- [AIS Bucket](#ais-bucket)
+    - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
 - [Cloud Bucket](#cloud-bucket)
     - [Prefetch/Evict Objects](#prefetchevict-objects)
     - [Evict Cloud Bucket](#evict-cloud-bucket)
@@ -21,35 +21,37 @@ As one would normally expect from an object store, AIS uses the bucket abstracti
 
 Buckets in AIS serve as the basic container in which objects are stored, similar to the buckets in [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html) and [Google Cloud (GCP)](https://cloud.google.com/storage/docs/key-terms#buckets).
 
-There are two different kinds of buckets in AIS, **local buckets** and **cloud buckets**. All the [supported storage services](storage_svcs.md) equally apply to both sorts of buckets, with a few exceptions. The following table summarizes them.
+AIS supports two kinds of buckets: **ais buckets** and **3rd party Cloud-based buckets** (or simply **cloud buckets**).
+
+All the [supported storage services](storage_svcs.md) equally apply to both kinds of buckets, with only a few exceptions. The following table summarizes them.
 
 | Kind | Description | Supported Storage Services (as of v2.0) |
 | --- | --- | --- |
-| local buckets | Some buckets exist only within AIS. These are referred to as **local buckets** and can be created through the [RESTful API](http_api.md). Local buckets are totally distributed content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
-| cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as local buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| ais buckets | buckets that are **not** 3rd party Cloud-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike cloud buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to cloud buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| cloud buckets | When AIS is deployed as [fast tier](/README.md#fast-tier), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **Cloud-based buckets** (or **cloud buckets** for short). | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
 
-Cloud-based and local buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. Local buckets are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
+Cloud-based and ais buckets support the same API with minor exceptions. Cloud buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, erasure coded, deleted via the [RESTful API](http_api.md).
 
 > Most of the examples below are `curl` based; it is possible, however, and often even preferable, to execute the same operations using [AIS CLI](../cli/README.md). In particular, for the commands that operate on buckets, please refer to [this CLI resource](../cli/resources/bucket.md).
 
 ### Bucket Provider
 
-Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS 2.0 introduces the concept of *bucket provider*.
+Any storage bucket handled by AIS may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an ais bucket, that happen to share the same name? To resolve the potential naming conflict, AIS introduces the concept of *bucket provider*.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for local buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
 
 For detailed documentation please refer [to the RESTful API reference and examples](http_api.md). Rest of this document serves to further explain features and concepts specific to storage buckets.
 
-## Local Bucket
-Local buckets are buckets that exist only within AIS.
+## AIS Bucket
+AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
-The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy local buckets.
+The [RESTful API](docs/http_api.md) can be used to create, rename and, destroy ais buckets.
 
-New local buckets must be given a unique name that is not shared with any other local or cloud bucket.
+New ais buckets must be given a unique name that does not duplicate any existing ais or cloud bucket.
 
-### Curl examples: create, rename and, destroy local bucket
+### Curl examples: create, rename and, destroy ais bucket
 
-To create a local bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
+To create an ais bucket with the name 'myBucket', rename it to 'myBucket2' and delete it, run:
 
 ```shell
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/myBucket
@@ -138,7 +140,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
-| pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and local bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html). |\b
+| pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and ais bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html). |\b
 
 The full list of bucket properties are:
 
@@ -149,7 +151,7 @@ The full list of bucket properties are:
 | ReadPolicy | read_policy | ReadPolicy determines if a read will be from cloud or next tier specified by NextTierURL. Default: "next_tier" |   `"read_policy": "next_tier" \| "cloud"` |
 | WritePolicy | write_policy | WritePolicy determines if a write will be to cloud or next tier specified by NextTierURL. Default: "cloud" | `"write_policy": "next_tier" \| "cloud"` |
 | Cksum | cksum | Configuration for [Checksum](docs/checksum.md). `validate_cold_get` determines whether or not the checksum of received object is checked after downloading it from the cloud or next tier. `validate_warm_get`: determines if the object's version (if in Cloud-based bucket) and checksum are checked. If either value fail to match, the object is removed from local storage. `validate_cluster_migration` determines if the migrated objects across single cluster should have their checksum validated. `enable_read_range` returns the read range checksum otherwise return the entire object checksum.  | `"cksum": { "type": "none" \| "xxhash" \| "md5" \| "inherit", "validate_cold_get": bool,  "validate_warm_get": bool,  "validate_cluster_migration": bool, "enable_read_range": bool }` |
-| LRU | lru | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `local_buckets` enables or disables LRU for local buckets. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "local_buckets": bool, "enabled": bool }` |
+| LRU | lru | Configuration for [LRU](docs/storage_svcs.md#lru). `lowwm` and `highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `highwm`. `atime_cache_max` represents the maximum number of entries. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `local_buckets` enables or disables LRU for ais buckets. `enabled` LRU will only run when set to true. | `"lru": { "lowwm": int64, "highwm": int64, "out_of_space": int64, "atime_cache_max": int64, "dont_evict_time": "120m", "capacity_upd_time": "10m", "local_buckets": bool, "enabled": bool }` |
 | Mirror | mirror | Configuration for [Mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size.  `util_thresh` represents the threshold when utilizations are considered equivalent. `optimize_put` represents the optimization objective. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "util_thresh": int64, "optimize_put": bool, "enabled": bool }` |
 | EC | ec | Configuration for [erasure coding](docs/storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
 
@@ -171,7 +173,7 @@ The full list of bucket properties are:
 
  <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
 
-### Curl example: listing local and Cloud buckets
+### Curl example: listing ais and Cloud buckets
 
 Example of listing objects in the smoke/ subdirectory of a given bucket called 'myBucket', the result must include object respective sizes and checksums.
 

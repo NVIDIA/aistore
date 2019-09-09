@@ -155,11 +155,11 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.BckProvider = rs.BckProvider
 	if parsedRS.BckProvider == "" {
-		parsedRS.BckProvider = cmn.LocalBs
+		parsedRS.BckProvider = cmn.AIS
 	}
 	parsedRS.OutputBckProvider = rs.OutputBckProvider
 	if parsedRS.OutputBckProvider == "" {
-		parsedRS.OutputBckProvider = cmn.LocalBs
+		parsedRS.OutputBckProvider = cmn.AIS
 	}
 
 	var err error

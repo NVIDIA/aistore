@@ -141,7 +141,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		objectsPayload interface{}
 
 		description string
-		bckIsLocal  bool
+		bckIsAIS    bool
 		fromCloud   bool
 	)
 
@@ -182,7 +182,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 			return nil, err
 		}
 		description = multiPayload.Describe()
-	} else if err := cloudPayload.Validate(bckIsLocal); err == nil {
+	} else if err := cloudPayload.Validate(bckIsAIS); err == nil {
 		baseJob := downloader.NewBaseDownloadJob(id, cloudPayload.Bucket, cloudPayload.BckProvider, cloudPayload.Timeout, payload.Description)
 		return downloader.NewCloudBucketDownloadJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {

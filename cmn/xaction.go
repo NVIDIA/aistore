@@ -34,14 +34,14 @@ type (
 	}
 	XactBase struct {
 		XactBaseCountStats
-		id         int64
-		sutime     atomic.Int64
-		eutime     atomic.Int64
-		kind       string
-		bucket     string
-		abrt       chan struct{}
-		aborted    atomic.Bool
-		bckIsLocal bool
+		id       int64
+		sutime   atomic.Int64
+		eutime   atomic.Int64
+		kind     string
+		bucket   string
+		abrt     chan struct{}
+		aborted  atomic.Bool
+		bckIsAIS bool
 	}
 	//
 	// xaction that self-terminates after staying idle for a while
@@ -82,9 +82,9 @@ func NewXactBase(id int64, kind string) *XactBase {
 	xact.sutime.Store(stime.UnixNano())
 	return xact
 }
-func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsLocal bool) *XactBase {
+func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsAIS bool) *XactBase {
 	xact := NewXactBase(id, kind)
-	xact.bucket, xact.bckIsLocal = bucket, bckIsLocal
+	xact.bucket, xact.bckIsAIS = bucket, bckIsAIS
 	return xact
 }
 
@@ -92,7 +92,7 @@ func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
-func (xact *XactBase) BckIsLocal() bool           { return xact.bckIsLocal }
+func (xact *XactBase) BckIsAIS() bool             { return xact.bckIsAIS }
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
@@ -151,14 +151,14 @@ func (xact *XactBase) Abort() {
 // XactDemandBase - partially implements XactDemand interface
 //
 
-func NewXactDemandBase(id int64, kind string, bucket string, bckIsLocal bool, idleTime ...time.Duration) *XactDemandBase {
+func NewXactDemandBase(id int64, kind string, bucket string, bckIsAIS bool, idleTime ...time.Duration) *XactDemandBase {
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]
 	}
 	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{
-		XactBase: *NewXactBaseWithBucket(id, kind, bucket, bckIsLocal),
+		XactBase: *NewXactBaseWithBucket(id, kind, bucket, bckIsAIS),
 		ticker:   ticker,
 	}
 }

@@ -20,7 +20,7 @@ import (
 type (
 	XactBck interface {
 		cmn.Xact
-		BckIsLocal() bool
+		BckIsAIS() bool
 		DoneCh() chan struct{}
 		Target() cluster.Target
 		Mpathers() map[string]mpather
@@ -114,8 +114,8 @@ func (j *joggerBckBase) stop()                            { j.stopCh <- struct{}
 //
 func (j *joggerBckBase) jog() {
 	j.stopCh = make(chan struct{}, 1)
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckIsLocal())
-	j.provider = cmn.ProviderFromLoc(j.parent.BckIsLocal())
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckIsAIS())
+	j.provider = cmn.ProviderFromBool(j.parent.BckIsAIS())
 	if err := filepath.Walk(dir, j.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -150,7 +150,7 @@ func (j *joggerBckBase) walk(fqn string, osfi os.FileInfo, err error) error {
 			return nil
 		}
 	}
-	cmn.Assert(j.parent.BckIsLocal() == lom.BckIsLocal)
+	cmn.Assert(j.parent.BckIsAIS() == lom.BckIsAIS)
 	return j.callback(lom)
 }
 

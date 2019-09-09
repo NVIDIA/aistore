@@ -139,7 +139,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		ver string
 		lom = poi.lom
 	)
-	if !lom.BckIsLocal && !poi.migrated {
+	if !lom.BckIsAIS && !poi.migrated {
 		file, err1 := os.Open(poi.workFQN)
 		if err1 != nil {
 			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
@@ -157,7 +157,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 
 	// check if bucket was destroyed while PUT was in the progress.
 	// TODO: support cloud case
-	if lom.BckIsLocal && !poi.t.bmdowner.Get().IsLocal(lom.Bucket) {
+	if lom.BckIsAIS && !poi.t.bmdowner.Get().IsAIS(lom.Bucket) {
 		err = fmt.Errorf("Bucket %s was destroyed while PUTting %s was in the progress",
 			lom.Bucket, lom.Objname)
 		errCode = http.StatusBadRequest
@@ -167,7 +167,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if lom.BckIsLocal && lom.VerConf().Enabled {
+	if lom.BckIsAIS && lom.VerConf().Enabled {
 		if ver, err = lom.IncObjectVersion(); err != nil {
 			return
 		}
@@ -322,12 +322,12 @@ do:
 	}
 
 	coldGet = !goi.lom.Exists()
-	if coldGet && goi.lom.BckIsLocal {
+	if coldGet && goi.lom.BckIsAIS {
 		// try lookup and restore
 		goi.lom.Unlock(false)
 		doubleCheck, err, errCode = goi.getFromAny(goi.lom)
 		if doubleCheck && err != nil {
-			lom2, er2 := cluster.LOM{T: goi.t, Bucket: goi.lom.Bucket, Objname: goi.lom.Objname}.Init(cmn.ProviderFromLoc(goi.lom.BckIsLocal))
+			lom2, er2 := cluster.LOM{T: goi.t, Bucket: goi.lom.Bucket, Objname: goi.lom.Objname}.Init(cmn.ProviderFromBool(goi.lom.BckIsAIS))
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil && lom2.Exists() {
@@ -342,7 +342,7 @@ do:
 		goi.lom.Lock(false)
 		goto get
 	}
-	if !coldGet && !goi.lom.BckIsLocal { // exists && cloud-bucket : check ver if requested
+	if !coldGet && !goi.lom.BckIsAIS { // exists && cloud-bucket : check ver if requested
 		goi.lom.Unlock(false)
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
@@ -362,7 +362,7 @@ do:
 		if err != nil {
 			if goi.lom.BadCksum {
 				glog.Error(err)
-				if goi.lom.BckIsLocal {
+				if goi.lom.BckIsAIS {
 					// TODO: recover from copies if available
 					if err := goi.lom.Remove(); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", err, err)
@@ -406,7 +406,7 @@ get:
 	return
 }
 
-// an attempt to restore an object that is missing in the local bucket - from:
+// an attempt to restore an object that is missing in the ais bucket - from:
 //     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
 //		targets using erasure coding (if enabled)
 func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error, errCode int) {
@@ -488,7 +488,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromLoc(lom.BckIsLocal))
+	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromBool(lom.BckIsAIS))
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
@@ -625,7 +625,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	if err != nil {
 		if os.IsNotExist(err) {
 			errCode = http.StatusNotFound
-			retry = true // (!lom.BckIsLocal || lom.ECEnabled() || GFN...)
+			retry = true // (!lom.BckIsAIS || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fshc(err, fqn)
 			err = fmt.Errorf("%s: err: %v", goi.lom, err)

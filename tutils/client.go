@@ -510,28 +510,28 @@ func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
 	return smap.ProxySI, nil
 }
 
-func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
-	DestroyLocalBucket(t, proxyURL, bucketFQN)
+func CreateFreshBucket(t *testing.T, proxyURL, bucketFQN string) {
+	DestroyBucket(t, proxyURL, bucketFQN)
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.CreateLocalBucket(baseParams, bucketFQN)
+	err := api.CreateBucket(baseParams, bucketFQN)
 	tassert.CheckFatal(t, err)
 }
 
-func DestroyLocalBucket(t *testing.T, proxyURL, bucket string) {
+func DestroyBucket(t *testing.T, proxyURL, bucket string) {
 	baseParams := BaseAPIParams(proxyURL)
-	exists, err := api.DoesLocalBucketExist(baseParams, bucket)
+	exists, err := api.DoesBucketExist(baseParams, bucket)
 	tassert.CheckFatal(t, err)
 	if exists {
-		err = api.DestroyLocalBucket(baseParams, bucket)
+		err = api.DestroyBucket(baseParams, bucket)
 		tassert.CheckFatal(t, err)
 	}
 }
 
 func CleanCloudBucket(t *testing.T, proxyURL, bucket, prefix string) {
-	toDelete, err := ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	toDelete, err := ListObjects(proxyURL, bucket, cmn.Cloud, prefix, 0)
 	tassert.CheckFatal(t, err)
 	baseParams := BaseAPIParams(proxyURL)
-	err = api.DeleteList(baseParams, bucket, cmn.CloudBs, toDelete, true, 0)
+	err = api.DeleteList(baseParams, bucket, cmn.Cloud, toDelete, true, 0)
 	tassert.CheckFatal(t, err)
 }
 
@@ -831,8 +831,8 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	return m
 }
 
-// waitForLocalBucket wait until all targets have local bucket created or deleted
-func WaitForLocalBucket(proxyURL, name string, exists bool) error {
+// waitForBucket wait until all targets have ais bucket created or deleted
+func WaitForBucket(proxyURL, name string, exists bool) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
@@ -842,7 +842,7 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 	for _, s := range smap.Tmap {
 		for {
 			baseParams := BaseAPIParams(s.URL(cmn.NetworkPublic))
-			bucketExists, err := api.DoesLocalBucketExist(baseParams, name)
+			bucketExists, err := api.DoesBucketExist(baseParams, name)
 			if err != nil {
 				return err
 			}
@@ -850,7 +850,7 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 				break
 			}
 			if time.Now().After(to) {
-				return fmt.Errorf("wait for local bucket timed out, target = %s", baseParams.URL)
+				return fmt.Errorf("wait for ais bucket timed out, target = %s", baseParams.URL)
 			}
 			time.Sleep(time.Second)
 		}
@@ -859,7 +859,7 @@ func WaitForLocalBucket(proxyURL, name string, exists bool) error {
 }
 
 func EvictObjects(t *testing.T, proxyURL string, fileslist []string, bucket string) {
-	err := api.EvictList(BaseAPIParams(proxyURL), bucket, cmn.CloudBs, fileslist, true, 0)
+	err := api.EvictList(BaseAPIParams(proxyURL), bucket, cmn.Cloud, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bucket, err)
 	}

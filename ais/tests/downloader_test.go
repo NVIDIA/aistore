@@ -154,7 +154,7 @@ func waitForDownloaderToFinish(t *testing.T, baseParams *api.BaseParams, targetI
 func TestDownloadSingle(t *testing.T) {
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
-		bucket        = TestLocalBucketName
+		bucket        = TestBucketName
 		objname       = "object"
 		objnameSecond = "object-second"
 
@@ -166,9 +166,9 @@ func TestDownloadSingle(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadSingle(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, objname, link)
 	tassert.CheckError(t, err)
@@ -214,7 +214,7 @@ func TestDownloadSingle(t *testing.T) {
 
 	waitForDownload(t, id, 30*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckError(t, err)
 	if len(objs) != 1 || objs[0] != objname {
 		t.Errorf("expected single object (%s), got: %s", objname, objs)
@@ -228,16 +228,16 @@ func TestDownloadSingle(t *testing.T) {
 func TestDownloadRange(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 
 		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000007}.tgz"
 	)
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
 	tassert.CheckFatal(t, err)
@@ -253,16 +253,16 @@ func TestDownloadRange(t *testing.T) {
 func TestDownloadMultiRange(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 
 		template = "storage.googleapis.com/lpr-imagenet-augmented/imagenet_train-{0000..0007}-{001..009}.tgz"
 	)
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
 	tassert.CheckFatal(t, err)
@@ -278,7 +278,7 @@ func TestDownloadMultiRange(t *testing.T) {
 func TestDownloadMultiMap(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		m        = map[string]string{
 			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"k8s": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
@@ -287,16 +287,16 @@ func TestDownloadMultiMap(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, m)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 10*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if len(objs) != len(m) {
 		t.Errorf("expected objects (%s), got: %s", m, objs)
@@ -308,7 +308,7 @@ func TestDownloadMultiMap(t *testing.T) {
 func TestDownloadMultiList(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		l        = []string{
 			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
 			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
@@ -318,16 +318,16 @@ func TestDownloadMultiList(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadMulti(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, l)
 	tassert.CheckFatal(t, err)
 
 	waitForDownload(t, id, 10*time.Second)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
@@ -339,16 +339,16 @@ func TestDownloadMultiList(t *testing.T) {
 func TestDownloadTimeout(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		objname  = "object"
 		link     = "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz"
 	)
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	body := cmn.DlSingleBody{
 		DlObj: cmn.DlObj{
@@ -373,7 +373,7 @@ func TestDownloadTimeout(t *testing.T) {
 		tutils.Logf("%v\n", err)
 	}
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckFatal(t, err)
 	if len(objs) != 0 {
 		t.Errorf("expected 0 objects, got: %s", objs)
@@ -415,7 +415,7 @@ func TestDownloadCloud(t *testing.T) {
 		err = api.PutObject(api.PutObjectArgs{
 			BaseParams:     baseParams,
 			Bucket:         bucket,
-			BucketProvider: cmn.CloudBs,
+			BucketProvider: cmn.Cloud,
 			Object:         objName,
 			Reader:         reader,
 		})
@@ -425,7 +425,7 @@ func TestDownloadCloud(t *testing.T) {
 	}
 
 	// Test download
-	err := api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
+	err := api.EvictList(baseParams, bucket, cmn.Cloud, expectedObjs, true, 0)
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
@@ -433,14 +433,14 @@ func TestDownloadCloud(t *testing.T) {
 
 	waitForDownload(t, id, time.Minute)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.CloudBs, prefix, 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.Cloud, prefix, 0)
 	tassert.CheckFatal(t, err)
 	if !reflect.DeepEqual(objs, expectedObjs) {
 		t.Errorf("expected objs: %s, got: %s", expectedObjs, objs)
 	}
 
 	// Test cancellation
-	err = api.EvictList(baseParams, bucket, cmn.CloudBs, expectedObjs, true, 0)
+	err = api.EvictList(baseParams, bucket, cmn.Cloud, expectedObjs, true, 0)
 	tassert.CheckFatal(t, err)
 
 	id, err = api.DownloadCloud(baseParams, generateDownloadDesc(), bucket, prefix, suffix)
@@ -466,7 +466,7 @@ func TestDownloadStatus(t *testing.T) {
 	}
 
 	var (
-		bucket        = TestLocalBucketName
+		bucket        = TestBucketName
 		params        = tutils.DefaultBaseAPIParams(t)
 		shortFileName = "shortFile"
 		m             = ioContext{t: t}
@@ -478,7 +478,7 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
-	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestLocalBucketName, m.smap)
+	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestBucketName, m.smap)
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
@@ -487,15 +487,15 @@ func TestDownloadStatus(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, bucket)
 
 	id, err := api.DownloadMulti(params, generateDownloadDesc(), bucket, files)
 	tassert.CheckFatal(t, err)
 
 	// Wait for the short file to be downloaded
-	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestLocalBucketName, params, 5*time.Second)
+	err = tutils.WaitForObjectToBeDowloaded(shortFileName, TestBucketName, params, 5*time.Second)
 	tassert.CheckFatal(t, err)
 
 	resp, err := api.DownloadStatus(params, id)
@@ -523,7 +523,7 @@ func TestDownloadStatusError(t *testing.T) {
 	}
 
 	var (
-		bucket     = TestLocalBucketName
+		bucket     = TestBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		files      = map[string]string{
@@ -534,9 +534,9 @@ func TestDownloadStatusError(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, files)
 	tassert.CheckFatal(t, err)
@@ -577,7 +577,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bucket        = TestLocalBucketName
+		bucket        = TestBucketName
 		objnameFirst  = "object-first"
 		objnameSecond = "object-second"
 
@@ -587,12 +587,12 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objnameFirst, objnameSecond}
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadSingle(baseParams, generateDownloadDesc(), bucket, objnameFirst, linkFirst)
@@ -618,7 +618,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bucket        = TestLocalBucketName
+		bucket        = TestBucketName
 		objnameFirst  = "linkFirst"
 		objnameSecond = "linkSecond"
 
@@ -630,12 +630,12 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objnameFirst, objnameSecond}
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bucket, m)
@@ -658,18 +658,18 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
 
-		bucket   = TestLocalBucketName
+		bucket   = TestBucketName
 		template = "storage.googleapis.com/lpr-vision/cifar{10..100..90}_test.tgz"
 
 		expectedObjects = []string{"cifar10_test.tgz", "cifar100_test.tgz"}
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Cksum.ValidateWarmGet = true
-	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
 	id, err := api.DownloadRange(baseParams, generateDownloadDesc(), bucket, template)
@@ -709,7 +709,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	var (
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.DefaultBaseAPIParams(t)
-		bucket     = TestLocalBucketName
+		bucket     = TestBucketName
 		objsCnt    = 100
 
 		template = "storage.googleapis.com/lpr-vision/imagenet/imagenet_train-{000000..000050}.tgz"
@@ -722,8 +722,8 @@ func TestDownloadMpathEvents(t *testing.T) {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	id, err := api.DownloadRange(tutils.DefaultBaseAPIParams(t), generateDownloadDesc(), bucket, template)
 	tassert.CheckFatal(t, err)
@@ -755,7 +755,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Aborting download job %s\n", id)
 	err = api.DownloadAbort(baseParams, id)
 
-	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
@@ -764,7 +764,7 @@ func TestDownloadMpathEvents(t *testing.T) {
 	tutils.Logf("Started download job %s, waiting for it to finish\n", id)
 
 	waitForDownload(t, id, 2*time.Minute)
-	objs, err = tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+	objs, err = tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs)) // 21: from cifar10.tgz to cifar30.tgz
 }

@@ -633,7 +633,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		}
 
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-		bckProvider := cmn.ProviderFromLoc(hdr.IsLocal)
+		bckProvider := cmn.ProviderFromBool(hdr.BckIsAIS)
 		lom, err := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(bckProvider)
 		if err == nil {
 			err = lom.Load()

@@ -121,8 +121,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] IsLocal:false} (88)
-	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] IsLocal:true} (103)
+	// {Bucket:abc Objname:X ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash CksumValue:hash Version:2} Opaque:[] BckIsAIS:false} (88)
+	// {Bucket:abracadabra Objname:p/q/s ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash CksumValue:hash Version:2} Opaque:[49 50 51] BckIsAIS:true} (103)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
@@ -469,7 +469,7 @@ func Test_ObjAttrs(t *testing.T) {
 		cmn.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
-		cmn.AssertMsg(hdr.IsLocal, "incorrectly set is local value")
+		cmn.AssertMsg(hdr.BckIsAIS, "expecting ais bucket")
 		cmn.AssertMsg(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
 			fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
 
@@ -490,7 +490,7 @@ func Test_ObjAttrs(t *testing.T) {
 	random := newRand(time.Now().UnixNano())
 	for idx, attrs := range testAttrs {
 		hdr := transport.Header{
-			IsLocal:  true,
+			BckIsAIS: true,
 			Opaque:   []byte{byte(idx)},
 			ObjAttrs: attrs,
 		}

@@ -36,7 +36,7 @@ func Test_smoke(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, clibucket)
 	fp := make(chan string, len(objSizes)*len(ratios)*numops*numworkers)
 	for _, fs := range objSizes {
 		for _, r := range ratios {
@@ -62,7 +62,7 @@ func Test_smoke(t *testing.T) {
 	}
 
 	if created {
-		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 }
 

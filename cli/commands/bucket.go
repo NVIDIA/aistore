@@ -127,7 +127,7 @@ var (
 				},
 				{
 					Name:         bucketCreate,
-					Usage:        "creates the local bucket(s)",
+					Usage:        "creates the ais bucket(s)",
 					ArgsUsage:    bucketsArgumentText,
 					Flags:        bucketFlags[bucketCreate],
 					Action:       bucketHandler,
@@ -135,19 +135,19 @@ var (
 				},
 				{
 					Name:         bucketDestroy,
-					Usage:        "destroys the local bucket(s)",
+					Usage:        "destroys the ais bucket(s)",
 					ArgsUsage:    bucketsArgumentText,
 					Flags:        bucketFlags[bucketDestroy],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /*multiple*/, cmn.LocalBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /*multiple*/, cmn.AIS),
 				},
 				{
 					Name:         subcommandRename,
-					Usage:        "renames the local bucket",
+					Usage:        "renames the ais bucket",
 					ArgsUsage:    bucketRenameArgumentText,
 					Flags:        bucketFlags[subcommandRename],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.LocalBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
 				},
 				{
 					Name:         propsList,
@@ -179,7 +179,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketEvict],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.CloudBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.Cloud),
 				},
 				{
 					Name:         bucketSummary,
@@ -191,11 +191,11 @@ var (
 				},
 				{
 					Name:         bucketCopy,
-					Usage:        "copies the local bucket",
+					Usage:        "copies the ais bucket",
 					ArgsUsage:    bucketRenameArgumentText,
 					Flags:        bucketFlags[bucketCopy],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.LocalBs),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
 				},
 			},
 		},
@@ -268,13 +268,13 @@ func bucketPropsHandler(c *cli.Context) (err error) {
 	return err
 }
 
-// Creates new local buckets
+// Creates new ais buckets
 func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
 	// TODO: on "soft" error (bucket already exists) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		if err := api.CreateLocalBucket(baseParams, bucket); err != nil {
+		if err := api.CreateBucket(baseParams, bucket); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusConflict {
 					_, _ = fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bucket)
@@ -288,13 +288,13 @@ func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string)
 	return nil
 }
 
-// Destroy local buckets
+// Destroy ais buckets
 func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
 	// TODO: on "soft" error (bucket does not exist) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		if err := api.DestroyLocalBucket(baseParams, bucket); err != nil {
+		if err := api.DestroyBucket(baseParams, bucket); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusNotFound {
 					_, _ = fmt.Fprintf(c.App.Writer, "Bucket %q does not exist\n", bucket)
@@ -308,14 +308,14 @@ func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string
 	return nil
 }
 
-// Rename local bucket
+// Rename ais bucket
 func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	bucket, newBucket, err := getRenameBucketParameters(c)
 	if err != nil {
 		return err
 	}
 
-	if err = api.RenameLocalBucket(baseParams, bucket, newBucket); err != nil {
+	if err = api.RenameBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
 	msg := fmt.Sprintf("Renaming bucket %s to %s in progress\n"+
@@ -325,14 +325,14 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	return
 }
 
-// Copy local bucket
+// Copy ais bucket
 func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	bucket, newBucket, err := getRenameBucketParameters(c)
 	if err != nil {
 		return err
 	}
 
-	if err = api.CopyLocalBucket(baseParams, bucket, newBucket); err != nil {
+	if err = api.CopyBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
 	msg := fmt.Sprintf("Copying bucket %s to %s in progress\n"+
@@ -344,7 +344,7 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 
 // Evict a cloud bucket
 func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	query := url.Values{cmn.URLParamBckProvider: []string{cmn.CloudBs}}
+	query := url.Values{cmn.URLParamBckProvider: []string{cmn.Cloud}}
 	if err = api.EvictCloudBucket(baseParams, bucket, query); err != nil {
 		return
 	}
@@ -757,14 +757,14 @@ func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err er
 }
 
 func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
-	isBckLocal := cmn.IsProviderLocal(bckProvider)
+	isBckLocal := cmn.IsProviderAIS(bckProvider)
 	if isBckLocal || bckProvider == "" {
-		localBuckets := regexFilter(regex, bucketNames.Local)
-		sort.Strings(localBuckets) // sort by name
+		aisBuckets := regexFilter(regex, bucketNames.AIS)
+		sort.Strings(aisBuckets) // sort by name
 		if showHeaders {
-			_, _ = fmt.Fprintf(c.App.Writer, "Local Buckets (%d)\n", len(localBuckets))
+			_, _ = fmt.Fprintf(c.App.Writer, "AIS Buckets (%d)\n", len(aisBuckets))
 		}
-		for _, bucket := range localBuckets {
+		for _, bucket := range aisBuckets {
 			_, _ = fmt.Fprintln(c.App.Writer, bucket)
 		}
 		if isBckLocal {

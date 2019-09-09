@@ -16,7 +16,7 @@ func TestFQN2Info(t *testing.T) {
 		wantContentType string
 		wantBucket      string
 		wantObjName     string
-		wantIsLocal     bool
+		wantBckIsAIS    bool
 		wantErr         bool
 	}{
 		// good
@@ -129,7 +129,7 @@ func TestFQN2Info(t *testing.T) {
 			if err != nil {
 				return
 			}
-			mpathInfo, gotContentType, gotBucket, gotObjName, gotIsLocal := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
+			mpathInfo, gotContentType, gotBucket, gotObjName, gotBckIsAIS := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.BckIsAIS
 			gotMPath := mpathInfo.Path
 			if gotMPath != tt.wantMPath {
 				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
@@ -143,8 +143,8 @@ func TestFQN2Info(t *testing.T) {
 			if gotObjName != tt.wantObjName {
 				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
 			}
-			if gotIsLocal != tt.wantIsLocal {
-				t.Errorf("fqn2info() gotIsLocal = %v, want %v", gotIsLocal, tt.wantIsLocal)
+			if gotBckIsAIS != tt.wantBckIsAIS {
+				t.Errorf("fqn2info() gotBckIsAIS = %v, want %v", gotBckIsAIS, tt.wantBckIsAIS)
 			}
 		})
 	}

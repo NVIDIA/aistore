@@ -73,7 +73,7 @@ type (
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
 		dontevictime    time.Time
-		bckIsLocal      bool
+		bckIsAIS        bool
 		throttle        bool
 		aborted         bool
 	}
@@ -107,14 +107,14 @@ func InitAndRun(ini *InitLRU) {
 			continue
 		}
 		//
-		// NOTE the sequence: Cloud buckets first, local buckets second
+		// NOTE the sequence: Cloud buckets first, ais buckets second
 		//
-		startLRUJoggers := func(bckIsLocal bool) (aborted bool) {
+		startLRUJoggers := func(bckIsAIS bool) (aborted bool) {
 			joggers := make(map[string]*lructx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))
 
 			for mpath, mpathInfo := range availablePaths {
-				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bckIsLocal)
+				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bckIsAIS)
 			}
 			for _, j := range joggers {
 				wg.Add(1)
@@ -141,7 +141,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bckIsLocal bool) *lructx {
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bckIsAIS bool) *lructx {
 	lctx := &lructx{
 		oldwork:         make([]string, 0, 64),
 		misplaced:       make([]*cluster.LOM, 0, 64),
@@ -151,7 +151,7 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, conte
 		contentType:     contentType,
 		contentResolver: contentResolver,
 		config:          config,
-		bckIsLocal:      bckIsLocal,
+		bckIsAIS:        bckIsAIS,
 	}
 	return lctx
 }

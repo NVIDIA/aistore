@@ -70,15 +70,12 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 		io.Copy(ioutil.Discard, r.Body)
 		return nil, err
 	}
-
 	var (
-		size        int64
-		numCopies   int
-		present     bool
-		localBucket bool
-		atime       time.Time
+		size           int64
+		atime          time.Time
+		numCopies      int
+		present, isais bool
 	)
-
 	size, err = strconv.ParseInt(r.Header.Get(cmn.HeaderObjSize), 10, 64)
 	if err != nil {
 		return nil, err
@@ -97,24 +94,22 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 			return nil, err
 		}
 	}
-
 	present, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjPresent))
 	if err != nil {
 		return nil, err
 	}
-	localBucket, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjIsBckLocal))
+	isais, err = cmn.ParseBool(r.Header.Get(cmn.HeaderObjBckIsAIS))
 	if err != nil {
 		return nil, err
 	}
-
 	return &cmn.ObjectProps{
-		Size:        size,
-		Version:     r.Header.Get(cmn.HeaderObjVersion),
-		Atime:       atime,
-		NumCopies:   numCopies,
-		Checksum:    r.Header.Get(cmn.HeaderObjCksumVal),
-		Present:     present,
-		BucketLocal: localBucket,
+		Size:      size,
+		Version:   r.Header.Get(cmn.HeaderObjVersion),
+		Atime:     atime,
+		NumCopies: numCopies,
+		Checksum:  r.Header.Get(cmn.HeaderObjCksumVal),
+		Present:   present,
+		BckIsAIS:  isais,
 	}, nil
 }
 
@@ -238,7 +233,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 // PutObject API
 //
 // Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
-// If there is a local bucket and cloud bucket with the same name, specify with bckProvider ("local", "cloud")
+// If there is an ais bucket and cloud bucket with the same name, specify with bckProvider ("local", "cloud")
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"

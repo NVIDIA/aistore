@@ -160,7 +160,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, bck
 		return
 	}
 	coldGet = !lom.Exists()
-	if lom.BckIsLocal { // must not come here
+	if lom.BckIsAIS { // must not come here
 		if coldGet {
 			glog.Errorf("prefetch: %s", lom)
 		}
@@ -426,7 +426,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		ctx            = t.contextWithAuth(r.Header)
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
-	bckIsLocal, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)
+	bckIsAIS, err := t.bmdowner.get().ValidateBucket(bucket, bckProvider)
 	if err != nil {
 		return err
 	}
@@ -442,8 +442,8 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 	}
 
 	for {
-		if bckIsLocal {
-			walk := objwalk.NewWalk(context.TODO(), bucket, bckIsLocal, msg, t)
+		if bckIsAIS {
+			walk := objwalk.NewWalk(context.TODO(), bucket, bckIsAIS, msg, t)
 			bucketListPage, err = walk.LocalObjPage()
 		} else {
 			bucketListPage, err, _ = t.Cloud().ListBucket(ctx, bucket, msg)

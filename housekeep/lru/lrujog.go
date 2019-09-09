@@ -27,7 +27,7 @@ import (
 
 func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh chan struct{}) {
 	defer wg.Done()
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bckIsLocal)
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bckIsAIS)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	var (
 		h           = lctx.heap
-		bckProvider = cmn.ProviderFromLoc(lctx.bckIsLocal)
+		bckProvider = cmn.ProviderFromBool(lctx.bckIsAIS)
 	)
 	// workfiles: remove old or do nothing
 	if lctx.contentType == fs.WorkfileType {
@@ -168,7 +168,7 @@ func (lctx *lructx) evict() (err error) {
 		lom.Uncache()
 		// 2.2: for mirrored objects: remove extra copies if any
 		lom, err = cluster.LOM{T: lctx.ini.T, Bucket: lom.Bucket, Objname: lom.Objname}.Init(
-			cmn.ProviderFromLoc(lom.BckIsLocal), lom.Config())
+			cmn.ProviderFromBool(lom.BckIsAIS), lom.Config())
 		if err != nil {
 			glog.Warningf("%s: %v", lom, err)
 		} else if err = lom.Load(false); err != nil {

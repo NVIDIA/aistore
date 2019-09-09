@@ -473,8 +473,8 @@ func (b *DlCloudBody) InitWithQuery(query url.Values) {
 	b.Suffix = query.Get(URLParamSuffix)
 }
 
-func (b *DlCloudBody) Validate(bckIsLocal bool) error {
-	if bckIsLocal {
+func (b *DlCloudBody) Validate(bckIsAIS bool) error {
+	if bckIsAIS {
 		return errors.New("bucket download requires cloud bucket")
 	}
 	if err := b.DlBase.Validate(); err != nil {

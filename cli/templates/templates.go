@@ -155,7 +155,7 @@ const (
 		" Out-of-Space:\t{{$obj.OOS}}\n" +
 		" Don't Evict Time:\t{{$obj.DontEvictTimeStr}}\n" +
 		" Capacity Update Time:\t{{$obj.CapacityUpdTimeStr}}\n" +
-		" Local Buckets:\t{{$obj.LocalBuckets}}\n" +
+		" AIS Buckets:\t{{$obj.Buckets}}\n" +
 		" Enabled:\t{{$obj.Enabled}}\n"
 	DiskConfTmpl = "\n{{$obj := .Disk}}Disk Config\n" +
 		" Disk Utilization Low WM:\t{{$obj.DiskUtilLowWM}}\n" +
@@ -336,7 +336,7 @@ var (
 	}
 
 	ObjStatMap = map[string]string{
-		"local":    "{{ .BucketLocal }}\t",
+		"ais":      "{{ .BckIsAIS }}\t",
 		"iscached": "{{ .Present }}\t",
 		"size":     "{{ FormatBytesSigned .Size 2 }}\t",
 		"version":  "{{ .Version }}\t",

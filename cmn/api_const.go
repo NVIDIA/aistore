@@ -131,15 +131,15 @@ const (
 	HeaderBucketAccessAttrs     = "aattrs"                  // Bucket access attributes
 
 	// object meta
-	HeaderObjCksumType  = "ObjCksumType"  // Checksum Type (xxhash, md5, none)
-	HeaderObjCksumVal   = "ObjCksumVal"   // Checksum Value
-	HeaderObjAtime      = "ObjAtime"      // Object access time
-	HeaderObjReplicSrc  = "ObjReplicSrc"  // In replication PUT request specifies the source target
-	HeaderObjSize       = "ObjSize"       // Object size (bytes)
-	HeaderObjVersion    = "ObjVersion"    // Object version/generation - local or Cloud
-	HeaderObjPresent    = "ObjPresent"    // Is object present in the cluster
-	HeaderObjNumCopies  = "ObjNumCopies"  // Number of copies of the object
-	HeaderObjIsBckLocal = "ObjIsBckLocal" // Is object from a local bucket
+	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
+	HeaderObjAtime     = "ObjAtime"     // Object access time
+	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
+	HeaderObjSize      = "ObjSize"      // Object size (bytes)
+	HeaderObjVersion   = "ObjVersion"   // Object version/generation - ais or Cloud
+	HeaderObjPresent   = "ObjPresent"   // Is object present in the cluster
+	HeaderObjNumCopies = "ObjNumCopies" // Number of copies of the object
+	HeaderObjBckIsAIS  = "ObjBckIsAIS"  // Is object from an ais bucket
 
 	// intra-cluster: control
 	HeaderCallerID          = "caller.id"
@@ -167,7 +167,7 @@ const (
 	URLParamCheckCached = "check_cached" // true: check if object is cached in AIStore
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
-	URLParamBckProvider = "bprovider"    // "local" | "cloud"
+	URLParamBckProvider = "bprovider"    // ais | cloud
 	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
 	URLParamRegex       = "regex"        // dsort/downloader regex
 	// internal use

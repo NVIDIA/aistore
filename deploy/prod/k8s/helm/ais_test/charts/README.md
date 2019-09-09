@@ -5,7 +5,7 @@
 This repo includes all the definitions of launching a test against an existing AIS cluster.
 It runs the following tests:
   1. Verify that the expected number of targets are running.
-  2. Upload objects to a local bucket in the cluster for the specified duration
+  2. Upload objects to an ais bucket in the cluster for the specified duration
   3. Perform list objects operation against the bucket created in the earlier step and verify its existence
 
 

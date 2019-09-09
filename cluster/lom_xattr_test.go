@@ -5,7 +5,6 @@ package cluster_test
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,6 +28,7 @@ var _ = Describe("LOM Xattributes", func() {
 	var (
 		tMock         = cluster.NewTargetMock(cluster.NewBaseBownerMock(bucketLocal))
 		copyMpathInfo *fs.MountpathInfo
+		mix           = fs.MountpathInfo{Path: xattrMpath}
 	)
 
 	BeforeEach(func() {
@@ -55,7 +55,7 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN = filepath.Join(xattrMpath, fs.ObjectType, cmn.LocalBs, bucketLocal, testObjectName)
+			localFQN = mix.MakePathBucketObject(fs.ObjectType, bucketLocal, testObjectName, true)
 
 			fqns = []string{
 				copyMpath + "/copy/fqn",

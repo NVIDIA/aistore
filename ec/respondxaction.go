@@ -70,7 +70,7 @@ func (r *XactRespond) Run() (err error) {
 
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
-func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) error {
+func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsAIS bool) error {
 	if glog.V(4) {
 		glog.Infof("Delete request for %s/%s", bucket, objname)
 	}
@@ -82,7 +82,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, objname, bckIsLocal)
+		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, objname, bckIsAIS)
 		if err != nil {
 			return err
 		}
@@ -96,13 +96,13 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsLocal bool) 
 
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
-	bckIsLocal := r.t.GetBowner().Get().IsLocal(bucket)
+	bckIsAIS := r.t.GetBowner().Get().IsAIS(bucket)
 	daemonID := iReq.Sender
 
 	switch iReq.Act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(bucket, objName, bckIsLocal); err != nil {
+		if err := r.removeObjAndMeta(bucket, objName, bckIsAIS); err != nil {
 			glog.Errorf("Failed to delete %s/%s: %v", bucket, objName, err)
 		}
 	case reqGet:
@@ -115,14 +115,14 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
+			fqn, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsAIS)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsAIS)
 		}
 		if err != nil {
 			glog.Error(err)
@@ -134,7 +134,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, _, err := cluster.HrwFQN(MetaType, bucket, objName, bckIsLocal)
+		fqn, _, err := cluster.HrwFQN(MetaType, bucket, objName, bckIsAIS)
 		if err != nil {
 			glog.Error(err)
 			return
@@ -178,9 +178,9 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		// Check if the request is valid (e.g, a request may come after
 		// the bucket is destroyed.
-		bckIsLocal := r.t.GetBowner().Get().IsLocal(bucket)
-		if !bckIsLocal {
-			// TODO: now EC supports only local buckets, so check if a local bucket exists
+		bckIsAIS := r.t.GetBowner().Get().IsAIS(bucket)
+		if !bckIsAIS {
+			// TODO: now EC supports only ais buckets, so check if an ais bucket exists
 			// NOTE: must read and discard otherwise next reads from the stream would fail
 			drain()
 			glog.Warningf("Received an EC slice/replica for non-existing bucket: %s/%s", bucket, objName)
@@ -197,7 +197,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
 			}
-			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsLocal)
+			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsAIS)
 			if err != nil {
 				drain()
 				glog.Error(err)
@@ -209,7 +209,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 					iReq.Sender, bucket, objName)
 			}
 			// FIXME: vs. lom.Fill() a few lines below
-			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsLocal)
+			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsAIS)
 			if err != nil {
 				drain()
 				glog.Error(err)

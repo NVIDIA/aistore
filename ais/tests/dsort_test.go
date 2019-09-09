@@ -114,7 +114,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:      generateDSortDesc(),
 		Bucket:           df.m.bucket,
-		BckProvider:      cmn.LocalBs,
+		BckProvider:      cmn.AIS,
 		OutputBucket:     df.outputBucket,
 		Extension:        df.extension,
 		InputFormat:      df.inputTempl,
@@ -526,7 +526,7 @@ func TestDistributedSort(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -543,9 +543,9 @@ func TestDistributedSort(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -593,7 +593,7 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			df.clearDSortList()
 
 			// Create local output bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBucket)
 
 			tutils.Logln("starting distributed sort...")
 			rs := df.gen()
@@ -602,9 +602,9 @@ func TestDistributedSortWithNonExistingBuckets(t *testing.T) {
 			}
 
 			// Now destroy output bucket and create input bucket
-			tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			tutils.DestroyBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			tutils.Logln("starting second distributed sort...")
 			if _, err := api.StartDSort(df.baseParams, rs); err == nil {
@@ -645,13 +645,13 @@ func TestDistributedSortWithOutputBucket(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local buckets
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais buckets
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			// Create local output bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, df.outputBucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, df.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, df.outputBucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, df.outputBucket)
 
 			df.init()
 			df.clearDSortList()
@@ -682,7 +682,7 @@ func TestDistributedSortParallel(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:           m,
@@ -699,9 +699,9 @@ func TestDistributedSortParallel(t *testing.T) {
 
 			df.clearDSortList()
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			wg := &sync.WaitGroup{}
 			for i := 0; i < dSortsCount; i++ {
@@ -729,7 +729,7 @@ func TestDistributedSortChain(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:           m,
@@ -746,9 +746,9 @@ func TestDistributedSortChain(t *testing.T) {
 
 			df.clearDSortList()
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			for i := 0; i < dSortsCount; i++ {
 				dispatchDSortJob(m, i)
@@ -765,7 +765,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -783,9 +783,9 @@ func TestDistributedSortShuffle(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -812,7 +812,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -830,9 +830,9 @@ func TestDistributedSortWithDisk(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -865,7 +865,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -883,9 +883,9 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -913,7 +913,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	var (
 		m = &ioContext{
 			t:      t,
-			bucket: TestLocalBucketName,
+			bucket: TestBucketName,
 		}
 		df = &dsortFramework{
 			m:                 m,
@@ -930,9 +930,9 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	df.init()
 	df.clearDSortList()
@@ -980,7 +980,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	var (
 		m = &ioContext{
 			t:      t,
-			bucket: TestLocalBucketName,
+			bucket: TestBucketName,
 		}
 		df = &dsortFramework{
 			m:                 m,
@@ -998,9 +998,9 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
 
-	// Create local bucket
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	df.init()
 	df.clearDSortList()
@@ -1051,7 +1051,7 @@ func TestDistributedSortZip(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1069,9 +1069,9 @@ func TestDistributedSortZip(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1102,7 +1102,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1120,9 +1120,9 @@ func TestDistributedSortWithCompression(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1171,7 +1171,7 @@ func TestDistributedSortWithContent(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:           m,
@@ -1194,9 +1194,9 @@ func TestDistributedSortWithContent(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 					df.init()
 					df.clearDSortList()
@@ -1241,7 +1241,7 @@ func TestDistributedSortAbort(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1258,9 +1258,9 @@ func TestDistributedSortAbort(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1295,7 +1295,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1312,9 +1312,9 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 					df.init()
 					df.clearDSortList()
@@ -1353,7 +1353,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1375,9 +1375,9 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					df.init()
 					df.clearDSortList()
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 					df.createInputShards()
 
@@ -1453,7 +1453,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1493,9 +1493,9 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						}
 					}
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 					df.init()
 					df.clearDSortList()
@@ -1553,7 +1553,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1579,9 +1579,9 @@ func TestDistributedSortAddTarget(t *testing.T) {
 			err := tutils.UnregisterNode(m.proxyURL, targets[0].DaemonID)
 			tassert.CheckFatal(t, err)
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.createInputShards()
 
@@ -1619,7 +1619,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1637,9 +1637,9 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1671,7 +1671,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -1688,9 +1688,9 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1719,7 +1719,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                 m,
@@ -1744,9 +1744,9 @@ func TestDistributedSortOnOOM(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -1778,7 +1778,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:                m,
@@ -1798,9 +1798,9 @@ func TestDistributedSortMissingShards(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": cmn.AbortReaction})
 					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.missing_shards": reaction})
 
@@ -1838,7 +1838,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					var (
 						m = &ioContext{
 							t:      t,
-							bucket: TestLocalBucketName,
+							bucket: TestBucketName,
 						}
 						df = &dsortFramework{
 							m:                     m,
@@ -1858,9 +1858,9 @@ func TestDistributedSortDuplications(t *testing.T) {
 						t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 					}
 
-					// Create local bucket
-					tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-					defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+					// Create ais bucket
+					tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+					defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 					defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": cmn.AbortReaction})
 					setClusterConfig(t, proxyURL, cmn.SimpleKVs{"distributed_sort.duplicated_records": reaction})
 
@@ -1890,12 +1890,12 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				err error
 				m   = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				dsortFW = &dsortFramework{
 					m:                m,
 					dsorterType:      dsorterType,
-					outputBucket:     TestLocalBucketName + "output",
+					outputBucket:     TestBucketName + "output",
 					tarballCnt:       100,
 					fileInTarballCnt: 10,
 					maxMemUsage:      "40%",
@@ -1923,13 +1923,13 @@ func TestDistributedSortOrderFile(t *testing.T) {
 			dsortFW.init()
 			dsortFW.clearDSortList()
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			// Create local output bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, dsortFW.outputBucket)
+			tutils.CreateFreshBucket(t, m.proxyURL, dsortFW.outputBucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, dsortFW.outputBucket)
 
 			dsortFW.createInputShards()
 
@@ -1994,7 +1994,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -2012,9 +2012,9 @@ func TestDistributedSortDryRun(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()
@@ -2043,7 +2043,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 			var (
 				m = &ioContext{
 					t:      t,
-					bucket: TestLocalBucketName,
+					bucket: TestBucketName,
 				}
 				df = &dsortFramework{
 					m:                m,
@@ -2061,9 +2061,9 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 				t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 			}
 
-			// Create local bucket
-			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-			defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+			// Create ais bucket
+			tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+			defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 			df.init()
 			df.clearDSortList()

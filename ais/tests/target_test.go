@@ -15,7 +15,7 @@ import (
 
 func TestPutObjectNoDaemonID(t *testing.T) {
 	const (
-		bucket  = TestLocalBucketName
+		bucket  = TestBucketName
 		objName = "someObject"
 	)
 	var (

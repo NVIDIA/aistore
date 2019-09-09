@@ -74,7 +74,7 @@ func BenchmarkObjPut(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
+			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.AIS)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -118,7 +118,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 	for _, bench := range benches {
 		b.Run(cmn.B2S(bench.fileSize, 2), func(b *testing.B) {
-			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.LocalBs)
+			lom, err := cluster.LOM{T: t, Objname: "objname", Bucket: testBucket}.Init(cmn.AIS)
 			if err != nil {
 				b.Fatal(err)
 			}

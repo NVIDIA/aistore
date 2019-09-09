@@ -121,7 +121,7 @@ type (
 		Bucket, Objname string      // uname at the destination
 		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
 		Opaque          []byte      // custom control (optional)
-		IsLocal         bool        // bucket is local?
+		BckIsAIS        bool        // is ais bucket
 	}
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
@@ -682,7 +682,7 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 	l = cmn.SizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
-	l = insBool(l, s.maxheader, hdr.IsLocal)
+	l = insBool(l, s.maxheader, hdr.BckIsAIS)
 	l = insByte(l, s.maxheader, hdr.Opaque)
 	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	hlen := l - cmn.SizeofI64*2

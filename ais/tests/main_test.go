@@ -134,8 +134,8 @@ func Test_download(t *testing.T) {
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	// Declare one channel per worker to pass the keyname
@@ -210,8 +210,8 @@ func Test_putdeleteRange(t *testing.T) {
 	if err := cmn.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	errCh := make(chan error, numfiles*5)
@@ -345,8 +345,8 @@ func Test_putdelete(t *testing.T) {
 	filesPutCh := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 
 	sgl := tutils.Mem2.NewSGL(filesize)
@@ -449,8 +449,8 @@ func Test_bucketnames(t *testing.T) {
 		t.Errorf("%v", err)
 		return
 	}
-	tutils.Logf("local bucket names:\n")
-	printBucketNames(t, buckets.Local)
+	tutils.Logf("ais bucket names:\n")
+	printBucketNames(t, buckets.AIS)
 
 	tutils.Logf("cloud bucket names:\n")
 	printBucketNames(t, buckets.Cloud)
@@ -481,13 +481,13 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bucketName) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
-	queryLocal.Add(cmn.URLParamBckProvider, cmn.LocalBs)
-	queryCloud.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	queryLocal.Add(cmn.URLParamBckProvider, cmn.AIS)
+	queryCloud.Add(cmn.URLParamBckProvider, cmn.Cloud)
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams:     baseParams,
 		Bucket:         bucketName,
-		BucketProvider: cmn.LocalBs,
+		BucketProvider: cmn.AIS,
 		Object:         fileName1,
 		Reader:         tutils.NewBytesReader(dataLocal),
 	}
@@ -495,52 +495,52 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	putArgsCloud := api.PutObjectArgs{
 		BaseParams:     baseParams,
 		Bucket:         bucketName,
-		BucketProvider: cmn.CloudBs,
+		BucketProvider: cmn.Cloud,
 		Object:         fileName1,
 		Reader:         tutils.NewBytesReader(dataCloud),
 	}
 
-	//PUT/GET/DEL Without local bucket
-	tutils.Logf("Validating responses for non-existent local bucket...\n")
+	//PUT/GET/DEL Without ais bucket
+	tutils.Logf("Validating responses for non-existent ais bucket...\n")
 	err := api.PutObject(putArgsLocal)
 	if err == nil {
-		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
 
 	_, err = api.GetObject(baseParams, bucketName, fileName1, api.GetObjectInput{Query: queryLocal})
 	if err == nil {
-		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
 
-	err = api.DeleteObject(baseParams, bucketName, fileName1, cmn.LocalBs)
+	err = api.DeleteObject(baseParams, bucketName, fileName1, cmn.AIS)
 	if err == nil {
-		t.Fatalf("Local bucket %s does not exist: Expected an error.", bucketName)
+		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
 
 	// Prefetch, evict without bprovider=cloud
 	tutils.Logf("Validating responses for empty bprovider for cloud bucket operations ...\n")
 	err = api.PrefetchList(baseParams, clibucket, "", files, true, 0)
 	if err == nil {
-		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
+		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
 	}
 
 	err = api.PrefetchRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
-		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
+		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
 	}
 
 	err = api.EvictList(baseParams, bucketName, "", files, true, 0)
 	if err == nil {
-		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
+		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
 	}
 
 	err = api.EvictRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
 	if err == nil {
-		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.CloudBs)
+		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
+	tutils.CreateFreshBucket(t, proxyURL, bucketName)
+	defer tutils.DestroyBucket(t, proxyURL, bucketName)
 
 	// PUT
 	tutils.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
@@ -556,48 +556,48 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	err = api.PutObject(putArgsCloud)
 	tassert.CheckFatal(t, err)
 
-	// Check Local bucket has 2 files
-	tutils.Logf("Validating local bucket have %s and %s ...\n", fileName1, fileName2)
-	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
+	// Check ais bucket has 2 objects
+	tutils.Logf("Validating ais bucket have %s and %s ...\n", fileName1, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName1)
 	tassert.CheckFatal(t, err)
-	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName2)
 	tassert.CheckFatal(t, err)
 
 	// Prefetch/Evict should work
-	err = api.PrefetchList(baseParams, clibucket, cmn.CloudBs, files, true, 0)
+	err = api.PrefetchList(baseParams, clibucket, cmn.Cloud, files, true, 0)
 	tassert.CheckFatal(t, err)
-	err = api.EvictList(baseParams, bucketName, cmn.CloudBs, files, true, 0)
+	err = api.EvictList(baseParams, bucketName, cmn.Cloud, files, true, 0)
 	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
 	tutils.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bucketName, cmn.CloudBs, files, true, 0)
+	api.DeleteList(baseParams, bucketName, cmn.Cloud, files, true, 0)
 
-	// Deleting from local bucket
-	tutils.Logf("Deleting %s and %s from local bucket ...\n", fileName1, fileName2)
-	api.DeleteList(baseParams, bucketName, cmn.LocalBs, files, true, 0)
+	// Deleting from ais bucket
+	tutils.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
+	api.DeleteList(baseParams, bucketName, cmn.AIS, files, true, 0)
 
-	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName1)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bucketName, cmn.LocalBs, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.AIS, fileName2)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName2)
 	}
 
-	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName1)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.Cloud, fileName1)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Cloud file %s not deleted", fileName1)
 	}
-	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName2)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.Cloud, fileName2)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Cloud file %s not deleted", fileName2)
 	}
 
 }
 
-func Test_SameLocalAndCloudBucketName(t *testing.T) {
+func Test_sameAISandCloudBucketName(t *testing.T) {
 	var (
 		bucketName    = clibucket
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
@@ -618,11 +618,11 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	queryLocal.Add(cmn.URLParamBckProvider, cmn.LocalBs)
-	queryCloud.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	queryLocal.Add(cmn.URLParamBckProvider, cmn.AIS)
+	queryCloud.Add(cmn.URLParamBckProvider, cmn.Cloud)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucketName)
+	tutils.CreateFreshBucket(t, proxyURL, bucketName)
+	defer tutils.DestroyBucket(t, proxyURL, bucketName)
 
 	//Common
 	defCloudProps.Cksum = globalConfig.Cksum
@@ -630,11 +630,11 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	defLocalProps.Cksum = globalConfig.Cksum
 	defLocalProps.LRU = testBucketProps(t).LRU
 	defLocalProps.CloudProvider = cmn.ProviderAIS
-	if !globalConfig.LRU.LocalBuckets {
+	if !globalConfig.LRU.Buckets {
 		defLocalProps.LRU.Enabled = false
 	}
 
-	// Local bucket props
+	// ais bucket props
 	bucketPropsLocal := defaultBucketProps()
 	bucketPropsLocal.Cksum.Type = cmn.ChecksumNone
 
@@ -643,11 +643,11 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	bucketPropsCloud.CloudProvider = cmn.ProviderAmazon
 
 	// Put
-	tutils.Logf("Putting object (%s) into local bucket %s...\n", fileName, bucketName)
+	tutils.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bucketName)
 	putArgs := api.PutObjectArgs{
 		BaseParams:     baseParams,
 		Bucket:         bucketName,
-		BucketProvider: cmn.LocalBs,
+		BucketProvider: cmn.AIS,
 		Object:         fileName,
 		Reader:         tutils.NewBytesReader(dataLocal),
 	}
@@ -661,7 +661,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	putArgs = api.PutObjectArgs{
 		BaseParams:     baseParams,
 		Bucket:         bucketName,
-		BucketProvider: cmn.CloudBs,
+		BucketProvider: cmn.Cloud,
 		Object:         fileName,
 		Reader:         tutils.NewBytesReader(dataCloud),
 	}
@@ -672,7 +672,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
-		t.Fatalf("Expected number of files in local bucket (%s) does not match: expected %v, got %v", bucketName, 1, len(resLocal.Entries))
+		t.Fatalf("Expected number of files in ais bucket (%s) does not match: expected %v, got %v", bucketName, 1, len(resLocal.Entries))
 	}
 
 	for _, entry := range resCloud.Entries {
@@ -698,7 +698,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	}
 
 	// Delete
-	err = api.DeleteObject(baseParams, bucketName, fileName, cmn.CloudBs)
+	err = api.DeleteObject(baseParams, bucketName, fileName, cmn.Cloud)
 	tassert.CheckFatal(t, err)
 
 	lenLocal, err = api.GetObject(baseParams, bucketName, fileName, api.GetObjectInput{Query: queryLocal})
@@ -710,7 +710,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	}
 
 	// Check that cloud object is deleted using HeadObject
-	_, err = api.HeadObject(baseParams, bucketName, cmn.CloudBs, fileName)
+	_, err = api.HeadObject(baseParams, bucketName, cmn.Cloud, fileName)
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Cloud file %s not deleted", fileName)
 	}
@@ -722,7 +722,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	err = api.SetBucketPropsMsg(baseParams, bucketName, bucketPropsCloud, queryCloud)
 	tassert.CheckFatal(t, err)
 
-	// Validate local bucket props are set
+	// Validate ais bucket props are set
 	localProps, err := api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsLocal, *localProps)
@@ -732,7 +732,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, bucketPropsCloud, *cloudProps)
 
-	// Reset local bucket props and validate they are reset
+	// Reset ais bucket props and validate they are reset
 	err = api.ResetBucketProps(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
@@ -752,7 +752,7 @@ func Test_SameLocalAndCloudBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, defCloudProps, *cloudProps)
 
-	// Check if local bucket props remain the same
+	// Check if ais bucket props remain the same
 	localProps, err = api.HeadBucket(baseParams, bucketName, queryLocal)
 	tassert.CheckFatal(t, err)
 	validateBucketProps(t, defLocalProps, *localProps)
@@ -827,23 +827,23 @@ cleanup:
 	close(errCh)
 }
 
-func TestHeadLocalBucket(t *testing.T) {
+func TestHeadBucket(t *testing.T) {
 	var (
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Cksum.ValidateWarmGet = true
 	bucketProps.LRU.Enabled = true
 
-	err := api.SetBucketPropsMsg(baseParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(baseParams, TestBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(baseParams, TestLocalBucketName)
+	p, err := api.HeadBucket(baseParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
 	validateBucketProps(t, bucketProps, *p)
@@ -902,8 +902,8 @@ func TestHeadObject(t *testing.T) {
 
 		putTime time.Time
 	)
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
 	r, rrErr := tutils.NewRandReader(objSize, true)
 	if rrErr != nil {
@@ -913,7 +913,7 @@ func TestHeadObject(t *testing.T) {
 	hash := r.XXHash()
 	putArgs := api.PutObjectArgs{
 		BaseParams: tutils.DefaultBaseAPIParams(t),
-		Bucket:     TestLocalBucketName,
+		Bucket:     TestBucketName,
 		Object:     objName,
 		Hash:       hash,
 		Reader:     r,
@@ -924,8 +924,8 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	propsExp := &cmn.ObjectProps{Size: objSize, Version: "", NumCopies: 1, Checksum: hash, Present: true, BucketLocal: true}
-	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "", NumCopies: 1, Checksum: hash, Present: true, BckIsAIS: true}
+	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestBucketName, "", objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
@@ -945,8 +945,8 @@ func TestHeadObject(t *testing.T) {
 	if props.Present != propsExp.Present {
 		t.Errorf("Returned `Present` not correct. Expected: %v, actual: %v", propsExp.Present, props.Present)
 	}
-	if props.BucketLocal != propsExp.BucketLocal {
-		t.Errorf("Returned `BucketLocal` not correct. Expected: %v, actual: %v", propsExp.BucketLocal, props.BucketLocal)
+	if props.BckIsAIS != propsExp.BckIsAIS {
+		t.Errorf("Returned `BckIsAIS` not correct. Expected: %v, actual: %v", propsExp.BckIsAIS, props.BckIsAIS)
 	}
 	if props.Atime.IsZero() {
 		t.Fatalf("Returned `Atime` (%s) is zero.", props.Atime)
@@ -961,10 +961,10 @@ func TestHeadNonexistentObject(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		objName  = "this_object_should_not_exist"
 	)
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
-	_, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "", objName)
+	_, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestBucketName, "", objName)
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
@@ -977,8 +977,8 @@ func TestHeadObjectCheckCached(t *testing.T) {
 		fileSize = 1024
 	)
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 	r, err := tutils.NewRandReader(int64(fileSize), false)
 	if err != nil {
@@ -1195,7 +1195,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		oldFileInfo os.FileInfo
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
-		tMock       = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
+		tMock       = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1353,7 +1353,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
-	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
 	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
 	tassert.CheckFatal(t, err)
 
@@ -1392,24 +1392,24 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 // Note: The following test can only work when running on a local setup
 // (targets are co-located with where this test is running from, because
 // it searches a local file system)
-func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
+func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	const fileSize = 1024
 	var (
 		numFiles   = 3
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
-		bucketName = TestLocalBucketName
+		bucketName = TestBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		fqn        string
 		err        error
-		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
+		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 	)
 
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
+	tutils.CreateFreshBucket(t, proxyURL, bucketName)
 	sgl := tutils.Mem2.NewSGL(fileSize)
 	defer sgl.Free()
 	tutils.PutRandObjs(proxyURL, bucketName, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
@@ -1471,7 +1471,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	tutils.DestroyLocalBucket(t, proxyURL, bucketName)
+	tutils.DestroyBucket(t, proxyURL, bucketName)
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
 		"cksum.type":              oldChecksum,
 		"cksum.validate_warm_get": fmt.Sprintf("%v", oldWarmGet),
@@ -1510,7 +1510,7 @@ func TestRangeRead(t *testing.T) {
 
 	sgl := tutils.Mem2.NewSGL(fileSize)
 	defer sgl.Free()
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, clibucket)
 	tutils.PutRandObjs(proxyURL, bucketName, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl, true)
 	selectErr(errCh, "put", t, false)
 
@@ -1558,7 +1558,7 @@ cleanup:
 	close(fileNameCh)
 
 	if created {
-		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 }
 
@@ -1806,20 +1806,20 @@ func getFromObjList(proxyURL, bucket string, errCh chan error, filesList []strin
 	getsGroup.Wait()
 }
 
-func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {
+func createBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {
 	baseParams := tutils.BaseAPIParams(proxyURL)
 	buckets, err := api.GetBucketNames(baseParams, "")
 	if err != nil {
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
 
-	if cmn.StringInSlice(bucket, buckets.Local) || cmn.StringInSlice(bucket, buckets.Cloud) {
+	if cmn.StringInSlice(bucket, buckets.AIS) || cmn.StringInSlice(bucket, buckets.Cloud) {
 		return false
 	}
 
-	err = api.CreateLocalBucket(baseParams, bucket)
+	err = api.CreateBucket(baseParams, bucket)
 	if err != nil {
-		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
+		t.Fatalf("Failed to create ais bucket %s: %v", bucket, err)
 	}
 
 	return true

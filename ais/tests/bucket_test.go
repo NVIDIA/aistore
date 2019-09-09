@@ -47,16 +47,16 @@ func TestDefaultBucketProps(t *testing.T) {
 		"ec_data_slices": "2",
 	})
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
-	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
+	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestBucketName)
 	tassert.CheckFatal(t, err)
-	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.LocalBuckets {
-		t.Errorf("LRU should be disabled for local buckets (bucket.Enabled: %v, global.localBuckets: %v)",
-			p.LRU.Enabled, globalConfig.LRU.LocalBuckets)
+	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.Buckets {
+		t.Errorf("LRU should be disabled for ais buckets (bucket.Enabled: %v, global.LRU.Buckets: %v)",
+			p.LRU.Enabled, globalConfig.LRU.Buckets)
 	}
 	if !p.EC.Enabled {
-		t.Errorf("EC should be enabled for local buckets")
+		t.Errorf("EC should be enabled for ais buckets")
 	}
 	if p.EC.DataSlices != dataSlices {
 		t.Errorf("Invalid number of EC data slices: expected %d, got %d", dataSlices, p.EC.DataSlices)
@@ -79,8 +79,8 @@ func TestResetBucketProps(t *testing.T) {
 		"ec_parity_slices": "2",
 	})
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Cksum.Type = cmn.ChecksumNone
@@ -94,22 +94,22 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.Cksum = globalConfig.Cksum
 	globalProps.LRU = testBucketProps(t).LRU
 	globalProps.EC.ParitySlices = 1
-	// For local bucket, there is additional config option that affects LRU.Enabled
-	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.LocalBuckets
+	// For ais bucket, there is an additional config option that affects LRU.Enabled
+	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.Buckets
 
 	bParams := tutils.DefaultBaseAPIParams(t)
-	err := api.SetBucketPropsMsg(bParams, TestLocalBucketName, bucketProps)
+	err := api.SetBucketPropsMsg(bParams, TestBucketName, bucketProps)
 	tassert.CheckFatal(t, err)
 
-	p, err := api.HeadBucket(bParams, TestLocalBucketName)
+	p, err := api.HeadBucket(bParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
-	err = api.ResetBucketProps(bParams, TestLocalBucketName)
+	err = api.ResetBucketProps(bParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
-	p, err = api.HeadBucket(bParams, TestLocalBucketName)
+	p, err = api.HeadBucket(bParams, TestBucketName)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props are reset
@@ -185,7 +185,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 	tutils.Logf("Reading bucket %q objects\n", bucket)
 	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
 	bckObjs, err := api.ListBucket(baseParams, bucket, msg, 0, query)
 	tassert.CheckError(t, err)
 
@@ -197,7 +197,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			err := api.DeleteObject(baseParams, bucket, name, cmn.CloudBs)
+			err := api.DeleteObject(baseParams, bucket, name, cmn.Cloud)
 			tassert.CheckError(t, err)
 		}(entry.Name)
 	}
@@ -221,8 +221,8 @@ func TestListObjects(t *testing.T) {
 		iterations = 3
 	}
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	// Iterations of PUT
 	totalObjects := 0
@@ -247,7 +247,7 @@ func TestListObjects(t *testing.T) {
 		wg.Wait()
 
 		// Confirm PUTs
-		bckObjs, err := tutils.ListObjects(proxyURL, bucket, cmn.LocalBs, "", 0)
+		bckObjs, err := tutils.ListObjects(proxyURL, bucket, cmn.AIS, "", 0)
 		tassert.CheckFatal(t, err)
 
 		if len(bckObjs) != totalObjects {
@@ -268,8 +268,8 @@ func TestListObjectFast(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 	sgl := tutils.Mem2.NewSGL(objSize)
 	defer sgl.Free()
 
@@ -353,8 +353,8 @@ func TestBucketSingleProp(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
-	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
 	tutils.Logf("Changing bucket %q properties...\n", bucket)
 	// Enabling EC should set default value for number of slices if it is 0
@@ -521,8 +521,8 @@ func TestBucketInvalidName(t *testing.T) {
 	}
 
 	for _, name := range invalidNames {
-		if err := api.CreateLocalBucket(baseParams, name); err == nil {
-			tutils.DestroyLocalBucket(t, proxyURL, name)
+		if err := api.CreateBucket(baseParams, name); err == nil {
+			tutils.DestroyBucket(t, proxyURL, name)
 			t.Errorf("accepted bucket with name %s", name)
 		}
 	}
@@ -583,8 +583,8 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		}
 	}
 
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 
 	{
 		var (
@@ -691,7 +691,7 @@ func TestCloudMirror(t *testing.T) {
 
 	// evict
 	query := make(url.Values)
-	query.Add(cmn.URLParamBckProvider, cmn.CloudBs)
+	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
 	err := api.EvictCloudBucket(baseParams, clibucket, query)
 	tassert.CheckFatal(t, err)
 
@@ -779,8 +779,8 @@ func TestBucketReadOnly(t *testing.T) {
 		}
 	)
 	m.init()
-	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
 	baseParams := tutils.DefaultBaseAPIParams(t)
 
 	m.puts()

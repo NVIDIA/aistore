@@ -329,7 +329,7 @@ func rwstress(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	created := createBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles)
 
 	generateRandomData(baseseed+10000, numFiles)
@@ -350,7 +350,7 @@ func rwstress(t *testing.T) {
 	rwstressCleanup(t)
 
 	if created {
-		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyBucket(t, proxyURL, clibucket)
 	}
 }
 

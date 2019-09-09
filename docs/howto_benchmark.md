@@ -27,12 +27,12 @@ $ $GOPATH/bin/aisloader
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
-1. Destroy existing local bucket. If the bucket is Cloud-based, delete all objects:
+1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 ```shell
 # aisloader -bucket=nvais -duration 0s -totalputsize=0
 ```
 
-2. Time-based 100% PUT into local bucket. Upon exit the bucket is emptied (by default):
+2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
 ```shell
 # aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
 ```
@@ -47,12 +47,12 @@ aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud
 # aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
 ```
 
-5. PUT 1GB total into a local bucket with cleanup disabled, object size = 1MB, duration unlimited:
+5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 ```shell
 # aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -bckprovider=local
 ```
 
-6. 100% GET from a local bucket:
+6. 100% GET from an ais bucket:
 ```shell
 # aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local
 ```
@@ -91,7 +91,7 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Description |
 | --- | --- |
 | -batchsize | Batch size to list and delete (default 100) |
-| -bckprovider | local - for local bucket, cloud - for Cloud based bucket (default "local") |
+| -bckprovider | local - for ais bucket, cloud - for Cloud based bucket (default "local") |
 | -bprops | JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply |
 | -bucket | Bucket name (default "nvais") |
 | -check-statsd | true: prior to benchmark make sure that StatsD is reachable |
@@ -148,11 +148,11 @@ Nothing to read, bucket is empty
 
 ### Local vs Cloud-based bucket
 
-In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-local' to select between local bucket (`-local=true`) or Cloud-based one (`-local=false`).
+In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-local' to select between ais bucket (`-local=true`) or Cloud-based one (`-local=false`).
 
-> Terminology: the term *local bucket* simply means that the bucket in question does not cache (or tier) and is not backed by the namesake Cloud bucket. AIStore-own local buckets are totally distributed, content-wise, across the entire AIS cluster. All the [supported storage services](/docs/storage_svcs.md) equally apply to both sorts of buckets.
+> Terminology: the term *ais bucket* simply means that the bucket in question does **not** cache (or tier) 3rd party Cloud and is not backed by the namesake Cloud bucket. AIS buckets are distributed across the entire AIS cluster. All the [supported storage services](/docs/storage_svcs.md) equally apply to both sorts of buckets.
 
-Note that aisloader **will create a local bucket if it does not exist**.
+Note that aisloader **will create an ais bucket if it does not exist**.
 
 Further, the name of the bucket is set via the option `-bucket=<bucket name>`.
 For instance:

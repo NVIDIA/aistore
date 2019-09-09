@@ -65,7 +65,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 
 		for _, bckName := range toDelete {
 			prefixedBckName := bckNamePrefix(bckName)
-			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), prefixedBckName)
+			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), prefixedBckName)
 			report.Writef(report.SummaryLevel, "Pre: deleted extraneous bucket: %v\n", prefixedBckName)
 		}
 	}

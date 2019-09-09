@@ -225,8 +225,8 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 
 // GetBucketNames API
 //
-// bckProvider takes one of "" (empty), "cloud" or "local". If bckProvider is empty, return all bucketnames.
-// Otherwise return "cloud" or "local" buckets.
+// bckProvider takes one of Cloud Provider enum names (see provider.go). If bckProvider is empty, return all names.
+// Otherwise, return cloud or ais bucket names.
 func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
 	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
@@ -248,10 +248,10 @@ func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketName
 	return bucketNames, nil
 }
 
-// CreateLocalBucket API
+// CreateBucket API
 //
-// CreateLocalBucket sends a HTTP request to a proxy to create a local bucket with the given name
-func CreateLocalBucket(baseParams *BaseParams, bucket string) error {
+// CreateBucket sends a HTTP request to a proxy to create an ais bucket with the given name
+func CreateBucket(baseParams *BaseParams, bucket string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
 	if err != nil {
 		return err
@@ -262,10 +262,10 @@ func CreateLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
-// DestroyLocalBucket API
+// DestroyBucket API
 //
-// DestroyLocalBucket sends a HTTP request to a proxy to remove a local bucket with the given name
-func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
+// DestroyBucket sends a HTTP request to a proxy to remove an ais bucket with the given name
+func DestroyBucket(baseParams *BaseParams, bucket string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
 	if err != nil {
 		return err
@@ -276,25 +276,25 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
-// DoesLocalBucketExist API
+// DoesBucketExist API
 //
-// DoesLocalBucketExist queries a proxy or target to get a list of all local
-// buckets, returns true if the bucket exists.
-func DoesLocalBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
-	buckets, err := GetBucketNames(baseParams, cmn.LocalBs)
+// DoesBucketExist queries a proxy or target to get a list of all ais buckets,
+// returns true if the bucket is present in the list.
+func DoesBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
+	buckets, err := GetBucketNames(baseParams, cmn.AIS)
 	if err != nil {
 		return false, err
 	}
 
-	exists := cmn.StringInSlice(bucket, buckets.Local)
+	exists := cmn.StringInSlice(bucket, buckets.AIS)
 	return exists, nil
 }
 
-// CopyLocalBucket API
+// CopyBucket API
 //
-// CopyLocalBucket creates a new local bucket newName and
+// CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
-func CopyLocalBucket(baseParams *BaseParams, oldName, newName string) error {
+func CopyBucket(baseParams *BaseParams, oldName, newName string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyLB, Name: newName})
 	if err != nil {
 		return err
@@ -305,10 +305,10 @@ func CopyLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 	return err
 }
 
-// RenameLocalBucket API
+// RenameBucket API
 //
-// RenameLocalBucket changes the name of a bucket from oldName to newBucketName
-func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
+// RenameBucket changes the name of a bucket from oldName to newBucketName
+func RenameBucket(baseParams *BaseParams, oldName, newName string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
 	if err != nil {
 		return err

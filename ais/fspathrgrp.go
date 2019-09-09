@@ -93,10 +93,10 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	if err = fs.Mountpaths.Add(mpath); err != nil {
 		return
 	}
-	if err = fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
+	if err = fs.Mountpaths.CreateBucketDir(cmn.AIS); err != nil {
 		return
 	}
-	if err = fs.Mountpaths.CreateBucketDir(cmn.CloudBs); err != nil {
+	if err = fs.Mountpaths.CreateBucketDir(cmn.Cloud); err != nil {
 		return
 	}
 

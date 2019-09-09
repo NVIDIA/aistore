@@ -27,25 +27,25 @@ type Bowner interface {
 // - BMD versioning is monotonic and incremental
 // Note: Getting a cloud object does not add the cloud bucket to CBmap
 type BMD struct {
-	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
+	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // ais buckets and their props
 	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their AIStore-only metadata
 	Version int64                       `json:"version"` // version - gets incremented on every update
 }
 
-func (m *BMD) GenBucketID(local bool) uint64 {
-	if !local {
+func (m *BMD) GenBucketID(isais bool) uint64 {
+	if !isais {
 		return uint64(m.Version)
 	}
 	return uint64(m.Version) | BisLocalBit
 }
 
-func (m *BMD) Exists(b string, bckID uint64, local bool) (exists bool) {
+func (m *BMD) Exists(b string, bckID uint64, isais bool) (exists bool) {
 	if bckID == 0 {
-		if local {
-			exists = m.IsLocal(b)
+		if isais {
+			exists = m.IsAIS(b)
 			// cmn.Assert(!exists)
 			if exists {
-				glog.Errorf("%s: local bucket must have ID", m.Bstring(b, local))
+				glog.Errorf("%s: ais bucket must have ID", m.Bstring(b, isais))
 				exists = false
 			}
 		} else {
@@ -53,14 +53,14 @@ func (m *BMD) Exists(b string, bckID uint64, local bool) (exists bool) {
 		}
 		return
 	}
-	if local != (bckID&BisLocalBit != 0) {
+	if isais != (bckID&BisLocalBit != 0) {
 		return
 	}
 	var (
 		p  *cmn.BucketProps
 		mm = m.LBmap
 	)
-	if !local {
+	if !isais {
 		mm = m.CBmap
 	}
 	p, exists = mm[b]
@@ -70,13 +70,13 @@ func (m *BMD) Exists(b string, bckID uint64, local bool) (exists bool) {
 	return
 }
 
-func (m *BMD) IsLocal(bucket string) bool { _, ok := m.LBmap[bucket]; return ok }
+func (m *BMD) IsAIS(bucket string) bool   { _, ok := m.LBmap[bucket]; return ok }
 func (m *BMD) IsCloud(bucket string) bool { _, ok := m.CBmap[bucket]; return ok }
 
-func (m *BMD) Bstring(b string, local bool) string {
+func (m *BMD) Bstring(b string, isais bool) string {
 	var (
-		s    = cmn.ProviderFromLoc(local)
-		p, e = m.Get(b, local)
+		s    = cmn.ProviderFromBool(isais)
+		p, e = m.Get(b, isais)
 	)
 	if !e {
 		return fmt.Sprintf("%s(unknown, %s)", b, s)
@@ -84,14 +84,14 @@ func (m *BMD) Bstring(b string, local bool) string {
 	return fmt.Sprintf("%s(%x, %s)", b, p.BID, s)
 }
 
-func (m *BMD) Get(b string, local bool) (p *cmn.BucketProps, present bool) {
-	if local {
+func (m *BMD) Get(b string, isais bool) (p *cmn.BucketProps, present bool) {
+	if isais {
 		p, present = m.LBmap[b]
 		return
 	}
 	p, present = m.CBmap[b]
 	if !present {
-		p = cmn.DefaultBucketProps(local)
+		p = cmn.DefaultBucketProps(isais)
 	}
 	return
 }
@@ -105,23 +105,23 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 		return
 	}
 	var (
-		config     = cmn.GCO.Get()
-		bckIsLocal = m.IsLocal(bucket)
+		config   = cmn.GCO.Get()
+		bckIsAIS = m.IsAIS(bucket)
 	)
 	switch normalizedBckProvider {
-	case cmn.LocalBs:
-		if !bckIsLocal {
-			return false, fmt.Errorf("local bucket %q %s", bucket, cmn.DoesNotExist)
+	case cmn.AIS:
+		if !bckIsAIS {
+			return false, fmt.Errorf("ais bucket %q %s", bucket, cmn.DoesNotExist)
 		}
 		isLocal = true
-	case cmn.CloudBs:
-		if bckProvider != config.CloudProvider && bckProvider != cmn.CloudBs {
+	case cmn.Cloud:
+		if bckProvider != config.CloudProvider && bckProvider != cmn.Cloud {
 			err = fmt.Errorf("cluster cloud provider %q, mismatch bucket provider %q", config.CloudProvider, bckProvider)
 			return
 		}
 		isLocal = false
 	default:
-		isLocal = bckIsLocal
+		isLocal = bckIsAIS
 	}
 	return
 }
@@ -130,31 +130,31 @@ func (m *BMD) ValidateBucket(bucket, bckProvider string) (isLocal bool, err erro
 // access perms
 //
 
-func (m *BMD) AllowGET(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "GET", cmn.AccessGET, local)
+func (m *BMD) AllowGET(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "GET", cmn.AccessGET, isais)
 }
-func (m *BMD) AllowHEAD(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "HEAD", cmn.AccessHEAD, local)
+func (m *BMD) AllowHEAD(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "HEAD", cmn.AccessHEAD, isais)
 }
-func (m *BMD) AllowPUT(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "PUT", cmn.AccessPUT, local)
+func (m *BMD) AllowPUT(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "PUT", cmn.AccessPUT, isais)
 }
-func (m *BMD) AllowColdGET(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "cold-GET", cmn.AccessColdGET, local)
+func (m *BMD) AllowColdGET(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "cold-GET", cmn.AccessColdGET, isais)
 }
-func (m *BMD) AllowDELETE(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "DELETE", cmn.AccessDELETE, local)
+func (m *BMD) AllowDELETE(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "DELETE", cmn.AccessDELETE, isais)
 }
-func (m *BMD) AllowRENAME(b string, local bool, bprops ...*cmn.BucketProps) error {
-	return m.allow(b, bprops, "RENAME", cmn.AccessRENAME, local)
+func (m *BMD) AllowRENAME(b string, isais bool, bprops ...*cmn.BucketProps) error {
+	return m.allow(b, bprops, "RENAME", cmn.AccessRENAME, isais)
 }
 
-func (m *BMD) allow(b string, bprops []*cmn.BucketProps, oper string, bits uint64, local bool) (err error) {
+func (m *BMD) allow(b string, bprops []*cmn.BucketProps, oper string, bits uint64, isais bool) (err error) {
 	var p *cmn.BucketProps
 	if len(bprops) > 0 {
 		p = bprops[0]
 	} else {
-		p, _ = m.Get(b, local)
+		p, _ = m.Get(b, isais)
 		if p == nil { // handle non-existence elsewhere
 			return
 		}
@@ -165,6 +165,6 @@ func (m *BMD) allow(b string, bprops []*cmn.BucketProps, oper string, bits uint6
 	if (p.AccessAttrs & bits) != 0 {
 		return
 	}
-	err = cmn.NewBucketAccessDenied(m.Bstring(b, local), oper, p.AccessAttrs)
+	err = cmn.NewBucketAccessDenied(m.Bstring(b, isais), oper, p.AccessAttrs)
 	return
 }

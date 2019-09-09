@@ -165,9 +165,9 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | --- | --- | --- |
 | Get bucket names | `bucket_api.list_names()` <sup>[1](#ftb1)</sup>  | BucketNames |
 | List objects in bucket | `bucket_api.perform_operation('myS3bucket', openapi_params(openapi_actions.LISTOBJECTS, value=openapi_models.ObjectPropertiesRequestParams(props="size")))` <sup>[2](#ftb2)</sup> | ObjectPropertyList|
-| Create local bucket (proxy) | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATELB))` | ObjectPropertyList |
-| Destroy local bucket (proxy) | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))` | None |
-| Rename local bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
+| Create ais bucket (proxy) | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.CREATELB))` | ObjectPropertyList |
+| Destroy ais bucket (proxy) | `bucket_api.delete('mybucket', openapi_params(openapi_actions.DESTROYLB))` | None |
+| Rename ais bucket (proxy) | `bucket_api.perform_operation('oldname', openapi_params(openapi_actions.RENAMELB, name='newname'))` | ObjectPropertyList |
 | [Evict](/docs/bucket.md#evict-bucket) cloud bucket (proxy) | `bucket_api.delete('myS3bucket', openapi_params(openapi_actions.EVICTCB))` | None |
 | Set bucket props (proxy) | `bucket_api.set_properties('mybucket', openapi_params(openapi_actions.SETPROPS, value=openapi_models.BucketProps(next_tier_url="http://localhost:8082", cloud_provider="ais", read_policy="next_tier", write_policy="next_tier", cksum=openapi_models.BucketPropsCksum(checksum="inherit"))))` | None |
 | [Prefetch](/docs/bucket.md#prefetchevict-objects) a list of objects | `bucket_api.perform_operation('mybucket', openapi_params(openapi_actions.PREFETCH, value=openapi_models.ListParameters(objnames=["o1","o2","o3"], deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | ObjectPropertyList |
@@ -178,7 +178,7 @@ First, create an api instance `bucket_api = ais_client.api.bucket_api.BucketApi(
 | [Evict](/docs/bucket.md#prefetchevict-objects) a range of objects | `bucket_api.delete('mybucket', openapi_params(openapi_actions.EVICTOBJECTS, value=openapi_models.RangeParameters(prefix="__tst/test-", regex='\\d22\\d', range="1000:2000", deadline="10s", wait=True)))` <sup>[3](#ftb3)</sup> | None |
 | Get bucket props (proxy) | `bucket_api.get_properties_with_http_info('mybucket')[2]` | dict |
 
-<a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the local buckets, this causes the `cloud` property to be the empty array
+<a name="ftb1">1</a>: Optional parameter `loc=true` can be used to retrieve just the ais buckets, this causes the `cloud` property to be the empty array
 
 <a name="ftb2">2</a>: See the [List Bucket section](/docs/bucket.md#list-bucket) for details.
 
@@ -221,7 +221,7 @@ First, create an api instance `object_api = ais_client.api.object_api.ObjectApi(
 | Get object (proxy) | `object_api.get('myS3bucket', 'myobject')` | str |
 | Read range (proxy) | `object_api.get('myS3bucket', 'myobject', offset=1024, length=512)` | str |
 | Put object (proxy) | `object_api.put('myS3bucket', 'myobject', body='object content here')` | None |
-| Rename/move object (local buckets) | `object_api.perform_operation('mylocalbucket', 'dir1/CCCCCCC', input_parameters=openapi_params(openapi_actions.RENAME, 'dir2/DDDDDDD'))` | None |
+| Rename/move object (ais buckets) | `object_api.perform_operation('mylocalbucket', 'dir1/CCCCCCC', input_parameters=openapi_params(openapi_actions.RENAME, 'dir2/DDDDDDD'))` | None |
 | Delete object | `object_api.delete('mybucket', 'myobject')` | None |
 | Evict object from cache | `object_api.delete('mybucket', 'myobject', input_parameters=openapi_params(openapi_actions.EVICTOBJECTS))` | None |
 | Get object props | `object_api.get_properties_with_http_info('mybucket', 'myobject')[2]` | dict |

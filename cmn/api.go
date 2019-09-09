@@ -184,7 +184,7 @@ type BucketList struct {
 // BucketNames is used to transfer all bucket names known to the system
 type BucketNames struct {
 	Cloud []string `json:"cloud"`
-	Local []string `json:"local"`
+	AIS   []string `json:"ais"`
 }
 
 func MakeAccess(aattr uint64, action string, bits uint64) uint64 {
@@ -387,20 +387,20 @@ func (c *ECConf) RequiredRestoreTargets() int {
 
 // ObjectProps
 type ObjectProps struct {
-	Size        int64
-	Version     string
-	Atime       time.Time
-	NumCopies   int
-	Checksum    string
-	Present     bool
-	BucketLocal bool
+	Size      int64
+	Version   string
+	Atime     time.Time
+	NumCopies int
+	Checksum  string
+	Present   bool
+	BckIsAIS  bool
 }
 
 func DefaultBucketProps(local bool) *BucketProps {
 	c := GCO.Clone()
 	c.Cksum.Type = PropInherit
 	if local {
-		if !c.LRU.LocalBuckets {
+		if !c.LRU.Buckets {
 			c.LRU.Enabled = false
 		}
 	} else {
@@ -445,7 +445,7 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 	to.AccessAttrs = from.AccessAttrs
 }
 
-func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluster func(string) bool) error {
+func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster func(string) bool) error {
 	if bp.Tiering.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(bp.Tiering.NextTierURL); err != nil {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", bp.Tiering.NextTierURL, err)
@@ -454,20 +454,20 @@ func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluste
 			return fmt.Errorf("invalid next tier URL: %s, URL is in current cluster", bp.Tiering.NextTierURL)
 		}
 	}
-	if err := validateCloudProvider(bp.CloudProvider, bckIsLocal); err != nil {
+	if err := validateCloudProvider(bp.CloudProvider, bckIsAIS); err != nil {
 		return err
 	}
 	if bp.Tiering.ReadPolicy != "" && bp.Tiering.ReadPolicy != RWPolicyCloud && bp.Tiering.ReadPolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid read policy: %s", bp.Tiering.ReadPolicy)
 	}
-	if bp.Tiering.ReadPolicy == RWPolicyCloud && bckIsLocal {
-		return fmt.Errorf("read policy for local bucket cannot be '%s'", RWPolicyCloud)
+	if bp.Tiering.ReadPolicy == RWPolicyCloud && bckIsAIS {
+		return fmt.Errorf("read policy for ais bucket cannot be '%s'", RWPolicyCloud)
 	}
 	if bp.Tiering.WritePolicy != "" && bp.Tiering.WritePolicy != RWPolicyCloud && bp.Tiering.WritePolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid write policy: %s", bp.Tiering.WritePolicy)
 	}
-	if bp.Tiering.WritePolicy == RWPolicyCloud && bckIsLocal {
-		return fmt.Errorf("write policy for local bucket cannot be '%s'", RWPolicyCloud)
+	if bp.Tiering.WritePolicy == RWPolicyCloud && bckIsAIS {
+		return fmt.Errorf("write policy for ais bucket cannot be '%s'", RWPolicyCloud)
 	}
 	if bp.Tiering.NextTierURL != "" {
 		if bp.CloudProvider == "" {
@@ -479,12 +479,12 @@ func (bp *BucketProps) Validate(bckIsLocal bool, targetCnt int, urlOutsideCluste
 		}
 		if bp.Tiering.WritePolicy == "" {
 			bp.Tiering.WritePolicy = RWPolicyNextTier
-			if !bckIsLocal {
+			if !bckIsAIS {
 				bp.Tiering.WritePolicy = RWPolicyCloud
 			}
 		}
 	}
-	validationArgs := &ValidationArgs{BckIsLocal: bckIsLocal, TargetCnt: targetCnt}
+	validationArgs := &ValidationArgs{BckIsAIS: bckIsAIS, TargetCnt: targetCnt}
 	validators := []PropsValidator{&bp.Cksum, &bp.LRU, &bp.Mirror, &bp.EC}
 	for _, validator := range validators {
 		if err := validator.ValidateAsProps(validationArgs); err != nil {

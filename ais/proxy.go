@@ -36,10 +36,9 @@ import (
 )
 
 const (
-	tokenStart = "Bearer"
-)
-const (
+	tokenStart    = "Bearer"
 	whatRenamedLB = "renamedlb"
+	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 )
 
 type (
@@ -389,11 +388,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowGET(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowGET(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -406,14 +405,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	config := cmn.GCO.Get()
 	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
+			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objname, si)
 		}
 		p.reverseNodeRequest(w, r, si)
 		delta := time.Since(started)
 		p.statsif.Add(stats.GetLatency, int64(delta))
 	} else {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
+			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objname, si)
 		}
 		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -430,11 +429,11 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objName := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowPUT(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowPUT(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -446,7 +445,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		bmd := p.bmdowner.get()
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objName, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -466,11 +465,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowDELETE(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -486,10 +485,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActEvictCB:
 		if bckProvider == "" {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
-				cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.CloudBs))
+				cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.Cloud))
 			return
-		} else if bckIsLocal {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+		} else if bckIsAIS {
+			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
 		if p.forwardCP(w, r, &msg, bucket, nil) {
@@ -527,10 +526,10 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if msg.Action == cmn.ActEvictObjects {
 			if bckProvider == "" {
 				p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
-					cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.CloudBs))
+					cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.Cloud))
 				return
-			} else if bckIsLocal {
-				p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+			} else if bckIsAIS {
+				p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 				return
 			}
 		}
@@ -549,11 +548,11 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowDELETE(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -564,7 +563,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsLocal), objname, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bckIsAIS), objname, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -677,11 +676,11 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, config *cmn.Config, local bool) error {
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, config *cmn.Config, isais bool) error {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := cmn.DefaultBucketProps(local)
-	if !clone.add(bucket, local, bucketProps) {
+	bucketProps := cmn.DefaultBucketProps(isais)
+	if !clone.add(bucket, isais, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bucket)
 	}
@@ -696,25 +695,25 @@ func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bucket string, config *cm
 	return nil
 }
 
-func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local bool) (*bucketMD, error, int) {
+func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, isais bool) (*bucketMD, error, int) {
 	p.bmdowner.Lock()
 	bmd := p.bmdowner.get()
-	if local {
-		if !bmd.IsLocal(bucket) {
+	if isais {
+		if !bmd.IsAIS(bucket) {
 			p.bmdowner.Unlock()
-			return bmd, cmn.NewErrorLocalBucketDoesNotExist(bucket), http.StatusNotFound
+			return bmd, cmn.NewErrorBucketDoesNotExist(bucket), http.StatusNotFound
 		}
 	} else if !bmd.IsCloud(bucket) {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bmd.Bstring(bucket, local), cmn.DoesNotExist)
+			glog.Infof("%s: %s %s - nothing to do", cmn.ActEvictCB, bmd.Bstring(bucket, isais), cmn.DoesNotExist)
 		}
 		p.bmdowner.Unlock()
 		return bmd, nil, 0
 	}
 	clone := bmd.clone()
-	if !clone.del(bucket, local) {
+	if !clone.del(bucket, isais) {
 		p.bmdowner.Unlock()
-		return nil, cmn.NewErrorLocalBucketDoesNotExist(bucket), http.StatusNotFound
+		return nil, cmn.NewErrorBucketDoesNotExist(bucket), http.StatusNotFound
 	}
 	if err := p.savebmdconf(clone, cmn.GCO.Get()); err != nil {
 		p.bmdowner.Unlock()
@@ -733,10 +732,10 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bucket string, local boo
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var (
-		msg                  cmn.ActionMsg
-		bucket, bckProvider  string
-		bmd                  *bucketMD
-		bckIsLocal, actLocal bool
+		msg                 cmn.ActionMsg
+		bucket, bckProvider string
+		bmd                 *bucketMD
+		bckIsAIS, actLocal  bool
 	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -747,7 +746,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	bckProvider = r.URL.Query().Get(cmn.URLParamBckProvider)
 	if len(apitems) != 0 {
 		bucket = apitems[0]
-		if bmd, bckIsLocal = p.validateBucket(w, r, bucket, bckProvider); bmd == nil {
+		if bmd, bckIsAIS = p.validateBucket(w, r, bucket, bckProvider); bmd == nil {
 			return
 		}
 	}
@@ -779,13 +778,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActCreateLB:
 		actLocal = true
-		bckIsLocal = bckProvider == "" || cmn.IsProviderLocal(bckProvider)
+		bckIsAIS = bckProvider == "" || cmn.IsProviderAIS(bckProvider)
 	case cmn.ActCopyLB, cmn.ActRenameLB, cmn.ActSyncLB:
 		actLocal = true
 	}
-	if actLocal && !bckIsLocal {
+	if actLocal && !bckIsAIS {
 		if bckProvider == "" {
-			err := cmn.NewErrorLocalBucketDoesNotExist(bucket)
+			err := cmn.NewErrorBucketDoesNotExist(bucket)
 			p.invalmsghdlr(w, r, err.Error())
 		} else {
 			p.invalmsghdlr(w, r, fmt.Sprintf("invalid bucket provider: %q", bckProvider))
@@ -845,17 +844,17 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		// Check that users didn't specify bprovider=cloud
 		if bckProvider == "" {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s is empty. Please specify '?%s=%s'",
-				cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.CloudBs))
+				cmn.URLParamBckProvider, cmn.URLParamBckProvider, cmn.Cloud))
 			return
-		} else if bckIsLocal {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s appears to be local (not cloud)", bucket))
+		} else if bckIsAIS {
+			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
 		p.listRangeHandler(w, r, &msg, http.MethodPost, bckProvider)
 	case cmn.ActListObjects:
 		p.listBucketAndCollectStats(w, r, bucket, bckProvider, msg, started, false /* fast listing */)
 	case cmn.ActMakeNCopies:
-		p.makeNCopies(w, r, bucket, &msg, config, bckIsLocal)
+		p.makeNCopies(w, r, bucket, &msg, config, bckIsAIS)
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -941,9 +940,9 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	// We only support actions for local buckets
+	// POST actions (below) require ais buckets
 	bucket := apitems[0]
-	if bmd, _ := p.validateBucket(w, r, bucket, cmn.LocalBs); bmd == nil {
+	if bmd, _ := p.validateBucket(w, r, bucket, cmn.AIS); bmd == nil {
 		return
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
@@ -986,15 +985,15 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.SimpleKVs) (errRet error) {
+func (p *proxyrunner) updateBucketProps(bucket string, bckIsAIS bool, nvs cmn.SimpleKVs) (errRet error) {
 	const errFmt = "invalid %s value %q: %v"
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	config := cmn.GCO.Get()
 
-	bprops, exists := clone.Get(bucket, bckIsLocal)
+	bprops, exists := clone.Get(bucket, bckIsAIS)
 	if !exists {
-		cmn.Assert(!bckIsLocal)
+		cmn.Assert(!bckIsAIS)
 
 		existsInCloud, err := p.doesCloudBucketExist(bucket)
 		if err != nil {
@@ -1006,8 +1005,8 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 			return cmn.NewErrorCloudBucketDoesNotExist(bucket)
 		}
 
-		bprops = cmn.DefaultBucketProps(bckIsLocal)
-		clone.add(bucket, false /* bucket is local */, bprops)
+		bprops = cmn.DefaultBucketProps(bckIsAIS)
+		clone.add(bucket, false /* = isais */, bprops)
 	}
 
 	// HTTP headers display property names title-cased so that LRULowWM becomes Lrulowwm, etc.
@@ -1175,7 +1174,7 @@ func (p *proxyrunner) updateBucketProps(bucket string, bckIsLocal bool, nvs cmn.
 		}
 	}
 
-	clone.set(bucket, bckIsLocal, bprops)
+	clone.set(bucket, bckIsAIS, bprops)
 	if err := p.savebmdconf(clone, config); err != nil {
 		glog.Error(err)
 	}
@@ -1195,7 +1194,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
@@ -1216,7 +1215,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		query.Del(cmn.URLParamBckProvider)
 		kvs := cmn.NewSimpleKVsFromQuery(query)
 
-		err := p.updateBucketProps(bucket, bckIsLocal, kvs)
+		err := p.updateBucketProps(bucket, bckIsAIS, kvs)
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -1230,7 +1229,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
 	// Note: this use case is for setting all bucket props
-	nprops := cmn.DefaultBucketProps(bckIsLocal)
+	nprops := cmn.DefaultBucketProps(bckIsAIS)
 	msg := cmn.ActionMsg{Value: nprops}
 	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
@@ -1248,9 +1247,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	clone := p.bmdowner.get().clone()
 	config := cmn.GCO.Get()
 
-	bprops, exists := clone.Get(bucket, bckIsLocal)
+	bprops, exists := clone.Get(bucket, bckIsAIS)
 	if !exists {
-		cmn.Assert(!bckIsLocal)
+		cmn.Assert(!bckIsAIS)
 
 		existsInCloud, err := p.doesCloudBucketExist(bucket)
 		if err != nil {
@@ -1263,14 +1262,14 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not exist.", bucket), http.StatusNotFound)
 			return
 		}
-		bprops = cmn.DefaultBucketProps(bckIsLocal)
-		clone.add(bucket, false /* bucket is local */, bprops)
+		bprops = cmn.DefaultBucketProps(bckIsAIS)
+		clone.add(bucket, false /* = isais */, bprops)
 	}
 
 	switch msg.Action {
 	case cmn.ActSetProps:
 		targetCnt := p.smapowner.Get().CountTargets()
-		if err := nprops.Validate(bckIsLocal, targetCnt, p.urlOutsideCluster); err != nil {
+		if err := nprops.Validate(bckIsAIS, targetCnt, p.urlOutsideCluster); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -1288,9 +1287,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		bprops.CopyFrom(nprops)
 	case cmn.ActResetProps:
-		bprops = cmn.DefaultBucketProps(bckIsLocal)
+		bprops = cmn.DefaultBucketProps(bckIsAIS)
 	}
-	clone.set(bucket, bckIsLocal, bprops)
+	clone.set(bucket, bckIsAIS, bprops)
 	if err := p.savebmdconf(clone, config); err != nil {
 		glog.Error(err)
 	}
@@ -1312,11 +1311,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	bmd, bckIsLocal := p.validateBucket(w, r, bucket, bckProvider)
+	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
 	if bmd == nil {
 		return
 	}
-	if err := bmd.AllowHEAD(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowHEAD(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1411,7 +1410,7 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 
 	bprops, ok := bmd.Get(bucketFrom, true)
 	if !ok {
-		return cmn.NewErrorLocalBucketDoesNotExist(bucketFrom)
+		return cmn.NewErrorBucketDoesNotExist(bucketFrom)
 	}
 	if _, ok = bmd.Get(bucketTo, true); ok {
 		if msg.Action == cmn.ActRenameLB {
@@ -1482,12 +1481,12 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	}
 	msgInt = p.newActionMsgInternal(msg, nil, nbmd)
 	p.metasyncer.sync(true, revspair{nbmd, msgInt})
-	glog.Infof("%s local bucket %s => %s, %s v%d", msg.Action, bucketFrom, bucketTo, bmdTermName, nbmd.version())
+	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bucketFrom, bucketTo, bmdTermName, nbmd.version())
 	return
 }
 
 func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket string,
-	msg *cmn.ActionMsg, cfg *cmn.Config, bckIsLocal bool) {
+	msg *cmn.ActionMsg, cfg *cmn.Config, bckIsAIS bool) {
 	copies, err := p.parseValidateNCopies(msg.Value)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1532,7 +1531,7 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 	//
 	// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf
 	//
-	if err := p.updateBucketProps(bucket, bckIsLocal, nvs); err != nil {
+	if err := p.updateBucketProps(bucket, bckIsAIS, nvs); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
 }
@@ -1540,10 +1539,10 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bucket
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
 	bmd := p.bmdowner.get()
 	bckProviderStr := "?" + cmn.URLParamBckProvider + "=" + bckProvider
-	if cmn.IsProviderLocal(bckProvider) {
-		bucketNames := &cmn.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
+	if cmn.IsProviderAIS(bckProvider) {
+		bucketNames := &cmn.BucketNames{Cloud: []string{}, AIS: make([]string, 0, 64)}
 		for bucket := range bmd.LBmap {
-			bucketNames.Local = append(bucketNames.Local, bucket)
+			bucketNames.AIS = append(bucketNames.AIS, bucket)
 		}
 		body := cmn.MustMarshal(bucketNames)
 		p.writeJSON(w, r, body, "getbucketnames"+bckProviderStr)
@@ -1689,7 +1688,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 	return allOK, err
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket string, msg cmn.SelectMsg, headerID string) (allEntries *cmn.BucketList, code int64, err error) {
+func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerID string) (allEntries *cmn.BucketList, code int64, err error) {
 	pageSize := cmn.DefaultPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
@@ -1823,7 +1822,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	if useCache {
 		q.Set(cmn.URLParamCached, "true")
 	}
-	q.Set(cmn.URLParamBckProvider, cmn.CloudBs)
+	q.Set(cmn.URLParamBckProvider, cmn.Cloud)
 
 	smap := p.smapowner.get()
 	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
@@ -1880,7 +1879,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.ListTaskResult)
 	q.Set(cmn.URLParamSilent, "true")
-	q.Set(cmn.URLParamBckProvider, cmn.CloudBs)
+	q.Set(cmn.URLParamBckProvider, cmn.Cloud)
 	if useCache {
 		q.Set(cmn.URLParamCached, "true")
 	}
@@ -1945,7 +1944,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	return allEntries, 0, nil
 }
 
-// Local bucket:
+// ais bucket:
 //   - reads object list from all targets, combines, sorts and returns the list
 // Cloud bucket:
 //   - selects a random target to read the list of objects from cloud
@@ -1958,10 +1957,10 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 //      * error
 func (p *proxyrunner) listBucket(r *http.Request, bucket, bckProvider string, msg cmn.SelectMsg) (bckList *cmn.BucketList, taskID int64, err error) {
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
-	if cmn.IsProviderCloud(bckProvider) || !p.bmdowner.get().IsLocal(bucket) {
+	if cmn.IsProviderCloud(bckProvider) || !p.bmdowner.get().IsAIS(bucket) {
 		bckList, taskID, err = p.getCloudBucketObjects(r, bucket, headerID, msg)
 	} else {
-		bckList, taskID, err = p.getLocalBucketObjects(bucket, msg, headerID)
+		bckList, taskID, err = p.getBucketObjects(bucket, msg, headerID)
 	}
 	return
 }
@@ -1981,9 +1980,9 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lbucket, objname := apitems[0], apitems[1]
-	if !p.bmdowner.get().IsLocal(lbucket) {
-		s := fmt.Sprintf("Rename/move is supported only for cache-only buckets (%s does not appear to be local)", lbucket)
-		p.invalmsghdlr(w, r, s)
+	if !p.bmdowner.get().IsAIS(lbucket) {
+		err := cmn.NewErrorBucketDoesNotExist(lbucket)
+		p.invalmsghdlr(w, r, fmt.Sprintf("%v - cannot rename %s/%s", err, lbucket, objname))
 		return
 	}
 
@@ -2395,7 +2394,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	smap := p.smapowner.get()
 	psi := smap.GetProxy(proxyID)
 	if psi == nil && newPrimaryURL == "" {
-		s := fmt.Sprintf("%s: failed to find new primary %s in local %s", p.si.Name(), proxyID, smap.pp())
+		s := fmt.Sprintf("%s: failed to find new primary %s in %s", p.si.Name(), proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2477,7 +2476,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	psi := smap.GetProxy(proxyID)
 
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyID, smap.pp())
+		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2503,7 +2502,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyIDToRemove string) (err error) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if !smap.isPresent(p.si) {
-		cmn.AssertMsg(false, "This proxy '"+p.si.DaemonID+"' must always be present in the local "+smap.pp())
+		cmn.AssertMsg(false, "This proxy '"+p.si.DaemonID+"' must always be present in the "+smap.pp())
 	}
 	clone := smap.clone()
 	// FIXME: may be premature at this point
@@ -2546,7 +2545,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	smap := p.smapowner.get()
 	psi, ok := smap.Pmap[proxyid]
 	if !ok {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
+		s := fmt.Sprintf("New primary proxy %s not present in the %s", proxyid, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}

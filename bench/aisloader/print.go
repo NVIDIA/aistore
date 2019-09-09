@@ -22,7 +22,7 @@ var examples = `
 	$ aisloader -bucket=nvais -duration 0s -totalputsize=0 # by default cleanup=true
 	$ aisloader -bucket=nvais -bckprovider=cloud -cleanup=true -duration 0s -totalputsize=0
 
-2. Time-based 100% PUT into local bucket. Upon exit the bucket is emptied (by default):
+2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
 
 	$ aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
 
@@ -36,11 +36,11 @@ var examples = `
 
 	$ aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
 
-5. PUT 1GB total into a local bucket with cleanup disabled, object size = 1MB, duration unlimited:
+5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
 	$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -bckprovider=local
 
-6. 100% GET from a local bucket:
+6. 100% GET from an ais bucket:
 
 	$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local
 

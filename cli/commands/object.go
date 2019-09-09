@@ -633,10 +633,10 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckProv
 		err = api.DeleteList(baseParams, bucket, bckProvider, fileList, wait, deadline)
 		command += "d"
 	case objPrefetch:
-		err = api.PrefetchList(baseParams, bucket, cmn.CloudBs, fileList, wait, deadline)
+		err = api.PrefetchList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
 	case objEvict:
-		err = api.EvictList(baseParams, bucket, cmn.CloudBs, fileList, wait, deadline)
+		err = api.EvictList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -667,10 +667,10 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckPro
 		err = api.DeleteRange(baseParams, bucket, bckProvider, prefix, regex, rangeStr, wait, deadline)
 		command += "d"
 	case objPrefetch:
-		err = api.PrefetchRange(baseParams, bucket, cmn.CloudBs, prefix, regex, rangeStr, wait, deadline)
+		err = api.PrefetchRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
 	case objEvict:
-		err = api.EvictRange(baseParams, bucket, cmn.CloudBs, prefix, regex, rangeStr, wait, deadline)
+		err = api.EvictRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)

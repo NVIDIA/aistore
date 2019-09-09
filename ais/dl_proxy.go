@@ -293,10 +293,10 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request) (ok bool) {
 	var (
-		bucket     string
-		bmd        *bucketMD
-		bckIsLocal bool
-		query      = r.URL.Query()
+		bucket   string
+		bmd      *bucketMD
+		bckIsAIS bool
+		query    = r.URL.Query()
 
 		payload = &cmn.DlBase{}
 	)
@@ -304,14 +304,14 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	payload.InitWithQuery(query)
 	bucket = payload.Bucket
 
-	if bmd, bckIsLocal = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
+	if bmd, bckIsAIS = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
 		return false
 	}
-	if err := bmd.AllowColdGET(bucket, bckIsLocal); err != nil {
+	if err := bmd.AllowColdGET(bucket, bckIsAIS); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return false
 	}
-	if !bckIsLocal {
+	if !bckIsAIS {
 		_, exists := bmd.Get(bucket, false)
 		if !exists {
 			if err := p.handleUnknownCB(bucket); err != nil {

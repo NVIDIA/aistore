@@ -55,7 +55,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		seed:     baseseed + 300,
 		numObjs:  100,
 		proxyURL: getPrimaryURL(t, proxyURLReadOnly),
-		bucket:   TestLocalBucketName,
+		bucket:   TestBucketName,
 		fileSize: 64 * cmn.KiB,
 		mpList:   make(map[string]*cluster.Snode, 10),
 		allMps:   make(map[*cluster.Snode]*cmn.MountpathList, 10),
@@ -304,8 +304,8 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
@@ -356,8 +356,8 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "false"})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{"fshc_enabled": "true"})
 
-	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyBucket(t, md.proxyURL, md.bucket)
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tutils.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget)
@@ -420,7 +420,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		break
 	}
 
-	// create a local bucket to write to
+	// create an ais bucket to write to
 	tutils.Logf("mountpath %s of %s is going offline\n", selectedMpath, selectedTarget.ID())
 
 	err := api.EnableMountpath(baseParams, selectedTarget, selectedMpath)

@@ -12,6 +12,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+// mountpath/<content-type>/<cloudPath|aisPath>/<bucket-name>/...
+const (
+	cloudPath = "cloud"
+	aisPath   = "local"
+)
+
 const (
 	// prefixes for workfiles created by various services
 	WorkfileReplication = "repl"   // replication runner
@@ -29,7 +35,7 @@ type ParsedFQN struct {
 	Bucket      string
 	Objname     string
 	Digest      uint64
-	IsLocal     bool
+	BckIsAIS    bool
 }
 
 // mpathInfo, bucket, objname, isLocal, err
@@ -49,10 +55,10 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
 	} else if items[3] == "" {
 		err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
-	} else if items[1] != cmn.LocalBs && items[1] != cmn.CloudBs {
+	} else if items[1] != aisPath && items[1] != cloudPath {
 		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[1], fqn)
 	} else {
-		parsed.ContentType, parsed.IsLocal, parsed.Bucket, parsed.Objname = items[0], (items[1] == cmn.LocalBs), items[2], items[3]
+		parsed.ContentType, parsed.BckIsAIS, parsed.Bucket, parsed.Objname = items[0], (items[1] == aisPath), items[2], items[3]
 	}
 	return
 }
@@ -105,19 +111,20 @@ func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relative
 	return
 }
 
-func (mfs *MountedFS) CreateBucketDir(bucketType string) error {
-	if !cmn.StringInSlice(bucketType, []string{cmn.LocalBs, cmn.CloudBs}) {
-		cmn.AssertMsg(false, "unknown bucket type: '"+bucketType+"'")
+func (mfs *MountedFS) CreateBucketDir(bckProvider string) error {
+	isLocal := cmn.IsProviderAIS(bckProvider)
+	if !isLocal {
+		cmn.AssertMsg(cmn.IsProviderCloud(bckProvider), "unknown bucket provider: '"+bckProvider+"'")
 	}
 	availablePaths, _ := Mountpaths.Get()
 	for contentType := range CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
-			dir := mpathInfo.MakePath(contentType, bucketType == cmn.LocalBs)
+			dir := mpathInfo.MakePath(contentType, isLocal)
 			if _, exists := availablePaths[dir]; exists {
 				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
 			}
 			if err := cmn.CreateDir(dir); err != nil {
-				return fmt.Errorf("cannot create %s buckets dir %q, err: %v", bucketType, dir, err)
+				return fmt.Errorf("cannot create %s buckets dir %q, err: %v", bckProvider, dir, err)
 			}
 		}
 	}

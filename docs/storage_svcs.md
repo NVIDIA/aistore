@@ -57,9 +57,9 @@ To revert a bucket's entire configuration back to use global parameters, use `"a
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
-### LRU for local buckets
+### LRU for ais buckets
 
-By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for local buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in local buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
+By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for ais buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in ais buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
 
 ## Erasure coding
 
@@ -100,7 +100,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "
 
 In version 2.1, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
 
-Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
+Secondly, only ais buckets are currently supported. Both limitations will be removed in the subsequent releases.
 
 ## N-way mirror
 Yet another supported storage service is n-way mirroring providing for bucket-level data redundancy and data protection. The service makes sure that each object in a given distributed (local or Cloud) bucket has exactly **n** object replicas, where n is an arbitrary user-defined integer greater or equal 1.
@@ -123,7 +123,7 @@ curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies"
 curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "makencopies", "value":3}' 'http://G/v1/buckets/c'
 ```
 
-The operations (above) are in fact [extended actions](xaction.md) that run asynchronously. Both Cloud and local buckets are supported. You can monitor completion of those operations via generic [xaction API](xaction.md).
+The operations (above) are in fact [extended actions](xaction.md) that run asynchronously. Both Cloud and ais buckets are supported. You can monitor completion of those operations via generic [xaction API](xaction.md).
 
 Subsequently, all PUTs into an n-way configured bucket also generate **n** copies for all newly created objects. Which also goes to say that the ("makencopies") operation, in addition to creating or destroying replicas of existing objects will also automatically re-enable(if n > 1) or disable (if n == 1) mirroring as far as subsequent PUTs are concerned.
 

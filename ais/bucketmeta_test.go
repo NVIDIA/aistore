@@ -53,7 +53,7 @@ func TestBMDSaveLoad(t *testing.T) {
 	tassert.Fatalf(t, bmdOK.Version == bmd.Version,
 		"Versions mismatch %d -> %d", bmd.Version, bmdOK.Version)
 	tassert.Fatalf(t, len(bmdOK.LBmap) == len(bmd.LBmap),
-		"Local bucket lists mismatch %v -> %v", bmd.LBmap, bmdOK.LBmap)
+		"ais bucket lists mismatch %v -> %v", bmd.LBmap, bmdOK.LBmap)
 	tassert.Fatalf(t, len(bmdOK.CBmap) == len(bmd.CBmap),
 		"Cloud bucket lists mismatch %v -> %v", bmd.CBmap, bmdOK.CBmap)
 

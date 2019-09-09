@@ -8,14 +8,14 @@ The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS
 
 `ais bucket create BUCKET [BUCKET...]`
 
-Creates a local bucket or buckets.
+Creates an ais bucket or buckets.
 
 
 ### destroy
 
 `ais bucket destroy BUCKET [BUCKET...]`
 
-Destroys a local bucket or buckets.
+Destroys an ais bucket or buckets.
 
 ### list
 
@@ -38,13 +38,13 @@ Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
 `ais bucket rename BUCKET NEW_BUCKET`
 
-Renames a local bucket.
+Renames an ais bucket.
 
 ### copy
 
 `ais bucket cp BUCKET NEW_BUCKET`
 
-Copies a local bucket content to a new local bucket.
+Copies an existing ais bucket to a new ais bucket.
 
 ### objects
 

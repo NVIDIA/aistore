@@ -200,16 +200,16 @@ func (r *xactionsRegistry) renewRespondEC(bucket string) *ec.XactRespond {
 //
 type mncEntry struct {
 	baseBckEntry
-	t          *targetrunner
-	xact       *mirror.XactBckMakeNCopies
-	copies     int
-	bckIsLocal bool
+	t        *targetrunner
+	xact     *mirror.XactBckMakeNCopies
+	copies   int
+	bckIsAIS bool
 }
 
 func (e *mncEntry) Start(id int64) error {
 	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize)
 	cmn.AssertNoErr(err)
-	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, slab, e.copies, e.bckIsLocal)
+	xmnc := mirror.NewXactMNC(id, e.bckName, e.t, slab, e.copies, e.bckIsAIS)
 	go xmnc.Run()
 	e.xact = xmnc
 	return nil
@@ -217,9 +217,9 @@ func (e *mncEntry) Start(id int64) error {
 func (*mncEntry) Kind() string    { return cmn.ActMakeNCopies }
 func (e *mncEntry) Get() cmn.Xact { return e.xact }
 
-func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, copies int, bckIsLocal bool) {
+func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, copies int, bckIsAIS bool) {
 	b := r.bucketsXacts(bucket)
-	e := &mncEntry{t: t, copies: copies, bckIsLocal: bckIsLocal, baseBckEntry: baseBckEntry{bckName: bucket}}
+	e := &mncEntry{t: t, copies: copies, bckIsAIS: bckIsAIS, baseBckEntry: baseBckEntry{bckName: bucket}}
 	_, _ = b.renewBucketXaction(e)
 }
 
@@ -228,13 +228,13 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bucket string, t *targetrunner, c
 //
 type loadLomCacheEntry struct {
 	baseBckEntry
-	t          cluster.Target
-	bckIsLocal bool
-	xact       *mirror.XactBckLoadLomCache
+	t        cluster.Target
+	bckIsAIS bool
+	xact     *mirror.XactBckLoadLomCache
 }
 
 func (e *loadLomCacheEntry) Start(id int64) error {
-	x := mirror.NewXactLLC(id, e.bckName, e.t, e.bckIsLocal)
+	x := mirror.NewXactLLC(id, e.bckName, e.t, e.bckIsAIS)
 	go x.Run()
 	e.xact = x
 
@@ -243,9 +243,9 @@ func (e *loadLomCacheEntry) Start(id int64) error {
 func (*loadLomCacheEntry) Kind() string    { return cmn.ActLoadLomCache }
 func (e *loadLomCacheEntry) Get() cmn.Xact { return e.xact }
 
-func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target, bckIsLocal bool) {
+func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target, bckIsAIS bool) {
 	b := r.bucketsXacts(bucket)
-	e := &loadLomCacheEntry{t: t, bckIsLocal: bckIsLocal, baseBckEntry: baseBckEntry{bckName: bucket}}
+	e := &loadLomCacheEntry{t: t, bckIsAIS: bckIsAIS, baseBckEntry: baseBckEntry{bckName: bucket}}
 	b.renewBucketXaction(e)
 }
 

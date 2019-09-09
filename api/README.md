@@ -209,13 +209,13 @@ Given the url of an existing proxy in a cluster, `GetBucketNames` returns the na
 | bckProvider | string       | One of "" (empty), "cloud", "local". If value is empty, returns all bucket names. Otherwise, return "cloud" or "local" buckets.|
 
 ##### Return
-Two lists: one for the names of local buckets, and the other for the names of cloud buckets
+Two lists: one for the names of ais buckets, and the other for the names of cloud buckets
 
 Error from AIStore in completing the request
 ___
 
 #### CreateLocalBucket
-Creates a local bucket with a given name
+Creates an ais bucket with a given name
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
@@ -254,7 +254,7 @@ Error from AIStore in completing the request
 ___
 
 #### DestroyLocalBucket
-Removes a local bucket using its name as the identifier
+Removes an ais bucket using its name as the identifier
 
 ##### Parameters
 | Name       | Type         | Description                                                                           |
@@ -325,7 +325,7 @@ Returns the size and version of an object identified by a combination of its buc
 | httpClient     | *http.Client | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket         | string       | Name of the bucket storing the object                                                 |
-| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking AIS bucket metadata |
 | object         | string       | Name of the object                                                                    |
 
 ##### Return
@@ -387,7 +387,7 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | httpClient     | *http.Client       | HTTP Client used to create and process the HTTP Request and return the HTTP Response  |
 | proxyURL       | string             | URL of the proxy to which the HTTP Request is sent                                    |
 | Bucket         | string             | Name of the bucket storing the object                                                 |
-| BucketProvider | string             | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| BucketProvider | string             | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking AIS bucket metadata |
 | Object         | string             | Name of the object                                                                    |
 | Hash           | string             | Hash computed for the object                                                          |
 | Reader         | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
@@ -442,7 +442,7 @@ Deletes an object identified by the combination of its bucket and object name
 | proxyURL       | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket         | string       | Name of the bucket storing the object                                                 |
 | object         | string       | Name of the object to be replicated                                                   |
-| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking if it exists in AIS local bucket metadata |
+| bckProvider | string       | Location of the bucket. One of "", "cloud", or "local", where "" is determined by checking AIS bucket metadata |
 
 ##### Return
 Error from AIStore in completing the request
@@ -475,7 +475,7 @@ ___
 ### URL Query Values
 | Name | Fields | Description |
 | --- | --- | --- |
-| bprovider | "", "cloud", "local" | Location of the bucket - "cloud" or "local". If the value is empty, the location of the bucket is determined by checking if it exists in AIS local bucket metadata |
+| bprovider | "", "cloud", "local" | Location of the bucket - "cloud" or "local". If the value is empty, the location of the bucket is determined by checking AIS bucket metadata |
 
 ## Basic API Workflow
 A sample demo of the APIs listed above:
@@ -496,17 +496,17 @@ func demo() error {
     
     primaryProxyURL := smap.ProxySI.PublicNet.DirectURL
     
-    // Create local bucket
+    // Create ais bucket
     err = api.CreateLocalBucket(httpClient, primaryProxyURL, bucket)
     if err != nil {
-        return Errors.New("Creating local bucket failed, %v\n", err)
+        return Errors.New("Creating ais bucket failed, %v\n", err)
     }
     
     newBucketName = "DemoBucketNew"
-    // Rename local bucket
+    // Rename ais bucket
     err = api.RenameLocalBucket(httpClient, primaryProxyURL, bucket, newBucketName)
     if err != nil {
-        return Errors.New("Renaming local bucket failed, %v\n", err)
+        return Errors.New("Renaming ais bucket failed, %v\n", err)
     }
 }
 ```

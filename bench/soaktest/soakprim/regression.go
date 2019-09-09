@@ -36,12 +36,12 @@ type regressionContext struct {
 //regression runs a constant get request throughout the testing
 
 func cleanupRegression() {
-	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.LocalBs)
+	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.AIS)
 	cmn.AssertNoErr(err)
 
-	for _, name := range names.Local {
+	for _, name := range names.AIS {
 		if strings.HasPrefix(name, regBucketPrefix) && (!soakcmn.Params.LocalCleanup || name == bckName) {
-			api.DestroyLocalBucket(tutils.BaseAPIParams(primaryURL), bckName)
+			api.DestroyBucket(tutils.BaseAPIParams(primaryURL), bckName)
 		}
 	}
 }

@@ -100,9 +100,9 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			bckIsLocal, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.bckProvider)
-			if bckIsLocal {
-				glog.Errorf("prefetch: bucket %s is local, nothing to do", fwd.bucket)
+			bckIsAIS, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.bckProvider)
+			if bckIsAIS {
+				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bucket)
 			} else {
 				for _, objname := range fwd.objnames {
 					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.bckProvider)

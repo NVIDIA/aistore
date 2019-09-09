@@ -47,7 +47,7 @@ type (
 
 func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
 	r = &XactPutLRepl{
-		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket, lom.BckIsLocal),
+		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket, lom.BckIsAIS),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
@@ -66,7 +66,7 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 	r.wg.Add(1)
 	for _, mpathInfo := range availablePaths {
 		xputJogger := &xputJogger{parent: r, mpathInfo: mpathInfo}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsLocal())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsAIS())
 		r.mpathers[mpathLC] = xputJogger
 	}
 	go r.Run()
@@ -89,7 +89,7 @@ func (r *XactPutLRepl) Run() error {
 				glog.Error(err)
 				break
 			}
-			cmn.Assert(r.BckIsLocal() == lom.BckIsLocal)
+			cmn.Assert(r.BckIsAIS() == lom.BckIsAIS)
 			if mpather := findLeastUtilized(lom, r.mpathers); mpather != nil {
 				mpather.post(lom)
 			} else {
@@ -109,7 +109,7 @@ func (r *XactPutLRepl) Run() error {
 
 // TODO: move elsewhere and use bucket ID
 func (r *XactPutLRepl) SameBucket(lom *cluster.LOM) bool {
-	return r.BckIsLocal() == lom.BckIsLocal && r.Bucket() == lom.Bucket
+	return r.BckIsAIS() == lom.BckIsAIS && r.Bucket() == lom.Bucket
 }
 
 // main method: replicate a given locally stored object

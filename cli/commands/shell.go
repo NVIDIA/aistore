@@ -139,8 +139,8 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, pro
 			}
 		}
 
-		if cmn.IsProviderLocal(bckProvider) || bckProvider == "" {
-			printNotUsedBuckets(bucketNames.Local)
+		if cmn.IsProviderAIS(bckProvider) || bckProvider == "" {
+			printNotUsedBuckets(bucketNames.AIS)
 		}
 		if cmn.IsProviderCloud(bckProvider) || bckProvider == "" {
 			printNotUsedBuckets(bucketNames.Cloud)

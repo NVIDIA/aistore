@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,11 +18,11 @@ import (
 
 var _ = Describe("Mirror", func() {
 	const (
-		TestLocalBucketName = "TEST_LOCAL_MIRROR_BUCKET"
-		mpath               = "/tmp/mirrortest_mpath/1"
-		mpath2              = "/tmp/mirrortest_mpath/2"
-		testObjectName      = "mirrortestobj.ext"
-		testObjectSize      = 1234
+		TestBucketName = "TEST_LOCAL_MIRROR_BUCKET"
+		mpath          = "/tmp/mirrortest_mpath/1"
+		mpath2         = "/tmp/mirrortest_mpath/2"
+		testObjectName = "mirrortestobj.ext"
+		testObjectSize = 1234
 	)
 
 	_ = cmn.CreateDir(mpath)
@@ -41,9 +40,10 @@ var _ = Describe("Mirror", func() {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
-		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestLocalBucketName))
-		testDir    = filepath.Join(mpath, fs.ObjectType, cmn.LocalBs, TestLocalBucketName)
-		testFQN    = filepath.Join(testDir, testObjectName)
+		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
+		mi         = fs.MountpathInfo{Path: mpath}
+		testDir    = mi.MakePathBucket(fs.ObjectType, TestBucketName, true)
+		testFQN    = mi.MakePathBucketObject(fs.ObjectType, TestBucketName, testObjectName, true)
 		copyBuf    = make([]byte, testObjectSize)
 		mpathInfo2 *fs.MountpathInfo
 	)
@@ -65,7 +65,9 @@ var _ = Describe("Mirror", func() {
 
 	Describe("copyTo", func() {
 		It("should copy corectly file and set Xattributes", func() {
-			expectedCopyFQN := filepath.Join(mpath2, fs.ObjectType, cmn.LocalBs, TestLocalBucketName, testObjectName)
+			mi2 := fs.MountpathInfo{Path: mpath2}
+			expectedCopyFQN := mi2.MakePathBucketObject(fs.ObjectType, TestBucketName, testObjectName, true)
+
 			createTestFile(testDir, testObjectName, testObjectSize)
 			lom := newBasicLom(testFQN, tMock)
 			lom.SetSize(testObjectSize)

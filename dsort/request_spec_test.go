@@ -38,8 +38,8 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("test"))
-			Expect(parsed.BckProvider).To(Equal(cmn.LocalBs))
-			Expect(parsed.OutputBckProvider).To(Equal(cmn.LocalBs))
+			Expect(parsed.BckProvider).To(Equal(cmn.AIS))
+			Expect(parsed.OutputBckProvider).To(Equal(cmn.AIS))
 			Expect(parsed.Extension).To(Equal(ExtTar))
 
 			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
@@ -73,9 +73,9 @@ var _ = Describe("RequestSpec", func() {
 		It("should set buckets correctly", func() {
 			rs := RequestSpec{
 				Bucket:            "test",
-				BckProvider:       cmn.CloudBs,
+				BckProvider:       cmn.Cloud,
 				OutputBucket:      "testing",
-				OutputBckProvider: cmn.CloudBs,
+				OutputBckProvider: cmn.Cloud,
 				Extension:         ExtTar,
 				InputFormat:       "prefix-{0010..0111..2}-suffix",
 				OutputFormat:      "prefix-{10..111}-suffix",
@@ -88,8 +88,8 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("testing"))
-			Expect(parsed.BckProvider).To(Equal(cmn.CloudBs))
-			Expect(parsed.OutputBckProvider).To(Equal(cmn.CloudBs))
+			Expect(parsed.BckProvider).To(Equal(cmn.Cloud))
+			Expect(parsed.OutputBckProvider).To(Equal(cmn.Cloud))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {
