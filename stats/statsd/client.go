@@ -163,7 +163,7 @@ func (c Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 	)
 
 	// NOTE: ":" is not allowed since it will be treated as value eg. in case daemonID is in form NUMBER:NUMBER
-	bucket = strings.Replace(bucket, ":", "_", -1)
+	bucket = strings.ReplaceAll(bucket, ":", "_")
 
 	for _, m := range metrics {
 		switch m.Type {

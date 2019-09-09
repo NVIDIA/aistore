@@ -67,7 +67,7 @@ var (
 	duration time.Duration // test duration
 )
 
-func init() {
+func TestMain(t *testing.M) {
 	var (
 		d   string
 		err error
@@ -82,6 +82,8 @@ func init() {
 	sc := transport.Init()
 	sc.Setname("stream-collector")
 	go sc.Run()
+
+	os.Exit(t.Run())
 }
 
 func Example_headers() {

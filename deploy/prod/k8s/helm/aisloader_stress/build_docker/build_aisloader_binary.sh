@@ -25,7 +25,7 @@ function check_go_version {
 
     gover=$(go version)
     echo "Using $gobin $gover" >&2
-    [[ $gover =~ go1.12 ]] || whinge "Go version 1.12.* is required"
+    [[ $gover =~ go1.13 ]] || whinge "Go version 1.13.* is required"
 }
 
 DEST=$(readlink -f $1)     # need an absolute path for subshell below

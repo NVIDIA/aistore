@@ -27,6 +27,7 @@ package memsys_test
 import (
 	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ var (
 	verbose  bool
 )
 
-func init() {
+func TestMain(t *testing.M) {
 	var (
 		d   string
 		err error
@@ -53,6 +54,8 @@ func init() {
 	if duration, err = time.ParseDuration(d); err != nil {
 		cmn.ExitInfof("Invalid duration %q", d)
 	}
+
+	os.Exit(t.Run())
 }
 
 func Test_Sleep(t *testing.T) {

@@ -7,7 +7,7 @@ RUN apt-get clean && apt-get update &&\
 
 RUN pip3 install awscli
 
-ENV GOLANG_VERSION 1.12.7
+ENV GOLANG_VERSION 1.13
 
 ENV GOPATH /go
 ENV GOBIN $GOPATH/bin

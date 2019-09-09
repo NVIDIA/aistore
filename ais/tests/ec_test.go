@@ -657,7 +657,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
 	tassert.CheckFatal(t, os.Remove(mainObjPath))
-	metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
+	metafile := strings.ReplaceAll(mainObjPath, ecDataDir, ecMetaDir)
 	tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 	tassert.CheckFatal(t, os.Remove(metafile))
 	if delSlice {
@@ -678,11 +678,11 @@ func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket,
 		tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
 		tassert.CheckFatal(t, os.Remove(sliceToDel))
 		if doEC {
-			metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
+			metafile := strings.ReplaceAll(sliceToDel, ecSliceDir, ecMetaDir)
 			tutils.Logf("Removing slice meta %s\n", metafile)
 			tassert.CheckFatal(t, os.Remove(metafile))
 		} else {
-			metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
+			metafile := strings.ReplaceAll(sliceToDel, ecDataDir, ecMetaDir)
 			tutils.Logf("Removing replica meta %s\n", metafile)
 			tassert.CheckFatal(t, os.Remove(metafile))
 		}
@@ -1384,7 +1384,7 @@ func TestECXattrs(t *testing.T) {
 
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
 		tassert.CheckFatal(t, os.Remove(mainObjPath))
-		metafile := strings.Replace(mainObjPath, ecDataDir, ecMetaDir, -1)
+		metafile := strings.ReplaceAll(mainObjPath, ecDataDir, ecMetaDir)
 		tutils.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 		tassert.CheckFatal(t, os.Remove(metafile))
 		if delSlice {
@@ -1404,11 +1404,11 @@ func TestECXattrs(t *testing.T) {
 			tutils.Logf("Removing slice/replica: %s\n", sliceToDel)
 			tassert.CheckFatal(t, os.Remove(sliceToDel))
 			if doEC {
-				metafile := strings.Replace(sliceToDel, ecSliceDir, ecMetaDir, -1)
+				metafile := strings.ReplaceAll(sliceToDel, ecSliceDir, ecMetaDir)
 				tutils.Logf("Removing slice meta %s\n", metafile)
 				tassert.CheckFatal(t, os.Remove(metafile))
 			} else {
-				metafile := strings.Replace(sliceToDel, ecDataDir, ecMetaDir, -1)
+				metafile := strings.ReplaceAll(sliceToDel, ecDataDir, ecMetaDir)
 				tutils.Logf("Removing replica meta %s\n", metafile)
 				tassert.CheckFatal(t, os.Remove(metafile))
 			}

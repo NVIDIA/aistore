@@ -42,7 +42,6 @@ linters-settings:
       - hugeParam # produces a lot of false positives (TODO: see if some errors are possible improvements)
       - commentFormatting
       - commentedOutCode
-      - wrapperFunc # suggest using strings.ReplaceAll, which was added in 1.12
       - unnamedResult
   misspell:
     # Correct spellings using locale preferences for US or UK.

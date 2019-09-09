@@ -10,7 +10,7 @@ sudo chmod 777 /etc/profile.d/aispaths.sh
 . /etc/profile.d/aispaths.sh
 rm -rf ~/ais || true
 mkdir -p ~/ais/{bin,pkg,src}
-GOLANG_VERSION="go1.12.7"
+GOLANG_VERSION="go1.13"
 CURRENT_GOLANG_VERSION=$(cat /usr/local/go/VERSION)
 if [[ ${CURRENT_GOLANG_VERSION} != ${GOLANG_VERSION} ]]; then
     echo 'Current go lang version does not match with expected, so updating golang to ' ${GOLANG_VERSION}

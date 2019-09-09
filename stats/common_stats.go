@@ -283,7 +283,7 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 // StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
 //
 func (s *CoreStats) initStatsD(daemonStr, daemonID string) (err error) {
-	suffix := strings.Replace(daemonID, ":", "_", -1)
+	suffix := strings.ReplaceAll(daemonID, ":", "_")
 	statsD, err := statsd.New("localhost", 8125, daemonStr+"."+suffix)
 	s.statsdC = &statsD
 	if err != nil {

@@ -29,7 +29,7 @@ function check_go_version {
 
     ver=$(go version | awk '{print $3}')
     echo "Using $gobin (go version $ver)" >&2
-    [[ $ver = go1.12.7 ]] || [[ $ver =~ go1.13 ]] || whinge "Go version 1.12.7 or 1.13.* is required"
+    [[ $ver =~ go1.13 ]] || whinge "Go version 1.13.* is required"
 }
 
 DEST=$(readlink -f $1)     # need an absolute path for subshell below

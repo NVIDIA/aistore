@@ -33,7 +33,7 @@ const (
 
 var (
 	// reformat object name from XML to JSON API requirements
-	GcsObjJSON = strings.Replace(GcsObjXML, "/", "%2F", -1)
+	GcsObjJSON = strings.ReplaceAll(GcsObjXML, "/", "%2F")
 )
 
 // search for the full path of cached object

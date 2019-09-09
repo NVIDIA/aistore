@@ -1157,7 +1157,7 @@ var (
 )
 
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
-	quantity = strings.Replace(quantity, " ", "", -1)
+	quantity = strings.ReplaceAll(quantity, " ", "")
 	idx := 0
 	number := ""
 	for ; idx < len(quantity) && unicode.IsDigit(rune(quantity[idx])); idx++ {

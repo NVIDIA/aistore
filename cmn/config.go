@@ -908,9 +908,9 @@ func (c *NetConf) Validate(_ *Config) (err error) {
 		}
 	}
 
-	c.IPv4 = strings.Replace(c.IPv4, " ", "", -1)
-	c.IPv4IntraControl = strings.Replace(c.IPv4IntraControl, " ", "", -1)
-	c.IPv4IntraData = strings.Replace(c.IPv4IntraData, " ", "", -1)
+	c.IPv4 = strings.ReplaceAll(c.IPv4, " ", "")
+	c.IPv4IntraControl = strings.ReplaceAll(c.IPv4IntraControl, " ", "")
+	c.IPv4IntraData = strings.ReplaceAll(c.IPv4IntraData, " ", "")
 
 	if overlap, addr := ipv4ListsOverlap(c.IPv4, c.IPv4IntraControl); overlap {
 		return fmt.Errorf("public (%s) and intra-cluster control (%s) IPv4 lists overlap: %s", c.IPv4, c.IPv4IntraControl, addr)

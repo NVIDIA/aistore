@@ -674,7 +674,7 @@ func NewFS(url fmt.Stringer, localDir string) webdav.FileSystem {
 func parseResource(name string) (*File, error) {
 	// Note: path.Clean() removes anything before "..", this is not what webdav thinks.
 	//       replace ".." with "/" before clean
-	n := strings.Replace(name, "..", "/", -1)
+	n := strings.ReplaceAll(name, "..", "/")
 	n = path.Clean(n)
 	if !path.IsAbs(n) {
 		return nil, os.ErrInvalid
