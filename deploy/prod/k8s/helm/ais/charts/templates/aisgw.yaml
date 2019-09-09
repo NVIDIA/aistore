@@ -1,0 +1,28 @@
+---
+#
+# LoadBalancer gateway service to expose AIS proxy service.
+# The selector matches only electable proxies.
+# External clients connect to port 51080 (port) and are forwarded
+# to the same port number 51080 in the container (targetPort).
+# MetalLB will allocate an IP in the range it controls;
+# or we can specify one in that range - we choose the latter
+# approach for initial simplicity.
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{  template "ais.fullname" . }}-gw
+spec:
+  ports:
+  - name: http
+    port: {{ .Values.ingress.gateway.port }}
+    protocol: TCP
+    targetPort: {{ .Values.ingress.gateway.targetPort }}
+  selector:
+    app: {{ template "ais.name" . }}
+    release: {{ .Release.Name }}
+    component: proxy
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerIP: {{ .Values.ingress.gateway.externalIP | quote }}
+

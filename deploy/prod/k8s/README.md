@@ -1,4 +1,7 @@
 ## AIS DEPLOYMENT ON A KUBERNETES CLUSTER
+
+NB: Out-of-date: being updated
+
 <img src="../../../docs/images/ais_prod_k8s_arch.png" width="50%" >
 
 Here you can find the scripts to build a docker image to run AIS, setup the hosts with required configurations and deploy AIS using Helm charts.
@@ -8,7 +11,7 @@ This README documents the steps to build and run AIS.
 ### BUILD AIS DOCKER IMAGE
 
 PREREQUISITES:
-- Expects Golang to be installed (min requirement: go1.11) and added to PATH environment variable.
+- Expects Golang to be installed (min requirement: go1.12) and added to PATH environment variable.
 
 1. Create the AIS executable using the build_ais_binary.sh
 ```

@@ -250,17 +250,14 @@ target:
     - /ais/sdi
     - /ais/sdj
     
+#
+# Ingress to the proxy/gateway service
+#
 ingress:
-  proxy:
-    #
-    # Planning for gateway LoadBalancer service - implemented manually for now
-    #
-    service:
-      name: ais-gw
-      type: LoadBalancer
-      port: 51080
-      targetPort: 51080
-      externalTrafficPolicy: Local
+  gateway:
+    externalIP:
+    port: 51080
+    targetPort: 51080
 
 #
 # Note that out target/proxy/ne_proxy DaemonSets use any resource values from their

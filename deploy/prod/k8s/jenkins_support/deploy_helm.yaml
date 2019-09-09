@@ -11,7 +11,7 @@
  tasks:
   - name: copy the helm charts to the bastion
     synchronize:
-     src: ../helm_charts/{{ chart_name }}/charts/
+     src: ../helm/{{ chart_name }}/charts/
      dest: /tmp/helm_deploy
      recursive: True
   - name: copy the script to bastion
