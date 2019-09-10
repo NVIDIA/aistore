@@ -1661,8 +1661,10 @@ func (p *proxyrunner) ensureCloudBucketExistence(w http.ResponseWriter, r *http.
 	}
 
 	if err := p.createBucket(msg, bucket, cfg, false); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return false
+		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
+			p.invalmsghdlr(w, r, err.Error())
+			return false
+		}
 	}
 
 	return true
