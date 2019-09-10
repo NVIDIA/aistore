@@ -165,7 +165,7 @@ ais bucket props set mybucket --jsonspec '{
       "out_of_space": 90,
       "dont_evict_time": "20m",
       "capacity_upd_time": "1m",
-      "local_buckets": false,
+      "ais_buckets": false,
       "enabled": true
     },
     "mirror": {

@@ -26,13 +26,13 @@
     "retry_sync_time":   "2s"
   },
   "timeout": {
-    "default_timeout":	"10s",
+    "default_timeout":		"10s",
     "default_long_timeout":	"30m",
     "list_timeout":		"2m",
-    "max_keepalive":	"4s",
+    "max_keepalive":		"4s",
     "proxy_ping":		"100ms",
-    "cplane_operation":	"2s",
-    "send_file_time":	"5m",
+    "cplane_operation":		"2s",
+    "send_file_time":		"5m",
     "startup_time":		"1m"
   },
   "proxy": {
@@ -42,13 +42,13 @@
     "discovery_url": "127.0.0.255"
   },
   "lru": {
-    "lowwm":		75,
-    "highwm":		90,
+    "lowwm":			75,
+    "highwm":			90,
     "out_of_space":		95,
-    "dont_evict_time":	"120m",
+    "dont_evict_time":		"120m",
     "capacity_upd_time":	"10m",
-    "local_buckets":	false,
-    "enabled":		true
+    "ais_buckets":		false,
+    "enabled":			true
   },
   "disk":{
     "iostat_time_long":  "2s",

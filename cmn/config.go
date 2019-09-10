@@ -376,7 +376,8 @@ type LRUConf struct {
 	CapacityUpdTime time.Duration `json:"-"`
 
 	// Buckets: Enables or disables LRU for ais buckets
-	Buckets bool `json:"local_buckets"`
+	// -- TODO -- FIXME: combine these two booleans into one enum { evict-all, evict-cloud, evict-none }
+	EvictAISBuckets bool `json:"ais_buckets"`
 
 	// Enabled: LRU will only run when set to true
 	Enabled bool `json:"enabled"`
@@ -1129,8 +1130,8 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.LRU, updateValue(&conf.LRU.DontEvictTimeStr)
 	case "capacity_upd_time", HeaderBucketCapUpdTime:
 		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
-	case "lru_local_buckets", "lru.local_buckets":
-		return &conf.LRU, updateValue(&conf.LRU.Buckets)
+	case "lru_ais_buckets", "lru.ais_buckets":
+		return &conf.LRU, updateValue(&conf.LRU.EvictAISBuckets)
 
 	// CHECKSUM
 	case "checksum", HeaderBucketChecksumType:
@@ -1269,7 +1270,7 @@ var ConfigPropList = map[string]bool{
 	HeaderBucketLRUHighWM:                    false,
 	HeaderBucketDontEvictTime:                false,
 	HeaderBucketCapUpdTime:                   true,
-	"lru.local_buckets":                      false,
+	"lru.ais_buckets":                        false,
 	HeaderBucketChecksumType:                 false,
 	HeaderBucketValidateColdGet:              false,
 	HeaderBucketValidateWarmGet:              false,

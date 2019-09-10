@@ -59,7 +59,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}
 ```
 ### LRU for ais buckets
 
-By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for ais buckets, set `lru.local_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in ais buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
+By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for ais buckets, set `lru.ais_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in ais buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
 
 ## Erasure coding
 

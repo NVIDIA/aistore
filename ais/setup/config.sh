@@ -48,7 +48,7 @@ cat > $CONFFILE <<EOL
 		"out_of_space":		95,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
-		"local_buckets":	false,
+		"ais_buckets":		false,
 		"enabled":		true
 	},
 	"disk":{

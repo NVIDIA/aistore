@@ -396,11 +396,11 @@ type ObjectProps struct {
 	BckIsAIS  bool
 }
 
-func DefaultBucketProps(local bool) *BucketProps {
+func DefaultBucketProps(isais bool) *BucketProps {
 	c := GCO.Clone()
 	c.Cksum.Type = PropInherit
-	if local {
-		if !c.LRU.Buckets {
+	if isais {
+		if !c.LRU.EvictAISBuckets {
 			c.LRU.Enabled = false
 		}
 	} else {

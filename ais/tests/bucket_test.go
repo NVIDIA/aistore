@@ -51,9 +51,9 @@ func TestDefaultBucketProps(t *testing.T) {
 	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
 	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestBucketName)
 	tassert.CheckFatal(t, err)
-	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.Buckets {
-		t.Errorf("LRU should be disabled for ais buckets (bucket.Enabled: %v, global.LRU.Buckets: %v)",
-			p.LRU.Enabled, globalConfig.LRU.Buckets)
+	if p.LRU.Enabled || p.LRU.Enabled != globalConfig.LRU.EvictAISBuckets {
+		t.Errorf("LRU should be disabled for ais buckets (bucket.Enabled: %v, global.LRU.EvictAISBuckets: %v)",
+			p.LRU.Enabled, globalConfig.LRU.EvictAISBuckets)
 	}
 	if !p.EC.Enabled {
 		t.Errorf("EC should be enabled for ais buckets")
@@ -95,7 +95,7 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.LRU = testBucketProps(t).LRU
 	globalProps.EC.ParitySlices = 1
 	// For ais bucket, there is an additional config option that affects LRU.Enabled
-	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.Buckets
+	globalProps.LRU.Enabled = globalProps.LRU.Enabled && globalProps.LRU.EvictAISBuckets
 
 	bParams := tutils.DefaultBaseAPIParams(t)
 	err := api.SetBucketPropsMsg(bParams, TestBucketName, bucketProps)

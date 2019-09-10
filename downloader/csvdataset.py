@@ -10,8 +10,8 @@ if not bucket_name:
     sys.exit()
 
 bucket_api = ais_client.BucketApi()
-local_buckets = bucket_api.list_names().local
-if bucket_name not in local_buckets:
+ais_buckets = bucket_api.list_names().ais
+if bucket_name not in ais_buckets:
     print('Bucket "%s" does not exists, creating...' % bucket_name)
     input_params = ais_client.InputParameters(ais_client.Actions.CREATELB)
     bucket_api.perform_operation(bucket_name, input_params)
