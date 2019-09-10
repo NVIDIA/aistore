@@ -40,6 +40,7 @@ type ioContext struct {
 	smap                *cluster.Smap
 	semaphore           chan struct{}
 	controlCh           chan struct{}
+	stopCh              chan struct{}
 	repFilenameCh       chan repFile
 	wg                  *sync.WaitGroup
 	bucket              string
@@ -79,6 +80,7 @@ func (m *ioContext) init() {
 	if m.bucket == "" {
 		m.bucket = m.t.Name() + "Bucket"
 	}
+	m.stopCh = make(chan struct{})
 }
 
 func (m *ioContext) assertClusterState() {
@@ -179,6 +181,7 @@ func (m *ioContext) gets() {
 				return
 			}
 			g := m.getsCompleted.Inc()
+
 			if g%5000 == 0 {
 				tutils.Logf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
 			}
@@ -191,6 +194,54 @@ func (m *ioContext) gets() {
 			}
 		}()
 	}
+}
+
+func (m *ioContext) getsUntilStop() {
+	for i := 0; i < 10; i++ {
+		m.semaphore <- struct{}{}
+	}
+	baseParams := tutils.DefaultBaseAPIParams(m.t)
+	i := 0
+	for {
+		select {
+		case <-m.stopCh:
+			return
+		default:
+			m.wg.Add(1)
+			go func() {
+				<-m.semaphore
+				defer func() {
+					m.semaphore <- struct{}{}
+					m.wg.Done()
+				}()
+				repFile := <-m.repFilenameCh
+				m.repFilenameCh <- repFile
+				_, err := api.GetObject(baseParams, m.bucket, path.Join(SmokeStr, repFile.filename))
+				if err != nil {
+					if m.getErrIsFatal {
+						m.t.Error(err)
+					}
+					m.numGetErrs.Inc()
+				}
+				if m.getErrIsFatal && m.numGetErrs.Load() > 0 {
+					return
+				}
+				g := m.getsCompleted.Inc()
+				if g%5000 == 0 {
+					tutils.Logf(" %d GET requests completed...\n", g)
+				}
+			}()
+
+			i++
+			if i%5000 == 0 {
+				time.Sleep(500 * time.Millisecond) // prevents generating too many GET requests
+			}
+		}
+	}
+}
+
+func (m *ioContext) stopGets() {
+	m.stopCh <- struct{}{}
 }
 
 func (m *ioContext) ensureNoErrors() {

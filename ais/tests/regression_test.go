@@ -589,114 +589,101 @@ func TestObjectsVersions(t *testing.T) {
 	propsMainTest(t, true /*versioning enabled*/)
 }
 
-func TestRebalance(t *testing.T) {
+func TestReregisterMultipleTargets(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
 
-	const filesize = 128 * cmn.KiB
 	var (
-		randomTarget *cluster.Snode
-		numPuts      = 40
-		filesPutCh   = make(chan string, numPuts)
-		errCh        = make(chan error, 100)
-		wg           = &sync.WaitGroup{}
-		sgl          *memsys.SGL
-		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
-		baseParams   = tutils.BaseAPIParams(proxyURL)
+		filesSentOrig = make(map[string]int64)
+		filesRecvOrig = make(map[string]int64)
+		bytesSentOrig = make(map[string]int64)
+		bytesRecvOrig = make(map[string]int64)
+		filesSent     int64
+		filesRecv     int64
+		bytesSent     int64
+		bytesRecv     int64
 	)
-	filesSentOrig := make(map[string]int64)
-	bytesSentOrig := make(map[string]int64)
-	filesRecvOrig := make(map[string]int64)
-	bytesRecvOrig := make(map[string]int64)
-	stats := getClusterStats(t, proxyURL)
-	for k, v := range stats.Target { // FIXME: stats names => API package
-		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
-			getNamedTargetStats(v, "tx.size"), getNamedTargetStats(v, "tx.n"),
-			getNamedTargetStats(v, "rx.size"), getNamedTargetStats(v, "rx.n")
+
+	m := ioContext{
+		t:   t,
+		num: 10000,
+	}
+	m.saveClusterState()
+
+	if m.originalTargetCount < 2 {
+		t.Fatalf("Must have at least 2 targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targetsToUnregister := m.originalTargetCount - 1
+
+	// Step 0: Collect rebalance stats
+	clusterStats := getClusterStats(t, m.proxyURL)
+	for targetID, targetStats := range clusterStats.Target {
+		filesSentOrig[targetID] = getNamedTargetStats(targetStats, stats.TxRebCount)
+		filesRecvOrig[targetID] = getNamedTargetStats(targetStats, stats.RxRebCount)
+		bytesSentOrig[targetID] = getNamedTargetStats(targetStats, stats.TxRebSize)
+		bytesRecvOrig[targetID] = getNamedTargetStats(targetStats, stats.RxRebSize)
 	}
 
-	//
-	// step 1. config
-	//
-	if created := createBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer tutils.DestroyBucket(t, proxyURL, clibucket)
+	// Step 1: Unregister multiple targets
+	targets := tutils.ExtractTargetNodes(m.smap)
+	for i := 0; i < targetsToUnregister; i++ {
+		tutils.Logf("Unregistering target %s\n", targets[i].DaemonID)
+		err := tutils.UnregisterNode(m.proxyURL, targets[i].DaemonID)
+		tassert.CheckFatal(t, err)
 	}
 
-	//
-	// cluster-wide reduce startup_delay_time
-	//
-	waitProgressBar("Rebalance: ", time.Second*10)
-
-	//
-	// step 2. unregister random target
-	//
-	smap := getClusterMap(t, proxyURL)
-	l := smap.CountTargets()
-	if l < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
+	n := getClusterMap(t, m.proxyURL).CountTargets()
+	if n != m.originalTargetCount-targetsToUnregister {
+		t.Fatalf("%d target(s) expected after unregister, actually %d target(s)", m.originalTargetCount-targetsToUnregister, n)
 	}
-	randomTarget = tutils.ExtractTargetNodes(smap)[0]
+	tutils.Logf("The cluster now has %d target(s)\n", n)
 
-	err := tutils.UnregisterNode(proxyURL, randomTarget.DaemonID)
-	tassert.CheckFatal(t, err)
-	tutils.Logf("Unregistered %s: cluster size = %d (targets)\n", randomTarget.DaemonID, l-1)
-	//
-	// step 3. put random files => (cluster - 1)
-	//
-	sgl = tutils.Mem2.NewSGL(filesize)
-	defer sgl.Free()
-	tutils.PutRandObjs(proxyURL, clibucket, SmokeDir, readerType, SmokeStr, filesize, numPuts, errCh, filesPutCh, sgl)
-	selectErr(errCh, "put", t, false)
+	// Step 2: PUT objects into a newly created bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	m.puts()
 
-	//
-	// step 4. register back
-	//
-	err = tutils.RegisterNode(proxyURL, randomTarget, smap)
-	tassert.CheckFatal(t, err)
-	for i := 0; i < 25; i++ {
-		time.Sleep(time.Second)
-		smap = getClusterMap(t, proxyURL)
-		if smap.CountTargets() == l {
-			break
-		}
-	}
-	if smap.CountTargets() != l {
-		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", randomTarget.DaemonID, l)
-		return
-	}
-	tutils.Logf("Registered %s: the cluster is now back to %d targets\n", randomTarget.DaemonID, l)
-	//
-	// step 5. wait for rebalance to run its course
-	//
-	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
-	//
-	// step 6. statistics
-	//
-	stats = getClusterStats(t, proxyURL)
-	var bsent, fsent, brecv, frecv int64
-	for k, v := range stats.Target { // FIXME: stats names => API package
-		bsent += getNamedTargetStats(v, "tx.size") - bytesSentOrig[k]
-		fsent += getNamedTargetStats(v, "tx.n") - filesSentOrig[k]
-		brecv += getNamedTargetStats(v, "rx.size") - bytesRecvOrig[k]
-		frecv += getNamedTargetStats(v, "rx.n") - filesRecvOrig[k]
-	}
+	// Step 3: Start performing GET requests
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.getsUntilStop()
+	}()
 
-	//
-	// step 7. cleanup
-	//
-	close(filesPutCh) // to exit for-range
-	for fname := range filesPutCh {
+	// Step 4: Simultaneously reregister each
+	wg := &sync.WaitGroup{}
+	for i := 0; i < targetsToUnregister; i++ {
 		wg.Add(1)
-		go tutils.Del(proxyURL, clibucket, "smoke/"+fname, "", wg, errCh, !testing.Verbose())
+		go func(r int) {
+			defer wg.Done()
+			m.reregisterTarget(targets[r])
+		}(i)
+		time.Sleep(5 * time.Second) // wait some time before reregistering next target
 	}
 	wg.Wait()
-	selectErr(errCh, "delete", t, abortonerr)
-	close(errCh)
-	if !t.Failed() && testing.Verbose() {
-		tutils.Logf("Rebalance: sent     %.2f MB in %d files\n", float64(bsent)/1000/1000, fsent)
-		tutils.Logf("           received %.2f MB in %d files\n", float64(brecv)/1000/1000, frecv)
+	tutils.Logf("Stopping GETS...\n")
+	m.stopGets()
+
+	m.wg.Wait()
+
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	clusterStats = getClusterStats(t, m.proxyURL)
+	for targetID, targetStats := range clusterStats.Target {
+		filesSent += getNamedTargetStats(targetStats, stats.TxRebCount) - filesSentOrig[targetID]
+		filesRecv += getNamedTargetStats(targetStats, stats.RxRebCount) - filesRecvOrig[targetID]
+		bytesSent += getNamedTargetStats(targetStats, stats.TxRebSize) - bytesSentOrig[targetID]
+		bytesRecv += getNamedTargetStats(targetStats, stats.RxRebSize) - bytesRecvOrig[targetID]
 	}
+
+	// Step 5: Log rebalance stats
+	tutils.Logf("Rebalance sent     %s in %d files\n", cmn.B2S(bytesSent, 2), filesSent)
+	tutils.Logf("Rebalance received %s in %d files\n", cmn.B2S(bytesRecv, 2), filesRecv)
+
+	m.ensureNoErrors()
+	m.assertClusterState()
 }
 
 func TestGetClusterStats(t *testing.T) {
@@ -805,8 +792,9 @@ func TestLRU(t *testing.T) {
 		usedpct  = int32(100)
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
+
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skipf("%s test requires a cloud bucket", t.Name())
+		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
 	getRandomFiles(proxyURL, 20, clibucket, "", t, errCh)
