@@ -43,6 +43,7 @@ var (
 			Timeout: 60 * time.Second,
 		}).DialContext,
 	}
+
 	httpClient = &http.Client{
 		Timeout:   300 * time.Second,
 		Transport: transport,
@@ -486,6 +487,14 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
+func providerFromArgsOrEnv(c *cli.Context) (string, error) {
+	provider := c.Args().First()
+	if provider == "" {
+		provider, _ = os.LookupEnv(aisBucketProviderEnvVar)
+	}
+	return cmn.ProviderFromStr(provider)
+}
+
 func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
 	bucket := c.Args().First()
 	if bucket == "" {
@@ -519,8 +528,8 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 	if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
 		return nil, missingArgumentsError(c, "bucket name")
 	}
-	return []string{bucket}, nil
 
+	return []string{bucket}, nil
 }
 
 func cliAPIParams(proxyURL string) *api.BaseParams {

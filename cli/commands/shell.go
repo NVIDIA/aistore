@@ -79,6 +79,23 @@ func listFlags(c *cli.Context, flagsToSkip ...string) {
 	}
 }
 
+// The function lists available providers if the first argument of the command was not yet specified.
+// Additionally, it will list available flags if the provider argument is optional and wasn't specified,
+// or it will list them anyway in case it was.
+func providerList(optional bool) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		if c.NArg() < 1 {
+			fmt.Printf("%s\n", cmn.ProviderAIS)
+			fmt.Printf("%s\n", cmn.ProviderAmazon)
+			fmt.Printf("%s\n", cmn.ProviderGoogle)
+			if !optional {
+				return
+			}
+		}
+		flagList(c)
+	}
+}
+
 // The function will list bucket names if the first argument to the command was not yet specified, otherwise it will
 // list flags and everything that `additionalCompletions` list.
 // By default it tries to read `provider` from flag `--provider` or AIS_BUCKET_PROVIDER env variable. If none

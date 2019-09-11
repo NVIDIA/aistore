@@ -23,6 +23,9 @@ const (
 	commandObject   = "object"
 	commandXaction  = "xaction"
 	commandNode     = "node"
+
+	// VERBs
+	commandList = "ls"
 )
 
 // Subcommand names
@@ -97,6 +100,13 @@ const (
 	xactStart = cmn.ActXactStart
 	xactStop  = cmn.ActXactStop
 	xactStats = cmn.ActXactStats
+
+	// List
+	listBuckets   = "buckets"
+	listBckProps  = "props"
+	listObjects   = "objects"
+	listDownloads = "downloads"
+	listDsort     = cmn.DSortNameLowercase
 )
 
 // Flag related constants
@@ -192,6 +202,9 @@ const (
 	bucketRenameArgumentText = bucketArgumentText + " NEW_NAME"
 	bucketPropsArgumentText  = bucketArgumentText + " " + keyValuePairArgumentsText
 
+	// Provider
+	providerOptionalArgumentText = "[BUCKET_PROVIDER]"
+
 	// Config
 	daemonIDArgumentText  = "[DAEMON_ID]"
 	configSetArgumentText = daemonIDArgumentText + " " + keyValuePairArgumentsText
@@ -212,6 +225,7 @@ const (
 )
 
 // Command help templates
+// TODO: review constant names (#2 & #3 should maybe be switched)
 const (
 	AISHelpTemplate = `DESCRIPTION:
    {{ .Name }}{{ if .Usage }} - {{ .Usage }}{{end}}
@@ -234,7 +248,7 @@ GLOBAL OPTIONS:
    {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [OPTIONS...]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Description}}
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{if .VisibleFlags}} [OPTIONS...]{{end}}{{end}}{{if .Description}}
 
 DESCRIPTION:
    {{.Description}}{{end}}{{if .VisibleFlags}}

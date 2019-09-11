@@ -35,6 +35,7 @@ var (
 	baseBucketFlags = []cli.Flag{
 		bckProviderFlag,
 	}
+
 	listObjectFlags = []cli.Flag{
 		regexFlag,
 		templateFlag,
@@ -349,6 +350,16 @@ func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 		return
 	}
 	_, _ = fmt.Fprintf(c.App.Writer, "%s bucket evicted\n", bucket)
+	return
+}
+
+// TODO: future replacement for listBucketNames
+func listBucketNamesForProvider(c *cli.Context, baseParams *api.BaseParams, provider string) (err error) {
+	bucketNames, err := api.GetBucketNames(baseParams, provider)
+	if err != nil {
+		return
+	}
+	printBucketNames(c, bucketNames, parseStrFlag(c, regexFlag), provider, !flagIsSet(c, noHeaderFlag))
 	return
 }
 
