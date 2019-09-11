@@ -178,19 +178,11 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		// Check if the request is valid (e.g, a request may come after
 		// the bucket is destroyed.
-		bckIsAIS := r.t.GetBowner().Get().IsAIS(bucket)
-		if !bckIsAIS {
-			// TODO: now EC supports only ais buckets, so check if an ais bucket exists
-			// NOTE: must read and discard otherwise next reads from the stream would fail
-			drain()
-			glog.Warningf("Received an EC slice/replica for non-existing bucket: %s/%s", bucket, objName)
-			return
-		}
-
 		var (
-			objFQN string
-			lom    *cluster.LOM
-			err    error
+			objFQN   string
+			lom      *cluster.LOM
+			err      error
+			bckIsAIS = r.t.GetBowner().Get().IsAIS(bucket)
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {

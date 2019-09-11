@@ -808,9 +808,6 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 	if !c.Enabled {
 		return nil
 	}
-	if !args.BckIsAIS {
-		return fmt.Errorf("erasure coding does not support cloud buckets")
-	}
 	if err := c.Validate(nil); err != nil {
 		return err
 	}

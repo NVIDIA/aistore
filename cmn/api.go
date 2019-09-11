@@ -310,8 +310,8 @@ func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
 	}
-	return fmt.Sprintf("Watermarks: %d/%d, do not evict time: %s",
-		c.LowWM, c.HighWM, c.DontEvictTimeStr)
+	return fmt.Sprintf("Watermarks: %d/%d, do not evict time: %s, OOS: %v",
+		c.LowWM, c.HighWM, c.DontEvictTimeStr, c.OOS)
 }
 
 func (c *BucketProps) AccessToStr() string {

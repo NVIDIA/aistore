@@ -98,6 +98,11 @@ func (m *bucketMD) ecUsed() bool {
 			return true
 		}
 	}
+	for _, bck := range m.CBmap {
+		if bck.EC.Enabled {
+			return true
+		}
+	}
 
 	return false
 }

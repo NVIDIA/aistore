@@ -74,7 +74,7 @@ A bucket inherits EC settings from global configuration. But it can be overridde
 * `ec.enabled`: bool - enables or disabled data protection the bucket
 * `ec.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
 * `ec.parity_slices`: integer in the range [2, 32], representing the number of redundant fragments to provide protection from failures. The value defines the maximum number of storage targets a cluster can lose but it is still able to restore the original object
-* `ec.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated. The field can be 0 - in this case the default value is used (as of version 1.3 it is 256KiB)
+* `ec.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated.
 * `ec.compression`: string that contains rules for LZ4 compression used by EC when it sends its fragments and replicas over network. Value "never" disables compression. Other values enable compression: it can be "always" - use compression for all transfers, or list of compression options, like "ratio=1.5" that means "disable compression automatically when compression ratio drops below 1.5"
 
 Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting `objsize_limit` to a very high value), the number of storage targets must exceed the number of parity slices.
@@ -94,6 +94,30 @@ To change only one EC property(e.g, enable or disable EC for a bucket) without t
 
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "name": "ec.enabled", "value": false}' 'http://G/v1/buckets/<bucket-name>'
+```
+
+or using AIS CLI utility:
+
+enable EC for a bucket with custom number of data and parity slices. It should be done using 2 commands: the first one changes the numbers while EC is disabled, and the second one enables EC with new slice count:
+
+```shell
+$ ais bucket props set mybucket ec.data_slices=3 ec.parity_slices=3
+$ ais bucket props set mybucket ec.enabled=true
+```
+
+check that EC properties are applied:
+
+```shell
+$ ais bucket props ls mybucket
+Property        Value
+Provider        ais
+Access          GET,PUT,DELETE,HEAD,ColdGET
+Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Mirror          Disabled
+EC              3:3 (256KiB)
+LRU             Disabled
+Versioning      Disabled
+Tiering         Disabled
 ```
 
 ### Limitations

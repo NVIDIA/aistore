@@ -69,11 +69,8 @@ func newECM(t *targetrunner) *ecManager {
 
 	t.smapowner.listeners.Reg(ECM)
 
-	for _, bck := range ECM.bckMD.LBmap {
-		if bck.EC.Enabled {
-			ECM.initECBundles()
-			break
-		}
+	if ECM.bckMD.ecUsed() {
+		ECM.initECBundles()
 	}
 
 	var err error
