@@ -731,8 +731,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !bckIsAIS {
 		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
-			errMsg := fmt.Sprintf("bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
-			t.invalmsghdlr(w, r, errMsg, errCode)
+			if errCode == http.StatusNotFound {
+				err = cmn.NewErrorCloudBucketDoesNotExist(bucket)
+			} else {
+				err = fmt.Errorf("%s: bucket %s, err: %v", t.si.Name(), bucket, err)
+			}
+			t.invalmsghdlr(w, r, err.Error(), errCode)
 			return
 		}
 	} else {

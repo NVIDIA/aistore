@@ -293,34 +293,22 @@ func (p *proxyrunner) httpDownloadPost(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *http.Request) (ok bool) {
 	var (
-		bucket   string
-		bmd      *bucketMD
-		bckIsAIS bool
-		query    = r.URL.Query()
-
+		bucket  string
+		query   = r.URL.Query()
 		payload = &cmn.DlBase{}
 	)
-
 	payload.InitWithQuery(query)
 	bucket = payload.Bucket
-
-	if bmd, bckIsAIS = p.validateBucket(w, r, bucket, payload.BckProvider); bmd == nil {
-		return false
-	}
-	if err := bmd.AllowColdGET(bucket, bckIsAIS); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return false
-	}
-	if !bckIsAIS {
-		_, exists := bmd.Get(bucket, false)
-		if !exists {
-			if err := p.handleUnknownCB(bucket); err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return false
-			}
+	bck, bmd, err := cluster.Bck{Name: bucket, Provider: payload.BckProvider}.Init(p.bmdowner)
+	if err != nil {
+		if bck, bmd, err = p.syncCBmeta(w, r, bucket, payload.BckProvider, err); err != nil {
+			return
 		}
 	}
-
+	if err = bmd.AllowColdGET(bucket, bck.IsAIS()); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
 	return true
 }
 
@@ -334,53 +322,4 @@ func (p *proxyrunner) respondWithID(w http.ResponseWriter, id string) {
 	if _, err := w.Write(b); err != nil {
 		glog.Errorf("Failed to write to http response: %v.", err)
 	}
-}
-
-// Handles the case when given `bucket` is a cloud bucket and it is not present in BMD's CBmap.
-// Checks if the bucket exists in cloud and registers it at the primary proxy.
-func (p *proxyrunner) handleUnknownCB(bucket string) error {
-	existsInCloud, err := p.doesCloudBucketExist(bucket)
-	if err != nil {
-		return fmt.Errorf("error checking if bucket exists in cloud: %v", err)
-	}
-
-	if !existsInCloud {
-		return fmt.Errorf("bucket %s does not exist", bucket)
-	}
-
-	// The bucket exists. Add it to CBmap
-
-	smap := p.smapowner.get()
-	actionMsg := cmn.ActionMsg{Action: cmn.ActRegisterCB}
-
-	// This is the primary proxy, update the CBmap
-	if smap.isPrimary(p.si) {
-		config := cmn.GCO.Get()
-		err := p.createBucket(&actionMsg, bucket, config, false)
-		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
-			return err
-		}
-		return nil
-	}
-
-	// This is not the primary proxy - call the primary to update the global CBmap
-
-	body := cmn.MustMarshal(actionMsg)
-	args := callArgs{
-		si: smap.ProxySI,
-		req: cmn.ReqArgs{
-			Method: http.MethodPost,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			Body:   body,
-		},
-		timeout: defaultTimeout,
-	}
-	res := p.call(args)
-
-	// Status conflict means that the bucket was already registered. This is not an error
-	if res.status == http.StatusConflict {
-		return nil
-	}
-
-	return res.err
 }

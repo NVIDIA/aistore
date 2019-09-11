@@ -700,8 +700,8 @@ func TestDownloadIntoNonexistentBucket(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected an error of type *cmn.HTTPError, but got: %T.", err)
 	}
-	if httpErr.Status != http.StatusBadRequest {
-		t.Errorf("Expected status: %d, got: %d.", http.StatusBadRequest, httpErr.Status)
+	if httpErr.Status != http.StatusNotFound {
+		t.Errorf("Expected status: %d, got: %d.", http.StatusNotFound, httpErr.Status)
 	}
 }
 
