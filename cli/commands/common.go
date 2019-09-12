@@ -24,8 +24,16 @@ const (
 	commandXaction  = "xaction"
 	commandNode     = "node"
 
+	//
 	// VERBs
-	commandList = "ls"
+	//
+	commandList      = "ls"
+	commandCreate    = "create"
+	commandRename    = "rename"
+	commandSetCopies = "set-copies"
+	commandRemove    = "rm"
+	commandEvict     = "evict"
+	commandCopy      = "cp"
 )
 
 // Subcommand names
@@ -101,12 +109,37 @@ const (
 	xactStop  = cmn.ActXactStop
 	xactStats = cmn.ActXactStats
 
+	//
+	// OBJECT subcommands
+	//
+	subcmdBuckets   = cmn.Buckets
+	subcmdBucket    = "bucket"
+	subcmdObjects   = cmn.Objects
+	subcmdProps     = "props"
+	subcmdDownloads = "downloads"
+	subcmdDsort     = cmn.DSortNameLowercase
+
 	// List
-	listBuckets   = "buckets"
-	listBckProps  = "props"
-	listObjects   = "objects"
-	listDownloads = "downloads"
-	listDsort     = cmn.DSortNameLowercase
+	subcmdListBuckets   = subcmdBuckets
+	subcmdListBckProps  = subcmdProps
+	subcmdListObjects   = subcmdObjects
+	subcmdListDownloads = subcmdDownloads
+	subcmdListDsort     = subcmdDsort
+
+	// Create
+	subcmdCreateBucket = subcmdBucket
+
+	// Rename
+	subcmdRenameBucket = subcmdBucket
+
+	// Remove
+	subcmdRemoveBucket = subcmdBucket
+
+	// Evict
+	subcmdEvictBucket = subcmdBucket
+
+	// Copy
+	subcmdCopyBucket = subcmdBucket
 )
 
 // Flag related constants
@@ -199,7 +232,7 @@ const (
 	// Bucket
 	bucketArgumentText       = "BUCKET_NAME"
 	bucketsArgumentText      = "BUCKET_NAME [BUCKET_NAME...]"
-	bucketRenameArgumentText = bucketArgumentText + " NEW_NAME"
+	bucketOldNewArgumentText = bucketArgumentText + " NEW_NAME"
 	bucketPropsArgumentText  = bucketArgumentText + " " + keyValuePairArgumentsText
 
 	// Provider

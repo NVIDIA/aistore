@@ -17,22 +17,22 @@ import (
 
 var (
 	listCmdsFlags = map[string][]cli.Flag{
-		listBuckets: {
+		subcmdListBuckets: {
 			regexFlag,
 			noHeaderFlag,
 		},
-		listBckProps: append(
+		subcmdListBckProps: append(
 			baseBucketFlags,
 			jsonFlag,
 		),
-		listObjects: append(
+		subcmdListObjects: append(
 			listObjectFlags,
 			bckProviderFlag,
 		),
-		listDownloads: {
+		subcmdListDownloads: {
 			regexFlag,
 		},
-		listDsort: {
+		subcmdListDsort: {
 			regexFlag,
 		},
 	}
@@ -43,42 +43,42 @@ var (
 			Usage: "lists information about entities in the cluster",
 			Subcommands: []cli.Command{
 				{
-					Name:         listBuckets,
+					Name:         subcmdListBuckets,
 					Usage:        "lists bucket names",
 					ArgsUsage:    providerOptionalArgumentText,
-					Flags:        listCmdsFlags[listBuckets],
+					Flags:        listCmdsFlags[subcmdListBuckets],
 					Action:       listBucketsHandler,
 					BashComplete: providerList(true /* optional */),
 				},
 				{
-					Name:         listBckProps,
+					Name:         subcmdListBckProps,
 					Usage:        "lists bucket properties",
 					ArgsUsage:    bucketArgumentText,
-					Flags:        listCmdsFlags[listBckProps],
+					Flags:        listCmdsFlags[subcmdListBckProps],
 					Action:       listBckPropsHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */),
 				},
 				{
-					Name:         listObjects,
+					Name:         subcmdListObjects,
 					Usage:        "lists bucket objects",
 					ArgsUsage:    bucketArgumentText,
-					Flags:        listCmdsFlags[listObjects],
+					Flags:        listCmdsFlags[subcmdListObjects],
 					Action:       listObjectsHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */),
 				},
 				{
-					Name:         listDownloads,
+					Name:         subcmdListDownloads,
 					Usage:        "lists all download jobs",
 					ArgsUsage:    noArgumentsText,
-					Flags:        listCmdsFlags[listDownloads],
+					Flags:        listCmdsFlags[subcmdListDownloads],
 					Action:       listDownloadsHandler,
 					BashComplete: flagList,
 				},
 				{
-					Name:         listDsort,
+					Name:         subcmdListDsort,
 					Usage:        "lists all dSort jobs",
 					ArgsUsage:    noArgumentsText,
-					Flags:        listCmdsFlags[listDsort],
+					Flags:        listCmdsFlags[subcmdListDsort],
 					Action:       listDsortHandler,
 					BashComplete: flagList,
 				},
@@ -101,9 +101,7 @@ func listBucketsHandler(c *cli.Context) (err error) {
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-	)
+	baseParams := cliAPIParams(ClusterURL)
 	return listBucketProps(c, baseParams)
 }
 

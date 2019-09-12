@@ -145,7 +145,7 @@ var (
 				{
 					Name:         subcommandRename,
 					Usage:        "renames the ais bucket",
-					ArgsUsage:    bucketRenameArgumentText,
+					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        bucketFlags[subcommandRename],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
@@ -193,7 +193,7 @@ var (
 				{
 					Name:         bucketCopy,
 					Usage:        "copies the ais bucket",
-					ArgsUsage:    bucketRenameArgumentText,
+					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        bucketFlags[bucketCopy],
 					Action:       bucketHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
