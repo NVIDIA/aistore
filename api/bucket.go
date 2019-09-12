@@ -163,6 +163,11 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
+	if u, err = strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUOOS), 10, 32); err == nil {
+		lruProps.OOS = int64(u)
+	} else {
+		return
+	}
 
 	mirrorProps := cmn.MirrorConf{}
 	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {

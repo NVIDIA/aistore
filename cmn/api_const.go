@@ -118,6 +118,7 @@ const (
 	HeaderBucketLRUEnabled      = "lru.enabled"             // LRU is run on a bucket only if this field is true
 	HeaderBucketLRULowWM        = "lru.lowwm"               // Capacity usage low water mark
 	HeaderBucketLRUHighWM       = "lru.highwm"              // Capacity usage high water mark
+	HeaderBucketLRUOOS          = "lru.out_of_space"        // Out-of-Space: if exceeded, the target starts failing new PUTs
 	HeaderBucketDontEvictTime   = "lru.dont_evict_time"     // eviction-free time period [atime, atime+dontevicttime]
 	HeaderBucketCapUpdTime      = "lru.capacity_upd_time"   // Minimum time to update the capacity
 	HeaderBucketMirrorEnabled   = "mirror.enabled"          // will only generate local copies when set to true

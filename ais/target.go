@@ -782,6 +782,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	hdr.Set(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Set(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
+	hdr.Set(cmn.HeaderBucketLRUOOS, strconv.FormatInt(props.LRU.OOS, 10))
 	hdr.Set(cmn.HeaderBucketDontEvictTime, props.LRU.DontEvictTimeStr)
 	hdr.Set(cmn.HeaderBucketCapUpdTime, props.LRU.CapacityUpdTimeStr)
 	hdr.Set(cmn.HeaderBucketMirrorEnabled, strconv.FormatBool(props.Mirror.Enabled))
