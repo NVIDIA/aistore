@@ -772,16 +772,6 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	return
 }
 
-func (h *httprunner) validateBucket(w http.ResponseWriter, r *http.Request, bucket, bckProvider string) (bmd *bucketMD, local bool) {
-	var err error
-	bmd = h.bmdowner.get()
-	if local, err = bmd.ValidateBucket(bucket, bckProvider); err != nil {
-		h.invalmsghdlr(w, r, err.Error())
-		return nil, false
-	}
-	return
-}
-
 func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err error) {
 	switch v := value.(type) {
 	case string:

@@ -212,7 +212,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	default:
-		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
 	}
 }

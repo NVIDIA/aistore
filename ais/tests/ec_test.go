@@ -121,7 +121,7 @@ func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
 func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map[string]ecSliceMD, string) {
 	tMock := cluster.NewTargetMock(cluster.NewBaseBownerMock(bucketName))
 	foundParts := make(map[string]ecSliceMD)
-	oldest := time.Now()
+	oldest := time.Now().Add(time.Hour)
 	main := ""
 	noObjCnt := 0
 	bckTypeDir := ecLocalDir

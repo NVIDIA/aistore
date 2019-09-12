@@ -507,7 +507,6 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets/bucket-name
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket  string
 		msgInt  = &actionMsgInternal{}
 		started = time.Now()
 	)
@@ -515,22 +514,23 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	bucket = apitems[0]
+	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
+	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
+	if err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
-	if err := bmd.AllowDELETE(bucket, bckIsAIS); err != nil {
+	if err := bmd.AllowDELETE(bucket, bck.IsAIS()); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	b, err := ioutil.ReadAll(r.Body)
-
 	if err == nil && len(b) > 0 {
 		err = jsoniter.Unmarshal(b, msgInt)
 	}
-	t.ensureLatestMD(msgInt)
 	if err != nil {
 		s := fmt.Sprintf("Failed to read %s body, err: %v", r.Method, err)
 		if err == io.EOF {
@@ -542,6 +542,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 		return
 	}
+	t.ensureLatestMD(msgInt)
 
 	switch msgInt.Action {
 	case cmn.ActEvictCB:
@@ -554,7 +555,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("DELETE list|range: %s, %d µs",
-					bmd.Bstring(bucket, bckIsAIS), int64(time.Since(started)/time.Microsecond))
+					bmd.Bstring(bucket, bck.IsAIS()), int64(time.Since(started)/time.Microsecond))
 			}
 			return
 		}
@@ -617,7 +618,6 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 // POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var (
-		bmd     *bucketMD
 		msgInt  = &actionMsgInternal{}
 		started = time.Now()
 	)
@@ -633,15 +633,17 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
+	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
+	if err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
-
 	switch msgInt.Action {
-	case cmn.ActPrefetch: // validation done in proxy.go
+	case cmn.ActPrefetch:
 		if err := t.listRangeOperation(r, apitems, bckProvider, msgInt); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch, err: %v", err))
 			return
 		}
 	case cmn.ActCopyLB, cmn.ActRenameLB:
@@ -663,18 +665,17 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		bmd := t.bmdowner.get()
-		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.version())
+		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.Version)
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bucket, bckIsAIS, msgInt); !ok {
+		if ok := t.listbucket(w, r, bucket, bck.IsAIS(), msgInt); !ok {
 			return
 		}
 
 		delta := time.Since(started)
 		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bckIsAIS), int64(delta/time.Microsecond))
+			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bck.IsAIS()), int64(delta/time.Microsecond))
 		}
 	case cmn.ActMakeNCopies:
 		copies, err := t.parseValidateNCopies(msgInt.Value)
@@ -686,9 +687,10 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-		t.xactions.renewBckMakeNCopies(bucket, t, copies, bckIsAIS)
+		t.xactions.renewBckMakeNCopies(bucket, t, copies, bck.IsAIS())
 	default:
-		t.invalmsghdlr(w, r, "Unexpected action "+msgInt.Action)
+		s := fmt.Sprintf(fmtUnknownAct, msgInt)
+		t.invalmsghdlr(w, r, s)
 	}
 }
 
@@ -702,7 +704,8 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActRename:
 		t.renameObject(w, r, msg)
 	default:
-		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
+		t.invalmsghdlr(w, r, s)
 	}
 }
 
@@ -719,16 +722,19 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, bckIsAIS := t.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
+	bck, _, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
+	if err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	config := cmn.GCO.Get()
-	if !bckIsAIS {
+	if !bck.IsAIS() {
 		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
 			if errCode == http.StatusNotFound {
@@ -747,20 +753,13 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for k, v := range bucketProps {
 		hdr.Set(k, v)
 	}
-
 	// include bucket's own config override
-	props, ok := bmd.Get(bucket, bckIsAIS)
-	if props == nil {
-		return
-	}
+	props := bck.Props
 	cksumConf := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
-	if ok && props.Cksum.Type != cmn.PropInherit {
+	if props.Cksum.Type != cmn.PropInherit {
 		cksumConf = &props.Cksum
 	}
-	verConf := &config.Ver
-	if ok {
-		verConf = &props.Versioning
-	}
+	verConf := &props.Versioning
 	// transfer bucket props via http header
 	// (it is ok for Cloud buckets not to have locally cached props)
 	hdr.Set(cmn.HeaderReadPolicy, props.Tiering.ReadPolicy)
@@ -771,15 +770,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	hdr.Set(cmn.HeaderBucketValidateObjMove, strconv.FormatBool(cksumConf.ValidateObjMove))
 	hdr.Set(cmn.HeaderBucketEnableReadRange, strconv.FormatBool(cksumConf.EnableReadRange))
 	hdr.Set(cmn.HeaderBucketVerValidateWarm, strconv.FormatBool(verConf.ValidateWarmGet))
-	// for Cloud buckets correct Versioning.Enabled is combination of
+	// for Cloud buckets, correct Versioning.Enabled is combination of
 	// local and cloud settings and it is true only if versioning
 	// is enabled at both sides: Cloud and for local usage
-	if bckIsAIS || !verConf.Enabled {
+	if bck.IsAIS() || !verConf.Enabled {
 		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(verConf.Enabled))
 	} else if enabled, err := cmn.ParseBool(bucketProps[cmn.HeaderBucketVerEnabled]); !enabled && err == nil {
 		hdr.Set(cmn.HeaderBucketVerEnabled, strconv.FormatBool(false))
 	}
-
 	hdr.Set(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LRU.LowWM, 10))
 	hdr.Set(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.LRU.HighWM, 10))
 	hdr.Set(cmn.HeaderBucketLRUOOS, strconv.FormatInt(props.LRU.OOS, 10))

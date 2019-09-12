@@ -39,6 +39,7 @@ const (
 	tokenStart    = "Bearer"
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
+	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
 )
 
 type (
@@ -555,7 +556,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
-		p.listRangeHandler(w, r, &msg, http.MethodDelete, bckProvider)
+		if err = p.listRange(http.MethodDelete, bucket, &msg, r.URL.Query()); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	default:
 		p.invalmsghdlr(w, r, "unsupported action: "+msg.Action)
 	}
@@ -839,14 +842,16 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtNotCloud, bucket))
 			return
 		}
-		p.listRangeHandler(w, r, &msg, http.MethodPost, bckProvider)
+		if err = p.listRange(http.MethodPost, bucket, &msg, r.URL.Query()); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	case cmn.ActListObjects:
 		started := time.Now()
 		p.listBucketAndCollectStats(w, r, bucket, bckProvider, msg, started, false /* fast listing */)
 	case cmn.ActMakeNCopies:
 		p.makeNCopies(w, r, bucket, &msg, config, bck.IsAIS())
 	default:
-		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
@@ -930,9 +935,10 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	// POST actions (below) require ais buckets
 	bucket := apitems[0]
-	if bmd, _ := p.validateBucket(w, r, bucket, cmn.AIS); bmd == nil {
+	_, _, err = cluster.Bck{Name: bucket, Provider: cmn.AIS /*must be ais*/}.Init(p.bmdowner)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
@@ -943,7 +949,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.objRename(w, r)
 		return
 	default:
-		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
@@ -957,11 +963,12 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bmd, _ := p.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
+	_, _, err = cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
+	if err != nil {
+		if _, _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+			return
+		}
 	}
-
 	si, err := p.smapowner.get().GetRandTarget()
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1282,15 +1289,16 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	bmd, bckIsAIS := p.validateBucket(w, r, bucket, bckProvider)
-	if bmd == nil {
-		return
+	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
+	if err != nil {
+		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+			return
+		}
 	}
-	if err := bmd.AllowHEAD(bucket, bckIsAIS); err != nil {
+	if err := bmd.AllowHEAD(bucket, bck.IsAIS()); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
@@ -2008,26 +2016,6 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
 	p.statsif.Add(stats.RenameCount, 1)
 }
 
-func (p *proxyrunner) listRangeHandler(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg, method, bckProvider string) {
-	var (
-		err   error
-		query = r.URL.Query()
-	)
-
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
-	if err != nil {
-		return
-	}
-	bucket := apitems[0]
-	if bmd, _ := p.validateBucket(w, r, bucket, bckProvider); bmd == nil {
-		return
-	}
-	if err := p.listRange(method, bucket, msg, query); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
-		return
-	}
-}
-
 func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
 	var (
 		timeout time.Duration
@@ -2352,7 +2340,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
@@ -3241,7 +3229,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			cmn.URLPath(cmn.Version, cmn.Daemon),
 			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
 	default:
-		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
