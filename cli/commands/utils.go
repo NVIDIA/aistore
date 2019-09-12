@@ -61,6 +61,8 @@ const (
 
 	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
 	invalidCmdMsg    = "invalid command name '%s'"
+
+	invalidFlagsMsgFmt = "flags %s are invalid when arguments have been provided"
 )
 
 type usageError struct {
@@ -352,9 +354,7 @@ func checkFlags(c *cli.Context, flag []cli.Flag, message ...string) error {
 		}
 	}
 
-	missingFlagCount := len(missingFlags)
-
-	if missingFlagCount >= 1 {
+	if len(missingFlags) >= 1 {
 		return missingFlagsError(c, missingFlags, message...)
 	}
 
@@ -493,6 +493,16 @@ func providerFromArgsOrEnv(c *cli.Context) (string, error) {
 		provider, _ = os.LookupEnv(aisBucketProviderEnvVar)
 	}
 	return cmn.ProviderFromStr(provider)
+}
+
+func splitBucketObject(objname string) (bucket string, object string) {
+	s := strings.Split(objname, "/")
+	if len(s) > 1 {
+		bucket = s[0]
+		object = strings.Join(s[1:], "/")
+		return
+	}
+	return "", s[0]
 }
 
 func bucketFromArgsOrEnv(c *cli.Context) (string, error) {

@@ -106,7 +106,7 @@ var (
 							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[propsList],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
 						},
 						{
 							Name:         propsSet,
@@ -114,7 +114,7 @@ var (
 							ArgsUsage:    bucketPropsArgumentText,
 							Flags:        bucketPropsFlags[propsSet],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{propList}, false /*multiple*/),
+							BashComplete: bucketList([]cli.BashCompleteFunc{propList}, false /*multiple*/, false /*separator*/),
 						},
 						{
 							Name:         propsReset,
@@ -122,7 +122,7 @@ var (
 							ArgsUsage:    bucketArgumentText,
 							Flags:        bucketPropsFlags[propsReset],
 							Action:       bucketPropsHandler,
-							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+							BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
 						},
 					},
 				},
@@ -140,7 +140,7 @@ var (
 					ArgsUsage:    bucketsArgumentText,
 					Flags:        bucketFlags[bucketDestroy],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /*multiple*/, cmn.AIS),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /*multiple*/, false /*separator*/, cmn.AIS),
 				},
 				{
 					Name:         subcommandRename,
@@ -148,7 +148,7 @@ var (
 					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        bucketFlags[subcommandRename],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/, cmn.AIS),
 				},
 				{
 					Name:         propsList,
@@ -164,7 +164,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketObjects],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
 				},
 				{
 					Name:         bucketNWayMirror,
@@ -172,7 +172,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketNWayMirror],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
 				},
 				{
 					Name:         bucketEvict,
@@ -180,7 +180,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketEvict],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.Cloud),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/, cmn.Cloud),
 				},
 				{
 					Name:         bucketSummary,
@@ -188,7 +188,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        bucketFlags[bucketSummary],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/),
 				},
 				{
 					Name:         bucketCopy,
@@ -196,7 +196,7 @@ var (
 					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        bucketFlags[bucketCopy],
 					Action:       bucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, cmn.AIS),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /*separator*/, cmn.AIS),
 				},
 			},
 		},

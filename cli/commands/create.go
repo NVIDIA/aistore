@@ -25,7 +25,7 @@ var (
 					ArgsUsage:    bucketsArgumentText,
 					Flags:        createCmdsFlags[subcmdCreateBucket],
 					Action:       createBucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 			},
 		},

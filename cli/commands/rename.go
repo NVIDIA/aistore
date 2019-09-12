@@ -6,6 +6,11 @@
 package commands
 
 import (
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -13,6 +18,7 @@ import (
 var (
 	renameCmdsFlags = map[string][]cli.Flag{
 		subcmdRenameBucket: {},
+		subcmdRenameObject: {},
 	}
 
 	renameCmds = []cli.Command{
@@ -26,7 +32,15 @@ var (
 					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        renameCmdsFlags[subcmdRenameBucket],
 					Action:       renameBucketHandler,
-					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, cmn.AIS),
+					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, false /* separator */, cmn.AIS),
+				},
+				{
+					Name:         subcmdRenameObject,
+					Usage:        "renames an object of the ais bucket",
+					ArgsUsage:    objectOldNewArgumentText,
+					Flags:        renameCmdsFlags[subcmdRenameObject],
+					Action:       renameObjectHandler,
+					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, true /* separator */, cmn.AIS),
 				},
 			},
 		},
@@ -36,4 +50,35 @@ var (
 func renameBucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
 	return renameBucket(c, baseParams)
+}
+
+func renameObjectHandler(c *cli.Context) (err error) {
+	if c.NArg() != 2 {
+		return incorrectUsageError(c, errors.New("invalid number of arguments"))
+	}
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		oldObjFull = c.Args().Get(0)
+		newObj     = c.Args().Get(1)
+		bucket     string
+		oldObj     string
+	)
+
+	bucket, oldObj = splitBucketObject(oldObjFull)
+	if bucket == "" {
+		bucket, _ = os.LookupEnv(aisBucketEnvVar)
+	}
+	if oldObj == "" {
+		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", oldObjFull))
+	}
+	if bucket == "" {
+		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", oldObj))
+	}
+
+	if err = api.RenameObject(baseParams, bucket, oldObj, newObj); err != nil {
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, "%s renamed to %s\n", oldObj, newObj)
+	return
 }

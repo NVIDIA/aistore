@@ -22,7 +22,7 @@ var (
 			ArgsUsage:    bucketArgumentText,
 			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
 			Action:       setCopiesHandler,
-			BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/),
+			BashComplete: bucketList([]cli.BashCompleteFunc{}, false /*multiple*/, false /* separator */),
 		},
 	}
 )

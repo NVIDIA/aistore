@@ -34,6 +34,7 @@ const (
 	commandRemove    = "rm"
 	commandEvict     = "evict"
 	commandCopy      = "cp"
+	commandPrefetch  = "prefetch"
 )
 
 // Subcommand names
@@ -115,6 +116,7 @@ const (
 	subcmdBuckets   = cmn.Buckets
 	subcmdBucket    = "bucket"
 	subcmdObjects   = cmn.Objects
+	subcmdObject    = "object"
 	subcmdProps     = "props"
 	subcmdDownloads = "downloads"
 	subcmdDsort     = cmn.DSortNameLowercase
@@ -131,12 +133,11 @@ const (
 
 	// Rename
 	subcmdRenameBucket = subcmdBucket
+	subcmdRenameObject = subcmdObject
 
 	// Remove
 	subcmdRemoveBucket = subcmdBucket
-
-	// Evict
-	subcmdEvictBucket = subcmdBucket
+	subcmdRemoveObject = subcmdObject
 
 	// Copy
 	subcmdCopyBucket = subcmdBucket
@@ -234,6 +235,11 @@ const (
 	bucketsArgumentText      = "BUCKET_NAME [BUCKET_NAME...]"
 	bucketOldNewArgumentText = bucketArgumentText + " NEW_NAME"
 	bucketPropsArgumentText  = bucketArgumentText + " " + keyValuePairArgumentsText
+
+	// Object
+	objectsOptionalArgumentText      = "BUCKET_NAME/[OBJECT_NAME]..."
+	objectPrefetchBucketArgumentText = "BUCKET_NAME/"
+	objectOldNewArgumentText         = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"
 
 	// Provider
 	providerOptionalArgumentText = "[BUCKET_PROVIDER]"

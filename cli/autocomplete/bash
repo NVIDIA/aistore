@@ -9,7 +9,20 @@ _cli_bash_autocomplete() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     opts=$( ${COMP_WORDS[@]:0:$COMP_CWORD} --generate-bash-completion )
     COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+
+    # append single space after a suggestion if it doesn't end with a /
+    local i=${#COMPREPLY[*]}
+    while [[ $((--i)) -ge 0 ]]; do
+        case "${COMPREPLY[$i]}" in
+            */ )
+                 ;;
+             * )
+                 COMPREPLY[$i]="${COMPREPLY[$i]} "
+                 ;;
+        esac
+    done
+
     return 0
 }
 
-complete -F _cli_bash_autocomplete $PROG 1>/dev/null 2>&1
+complete -F _cli_bash_autocomplete -o nospace $PROG 1>/dev/null 2>&1

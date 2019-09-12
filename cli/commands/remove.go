@@ -6,6 +6,10 @@
 package commands
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -13,6 +17,10 @@ import (
 var (
 	removeCmdsFlags = map[string][]cli.Flag{
 		subcmdRemoveBucket: {},
+		subcmdRemoveObject: append(
+			baseLstRngFlags,
+			bckProviderFlag,
+		),
 	}
 
 	removeCmds = []cli.Command{
@@ -26,7 +34,15 @@ var (
 					ArgsUsage:    bucketsArgumentText,
 					Flags:        removeCmdsFlags[subcmdRemoveBucket],
 					Action:       removeBucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, cmn.AIS),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, false /* separator */, cmn.AIS),
+				},
+				{
+					Name:         subcmdRemoveObject,
+					Usage:        "removes an object from the bucket",
+					ArgsUsage:    objectsOptionalArgumentText,
+					Flags:        removeCmdsFlags[subcmdRemoveObject],
+					Action:       removeObjectHandler,
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */),
 				},
 			},
 		},
@@ -44,4 +60,50 @@ func removeBucketHandler(c *cli.Context) (err error) {
 	}
 
 	return destroyBuckets(c, baseParams, buckets)
+}
+
+func removeObjectHandler(c *cli.Context) (err error) {
+	var (
+		baseParams  = cliAPIParams(ClusterURL)
+		bucket      string
+		bckProvider string
+	)
+
+	if bckProvider, err = bucketProvider(c); err != nil {
+		return
+	}
+
+	// default bucket or bucket argument given by the user
+	if c.NArg() == 0 || (c.NArg() == 1 && strings.HasSuffix(c.Args().Get(0), "/")) {
+		if c.NArg() == 1 {
+			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
+		}
+		if bucket == "" {
+			bucket, _ = os.LookupEnv(aisBucketEnvVar)
+			if bucket == "" {
+				return missingArgumentsError(c, "bucket or object name")
+			}
+		}
+		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+			// list or range operation on a given bucket
+			return listOrRangeOp(c, baseParams, commandRemove, bucket, bckProvider)
+		}
+
+		err = fmt.Errorf("%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
+		return incorrectUsageError(c, err)
+	}
+
+	if c.NArg() > 0 && (flagIsSet(c, rangeFlag) || flagIsSet(c, listFlag)) {
+		err = fmt.Errorf(invalidFlagsMsgFmt, strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
+		return incorrectUsageError(c, err)
+	}
+
+	// list and range flags are invalid with object argument(s)
+	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
+		err = fmt.Errorf(invalidFlagsMsgFmt, strings.Join([]string{listFlag.Name, rangeFlag.Name}, ","))
+		return incorrectUsageError(c, err)
+	}
+
+	// object argument(s) given by the user; operation on given object(s)
+	return multiObjOp(c, baseParams, commandRemove, bckProvider)
 }

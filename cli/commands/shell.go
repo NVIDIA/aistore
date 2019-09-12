@@ -100,11 +100,8 @@ func providerList(optional bool) cli.BashCompleteFunc {
 // 1) Function argument provider (highest priority)
 // 2) Command line flag --provider
 // 3) Environment variable (lowest priority)
-func bucketProvider(c *cli.Context, provider ...string) string {
-	var (
-		bckProvider string
-		err         error
-	)
+func bucketProvider(c *cli.Context, provider ...string) (string, error) {
+	bckProvider := ""
 	if len(provider) > 0 {
 		bckProvider = provider[0]
 	}
@@ -114,10 +111,7 @@ func bucketProvider(c *cli.Context, provider ...string) string {
 	if bckProvider == "" {
 		bckProvider = os.Getenv(aisBucketProviderEnvVar)
 	}
-	if bckProvider, err = cmn.ProviderFromStr(bckProvider); err != nil {
-		bckProvider = ""
-	}
-	return bckProvider
+	return cmn.ProviderFromStr(bckProvider)
 }
 
 // The function will list bucket names if the first argument to the command was not yet specified, otherwise it will
@@ -125,9 +119,8 @@ func bucketProvider(c *cli.Context, provider ...string) string {
 // By default it tries to read `provider` from flag `--provider` or AIS_BUCKET_PROVIDER env variable. If none
 // is provided it lists all buckets.
 // Optional parameter `provider` can be used to specify which buckets will be listed - only local or only cloud.
-func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, provider ...string) cli.BashCompleteFunc {
+func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, separator bool, provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
-		// Don't list buckets if one is provided via env variable
 		if c.NArg() >= 1 && !multiple {
 			for _, f := range additionalCompletions {
 				f(c)
@@ -136,11 +129,19 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, pro
 			return
 		}
 
-		bckProvider := bucketProvider(c, provider...)
+		bckProvider, err := bucketProvider(c, provider...)
+		if err != nil {
+			return
+		}
 		baseParams := cliAPIParams(ClusterURL)
 		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
 		if err != nil {
 			return
+		}
+
+		sep := ""
+		if separator {
+			sep = "/"
 		}
 
 		printNotUsedBuckets := func(buckets []string) {
@@ -156,7 +157,7 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, pro
 				}
 
 				if !alreadyListed {
-					fmt.Println(bucket)
+					fmt.Printf("%s%s\n", bucket, sep)
 				}
 			}
 		}
@@ -170,10 +171,8 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, pro
 	}
 }
 
-func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, provider ...string) cli.BashCompleteFunc {
+func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, separator bool, provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
-		// in case that both old and new bucket name have already been provided
-		// suggest from additionalCompletions and suggest flags
 		if c.NArg() >= 2 {
 			for _, f := range additionalCompletions {
 				f(c)
@@ -182,23 +181,31 @@ func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, provider 
 			return
 		}
 
-		// second argument is assumed to be a non-existing bucket
 		if c.NArg() == 1 {
 			return
 		}
 
 		// suggest existing buckets
 
-		bckProvider := bucketProvider(c, provider...)
+		bckProvider, err := bucketProvider(c, provider...)
+		if err != nil {
+			return
+		}
+
 		baseParams := cliAPIParams(ClusterURL)
 		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
 		if err != nil {
 			return
 		}
 
+		sep := ""
+		if separator {
+			sep = "/"
+		}
+
 		printNotUsedBuckets := func(buckets []string) {
 			for _, bucket := range buckets {
-				fmt.Println(bucket)
+				fmt.Printf("%s%s\n", bucket, sep)
 			}
 		}
 

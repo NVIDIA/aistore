@@ -149,10 +149,10 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, listCmds...)
 	app.Commands = append(app.Commands, createCmds...)
 	app.Commands = append(app.Commands, renameCmds...)
-	app.Commands = append(app.Commands, bucketSpecificCmds...)
 	app.Commands = append(app.Commands, removeCmds...)
-	app.Commands = append(app.Commands, evictCmds...)
 	app.Commands = append(app.Commands, copyCmds...)
+	app.Commands = append(app.Commands, bucketSpecificCmds...)
+	app.Commands = append(app.Commands, objectSpecificCmds...)
 
 	sort.Sort(cli.CommandsByName(app.Commands))
 

@@ -26,7 +26,7 @@ var (
 					ArgsUsage:    bucketOldNewArgumentText,
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,
-					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, cmn.AIS),
+					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, false /* separator */, cmn.AIS),
 				},
 			},
 		},

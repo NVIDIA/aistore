@@ -507,10 +507,10 @@ func objectDelete(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvide
 		return
 	} else if flagIsSet(c, listFlag) {
 		// List Delete
-		return listOp(c, baseParams, objDel, bucket, bckProvider)
+		return listOp(c, baseParams, commandRemove, bucket, bckProvider)
 	} else if flagIsSet(c, rangeFlag) {
 		// Range Delete
-		return rangeOp(c, baseParams, objDel, bucket, bckProvider)
+		return rangeOp(c, baseParams, commandRemove, bucket, bckProvider)
 	}
 
 	return errors.New(c.Command.UsageText)
@@ -573,10 +573,10 @@ func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider 
 func objectPrefetch(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) (err error) {
 	if flagIsSet(c, listFlag) {
 		// List prefetch
-		return listOp(c, baseParams, objPrefetch, bucket, bckProvider)
+		return listOp(c, baseParams, commandPrefetch, bucket, bckProvider)
 	} else if flagIsSet(c, rangeFlag) {
 		// Range prefetch
-		return rangeOp(c, baseParams, objPrefetch, bucket, bckProvider)
+		return rangeOp(c, baseParams, commandPrefetch, bucket, bckProvider)
 	}
 
 	return errors.New(c.Command.UsageText)
@@ -594,10 +594,10 @@ func objectEvict(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider
 		return
 	} else if flagIsSet(c, listFlag) {
 		// List evict
-		return listOp(c, baseParams, objEvict, bucket, bckProvider)
+		return listOp(c, baseParams, commandEvict, bucket, bckProvider)
 	} else if flagIsSet(c, rangeFlag) {
 		// Range evict
-		return rangeOp(c, baseParams, objEvict, bucket, bckProvider)
+		return rangeOp(c, baseParams, commandEvict, bucket, bckProvider)
 	}
 
 	return errors.New(c.Command.UsageText)
@@ -618,7 +618,38 @@ func objectRename(c *cli.Context, baseParams *api.BaseParams, bucket string) (er
 	return
 }
 
-// =======================HELPERS=========================
+// ======================= HELPERS =========================
+
+// This function is needed to print a nice error message for the user
+func handleObjHeadError(err error, bucket, object string) error {
+	httpErr, ok := err.(*cmn.HTTPError)
+	if !ok {
+		return err
+	}
+	if httpErr.Status == http.StatusNotFound {
+		return fmt.Errorf("no such object %q in bucket %q", object, bucket)
+	}
+
+	return err
+}
+
+func listOrRangeOp(c *cli.Context, baseParams *api.BaseParams, command string, bucket string, bckProvider string) (err error) {
+	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+		return
+	}
+	if flagIsSet(c, listFlag) && flagIsSet(c, rangeFlag) {
+		return incorrectUsageError(c, fmt.Errorf("flags %s and %s cannot be both set", listFlag.Name, rangeFlag.Name))
+	}
+
+	if flagIsSet(c, listFlag) {
+		return listOp(c, baseParams, command, bucket, bckProvider)
+	}
+	if flagIsSet(c, rangeFlag) {
+		return rangeOp(c, baseParams, command, bucket, bckProvider)
+	}
+	return
+}
+
 // List handler
 func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckProvider string) (err error) {
 	fileList := makeList(parseStrFlag(c, listFlag), ",")
@@ -629,13 +660,13 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckProv
 	}
 
 	switch command {
-	case objDel:
+	case commandRemove:
 		err = api.DeleteList(baseParams, bucket, bckProvider, fileList, wait, deadline)
-		command += "d"
-	case objPrefetch:
+		command = "removed"
+	case commandPrefetch:
 		err = api.PrefetchList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
-	case objEvict:
+	case commandEvict:
 		err = api.EvictList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
 	default:
@@ -644,7 +675,7 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckProv
 	if err != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s %s from %s bucket\n", fileList, command, bucket)
+	fmt.Fprintf(c.App.Writer, "%s %s from %s bucket\n", fileList, command, bucket)
 	return
 }
 
@@ -663,13 +694,13 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckPro
 	}
 
 	switch command {
-	case objDel:
+	case commandRemove:
 		err = api.DeleteRange(baseParams, bucket, bckProvider, prefix, regex, rangeStr, wait, deadline)
-		command += "d"
-	case objPrefetch:
+		command = "removed"
+	case commandPrefetch:
 		err = api.PrefetchRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
-	case objEvict:
+	case commandEvict:
 		err = api.EvictRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
 	default:
@@ -678,20 +709,41 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, bckPro
 	if err != nil {
 		return
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
+	fmt.Fprintf(c.App.Writer, "%s files with prefix '%s' matching '%s' in the range '%s' from %s bucket\n",
 		command, prefix, regex, rangeStr, bucket)
 	return
 }
 
-// This function is needed to print a nice error message for the user
-func handleObjHeadError(err error, bucket, object string) error {
-	httpErr, ok := err.(*cmn.HTTPError)
-	if !ok {
-		return err
-	}
-	if httpErr.Status == http.StatusNotFound {
-		return fmt.Errorf("no such object %q in bucket %q", object, bucket)
-	}
+// Multiple object arguments handler
+func multiObjOp(c *cli.Context, baseParams *api.BaseParams, command string, bckProvider string) (err error) {
+	// stops iterating if it encounters an error
+	for _, fullObjName := range c.Args() {
+		bucket, object := splitBucketObject(fullObjName)
+		if bucket == "" {
+			bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
+		}
+		if object == "" {
+			return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
+		}
+		if bucket == "" {
+			return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
+		}
+		if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+			return
+		}
 
-	return err
+		switch command {
+		case commandRemove:
+			if err = api.DeleteObject(baseParams, bucket, object, bckProvider); err != nil {
+				return
+			}
+			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", object, bucket)
+		case commandEvict:
+			if err = api.EvictObject(baseParams, bucket, object); err != nil {
+				return
+			}
+			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", object, bucket)
+		}
+	}
+	return
 }

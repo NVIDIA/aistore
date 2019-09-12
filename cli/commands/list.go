@@ -56,7 +56,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        listCmdsFlags[subcmdListBckProps],
 					Action:       listBckPropsHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
 					Name:         subcmdListObjects,
@@ -64,7 +64,7 @@ var (
 					ArgsUsage:    bucketArgumentText,
 					Flags:        listCmdsFlags[subcmdListObjects],
 					Action:       listObjectsHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */),
+					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
 					Name:         subcmdListDownloads,
@@ -107,18 +107,18 @@ func listBckPropsHandler(c *cli.Context) (err error) {
 
 func listObjectsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams     = cliAPIParams(ClusterURL)
-		bucket         string
-		bucketProvider string
+		baseParams  = cliAPIParams(ClusterURL)
+		bckProvider string
+		bucket      string
 	)
 
 	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
 		return
 	}
-	if bucketProvider, err = cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag)); err != nil {
+	if bckProvider, err = bucketProvider(c); err != nil {
 		return
 	}
-	if err = canReachBucket(baseParams, bucket, bucketProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
 		return
 	}
 
