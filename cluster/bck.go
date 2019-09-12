@@ -4,7 +4,11 @@
  */
 package cluster
 
-import "github.com/NVIDIA/aistore/cmn"
+import (
+	"fmt"
+
+	"github.com/NVIDIA/aistore/cmn"
+)
 
 type Bck struct {
 	Name     string
@@ -41,6 +45,13 @@ func (newbck Bck) Init(bowner Bowner, bmds ...*BMD) (*Bck, *BMD, error) {
 		}
 		if b.IsCloud() && !bmd.IsCloud(b.Name) {
 			return nil, bmd, cmn.NewErrorCloudBucketDoesNotExist(b.Name)
+		}
+	}
+	if b.IsCloud() && b.Provider != cmn.Cloud {
+		config := cmn.GCO.Get()
+		if b.Provider != config.CloudProvider {
+			err := fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", config.CloudProvider, b.Name, b.Provider)
+			return nil, bmd, err
 		}
 	}
 	b.Props, _ = bmd.Get(b.Name, b.IsAIS())

@@ -517,26 +517,25 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bucketName)
 	}
 
-	// Prefetch, evict without bprovider=cloud
-	tutils.Logf("Validating responses for empty bprovider for cloud bucket operations ...\n")
+	tutils.Logf("PrefetchList %d\n", len(files))
 	err = api.PrefetchList(baseParams, clibucket, "", files, true, 0)
-	if err == nil {
-		t.Fatalf("PrefetchList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
+	if err != nil {
+		t.Fatalf("%v\n", err)
 	}
-
-	err = api.PrefetchRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
-	if err == nil {
-		t.Fatalf("PrefetchRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
+	tutils.Logf("PrefetchRange\n")
+	err = api.PrefetchRange(baseParams, clibucket, "", "r", "", prefetchRange, true, 0)
+	if err != nil {
+		t.Fatalf("%v\n", err)
 	}
-
+	tutils.Logf("EvictList\n")
 	err = api.EvictList(baseParams, bucketName, "", files, true, 0)
-	if err == nil {
-		t.Fatalf("EvictList without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
+	if err != nil {
+		t.Fatalf("%v\n", err)
 	}
-
+	tutils.Logf("EvictRange\n")
 	err = api.EvictRange(baseParams, clibucket, "", "", "", prefetchRange, true, 0)
-	if err == nil {
-		t.Fatalf("EvictRange without %s=%s. Expected an error.", cmn.URLParamBckProvider, cmn.Cloud)
+	if err != nil {
+		t.Fatalf("%v\n", err)
 	}
 
 	tutils.CreateFreshBucket(t, proxyURL, bucketName)
