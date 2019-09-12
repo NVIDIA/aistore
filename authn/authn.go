@@ -8,7 +8,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -64,17 +63,17 @@ func main() {
 	}
 
 	if glog.V(4) {
-		log.Printf("Reading configuration from %s\n", configPath)
+		glog.Infof("Reading configuration from %s", configPath)
 	}
 	if err = cmn.LocalLoad(configPath, conf); err != nil {
-		glog.Fatalf("Failed to load configuration: %v\n", err)
+		glog.Fatalf("Failed to load configuration: %v", err)
 	}
 	if err = conf.validate(); err != nil {
-		glog.Fatalf("Invalid configuration: %v\n", err)
+		glog.Fatalf("Invalid configuration: %v", err)
 	}
 
 	if err = updateLogOptions(); err != nil {
-		glog.Fatalf("Failed to set up logger: %v\n", err)
+		glog.Fatalf("Failed to set up logger: %v", err)
 	}
 
 	smapFile := filepath.Join(conf.ConfDir, smapConfig)

@@ -57,6 +57,7 @@ type (
 		issued  time.Time
 		expires time.Time
 		creds   cmn.SimpleKVs
+		isGuest bool
 	}
 
 	authList map[string]*authRec
@@ -71,6 +72,11 @@ type (
 		version       int64
 	}
 )
+
+var guestAcc = &authRec{
+	userID:  "guest",
+	isGuest: true,
+}
 
 // Decrypts JWT token and returns all encrypted information.
 // Used by proxy - to check a user access and token validity(e.g, expiration),

@@ -101,6 +101,7 @@ const (
 // - if a property is nested, then its value is propertie's parent and propery name separated with a dash
 const (
 	HeaderCloudProvider = "cloud_provider" // ProviderAmazon et al. - see provider.go
+	HeaderGuestAccess   = "guest"          // AuthN is enabled and proxy gets a request without token
 
 	// tiering
 	HeaderNextTierURL = "tier.next_url"     // URL of the next tier in a AIStore multi-tier environment

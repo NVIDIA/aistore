@@ -40,6 +40,7 @@ const (
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
+	guestError    = "guest account does not have permissions for the operation"
 )
 
 type (
@@ -146,8 +147,10 @@ func (p *proxyrunner) Run() error {
 	}
 
 	bucketHandler, objectHandler := p.bucketHandler, p.objectHandler
+	dsortHandler, downloadHandler := dsort.ProxySortHandler, p.downloadHandler
 	if config.Auth.Enabled {
 		bucketHandler, objectHandler = wrapHandler(p.bucketHandler, p.checkHTTPAuth), wrapHandler(p.objectHandler, p.checkHTTPAuth)
+		dsortHandler, downloadHandler = wrapHandler(dsort.ProxySortHandler, p.checkHTTPAuth), wrapHandler(p.downloadHandler, p.checkHTTPAuth)
 	}
 
 	networkHandlers := []networkHandler{
@@ -155,11 +158,11 @@ func (p *proxyrunner) Run() error {
 
 		networkHandler{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
 		networkHandler{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Download, h: p.downloadHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Download, h: downloadHandler, net: []string{cmn.NetworkPublic}},
 		networkHandler{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		networkHandler{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
 		networkHandler{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Sort, h: dsort.ProxySortHandler, net: []string{cmn.NetworkPublic}},
+		networkHandler{r: cmn.Sort, h: dsortHandler, net: []string{cmn.NetworkPublic}},
 
 		networkHandler{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
 		networkHandler{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
@@ -733,8 +736,15 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
+	guestAccess := r.Header.Get(cmn.HeaderGuestAccess) == "1"
+
 	// 1. "all buckets"
 	if len(apitems) == 0 {
+		if guestAccess {
+			p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
+			return
+		}
+
 		switch msg.Action {
 		case cmn.ActRecoverBck:
 			p.recoverBuckets(w, r, &msg)
@@ -767,6 +777,11 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	config := cmn.GCO.Get()
+
+	if msg.Action != cmn.ActListObjects && guestAccess {
+		p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
+		return
+	}
 
 	// 3. createlb
 	if msg.Action == cmn.ActCreateLB {
@@ -2087,7 +2102,12 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
-	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	authToken := r.Header.Get("Authorization")
+	if authToken == "" && cmn.GCO.Get().Auth.AllowGuest {
+		return guestAcc, nil
+	}
+
+	s := strings.SplitN(authToken, " ", 2)
 	if len(s) != 2 || s[0] != tokenStart {
 		return nil, fmt.Errorf("invalid request")
 	}
@@ -2122,8 +2142,21 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
 				return
 			}
-			if glog.V(3) {
-				glog.Infof("Logged as %s", auth.userID)
+			if auth.isGuest && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/"+cmn.Buckets+"/") {
+				// get bucket objects is POST request, it cannot check the action
+				// here because it "emties" payload and httpbckpost gets nothing.
+				// So, we just set flag 'Guest' for httpbckpost to use
+				r.Header.Set(cmn.HeaderGuestAccess, "1")
+			} else if auth.isGuest && r.Method != http.MethodGet && r.Method != http.MethodHead {
+				p.invalmsghdlr(w, r, guestError, http.StatusUnauthorized)
+				return
+			}
+			if glog.FastV(4, glog.SmoduleAIS) {
+				if auth.isGuest {
+					glog.Info("Guest access granted")
+				} else {
+					glog.Infof("Logged as %s", auth.userID)
+				}
 			}
 		}
 

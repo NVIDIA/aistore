@@ -52,6 +52,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 			glog.Errorf("Failed to get cluster map: %v", err)
 			return &proxy{configPath: configPath, URL: defaultURL}
 		}
+		p.configPath = configPath
 		p.Smap = smap
 		p.saveSmap()
 	}

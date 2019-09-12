@@ -171,7 +171,8 @@ do
 done
 
 # conf file for authn
-CONFDIR="$HOME/.ais$NEXT_TIER"
+CONFDIR="$HOME/.authn"
+mkdir -p $CONFDIR
 CONFFILE="$CONFDIR/authn.json"
 LOGDIR="$LOGROOT/authn/log"
 source $DIR/authn.sh
@@ -240,7 +241,7 @@ do
 done
 
 if [[ $AUTHENABLED = "true" ]]; then
-	CONFDIR="$HOME/.ais$NEXT_TIER"
+	CONFDIR="$HOME/.authn"
 	CONFFILE="$CONFDIR/authn.json"
 	set -x
 	$GOPATH/bin/authn -config=$CONFFILE &
