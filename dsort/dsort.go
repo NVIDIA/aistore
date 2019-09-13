@@ -151,9 +151,8 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		if si.DaemonID != m.ctx.node.DaemonID {
 			return nil
 		}
-
-		lom, err := cluster.LOM{T: m.ctx.t, Objname: shardName, Bucket: m.rs.Bucket}.Init(m.rs.BckProvider)
-		if err == nil {
+		lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
+		if err = lom.Init(m.rs.Bucket, m.rs.BckProvider); err == nil {
 			err = lom.Load(false)
 		}
 		if err != nil {
@@ -308,9 +307,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		errCh = make(chan error, 2)
 	)
-	lom, err := cluster.LOM{T: m.ctx.t, Bucket: bucket, Objname: shardName}.Init(bckProvider)
-	if err != nil {
-		return err
+	lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
+	if err = lom.Init(bucket, bckProvider); err != nil {
+		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, filetype.DSortWorkfileType, filetype.WorkfileCreateShard)

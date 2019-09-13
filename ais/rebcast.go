@@ -85,7 +85,7 @@ func (reb *rebManager) getGlobStatus(status *rebStatus) {
 	for _, lomack := range reb.lomAcks() {
 		lomack.mu.Lock()
 		for _, lom := range lomack.q {
-			tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &rsmap.Smap)
+			tsi, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, &rsmap.Smap)
 			if err != nil {
 				continue
 			}

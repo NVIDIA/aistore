@@ -45,9 +45,9 @@ type (
 func (t *singleObjectTask) download() {
 	var (
 		statusMsg string
-		err       error
 	)
-	lom, err := cluster.LOM{T: t.parent.t, Bucket: t.bucket, Objname: t.obj.Objname}.Init(t.bckProvider)
+	lom := &cluster.LOM{T: t.parent.t, Objname: t.obj.Objname}
+	err := lom.Init(t.bucket, t.bckProvider)
 	if err == nil {
 		err = lom.Load()
 	}

@@ -501,7 +501,7 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 	return fsInfo
 }
 
-// NOTE: caller is responsible to serialize per bucket TODO -- FIXME
+// NOTE: caller is responsible to serialize per bucket
 func (mfs *MountedFS) CreateBucketDirs(bucket string, isLocal, destroyUponRet bool) (err error) {
 	availablePaths, _ := mfs.Get()
 	created := make([]string, 0, len(availablePaths))

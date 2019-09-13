@@ -44,7 +44,7 @@ func (c *putJogger) run() {
 	for {
 		select {
 		case req := <-c.workCh:
-			ecConf := req.LOM.BckProps.EC
+			ecConf := req.LOM.Bprops().EC
 
 			c.parent.stats.updateWaitTime(time.Since(req.tm))
 			memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
@@ -88,7 +88,7 @@ func (c *putJogger) ec(req *Request) {
 
 	if err != nil {
 		glog.Errorf("Error %s object [%s/%s], fqn: %q, err: %v",
-			act, req.LOM.Bucket, req.LOM.Objname, req.LOM.FQN, err)
+			act, req.LOM.Bucket(), req.LOM.Objname, req.LOM.FQN, err)
 	}
 
 	if req.ErrCh != nil {
@@ -114,7 +114,7 @@ func (c *putJogger) encode(req *Request) error {
 	if glog.V(4) {
 		glog.Infof("Encoding %q...", req.LOM.FQN)
 	}
-	ecConf := req.LOM.BckProps.EC
+	ecConf := req.LOM.Bprops().EC
 	_, cksumValue := req.LOM.Cksum().Get()
 	meta := &Metadata{
 		Size:        req.LOM.Size(),
@@ -134,11 +134,11 @@ func (c *putJogger) encode(req *Request) error {
 	targetCnt := len(c.parent.smap.Get().Tmap)
 	if targetCnt < reqTargets {
 		return fmt.Errorf("object %s/%s requires %d targets to encode, only %d found",
-			req.LOM.Bucket, req.LOM.Objname, reqTargets, targetCnt)
+			req.LOM.Bucket(), req.LOM.Objname, reqTargets, targetCnt)
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsAIS)
+	metaFQN, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.Objname, req.LOM.IsAIS())
 	if err != nil {
 		return err
 	}
@@ -170,9 +170,9 @@ func (c *putJogger) encode(req *Request) error {
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket, req.LOM.Objname, req.LOM.BckIsAIS)
+	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.Objname, req.LOM.IsAIS())
 	if err != nil {
-		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket, req.LOM.Objname, err)
+		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket(), req.LOM.Objname, err)
 		return nil
 	}
 
@@ -183,7 +183,7 @@ func (c *putJogger) cleanup(req *Request) error {
 
 	request := c.parent.newIntraReq(reqDel, nil).Marshal()
 	hdr := transport.Header{
-		Bucket:  req.LOM.Bucket,
+		Bucket:  req.LOM.Bucket(),
 		Objname: req.LOM.Objname,
 		Opaque:  request,
 		ObjAttrs: transport.ObjectAttrs{
@@ -197,11 +197,11 @@ func (c *putJogger) cleanup(req *Request) error {
 // uploads the main replica
 func (c *putJogger) createCopies(req *Request, metadata *Metadata) error {
 	var (
-		copies = req.LOM.BckProps.EC.ParitySlices
+		copies = req.LOM.Bprops().EC.ParitySlices
 	)
 
 	// generate a list of target to send the replica (all excluding this one)
-	targets, err := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), copies+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Bucket(), req.LOM.Objname, c.parent.smap.Get(), copies+1)
 	if err != nil {
 		return err
 	}
@@ -455,12 +455,12 @@ func generateSlicesToDisk(fqn string, dataSlices, paritySlices int) (cmn.ReadOpe
 // Returns:
 // * list of all slices, sent to targets
 func (c *putJogger) sendSlices(req *Request, meta *Metadata) ([]*slice, error) {
-	ecConf := req.LOM.BckProps.EC
+	ecConf := req.LOM.Bprops().EC
 	totalCnt := ecConf.ParitySlices + ecConf.DataSlices
 
 	// totalCnt+1: first node gets the full object, other totalCnt nodes
 	// gets a slice each
-	targets, err := cluster.HrwTargetList(req.LOM.Bucket, req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
+	targets, err := cluster.HrwTargetList(req.LOM.Bucket(), req.LOM.Objname, c.parent.smap.Get(), totalCnt+1)
 	if err != nil {
 		return nil, err
 	}

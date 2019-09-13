@@ -345,9 +345,9 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	_, _, err = cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if _, _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
@@ -390,17 +390,16 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
-	if err := bmd.AllowGET(bucket, bck.IsAIS()); err != nil {
+	if err := bck.AllowGET(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
@@ -410,14 +409,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	config := cmn.GCO.Get()
 	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bmd.Bstring(bucket, bck.IsAIS()), objname, si)
+			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si)
 		}
 		p.reverseNodeRequest(w, r, si)
 		delta := time.Since(started)
 		p.statsif.Add(stats.GetLatency, int64(delta))
 	} else {
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bck.IsAIS()), objname, si)
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 		}
 		redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -434,17 +433,16 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objName := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
-	if err := bmd.AllowPUT(bucket, bck.IsAIS()); err != nil {
+	if err := bck.AllowPUT(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objName, &smap.Smap)
 	if err != nil {
@@ -452,7 +450,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bck.IsAIS()), objName, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objName, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -469,17 +467,16 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
-	if err = bmd.AllowDELETE(bucket, bck.IsAIS()); err != nil {
+	if err = bck.AllowDELETE(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	smap := p.smapowner.get()
 	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
 	if err != nil {
@@ -487,7 +484,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bmd.Bstring(bucket, bck.IsAIS()), objname, si)
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -507,13 +504,13 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
-	if err = bmd.AllowDELETE(bucket, bck.IsAIS()); err != nil {
+	if err = bck.AllowDELETE(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -793,10 +790,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	bck, _, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
@@ -936,8 +932,8 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	_, _, err = cluster.Bck{Name: bucket, Provider: cmn.AIS /*must be ais*/}.Init(p.bmdowner)
-	if err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: cmn.AIS /*must be ais*/}
+	if err = bck.Init(p.bmdowner); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -963,9 +959,9 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	_, _, err = cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if _, _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
@@ -1183,9 +1179,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, _, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, _, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
@@ -1289,13 +1285,13 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	bckProvider := query.Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, bckProvider, err); err != nil {
 			return
 		}
 	}
-	if err := bmd.AllowHEAD(bucket, bck.IsAIS()); err != nil {
+	if err := bck.AllowHEAD(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1590,7 +1586,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, si *cluster.Snode, ts time.Ti
 
 // for cloud buckets only - check if exists (in the Cloud) and update BMD
 func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket, bckProvider string,
-	erc error) (bck *cluster.Bck, bmd *cluster.BMD, err error) {
+	erc error) (bck *cluster.Bck, err error) {
 	if _, ok := erc.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 		err = erc
 		p.invalmsghdlr(w, r, erc.Error())
@@ -1616,8 +1612,8 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket,
 			return
 		}
 	}
-	bmd = p.bmdowner.Get()
-	bck, _, err = cluster.Bck{Name: bucket, Provider: bckProvider}.Init(p.bmdowner, bmd)
+	bck = &cluster.Bck{Name: bucket, Provider: bckProvider}
+	err = bck.Init(p.bmdowner)
 	cmn.AssertNoErr(err)
 	return
 }

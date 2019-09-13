@@ -146,7 +146,8 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 	// this lom is for local slice/metafile requested by another target
 	// to restore the object. So, just create lom and call FromFS
 	// because LOM cache does not keep non-objects
-	lom, err1 := cluster.LOM{FQN: fqn, T: r.t}.Init("")
+	lom := &cluster.LOM{T: r.t, FQN: fqn}
+	err1 := lom.Init("", "")
 	if err1 != nil {
 		glog.Warningf("Failed to read file stats #1: %s", err1)
 	}
@@ -236,7 +237,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 // * writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
 	hdr := transport.Header{
-		Bucket:  lom.Bucket,
+		Bucket:  lom.Bucket(),
 		Objname: lom.Objname,
 		Opaque:  request,
 	}
@@ -253,7 +254,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.regWriter(uname, sw)
 
 	if glog.V(4) {
-		glog.Infof("Requesting object %s/%s from %s", lom.Bucket, lom.Objname, daemonID)
+		glog.Infof("Requesting object %s/%s from %s", lom.Bucket(), lom.Objname, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, reader, nil, true); err != nil {
 		r.unregWriter(uname)
@@ -267,7 +268,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.unregWriter(uname)
 	_ = lom.Load() // FIXME: handle errors
 	if glog.V(4) {
-		glog.Infof("Received object %s/%s from %s", lom.Bucket, lom.Objname, daemonID)
+		glog.Infof("Received object %s/%s from %s", lom.Bucket(), lom.Objname, daemonID)
 	}
 	return nil
 }
@@ -330,7 +331,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	hdr := transport.Header{
 		Objname:  lom.Objname,
-		Bucket:   lom.Bucket,
+		Bucket:   lom.Bucket(),
 		Opaque:   putData,
 		ObjAttrs: objAttrs,
 	}
@@ -341,7 +342,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 				obj.release()
 			}
 			if err != nil {
-				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket, lom.Objname, daemonIDs, err)
+				glog.Errorf("Failed to send %s/%s to %v: %v", lom.Bucket(), lom.Objname, daemonIDs, err)
 			}
 		}
 	}

@@ -314,9 +314,9 @@ func (gcpp *gcpProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 	if err != nil {
 		return
 	}
-	attrs, err := gcpClient.Bucket(lom.Bucket).Object(lom.Objname).Attrs(gctx)
+	attrs, err := gcpClient.Bucket(lom.Bucket()).Object(lom.Objname).Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket(), gcpClient.Bucket(lom.Bucket()), gctx)
 		return
 	}
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
@@ -336,10 +336,10 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	if err != nil {
 		return
 	}
-	o := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.Bucket()).Object(lom.Objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket(), gcpClient.Bucket(lom.Bucket()), gctx)
 		return
 	}
 
@@ -347,11 +347,6 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	cksumToCheck := cmn.NewCksum(cmn.ChecksumMD5, hex.EncodeToString(attrs.MD5))
 
 	rc, err := o.NewReader(gctx)
-	if err != nil {
-		return
-	}
-	bckProvider, _ := cmn.ProviderFromStr(cmn.Cloud)
-	lom, err = cluster.LOM{T: gcpp.t, Bucket: lom.Bucket, Objname: lom.Objname}.Init(bckProvider)
 	if err != nil {
 		return
 	}
@@ -365,7 +360,6 @@ func (gcpp *gcpProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 		lom:          lom,
 		workFQN:      workFQN,
 	}
-
 	if err = poi.writeToFile(); err != nil {
 		return
 	}
@@ -388,7 +382,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	md := make(cmn.SimpleKVs)
 	md[gcpChecksumType], md[gcpChecksumVal] = lom.Cksum().Get()
 
-	gcpObj := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
+	gcpObj := gcpClient.Bucket(lom.Bucket()).Object(lom.Objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
 	buf, slab := nodeCtx.mm.AllocDefault()
@@ -403,7 +397,7 @@ func (gcpp *gcpProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket(), gcpClient.Bucket(lom.Bucket()), gctx)
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
@@ -422,10 +416,10 @@ func (gcpp *gcpProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err e
 	if err != nil {
 		return
 	}
-	o := gcpClient.Bucket(lom.Bucket).Object(lom.Objname)
+	o := gcpClient.Bucket(lom.Bucket()).Object(lom.Objname)
 	err = o.Delete(gctx)
 	if err != nil {
-		err, errCode = handleObjectError(err, lom.Bucket, gcpClient.Bucket(lom.Bucket), gctx)
+		err, errCode = handleObjectError(err, lom.Bucket(), gcpClient.Bucket(lom.Bucket()), gctx)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

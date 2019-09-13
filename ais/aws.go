@@ -324,11 +324,11 @@ func (awsp *awsProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 
 	sess := createSession(ctx)
 	svc := s3.New(sess)
-	input := &s3.HeadObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)}
+	input := &s3.HeadObjectInput{Bucket: aws.String(lom.Bucket()), Key: aws.String(lom.Objname)}
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
-		err, errCode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket(), err)
 		return
 	}
 	objMeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
@@ -355,11 +355,11 @@ func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluste
 	sess := createSession(ctx)
 	svc := s3.New(sess)
 	obj, err := svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(lom.Bucket),
+		Bucket: aws.String(lom.Bucket()),
 		Key:    aws.String(lom.Objname),
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket(), err)
 		return
 	}
 	// may not have ais metadata
@@ -410,13 +410,13 @@ func (awsp *awsProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 
 	uploader := s3manager.NewUploader(createSession(ctx))
 	uploadOutput, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:   aws.String(lom.Bucket),
+		Bucket:   aws.String(lom.Bucket()),
 		Key:      aws.String(lom.Objname),
 		Body:     r,
 		Metadata: md,
 	})
 	if err != nil {
-		err, errCode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket(), err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
@@ -436,9 +436,9 @@ func (awsp *awsProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.L
 
 func (awsp *awsProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
 	svc := s3.New(createSession(ctx))
-	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.Bucket), Key: aws.String(lom.Objname)})
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(lom.Bucket()), Key: aws.String(lom.Objname)})
 	if err != nil {
-		err, errCode = awsErrorToAISError(lom.Bucket, err)
+		err, errCode = awsErrorToAISError(lom.Bucket(), err)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {

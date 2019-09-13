@@ -390,8 +390,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider, config)
-	if err != nil {
+	lom := &cluster.LOM{T: t, Objname: objName}
+	if err = lom.Init(bucket, bckProvider, config); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -486,8 +486,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, "OOS")
 		return
 	}
-	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if err != nil {
+	lom := &cluster.LOM{T: t, Objname: objname}
+	if err = lom.Init(bucket, bckProvider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -495,7 +495,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if lom.BckIsAIS && lom.VerConf().Enabled {
+	if lom.IsAIS() && lom.VerConf().Enabled {
 		lom.Load() // need to know the current version if versionig enabled
 	}
 	lom.SetAtimeUnix(started.UnixNano())
@@ -516,14 +516,14 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
-	if err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
 	}
-	if err := bmd.AllowDELETE(bucket, bck.IsAIS()); err != nil {
+	if err := bck.AllowDELETE(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -554,8 +554,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("DELETE list|range: %s, %d µs",
-					bmd.Bstring(bucket, bck.IsAIS()), int64(time.Since(started)/time.Microsecond))
+				glog.Infof("DELETE list|range: %s, %d µs", bucket, int64(time.Since(started)/time.Microsecond))
 			}
 			return
 		}
@@ -593,8 +592,8 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		evict = msg.Action == cmn.ActEvictObjects
 	}
 
-	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objname}.Init(bckProvider)
-	if err != nil {
+	lom := &cluster.LOM{T: t, Objname: objname}
+	if err = lom.Init(bucket, bckProvider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -633,8 +632,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
-	if err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -665,7 +664,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		glog.Infof("%s %s bucket %s => %s, %s v%d", phase, msgInt.Action, bucketFrom, bucketTo, bmdTermName, bmd.Version)
+		glog.Infof("%s %s bucket %s => %s", phase, msgInt.Action, bucketFrom, bucketTo)
 	case cmn.ActListObjects:
 		// list the bucket and return
 		if ok := t.listbucket(w, r, bucket, bck.IsAIS(), msgInt); !ok {
@@ -675,7 +674,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		delta := time.Since(started)
 		t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("LIST: %s, %d µs", bmd.Bstring(bucket, bck.IsAIS()), int64(delta/time.Microsecond))
+			glog.Infof("LIST: %s, %d µs", bucket, int64(delta/time.Microsecond))
 		}
 	case cmn.ActMakeNCopies:
 		copies, err := t.parseValidateNCopies(msgInt.Value)
@@ -722,8 +721,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck, _, err := cluster.Bck{Name: bucket, Provider: bckProvider}.Init(t.bmdowner)
-	if err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -822,8 +821,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
-	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objName}.Init(bckProvider)
-	if err != nil {
+	lom := &cluster.LOM{T: t, Objname: objName}
+	if err = lom.Init(bucket, bckProvider); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
 	}
@@ -851,7 +850,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		exists = lom.CopyObjectFromAny()
 	}
 
-	if lom.BckIsAIS || checkCached {
+	if lom.IsAIS() || checkCached {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
@@ -882,7 +881,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		_, ckSum := lom.Cksum().Get()
 		objmeta[cmn.HeaderObjCksumVal] = ckSum
 	}
-	objmeta[cmn.HeaderObjBckIsAIS] = strconv.FormatBool(lom.BckIsAIS)
+	objmeta[cmn.HeaderObjBckIsAIS] = strconv.FormatBool(lom.IsAIS())
 	objmeta[cmn.HeaderObjPresent] = strconv.FormatBool(exists)
 
 	hdr := w.Header()
@@ -990,7 +989,7 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 	if nmp := fs.Mountpaths.NumAvail(); nmp < int(mirrConf.Copies) {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)",
-				nmp, lom.Bucket, mirrConf.Copies)
+				nmp, lom.Bucket(), mirrConf.Copies)
 		}
 		return
 	}
@@ -1020,7 +1019,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	delFromCloud := !lom.BckIsAIS && !evict
+	delFromCloud := !lom.IsAIS() && !evict
 	if err := lom.Load(false); err != nil {
 		return err
 	}
@@ -1043,7 +1042,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 			}
 		}
 		if evict {
-			cmn.Assert(!lom.BckIsAIS)
+			cmn.Assert(!lom.IsAIS())
 			t.statsif.AddMany(
 				stats.NamedVal64{stats.LruEvictCount, 1},
 				stats.NamedVal64{stats.LruEvictSize, lom.Size()})
@@ -1067,12 +1066,12 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	bucket, objnameFrom := apitems[0], apitems[1]
 	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
-	lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: objnameFrom}.Init(bckProvider)
-	if err != nil {
+	lom := &cluster.LOM{T: t, Objname: objnameFrom}
+	if err = lom.Init(bucket, bckProvider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if !lom.BckIsAIS {
+	if !lom.IsAIS() {
 		t.invalmsghdlr(w, r, fmt.Sprintf("%s: cannot rename object from Cloud bucket", lom))
 		return
 	}

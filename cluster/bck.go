@@ -16,18 +16,14 @@ type Bck struct {
 	Props    *cmn.BucketProps
 }
 
-func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
+func (b *Bck) String() string { return fmt.Sprintf("%s(%x, %s)", b.Name, b.Props.BID, b.Provider) }
+func (b *Bck) IsAIS() bool    { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
 func (b *Bck) IsCloud() bool {
 	return b.Provider == cmn.Cloud || b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
 }
 
-func (newbck Bck) Init(bowner Bowner, bmds ...*BMD) (b *Bck, bmd *BMD, err error) {
-	b = &newbck
-	if len(bmds) == 0 || bmds[0] == nil {
-		bmd = bowner.Get()
-	} else {
-		bmd = bmds[0]
-	}
+func (b *Bck) Init(bowner Bowner) (err error) {
+	bmd := bowner.Get()
 	if b.Provider == "" {
 		if bmd.IsAIS(b.Name) {
 			b.Provider = cmn.AIS
@@ -39,7 +35,7 @@ func (newbck Bck) Init(bowner Bowner, bmds ...*BMD) (b *Bck, bmd *BMD, err error
 		}
 	} else {
 		if b.IsAIS() && !bmd.IsAIS(b.Name) {
-			return nil, bmd, cmn.NewErrorBucketDoesNotExist(b.Name)
+			return cmn.NewErrorBucketDoesNotExist(b.Name)
 		}
 		if b.IsCloud() && !bmd.IsCloud(b.Name) {
 			err = cmn.NewErrorCloudBucketDoesNotExist(b.Name)
@@ -52,5 +48,27 @@ func (newbck Bck) Init(bowner Bowner, bmds ...*BMD) (b *Bck, bmd *BMD, err error
 		}
 	}
 	b.Props, _ = bmd.Get(b.Name, b.IsAIS())
+	return
+}
+
+//
+// access perms
+//
+
+func (b *Bck) AllowGET() error     { return b.allow("GET", cmn.AccessGET) }
+func (b *Bck) AllowHEAD() error    { return b.allow("HEAD", cmn.AccessHEAD) }
+func (b *Bck) AllowPUT() error     { return b.allow("PUT", cmn.AccessPUT) }
+func (b *Bck) AllowColdGET() error { return b.allow("cold-GET", cmn.AccessColdGET) }
+func (b *Bck) AllowDELETE() error  { return b.allow("DELETE", cmn.AccessDELETE) }
+func (b *Bck) AllowRENAME() error  { return b.allow("RENAME", cmn.AccessRENAME) }
+
+func (b *Bck) allow(oper string, bits uint64) (err error) {
+	if b.Props.AccessAttrs == cmn.AllowAnyAccess {
+		return
+	}
+	if (b.Props.AccessAttrs & bits) != 0 {
+		return
+	}
+	err = cmn.NewBucketAccessDenied(b.String(), oper, b.Props.AccessAttrs)
 	return
 }

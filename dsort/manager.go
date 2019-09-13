@@ -627,15 +627,13 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			m.abort(err)
 			return
 		}
-
 		if m.aborted() {
 			return
 		}
-
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
 		bckProvider := cmn.ProviderFromBool(hdr.BckIsAIS)
-		lom, err := cluster.LOM{T: m.ctx.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(bckProvider)
-		if err == nil {
+		lom := &cluster.LOM{T: m.ctx.t, Objname: hdr.Objname}
+		if err = lom.Init(hdr.Bucket, bckProvider); err == nil {
 			err = lom.Load()
 		}
 		if err != nil {

@@ -299,13 +299,13 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	)
 	payload.InitWithQuery(query)
 	bucket = payload.Bucket
-	bck, bmd, err := cluster.Bck{Name: bucket, Provider: payload.BckProvider}.Init(p.bmdowner)
-	if err != nil {
-		if bck, bmd, err = p.syncCBmeta(w, r, bucket, payload.BckProvider, err); err != nil {
+	bck := &cluster.Bck{Name: bucket, Provider: payload.BckProvider}
+	if err := bck.Init(p.bmdowner); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, payload.BckProvider, err); err != nil {
 			return
 		}
 	}
-	if err = bmd.AllowColdGET(bucket, bck.IsAIS()); err != nil {
+	if err := bck.AllowColdGET(); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}

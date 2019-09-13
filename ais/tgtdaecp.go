@@ -1346,7 +1346,7 @@ func (t *targetrunner) lookupRemote(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 		req: cmn.ReqArgs{
 			Method: http.MethodHead,
 			Base:   tsi.URL(cmn.NetworkIntraControl),
-			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+			Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket(), lom.Objname),
 			Query:  query,
 		},
 		timeout: lom.Config().Timeout.CplaneOperation,
@@ -1361,7 +1361,7 @@ func (t *targetrunner) locateObject(lom *cluster.LOM, smap *smapX) *cluster.Snod
 	query.Add(cmn.URLParamSilent, "true")
 	query.Add(cmn.URLParamCheckCached, "true") // lookup all mountpaths _and_ copy if misplaced
 	res := t.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket(), lom.Objname),
 		query,
 		http.MethodHead,
 		nil,

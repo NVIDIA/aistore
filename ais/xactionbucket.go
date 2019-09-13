@@ -279,8 +279,8 @@ func (e *putLocReplicasEntry) Get() cmn.Xact { return e.xact }
 func (*putLocReplicasEntry) Kind() string    { return cmn.ActPutCopies }
 
 func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPutLRepl {
-	b := r.bucketsXacts(lom.Bucket)
-	e := &putLocReplicasEntry{lom: lom, baseBckEntry: baseBckEntry{bckName: lom.Bucket}}
+	b := r.bucketsXacts(lom.Bucket())
+	e := &putLocReplicasEntry{lom: lom, baseBckEntry: baseBckEntry{bckName: lom.Bucket()}}
 	ee, err := b.renewBucketXaction(e)
 	if err != nil {
 		return nil

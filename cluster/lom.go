@@ -46,19 +46,15 @@ type (
 		copies  fs.MPI       // ditto
 	}
 	LOM struct {
-		// local meta
-		md lmeta
-		// other names
-		FQN             string
-		Bucket, Objname string
-		HrwFQN          string // misplaced?
-		// runtime context
+		md      lmeta  // local meta
+		bck     Bck    // bucket
+		FQN     string // fqn
+		Objname string // object name in the bucket
+		HrwFQN  string // (misplaced?)
+		// runtime
 		T         Target
 		config    *cmn.Config
-		bmd       *BMD
-		BckProps  *cmn.BucketProps
 		ParsedFQN fs.ParsedFQN // redundant in-part; tradeoff to speed-up workfile name gen, etc.
-		BckIsAIS  bool         // the bucket (that contains this object) is local
 		BadCksum  bool         // this object has a bad checksum
 		exists    bool         // determines if the object exists or not (initially set by fstat)
 		loaded    bool
@@ -82,7 +78,6 @@ func init() {
 //
 
 func (lom *LOM) Uname() string               { return lom.md.uname }
-func (lom *LOM) BMD() *BMD                   { return lom.bmd }
 func (lom *LOM) Size() int64                 { return lom.md.size }
 func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
 func (lom *LOM) Version() string             { return lom.md.version }
@@ -92,11 +87,23 @@ func (lom *LOM) SetCksum(cksum cmn.Cksummer) { lom.md.cksum = cksum }
 func (lom *LOM) Atime() time.Time            { return time.Unix(0, lom.md.atime) }
 func (lom *LOM) AtimeUnix() int64            { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)       { lom.md.atime = tu }
-func (lom *LOM) ECEnabled() bool             { return lom.BckProps.EC.Enabled }
-func (lom *LOM) LRUEnabled() bool            { return lom.BckProps.LRU.Enabled }
+func (lom *LOM) ECEnabled() bool             { return lom.Bprops().EC.Enabled }
+func (lom *LOM) LRUEnabled() bool            { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN } // subj to resilvering
-func (lom *LOM) SetBMD(bmd *BMD)             { lom.bmd = bmd }                // internal use
-func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID = bid }           // ditto
+func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID, lom.bck.Props.BID = bid, bid }
+func (lom *LOM) Bucket() string              { return lom.bck.Name }
+func (lom *LOM) Bprops() *cmn.BucketProps    { return lom.bck.Props }
+func (lom *LOM) IsAIS() bool                 { return lom.bck.IsAIS() }
+
+//
+// access perms
+//
+func (lom *LOM) AllowGET() error     { return lom.bck.AllowGET() }
+func (lom *LOM) AllowHEAD() error    { return lom.bck.AllowHEAD() }
+func (lom *LOM) AllowPUT() error     { return lom.bck.AllowPUT() }
+func (lom *LOM) AllowColdGET() error { return lom.bck.AllowColdGET() }
+func (lom *LOM) AllowDELETE() error  { return lom.bck.AllowDELETE() }
+func (lom *LOM) AllowRENAME() error  { return lom.bck.AllowRENAME() }
 
 func (lom *LOM) Config() *cmn.Config {
 	if lom.config == nil {
@@ -104,16 +111,16 @@ func (lom *LOM) Config() *cmn.Config {
 	}
 	return lom.config
 }
-func (lom *LOM) MirrorConf() *cmn.MirrorConf { return &lom.BckProps.Mirror }
+func (lom *LOM) MirrorConf() *cmn.MirrorConf { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf {
-	conf := &lom.BckProps.Cksum
+	conf := &lom.Bprops().Cksum
 	if conf.Type == cmn.PropInherit {
 		conf = &lom.Config().Cksum
 	}
 	return conf
 }
 func (lom *LOM) VerConf() *cmn.VersionConf {
-	conf := &lom.BckProps.Versioning
+	conf := &lom.Bprops().Versioning
 	if conf.Type == cmn.PropInherit {
 		conf = &lom.Config().Ver
 	}
@@ -203,7 +210,7 @@ func (lom *LOM) DelExtraCopies() (n int, err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsAIS, lom.Bucket, lom.Objname)
+		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.IsAIS(), lom.Bucket(), lom.Objname)
 		if _, ok := lom.md.copies[cpyfqn]; ok {
 			continue
 		}
@@ -224,7 +231,7 @@ func (lom *LOM) CopyObjectFromAny() (copied bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.BckIsAIS, lom.Bucket, lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.IsAIS(), lom.Bucket(), lom.Objname)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -281,7 +288,8 @@ func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, dstIsCopy, srcCop
 // lom.String() and helpers
 //
 
-func (lom *LOM) String() string { return lom._string(lom.Bucket) }
+func (lom *LOM) String() string   { return lom._string(lom.Bucket()) }
+func (lom *LOM) StringEx() string { return lom._string(lom.bck.String()) }
 
 func (lom *LOM) _string(b string) string {
 	var (
@@ -319,15 +327,6 @@ func (lom *LOM) _string(b string) string {
 		}
 	}
 	return s + a + "]"
-}
-
-func (lom *LOM) bckString() string { return lom.bmd.Bstring(lom.Bucket, lom.BckIsAIS) }
-
-func (lom *LOM) StringEx() string {
-	if lom.bmd == nil {
-		return lom.String()
-	}
-	return lom._string(lom.bckString())
 }
 
 func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (err error) {
@@ -507,55 +506,6 @@ func (lom *LOM) Clone(fqn string) *LOM {
 	return dst
 }
 
-func (lom *LOM) init(bckProvider string) (err error) {
-	var bckPresent, fromFQN bool
-	bowner := lom.T.GetBowner()
-	if bckProvider != "" {
-		val, err := cmn.ProviderFromStr(bckProvider)
-		if err != nil {
-			return err
-		}
-		lom.BckIsAIS = cmn.IsProviderAIS(val)
-		bckProvider = val
-	}
-	if lom.Bucket == "" || lom.Objname == "" {
-		if bckProvider != "" {
-			lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN, nil, lom.BckIsAIS)
-		} else {
-			lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN, bowner)
-			bckProvider = cmn.ProviderFromBool(lom.ParsedFQN.BckIsAIS)
-		}
-		if err != nil {
-			return
-		}
-		lom.Bucket, lom.Objname = lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname
-		lom.BckIsAIS = lom.ParsedFQN.BckIsAIS
-		fromFQN = true
-	}
-	lom.md.uname = Bo2Uname(lom.Bucket, lom.Objname)
-	// bucketmd, local, bprops
-	lom.bmd = bowner.Get()
-	if bckProvider == "" {
-		lom.BckIsAIS = lom.bmd.IsAIS(lom.Bucket)
-	}
-	lom.BckProps, bckPresent = lom.bmd.Get(lom.Bucket, lom.BckIsAIS)
-	if lom.BckIsAIS && !bckPresent {
-		return cmn.NewErrorBucketDoesNotExist(lom.Bucket)
-	}
-	if !fromFQN {
-		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = hrwMpath(lom.Bucket, lom.Objname)
-		if err != nil {
-			return
-		}
-		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, lom.BckIsAIS, lom.Bucket, lom.Objname)
-		lom.HrwFQN = lom.FQN
-		lom.ParsedFQN.BckIsAIS = lom.BckIsAIS
-		lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname = lom.Bucket, lom.Objname
-	}
-	return
-}
-
 // Local Object Metadata (LOM) - is cached. Respectively, lifecycle of any given LOM
 // instance includes the following steps:
 // 1) construct LOM instance and initialize its runtime state: lom = LOM{...}.Init()
@@ -576,17 +526,46 @@ func (lom *LOM) Hkey() (string, int) {
 	cmn.Dassert(lom.ParsedFQN.Digest != 0, pkgName)
 	return lom.md.uname, int(lom.ParsedFQN.Digest & fs.LomCacheMask)
 }
-func (newlom LOM) Init(bckProvider string, config ...*cmn.Config) (lom *LOM, err error) {
-	lom = &newlom
-	if err = lom.init(bckProvider); err != nil {
+func (lom *LOM) Init(bucket, bckProvider string, config ...*cmn.Config) (err error) {
+	if lom.FQN != "" {
+		cmn.Dassert(bucket == "", pkgName) // either/or
+		lom.ParsedFQN, lom.HrwFQN, err = ResolveFQN(lom.FQN)
+		if err != nil {
+			return
+		}
+		bucket = lom.ParsedFQN.Bucket
+		lom.Objname = lom.ParsedFQN.Objname
+		prov := cmn.ProviderFromBool(lom.ParsedFQN.BckIsAIS)
+		if bckProvider == "" {
+			bckProvider = prov
+		} else if prov1, _ := cmn.ProviderFromStr(bckProvider); prov1 != prov {
+			err = fmt.Errorf("unexpected provider %s for FQN [%s]", bckProvider, lom.FQN)
+			return
+		}
+	}
+	bowner := lom.T.GetBowner()
+	lom.bck.Name, lom.bck.Provider = bucket, bckProvider
+	var b = &lom.bck
+	if err = b.Init(bowner); err != nil {
 		return
 	}
+	if lom.FQN == "" {
+		lom.ParsedFQN.MpathInfo, lom.ParsedFQN.Digest, err = hrwMpath(bucket, lom.Objname)
+		if err != nil {
+			return
+		}
+		lom.ParsedFQN.ContentType = fs.ObjectType
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, lom.IsAIS(), bucket, lom.Objname)
+		lom.HrwFQN = lom.FQN
+		lom.ParsedFQN.BckIsAIS = lom.IsAIS()
+		lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname = bucket, lom.Objname
+	}
+	lom.md.uname = Bo2Uname(bucket, lom.Objname)
 	if len(config) > 0 {
 		lom.config = config[0]
 	}
 	return
 }
-
 func (lom *LOM) IsLoaded() (ok bool) {
 	var (
 		hkey, idx = lom.Hkey()
@@ -622,7 +601,7 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	// slow path
 	err = lom.FromFS()
 	if err == nil && lom.exists {
-		lom.md.bckID = lom.BckProps.BID
+		lom.md.bckID = lom.Bprops().BID
 		if !add {
 			return
 		}
@@ -636,11 +615,10 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 // this code does an extra check only for an ais bucket
 func (lom *LOM) Exists() bool {
 	cmn.Dassert(lom.loaded, pkgName) // cannot check existence without first calling lom.Load()
-	if lom.BckIsAIS && lom.exists {
-		bowner := lom.T.GetBowner()
-		lom.bmd = bowner.Get()
-		lom.BckProps, _ = lom.bmd.Get(lom.Bucket, lom.BckIsAIS)
-		if lom.BckProps != nil && lom.md.bckID == lom.BckProps.BID {
+	if lom.IsAIS() && lom.exists {
+		bmd := lom.T.GetBowner().Get()
+		lom.bck.Props, _ = bmd.Get(lom.Bucket(), lom.IsAIS())
+		if lom.bck.Props != nil && lom.md.bckID == lom.bck.Props.BID {
 			return true
 		}
 		// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
@@ -660,7 +638,7 @@ func (lom *LOM) ReCache() {
 		md        = &lmeta{}
 	)
 	*md = lom.md
-	md.bckID = lom.BckProps.BID
+	md.bckID = lom.Bprops().BID
 	cache.M.Store(hkey, md)
 	lom.loaded = true
 }
@@ -863,7 +841,8 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 		bucket, objName = Uname2Bo(md.uname)
 		local, exists   bool
 	)
-	lom = &LOM{Bucket: bucket, Objname: objName}
+	lom = &LOM{Objname: objName}
+	lom.bck.Name = bucket
 	if bmd.Exists(bucket, md.bckID, true /*local*/) {
 		local, exists = true, true
 	} else if bmd.Exists(bucket, md.bckID, false /*cloud*/) {
@@ -871,8 +850,8 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 	}
 	lom.exists = exists
 	if exists {
-		lom.BckIsAIS = local
-		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.BckIsAIS)
+		lom.bck.Provider = cmn.ProviderFromBool(local)
+		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bucket(), lom.Objname, lom.IsAIS())
 	}
 	return
 }
@@ -892,23 +871,6 @@ func lomCaches() []*fs.LomCache {
 		}
 	}
 	return caches
-}
-
-//
-// access perms
-//
-
-func (lom *LOM) AllowGET() error  { return lom.bmd.AllowGET(lom.Bucket, lom.BckIsAIS, lom.BckProps) }
-func (lom *LOM) AllowHEAD() error { return lom.bmd.AllowHEAD(lom.Bucket, lom.BckIsAIS, lom.BckProps) }
-func (lom *LOM) AllowPUT() error  { return lom.bmd.AllowPUT(lom.Bucket, lom.BckIsAIS, lom.BckProps) }
-func (lom *LOM) AllowColdGET() error {
-	return lom.bmd.AllowColdGET(lom.Bucket, lom.BckIsAIS, lom.BckProps)
-}
-func (lom *LOM) AllowDELETE() error {
-	return lom.bmd.AllowDELETE(lom.Bucket, lom.BckIsAIS, lom.BckProps)
-}
-func (lom *LOM) AllowRENAME() error {
-	return lom.bmd.AllowRENAME(lom.Bucket, lom.BckIsAIS, lom.BckProps)
 }
 
 //

@@ -13,7 +13,7 @@ import (
 //
 // resolve and validate fqn
 //
-func ResolveFQN(fqn string, bowner Bowner, isLocal ...bool) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
+func ResolveFQN(fqn string, isLocal ...bool) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	var (
 		digest uint64
 	)
@@ -26,19 +26,10 @@ func ResolveFQN(fqn string, bowner Bowner, isLocal ...bool) (parsedFQN fs.Parsed
 	if err != nil {
 		return
 	}
-	bckIsAIS := parsedFQN.BckIsAIS
 	parsedFQN.Digest = digest
-	if len(isLocal) == 0 {
-		if !bowner.Get().IsAIS(parsedFQN.Bucket) && bckIsAIS {
-			err = fmt.Errorf("ais bucket (%s) for FQN (%s) does not exist", parsedFQN.Bucket, fqn)
-			return
-		}
-	} else {
-		bckIsAIS = isLocal[0] // caller has already done the above
-	}
-	if bckIsAIS != parsedFQN.BckIsAIS {
+	if len(isLocal) > 0 && isLocal[0] != parsedFQN.BckIsAIS {
 		err = fmt.Errorf("%s (%s/%s) - bucket locality mismatch (%t != %t)",
-			fqn, parsedFQN.Bucket, parsedFQN.Objname, bckIsAIS, parsedFQN.BckIsAIS)
+			fqn, parsedFQN.Bucket, parsedFQN.Objname, isLocal[0], parsedFQN.BckIsAIS)
 	}
 	return
 }

@@ -237,7 +237,7 @@ wack:
 				cnt += l
 				if !logged {
 					for _, lom := range lomack.q {
-						tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
+						tsi, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
 						if err == nil {
 							glog.Infof("waiting for %s ACK from %s", lom, tsi)
 							logged = true
@@ -481,8 +481,8 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 		tsi  = smap.GetTarget(tsid)
 	)
 	// Rx
-	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromBool(hdr.BckIsAIS))
-	if err != nil {
+	lom := &cluster.LOM{T: reb.t, Objname: hdr.Objname}
+	if err = lom.Init(hdr.Bucket, cmn.ProviderFromBool(hdr.BckIsAIS)); err != nil {
 		glog.Error(err)
 		return
 	}
@@ -541,13 +541,13 @@ func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objR
 		glog.Error(err)
 		return
 	}
-	lom, err := cluster.LOM{T: reb.t, Bucket: hdr.Bucket, Objname: hdr.Objname}.Init(cmn.ProviderFromBool(hdr.BckIsAIS))
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
-	}
-	if err != nil {
+	lom := &cluster.LOM{T: reb.t, Objname: hdr.Objname}
+	if err = lom.Init(hdr.Bucket, cmn.ProviderFromBool(hdr.BckIsAIS)); err != nil {
 		glog.Error(err)
 		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: ack from %s on %s", reb.t.si.Name(), string(hdr.Opaque), lom)
 	}
 	var (
 		_, idx = lom.Hkey()
@@ -593,7 +593,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 				delete(lomack.q, uname)
 				continue
 			}
-			tsi, _ := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
+			tsi, _ := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
 			if reb.t.lookupRemote(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
@@ -674,7 +674,8 @@ func (rj *globalRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if de.IsDir() {
 		return nil
 	}
-	lom, err = cluster.LOM{T: t, FQN: fqn}.Init("")
+	lom = &cluster.LOM{T: t, FQN: fqn}
+	err = lom.Init("", "")
 	if err != nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s, err %s - skipping...", lom, err)
@@ -682,7 +683,7 @@ func (rj *globalRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// rebalance, maybe
-	tsi, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &rj.smap.Smap)
+	tsi, err = cluster.HrwTarget(lom.Bucket(), lom.Objname, &rj.smap.Smap)
 	if err != nil {
 		return err
 	}
@@ -747,9 +748,9 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error
 		goto rerr
 	}
 	hdr = transport.Header{
-		Bucket:   lom.Bucket,
+		Bucket:   lom.Bucket(),
 		Objname:  lom.Objname,
-		BckIsAIS: lom.BckIsAIS,
+		BckIsAIS: lom.IsAIS(),
 		Opaque:   []byte(rj.m.t.si.DaemonID), // self == src
 		ObjAttrs: transport.ObjectAttrs{
 			Size:       lom.Size(),
@@ -888,14 +889,14 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	if de.IsDir() {
 		return nil
 	}
-	lom, err := cluster.LOM{T: t, FQN: fqn}.Init("")
-	if err != nil {
+	lom := &cluster.LOM{T: t, FQN: fqn}
+	if err = lom.Init("", ""); err != nil {
 		return nil
 	}
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {
 		smap := t.smapowner.get()
-		if tsi, err := cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap); err == nil {
+		if tsi, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap); err == nil {
 			if tsi.DaemonID != t.si.DaemonID {
 				return nil
 			}
@@ -906,7 +907,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	ri := &replicInfo{t: t, bucketTo: lom.Bucket, buf: rj.buf, localCopy: true}
+	ri := &replicInfo{t: t, bucketTo: lom.Bucket(), buf: rj.buf, localCopy: true}
 	copied, err := ri.copyObject(lom, lom.Objname)
 	if err != nil {
 		glog.Warningf("%s: %v", lom, err)

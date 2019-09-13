@@ -264,16 +264,16 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 }
 
 func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
-	if !lom.BckProps.EC.Enabled {
+	if !lom.Bprops().EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 
-	isECCopy := ec.IsECCopy(lom.Size(), &lom.BckProps.EC)
+	isECCopy := ec.IsECCopy(lom.Size(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
 	// tradeoff: encoding small object might require just 1 additional target available
 	// we will start xaction to satisfy this request
-	if required := lom.BckProps.EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
+	if required := lom.Bprops().EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
 		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
 		return ec.ErrorInsufficientTargets
 	}
@@ -291,7 +291,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 
 	req := &ec.Request{
 		Action: ec.ActSplit,
-		IsCopy: ec.IsECCopy(lom.Size(), &lom.BckProps.EC),
+		IsCopy: ec.IsECCopy(lom.Size(), &lom.Bprops().EC),
 		LOM:    lom,
 	}
 
@@ -299,13 +299,13 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		return err
 	}
 
-	mgr.restoreBckPutXact(lom.Bucket).Encode(req)
+	mgr.restoreBckPutXact(lom.Bucket()).Encode(req)
 
 	return nil
 }
 
 func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
-	if !lom.BckProps.EC.Enabled {
+	if !lom.Bprops().EC.Enabled {
 		return
 	}
 	cmn.Assert(lom.FQN != "")
@@ -315,17 +315,17 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 		LOM:    lom,
 	}
 
-	mgr.restoreBckPutXact(lom.Bucket).Cleanup(req)
+	mgr.restoreBckPutXact(lom.Bucket()).Cleanup(req)
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
-	if !lom.BckProps.EC.Enabled {
+	if !lom.Bprops().EC.Enabled {
 		return ec.ErrorECDisabled
 	}
 
 	targetCnt := mgr.targetCnt.Load()
 	// note: restore replica object is done with GFN, safe to always abort
-	if required := lom.BckProps.EC.RequiredRestoreTargets(); int(targetCnt) < required {
+	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
 		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
 		return ec.ErrorInsufficientTargets
 	}
@@ -337,7 +337,7 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		ErrCh:  make(chan error), // unbuffered
 	}
 
-	mgr.restoreBckGetXact(lom.Bucket).Decode(req)
+	mgr.restoreBckGetXact(lom.Bucket()).Decode(req)
 
 	// wait for EC completes restoring the object
 	return <-req.ErrCh

@@ -82,15 +82,18 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// stop whole operation. Maybe some listeners as we have on smap change?
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
-	bmd := ctx.bmdowner.Get()
-	if _, err = bmd.ValidateBucket(parsedRS.Bucket, parsedRS.BckProvider); err != nil {
+
+	bck := &cluster.Bck{Name: parsedRS.Bucket, Provider: parsedRS.BckProvider}
+	if err = bck.Init(ctx.bmdowner); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
-	if outBckIsAIS, err := bmd.ValidateBucket(parsedRS.OutputBucket, parsedRS.OutputBckProvider); err != nil {
+	bck = &cluster.Bck{Name: parsedRS.OutputBucket, Provider: parsedRS.OutputBckProvider}
+	if err = bck.Init(ctx.bmdowner); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
-	} else if err = bmd.AllowPUT(parsedRS.OutputBucket, outBckIsAIS); err != nil {
+	}
+	if err = bck.AllowPUT(); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}

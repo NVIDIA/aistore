@@ -144,9 +144,11 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		}
 
 		if strings.Contains(path, objName) {
-			sliceLom, err := cluster.LOM{FQN: path, T: tMock}.Init(bckType)
-			tassert.CheckFatal(t, err)
-
+			sliceLom := &cluster.LOM{T: tMock, FQN: path}
+			err := sliceLom.Init("", bckType)
+			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+				tassert.CheckFatal(t, err)
+			}
 			err = sliceLom.Load(false)
 
 			var cksumVal string

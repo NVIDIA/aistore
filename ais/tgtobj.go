@@ -139,7 +139,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		ver string
 		lom = poi.lom
 	)
-	if !lom.BckIsAIS && !poi.migrated {
+	if !lom.IsAIS() && !poi.migrated {
 		file, err1 := os.Open(poi.workFQN)
 		if err1 != nil {
 			err = fmt.Errorf("failed to open %s err: %v", poi.workFQN, err1)
@@ -157,9 +157,9 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 
 	// check if bucket was destroyed while PUT was in the progress.
 	// TODO: support cloud case
-	if lom.BckIsAIS && !poi.t.bmdowner.Get().IsAIS(lom.Bucket) {
+	if lom.IsAIS() && !poi.t.bmdowner.Get().IsAIS(lom.Bucket()) {
 		err = fmt.Errorf("Bucket %s was destroyed while PUTting %s was in the progress",
-			lom.Bucket, lom.Objname)
+			lom.Bucket(), lom.Objname)
 		errCode = http.StatusBadRequest
 		return
 	}
@@ -167,7 +167,7 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
-	if lom.BckIsAIS && lom.VerConf().Enabled {
+	if lom.IsAIS() && lom.VerConf().Enabled {
 		if ver, err = lom.IncObjectVersion(); err != nil {
 			return
 		}
@@ -322,12 +322,13 @@ do:
 	}
 
 	coldGet = !goi.lom.Exists()
-	if coldGet && goi.lom.BckIsAIS {
+	if coldGet && goi.lom.IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
 		doubleCheck, err, errCode = goi.getFromAny(goi.lom)
 		if doubleCheck && err != nil {
-			lom2, er2 := cluster.LOM{T: goi.t, Bucket: goi.lom.Bucket, Objname: goi.lom.Objname}.Init(cmn.ProviderFromBool(goi.lom.BckIsAIS))
+			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
+			er2 := lom2.Init(goi.lom.Bucket(), cmn.ProviderFromBool(goi.lom.IsAIS()))
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil && lom2.Exists() {
@@ -342,7 +343,7 @@ do:
 		goi.lom.Lock(false)
 		goto get
 	}
-	if !coldGet && !goi.lom.BckIsAIS { // exists && cloud-bucket : check ver if requested
+	if !coldGet && !goi.lom.IsAIS() { // exists && cloud-bucket : check ver if requested
 		if goi.lom.Version() != "" && goi.lom.VerConf().ValidateWarmGet {
 			goi.lom.Unlock(false)
 			if coldGet, err, errCode = goi.t.checkCloudVersion(goi.ctx, goi.lom); err != nil {
@@ -362,7 +363,7 @@ do:
 		if err != nil {
 			if goi.lom.BadCksum {
 				glog.Error(err)
-				if goi.lom.BckIsAIS {
+				if goi.lom.IsAIS() {
 					// TODO: recover from copies if available
 					if err := goi.lom.Remove(); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", err, err)
@@ -417,7 +418,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		aborted, running = goi.t.xactions.isRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
 	)
-	tsi, err = cluster.HrwTarget(lom.Bucket, lom.Objname, &smap.Smap)
+	tsi, err = cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
 	if err != nil {
 		return
 	}
@@ -434,7 +435,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 	// FIXME: if there're not enough EC targets to restore an sliced object, we might be able to restore it
 	// if it was replicated. In this case even just one additional target might be sufficient
 	// This won't succeed if an object was sliced, neither will ecmanager.RestoreObject(lom)
-	enoughECRestoreTargets := lom.BckProps.EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
+	enoughECRestoreTargets := lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
 	aborted, running = goi.t.xactions.isRebalancing(cmn.ActGlobalReb)
@@ -488,12 +489,12 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromBool(lom.BckIsAIS))
+	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromBool(lom.IsAIS()))
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,
 		Base:   tsi.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket(), lom.Objname),
 		Query:  query,
 	}
 	req, _, cancel, err := reqArgs.ReqWithTimeout(lom.Config().Timeout.SendFile)
@@ -625,7 +626,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, err error, errCode in
 	if err != nil {
 		if os.IsNotExist(err) {
 			errCode = http.StatusNotFound
-			retry = true // (!lom.BckIsAIS || lom.ECEnabled() || GFN...)
+			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fshc(err, fqn)
 			err = fmt.Errorf("%s: err: %v", goi.lom, err)

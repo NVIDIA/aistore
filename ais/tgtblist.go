@@ -103,7 +103,8 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 						return
 					}
 					for i := 0; i < l; i += m {
-						lom, err := cluster.LOM{T: t, Bucket: bucket, Objname: bckEntries[i].Name}.Init(bckProvider)
+						lom := &cluster.LOM{T: t, Objname: bckEntries[i].Name}
+						err := lom.Init(bucket, bckProvider)
 						if err == nil && lom.IsLoaded() { // loaded?
 							loaded++
 						}

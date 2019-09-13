@@ -142,7 +142,8 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	var (
 		objStatus uint16 = cmn.ObjStatusOK
 	)
-	lom, err := cluster.LOM{T: ci.t, FQN: fqn}.Init("")
+	lom := &cluster.LOM{T: ci.t, FQN: fqn}
+	err := lom.Init("", "")
 	if err != nil {
 		glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 	}
@@ -159,7 +160,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 		}
-		si, err := cluster.HrwTarget(lom.Bucket, lom.Objname, ci.smap)
+		si, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, ci.smap)
 		if err != nil {
 			glog.Errorf("%s: %s", lom, err)
 		}

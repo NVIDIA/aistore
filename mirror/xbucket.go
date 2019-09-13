@@ -133,7 +133,8 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	lom, err := cluster.LOM{T: j.parent.Target(), FQN: fqn}.Init(j.provider, j.config)
+	lom := &cluster.LOM{T: j.parent.Target(), FQN: fqn}
+	err := lom.Init("", j.provider, j.config)
 	if err != nil {
 		return nil
 	}
@@ -145,7 +146,6 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 			return nil
 		}
 	}
-	cmn.Assert(j.parent.BckIsAIS() == lom.BckIsAIS)
 	return j.callback(lom)
 }
 

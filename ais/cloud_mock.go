@@ -35,14 +35,14 @@ func (m *emptyCloudProvider) getBucketNames(ctx context.Context) (buckets []stri
 	return []string{}, nil, 0
 }
 func (m *emptyCloudProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta cmn.SimpleKVs, err error, errCode int) {
-	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket), http.StatusNotFound
+	return cmn.SimpleKVs{}, cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket()), http.StatusNotFound
 }
 func (m *emptyCloudProvider) getObj(ctx context.Context, fqn string, lom *cluster.LOM) (err error, errCode int) {
-	return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket), http.StatusNotFound
+	return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket()), http.StatusNotFound
 }
 func (m *emptyCloudProvider) putObj(ctx context.Context, r io.Reader, lom *cluster.LOM) (version string, err error, errCode int) {
-	return "", cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket), http.StatusNotFound
+	return "", cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket()), http.StatusNotFound
 }
 func (m *emptyCloudProvider) deleteObj(ctx context.Context, lom *cluster.LOM) (err error, errCode int) {
-	return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket), http.StatusNotFound
+	return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket()), http.StatusNotFound
 }

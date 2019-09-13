@@ -85,8 +85,8 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 		}
 		return nil
 	}
-
-	lom, err := cluster.LOM{T: lctx.ini.T, FQN: fqn}.Init(bckProvider, lctx.config)
+	lom := &cluster.LOM{T: lctx.ini.T, FQN: fqn}
+	err := lom.Init("", bckProvider, lctx.config)
 	if err != nil {
 		return nil
 	}
@@ -164,8 +164,9 @@ func (lctx *lructx) evict() (err error) {
 		}
 		lom.Uncache()
 		// 2.2: for mirrored objects: remove extra copies if any
-		lom, err = cluster.LOM{T: lctx.ini.T, Bucket: lom.Bucket, Objname: lom.Objname}.Init(
-			cmn.ProviderFromBool(lom.BckIsAIS), lom.Config())
+		prov := cmn.ProviderFromBool(lom.IsAIS())
+		lom = &cluster.LOM{T: lctx.ini.T, Objname: lom.Objname}
+		err = lom.Init(lom.Bucket(), prov, lom.Config())
 		if err != nil {
 			glog.Warningf("%s: %v", lom, err)
 		} else if err = lom.Load(false); err != nil {
