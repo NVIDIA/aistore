@@ -67,6 +67,7 @@ type globalRebEntry struct {
 	xact        *xactGlobalReb
 	stats       stats.RebalanceTargetStats
 	smapVersion int64
+	globRebID   int64
 	runnerCnt   int
 }
 
@@ -75,7 +76,7 @@ func (e *globalRebEntry) Start(id int64) error {
 		xactRebBase: makeXactRebBase(id, cmn.ActGlobalReb, e.runnerCnt),
 		smapVersion: e.smapVersion,
 	}
-
+	xGlobalReb.XactBase.SetGID(e.globRebID)
 	e.xact = xGlobalReb
 	return nil
 }

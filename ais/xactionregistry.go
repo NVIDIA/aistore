@@ -671,8 +671,8 @@ func (r *xactionsRegistry) renewLRU() *lru.Xaction {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewGlobalReb(smapVersion int64, runnerCnt int) *xactGlobalReb {
-	e := &globalRebEntry{smapVersion: smapVersion, runnerCnt: runnerCnt}
+func (r *xactionsRegistry) renewGlobalReb(smapVersion, globRebID int64, runnerCnt int) *xactGlobalReb {
+	e := &globalRebEntry{smapVersion: smapVersion, globRebID: globRebID, runnerCnt: runnerCnt}
 	ee, keep, _ := r.renewGlobalXaction(e)
 	entry := ee.(*globalRebEntry)
 	if keep { // previous global rebalance is still running

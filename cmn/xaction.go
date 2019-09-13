@@ -35,6 +35,7 @@ type (
 	XactBase struct {
 		XactBaseCountStats
 		id       int64
+		gid      int64
 		sutime   atomic.Int64
 		eutime   atomic.Int64
 		kind     string
@@ -90,6 +91,7 @@ func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsAIS bool) 
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
+func (xact *XactBase) SetGID(gid int64)           { xact.gid = gid }
 func (xact *XactBase) Kind() string               { return xact.kind }
 func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) BckIsAIS() bool             { return xact.bckIsAIS }
@@ -100,12 +102,22 @@ func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }
 func (xact *XactBase) String() string {
 	stime := xact.StartTime()
 	stimestr := stime.Format(timeStampFormat)
+	prefix := xact.Kind()
+	if xact.bucket != "" {
+		prefix += "@" + xact.bucket
+	}
 	if !xact.Finished() {
-		return fmt.Sprintf("%s(%d) started %s", xact.Kind(), xact.ShortID(), stimestr)
+		if xact.gid == 0 {
+			return fmt.Sprintf("%s(%d) started %s", prefix, xact.ShortID(), stimestr)
+		}
+		return fmt.Sprintf("%s[%d, g%d] started %s", prefix, xact.ShortID(), xact.gid, stimestr)
 	}
 	etime := xact.EndTime()
 	d := etime.Sub(stime)
-	return fmt.Sprintf("%s(%d) started %s ended %s (%v)", xact.Kind(), xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
+	if xact.gid == 0 {
+		return fmt.Sprintf("%s(%d) started %s ended %s (%v)", prefix, xact.ShortID(), stimestr, etime.Format(timeStampFormat), d)
+	}
+	return fmt.Sprintf("%s[%d, g%d] started %s ended %s (%v)", prefix, xact.ShortID(), xact.gid, stimestr, etime.Format(timeStampFormat), d)
 }
 
 func (xact *XactBase) StartTime(s ...time.Time) time.Time {

@@ -146,7 +146,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
 	availablePaths, _ := fs.Mountpaths.Get()
-	xreb = reb.t.xactions.renewGlobalReb(ver, len(availablePaths)*2)
+	xreb = reb.t.xactions.renewGlobalReb(ver, globRebID, len(availablePaths)*2)
 	cmn.Assert(xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
