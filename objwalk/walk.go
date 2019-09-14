@@ -216,9 +216,11 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := &cluster.LOM{T: w.t, Objname: e.Name}
-		err := lom.Init(cmn.Cloud, w.bucket, config)
+		err := lom.Init(w.bucket, cmn.Cloud, config)
 		if err != nil {
-			continue
+			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+				continue
+			}
 		}
 		err = lom.Load()
 		if err != nil || !lom.Exists() {

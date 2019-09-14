@@ -22,6 +22,11 @@ func (b *Bck) IsCloud() bool {
 	return b.Provider == cmn.Cloud || b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
 }
 
+// NOTE: when the specified bucket is not present in the BMD:
+//       - always returns the corresponding *DoesNotExist error
+//       - for Cloud bucket - fills in the props with defaults from config
+//       - for AIS bucket - sets the props to nil
+//       - for Cloud bucket, the caller can type-cast err.(*cmn.ErrorCloudBucketDoesNotExist) and proceed
 func (b *Bck) Init(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if b.Provider == "" {
