@@ -296,6 +296,8 @@ const (
 	Vote      = "vote"
 	Transport = "transport"
 	Reverse   = "reverse"
+	// l2 AuthN
+	Users = "users"
 
 	// l3
 	SyncSmap     = "syncsmap"
@@ -351,4 +353,10 @@ const (
 	CompressAlways = "always"
 	CompressNever  = "never"
 	CompressRatio  = "ratio=%d" // adaptive: min ratio that warrants compression
+)
+
+// AuthN consts
+const (
+	HeaderAuthorization = "Authorization"
+	HeaderBearer        = "Bearer"
 )

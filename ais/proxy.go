@@ -36,7 +36,6 @@ import (
 )
 
 const (
-	tokenStart    = "Bearer"
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
@@ -2205,13 +2204,13 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 // Header format:
 //		'Authorization: Bearer <token>'
 func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
-	authToken := r.Header.Get("Authorization")
+	authToken := r.Header.Get(cmn.HeaderAuthorization)
 	if authToken == "" && cmn.GCO.Get().Auth.AllowGuest {
 		return guestAcc, nil
 	}
 
 	s := strings.SplitN(authToken, " ", 2)
-	if len(s) != 2 || s[0] != tokenStart {
+	if len(s) != 2 || s[0] != cmn.HeaderBearer {
 		return nil, fmt.Errorf("invalid request")
 	}
 

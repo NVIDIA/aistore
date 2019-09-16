@@ -25,6 +25,7 @@ type BaseParams struct {
 	Client *http.Client
 	URL    string
 	Method string
+	Token  string
 }
 
 func (bp *BaseParams) Copy() *BaseParams {
@@ -38,8 +39,10 @@ func (bp *BaseParams) Copy() *BaseParams {
 // OptionalParams is used in constructing client-side API requests to the AIStore.
 // Stores Query and Headers for providing arguments that are not used commonly in API requests
 type OptionalParams struct {
-	Query  url.Values
-	Header http.Header
+	Query    url.Values
+	Header   http.Header
+	User     string
+	Password string
 }
 
 func init() {
@@ -64,6 +67,7 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 	if b != nil {
 		reqBody = bytes.NewBuffer(b)
 	}
+
 	url := baseParams.URL + path
 	req, err := http.NewRequest(baseParams.Method, url, reqBody)
 	if err != nil {
@@ -72,6 +76,7 @@ func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optPara
 	if len(optParams) > 0 {
 		setRequestOptParams(req, optParams[0])
 	}
+	setAuthToken(req, baseParams)
 
 	resp, err := baseParams.Client.Do(req)
 	if err != nil {
@@ -110,7 +115,12 @@ func setRequestOptParams(req *http.Request, optParams OptionalParams) {
 	if len(optParams.Query) != 0 {
 		req.URL.RawQuery = optParams.Query.Encode()
 	}
-	req.Header = optParams.Header
+	if optParams.Header != nil {
+		req.Header = optParams.Header
+	}
+	if optParams.User != "" && optParams.Password != "" {
+		req.SetBasicAuth(optParams.User, optParams.Password)
+	}
 }
 
 func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values) {
@@ -122,4 +132,10 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values) {
 		q = options.Query
 	}
 	return
+}
+
+func setAuthToken(r *http.Request, baseParams *BaseParams) {
+	if baseParams.Token != "" {
+		r.Header.Set(cmn.HeaderAuthorization, cmn.MakeHeaderAuthnToken(baseParams.Token))
+	}
 }

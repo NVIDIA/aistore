@@ -263,7 +263,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 // valid. Super-user is a user created at deployment time that cannot be
 // deleted/created via REST API
 func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
-	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	s := strings.SplitN(r.Header.Get(cmn.HeaderAuthorization), " ", 2)
 	if len(s) != 2 {
 		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("invalid header")

@@ -274,6 +274,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 		req.ContentLength = int64(args.Size) // as per https://tools.ietf.org/html/rfc7230#section-3.3.2
 	}
 
+	setAuthToken(req, args.BaseParams)
 	resp, err := args.BaseParams.Client.Do(req)
 	if err != nil {
 		sleep := httpRetrySleep

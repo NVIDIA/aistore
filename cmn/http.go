@@ -333,3 +333,7 @@ func copyHeaders(src http.Header, dst *http.Header) {
 		}
 	}
 }
+
+func MakeHeaderAuthnToken(token string) string {
+	return HeaderBearer + " " + token
+}

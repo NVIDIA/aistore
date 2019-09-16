@@ -513,8 +513,8 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 // Returns empty userID in case of token is invalid
 func (t *targetrunner) userFromRequest(header http.Header) (*authRec, error) {
 	token := ""
-	tokenParts := strings.SplitN(header.Get("Authorization"), " ", 2)
-	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
+	tokenParts := strings.SplitN(header.Get(cmn.HeaderAuthorization), " ", 2)
+	if len(tokenParts) == 2 && tokenParts[0] == cmn.HeaderBearer {
 		token = tokenParts[1]
 	}
 

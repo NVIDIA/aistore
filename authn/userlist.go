@@ -8,6 +8,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,9 +22,10 @@ import (
 )
 
 const (
-	userListFile   = "users.json"
-	proxyTimeout   = time.Minute * 2 // maximum time for syncing Authn data with primary proxy
-	proxyRetryTime = time.Second * 5 // an interval between primary proxy detection attempts
+	userListFile     = "users.json"
+	proxyTimeout     = 2 * time.Minute           // maximum time for syncing Authn data with primary proxy
+	proxyRetryTime   = 5 * time.Second           // an interval between primary proxy detection attempts
+	foreverTokenTime = 24 * 365 * 20 * time.Hour // kind of never-expired token
 )
 
 type (
@@ -76,6 +78,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 	if err = cmn.LocalLoad(dbPath, &mgr.Users); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
 	}
+
 	// update loaded list: create empty map for users who do not have credentials in saved file
 	for _, uinfo := range mgr.Users {
 		if uinfo.Creds == nil {
@@ -90,6 +93,12 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		info.passwordDecoded = string(bytes)
 	}
 
+	// add a superuser to the list to allow the superuser to login
+	mgr.Users[conf.Auth.Username] = &userInfo{
+		UserID:          conf.Auth.Username,
+		passwordDecoded: conf.Auth.Password,
+	}
+
 	return mgr
 }
 
@@ -97,7 +106,15 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 // It is called from functions of this module that acquire lock, so this
 //    function needs no locks
 func (m *userManager) saveUsers() (err error) {
-	if err = cmn.LocalSave(m.Path, &m.Users); err != nil {
+	// copy users to avoid saving admin to the file
+	filtered := make(map[string]*userInfo, len(m.Users))
+	for k, v := range m.Users {
+		if k != conf.Auth.Username {
+			filtered[k] = v
+		}
+	}
+
+	if err = cmn.LocalSave(m.Path, &filtered); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
 	return err
@@ -127,6 +144,9 @@ func (m *userManager) addUser(userID, userPass string) error {
 
 // Deletes an existing user
 func (m *userManager) delUser(userID string) error {
+	if userID == conf.Auth.Username {
+		return errors.New("Super user cannot be deleted")
+	}
 	m.mtx.Lock()
 	if _, ok := m.Users[userID]; !ok {
 		m.mtx.Unlock()
@@ -151,10 +171,11 @@ func (m *userManager) delUser(userID string) error {
 // If a new token was generated then it sends the proxy a new valid token list
 func (m *userManager) issueToken(userID, pwd string) (string, error) {
 	var (
-		user  *userInfo
-		token *tokenInfo
-		ok    bool
-		err   error
+		user    *userInfo
+		token   *tokenInfo
+		ok      bool
+		err     error
+		expires time.Time
 	)
 
 	// check user name and pass in DB
@@ -181,7 +202,11 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 
 	// generate token
 	issued := time.Now()
-	expires := issued.Add(conf.Auth.ExpirePeriod)
+	if conf.Auth.ExpirePeriod == 0 {
+		expires = issued.Add(foreverTokenTime)
+	} else {
+		expires = issued.Add(conf.Auth.ExpirePeriod)
+	}
 
 	// put all useful info into token: who owns the token, when it was issued,
 	// when it expires and credentials to log in AWS, GCP etc

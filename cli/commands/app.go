@@ -143,6 +143,7 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, configCmds...)
 	app.Commands = append(app.Commands, xactCmds...)
 	app.Commands = append(app.Commands, helpCommand)
+	app.Commands = append(app.Commands, authCmds...)
 
 	// VERBs
 	app.Commands = append(app.Commands, listCmds...)

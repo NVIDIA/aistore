@@ -93,12 +93,20 @@ func reloadFromFile(mgr *userManager, t *testing.T) {
 	if newmgr == nil {
 		t.Error("New manager has not been created")
 	}
-	if len(newmgr.Users) != len(mgr.Users) {
-		t.Errorf("Number of users mismatch: old=%d, new=%d", len(mgr.Users), len(newmgr.Users))
-	}
 	for username, creds := range mgr.Users {
+		if username == conf.Auth.Username {
+			continue
+		}
 		if info, ok := newmgr.Users[username]; !ok || info == nil || info.Password != creds.Password {
 			t.Errorf("User %s not found in reloaded list", username)
+		}
+	}
+	for username, creds := range newmgr.Users {
+		if username == conf.Auth.Username {
+			continue
+		}
+		if info, ok := mgr.Users[username]; !ok || info == nil || info.Password != creds.Password {
+			t.Errorf("User %s should not be in saved list", username)
 		}
 	}
 }

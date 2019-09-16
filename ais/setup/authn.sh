@@ -18,8 +18,8 @@ cat > $CONFFILE <<EOL
 	},
 	"auth": {
 		"secret": "$SECRETKEY",
-		"username": "$AUTH_SU_NAME",
-		"password": "$AUTH_SU_PASS",
+		"username": "${AUTHN_SU_NAME:-admin}",
+		"password": "${AUTHN_SU_PASS:-admin}",
 		"expiration_time": "${AUTHN_TTL:-24h}"
 	},
 	"timeout": {

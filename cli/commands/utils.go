@@ -546,6 +546,7 @@ func cliAPIParams(proxyURL string) *api.BaseParams {
 	return &api.BaseParams{
 		Client: httpClient,
 		URL:    proxyURL,
+		Token:  loggedUserToken.Token,
 	}
 }
 

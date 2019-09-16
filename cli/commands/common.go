@@ -22,6 +22,7 @@ const (
 	commandObject   = "object"
 	commandXaction  = "xaction"
 	commandNode     = "node"
+	commandAuth     = "auth"
 
 	//
 	// VERBs
@@ -296,6 +297,11 @@ const (
 	xactionWithOptionalBucketArgumentText = "XACTION_NAME [BUCKET_NAME]"
 	xactionStopAll                        = "all"
 	xactionStopCommandArgumentText        = "XACTION_NAME|" + xactionStopAll + " [BUCKET_NAME]"
+
+	// auth
+	addUserText    = "USER_NAME USER_PASSWORD"
+	deleteUserText = "USER_NAME"
+	userLoginText  = "USER_NAME USER_PASSWORD"
 )
 
 // Command help templates
