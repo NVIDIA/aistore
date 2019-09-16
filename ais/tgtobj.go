@@ -423,7 +423,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		return
 	}
 	if aborted || running || gfnActive {
-		if lom.CopyObjectFromAny() { // get-from-neighbor local variety
+		if lom.RestoreObjectFromAny() { // get-from-neighbor local variety
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s restored", lom)
 			}

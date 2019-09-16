@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 type replicInfo struct {
@@ -77,8 +76,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		}
 
 		// do
-		workFQN := fs.CSM.GenContentParsedFQN(dst.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-		_, err = lom.CopyObject(dst.FQN, workFQN, ri.buf, false /*dstIsCopy=false*/, true /*srcCopyOK*/)
+		_, err = lom.CopyObject(dst.FQN, ri.buf, false /*dstIsCopy=false*/, true /*srcCopyOK*/)
 		if err == nil {
 			copied = true
 			dst.SetBID(dst.Bprops().BID)

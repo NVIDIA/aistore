@@ -671,24 +671,39 @@ func Rename(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
-func CopyFile(src, dst string, buf []byte) (written int64, err error) {
+func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum string, err error) {
 	var (
-		reader *os.File
-		writer *os.File
+		hasher *xxhash.XXHash64
+
+		srcFile *os.File
+		dstFile *os.File
+		writer  io.Writer
 	)
-	if reader, err = os.Open(src); err != nil {
+	if srcFile, err = os.Open(src); err != nil {
 		return
 	}
-	if writer, err = CreateFile(dst); err != nil {
+	if dstFile, err = CreateFile(dst); err != nil {
 		glog.Errorf("Failed to create %s: %v", dst, err)
-		reader.Close()
+		srcFile.Close()
 		return
 	}
-	if written, err = io.CopyBuffer(writer, reader, buf); err != nil {
+
+	writer = dstFile
+	if needCksum {
+		hasher = xxhash.New64()
+		writer = io.MultiWriter(dstFile, hasher)
+	}
+
+	if written, err = io.CopyBuffer(writer, srcFile, buf); err != nil {
 		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
 	}
-	writer.Close()
-	reader.Close()
+	dstFile.Close()
+	srcFile.Close()
+
+	if needCksum {
+		cksum = HashToStr(hasher)
+	}
+
 	return
 }
 

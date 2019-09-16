@@ -871,7 +871,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	// * checkCached also copies (i.e., effectively, recovers) misplaced object if it finds one
 	// * see also: GFN
 	if !exists && checkCached {
-		exists = lom.CopyObjectFromAny()
+		exists = lom.RestoreObjectFromAny()
 	}
 
 	if lom.IsAIS() || checkCached {

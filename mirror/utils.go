@@ -54,29 +54,26 @@ loop:
 
 func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
 	var (
-		orig      = lom.ParsedFQN.MpathInfo
-		parsedFQN = lom.ParsedFQN
-		bck       = lom.Bck()
+		bck = lom.Bck()
 	)
-	parsedFQN.MpathInfo = mpathInfo
 
-	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	// Reload metadata, it is necessary to have it fresh
+	lom.Uncache()
+	if err := lom.Load(false); err != nil {
+		return nil, err
+	}
+
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
-	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK=false*/)
+	clone, err = lom.CopyObject(copyFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK*/)
 	if err != nil {
 		return
 	}
 	lom.AddCopy(copyFQN, mpathInfo)
-	if err = lom.Persist(); err == nil {
-		clone = lom.Clone(copyFQN)
-		clone.HrwFQN = lom.FQN
-		clone.SetCopies(lom.FQN, orig)
-		if err = clone.Persist(); err == nil {
-			lom.ReCache()
-			return // ok
-		}
+	if err = lom.Persist(); err != nil {
+		_ = lom.DelCopy(copyFQN)
+		return
 	}
-	// on error
-	_ = lom.DelCopy(copyFQN)
+
+	lom.ReCache()
 	return
 }

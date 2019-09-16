@@ -224,9 +224,10 @@ func (lom *LOM) DelExtraCopies() (n int, err error) {
 	return
 }
 
-func (lom *LOM) CopyObjectFromAny() (copied bool) {
+// RestoreObjectFromAny tries to restore object either from an object that
+// was not yet moved by rebalance or from any of the copy.
+func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 	availablePaths, _ := fs.Mountpaths.Get()
-	workFQN := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 	buf, slab := lom.T.GetMem2().AllocDefault()
 	for path, mpathInfo := range availablePaths {
 		if path == lom.ParsedFQN.MpathInfo.Path {
@@ -239,7 +240,16 @@ func (lom *LOM) CopyObjectFromAny() (copied bool) {
 		src := lom.Clone(fqn)
 
 		lom.Lock(true)
-		_, err := src.CopyObject(lom.FQN, workFQN, buf, false, true)
+		if err := src.Load(false); err != nil {
+			lom.Unlock(true)
+			continue
+		}
+		if !src.Exists() {
+			lom.Unlock(true)
+			continue
+		}
+
+		_, err := src.CopyObject(lom.FQN, buf, false, true)
 		lom.Unlock(true)
 
 		if err == nil {
@@ -252,16 +262,25 @@ func (lom *LOM) CopyObjectFromAny() (copied bool) {
 }
 
 // NOTE: caller is responsible for locking
-func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, dstIsCopy, srcCopyOK bool) (dst *LOM, err error) {
-	var written int64
+func (lom *LOM) CopyObject(dstFQN string, buf []byte, dstIsCopy, srcCopyOK bool) (dst *LOM, err error) {
+	var (
+		written       int64
+		dstCksumValue string
+
+		workFQN  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		srcCksum = lom.Cksum()
+	)
 	if !srcCopyOK && lom.IsCopy() {
 		err = fmt.Errorf("%s is a mirrored copy", lom)
 		return
 	}
-	written, err = cmn.CopyFile(lom.FQN, workFQN, buf)
+
+	needCksum := srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone
+	written, dstCksumValue, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
 	if err != nil {
 		return
 	}
+
 	dst = lom.Clone(dstFQN)
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
@@ -269,14 +288,24 @@ func (lom *LOM) CopyObject(dstFQN, workFQN string, buf []byte, dstIsCopy, srcCop
 		}
 		return
 	}
-	if dstIsCopy {
-		return
+
+	if srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone {
+		dstCksum := cmn.NewCksum(cmn.ChecksumXXHash, dstCksumValue)
+		if !cmn.EqCksum(dstCksum, lom.Cksum()) {
+			return nil, errors.New(cmn.BadCksum(dstCksum, lom.Cksum()))
+		}
 	}
-	// TODO -- FIXME: md.size and md.copies
+
+	if !dstIsCopy {
+		// If regular file store also atime, copies do not need that.
+		dst.SetAtimeUnix(time.Now().UnixNano())
+		// TODO -- FIXME: md.copies
+	} else {
+		dst.SetCopies(lom.FQN, lom.ParsedFQN.MpathInfo) // point to original object
+	}
 	dst.SetSize(written)
-	dst.SetCksum(lom.Cksum())
+	dst.SetCksum(srcCksum)
 	dst.SetVersion(lom.Version())
-	dst.SetAtimeUnix(time.Now().UnixNano())
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dstFQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)

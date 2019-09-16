@@ -184,8 +184,37 @@ func TestCopyFile(t *testing.T) {
 
 	// creates a file of random bytes
 	cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
-	if _, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000)); err != nil {
+	if _, _, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), false); err != nil {
 		t.Error(err)
+	}
+	srcData, err := ioutil.ReadFile(srcFilename)
+	if err != nil {
+		t.Error(err)
+	}
+	dstData, err := ioutil.ReadFile(dstFilename)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(srcData, dstData) {
+		t.Error("copied and source files are different")
+	}
+	os.Remove(srcFilename)
+	os.Remove(dstFilename)
+}
+
+func TestCopyFileCksum(t *testing.T) {
+	srcFilename := filepath.Join(tmpDir, "copyfilesrc.txt")
+	dstFilename := filepath.Join(tmpDir, "copyfiledst.txt")
+
+	// creates a file of random bytes
+	expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), true, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), true); err != nil {
+		t.Error(err)
+	} else if expectedCksum != cksum {
+		t.Errorf("expectedCksum: %s, got: %s", expectedCksum, cksum)
 	}
 	srcData, err := ioutil.ReadFile(srcFilename)
 	if err != nil {
