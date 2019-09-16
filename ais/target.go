@@ -1001,6 +1001,10 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
+	const (
+		retries = 2
+	)
+
 	mirrConf := lom.MirrorConf()
 	if !mirrConf.Enabled {
 		return
@@ -1012,18 +1016,23 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 		}
 		return
 	}
-	xputlrep := t.xactions.renewPutLocReplicas(lom)
-	if xputlrep == nil {
-		return
-	}
-	err := xputlrep.Repl(lom)
-	// retry upon race vs (just finished/timedout)
-	if _, ok := err.(*cmn.ErrXpired); ok {
-		xputlrep = t.xactions.renewPutLocReplicas(lom)
-		if xputlrep != nil {
-			err = xputlrep.Repl(lom)
+
+	var (
+		err error
+	)
+	for i := 0; i < retries; i++ {
+		xputlrep := t.xactions.renewPutLocReplicas(lom)
+		if xputlrep == nil {
+			return
 		}
+		err = xputlrep.Repl(lom)
+		if _, ok := err.(*cmn.ErrXpired); !ok {
+			break
+		}
+
+		// retry upon race vs (just finished/timedout)
 	}
+
 	if err != nil {
 		glog.Errorf("%s: unexpected failure to post for copying, err: %v", lom.StringEx(), err)
 	}

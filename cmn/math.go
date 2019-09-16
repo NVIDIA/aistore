@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+func MaxInArray(xs ...int) int {
+	Assert(len(xs) > 0)
+	curMax := xs[0]
+	for _, x := range xs[1:] {
+		if x > curMax {
+			curMax = x
+		}
+	}
+	return curMax
+}
+
 const MaxInt64 = int64(math.MaxInt64)
 
 // MinU64 returns min value of a and b for uint64 types

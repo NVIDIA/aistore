@@ -285,7 +285,7 @@ func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPut
 	if err != nil {
 		return nil
 	}
-	return ee.(*putLocReplicasEntry).xact
+	return ee.Get().(*mirror.XactPutLRepl)
 }
 
 //

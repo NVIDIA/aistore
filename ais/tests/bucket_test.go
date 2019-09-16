@@ -530,28 +530,31 @@ func TestBucketInvalidName(t *testing.T) {
 //
 //===============================================================
 func TestLocalMirror(t *testing.T) {
-	total, copies2, copies3 := testLocalMirror(t, 0, 0)
-	if copies2 != total || copies3 != 0 {
-		t.Fatalf("Expecting %d objects all to have 2 replicas, got copies2=%d, copies3=%d",
-			total, copies2, copies3)
+	tests := []struct {
+		numCopies []int // each of the number in the list represents the number of copies enforced on the bucket
+	}{
+		{[]int{1}}, // set number copies = 1 -- no copies should be created
+		{[]int{2}},
+		{[]int{2, 3}}, // first set number of copies to 2, then to 3
 	}
-}
-func TestLocalMirror2_1(t *testing.T) {
-	total, copies2, copies3 := testLocalMirror(t, 1, 0)
-	if copies2 != 0 || copies3 != 0 {
-		t.Fatalf("Expecting %d objects to have 1 replica, got %d", total, copies2)
-	}
-}
 
-// NOTE: targets must have at least 4 mountpaths for this test to PASS
-func TestLocalMirror2_1_3(t *testing.T) {
-	total, copies2, copies3 := testLocalMirror(t, 1, 3)
-	if copies3 != total || copies2 != 0 {
-		t.Fatalf("Expecting %d objects to have 3 replicas, got %d", total, copies3)
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test.numCopies), func(t *testing.T) {
+			total, copiesToNumObjects := testLocalMirror(t, test.numCopies)
+			if len(copiesToNumObjects) != 1 {
+				t.Fatalf("some objects do not have expected number of copies: %v", copiesToNumObjects)
+			}
+
+			expectedCopies := test.numCopies[len(test.numCopies)-1]
+			for copies := range copiesToNumObjects {
+				if copies != expectedCopies {
+					t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
+				}
+			}
+		})
 	}
 }
-
-func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int) {
+func testLocalMirror(t *testing.T, numCopies []int) (total int, copiesToNumObjects map[int]int) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -561,6 +564,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 			t:               t,
 			num:             10000,
 			numGetsEachFile: 5,
+			bucket:          cmn.RandString(10),
 		}
 	)
 
@@ -573,7 +577,7 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 		tassert.CheckFatal(t, err)
 
 		l := len(mpList.Available)
-		max := cmn.Max(cmn.Max(2, num1), num2) + 1
+		max := cmn.MaxInArray(numCopies...) + 1
 		if l < max {
 			t.Skipf("test %q requires at least %d mountpaths (target %s has %d)", t.Name(), max, targets[0], l)
 		}
@@ -612,14 +616,11 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
-	if num1 != 0 {
-		makeNCopies(t, num1, m.bucket, baseParams)
-	}
-	if num2 != 0 {
-		if num1 != 0 {
-			time.Sleep(time.Second * 30)
+	for _, copies := range numCopies {
+		makeNCopies(t, copies, m.bucket, baseParams)
+		if copies > 1 {
+			time.Sleep(10 * time.Second)
 		}
-		makeNCopies(t, num2, m.bucket, baseParams)
 	}
 
 	// List Bucket - primarily for the copies
@@ -629,18 +630,15 @@ func testLocalMirror(t *testing.T, num1, num2 int) (total, copies2, copies3 int)
 
 	m.wg.Wait()
 
+	copiesToNumObjects = make(map[int]int)
 	for _, entry := range objectList.Entries {
 		if entry.Atime == "" {
 			t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
 		}
 		total++
-		if entry.Copies == 2 {
-			copies2++
-		} else if entry.Copies == 3 {
-			copies3++
-		}
+		copiesToNumObjects[int(entry.Copies)]++
 	}
-	tutils.Logf("objects (total, 2-copies, 3-copies) = (%d, %d, %d)\n", total, copies2, copies3)
+	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
 	if total != m.num {
 		t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
 	}
