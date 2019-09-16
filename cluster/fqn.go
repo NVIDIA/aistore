@@ -5,15 +5,13 @@
 package cluster
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/aistore/fs"
 )
 
 //
 // resolve and validate fqn
 //
-func ResolveFQN(fqn string, isLocal ...bool) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
+func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	var (
 		digest uint64
 	)
@@ -22,22 +20,18 @@ func ResolveFQN(fqn string, isLocal ...bool) (parsedFQN fs.ParsedFQN, hrwFQN str
 		return
 	}
 	// NOTE: "misplaced" (when hrwFQN != fqn) is to be checked separately, via lom.Misplaced()
-	hrwFQN, digest, err = HrwFQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.BckIsAIS)
+	hrwFQN, digest, err = HrwFQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.BckProvider, parsedFQN.ObjName)
 	if err != nil {
 		return
 	}
 	parsedFQN.Digest = digest
-	if len(isLocal) > 0 && isLocal[0] != parsedFQN.BckIsAIS {
-		err = fmt.Errorf("%s (%s/%s) - bucket locality mismatch (%t != %t)",
-			fqn, parsedFQN.Bucket, parsedFQN.Objname, isLocal[0], parsedFQN.BckIsAIS)
-	}
 	return
 }
 
-func HrwFQN(contentType, bucket, objname string, isLocal bool) (fqn string, digest uint64, err error) {
+func HrwFQN(contentType, bucket, bckProvider, objName string) (fqn string, digest uint64, err error) {
 	var mpathInfo *fs.MountpathInfo
-	if mpathInfo, digest, err = hrwMpath(bucket, objname); err == nil {
-		fqn = fs.CSM.FQN(mpathInfo, contentType, isLocal, bucket, objname)
+	if mpathInfo, digest, err = hrwMpath(bucket, objName); err == nil {
+		fqn = fs.CSM.FQN(mpathInfo, contentType, bucket, bckProvider, objName)
 	}
 	return
 }

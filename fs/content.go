@@ -105,9 +105,9 @@ func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN ParsedFQN, contentType, p
 	fqn = f.FQN(
 		parsedFQN.MpathInfo,
 		contentType,
-		parsedFQN.BckIsAIS,
 		parsedFQN.Bucket,
-		spec.GenUniqueFQN(parsedFQN.Objname, prefix))
+		parsedFQN.BckProvider,
+		spec.GenUniqueFQN(parsedFQN.ObjName, prefix))
 	return
 }
 
@@ -136,11 +136,11 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	return
 }
 
-func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, bckIsAIS bool, bucket, objName string) (fqn string) {
+func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType, bucket, bckProvider, objName string) (fqn string) {
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
 		cmn.AssertMsg(false, contentType)
 	}
-	return mi.MakePathBucketObject(contentType, bucket, objName, bckIsAIS)
+	return mi.MakePathBucketObject(contentType, bucket, bckProvider, objName)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

@@ -194,7 +194,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 			sema   chan struct{}
 			mpathL string
 		)
-		mpathL = mpathInfo.MakePath(fs.ObjectType, true /*local*/)
+		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.AIS)
 		if config.Rebalance.Multiplier > 1 {
 			sema = make(chan struct{}, config.Rebalance.Multiplier)
 		}
@@ -205,7 +205,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	}
 	for _, mpathInfo := range availablePaths {
 		var sema chan struct{}
-		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
 		if config.Rebalance.Multiplier > 1 {
 			sema = make(chan struct{}, config.Rebalance.Multiplier)
 		}
@@ -821,9 +821,9 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 	for _, mpathInfo := range availablePaths {
 		var mpathL string
 		if bucket == "" {
-			mpathL = mpathInfo.MakePath(fs.ObjectType, true /*local*/)
+			mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.AIS)
 		} else {
-			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, true)
+			mpathL = mpathInfo.MakePathBucket(fs.ObjectType, bucket, cmn.AIS)
 		}
 		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.xactRebBase, wg: wg},
 			slab:              slab,
@@ -836,7 +836,7 @@ func (reb *rebManager) runLocalReb(skipGlobMisplaced bool, buckets ...string) {
 		goto wait
 	}
 	for _, mpathInfo := range availablePaths {
-		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
 		jogger := &localRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.xactRebBase, wg: wg},
 			slab:              slab,
 			skipGlobMisplaced: skipGlobMisplaced,

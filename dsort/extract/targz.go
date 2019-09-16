@@ -93,7 +93,7 @@ func (t *targzExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader
 			extractMethod.Set(ExtractToWriter)
 
 			args := extractRecordArgs{
-				shardName:     fqn.Objname,
+				shardName:     fqn.ObjName,
 				fileType:      filetype.DSortFileType,
 				recordName:    header.Name,
 				r:             data,

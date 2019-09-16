@@ -138,7 +138,7 @@ func (c *putJogger) encode(req *Request) error {
 	}
 
 	// Save metadata before encoding the object
-	metaFQN, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.Objname, req.LOM.IsAIS())
+	metaFQN, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.BckProvider(), req.LOM.Objname)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (c *putJogger) encode(req *Request) error {
 // replicas and slices
 // Just remove local metafile if it exists and broadcast the request to all
 func (c *putJogger) cleanup(req *Request) error {
-	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.Objname, req.LOM.IsAIS())
+	fqnMeta, _, err := cluster.HrwFQN(MetaType, req.LOM.Bucket(), req.LOM.BckProvider(), req.LOM.Objname)
 	if err != nil {
 		glog.Errorf("Failed to get path for metadata of %s/%s: %v", req.LOM.Bucket(), req.LOM.Objname, err)
 		return nil

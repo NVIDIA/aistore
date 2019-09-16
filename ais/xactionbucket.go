@@ -243,9 +243,9 @@ func (e *loadLomCacheEntry) Start(id int64) error {
 func (*loadLomCacheEntry) Kind() string    { return cmn.ActLoadLomCache }
 func (e *loadLomCacheEntry) Get() cmn.Xact { return e.xact }
 
-func (r *xactionsRegistry) renewBckLoadLomCache(bucket string, t cluster.Target, bckIsAIS bool) {
-	b := r.bucketsXacts(bucket)
-	e := &loadLomCacheEntry{t: t, bckIsAIS: bckIsAIS, baseBckEntry: baseBckEntry{bckName: bucket}}
+func (r *xactionsRegistry) renewBckLoadLomCache(t cluster.Target, bck *cluster.Bck) {
+	b := r.bucketsXacts(bck.Name)
+	e := &loadLomCacheEntry{t: t, bckIsAIS: bck.IsAIS(), baseBckEntry: baseBckEntry{bckName: bck.Name}}
 	b.renewBucketXaction(e)
 }
 
@@ -320,11 +320,11 @@ func (e *bcrEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, er
 	return
 }
 
-func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bucketFrom, bucketTo string, phase string) (*mirror.XactBckCopy, error) {
-	b := r.bucketsXacts(bucketFrom)
-	e := &bcrEntry{baseBckEntry: baseBckEntry{bckName: bucketFrom},
+func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bckFrom, bckTo *cluster.Bck, phase string) (*mirror.XactBckCopy, error) {
+	b := r.bucketsXacts(bckFrom.Name)
+	e := &bcrEntry{baseBckEntry: baseBckEntry{bckName: bckFrom.Name},
 		t:        t,
-		bucketTo: bucketTo,
+		bucketTo: bckTo.Name,
 		action:   cmn.ActCopyLB, // kind
 		phase:    phase,
 	}
@@ -419,11 +419,11 @@ func (e *fastRenEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool
 	return
 }
 
-func (r *xactionsRegistry) renewBckFastRename(t *targetrunner, bucketFrom, bucketTo string, phase string) (*xactFastRen, error) {
-	b := r.bucketsXacts(bucketFrom)
-	e := &fastRenEntry{baseBckEntry: baseBckEntry{bckName: bucketFrom},
+func (r *xactionsRegistry) renewBckFastRename(t *targetrunner, bckFrom, bckTo *cluster.Bck, phase string) (*xactFastRen, error) {
+	b := r.bucketsXacts(bckFrom.Name)
+	e := &fastRenEntry{baseBckEntry: baseBckEntry{bckName: bckFrom.Name},
 		t:        t,
-		bucketTo: bucketTo,
+		bucketTo: bckTo.Name,
 		action:   cmn.ActRenameLB, // kind
 		phase:    phase,
 	}

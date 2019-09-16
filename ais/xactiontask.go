@@ -7,30 +7,30 @@ package ais
 import (
 	"context"
 
+	"github.com/NVIDIA/aistore/cluster"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 )
 
 type bckListTaskEntry struct {
 	baseEntry
-	xact    *xactBckListTask
-	t       *targetrunner
-	id      int64
-	msg     *cmn.SelectMsg
-	bucket  string
-	isLocal bool
-	ctx     context.Context
-	cached  bool
+	xact   *xactBckListTask
+	t      *targetrunner
+	id     int64
+	msg    *cmn.SelectMsg
+	bck    *cluster.Bck
+	ctx    context.Context
+	cached bool
 }
 
 func (e *bckListTaskEntry) Start(_ int64) error {
 	xact := &xactBckListTask{
 		XactBase: *cmn.NewXactBase(e.id, cmn.ActAsyncTask),
+		ctx:      e.ctx,
 		t:        e.t,
 		msg:      e.msg,
-		bucket:   e.bucket,
-		isLocal:  e.isLocal,
-		ctx:      e.ctx,
+		bck:      e.bck,
 		cached:   e.cached,
 	}
 	e.xact = xact

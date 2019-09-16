@@ -49,7 +49,7 @@ func (r *XactBckLoadLomCache) init() (numjs int, err error) {
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
 		xwarmJogger := newXwarmJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckIsAIS())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckProvider())
 		r.mpathers[mpathLC] = xwarmJogger
 		go xwarmJogger.jog()
 	}

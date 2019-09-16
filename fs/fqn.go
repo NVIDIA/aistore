@@ -33,9 +33,9 @@ type ParsedFQN struct {
 	MpathInfo   *MountpathInfo
 	ContentType string
 	Bucket      string
-	Objname     string
+	BckProvider string
+	ObjName     string
 	Digest      uint64
-	BckIsAIS    bool
 }
 
 // mpathInfo, bucket, objname, isLocal, err
@@ -58,7 +58,13 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed ParsedFQN, err error) {
 	} else if items[1] != aisPath && items[1] != cloudPath {
 		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[1], fqn)
 	} else {
-		parsed.ContentType, parsed.BckIsAIS, parsed.Bucket, parsed.Objname = items[0], (items[1] == aisPath), items[2], items[3]
+		if items[1] == aisPath {
+			parsed.BckProvider = cmn.AIS
+		} else {
+			parsed.BckProvider = cmn.Cloud
+		}
+
+		parsed.ContentType, parsed.Bucket, parsed.ObjName = items[0], items[2], items[3]
 	}
 	return
 }
@@ -119,7 +125,7 @@ func (mfs *MountedFS) CreateBucketDir(bckProvider string) error {
 	availablePaths, _ := Mountpaths.Get()
 	for contentType := range CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
-			dir := mpathInfo.MakePath(contentType, isLocal)
+			dir := mpathInfo.MakePath(contentType, bckProvider)
 			if _, exists := availablePaths[dir]; exists {
 				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo, dir)
 			}

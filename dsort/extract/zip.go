@@ -144,7 +144,7 @@ func (z *zipExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 			}
 
 			args := extractRecordArgs{
-				shardName:     fqn.Objname,
+				shardName:     fqn.ObjName,
 				fileType:      fqn.ContentType,
 				recordName:    header.Name,
 				r:             cmn.NewSizedReader(file, int64(header.UncompressedSize64)),

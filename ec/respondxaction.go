@@ -70,9 +70,9 @@ func (r *XactRespond) Run() (err error) {
 
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
-func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsAIS bool) error {
+func (r *XactRespond) removeObjAndMeta(bucket, bckProvider, objName string) error {
 	if glog.V(4) {
-		glog.Infof("Delete request for %s/%s", bucket, objname)
+		glog.Infof("Delete request for %s/%s", bucket, objName)
 	}
 
 	// to be consistent with PUT, object's files are deleted in a reversed
@@ -82,7 +82,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsAIS bool) er
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, objname, bckIsAIS)
+		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, bckProvider, objName)
 		if err != nil {
 			return err
 		}
@@ -96,13 +96,13 @@ func (r *XactRespond) removeObjAndMeta(bucket, objname string, bckIsAIS bool) er
 
 // DispatchReq is responsible for handling request from other targets
 func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
-	bckIsAIS := r.t.GetBowner().Get().IsAIS(bucket)
+	bckProvider := cmn.ProviderFromBool(r.t.GetBowner().Get().IsAIS(bucket))
 	daemonID := iReq.Sender
 
 	switch iReq.Act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(bucket, objName, bckIsAIS); err != nil {
+		if err := r.removeObjAndMeta(bucket, bckProvider, objName); err != nil {
 			glog.Errorf("Failed to delete %s/%s: %v", bucket, objName, err)
 		}
 	case reqGet:
@@ -115,14 +115,14 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsAIS)
+			fqn, _, err = cluster.HrwFQN(SliceType, bucket, bckProvider, objName)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsAIS)
+			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, bckProvider, objName)
 		}
 		if err != nil {
 			glog.Error(err)
@@ -134,7 +134,7 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, _, err := cluster.HrwFQN(MetaType, bucket, objName, bckIsAIS)
+		fqn, _, err := cluster.HrwFQN(MetaType, bucket, bckProvider, objName)
 		if err != nil {
 			glog.Error(err)
 			return
@@ -179,17 +179,17 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		// Check if the request is valid (e.g, a request may come after
 		// the bucket is destroyed.
 		var (
-			objFQN   string
-			lom      *cluster.LOM
-			err      error
-			bckIsAIS = r.t.GetBowner().Get().IsAIS(bucket)
+			objFQN      string
+			lom         *cluster.LOM
+			err         error
+			bckProvider = cmn.ProviderFromBool(r.t.GetBowner().Get().IsAIS(bucket))
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {
 				glog.Infof("Got slice response from %s (#%d of %s/%s)",
 					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
 			}
-			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, objName, bckIsAIS)
+			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, bckProvider, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)
@@ -201,7 +201,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 					iReq.Sender, bucket, objName)
 			}
 			// FIXME: vs. lom.Fill() a few lines below
-			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, objName, bckIsAIS)
+			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, bckProvider, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)

@@ -18,13 +18,11 @@ import (
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string,
-	bckIsAIS bool, actionMsg *actionMsgInternal) (ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actionMsg *actionMsgInternal) (ok bool) {
 	query := r.URL.Query()
 	if glog.FastV(4, glog.SmoduleAIS) {
 		pid := query.Get(cmn.URLParamProxyID)
-		bmd := t.bmdowner.get()
-		glog.Infof("%s %s <= (%s)", r.Method, bmd.Bstring(bucket, bckIsAIS), pid)
+		glog.Infof("%s %s <= (%s)", r.Method, bck, pid)
 	}
 
 	var msg cmn.SelectMsg
@@ -34,7 +32,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	ok = t.listBucketAsync(w, r, bucket, bckIsAIS, &msg)
+	ok = t.listBucketAsync(w, r, bck, &msg)
 	return
 }
 
@@ -43,7 +41,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 // - returns status of a running task by its ID
 // - returns the result of a task by its ID
 // TODO: support cloud buckets
-func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, bucket string, bckIsAIS bool, msg *cmn.SelectMsg) bool {
+func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.SelectMsg) bool {
 	query := r.URL.Query()
 	taskAction := query.Get(cmn.URLParamTaskAction)
 	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
@@ -51,7 +49,7 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 	ctx := t.contextWithAuth(r.Header)
 	// create task call
 	if taskAction == cmn.ListTaskStart {
-		_, err := t.xactions.renewBckListXact(ctx, t, bucket, bckIsAIS, msg, useCache)
+		_, err := t.xactions.renewBckListXact(ctx, t, bck, msg, useCache)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 			return false
@@ -94,17 +92,16 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 			if len(bckList.Entries) > minloaded {
 				go func(bckEntries []*cmn.BucketEntry) {
 					var (
-						bckProvider = cmn.ProviderFromBool(bckIsAIS)
-						l           = len(bckEntries)
-						m           = l / minloaded
-						loaded      int
+						l      = len(bckEntries)
+						m      = l / minloaded
+						loaded int
 					)
 					if l < minloaded {
 						return
 					}
 					for i := 0; i < l; i += m {
 						lom := &cluster.LOM{T: t, Objname: bckEntries[i].Name}
-						err := lom.Init(bucket, bckProvider)
+						err := lom.Init(bck.Name, bck.Provider)
 						if err == nil && lom.IsLoaded() { // loaded?
 							loaded++
 						}
@@ -114,7 +111,7 @@ func (t *targetrunner) listBucketAsync(w http.ResponseWriter, r *http.Request, b
 						glog.Errorf("%s: loaded %d/%d, renew=%t", t.si, loaded, minloaded, renew)
 					}
 					if renew {
-						t.xactions.renewBckLoadLomCache(bucket, t, bckIsAIS)
+						t.xactions.renewBckLoadLomCache(t, bck)
 					}
 				}(bckList.Entries)
 			}

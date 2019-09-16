@@ -19,6 +19,7 @@ type (
 	XactBck interface {
 		cmn.Xact
 		BckIsAIS() bool
+		BckProvider() string
 		DoneCh() chan struct{}
 		Target() cluster.Target
 		Mpathers() map[string]mpather
@@ -112,7 +113,7 @@ func (j *joggerBckBase) stop()                            { j.stopCh <- struct{}
 //
 func (j *joggerBckBase) jog() {
 	j.stopCh = make(chan struct{}, 1)
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckIsAIS())
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.BckProvider())
 	j.provider = cmn.ProviderFromBool(j.parent.BckIsAIS())
 	opts := &fs.Options{
 		Callback: j.walk,

@@ -20,11 +20,10 @@ import (
 
 type (
 	Walk struct {
-		msg     *cmn.SelectMsg
-		ctx     context.Context
-		t       cluster.Target
-		bucket  string
-		isLocal bool
+		ctx context.Context
+		t   cluster.Target
+		bck *cluster.Bck
+		msg *cmn.SelectMsg
 	}
 	mresp struct {
 		infos      *allfinfos
@@ -72,13 +71,12 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 	return ci
 }
 
-func NewWalk(ctx context.Context, bucket string, isLocal bool, msg *cmn.SelectMsg, t cluster.Target) *Walk {
+func NewWalk(ctx context.Context, t cluster.Target, bck *cluster.Bck, msg *cmn.SelectMsg) *Walk {
 	return &Walk{
-		msg:     msg,
-		ctx:     ctx,
-		t:       t,
-		bucket:  bucket,
-		isLocal: isLocal,
+		ctx: ctx,
+		t:   t,
+		bck: bck,
+		msg: msg,
 	}
 }
 
@@ -92,7 +90,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
-		r := &mresp{w.newFileWalk(w.bucket, w.msg), "", nil}
+		r := &mresp{w.newFileWalk(w.bck.Name, w.msg), "", nil}
 		if w.msg.Fast {
 			r.infos.limit = math.MaxInt64 // return all objects in one response
 		}
@@ -141,7 +139,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		}
 		for _, mpathInfo := range availablePaths {
 			wg.Add(1)
-			dir := mpathInfo.MakePathBucket(contentType, w.bucket, w.isLocal)
+			dir := mpathInfo.MakePathBucket(contentType, w.bck.Name, w.bck.Provider)
 			go walkMpath(dir)
 		}
 	}
@@ -192,7 +190,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 		return w.LocalObjPage()
 	}
 
-	bucketList, err, _ := w.t.Cloud().ListBucket(w.ctx, w.bucket, w.msg)
+	bucketList, err, _ := w.t.Cloud().ListBucket(w.ctx, w.bck.Name, w.msg)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +205,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 	localID := w.t.Snode().DaemonID
 	smap := w.t.GetSmap()
 	for _, e := range bucketList.Entries {
-		si, _ := cluster.HrwTarget(w.bucket, e.Name, smap)
+		si, _ := cluster.HrwTarget(w.bck.Name, e.Name, smap)
 		if si.DaemonID != localID {
 			continue
 		}
@@ -216,7 +214,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			e.TargetURL = localURL
 		}
 		lom := &cluster.LOM{T: w.t, Objname: e.Name}
-		err := lom.Init(w.bucket, cmn.Cloud, config)
+		err := lom.Init(w.bck.Name, cmn.Cloud, config)
 		if err != nil {
 			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 				continue

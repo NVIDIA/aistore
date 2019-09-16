@@ -667,7 +667,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s bucket %s => %s", phase, msgInt.Action, bucketFrom, bucketTo)
 	case cmn.ActListObjects:
 		// list the bucket and return
-		if ok := t.listbucket(w, r, bucket, bck.IsAIS(), msgInt); !ok {
+		if ok := t.listbucket(w, r, bck, msgInt); !ok {
 			return
 		}
 

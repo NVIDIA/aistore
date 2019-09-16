@@ -89,12 +89,22 @@ func NewXactBaseWithBucket(id int64, kind string, bucket string, bckIsAIS bool) 
 	return xact
 }
 
-func (xact *XactBase) ID() int64                  { return xact.id }
-func (xact *XactBase) ShortID() uint32            { return ShortID(xact.id) }
-func (xact *XactBase) SetGID(gid int64)           { xact.gid = gid }
-func (xact *XactBase) Kind() string               { return xact.kind }
-func (xact *XactBase) Bucket() string             { return xact.bucket }
-func (xact *XactBase) BckIsAIS() bool             { return xact.bckIsAIS }
+func (xact *XactBase) ID() int64        { return xact.id }
+func (xact *XactBase) ShortID() uint32  { return ShortID(xact.id) }
+func (xact *XactBase) SetGID(gid int64) { xact.gid = gid }
+func (xact *XactBase) Kind() string     { return xact.kind }
+func (xact *XactBase) Bucket() string   { return xact.bucket }
+func (xact *XactBase) BckIsAIS() bool   { return xact.bckIsAIS }
+
+// TODO: remove `BckIsAIS` in favor of BckProvider - this requires change
+// in signature of NewXactBaseWithBucket.
+func (xact *XactBase) BckProvider() string {
+	if xact.bckIsAIS {
+		return AIS
+	}
+	return Cloud
+}
+
 func (xact *XactBase) Finished() bool             { return xact.eutime.Load() != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 func (xact *XactBase) Aborted() bool              { return xact.aborted.Load() }

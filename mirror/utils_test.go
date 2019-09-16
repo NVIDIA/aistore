@@ -42,8 +42,8 @@ var _ = Describe("Mirror", func() {
 	var (
 		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
 		mi         = fs.MountpathInfo{Path: mpath}
-		testDir    = mi.MakePathBucket(fs.ObjectType, TestBucketName, true)
-		testFQN    = mi.MakePathBucketObject(fs.ObjectType, TestBucketName, testObjectName, true)
+		testDir    = mi.MakePathBucket(fs.ObjectType, TestBucketName, cmn.AIS)
+		testFQN    = mi.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
 		copyBuf    = make([]byte, testObjectSize)
 		mpathInfo2 *fs.MountpathInfo
 	)
@@ -66,7 +66,7 @@ var _ = Describe("Mirror", func() {
 	Describe("copyTo", func() {
 		It("should copy corectly file and set Xattributes", func() {
 			mi2 := fs.MountpathInfo{Path: mpath2}
-			expectedCopyFQN := mi2.MakePathBucketObject(fs.ObjectType, TestBucketName, testObjectName, true)
+			expectedCopyFQN := mi2.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
 
 			createTestFile(testDir, testObjectName, testObjectSize)
 			lom := newBasicLom(testFQN, tMock)

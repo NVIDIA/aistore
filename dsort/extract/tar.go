@@ -183,7 +183,7 @@ func (t *tarExtractCreator) ExtractShard(fqn fs.ParsedFQN, r *io.SectionReader, 
 			}
 
 			args := extractRecordArgs{
-				shardName:     fqn.Objname,
+				shardName:     fqn.ObjName,
 				fileType:      fqn.ContentType,
 				recordName:    header.Name,
 				r:             data,

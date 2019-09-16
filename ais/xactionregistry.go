@@ -13,6 +13,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/NVIDIA/aistore/cluster"
+
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
@@ -71,13 +73,12 @@ type (
 	}
 	xactBckListTask struct {
 		cmn.XactBase
-		res     atomic.Pointer
-		t       *targetrunner
-		bucket  string
-		msg     *cmn.SelectMsg
-		ctx     context.Context
-		isLocal bool
-		cached  bool
+		ctx    context.Context
+		res    atomic.Pointer
+		t      *targetrunner
+		bck    *cluster.Bck
+		msg    *cmn.SelectMsg
+		cached bool
 	}
 	xactionEntry interface {
 		Start(id int64) error // supposed to start an xaction, will be called when entry is stored to into registry
@@ -719,20 +720,18 @@ func (r *xactionsRegistry) renewEvictDelete(evict bool) *xactEvictDelete {
 	return entry.xact
 }
 
-func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bucket string,
-	isLocal bool, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
+func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg, cached bool) (*xactBckListTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
 	}
 	e := &bckListTaskEntry{
-		id:      id,
-		t:       t,
-		bucket:  bucket,
-		isLocal: isLocal,
-		msg:     msg,
-		ctx:     ctx,
-		cached:  cached,
+		ctx:    ctx,
+		t:      t,
+		id:     id,
+		bck:    bck,
+		msg:    msg,
+		cached: cached,
 	}
 	if err := e.Start(id); err != nil {
 		return nil, err
@@ -760,8 +759,8 @@ func (r *xactBckListTask) UpdateResult(result interface{}, err error) {
 }
 
 func (r *xactBckListTask) Run() {
-	walk := objwalk.NewWalk(r.ctx, r.bucket, r.isLocal, r.msg, r.t)
-	if r.isLocal {
+	walk := objwalk.NewWalk(r.ctx, r.t, r.bck, r.msg)
+	if r.bck.IsAIS() {
 		r.UpdateResult(walk.LocalObjPage())
 	} else {
 		r.UpdateResult(walk.CloudObjPage(r.cached))

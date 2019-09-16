@@ -15,8 +15,8 @@ func TestFQN2Info(t *testing.T) {
 		wantMPath       string
 		wantContentType string
 		wantBucket      string
+		wantBckProvider string
 		wantObjName     string
-		wantBckIsAIS    bool
 		wantErr         bool
 	}{
 		// good
@@ -24,37 +24,37 @@ func TestFQN2Info(t *testing.T) {
 			"smoke test",
 			"/tmp/obj/local/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", "objname", true, false,
+			"/tmp", "obj", "bucket", cmn.AIS, "objname", false,
 		},
 		{
 			"cloud as bucket type",
 			"/tmp/obj/cloud/bucket/objname",
 			[]string{"/tmp"},
-			"/tmp", "obj", "bucket", "objname", false, false,
+			"/tmp", "obj", "bucket", cmn.Cloud, "objname", false,
 		},
 		{
 			"long mount path name",
 			"/tmp/super/long/obj/cloud/bucket/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", "objname", false, false,
+			"/tmp/super/long", "obj", "bucket", cmn.Cloud, "objname", false,
 		},
 		{
 			"long mount path name and objname in folder",
 			"/tmp/super/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long"},
-			"/tmp/super/long", "obj", "bucket", "folder/objname", false, false,
+			"/tmp/super/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
 		},
 		{
 			"multiple mpaths matching, choose the longest",
 			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/super/long/long"},
-			"/tmp/super/long/long", "obj", "bucket", "folder/objname", false, false,
+			"/tmp/super/long/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
 		},
 		{
 			"dirty mpath",
 			"/tmp/super/long/long/obj/cloud/bucket/folder/objname",
 			[]string{"/tmp/super/long", "/tmp/.////super/../super//./long///////////long"},
-			"/tmp/super/long/long", "obj", "bucket", "folder/objname", false, false,
+			"/tmp/super/long/long", "obj", "bucket", cmn.Cloud, "folder/objname", false,
 		},
 
 		// bad
@@ -62,43 +62,43 @@ func TestFQN2Info(t *testing.T) {
 			"too short name",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"empty bucket name",
 			"/tmp/local//objname",
 			[]string{"/tmp"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"empty object name",
 			"/tmp/local//objname",
 			[]string{"/tmp"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"empty bucket type",
 			"/tmp/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"bad bucket type",
 			"/tmp/local_or_cloud/bucket/objname",
 			[]string{"/tmp"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"no matching mountpath",
 			"/tmp/local/bucket/objname",
 			[]string{"/tmp/a", "/tmp/b"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 		{
 			"fqn is mpath",
 			"/tmp/mpath",
 			[]string{"/tmp/mpath"},
-			"", "", "", "", false, true,
+			"", "", "", cmn.Cloud, "", true,
 		},
 	}
 
@@ -129,7 +129,7 @@ func TestFQN2Info(t *testing.T) {
 			if err != nil {
 				return
 			}
-			mpathInfo, gotContentType, gotBucket, gotObjName, gotBckIsAIS := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.BckIsAIS
+			mpathInfo, gotContentType, gotBucket, gotBckProvider, gotObjName := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.BckProvider, parsedFQN.ObjName
 			gotMPath := mpathInfo.Path
 			if gotMPath != tt.wantMPath {
 				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
@@ -140,11 +140,11 @@ func TestFQN2Info(t *testing.T) {
 			if gotBucket != tt.wantBucket {
 				t.Errorf("fqn2info() gotBucket = %v, want %v", gotBucket, tt.wantBucket)
 			}
+			if gotBckProvider != tt.wantBckProvider {
+				t.Errorf("fqn2info() gotBckProvider = %v, want %v", gotBckProvider, tt.wantBckProvider)
+			}
 			if gotObjName != tt.wantObjName {
 				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
-			}
-			if gotBckIsAIS != tt.wantBckIsAIS {
-				t.Errorf("fqn2info() gotBckIsAIS = %v, want %v", gotBckIsAIS, tt.wantBckIsAIS)
 			}
 		})
 	}

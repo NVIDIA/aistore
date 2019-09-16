@@ -1239,34 +1239,37 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	}
 	t.bmdowner.Lock()
 	defer t.bmdowner.Unlock()
-
 	bmd := t.bmdowner.get()
-	bprops, ok := bmd.Get(bucketFrom, true /*is local*/)
-	if !ok {
-		return cmn.NewErrorBucketDoesNotExist(bucketFrom)
+
+	bckFrom := &cluster.Bck{Name: bucketFrom, Provider: cmn.AIS}
+	if err := bckFrom.Init(t.bmdowner); err != nil {
+		return err
 	}
-	if _, ok = bmd.Get(bucketTo, true /*is local*/); ok {
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	if err := bckTo.Init(t.bmdowner); err == nil {
 		if action == cmn.ActRenameLB {
-			return fmt.Errorf("destination bucket %s already exists", bucketTo)
+			return cmn.NewErrorBucketAlreadyExists(bckTo.Name)
 		}
+
 		// allow to copy into existing bucket
-		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bucketTo, action, bucketFrom, bucketTo)
+		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bckFrom, action, bckFrom, bckTo)
 	}
+
 	switch action {
 	case cmn.ActRenameLB:
-		_, err = t.xactions.renewBckFastRename(t, bucketFrom, bucketTo, cmn.ActBegin)
+		_, err = t.xactions.renewBckFastRename(t, bckFrom, bckTo, cmn.ActBegin)
 		if err == nil {
-			err = fs.Mountpaths.CreateBucketDirs(bucketTo, true /*is local*/, true /*destroy*/)
+			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, true /*destroy*/)
 		}
 	case cmn.ActCopyLB:
-		_, err = t.xactions.renewBckCopy(t, bucketFrom, bucketTo, cmn.ActBegin)
+		_, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
 	default:
 		cmn.Assert(false)
 	}
 	if err == nil {
 		// add bucketTo to this target's BMD wo/ increasing the version
 		clone := bmd.clone()
-		clone.LBmap[bucketTo] = bprops
+		clone.LBmap[bucketTo] = bckFrom.Props
 		t.bmdowner.put(clone)
 	}
 	return
@@ -1308,15 +1311,24 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 }
 
 func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo string, msgInt *actionMsgInternal) (err error) {
+	bckFrom := &cluster.Bck{Name: bucketFrom, Provider: cmn.AIS}
+	if err := bckFrom.Init(t.bmdowner); err != nil {
+		return err
+	}
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	if err := bckFrom.Init(t.bmdowner); err != nil {
+		return err
+	}
+
 	switch msgInt.Action {
 	case cmn.ActRenameLB:
 		var xact *xactFastRen
-		xact, err = t.xactions.renewBckFastRename(t, bucketFrom, bucketTo, cmn.ActCommit)
+		xact, err = t.xactions.renewBckFastRename(t, bckFrom, bckTo, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // must not happen at commit time
 			break
 		}
-		err = fs.Mountpaths.RenameBucketDirs(bucketFrom, bucketTo, true /*is local*/)
+		err = fs.Mountpaths.RenameBucketDirs(bckFrom.Name, bckTo.Name, cmn.AIS)
 		if err != nil {
 			glog.Error(err) // ditto
 			break
@@ -1328,7 +1340,7 @@ func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo string, msgInt *a
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
 	case cmn.ActCopyLB:
 		var xact *mirror.XactBckCopy
-		xact, err = t.xactions.renewBckCopy(t, bucketFrom, bucketTo, cmn.ActCommit)
+		xact, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
 		if err != nil {
 			glog.Error(err) // unexpected at commit time
 			break
