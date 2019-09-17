@@ -20,19 +20,19 @@ import (
 
 // on-disk LOM attribute names (NOTE: changing any of this might break compatibility)
 const (
-	lomCsmKnd = iota
-	lomCsmVal
-	lomObjVer
-	lomObjSiz
-	lomObjCps
+	lomCksumType = iota
+	lomCksumValue
+	lomObjVersion
+	lomObjSize
+	lomObjCopies
 )
 
 // delimiters
 const (
-	cpyfqnSepa = "\xa6/\xc5"
-	recordSepa = "\xe3/\xbd"
-	lenCpySepa = len(cpyfqnSepa)
-	lenRecSepa = len(recordSepa)
+	copyFQNSepa = "\xa6/\xc5"
+	recordSepa  = "\xe3/\xbd"
+	lenCopySepa = len(copyFQNSepa)
+	lenRecSepa  = len(recordSepa)
 
 	xattrBufSize = 4 * cmn.KiB
 )
@@ -83,18 +83,19 @@ func (lom *LOM) Persist() (err error) {
 func (md *lmeta) unmarshal(mdstr string) (err error) {
 	const invalid = "invalid lmeta "
 	var (
-		payload                                           string
-		expectedCksm, actualCksm                          uint64
-		lomCksumKind, lomCksumVal                         string
-		haveSiz, haveCsmKnd, haveCsmVal, haveVer, haveCps bool
-		last                                              bool
+		payload                           string
+		expectedCksum, actualCksum        uint64
+		cksumType, cksumValue             string
+		haveSize, haveVersion, haveCopies bool
+		haveCksumType, haveCksumValue     bool
+		last                              bool
 	)
-	expectedCksm = binary.BigEndian.Uint64([]byte(mdstr))
+	expectedCksum = binary.BigEndian.Uint64([]byte(mdstr))
 	payload = mdstr[cmn.SizeofI64:]
-	actualCksm = xxhash.ChecksumString64S(payload, cmn.MLCG32)
+	actualCksum = xxhash.ChecksumString64S(payload, cmn.MLCG32)
 
-	if expectedCksm != actualCksm {
-		return fmt.Errorf("%s (%x != %x)", cmn.BadCksumPrefix, expectedCksm, actualCksm)
+	if expectedCksum != actualCksum {
+		return fmt.Errorf("%s (%x != %x)", cmn.BadCksumPrefix, expectedCksum, actualCksum)
 	}
 	for off := 0; !last; {
 		var (
@@ -111,54 +112,54 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 		val := record[cmn.SizeofI16:]
 		off += i + lenRecSepa
 		switch key {
-		case lomCsmVal:
-			if haveCsmVal {
+		case lomCksumValue:
+			if haveCksumValue {
 				return errors.New(invalid + "#1")
 			}
-			lomCksumVal = val
-			haveCsmVal = true
-		case lomCsmKnd:
-			if haveCsmKnd {
+			cksumValue = val
+			haveCksumValue = true
+		case lomCksumType:
+			if haveCksumType {
 				return errors.New(invalid + "#2")
 			}
-			lomCksumKind = val
-			haveCsmKnd = true
-		case lomObjVer:
-			if haveVer {
+			cksumType = val
+			haveCksumType = true
+		case lomObjVersion:
+			if haveVersion {
 				return errors.New(invalid + "#3")
 			}
 			md.version = val
-			haveVer = true
-		case lomObjSiz:
-			if haveSiz {
+			haveVersion = true
+		case lomObjSize:
+			if haveSize {
 				return errors.New(invalid + "#4")
 			}
 			md.size = int64(binary.BigEndian.Uint64([]byte(val)))
-			haveSiz = true
-		case lomObjCps:
-			if haveCps {
+			haveSize = true
+		case lomObjCopies:
+			if haveCopies {
 				return errors.New(invalid + "#5")
 			}
-			cpyfqns := strings.Split(val, cpyfqnSepa)
-			haveCps = true
-			md.copies = make(fs.MPI, len(cpyfqns))
-			for _, cpyfqn := range cpyfqns {
-				mpathInfo, _, err := fs.Mountpaths.FQN2MpathInfo(cpyfqn)
+			copyFQNs := strings.Split(val, copyFQNSepa)
+			haveCopies = true
+			md.copies = make(fs.MPI, len(copyFQNs))
+			for _, copyFQN := range copyFQNs {
+				mpathInfo, _, err := fs.Mountpaths.FQN2MpathInfo(copyFQN)
 				if err != nil {
 					glog.Warning(err)
 					continue
 				}
-				md.copies[cpyfqn] = mpathInfo
+				md.copies[copyFQN] = mpathInfo
 			}
 		default:
 			return errors.New(invalid + "#6")
 		}
 	}
-	if haveCsmKnd != haveCsmVal {
+	if haveCksumType != haveCksumValue {
 		return errors.New(invalid + "#7")
 	}
-	md.cksum = cmn.NewCksum(lomCksumKind, lomCksumVal)
-	if !haveSiz {
+	md.cksum = cmn.NewCksum(cksumType, cksumValue)
+	if !haveSize {
 		return errors.New(invalid + "#8")
 	}
 	return
@@ -167,23 +168,23 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 func _writeCopies(copies fs.MPI, buf []byte, off, ll int) int {
 	for c := range copies {
 		off += copy(buf[off:], c)
-		off += copy(buf[off:], cpyfqnSepa)
+		off += copy(buf[off:], copyFQNSepa)
 		cmn.Assert(off < ll-1) // bounds check
 	}
 	if off > 0 {
-		off -= lenCpySepa
+		off -= lenCopySepa
 	}
 	return off
 }
 
 func (md *lmeta) marshal(buf []byte) (off int) {
 	var (
-		cksmKind, cksmVal string
-		b8                [cmn.SizeofI64]byte
-		ll                = len(buf)
+		cksumType, cksumValue string
+		b8                    [cmn.SizeofI64]byte
+		ll                    = len(buf)
 	)
 	off = cmn.SizeofI64
-	f := func(key int, value string, sepa bool) {
+	appendMD := func(key int, value string, sepa bool) {
 		var (
 			bkey [cmn.SizeofI16]byte
 			bb   = bkey[0:]
@@ -197,24 +198,24 @@ func (md *lmeta) marshal(buf []byte) (off int) {
 		cmn.Assert(off < ll-8) // bounds check
 	}
 	if md.cksum != nil {
-		cksmKind, cksmVal = md.cksum.Get()
-		f(lomCsmKnd, cksmKind, true)
-		f(lomCsmVal, cksmVal, true)
+		cksumType, cksumValue = md.cksum.Get()
+		appendMD(lomCksumType, cksumType, true)
+		appendMD(lomCksumValue, cksumValue, true)
 	}
 	if md.version != "" {
-		f(lomObjVer, md.version, true)
+		appendMD(lomObjVersion, md.version, true)
 	}
 	binary.BigEndian.PutUint64(b8[0:], uint64(md.size))
-	f(lomObjSiz, string(b8[0:]), false)
+	appendMD(lomObjSize, string(b8[0:]), false)
 	if len(md.copies) > 0 {
 		off += copy(buf[off:], recordSepa)
-		f(lomObjCps, "", false)
+		appendMD(lomObjCopies, "", false)
 		off = _writeCopies(md.copies, buf, off, ll)
 	}
 	//
 	// checksum, prepend, and return
 	//
-	metaCksm := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
-	binary.BigEndian.PutUint64(buf[0:], metaCksm)
+	metaCksum := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
+	binary.BigEndian.PutUint64(buf[0:], metaCksum)
 	return
 }
