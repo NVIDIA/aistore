@@ -35,6 +35,9 @@ var (
 		subcmdListDsort: {
 			regexFlag,
 		},
+		subcmdListConfig: {
+			jsonFlag,
+		},
 	}
 
 	listCmds = []cli.Command{
@@ -81,6 +84,14 @@ var (
 					Flags:        listCmdsFlags[subcmdListDsort],
 					Action:       listDsortHandler,
 					BashComplete: flagList,
+				},
+				{
+					Name:         subcmdListConfig,
+					Usage:        "lists daemon configuration",
+					ArgsUsage:    daemonIDArgumentText,
+					Flags:        listCmdsFlags[subcmdListConfig],
+					Action:       listConfigHandler,
+					BashComplete: daemonList,
 				},
 			},
 		},
@@ -168,4 +179,11 @@ func listDsortHandler(c *cli.Context) (err error) {
 	})
 
 	return templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
+}
+
+func listConfigHandler(c *cli.Context) (err error) {
+	if _, err = fillMap(ClusterURL); err != nil {
+		return
+	}
+	return getConfig(c, cliAPIParams(ClusterURL))
 }

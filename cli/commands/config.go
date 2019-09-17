@@ -41,7 +41,7 @@ var (
 					ArgsUsage:    configSetArgumentText,
 					Action:       configHandler,
 					Flags:        configFlags[configSet],
-					BashComplete: configSetCompletions,
+					BashComplete: updatableConfigList,
 				},
 			},
 		},
@@ -103,7 +103,7 @@ func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
 
 // Sets config of specific daemon or cluster
 func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
-	daemonID, nvs, err := extractArguments(c)
+	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 			return err
 		}
 
-		_, _ = fmt.Fprintf(c.App.Writer, "Config has been updated successfully.\n")
+		fmt.Fprintf(c.App.Writer, "Config has been updated successfully.\n")
 		return nil
 	}
 
@@ -121,11 +121,11 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "Config for node %q has been updated successfully.\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Config for node %q has been updated successfully.\n", daemonID)
 	return nil
 }
 
-func extractArguments(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
+func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
 	if c.NArg() == 0 {
 		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
 	}

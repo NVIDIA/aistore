@@ -32,6 +32,7 @@ const (
 	commandStop      = cmn.ActXactStop
 	commandList      = "ls"
 	commandCreate    = "create"
+	commandSet       = "set"
 	commandSetCopies = "set-copies"
 	commandRemove    = "rm"
 	commandEvict     = "evict"
@@ -118,6 +119,7 @@ const (
 	subcmdDownload  = "download"
 	subcmdDsort     = cmn.DSortNameLowercase
 	subcmdXaction   = "xaction"
+	subcmdConfig    = "config"
 
 	// List
 	subcmdListBuckets   = subcmdBuckets
@@ -125,6 +127,7 @@ const (
 	subcmdListObjects   = subcmdObjects
 	subcmdListDownloads = subcmdDownloads
 	subcmdListDsort     = subcmdDsort
+	subcmdListConfig    = subcmdConfig
 
 	// Create
 	subcmdCreateBucket = subcmdBucket
@@ -149,6 +152,10 @@ const (
 	subcmdStopXaction  = subcmdXaction
 	subcmdStopDsort    = subcmdDsort
 	subcmdStopDownload = subcmdDownload
+
+	// Set
+	subcmdSetConfig = subcmdConfig
+	subcmdSetProps  = subcmdProps
 )
 
 // Flag related constants
@@ -165,7 +172,7 @@ const (
 var (
 	// Common
 	bucketFlag      = cli.StringFlag{Name: "bucket", Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
-	bckProviderFlag = cli.StringFlag{Name: "provider", Value: cmn.ProviderAIS,
+	bckProviderFlag = cli.StringFlag{Name: "provider",
 		Usage:  "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically",
 		EnvVar: aisBucketProviderEnvVar,
 	}
@@ -176,6 +183,7 @@ var (
 	jsonFlag        = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag    = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	resetFlag       = cli.BoolFlag{Name: "reset", Usage: "reset to original state"}
 
 	// Bucket
 	jsonspecFlag      = cli.StringFlag{Name: "jsonspec", Usage: "bucket properties in JSON format"}
@@ -253,8 +261,8 @@ const (
 	providerOptionalArgumentText = "[BUCKET_PROVIDER]"
 
 	// Config
-	daemonIDArgumentText  = "[DAEMON_ID]"
-	configSetArgumentText = daemonIDArgumentText + " " + keyValuePairArgumentsText
+	daemonIDArgumentText  = "DAEMON_ID"
+	configSetArgumentText = "[DAEMON_ID] " + keyValuePairArgumentsText
 
 	// Daeclu
 	daemonTypeArgumentText = "[DAEMON_TYPE]"

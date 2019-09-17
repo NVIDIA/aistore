@@ -580,7 +580,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
 		return
 	}
-	_, _ = fmt.Fprintln(c.App.Writer)
+	fmt.Fprintln(c.App.Writer)
 	return
 }
 
@@ -605,7 +605,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintln(c.App.Writer)
+	fmt.Fprintln(c.App.Writer)
 	return nil
 }
 
@@ -629,7 +629,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "Reset %s bucket properties\n", bucket)
+	fmt.Fprintf(c.App.Writer, "Reset %s bucket properties\n", bucket)
 	return
 }
 

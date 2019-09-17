@@ -262,7 +262,7 @@ func propList(c *cli.Context) {
 	}
 }
 
-func configSetCompletions(c *cli.Context) {
+func updatableConfigList(c *cli.Context) {
 	if c.NArg() == 0 {
 		daemonList(c)
 	}
