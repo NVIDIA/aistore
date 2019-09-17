@@ -16,43 +16,82 @@ import (
 	"github.com/urfave/cli"
 )
 
-// Bash Completion
-func daemonList(c *cli.Context) {
-	if c.NArg() > 1 {
-		flagList(c)
+func suggestDaemon(omitProxies bool) {
+	smap, err := api.GetClusterMap(cliAPIParams(ClusterURL))
+	if err != nil {
 		return
 	}
-
-	if c.NArg() == 1 {
-		for k := range templates.ConfigSectionTmpl {
-			fmt.Println(k)
+	if !omitProxies {
+		for dae := range smap.Pmap {
+			fmt.Println(dae)
 		}
-		return
-	}
-
-	baseParams := cliAPIParams(ClusterURL)
-	smap, _ := api.GetClusterMap(baseParams)
-
-	for dae := range smap.Pmap {
-		fmt.Println(dae)
 	}
 	for dae := range smap.Tmap {
 		fmt.Println(dae)
 	}
 }
 
-func targetList(c *cli.Context) {
-	if c.NArg() > 0 {
+func suggestConfigSection(c *cli.Context, optional bool) {
+	for k := range templates.ConfigSectionTmpl {
+		fmt.Println(k)
+	}
+	if optional {
 		flagList(c)
-		return
 	}
+}
 
-	baseParams := cliAPIParams(ClusterURL)
-	smap, _ := api.GetClusterMap(baseParams)
-
-	for dae := range smap.Tmap {
-		fmt.Println(dae)
+func suggestUpdatableConfig(c *cli.Context) {
+	for prop, readonly := range cmn.ConfigPropList {
+		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
+			fmt.Println(prop)
+		}
 	}
+}
+
+func daemonSuggestions(optional bool, omitProxies bool) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		// daemon already given as argument
+		if c.NArg() >= 1 {
+			flagList(c)
+			return
+		}
+
+		suggestDaemon(omitProxies)
+
+		if optional {
+			flagList(c)
+		}
+	}
+}
+
+func daemonConfigSectionSuggestions(daemonOptional bool, configOptional bool) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		// daemon and config already given as arguments
+		if c.NArg() >= 2 {
+			flagList(c)
+			return
+		}
+
+		// daemon already given as argument
+		if c.NArg() == 1 {
+			suggestConfigSection(c, configOptional)
+			return
+		}
+
+		// no arguments given
+		suggestDaemon(false /* omit proxies */)
+		if daemonOptional {
+			suggestConfigSection(c, configOptional)
+		}
+	}
+}
+
+func setConfigSuggestions(c *cli.Context) {
+	if c.NArg() == 0 {
+		suggestDaemon(false /* omit proxies */)
+	}
+	suggestUpdatableConfig(c)
+	flagList(c)
 }
 
 // Returns flags for command
@@ -256,21 +295,6 @@ func xactFlagsBasedOnXactType(c *cli.Context) {
 
 func propList(c *cli.Context) {
 	for prop, readonly := range cmn.BucketPropList {
-		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
-			fmt.Println(prop)
-		}
-	}
-}
-
-func updatableConfigList(c *cli.Context) {
-	if c.NArg() == 0 {
-		daemonList(c)
-	}
-	configPropList(c)
-}
-
-func configPropList(c *cli.Context) {
-	for prop, readonly := range cmn.ConfigPropList {
 		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
 		}

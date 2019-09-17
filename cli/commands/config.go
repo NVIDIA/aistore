@@ -33,7 +33,7 @@ var (
 					ArgsUsage:    daemonIDArgumentText,
 					Action:       configHandler,
 					Flags:        configFlags[configGet],
-					BashComplete: daemonList,
+					BashComplete: daemonConfigSectionSuggestions(false /* optional daemon */, true /* optional config */),
 				},
 				{
 					Name:         configSet,
@@ -41,7 +41,7 @@ var (
 					ArgsUsage:    configSetArgumentText,
 					Action:       configHandler,
 					Flags:        configFlags[configSet],
-					BashComplete: updatableConfigList,
+					BashComplete: setConfigSuggestions,
 				},
 			},
 		},

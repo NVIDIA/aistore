@@ -21,6 +21,7 @@ var (
 			baseLstRngFlags,
 			bckProviderFlag,
 		),
+		subcmdRemoveNode: {},
 	}
 
 	removeCmds = []cli.Command{
@@ -43,6 +44,14 @@ var (
 					Flags:        removeCmdsFlags[subcmdRemoveObject],
 					Action:       removeObjectHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */),
+				},
+				{
+					Name:         subcmdRemoveNode,
+					Usage:        "removes node from the cluster",
+					ArgsUsage:    daemonIDArgumentText,
+					Flags:        removeCmdsFlags[subcmdRemoveNode],
+					Action:       removeNodeHandler,
+					BashComplete: daemonSuggestions(false /* optional */, false /* omit proxies */),
 				},
 			},
 		},
@@ -106,4 +115,13 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 	// object argument(s) given by the user; operation on given object(s)
 	return multiObjOp(c, baseParams, commandRemove, bckProvider)
+}
+
+func removeNodeHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		daemonID   = c.Args().First()
+	)
+
+	return clusterRemoveNode(c, baseParams, daemonID)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
@@ -36,6 +37,13 @@ var (
 			regexFlag,
 		},
 		subcmdListConfig: {
+			jsonFlag,
+		},
+		subcmdListDisks: append(
+			append(daecluBaseFlags, longRunFlags...),
+			noHeaderFlag,
+		),
+		subcmdListSmap: {
 			jsonFlag,
 		},
 	}
@@ -91,7 +99,23 @@ var (
 					ArgsUsage:    daemonIDArgumentText,
 					Flags:        listCmdsFlags[subcmdListConfig],
 					Action:       listConfigHandler,
-					BashComplete: daemonList,
+					BashComplete: daemonConfigSectionSuggestions(false /* daemon optional */, true /* config optional */),
+				},
+				{
+					Name:         subcmdListDisks,
+					Usage:        "list disk stats for targets",
+					ArgsUsage:    targetIDArgumentText,
+					Flags:        listCmdsFlags[subcmdListDisks],
+					Action:       listDisksHandler,
+					BashComplete: daemonSuggestions(true /* optional */, true /* omit proxies */),
+				},
+				{
+					Name:         subcmdListSmap,
+					Usage:        "display smap copy of a node",
+					ArgsUsage:    optionalDaemonIDArgumentText,
+					Flags:        listCmdsFlags[subcmdListSmap],
+					Action:       listSmapHandler,
+					BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
 				},
 			},
 		},
@@ -186,4 +210,35 @@ func listConfigHandler(c *cli.Context) (err error) {
 		return
 	}
 	return getConfig(c, cliAPIParams(ClusterURL))
+}
+
+func listDisksHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		daemonID   = c.Args().First()
+	)
+
+	if _, err = fillMap(ClusterURL); err != nil {
+		return
+	}
+
+	if err = updateLongRunParams(c); err != nil {
+		return
+	}
+
+	return daemonDiskStats(c, baseParams, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+}
+
+func listSmapHandler(c *cli.Context) (err error) {
+	var (
+		baseParams  = cliAPIParams(ClusterURL)
+		daemonID    = c.Args().First()
+		primarySmap *cluster.Smap
+	)
+
+	if primarySmap, err = fillMap(ClusterURL); err != nil {
+		return
+	}
+
+	return clusterSmap(c, baseParams, primarySmap, daemonID, flagIsSet(c, jsonFlag))
 }

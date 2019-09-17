@@ -28,7 +28,7 @@ var (
 					ArgsUsage:    configSetArgumentText,
 					Flags:        setCmdsFlags[subcmdSetConfig],
 					Action:       setConfigHandler,
-					BashComplete: updatableConfigList,
+					BashComplete: setConfigSuggestions,
 				},
 				{
 					Name:         subcmdSetProps,

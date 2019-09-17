@@ -37,6 +37,7 @@ const (
 	commandRemove    = "rm"
 	commandEvict     = "evict"
 	commandCopy      = "cp"
+	commandRegister  = "register"
 )
 
 // Subcommand names
@@ -120,6 +121,11 @@ const (
 	subcmdDsort     = cmn.DSortNameLowercase
 	subcmdXaction   = "xaction"
 	subcmdConfig    = "config"
+	subcmdDisks     = "disks"
+	subcmdSmap      = cmn.GetWhatSmap
+	subcmdNode      = "node"
+	subcmdProxy     = "proxy"
+	subcmdTarget    = "target"
 
 	// List
 	subcmdListBuckets   = subcmdBuckets
@@ -128,6 +134,8 @@ const (
 	subcmdListDownloads = subcmdDownloads
 	subcmdListDsort     = subcmdDsort
 	subcmdListConfig    = subcmdConfig
+	subcmdListDisks     = subcmdDisks
+	subcmdListSmap      = subcmdSmap
 
 	// Create
 	subcmdCreateBucket = subcmdBucket
@@ -139,6 +147,7 @@ const (
 	// Remove
 	subcmdRemoveBucket = subcmdBucket
 	subcmdRemoveObject = subcmdObject
+	subcmdRemoveNode   = subcmdNode
 
 	// Copy
 	subcmdCopyBucket = subcmdBucket
@@ -156,6 +165,10 @@ const (
 	// Set
 	subcmdSetConfig = subcmdConfig
 	subcmdSetProps  = subcmdProps
+
+	// Register
+	subcmdRegisterProxy  = subcmdProxy
+	subcmdRegisterTarget = subcmdTarget
 )
 
 // Flag related constants
@@ -261,12 +274,15 @@ const (
 	providerOptionalArgumentText = "[BUCKET_PROVIDER]"
 
 	// Config
-	daemonIDArgumentText  = "DAEMON_ID"
-	configSetArgumentText = "[DAEMON_ID] " + keyValuePairArgumentsText
+	daemonIDArgumentText         = "DAEMON_ID"
+	optionalDaemonIDArgumentText = "[DAEMON_ID]"
+	configSetArgumentText        = optionalDaemonIDArgumentText + " " + keyValuePairArgumentsText
 
 	// Daeclu
 	daemonTypeArgumentText = "[DAEMON_TYPE]"
 	targetIDArgumentText   = "[TARGET_ID]"
+	publicAddrArgumentText = "IP:PORT"
+	joinNodeArgumentText   = publicAddrArgumentText + " " + optionalDaemonIDArgumentText
 
 	// Download
 	downloadStartArgumentText = "SOURCE DESTINATION"

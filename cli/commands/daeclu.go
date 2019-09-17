@@ -40,15 +40,40 @@ var (
 		daecluRemoveNode: []cli.Flag{},
 	}
 
+	joinCmdsFlags = map[string][]cli.Flag{
+		subcmdRegisterProxy:  {},
+		subcmdRegisterTarget: {},
+	}
+
 	// DaeCluCmds tracks available AIS API Information/Query Commands
 	daeCluCmds = []cli.Command{
+		{
+			Name:  commandRegister,
+			Usage: "adds a node to the cluster",
+			Subcommands: []cli.Command{
+				{
+					Name:      subcmdRegisterProxy,
+					Usage:     "adds a proxy node to the cluster",
+					ArgsUsage: joinNodeArgumentText,
+					Flags:     joinCmdsFlags[subcmdRegisterProxy],
+					Action:    joinNodeHandler,
+				},
+				{
+					Name:      subcmdRegisterTarget,
+					Usage:     "adds a target node to the cluster",
+					ArgsUsage: joinNodeArgumentText,
+					Flags:     joinCmdsFlags[subcmdRegisterTarget],
+					Action:    joinNodeHandler,
+				},
+			},
+		},
 		{
 			Name:         daecluSmap,
 			Usage:        "displays cluster map",
 			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[daecluSmap],
-			BashComplete: daemonList,
+			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
 		},
 		{
 			Name:         daecluStatus,
@@ -56,7 +81,7 @@ var (
 			ArgsUsage:    daemonTypeArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[daecluStatus],
-			BashComplete: daemonList,
+			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
 		},
 		{
 			Name:         daecluStats,
@@ -64,7 +89,7 @@ var (
 			ArgsUsage:    daemonIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[daecluStats],
-			BashComplete: daemonList,
+			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
 		},
 		{
 			Name:         daecluDiskStats,
@@ -72,7 +97,7 @@ var (
 			ArgsUsage:    targetIDArgumentText,
 			Action:       queryHandler,
 			Flags:        daecluFlags[daecluDiskStats],
-			BashComplete: targetList,
+			BashComplete: daemonSuggestions(true /* optional */, true /* omit proxies */),
 		},
 		{
 			Name:  commandNode,
@@ -91,12 +116,56 @@ var (
 					ArgsUsage:    daemonIDArgumentText,
 					Action:       queryHandler,
 					Flags:        daecluFlags[daecluRemoveNode],
-					BashComplete: daemonList,
+					BashComplete: daemonSuggestions(false /* optional */, false /* omit proxies */),
 				},
 			},
 		},
 	}
 )
+
+func joinNodeHandler(c *cli.Context) (err error) {
+	var (
+		baseParams      = cliAPIParams(ClusterURL)
+		daemonType      = c.Command.Name // proxy|target
+		daemonID        string
+		socketAddr      string
+		socketAddrParts []string
+	)
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "public socket address to communicate with the node")
+	}
+	socketAddr = c.Args().Get(0)
+
+	socketAddrParts = strings.Split(socketAddr, ":")
+	if len(socketAddrParts) != 2 {
+		return fmt.Errorf("invalid socket address, should be in format: 'IP:PORT'")
+	}
+
+	daemonID = c.Args().Get(1) // user-given ID
+	if daemonID == "" {
+		// default is a random generated string
+		daemonID = cmn.RandString(8)
+	}
+
+	netInfo := cluster.NetInfo{
+		NodeIPAddr: socketAddrParts[0],
+		DaemonPort: socketAddrParts[1],
+		DirectURL:  "http://" + socketAddr,
+	}
+	nodeInfo := &cluster.Snode{
+		DaemonID:        daemonID,
+		DaemonType:      daemonType,
+		PublicNet:       netInfo,
+		IntraControlNet: netInfo,
+		IntraDataNet:    netInfo,
+	}
+	if err = api.RegisterNode(baseParams, nodeInfo); err != nil {
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster\n", daemonID)
+	return
+}
 
 // Querying information
 func queryHandler(c *cli.Context) (err error) {
@@ -282,7 +351,7 @@ func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID stri
 	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
+	fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
 	return nil
 }
 
