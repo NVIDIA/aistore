@@ -11,50 +11,34 @@ import (
 	"hash/crc32"
 )
 
-const BadCksumPrefix = "BAD CHECKSUM:"
-const MLCG32 = 1103515245 // xxhash seed
+const (
+	BadCksumPrefix = "BAD CHECKSUM:"
+	MLCG32         = 1103515245 // xxhash seed
+)
 
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
 
-//
-// typed checksum value
-//
 type (
 	Cksummer interface {
 		Get() (string, string)
 		String() string
 	}
-	Cksumvalxxhash struct {
-		kind string
-		val  string
-	}
-	Cksumvalmd5 struct {
-		kind string
-		val  string
-	}
-	Cksumvalcrc32c struct {
-		kind string
-		val  string
+	cksum struct {
+		ty    string
+		value string
 	}
 )
 
-func NewCksum(kind string, val string) Cksummer {
-	if kind == "" {
+func NewCksum(ty, value string) Cksummer {
+	if ty == "" || value == "" {
 		return nil
 	}
-	if val == "" {
-		return nil
+	if ty != ChecksumXXHash && ty != ChecksumMD5 && ty != ChecksumCRC32C {
+		AssertMsg(false, fmt.Sprintf("invalid checksum type: %s (with value of: %s)", ty, value))
 	}
-	if kind == ChecksumXXHash {
-		return Cksumvalxxhash{kind, val}
-	}
-	if kind == ChecksumMD5 {
-		return Cksumvalmd5{kind, val}
-	}
-	AssertMsg(kind == ChecksumCRC32C, kind)
-	return Cksumvalcrc32c{kind, val}
+	return cksum{ty, value}
 }
 
 func HashToStr(h hash.Hash) string {
@@ -83,18 +67,12 @@ func BadCksum(a, b Cksummer) string {
 	if t1 == t2 {
 		return fmt.Sprintf("%s %s(%s != %s)", BadCksumPrefix, t1, v1, v2)
 	}
-	return fmt.Sprintf("%s [%s,%s...] != [%s,%s...]", BadCksumPrefix, t1, v1[:Min(8, len(v1))], t2, v2[:Min(8, len(v2))])
+	return fmt.Sprintf("%s %s != %s", BadCksumPrefix, a, b)
 }
 
-func (v Cksumvalxxhash) Get() (string, string) { return v.kind, v.val }
-func (v Cksumvalmd5) Get() (string, string)    { return v.kind, v.val }
-func (v Cksumvalcrc32c) Get() (string, string) { return v.kind, v.val }
-func (v Cksumvalxxhash) String() string {
-	return fmt.Sprintf("(%s,%s...)", v.kind, v.val[:Min(8, len(v.val))])
-}
-func (v Cksumvalmd5) String() string {
-	return fmt.Sprintf("(%s,%s...)", v.kind, v.val[:Min(8, len(v.val))])
-}
-func (v Cksumvalcrc32c) String() string {
-	return fmt.Sprintf("(%s,%s...)", v.kind, v.val[:Min(8, len(v.val))])
+func (v cksum) Get() (string, string) { return v.ty, v.value }
+func (v cksum) Type() string          { return v.ty }
+func (v cksum) Value() string         { return v.value }
+func (v cksum) String() string {
+	return fmt.Sprintf("(%s,%s...)", v.ty, v.value[:Min(10, len(v.value))])
 }
