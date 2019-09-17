@@ -396,7 +396,7 @@ func parseCmdLine() (params, error) {
 		}
 
 		if p.loaderIDHashLen > 0 {
-			if p.loaderIDHashLen <= 0 || p.loaderIDHashLen > 63 {
+			if p.loaderIDHashLen == 0 || p.loaderIDHashLen > 63 {
 				return params{}, fmt.Errorf("loaderIDHashLen has to be larger than 0 and smaller than 64")
 			}
 
@@ -778,7 +778,7 @@ MainLoop:
 			}
 
 			if err := postNewWorkOrder(); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, err.Error())
+				_, _ = fmt.Fprint(os.Stderr, err.Error())
 				break MainLoop
 			}
 		case <-statsTicker.C:

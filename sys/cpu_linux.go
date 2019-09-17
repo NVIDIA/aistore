@@ -82,7 +82,7 @@ func ContainerNumCPU() (int, error) {
 		return 0, err
 	}
 
-	if period <= 0 {
+	if period == 0 {
 		return 0, errors.New("failed to read container CPU info")
 	}
 
