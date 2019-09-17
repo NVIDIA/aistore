@@ -334,3 +334,11 @@ func dsortIDList(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		}
 	}
 }
+
+func nRequiredArgsCompletions(n int) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		if c.NArg() >= n {
+			flagList(c)
+		}
+	}
+}

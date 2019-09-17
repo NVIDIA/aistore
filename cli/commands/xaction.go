@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -36,7 +35,7 @@ var (
 				{
 					Name:         xactStart,
 					Usage:        "starts the extended action",
-					ArgsUsage:    xactionNameArgumentText,
+					ArgsUsage:    xactionArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStart],
 					Action:       xactHandler,
@@ -45,7 +44,7 @@ var (
 				{
 					Name:         xactStop,
 					Usage:        "stops the extended action",
-					ArgsUsage:    xactionNameOptionalArgumentText,
+					ArgsUsage:    xactionOptionalArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStop],
 					Action:       xactHandler,
@@ -54,7 +53,7 @@ var (
 				{
 					Name:         xactStats,
 					Usage:        "returns the stats of the extended action",
-					ArgsUsage:    xactionNameOptionalArgumentText,
+					ArgsUsage:    xactionOptionalArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        xactFlags[xactStats],
 					Action:       xactHandler,
@@ -134,26 +133,4 @@ func xactHandler(c *cli.Context) (err error) {
 		err = fmt.Errorf(invalidCmdMsg, command)
 	}
 	return
-}
-
-func buildXactKindsMsg() string {
-	xactKinds := make([]string, 0, len(cmn.XactKind))
-
-	for kind := range cmn.XactKind {
-		xactKinds = append(xactKinds, kind)
-	}
-
-	return fmt.Sprintf("%s can be one of: %s", xactionNameArgumentText, strings.Join(xactKinds, ", "))
-}
-
-func bucketXactionNames() cmn.StringSet {
-	result := make(cmn.StringSet)
-
-	for name, meta := range cmn.XactKind {
-		if !meta.IsGlobal {
-			result[name] = struct{}{}
-		}
-	}
-
-	return result
 }

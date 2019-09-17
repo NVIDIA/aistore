@@ -53,7 +53,7 @@ var (
 					Usage:        "download objects from external source",
 					ArgsUsage:    downloadStartArgumentText,
 					Flags:        downloadFlags[downloadStart],
-					Action:       downloadStartHandler,
+					Action:       startDownloadHandler,
 					BashComplete: flagList,
 				},
 				{
@@ -92,68 +92,6 @@ var (
 		},
 	}
 )
-
-func downloadStartHandler(c *cli.Context) error {
-	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		description = parseStrFlag(c, descriptionFlag)
-		timeout     = parseStrFlag(c, timeoutFlag)
-
-		id string
-	)
-
-	basePayload := cmn.DlBase{
-		BckProvider: cmn.AIS, // NOTE: currently downloading only to ais buckets is supported
-		Timeout:     timeout,
-		Description: description,
-	}
-
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, "source", "destination")
-	}
-	if c.NArg() == 1 {
-		return missingArgumentsError(c, "destination")
-	}
-
-	source, dest := c.Args().Get(0), c.Args().Get(1)
-	link, err := parseSource(source)
-	if err != nil {
-		return err
-	}
-	bucket, pathSuffix, err := parseDest(dest)
-	if err != nil {
-		return err
-	}
-	basePayload.Bucket = bucket
-
-	if strings.Contains(source, "{") && strings.Contains(source, "}") {
-		// Range
-		payload := cmn.DlRangeBody{
-			DlBase:   basePayload,
-			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
-			Template: link,
-		}
-		id, err = api.DownloadRangeWithParam(baseParams, payload)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Single
-		payload := cmn.DlSingleBody{
-			DlBase: basePayload,
-			DlObj: cmn.DlObj{
-				Link:    link,
-				Objname: pathSuffix, // in this case pathSuffix is a full name of the object
-			},
-		}
-		id, err = api.DownloadSingleWithParam(baseParams, payload)
-		if err != nil {
-			return err
-		}
-	}
-	_, _ = fmt.Fprintln(c.App.Writer, id)
-	return nil
-}
 
 func downloadAdminHandler(c *cli.Context) error {
 	var (

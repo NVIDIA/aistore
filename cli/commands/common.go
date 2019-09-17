@@ -19,7 +19,6 @@ const (
 	// commandDaeclu - all subcommands are top-level commands
 	commandDownload = "download"
 	commandDsort    = cmn.DSortNameLowercase
-	commandLRU      = "lru"
 	commandObject   = "object"
 	commandXaction  = "xaction"
 	commandNode     = "node"
@@ -27,14 +26,16 @@ const (
 	//
 	// VERBs
 	//
+	commandRename    = cmn.ActRename
+	commandPrefetch  = cmn.ActPrefetch
+	commandStart     = cmn.ActXactStart
+	commandStop      = cmn.ActXactStop
 	commandList      = "ls"
 	commandCreate    = "create"
-	commandRename    = "rename"
 	commandSetCopies = "set-copies"
 	commandRemove    = "rm"
 	commandEvict     = "evict"
 	commandCopy      = "cp"
-	commandPrefetch  = "prefetch"
 )
 
 // Subcommand names
@@ -92,11 +93,6 @@ const (
 	dsortRemove = subcommandRemove
 	dsortList   = subcommandList
 
-	// Lru
-	lruStart  = cmn.ActXactStart
-	lruStop   = cmn.ActXactStop
-	lruStatus = cmn.ActXactStats
-
 	// Object
 	objGet      = subcommandGet
 	objPut      = "put"
@@ -119,7 +115,9 @@ const (
 	subcmdObject    = "object"
 	subcmdProps     = "props"
 	subcmdDownloads = "downloads"
+	subcmdDownload  = "download"
 	subcmdDsort     = cmn.DSortNameLowercase
+	subcmdXaction   = "xaction"
 
 	// List
 	subcmdListBuckets   = subcmdBuckets
@@ -141,6 +139,16 @@ const (
 
 	// Copy
 	subcmdCopyBucket = subcmdBucket
+
+	// Start
+	subcmdStartXaction  = subcmdXaction
+	subcmdStartDsort    = subcmdDsort
+	subcmdStartDownload = subcmdDownload
+
+	// Stop
+	subcmdStopXaction  = subcmdXaction
+	subcmdStopDsort    = subcmdDsort
+	subcmdStopDownload = subcmdDownload
 )
 
 // Flag related constants
@@ -259,8 +267,11 @@ const (
 	jsonSpecArgumentText = "JSON_SPECIFICATION"
 
 	// Xaction
-	xactionNameArgumentText         = "XACTION_NAME"
-	xactionNameOptionalArgumentText = "[XACTION_NAME]"
+	xactionArgumentText                   = "XACTION_NAME"
+	xactionOptionalArgumentText           = "[XACTION_NAME]"
+	xactionWithOptionalBucketArgumentText = "XACTION_NAME [BUCKET_NAME]"
+	xactionStopAll                        = "all"
+	xactionStopCommandArgumentText        = "XACTION_NAME|" + xactionStopAll + " [BUCKET_NAME]"
 )
 
 // Command help templates
