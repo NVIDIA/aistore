@@ -1358,7 +1358,7 @@ func Test_evictCloudBucket(t *testing.T) {
 
 	for _, fname := range filesList {
 		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
-			t.Fatalf("%s remains cached", fname)
+			t.Errorf("%s remains cached", fname)
 		}
 	}
 	bProps, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
