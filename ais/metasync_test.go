@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -138,24 +138,24 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.AIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.AIS}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add("bucket3", false, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.Cloud}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add("bucket4", false, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket4", Provider: cmn.Cloud}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
@@ -572,13 +572,13 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket1", Provider: cmn.AIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, &cmn.BucketProps{
+	bucketmd.add(&cluster.Bck{Name: "bucket2", Provider: cmn.AIS}, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderAIS,
 		Cksum: cmn.CksumConf{
 			Type: cmn.PropInherit,
@@ -605,7 +605,7 @@ func TestMetaSyncData(t *testing.T) {
 		Cksum: cmn.CksumConf{Type: cmn.PropInherit},
 		LRU:   cmn.GCO.Get().LRU,
 	}
-	bucketmd.add("bucket3", true, bprops)
+	bucketmd.add(&cluster.Bck{Name: "bucket3", Provider: cmn.AIS}, bprops)
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)

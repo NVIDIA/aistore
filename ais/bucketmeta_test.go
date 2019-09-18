@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cluster"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
@@ -17,9 +19,9 @@ import (
 // - trash in - error out
 func TestBMDSaveLoad(t *testing.T) {
 	bmd := newBucketMD()
-	bmd.add("local1", true, &cmn.BucketProps{})
-	bmd.add("local3", true, &cmn.BucketProps{})
-	bmd.add("cloud0", false, &cmn.BucketProps{})
+	bmd.add(&cluster.Bck{Name: "local1", Provider: cmn.AIS}, &cmn.BucketProps{})
+	bmd.add(&cluster.Bck{Name: "local3", Provider: cmn.AIS}, &cmn.BucketProps{})
+	bmd.add(&cluster.Bck{Name: "cloud0", Provider: cmn.Cloud}, &cmn.BucketProps{})
 
 	b := bmd.MarshalXattr()
 	tutils.Logf("Original checksum: %v\n", b[:9])

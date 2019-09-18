@@ -301,7 +301,7 @@ func (p *proxyrunner) validateStartDownloadRequest(w http.ResponseWriter, r *htt
 	bucket = payload.Bucket
 	bck := &cluster.Bck{Name: bucket, Provider: payload.Provider}
 	if err := bck.Init(p.bmdowner); err != nil {
-		if bck, err = p.syncCBmeta(w, r, bucket, payload.Provider, err); err != nil {
+		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
 	}

@@ -47,7 +47,7 @@ type (
 	}
 	LOM struct {
 		md      lmeta  // local meta
-		bck     Bck    // bucket
+		bck     *Bck   // bucket
 		FQN     string // fqn
 		Objname string // object name in the bucket
 		HrwFQN  string // (misplaced?)
@@ -94,7 +94,7 @@ func (lom *LOM) SetBID(bid uint64)         { lom.md.bckID, lom.bck.Props.BID = b
 func (lom *LOM) Bucket() string            { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
-func (lom *LOM) Bck() *Bck                 { return &lom.bck }
+func (lom *LOM) Bck() *Bck                 { return lom.bck }
 
 //
 // access perms
@@ -574,9 +574,8 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 		}
 	}
 	bowner := lom.T.GetBowner()
-	lom.bck.Name, lom.bck.Provider = bucket, provider
-	var b = &lom.bck
-	if err = b.Init(bowner); err != nil {
+	lom.bck = &Bck{Name: bucket, Provider: provider}
+	if err = lom.bck.Init(bowner); err != nil {
 		return
 	}
 	if lom.FQN == "" {
@@ -647,7 +646,7 @@ func (lom *LOM) Exists() bool {
 	cmn.Dassert(lom.loaded, pkgName) // cannot check existence without first calling lom.Load()
 	if lom.IsAIS() && lom.exists {
 		bmd := lom.T.GetBowner().Get()
-		lom.bck.Props, _ = bmd.Get(lom.Bucket(), lom.IsAIS())
+		lom.bck.Props, _ = bmd.Get(lom.bck)
 		if lom.bck.Props != nil && lom.md.bckID == lom.bck.Props.BID {
 			return true
 		}
@@ -871,11 +870,10 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 		bucket, objName = Uname2Bo(md.uname)
 		local, exists   bool
 	)
-	lom = &LOM{Objname: objName}
-	lom.bck.Name = bucket
-	if bmd.Exists(bucket, md.bckID, true /*local*/) {
+	lom = &LOM{Objname: objName, bck: &Bck{Name: bucket}}
+	if bmd.Exists(&Bck{Name: bucket, Provider: cmn.AIS}, md.bckID) {
 		local, exists = true, true
-	} else if bmd.Exists(bucket, md.bckID, false /*cloud*/) {
+	} else if bmd.Exists(&Bck{Name: bucket, Provider: cmn.Cloud}, md.bckID) {
 		local, exists = false, true
 	}
 	lom.exists = exists

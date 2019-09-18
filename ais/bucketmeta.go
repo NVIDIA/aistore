@@ -51,45 +51,45 @@ func newBucketMD() *bucketMD {
 	return &bucketMD{BMD: cluster.BMD{LBmap: lbmap, CBmap: cbmap}}
 }
 
-func (m *bucketMD) add(b string, isais bool, p *cmn.BucketProps) bool {
+func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	cmn.Assert(p != nil)
 	mm := m.LBmap
-	if !isais {
+	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	if _, ok := mm[b]; ok {
+	if _, ok := mm[bck.Name]; ok {
 		return false
 	}
 	m.Version++
-	p.BID = m.GenBucketID(isais)
-	mm[b] = p
+	p.BID = m.GenBucketID(bck.IsAIS())
+	mm[bck.Name] = p
 	return true
 }
 
-func (m *bucketMD) del(b string, isais bool) bool {
+func (m *bucketMD) del(bck *cluster.Bck) bool {
 	mm := m.LBmap
-	if !isais {
+	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	if _, ok := mm[b]; !ok {
+	if _, ok := mm[bck.Name]; !ok {
 		return false
 	}
-	delete(mm, b)
+	delete(mm, bck.Name)
 	m.Version++
 	return true
 }
 
-func (m *bucketMD) set(b string, isais bool, p *cmn.BucketProps) {
+func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	mm := m.LBmap
-	if !isais {
+	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	if _, ok := mm[b]; !ok {
+	if _, ok := mm[bck.Name]; !ok {
 		cmn.Assert(false)
 	}
 
 	m.Version++
-	mm[b] = p
+	mm[bck.Name] = p
 }
 
 func (m *bucketMD) ecUsed() bool {
@@ -105,14 +105,6 @@ func (m *bucketMD) ecUsed() bool {
 	}
 
 	return false
-}
-
-// ecEnabled returns whether or not erasure coding is enabled
-// for the bucket. Returns false if bucket not found
-//nolint:unused
-func (m *bucketMD) ecEnabled(bucket string) bool {
-	p, ok := m.Get(bucket, m.IsAIS(bucket))
-	return ok && p.EC.Enabled
 }
 
 func (m *bucketMD) clone() *bucketMD {

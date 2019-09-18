@@ -39,31 +39,30 @@ func (m *BMD) GenBucketID(isais bool) uint64 {
 	return uint64(m.Version) | BisLocalBit
 }
 
-func (m *BMD) Exists(b string, bckID uint64, isais bool) (exists bool) {
+func (m *BMD) Exists(bck *Bck, bckID uint64) (exists bool) {
 	if bckID == 0 {
-		if isais {
-			exists = m.IsAIS(b)
-			// cmn.Assert(!exists)
+		if bck.IsAIS() {
+			exists = m.IsAIS(bck.Name)
 			if exists {
-				glog.Errorf("%s: ais bucket must have ID", m.Bstring(b, isais))
+				glog.Errorf("%s: ais bucket must have ID", m.Bstring(bck))
 				exists = false
 			}
 		} else {
-			exists = m.IsCloud(b)
+			exists = m.IsCloud(bck.Name)
 		}
 		return
 	}
-	if isais != (bckID&BisLocalBit != 0) {
+	if bck.IsAIS() != (bckID&BisLocalBit != 0) {
 		return
 	}
 	var (
 		p  *cmn.BucketProps
 		mm = m.LBmap
 	)
-	if !isais {
+	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	p, exists = mm[b]
+	p, exists = mm[bck.Name]
 	if exists && p.BID != bckID {
 		exists = false
 	}
@@ -73,25 +72,22 @@ func (m *BMD) Exists(b string, bckID uint64, isais bool) (exists bool) {
 func (m *BMD) IsAIS(bucket string) bool   { _, ok := m.LBmap[bucket]; return ok }
 func (m *BMD) IsCloud(bucket string) bool { _, ok := m.CBmap[bucket]; return ok }
 
-func (m *BMD) Bstring(b string, isais bool) string {
-	var (
-		s    = cmn.ProviderFromBool(isais)
-		p, e = m.Get(b, isais)
-	)
+func (m *BMD) Bstring(bck *Bck) string {
+	_, e := m.Get(bck)
 	if !e {
-		return fmt.Sprintf("%s(unknown, %s)", b, s)
+		return fmt.Sprintf("%s(not exists)", bck)
 	}
-	return fmt.Sprintf("%s(%x, %s)", b, p.BID, s)
+	return fmt.Sprintf("%s(exists)", bck)
 }
 
-func (m *BMD) Get(b string, isais bool) (p *cmn.BucketProps, present bool) {
-	if isais {
-		p, present = m.LBmap[b]
+func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
+	if bck.IsAIS() {
+		p, present = m.LBmap[bck.Name]
 		return
 	}
-	p, present = m.CBmap[b]
+	p, present = m.CBmap[bck.Name]
 	if !present {
-		p = cmn.DefaultBucketProps(isais)
+		p = cmn.DefaultBucketProps(bck.IsAIS())
 	}
 	return
 }

@@ -328,7 +328,7 @@ do:
 		doubleCheck, err, errCode = goi.getFromAny(goi.lom)
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
-			er2 := lom2.Init(goi.lom.Bucket(), cmn.ProviderFromBool(goi.lom.IsAIS()))
+			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Bck().Provider)
 			if er2 == nil {
 				er2 = lom2.Load()
 				if er2 == nil && lom2.Exists() {

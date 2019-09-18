@@ -1212,8 +1212,18 @@ func TestRenameEmptyBucket(t *testing.T) {
 	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
 
 	// Rename it
-	err := api.RenameBucket(tutils.DefaultBaseAPIParams(t), m.bucket, newTestBucketName)
+	baseParams := tutils.DefaultBaseAPIParams(t)
+	err := api.RenameBucket(baseParams, m.bucket, newTestBucketName)
 	tassert.CheckFatal(t, err)
+
+	// Check if the new bucket appears in the list
+	names, err := api.GetBucketNames(baseParams, cmn.AIS)
+	tassert.CheckFatal(t, err)
+
+	exists := cmn.StringInSlice(newTestBucketName, names.AIS)
+	if !exists {
+		t.Error("new bucket not found in buckets list")
+	}
 
 	// Destroy renamed ais bucket
 	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)

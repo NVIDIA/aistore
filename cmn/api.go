@@ -458,6 +458,12 @@ func (to *BucketProps) CopyFrom(from *BucketProps) {
 	to.AccessAttrs = from.AccessAttrs
 }
 
+func (from *BucketProps) Clone() *BucketProps {
+	to := &BucketProps{}
+	to.CopyFrom(from)
+	return to
+}
+
 func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster func(string) bool) error {
 	if bp.Tiering.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(bp.Tiering.NextTierURL); err != nil {

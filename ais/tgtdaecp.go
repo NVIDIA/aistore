@@ -1275,7 +1275,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	defer t.bmdowner.Unlock()
 
 	bmd := t.bmdowner.get()
-	_, ok := bmd.Get(bucketTo, true /*is local*/)
+	_, ok := bmd.Get(&cluster.Bck{Name: bucketTo, Provider: cmn.AIS})
 	if !ok {
 		return
 	}

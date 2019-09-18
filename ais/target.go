@@ -757,7 +757,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	config := cmn.GCO.Get()
-	if !bck.IsAIS() {
+	if bck.IsCloud() {
 		bucketProps, err, errCode = t.cloud.headBucket(t.contextWithAuth(r.Header), bucket)
 		if err != nil {
 			if errCode == http.StatusNotFound {

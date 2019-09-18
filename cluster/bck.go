@@ -58,7 +58,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 			err = fmt.Errorf("provider mismatch: %q vs bucket (%s, %s)", config.CloudProvider, b.Name, b.Provider)
 		}
 	}
-	b.Props, _ = bmd.Get(b.Name, b.IsAIS())
+	b.Props, _ = bmd.Get(b)
 	return
 }
 

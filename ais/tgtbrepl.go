@@ -58,7 +58,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	// local op
 	if si.DaemonID == ri.t.si.DaemonID {
 		dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
-		err = dst.Init(ri.bucketTo, cmn.ProviderFromBool(true /*is local*/))
+		err = dst.Init(ri.bucketTo, cmn.AIS)
 		if err != nil {
 			return
 		}
@@ -102,7 +102,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 
 	// PUT object into different target
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, cmn.ProviderFromBool(lom.IsAIS()))
+	query.Add(cmn.URLParamProvider, lom.Bck().Provider)
 	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.DaemonID)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,

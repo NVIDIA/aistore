@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	t.init(nil, cmn.GCO.Get())
 
 	bmd := newBucketMD()
-	bmd.add(testBucket, true, &cmn.BucketProps{
+	bmd.add(&cluster.Bck{Name: testBucket, Provider: cmn.AIS}, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{
 			Type: cmn.ChecksumNone,
 		},
