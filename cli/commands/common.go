@@ -37,6 +37,8 @@ const (
 	commandCopy      = "cp"
 	commandRegister  = "register"
 	commandStats     = "stats"
+	commandGet       = "get"
+	commandPut       = "put"
 )
 
 // Subcommand names
@@ -246,7 +248,7 @@ var (
 	outFileFlag   = cli.StringFlag{Name: "out-file", Usage: "name of the file where the contents will be saved"}
 	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset"}
 	rangeFlag     = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
-	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "check if an object is cached"}
+	isCachedFlag  = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	waitFlag      = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
@@ -271,6 +273,8 @@ const (
 	bucketPropsArgumentText  = bucketArgumentText + " " + keyValuePairArgumentsText
 
 	// Object
+	objectGetArgumentText            = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
+	objectPutArgumentText            = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
 	objectsOptionalArgumentText      = "BUCKET_NAME/[OBJECT_NAME]..."
 	objectPrefetchBucketArgumentText = "BUCKET_NAME/"
 	objectOldNewArgumentText         = "BUCKET_NAME/OBJECT_NAME NEW_OBJECT_NAME"

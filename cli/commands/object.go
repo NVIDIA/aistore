@@ -72,7 +72,7 @@ var (
 			lengthFlag,
 			checksumFlag,
 			propsFlag,
-			cachedFlag,
+			isCachedFlag,
 		),
 		subcommandRename: {
 			nameFlag,
@@ -230,8 +230,8 @@ func objectHandler(c *cli.Context) (err error) {
 
 // Get object from bucket
 func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
-	if flagIsSet(c, cachedFlag) {
-		return objectCheckCached(c, baseParams, bucket, bckProvider)
+	if flagIsSet(c, isCachedFlag) {
+		return objectCheckCached(c, baseParams, bucket, bckProvider, parseStrFlag(c, nameFlag))
 	}
 
 	if err := checkFlags(c, []cli.Flag{nameFlag, outFileFlag}); err != nil {
@@ -289,19 +289,17 @@ func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvi
 	return err
 }
 
-func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
-	object := parseStrFlag(c, nameFlag)
-
+func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, object string) error {
 	_, err := api.HeadObject(baseParams, bucket, bckProvider, object, true)
 	if err != nil {
 		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
-			_, _ = fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
+			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
 			return nil
 		}
 		return err
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)
+	fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)
 	return nil
 }
 
