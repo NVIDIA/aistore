@@ -21,7 +21,7 @@ var (
 	xactFlags = map[string][]cli.Flag{
 		xactStart: baseXactFlags,
 		xactStop:  baseXactFlags,
-		xactStats: append(baseXactFlags, jsonFlag, allFlag, activeFlag),
+		xactStats: append(baseXactFlags, jsonFlag, allItemsFlag, activeFlag),
 	}
 
 	bucketXactions = bucketXactionNames()
@@ -105,7 +105,7 @@ func xactHandler(c *cli.Context) (err error) {
 		}
 	case xactStats:
 		var xactStatsMap map[string][]*stats.BaseXactStatsExt
-		xactStatsMap, err = api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allFlag))
+		xactStatsMap, err = api.MakeXactGetRequest(baseParams, xaction, command, bucket, flagIsSet(c, allItemsFlag))
 		if err != nil {
 			return
 		}

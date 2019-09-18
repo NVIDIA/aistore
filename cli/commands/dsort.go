@@ -725,3 +725,104 @@ func printCondensedStats(w io.Writer, baseParams *api.BaseParams, id string) err
 	_, _ = fmt.Fprint(w, "\n")
 	return nil
 }
+
+func dsortJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) error {
+	list, err := api.ListDSort(baseParams, regex)
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(list, func(i int, j int) bool {
+		if list[i].IsRunning() && !list[j].IsRunning() {
+			return true
+		}
+		if !list[i].IsRunning() && list[j].IsRunning() {
+			return false
+		}
+		if !list[i].Aborted && list[j].Aborted {
+			return true
+		}
+		if list[i].Aborted && !list[j].Aborted {
+			return false
+		}
+
+		return list[i].StartedTime.Before(list[j].StartedTime)
+	})
+
+	return templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
+}
+
+func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error {
+	var (
+		verbose = flagIsSet(c, verboseFlag)
+		refresh = flagIsSet(c, refreshFlag)
+		logging = flagIsSet(c, logFlag)
+	)
+
+	// Show progress bar.
+	if !verbose && refresh && !logging {
+		refreshRate, err := calcRefreshRate(c)
+		if err != nil {
+			return err
+		}
+		dsortResult, err := newDSortProgressBar(baseParams, id, refreshRate).run()
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintln(c.App.Writer, dsortResult)
+		return nil
+	}
+
+	// Show metrics just once.
+	if !refresh && !logging {
+		if verbose {
+			if _, _, err := printMetrics(c.App.Writer, baseParams, id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(c.App.Writer, "\n")
+		}
+
+		return printCondensedStats(c.App.Writer, baseParams, id)
+	}
+
+	// Show metrics once in a while.
+	var (
+		w = c.App.Writer
+	)
+
+	rate, err := calcRefreshRate(c)
+	if err != nil {
+		return err
+	}
+
+	if logging {
+		file, err := cmn.CreateFile(c.String(logFlag.Name))
+		if err != nil {
+			return err
+		}
+		w = file
+		defer file.Close()
+	}
+
+	var (
+		aborted  bool
+		finished bool
+	)
+
+	for {
+		aborted, finished, err = printMetrics(w, baseParams, id)
+		if err != nil {
+			return err
+		}
+		if aborted || finished {
+			break
+		}
+
+		time.Sleep(rate)
+	}
+
+	fmt.Fprintf(c.App.Writer, "\n")
+	return printCondensedStats(c.App.Writer, baseParams, id)
+}

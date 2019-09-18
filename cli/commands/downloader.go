@@ -418,3 +418,42 @@ func (b *progressBar) totalFilesCnt() int {
 	}
 	return b.totalFiles
 }
+
+func downloadJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) error {
+	list, err := api.DownloadGetList(baseParams, regex)
+	if err != nil {
+		return err
+	}
+
+	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
+}
+
+func downloadJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error {
+	showProgressBar := flagIsSet(c, progressBarFlag)
+
+	// with progress bar
+	if showProgressBar {
+		refreshRate, err := calcRefreshRate(c)
+		if err != nil {
+			return err
+		}
+
+		downloadingResult, err := newProgressBar(baseParams, id, refreshRate).run()
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintln(c.App.Writer, downloadingResult)
+		return nil
+	}
+
+	// without progress bar
+	resp, err := api.DownloadStatus(baseParams, id)
+	if err != nil {
+		return err
+	}
+
+	verbose := flagIsSet(c, verboseFlag)
+	fmt.Fprint(c.App.Writer, resp.Print(verbose))
+	return nil
+}

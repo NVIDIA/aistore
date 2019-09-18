@@ -44,7 +44,7 @@ var (
 		objPropsFlag,
 		objLimitFlag,
 		showUnmatchedFlag,
-		allFlag,
+		allItemsFlag,
 		fastFlag,
 		noHeaderFlag,
 		pagedFlag,
@@ -390,7 +390,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 		props += strings.Join(cmn.GetPropsAll, ",")
 	} else {
 		props += parseStrFlag(c, objPropsFlag)
-		if flagIsSet(c, allFlag) && !strings.Contains(props, "status") {
+		if flagIsSet(c, allItemsFlag) && !strings.Contains(props, "status") {
 			// If `all` flag is set print status of the file so that the output is easier to understand -
 			// there might be multiple files with the same name listed (e.g EC replicas)
 			props += ",status"
@@ -860,7 +860,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 	objFilter := &objectListFilter{}
 
 	// if fastFlag is enabled, allFlag is enabled automatically because obj.Status is unset
-	if !flagIsSet(c, allFlag) && !flagIsSet(c, fastFlag) {
+	if !flagIsSet(c, allItemsFlag) && !flagIsSet(c, fastFlag) {
 		// Filter out files with status different than OK
 		objFilter.addFilter(func(obj *cmn.BucketEntry) bool { return obj.IsStatusOK() })
 	}

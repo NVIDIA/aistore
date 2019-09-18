@@ -24,9 +24,6 @@ const (
 	commandNode     = "node"
 	commandAuth     = "auth"
 
-	//
-	// VERBs
-	//
 	commandRename    = cmn.ActRename
 	commandPrefetch  = cmn.ActPrefetch
 	commandStart     = cmn.ActXactStart
@@ -39,6 +36,7 @@ const (
 	commandEvict     = "evict"
 	commandCopy      = "cp"
 	commandRegister  = "register"
+	commandStats     = "stats"
 )
 
 // Subcommand names
@@ -112,31 +110,28 @@ const (
 	//
 	// OBJECT subcommands
 	//
-	subcmdBuckets   = cmn.Buckets
-	subcmdBucket    = "bucket"
-	subcmdObjects   = cmn.Objects
-	subcmdObject    = "object"
-	subcmdProps     = "props"
-	subcmdDownloads = "downloads"
-	subcmdDownload  = "download"
-	subcmdDsort     = cmn.DSortNameLowercase
-	subcmdXaction   = "xaction"
-	subcmdConfig    = "config"
-	subcmdDisks     = "disks"
-	subcmdSmap      = cmn.GetWhatSmap
-	subcmdNode      = "node"
-	subcmdProxy     = "proxy"
-	subcmdTarget    = "target"
+	subcmdBucket   = "bucket"
+	subcmdObject   = "object"
+	subcmdProps    = "props"
+	subcmdDownload = "download"
+	subcmdDsort    = cmn.DSortNameLowercase
+	subcmdXaction  = "xaction"
+	subcmdConfig   = "config"
+	subcmdSmap     = cmn.GetWhatSmap
+	subcmdDisk     = "disk"
+	subcmdNode     = "node"
+	subcmdProxy    = "proxy"
+	subcmdTarget   = "target"
 
 	// List
-	subcmdListBuckets   = subcmdBuckets
-	subcmdListBckProps  = subcmdProps
-	subcmdListObjects   = subcmdObjects
-	subcmdListDownloads = subcmdDownloads
-	subcmdListDsort     = subcmdDsort
-	subcmdListConfig    = subcmdConfig
-	subcmdListDisks     = subcmdDisks
-	subcmdListSmap      = subcmdSmap
+	subcmdListBucket   = subcmdBucket
+	subcmdListBckProps = subcmdProps
+	subcmdListObject   = subcmdObject
+	subcmdListDownload = subcmdDownload
+	subcmdListDsort    = subcmdDsort
+	subcmdListConfig   = subcmdConfig
+	subcmdListDisk     = subcmdDisk
+	subcmdListSmap     = subcmdSmap
 
 	// Create
 	subcmdCreateBucket = subcmdBucket
@@ -146,9 +141,11 @@ const (
 	subcmdRenameObject = subcmdObject
 
 	// Remove
-	subcmdRemoveBucket = subcmdBucket
-	subcmdRemoveObject = subcmdObject
-	subcmdRemoveNode   = subcmdNode
+	subcmdRemoveBucket   = subcmdBucket
+	subcmdRemoveObject   = subcmdObject
+	subcmdRemoveNode     = subcmdNode
+	subcmdRemoveDownload = subcmdDownload
+	subcmdRemoveDsort    = subcmdDsort
 
 	// Copy
 	subcmdCopyBucket = subcmdBucket
@@ -170,6 +167,10 @@ const (
 	// Register
 	subcmdRegisterProxy  = subcmdProxy
 	subcmdRegisterTarget = subcmdTarget
+
+	// Stats
+	subcmdStatsNode    = subcmdNode
+	subcmdStatsXaction = subcmdXaction
 )
 
 // Flag related constants
@@ -207,7 +208,7 @@ var (
 	templateFlag      = cli.StringFlag{Name: "template", Usage: "template for matching object names"}
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
-	allFlag           = cli.BoolTFlag{Name: "all", Usage: "show all items including old, duplicated etc"}
+	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old, duplicated etc"}
 	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	propsFlag         = cli.BoolFlag{Name: "props", Usage: "properties of a bucket"}
@@ -257,8 +258,11 @@ var (
 const (
 	// Common
 	idArgumentText            = "ID"
+	jobIDArgumentText         = "JOB_ID"
+	optionalJobIDArgumentText = "[JOB_ID]"
 	noArgumentsText           = " "
 	keyValuePairArgumentsText = "KEY=VALUE [KEY=VALUE...]"
+	allArgumentText           = "all"
 
 	// Bucket
 	bucketArgumentText       = "BUCKET_NAME"
@@ -276,6 +280,7 @@ const (
 
 	// Config
 	daemonIDArgumentText         = "DAEMON_ID"
+	daemonStatsArgumentText      = daemonIDArgumentText + "|" + allArgumentText
 	optionalDaemonIDArgumentText = "[DAEMON_ID]"
 	configSetArgumentText        = optionalDaemonIDArgumentText + " " + keyValuePairArgumentsText
 
@@ -295,8 +300,7 @@ const (
 	xactionArgumentText                   = "XACTION_NAME"
 	xactionOptionalArgumentText           = "[XACTION_NAME]"
 	xactionWithOptionalBucketArgumentText = "XACTION_NAME [BUCKET_NAME]"
-	xactionStopAll                        = "all"
-	xactionStopCommandArgumentText        = "XACTION_NAME|" + xactionStopAll + " [BUCKET_NAME]"
+	xactionStopStatsCommandArgumentText   = "XACTION_NAME|" + allArgumentText + " [BUCKET_NAME]"
 
 	// auth
 	addUserText    = "USER_NAME USER_PASSWORD"

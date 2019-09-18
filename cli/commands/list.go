@@ -6,19 +6,13 @@
 package commands
 
 import (
-	"sort"
-
-	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
 
 var (
 	listCmdsFlags = map[string][]cli.Flag{
-		subcmdListBuckets: {
+		subcmdListBucket: {
 			regexFlag,
 			noHeaderFlag,
 		},
@@ -26,20 +20,26 @@ var (
 			baseBucketFlags,
 			jsonFlag,
 		),
-		subcmdListObjects: append(
+		subcmdListObject: append(
 			listObjectFlags,
 			bckProviderFlag,
 		),
-		subcmdListDownloads: {
+		subcmdListDownload: {
 			regexFlag,
+			progressBarFlag,
+			refreshFlag,
+			verboseFlag,
 		},
 		subcmdListDsort: {
 			regexFlag,
+			refreshFlag,
+			verboseFlag,
+			logFlag,
 		},
 		subcmdListConfig: {
 			jsonFlag,
 		},
-		subcmdListDisks: append(
+		subcmdListDisk: append(
 			append(daecluBaseFlags, longRunFlags...),
 			noHeaderFlag,
 		),
@@ -54,10 +54,10 @@ var (
 			Usage: "lists information about entities in the cluster",
 			Subcommands: []cli.Command{
 				{
-					Name:         subcmdListBuckets,
+					Name:         subcmdListBucket,
 					Usage:        "lists bucket names",
 					ArgsUsage:    providerOptionalArgumentText,
-					Flags:        listCmdsFlags[subcmdListBuckets],
+					Flags:        listCmdsFlags[subcmdListBucket],
 					Action:       listBucketsHandler,
 					BashComplete: providerList(true /* optional */),
 				},
@@ -70,25 +70,25 @@ var (
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
-					Name:         subcmdListObjects,
+					Name:         subcmdListObject,
 					Usage:        "lists bucket objects",
 					ArgsUsage:    bucketArgumentText,
-					Flags:        listCmdsFlags[subcmdListObjects],
+					Flags:        listCmdsFlags[subcmdListObject],
 					Action:       listObjectsHandler,
 					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
-					Name:         subcmdListDownloads,
-					Usage:        "lists all download jobs",
-					ArgsUsage:    noArgumentsText,
-					Flags:        listCmdsFlags[subcmdListDownloads],
+					Name:         subcmdListDownload,
+					Usage:        "lists download jobs",
+					ArgsUsage:    optionalJobIDArgumentText,
+					Flags:        listCmdsFlags[subcmdListDownload],
 					Action:       listDownloadsHandler,
 					BashComplete: flagList,
 				},
 				{
 					Name:         subcmdListDsort,
-					Usage:        "lists all dSort jobs",
-					ArgsUsage:    noArgumentsText,
+					Usage:        "lists dSort jobs",
+					ArgsUsage:    optionalJobIDArgumentText,
 					Flags:        listCmdsFlags[subcmdListDsort],
 					Action:       listDsortHandler,
 					BashComplete: flagList,
@@ -102,10 +102,10 @@ var (
 					BashComplete: daemonConfigSectionSuggestions(false /* daemon optional */, true /* config optional */),
 				},
 				{
-					Name:         subcmdListDisks,
-					Usage:        "list disk stats for targets",
+					Name:         subcmdListDisk,
+					Usage:        "lists disk stats for targets",
 					ArgsUsage:    targetIDArgumentText,
-					Flags:        listCmdsFlags[subcmdListDisks],
+					Flags:        listCmdsFlags[subcmdListDisk],
 					Action:       listDisksHandler,
 					BashComplete: daemonSuggestions(true /* optional */, true /* omit proxies */),
 				},
@@ -163,46 +163,29 @@ func listObjectsHandler(c *cli.Context) (err error) {
 func listDownloadsHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		regex      = parseStrFlag(c, regexFlag)
-		list       map[string]cmn.DlJobInfo
+		id         = c.Args().First()
 	)
 
-	if list, err = api.DownloadGetList(baseParams, regex); err != nil {
-		return
+	if c.NArg() < 1 { // list all download jobs
+		return downloadJobsList(c, baseParams, parseStrFlag(c, regexFlag))
 	}
 
-	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
+	// display status of a download job with given id
+	return downloadJobStatus(c, baseParams, id)
 }
 
 func listDsortHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		regex      = parseStrFlag(c, regexFlag)
-		list       []*dsort.JobInfo
+		id         = c.Args().First()
 	)
 
-	if list, err = api.ListDSort(baseParams, regex); err != nil {
-		return err
+	if c.NArg() < 1 { // list all dsort jobs
+		return dsortJobsList(c, baseParams, parseStrFlag(c, regexFlag))
 	}
 
-	sort.Slice(list, func(i int, j int) bool {
-		if list[i].IsRunning() && !list[j].IsRunning() {
-			return true
-		}
-		if !list[i].IsRunning() && list[j].IsRunning() {
-			return false
-		}
-		if !list[i].Aborted && list[j].Aborted {
-			return true
-		}
-		if list[i].Aborted && !list[j].Aborted {
-			return false
-		}
-
-		return list[i].StartedTime.Before(list[j].StartedTime)
-	})
-
-	return templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
+	// display status of a dsort job with given id
+	return dsortJobStatus(c, baseParams, id)
 }
 
 func listConfigHandler(c *cli.Context) (err error) {

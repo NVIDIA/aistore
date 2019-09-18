@@ -72,7 +72,7 @@ var (
 				{
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
-					ArgsUsage:    xactionStopCommandArgumentText,
+					ArgsUsage:    xactionStopStatsCommandArgumentText,
 					Description:  xactKindsMsg,
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
@@ -142,10 +142,10 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", xactionStopAll))
+		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgumentText))
 	}
 
-	if xaction == xactionStopAll {
+	if xaction == allArgumentText {
 		xaction = ""
 		bucket = c.Args().Get(1)
 		if bucket == "" {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -21,7 +22,9 @@ var (
 			baseLstRngFlags,
 			bckProviderFlag,
 		),
-		subcmdRemoveNode: {},
+		subcmdRemoveNode:     {},
+		subcmdRemoveDownload: {},
+		subcmdRemoveDsort:    {},
 	}
 
 	removeCmds = []cli.Command{
@@ -52,6 +55,22 @@ var (
 					Flags:        removeCmdsFlags[subcmdRemoveNode],
 					Action:       removeNodeHandler,
 					BashComplete: daemonSuggestions(false /* optional */, false /* omit proxies */),
+				},
+				{
+					Name:         subcmdRemoveDownload,
+					Usage:        "removes finished download job with given id from the list",
+					ArgsUsage:    jobIDArgumentText,
+					Flags:        removeCmdsFlags[subcmdRemoveDownload],
+					Action:       removeDownloadHandler,
+					BashComplete: downloadIDListFinished,
+				},
+				{
+					Name:         subcmdRemoveDsort,
+					Usage:        fmt.Sprintf("remove finished %s job with given id from the list", cmn.DSortName),
+					ArgsUsage:    jobIDArgumentText,
+					Flags:        removeCmdsFlags[subcmdRemoveDsort],
+					Action:       removeDsortHandler,
+					BashComplete: dsortIDListFinished,
 				},
 			},
 		},
@@ -124,4 +143,40 @@ func removeNodeHandler(c *cli.Context) (err error) {
 	)
 
 	return clusterRemoveNode(c, baseParams, daemonID)
+}
+
+func removeDownloadHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		id         = c.Args().First()
+	)
+
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "download job ID")
+	}
+
+	if err = api.DownloadRemove(baseParams, id); err != nil {
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, "download job with id %s successfully removed\n", id)
+	return
+}
+
+func removeDsortHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		id         = c.Args().First()
+	)
+
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, cmn.DSortName+" job ID")
+	}
+
+	if err = api.RemoveDSort(baseParams, id); err != nil {
+		return
+	}
+
+	fmt.Fprintf(c.App.Writer, "%s job with id %s successfully removed\n", cmn.DSortName, id)
+	return
 }
