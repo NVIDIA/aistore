@@ -310,6 +310,7 @@ const (
 	VoteInit     = "init"
 	Mountpaths   = "mountpaths"
 	Summary      = "summary"
+	AllBuckets   = "*"
 
 	// dSort and downloader
 	Init        = "init"

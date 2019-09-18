@@ -323,7 +323,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch apiItems[0] {
-	case cmn.List:
+	case cmn.AllBuckets:
 		bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
 		normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
@@ -1652,7 +1652,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bck
 		si: si,
 		req: cmn.ReqArgs{
 			Method: r.Method,
-			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.List),
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
 			Query:  r.URL.Query(),
 			Header: r.Header,
 		},
@@ -3456,7 +3456,7 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 
 	// request all targets for their BMD saved to xattrs
 	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.List),
+		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
 		query,
 		http.MethodGet,
 		nil, // message

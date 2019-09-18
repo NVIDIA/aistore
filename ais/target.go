@@ -326,7 +326,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch apiItems[0] {
-	case cmn.List:
+	case cmn.AllBuckets:
 		bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
 
 		normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
