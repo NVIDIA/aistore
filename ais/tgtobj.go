@@ -37,7 +37,7 @@ type (
 		r io.ReadCloser
 		// Checksum which needs to be checked on receive. It is only checked
 		// on specific occasions: see `writeToFile` method.
-		cksumToCheck cmn.Cksummer
+		cksumToCheck *cmn.Cksum
 		// object size aka Content-Length
 		size int64
 		// Context used when putting the object which should be contained in
@@ -230,7 +230,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		written int64
 
 		checkCksumType      string
-		expectedCksum       cmn.Cksummer
+		expectedCksum       *cmn.Cksum
 		saveHash, checkHash hash.Hash
 		hashes              []hash.Hash
 	)

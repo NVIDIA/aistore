@@ -42,7 +42,7 @@ type Target interface {
 	Prefetch()
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
-	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum cmn.Cksummer, started time.Time) error
+	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
 	CopyObject(lom *LOM, bucketTo string, buf []byte, uncache bool) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 }

@@ -477,7 +477,7 @@ const (
 )
 
 // Get file checksum if link points to Google storage or s3
-func getCksum(link string, resp *http.Response) cmn.Cksummer {
+func getCksum(link string, resp *http.Response) *cmn.Cksum {
 	u, err := url.Parse(link)
 	cmn.AssertNoErr(err)
 

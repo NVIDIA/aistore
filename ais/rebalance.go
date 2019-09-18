@@ -729,7 +729,7 @@ func (rj *globalRebJogger) send(lom *cluster.LOM, tsi *cluster.Snode) (err error
 	var (
 		file                  *cmn.FileHandle
 		hdr                   transport.Header
-		cksum                 cmn.Cksummer
+		cksum                 *cmn.Cksum
 		cksumType, cksumValue string
 		lomack                *LomAcks
 		idx                   int

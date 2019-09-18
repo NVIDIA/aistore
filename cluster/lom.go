@@ -42,8 +42,8 @@ type (
 		atime   int64
 		atimefs int64
 		bckID   uint64
-		cksum   cmn.Cksummer // ReCache(ref)
-		copies  fs.MPI       // ditto
+		cksum   *cmn.Cksum // ReCache(ref)
+		copies  fs.MPI     // ditto
 	}
 	LOM struct {
 		md      lmeta  // local meta
@@ -77,24 +77,24 @@ func init() {
 // LOM public methods
 //
 
-func (lom *LOM) Uname() string               { return lom.md.uname }
-func (lom *LOM) Size() int64                 { return lom.md.size }
-func (lom *LOM) SetSize(size int64)          { lom.md.size = size }
-func (lom *LOM) Version() string             { return lom.md.version }
-func (lom *LOM) SetVersion(ver string)       { lom.md.version = ver }
-func (lom *LOM) Cksum() cmn.Cksummer         { return lom.md.cksum }
-func (lom *LOM) SetCksum(cksum cmn.Cksummer) { lom.md.cksum = cksum }
-func (lom *LOM) Atime() time.Time            { return time.Unix(0, lom.md.atime) }
-func (lom *LOM) AtimeUnix() int64            { return lom.md.atime }
-func (lom *LOM) SetAtimeUnix(tu int64)       { lom.md.atime = tu }
-func (lom *LOM) ECEnabled() bool             { return lom.Bprops().EC.Enabled }
-func (lom *LOM) LRUEnabled() bool            { return lom.Bprops().LRU.Enabled }
-func (lom *LOM) Misplaced() bool             { return lom.HrwFQN != lom.FQN } // subj to resilvering
-func (lom *LOM) SetBID(bid uint64)           { lom.md.bckID, lom.bck.Props.BID = bid, bid }
-func (lom *LOM) Bucket() string              { return lom.bck.Name }
-func (lom *LOM) BckProvider() string         { return lom.bck.Provider }
-func (lom *LOM) Bprops() *cmn.BucketProps    { return lom.bck.Props }
-func (lom *LOM) IsAIS() bool                 { return lom.bck.IsAIS() }
+func (lom *LOM) Uname() string             { return lom.md.uname }
+func (lom *LOM) Size() int64               { return lom.md.size }
+func (lom *LOM) SetSize(size int64)        { lom.md.size = size }
+func (lom *LOM) Version() string           { return lom.md.version }
+func (lom *LOM) SetVersion(ver string)     { lom.md.version = ver }
+func (lom *LOM) Cksum() *cmn.Cksum         { return lom.md.cksum }
+func (lom *LOM) SetCksum(cksum *cmn.Cksum) { lom.md.cksum = cksum }
+func (lom *LOM) Atime() time.Time          { return time.Unix(0, lom.md.atime) }
+func (lom *LOM) AtimeUnix() int64          { return lom.md.atime }
+func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.atime = tu }
+func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
+func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
+func (lom *LOM) Misplaced() bool           { return lom.HrwFQN != lom.FQN } // subj to resilvering
+func (lom *LOM) SetBID(bid uint64)         { lom.md.bckID, lom.bck.Props.BID = bid, bid }
+func (lom *LOM) Bucket() string            { return lom.bck.Name }
+func (lom *LOM) BckProvider() string       { return lom.bck.Provider }
+func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
+func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
 
 //
 // access perms
@@ -330,7 +330,7 @@ func (lom *LOM) _string(b string) string {
 	return s + a + "]"
 }
 
-func (lom *LOM) BadCksumErr(cksum cmn.Cksummer) (err error) {
+func (lom *LOM) BadCksumErr(cksum *cmn.Cksum) (err error) {
 	return errors.New(cmn.BadCksum(cksum, lom.md.cksum) + ", " + lom.StringEx())
 }
 
@@ -390,7 +390,7 @@ func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
 // Use lom.ValidateContentChecksum() to recompute and check object's content checksum.
 func (lom *LOM) ValidateMetaChecksum() error {
 	var (
-		cksumFromFS cmn.Cksummer
+		cksumFromFS *cmn.Cksum
 		md          *lmeta
 		err         error
 	)
@@ -461,7 +461,7 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 	return
 }
 
-func (lom *LOM) CksumComputeIfMissing() (cksum cmn.Cksummer, err error) {
+func (lom *LOM) CksumComputeIfMissing() (cksum *cmn.Cksum, err error) {
 	var (
 		val       string
 		cksumType = lom.CksumConf().Type

@@ -1255,7 +1255,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	oldFileInfo, err = os.Stat(fqn)
 	tassert.Errorf(t, err == nil, "Failed while reading the bucket from the local file system. Error: [%v]", err)
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
+	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
@@ -1268,7 +1268,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 
 	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, path.Join(ChecksumWarmValidateStr, fileName))
@@ -1449,7 +1449,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, bucketName, fileName, t)
 
@@ -1461,7 +1461,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	err = tutils.SetXattrCksm(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
+	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234abcde"), tMock)
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bucketName, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {

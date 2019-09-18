@@ -51,7 +51,7 @@ func (*TargetMock) RebalanceInfo() RebalanceInfo {
 func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int) {
 	return nil, http.StatusOK
 }
-func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ cmn.Cksummer, _ time.Time) error {
+func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ *cmn.Cksum, _ time.Time) error {
 	return nil
 }
 func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error    { return nil }

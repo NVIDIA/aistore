@@ -349,8 +349,8 @@ func (awsp *awsProvider) headObj(ctx context.Context, lom *cluster.LOM) (objMeta
 
 func (awsp *awsProvider) getObj(ctx context.Context, workFQN string, lom *cluster.LOM) (err error, errCode int) {
 	var (
-		cksum        cmn.Cksummer
-		cksumToCheck cmn.Cksummer
+		cksum        *cmn.Cksum
+		cksumToCheck *cmn.Cksum
 	)
 	sess := createSession(ctx)
 	svc := s3.New(sess)

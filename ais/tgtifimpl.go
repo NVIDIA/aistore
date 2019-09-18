@@ -136,7 +136,7 @@ func (t *targetrunner) GetObject(w io.Writer, lom *cluster.LOM, started time.Tim
 
 // slight variation vs t.doPut() above
 func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *cluster.LOM,
-	recvType cluster.RecvType, cksum cmn.Cksummer, started time.Time) error {
+	recvType cluster.RecvType, cksum *cmn.Cksum, started time.Time) error {
 
 	poi := &putObjInfo{
 		started: started,

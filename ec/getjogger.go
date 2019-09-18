@@ -417,7 +417,7 @@ func noSliceWriter(req *Request, writers []io.Writer, restored []*slice,
 	return nil
 }
 
-func checkSliceChecksum(reader io.Reader, recvCksm cmn.Cksummer, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64) {
+func checkSliceChecksum(reader io.Reader, recvCksm *cmn.Cksum, wg *sync.WaitGroup, errCh chan int, i int, sliceSize int64) {
 	defer wg.Done()
 
 	if kind, _ := recvCksm.Get(); kind == cmn.ChecksumNone {

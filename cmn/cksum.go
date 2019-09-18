@@ -21,31 +21,27 @@ func NewCRC32C() hash.Hash {
 }
 
 type (
-	Cksummer interface {
-		Get() (string, string)
-		String() string
-	}
-	cksum struct {
+	Cksum struct {
 		ty    string
 		value string
 	}
 )
 
-func NewCksum(ty, value string) Cksummer {
+func NewCksum(ty, value string) *Cksum {
 	if ty == "" || value == "" {
 		return nil
 	}
 	if ty != ChecksumXXHash && ty != ChecksumMD5 && ty != ChecksumCRC32C {
 		AssertMsg(false, fmt.Sprintf("invalid checksum type: %s (with value of: %s)", ty, value))
 	}
-	return cksum{ty, value}
+	return &Cksum{ty, value}
 }
 
 func HashToStr(h hash.Hash) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func EqCksum(a, b Cksummer) bool {
+func EqCksum(a, b *Cksum) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -54,7 +50,7 @@ func EqCksum(a, b Cksummer) bool {
 	return t1 == t2 && v1 == v2
 }
 
-func BadCksum(a, b Cksummer) string {
+func BadCksum(a, b *Cksum) string {
 	if a != nil && b == nil {
 		return fmt.Sprintf("%s (%s != %v)", BadCksumPrefix, a, b)
 	} else if a == nil && b != nil {
@@ -70,9 +66,9 @@ func BadCksum(a, b Cksummer) string {
 	return fmt.Sprintf("%s %s != %s", BadCksumPrefix, a, b)
 }
 
-func (v cksum) Get() (string, string) { return v.ty, v.value }
-func (v cksum) Type() string          { return v.ty }
-func (v cksum) Value() string         { return v.value }
-func (v cksum) String() string {
+func (v *Cksum) Get() (string, string) { return v.ty, v.value }
+func (v *Cksum) Type() string          { return v.ty }
+func (v *Cksum) Value() string         { return v.value }
+func (v *Cksum) String() string {
 	return fmt.Sprintf("(%s,%s...)", v.ty, v.value[:Min(10, len(v.value))])
 }

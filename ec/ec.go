@@ -205,7 +205,7 @@ type (
 		n       int64              // number of byte sent/received
 		refCnt  atomic.Int32       // number of references
 		workFQN string             // FQN for temporary slice/replica
-		cksum   cmn.Cksummer       // checksum of the slice
+		cksum   *cmn.Cksum         // checksum of the slice
 		version string             // version of the remote object
 	}
 

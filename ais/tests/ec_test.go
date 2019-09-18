@@ -934,7 +934,7 @@ func TestECChecksum(t *testing.T) {
 	// Corrupt just one slice, EC should be able to restore the original object
 	for k := range foundParts1 {
 		if k != mainObjPath1 && strings.Contains(k, ecSliceDir) {
-			err := tutils.SetXattrCksm(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
+			err := tutils.SetXattrCksum(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 			tassert.CheckFatal(t, err)
 			break
 		}
@@ -949,7 +949,7 @@ func TestECChecksum(t *testing.T) {
 	// Corrupt all slices, EC should not be able to restore
 	for k := range foundParts2 {
 		if k != mainObjPath2 && strings.Contains(k, ecSliceDir) {
-			err := tutils.SetXattrCksm(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
+			err := tutils.SetXattrCksum(k, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 			tassert.CheckFatal(t, err)
 		}
 	}
