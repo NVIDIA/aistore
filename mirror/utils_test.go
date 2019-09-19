@@ -40,7 +40,16 @@ var _ = Describe("Mirror", func() {
 	_ = fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
-		tMock      = cluster.NewTargetMock(cluster.NewBaseBownerMock(TestBucketName))
+		tMock = cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
+			LBmap: map[string]*cmn.BucketProps{
+				TestBucketName: {
+					Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+					LRU:    cmn.LRUConf{Enabled: true},
+					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
+				},
+			},
+		}})
+
 		mi         = fs.MountpathInfo{Path: mpath}
 		testDir    = mi.MakePathBucket(fs.ObjectType, TestBucketName, cmn.AIS)
 		testFQN    = mi.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
@@ -64,7 +73,7 @@ var _ = Describe("Mirror", func() {
 	})
 
 	Describe("copyTo", func() {
-		It("should copy corectly file and set Xattributes", func() {
+		It("should copy correctly file and set Xattributes", func() {
 			mi2 := fs.MountpathInfo{Path: mpath2}
 			expectedCopyFQN := mi2.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
 
@@ -110,7 +119,7 @@ var _ = Describe("Mirror", func() {
 			Expect(lom.IsCopy()).To(BeFalse())
 			Expect(lom.HasCopies()).To(BeTrue())
 			Expect(lomCopy.IsCopy()).To(BeTrue())
-			Expect(lomCopy.HasCopies()).To(BeFalse())
+			Expect(lomCopy.HasCopies()).To(BeTrue())
 		})
 	})
 })

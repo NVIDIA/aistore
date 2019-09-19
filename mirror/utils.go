@@ -20,12 +20,20 @@ type mpather interface {
 
 func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {
 	var (
+		copiesMpath cmn.StringSet
+
 		util       int64 = 101
-		skip             = make(cmn.SimpleKVs)
 		now              = time.Now()
 		mpathUtils       = fs.Mountpaths.GetAllMpathUtils(now)
 	)
-loop:
+
+	if lom.HasCopies() {
+		copiesMpath = make(cmn.StringSet)
+		for _, mpathInfo := range lom.GetCopies() {
+			copiesMpath.Add(mpathInfo.Path)
+		}
+	}
+
 	for _, j := range mpathers {
 		jpath := j.mountpathInfo().Path
 		if jpath == lom.ParsedFQN.MpathInfo.Path {
@@ -33,15 +41,8 @@ loop:
 		}
 		if lom.HasCopies() {
 			// skip existing
-			for cpyfqn, mpathInfo := range lom.GetCopies() {
-				cpath, ok := skip[cpyfqn]
-				if !ok {
-					cpath = mpathInfo.Path
-					skip[cpyfqn] = cpath
-				}
-				if jpath == cpath {
-					continue loop
-				}
+			if copiesMpath.Contains(jpath) {
+				continue
 			}
 		}
 		if u, ok := mpathUtils[jpath]; ok && u < util {
@@ -64,7 +65,7 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	}
 
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
-	clone, err = lom.CopyObject(copyFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK*/)
+	clone, err = lom.CopyObject(copyFQN, buf)
 	if err != nil {
 		return
 	}

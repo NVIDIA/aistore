@@ -176,8 +176,12 @@ func NewSimpleKVsFromQuery(query url.Values) SimpleKVs {
 	return kvs
 }
 
-func (s StringSet) Contains(key string) bool {
-	_, ok := s[key]
+func (ss StringSet) Add(key string) {
+	ss[key] = struct{}{}
+}
+
+func (ss StringSet) Contains(key string) bool {
+	_, ok := ss[key]
 	return ok
 }
 

@@ -129,38 +129,84 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 	return conf
 }
 
+func (lom *LOM) CopyMetadata(from *LOM) {
+	if lom.MirrorConf().Enabled {
+		for fqn, mpathInfo := range from.GetCopies() {
+			lom.AddCopy(fqn, mpathInfo)
+		}
+		lom.AddCopy(from.FQN, from.ParsedFQN.MpathInfo)
+		// TODO: in future we should have invariant: cmn.Assert(lom.NumCopies() == from.NumCopies())
+	}
+
+	lom.md.cksum = from.md.cksum
+	lom.md.size = from.md.size
+	lom.md.version = from.md.version
+	lom.md.atime = from.md.atime
+}
+
 //
 // local copy management
 // TODO -- FIXME: lom.md.copies are not protected and are subject to races
 //                the caller to use lom.Lock/Unlock (as in mirror)
 //
-func (lom *LOM) HasCopies() bool   { return !lom.IsCopy() && lom.NumCopies() > 1 }
-func (lom *LOM) NumCopies() int    { return len(lom.md.copies) + 1 }
-func (lom *LOM) GetCopies() fs.MPI { return lom.md.copies }
+func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
+
+// NumCopies returns number of copies: different mountpaths + itself.
+func (lom *LOM) NumCopies() int {
+	if len(lom.md.copies) == 0 {
+		return 1
+	}
+
+	// If lom contains itself we do not need to add +1
+	_, ok := lom.md.copies[lom.FQN]
+	if !ok {
+		return len(lom.md.copies) + 1
+	}
+	return len(lom.md.copies)
+}
+
+// TODO: maybe we can do that with no-allocation? Like an iterator which would skip lom.FQN?
+func (lom *LOM) GetCopies() fs.MPI {
+	// If lom contains itself in copies it should be removed when iterating.
+	_, ok := lom.md.copies[lom.FQN]
+	if !ok {
+		return lom.md.copies
+	}
+	copies := make(fs.MPI, len(lom.md.copies)-1)
+	for k, v := range lom.md.copies {
+		if k == lom.FQN {
+			continue
+		}
+		copies[k] = v
+	}
+	return copies
+}
 func (lom *LOM) IsCopy() bool {
-	if len(lom.md.copies) != 1 {
+	if !lom.bck.Props.Mirror.Enabled {
 		return false
 	}
-	_, ok := lom.md.copies[lom.HrwFQN]
-	return ok
+	return lom.FQN != lom.HrwFQN
 }
 func (lom *LOM) SetCopies(cpyfqn string, mpi *fs.MountpathInfo) {
 	lom.md.copies = make(fs.MPI, 1)
 	lom.md.copies[cpyfqn] = mpi
+	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 }
 func (lom *LOM) AddCopy(cpyfqn string, mpi *fs.MountpathInfo) {
 	if lom.md.copies == nil {
 		lom.SetCopies(cpyfqn, mpi)
 	} else {
 		lom.md.copies[cpyfqn] = mpi
+		lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 	}
 }
 func (lom *LOM) DelCopy(cpyfqn string) (err error) {
-	l := len(lom.md.copies)
-	if _, ok := lom.md.copies[cpyfqn]; !ok {
-		return fmt.Errorf("lom %s(%d): copy %s %s", lom, l, cpyfqn, cmn.DoesNotExist)
+	numCopies := lom.NumCopies()
+	copies := lom.GetCopies()
+	if _, ok := copies[cpyfqn]; !ok {
+		return fmt.Errorf("lom %s(%d): copy %s %s", lom, numCopies, cpyfqn, cmn.DoesNotExist)
 	}
-	if l == 1 {
+	if numCopies == 1 {
 		return lom.DelAllCopies()
 	}
 	if lom._whingeCopy() {
@@ -172,6 +218,41 @@ func (lom *LOM) DelCopy(cpyfqn string) (err error) {
 	}
 	return
 }
+
+// syncMetaWithCopies tries to match metadata with all existing copies.
+// NOTE: uname for LOM must be already locked.
+//
+// TODO: it is very similar to `RestoreObjectFromAny` method. Needs to be consolidated.
+func (lom *LOM) syncMetaWithCopies() (err error) {
+	availablePaths, _ := fs.Mountpaths.Get()
+
+	bck := lom.Bck()
+	for path, mpathInfo := range availablePaths {
+		if path == lom.ParsedFQN.MpathInfo.Path {
+			continue
+		}
+
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
+		src := lom.Clone(fqn)
+		if err := src.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
+			continue
+		}
+		if err := src.Load(false); err != nil {
+			continue
+		}
+		if !src.Exists() {
+			continue
+		}
+
+		src.CopyMetadata(lom)
+		if err := src.Persist(); err != nil {
+			// TODO: rollback
+			return err
+		}
+	}
+	return nil
+}
+
 func (lom *LOM) _whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return
@@ -189,8 +270,12 @@ func (lom *LOM) DelAllCopies() (err error) {
 	if !lom.HasCopies() {
 		return
 	}
-	n := 0
-	for cpyfqn := range lom.md.copies {
+	if lom.Misplaced() {
+		return
+	}
+	numCopies := lom.NumCopies()
+	n := 1
+	for cpyfqn := range lom.GetCopies() {
 		if err1 := os.Remove(cpyfqn); err1 != nil && !os.IsNotExist(err1) {
 			err = err1
 			continue
@@ -198,8 +283,8 @@ func (lom *LOM) DelAllCopies() (err error) {
 		delete(lom.md.copies, cpyfqn)
 		n++
 	}
-	if n < len(lom.md.copies) {
-		glog.Errorf("%s: failed to remove some copies(%d < %d), err: %s", lom, n, len(lom.md.copies), err)
+	if n < numCopies {
+		glog.Errorf("%s: failed to remove some copies(%d < %d), err: %s", lom, n, numCopies, err)
 	} else {
 		lom.md.copies = nil
 	}
@@ -241,6 +326,10 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 		src := lom.Clone(fqn)
 
 		lom.Lock(true)
+		if err := src.Init(lom.bck.Name, lom.bck.Provider, lom.Config()); err != nil {
+			lom.Unlock(true)
+			continue
+		}
 		if err := src.Load(false); err != nil {
 			lom.Unlock(true)
 			continue
@@ -250,7 +339,7 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 			continue
 		}
 
-		_, err := src.CopyObject(lom.FQN, buf, false, true)
+		_, err := src.CopyObject(lom.FQN, buf)
 		lom.Unlock(true)
 
 		if err == nil {
@@ -263,21 +352,16 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 }
 
 // NOTE: caller is responsible for locking
-func (lom *LOM) CopyObject(dstFQN string, buf []byte, dstIsCopy, srcCopyOK bool) (dst *LOM, err error) {
+func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
-		written       int64
 		dstCksumValue string
 
 		workFQN  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 		srcCksum = lom.Cksum()
 	)
-	if !srcCopyOK && lom.IsCopy() {
-		err = fmt.Errorf("%s is a mirrored copy", lom)
-		return
-	}
 
 	needCksum := srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone
-	written, dstCksumValue, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
+	_, dstCksumValue, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
 	if err != nil {
 		return
 	}
@@ -297,16 +381,8 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte, dstIsCopy, srcCopyOK bool)
 		}
 	}
 
-	if !dstIsCopy {
-		// If regular file store also atime, copies do not need that.
-		dst.SetAtimeUnix(time.Now().UnixNano())
-		// TODO -- FIXME: md.copies
-	} else {
-		dst.SetCopies(lom.FQN, lom.ParsedFQN.MpathInfo) // point to original object
-	}
-	dst.SetSize(written)
-	dst.SetCksum(srcCksum)
-	dst.SetVersion(lom.Version())
+	dst.CopyMetadata(lom)
+	dst.SetAtimeUnix(time.Now().UnixNano())
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dstFQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
@@ -389,10 +465,10 @@ func (lom *LOM) IncObjectVersion() (newVersion string, err error) {
 
 // best-effort GET load balancing (see also mirror.findLeastUtilized())
 func (lom *LOM) LoadBalanceGET(now time.Time) (fqn string) {
-	if len(lom.md.copies) == 0 {
+	if !lom.HasCopies() {
 		return lom.FQN
 	}
-	return fs.Mountpaths.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.md.copies, now)
+	return fs.Mountpaths.LoadBalanceGET(lom.FQN, lom.ParsedFQN.MpathInfo.Path, lom.GetCopies(), now)
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)

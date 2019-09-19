@@ -76,7 +76,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		}
 
 		// do
-		_, err = lom.CopyObject(dst.FQN, ri.buf, false /*dstIsCopy=false*/, true /*srcCopyOK*/)
+		_, err = lom.CopyObject(dst.FQN, ri.buf)
 		if err == nil {
 			copied = true
 			dst.SetBID(dst.Bprops().BID)

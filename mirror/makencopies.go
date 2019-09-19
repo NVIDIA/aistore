@@ -6,6 +6,7 @@ package mirror
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -136,6 +137,10 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 		size, err = j.delCopies(lom)
 	} else {
 		size, err = j.addCopies(lom)
+	}
+
+	if os.IsNotExist(err) {
+		return nil
 	}
 
 	j.num++

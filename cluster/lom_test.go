@@ -27,6 +27,7 @@ var _ = Describe("LOM", func() {
 
 		bucketLocalA = "LOM_TEST_Local_1"
 		bucketLocalB = "LOM_TEST_Local_2"
+		bucketLocalC = "LOM_TEST_Local_3"
 
 		bucketCloudA = "LOM_TEST_Cloud_1"
 		bucketCloudB = "LOM_TEST_Cloud_2"
@@ -65,6 +66,11 @@ var _ = Describe("LOM", func() {
 			bucketLocalB: {
 				Cksum: cmn.CksumConf{Type: cmn.ChecksumXXHash},
 				LRU:   cmn.LRUConf{Enabled: true},
+			},
+			bucketLocalC: {
+				Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
+				LRU:    cmn.LRUConf{Enabled: true},
+				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 			},
 			sameBucketName: {},
 		},
@@ -552,8 +558,9 @@ var _ = Describe("LOM", func() {
 
 	Describe("copy object methods", func() {
 		testObjectName := "foldr/test-obj.ext"
-		localFQN := mi.MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.AIS, testObjectName)
+		localFQN := mi.MakePathBucketObject(fs.ObjectType, bucketLocalC, cmn.AIS, testObjectName)
 		copyFQN := mi2.MakePathBucketObject(fs.ObjectType, bucketLocalB, cmn.AIS, testObjectName)
+		mirrorFQN := mi2.MakePathBucketObject(fs.ObjectType, bucketLocalC, cmn.AIS, testObjectName)
 		testFileSize := 101
 		desiredVersion := "9002"
 
@@ -561,7 +568,7 @@ var _ = Describe("LOM", func() {
 			localFQN, copyFQN = copyFQN, localFQN
 		}
 
-		prepareLomWithCopy := func(setXCopy, dstIsCopy bool) (lom *cluster.LOM) {
+		prepareLomWithCopy := func(setXCopy, makeCopy bool) (lom, dst *cluster.LOM) {
 			var err error
 			// Prepares a basic lom with a copy
 			createTestFile(localFQN, testFileSize)
@@ -576,13 +583,17 @@ var _ = Describe("LOM", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(lom.ValidateContentChecksum()).ToNot(HaveOccurred())
 
-			dst, err := lom.CopyObject(copyFQN, make([]byte, testFileSize), dstIsCopy, false)
+			dstFQN := copyFQN
+			if makeCopy {
+				dstFQN = mirrorFQN
+			}
+			dst, err = lom.CopyObject(dstFQN, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
-			_, err = os.Stat(copyFQN)
+			_, err = os.Stat(dst.FQN)
 			Expect(os.IsNotExist(err)).To(BeFalse())
 
 			if setXCopy {
-				lom.SetCopies(copyFQN, nil)
+				lom.SetCopies(dst.FQN, nil)
 				Expect(lom.Persist()).ShouldNot(HaveOccurred())
 				dst.SetCopies(lom.FQN, nil)
 				Expect(dst.Persist()).ShouldNot(HaveOccurred())
@@ -594,11 +605,11 @@ var _ = Describe("LOM", func() {
 
 		Describe("CopyObject", func() {
 			It("Should successfully copy the object", func() {
-				lom := prepareLomWithCopy(false /*setXCopy*/, false /*dstIsCopy*/)
+				lom, dst := prepareLomWithCopy(false /*setXCopy*/, false /*makeCopy*/)
 				expectedHash := getTestFileHash(localFQN)
 
 				// Check copy created
-				newLom := NewBasicLom(copyFQN, tMock)
+				newLom := NewBasicLom(dst.FQN, tMock)
 				err := newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newLom.FQN).NotTo(Equal(lom.FQN))
@@ -609,15 +620,15 @@ var _ = Describe("LOM", func() {
 				Expect(newLom.IsCopy()).To(BeFalse())
 
 				// Check copy contents are correct
-				Expect(getTestFileHash(copyFQN)).To(BeEquivalentTo(expectedHash))
+				Expect(getTestFileHash(dst.FQN)).To(BeEquivalentTo(expectedHash))
 			})
 
 			It("Should successfully copy the object in case it is mirror", func() {
-				lom := prepareLomWithCopy(false /*setXCopy*/, true /*dstIsCopy*/)
+				lom, dst := prepareLomWithCopy(false /*setXCopy*/, true /*makeCopy*/)
 				expectedHash := getTestFileHash(localFQN)
 
 				// Check copy created
-				newLom := NewBasicLom(copyFQN, tMock)
+				newLom := NewBasicLom(dst.FQN, tMock)
 				err := newLom.Load(false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newLom.FQN).NotTo(Equal(lom.FQN))
@@ -629,17 +640,25 @@ var _ = Describe("LOM", func() {
 				Expect(newLom.GetCopies()).To(HaveKey(lom.FQN))
 
 				// Check copy contents are correct
-				Expect(getTestFileHash(copyFQN)).To(BeEquivalentTo(expectedHash))
+				Expect(getTestFileHash(dst.FQN)).To(BeEquivalentTo(expectedHash))
 			})
 		})
 
 		Describe("DelAllCopies", func() {
 			It("Should be able to delete all copies", func() {
-				lom := prepareLomWithCopy(true /*setXCopy*/, false /*dstIsCopy*/)
+				lom, dst := prepareLomWithCopy(true /*setXCopy*/, true /*makeCopy*/)
+
+				Expect(lom.GetCopies()).To(HaveLen(1))
+				Expect(lom.NumCopies()).To(Equal(2))
+				Expect(lom.HasCopies()).To(BeTrue())
 
 				Expect(lom.DelAllCopies()).NotTo(HaveOccurred())
+				Expect(lom.GetCopies()).To(HaveLen(0))
+				Expect(lom.NumCopies()).To(Equal(1))
+				Expect(lom.HasCopies()).To(BeFalse())
+
 				Expect(lom.Persist()).To(BeNil())
-				_, err := os.Stat(copyFQN)
+				_, err := os.Stat(dst.FQN)
 				Expect(os.IsNotExist(err)).To(BeTrue())
 			})
 		})
