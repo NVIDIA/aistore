@@ -11,15 +11,31 @@ import (
 )
 
 var (
+	listObjectFlags = []cli.Flag{
+		regexFlag,
+		templateFlag,
+		prefixFlag,
+		pageSizeFlag,
+		objPropsFlag,
+		objLimitFlag,
+		showUnmatchedFlag,
+		allItemsFlag,
+		fastFlag,
+		noHeaderFlag,
+		pagedFlag,
+		maxPagesFlag,
+		markerFlag,
+	}
+
 	listCmdsFlags = map[string][]cli.Flag{
 		subcmdListBucket: {
 			regexFlag,
 			noHeaderFlag,
 		},
-		subcmdListBckProps: append(
-			baseBucketFlags,
+		subcmdListBckProps: {
+			providerFlag,
 			jsonFlag,
-		),
+		},
 		subcmdListObject: append(
 			listObjectFlags,
 			providerFlag,
@@ -40,7 +56,8 @@ var (
 			jsonFlag,
 		},
 		subcmdListDisk: append(
-			append(daecluBaseFlags, longRunFlags...),
+			longRunFlags,
+			jsonFlag,
 			noHeaderFlag,
 		),
 		subcmdListSmap: {
@@ -56,66 +73,66 @@ var (
 				{
 					Name:         subcmdListBucket,
 					Usage:        "lists bucket names",
-					ArgsUsage:    providerOptionalArgumentText,
+					ArgsUsage:    optionalProviderArgument,
 					Flags:        listCmdsFlags[subcmdListBucket],
 					Action:       listBucketsHandler,
-					BashComplete: providerList(true /* optional */),
+					BashComplete: providerCompletions(true /* optional */),
 				},
 				{
 					Name:         subcmdListBckProps,
 					Usage:        "lists bucket properties",
-					ArgsUsage:    bucketArgumentText,
+					ArgsUsage:    bucketArgument,
 					Flags:        listCmdsFlags[subcmdListBckProps],
 					Action:       listBckPropsHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
 					Name:         subcmdListObject,
 					Usage:        "lists bucket objects",
-					ArgsUsage:    bucketArgumentText,
+					ArgsUsage:    bucketArgument,
 					Flags:        listCmdsFlags[subcmdListObject],
 					Action:       listObjectsHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
 					Name:         subcmdListDownload,
 					Usage:        "lists download jobs",
-					ArgsUsage:    optionalJobIDArgumentText,
+					ArgsUsage:    optionalJobIDArgument,
 					Flags:        listCmdsFlags[subcmdListDownload],
 					Action:       listDownloadsHandler,
-					BashComplete: flagList,
+					BashComplete: downloadIDAllCompletions,
 				},
 				{
 					Name:         subcmdListDsort,
 					Usage:        "lists dSort jobs",
-					ArgsUsage:    optionalJobIDArgumentText,
+					ArgsUsage:    optionalJobIDArgument,
 					Flags:        listCmdsFlags[subcmdListDsort],
 					Action:       listDsortHandler,
-					BashComplete: flagList,
+					BashComplete: dsortIDAllCompletions,
 				},
 				{
 					Name:         subcmdListConfig,
 					Usage:        "lists daemon configuration",
-					ArgsUsage:    daemonIDArgumentText,
+					ArgsUsage:    daemonIDArgument,
 					Flags:        listCmdsFlags[subcmdListConfig],
 					Action:       listConfigHandler,
-					BashComplete: daemonConfigSectionSuggestions(false /* daemon optional */, true /* config optional */),
+					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */, true /* config optional */),
 				},
 				{
 					Name:         subcmdListDisk,
 					Usage:        "lists disk stats for targets",
-					ArgsUsage:    targetIDArgumentText,
+					ArgsUsage:    targetIDArgument,
 					Flags:        listCmdsFlags[subcmdListDisk],
 					Action:       listDisksHandler,
-					BashComplete: daemonSuggestions(true /* optional */, true /* omit proxies */),
+					BashComplete: daemonCompletions(true /* optional */, true /* omit proxies */),
 				},
 				{
 					Name:         subcmdListSmap,
-					Usage:        "display smap copy of a node",
-					ArgsUsage:    optionalDaemonIDArgumentText,
+					Usage:        "displays an smap copy of a node",
+					ArgsUsage:    optionalDaemonIDArgument,
 					Flags:        listCmdsFlags[subcmdListSmap],
 					Action:       listSmapHandler,
-					BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
+					BashComplete: daemonCompletions(true /* optional */, false /* omit proxies */),
 				},
 			},
 		},
@@ -132,7 +149,7 @@ func listBucketsHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	return listBucketNamesForProvider(c, baseParams, provider)
+	return listBucketNames(c, baseParams, provider)
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {

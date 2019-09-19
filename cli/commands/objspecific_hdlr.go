@@ -7,14 +7,9 @@ package commands
 
 import (
 	"fmt"
-	"net/url"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cli/templates"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -51,34 +46,34 @@ var (
 		{
 			Name:         commandPrefetch,
 			Usage:        "prefetches objects from cloud buckets",
-			ArgsUsage:    objectPrefetchBucketArgumentText,
+			ArgsUsage:    prefetchObjectBucketArgument,
 			Flags:        objectSpecificCmdsFlags[commandPrefetch],
 			Action:       prefetchHandler,
-			BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
 		},
 		{
 			Name:         commandEvict,
 			Usage:        "evicts objects from the cache",
-			ArgsUsage:    objectsOptionalArgumentText,
+			ArgsUsage:    optionalObjectsArgument,
 			Flags:        objectSpecificCmdsFlags[commandEvict],
 			Action:       evictHandler,
-			BashComplete: bucketList([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, true /* multiple */, true /* separator */, cmn.Cloud),
 		},
 		{
 			Name:         commandGet,
 			Usage:        "gets the object from the specified bucket",
-			ArgsUsage:    objectGetArgumentText,
+			ArgsUsage:    getObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandGet],
 			Action:       getHandler,
-			BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
 		},
 		{
 			Name:         commandPut,
 			Usage:        "puts objects to the specified bucket",
-			ArgsUsage:    objectPutArgumentText,
+			ArgsUsage:    putObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPut],
 			Action:       putHandler,
-			BashComplete: flagList, // FIXME
+			BashComplete: flagCompletions, // FIXME
 		},
 	}
 )
@@ -222,154 +217,4 @@ func putHandler(c *cli.Context) (err error) {
 	}
 
 	return putObject(c, baseParams, bucket, provider, objName, fileName)
-}
-
-func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object, outFile string) (err error) {
-	// just check if object is cached, don't get object
-	if flagIsSet(c, isCachedFlag) {
-		return objectCheckCached(c, baseParams, bucket, provider, object)
-	}
-
-	var (
-		query   = url.Values{}
-		objArgs api.GetObjectInput
-		objLen  int64
-		offset  string
-		length  string
-	)
-
-	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		err = fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
-		return incorrectUsageError(c, err)
-	}
-	if offset, err = getByteFlagValue(c, offsetFlag); err != nil {
-		return
-	}
-	if length, err = getByteFlagValue(c, lengthFlag); err != nil {
-		return
-	}
-
-	query.Add(cmn.URLParamProvider, provider)
-	query.Add(cmn.URLParamOffset, offset)
-	query.Add(cmn.URLParamLength, length)
-
-	if outFile == outFileStdout {
-		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
-	} else {
-		var file *os.File
-		if file, err = os.Create(outFile); err != nil {
-			return
-		}
-		defer file.Close()
-		objArgs = api.GetObjectInput{Writer: file, Query: query}
-	}
-
-	if flagIsSet(c, checksumFlag) {
-		objLen, err = api.GetObjectWithValidation(baseParams, bucket, object, objArgs)
-	} else {
-		objLen, err = api.GetObject(baseParams, bucket, object, objArgs)
-	}
-	if err != nil {
-		return
-	}
-
-	if flagIsSet(c, lengthFlag) {
-		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
-		return
-	}
-
-	fmt.Fprintf(c.App.ErrWriter, "%s has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
-	return
-}
-
-func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
-	path := cmn.ExpandPath(fileName)
-	if path, err = filepath.Abs(path); err != nil {
-		return
-	}
-
-	commonBase := parseStrFlag(c, baseFlag)
-	if commonBase != "" {
-		commonBase = cmn.ExpandPath(commonBase)
-		if commonBase, err = filepath.Abs(commonBase); err != nil {
-			return
-		}
-	}
-
-	if objName != "" {
-		// corner case - user gave the object name, upload one file
-		fh, err := cmn.NewFileHandle(path)
-		if err != nil {
-			return err
-		}
-
-		putArgs := api.PutObjectArgs{
-			BaseParams:     baseParams,
-			Bucket:         bucket,
-			BucketProvider: provider,
-			Object:         objName,
-			Reader:         fh,
-		}
-		err = api.PutObject(putArgs)
-		if err != nil {
-			return err
-		}
-
-		fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
-		return nil
-	}
-
-	// enumerate files
-	fmt.Fprintf(c.App.Writer, "Enumerating files\n")
-	files, err := generateFileList(path, commonBase, flagIsSet(c, recursiveFlag))
-	if err != nil {
-		return
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("no files found")
-	}
-
-	// check if the bucket is empty
-	msg := cmn.SelectMsg{PageSize: 1}
-	bckList, err := api.ListBucket(baseParams, bucket, &msg, 1)
-	if err != nil {
-		return
-	}
-	if len(bckList.Entries) != 0 {
-		fmt.Fprintf(c.App.Writer, "\nWARNING: destination bucket %q is not empty\n\n", bucket)
-	}
-
-	// calculate total size, group by extension
-	totalSize, extSizes := groupByExt(files)
-	totalCount := int64(len(files))
-	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
-	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
-		return
-	}
-
-	// ask a user for confirmation
-	if !flagIsSet(c, yesFlag) {
-		var input string
-		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
-		fmt.Scanln(&input)
-		if ok, _ := cmn.ParseBool(input); !ok {
-			return fmt.Errorf("Operation canceled")
-		}
-	}
-
-	refresh, err := calcPutRefresh(c)
-	if err != nil {
-		return
-	}
-
-	numWorkers := parseIntFlag(c, concurrencyFlag)
-	params := uploadParams{
-		bucket:    bucket,
-		provider:  provider,
-		files:     files,
-		workerCnt: numWorkers,
-		refresh:   refresh,
-		totalSize: totalSize,
-	}
-	return uploadFiles(c, baseParams, params)
 }

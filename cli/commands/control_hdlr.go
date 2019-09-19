@@ -18,6 +18,9 @@ import (
 )
 
 var (
+	bucketXactions = bucketXactionNames()
+	xactKindsMsg   = buildXactKindsMsg()
+
 	startCmdsFlags = map[string][]cli.Flag{
 		subcmdStartXaction: {},
 		subcmdStartDownload: {
@@ -41,27 +44,27 @@ var (
 				{
 					Name:         subcmdStartXaction,
 					Usage:        "starts an xaction",
-					ArgsUsage:    xactionWithOptionalBucketArgumentText,
+					ArgsUsage:    xactionWithOptionalBucketArgument,
 					Description:  xactKindsMsg,
 					Flags:        startCmdsFlags[subcmdStartXaction],
 					Action:       startXactionHandler,
-					BashComplete: xactStartCompletions,
+					BashComplete: xactionCompletions,
 				},
 				{
 					Name:         subcmdStartDownload,
 					Usage:        "starts a download job (downloads objects from external source)",
-					ArgsUsage:    downloadStartArgumentText,
+					ArgsUsage:    startDownloadArgument,
 					Flags:        startCmdsFlags[subcmdStartDownload],
 					Action:       startDownloadHandler,
-					BashComplete: nRequiredArgsCompletions(2),
+					BashComplete: noSuggestionCompletions(2),
 				},
 				{
 					Name:         subcmdStartDsort,
-					Usage:        fmt.Sprintf("start new %s job with given specification", cmn.DSortName),
-					ArgsUsage:    jsonSpecArgumentText,
+					Usage:        fmt.Sprintf("starts a new %s job with given specification", cmn.DSortName),
+					ArgsUsage:    jsonSpecArgument,
 					Flags:        startCmdsFlags[subcmdStartDsort],
 					Action:       startDsortHandler,
-					BashComplete: nRequiredArgsCompletions(1),
+					BashComplete: noSuggestionCompletions(1),
 				},
 			},
 		},
@@ -72,26 +75,26 @@ var (
 				{
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
-					ArgsUsage:    xactionStopStatsCommandArgumentText,
+					ArgsUsage:    stopStatsCommandXactionArgument,
 					Description:  xactKindsMsg,
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
-					BashComplete: xactStopStatsCompletions,
+					BashComplete: xactionCompletions,
 				},
 				{
 					Name:         subcmdStopDownload,
 					Usage:        "stops a download job with given ID",
-					ArgsUsage:    idArgumentText,
+					ArgsUsage:    jobIDArgument,
 					Flags:        stopCmdsFlags[subcmdStopDownload],
 					Action:       stopDownloadHandler,
-					BashComplete: downloadIDListRunning,
+					BashComplete: downloadIDRunningCompletions,
 				},
 				{
 					Name:         subcmdStopDsort,
 					Usage:        fmt.Sprintf("stops a %s job with given ID", cmn.DSortName),
-					ArgsUsage:    idArgumentText,
+					ArgsUsage:    jobIDArgument,
 					Action:       stopDsortHandler,
-					BashComplete: dsortIDListRunning,
+					BashComplete: dsortIDRunningCompletions,
 				},
 			},
 		},
@@ -142,10 +145,10 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgumentText))
+		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgument))
 	}
 
-	if xaction == allArgumentText {
+	if xaction == allArgument {
 		xaction = ""
 		bucket = c.Args().Get(1)
 		if bucket == "" {
@@ -308,7 +311,7 @@ func buildXactKindsMsg() string {
 		xactKinds = append(xactKinds, kind)
 	}
 
-	return fmt.Sprintf("%s can be one of: %s", xactionArgumentText, strings.Join(xactKinds, ", "))
+	return fmt.Sprintf("%s can be one of: %s", xactionArgument, strings.Join(xactKinds, ", "))
 }
 
 func bucketXactionNames() cmn.StringSet {

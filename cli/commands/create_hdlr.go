@@ -22,10 +22,10 @@ var (
 				{
 					Name:         subcmdCreateBucket,
 					Usage:        "creates an ais buckets",
-					ArgsUsage:    bucketsArgumentText,
+					ArgsUsage:    bucketsArgument,
 					Flags:        createCmdsFlags[subcmdCreateBucket],
 					Action:       createBucketHandler,
-					BashComplete: bucketList([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 			},
 		},

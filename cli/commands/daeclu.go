@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that interact with the cluster
+// This specific file handles cluster and daemon operations.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -20,190 +20,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type targetDiskStats struct {
+	stats    map[string]*ios.SelectedDiskStats
+	targetID string
+}
+
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
 	target = make(map[string]*stats.DaemonStatus)
-
-	longRunFlags    = []cli.Flag{refreshFlag, countFlag}
-	daecluBaseFlags = []cli.Flag{jsonFlag}
-
-	daecluFlags = map[string][]cli.Flag{
-		daecluSmap:      daecluBaseFlags,
-		daecluStatus:    append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
-		daecluStats:     append(daecluBaseFlags, longRunFlags...),
-		daecluDiskStats: append(append(daecluBaseFlags, longRunFlags...), noHeaderFlag),
-		daecluAddNode: []cli.Flag{
-			daemonTypeFlag,
-			daemonIDFlag,
-			publicAddrFlag,
-		},
-		daecluRemoveNode: []cli.Flag{},
-	}
-
-	joinCmdsFlags = map[string][]cli.Flag{
-		subcmdRegisterProxy:  {},
-		subcmdRegisterTarget: {},
-	}
-
-	// DaeCluCmds tracks available AIS API Information/Query Commands
-	daeCluCmds = []cli.Command{
-		{
-			Name:  commandRegister,
-			Usage: "adds a node to the cluster",
-			Subcommands: []cli.Command{
-				{
-					Name:      subcmdRegisterProxy,
-					Usage:     "adds a proxy node to the cluster",
-					ArgsUsage: joinNodeArgumentText,
-					Flags:     joinCmdsFlags[subcmdRegisterProxy],
-					Action:    joinNodeHandler,
-				},
-				{
-					Name:      subcmdRegisterTarget,
-					Usage:     "adds a target node to the cluster",
-					ArgsUsage: joinNodeArgumentText,
-					Flags:     joinCmdsFlags[subcmdRegisterTarget],
-					Action:    joinNodeHandler,
-				},
-			},
-		},
-		{
-			Name:         daecluSmap,
-			Usage:        "displays cluster map",
-			ArgsUsage:    daemonIDArgumentText,
-			Action:       queryHandler,
-			Flags:        daecluFlags[daecluSmap],
-			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
-		},
-		{
-			Name:         daecluStatus,
-			Usage:        "displays status of daemon",
-			ArgsUsage:    daemonTypeArgumentText,
-			Action:       queryHandler,
-			Flags:        daecluFlags[daecluStatus],
-			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
-		},
-		{
-			Name:         daecluStats,
-			Usage:        "displays stats of daemon",
-			ArgsUsage:    daemonIDArgumentText,
-			Action:       queryHandler,
-			Flags:        daecluFlags[daecluStats],
-			BashComplete: daemonSuggestions(true /* optional */, false /* omit proxies */),
-		},
-		{
-			Name:         daecluDiskStats,
-			Usage:        "displays disk stats of targets",
-			ArgsUsage:    targetIDArgumentText,
-			Action:       queryHandler,
-			Flags:        daecluFlags[daecluDiskStats],
-			BashComplete: daemonSuggestions(true /* optional */, true /* omit proxies */),
-		},
-		{
-			Name:  commandNode,
-			Usage: "command that manages nodes",
-			Subcommands: []cli.Command{
-				{
-					Name:         daecluAddNode,
-					Usage:        "add node to the cluster manually",
-					Action:       queryHandler,
-					Flags:        daecluFlags[daecluAddNode],
-					BashComplete: flagList,
-				},
-				{
-					Name:         daecluRemoveNode,
-					Usage:        "remove node from the cluster",
-					ArgsUsage:    daemonIDArgumentText,
-					Action:       queryHandler,
-					Flags:        daecluFlags[daecluRemoveNode],
-					BashComplete: daemonSuggestions(false /* optional */, false /* omit proxies */),
-				},
-			},
-		},
-	}
 )
-
-func joinNodeHandler(c *cli.Context) (err error) {
-	var (
-		baseParams      = cliAPIParams(ClusterURL)
-		daemonType      = c.Command.Name // proxy|target
-		daemonID        string
-		socketAddr      string
-		socketAddrParts []string
-	)
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "public socket address to communicate with the node")
-	}
-	socketAddr = c.Args().Get(0)
-
-	socketAddrParts = strings.Split(socketAddr, ":")
-	if len(socketAddrParts) != 2 {
-		return fmt.Errorf("invalid socket address, should be in format: 'IP:PORT'")
-	}
-
-	daemonID = c.Args().Get(1) // user-given ID
-	if daemonID == "" {
-		// default is a random generated string
-		daemonID = cmn.RandString(8)
-	}
-
-	netInfo := cluster.NetInfo{
-		NodeIPAddr: socketAddrParts[0],
-		DaemonPort: socketAddrParts[1],
-		DirectURL:  "http://" + socketAddr,
-	}
-	nodeInfo := &cluster.Snode{
-		DaemonID:        daemonID,
-		DaemonType:      daemonType,
-		PublicNet:       netInfo,
-		IntraControlNet: netInfo,
-		IntraDataNet:    netInfo,
-	}
-	if err = api.RegisterNode(baseParams, nodeInfo); err != nil {
-		return
-	}
-
-	fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster\n", daemonID)
-	return
-}
-
-// Querying information
-func queryHandler(c *cli.Context) (err error) {
-	primarySmap, err := fillMap(ClusterURL)
-	if err != nil {
-		return err
-	}
-
-	if err := updateLongRunParams(c); err != nil {
-		return err
-	}
-
-	var (
-		useJSON    = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		baseParams = cliAPIParams(ClusterURL)
-		daemonID   = c.Args().First()
-		req        = c.Command.Name
-	)
-
-	switch req {
-	case daecluSmap:
-		err = clusterSmap(c, baseParams, primarySmap, daemonID, useJSON)
-	case daecluStats:
-		err = daemonStats(c, baseParams, daemonID, useJSON)
-	case daecluDiskStats:
-		err = daemonDiskStats(c, baseParams, daemonID, useJSON, hideHeader)
-	case daecluStatus:
-		err = daemonStatus(c, primarySmap, daemonID, useJSON, hideHeader)
-	case daecluAddNode:
-		err = clusterAddNode(c, baseParams)
-	case daecluRemoveNode:
-		err = clusterRemoveNode(c, baseParams, daemonID)
-	default:
-		return fmt.Errorf(invalidCmdMsg, req)
-	}
-	return err
-}
 
 // Displays smap of single daemon
 func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
@@ -235,6 +60,47 @@ func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap *cluste
 	return templates.DisplayOutput(body, c.App.Writer, templates.SmapTmpl, useJSON)
 }
 
+// Displays the status of the cluster or daemon
+func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
+	if res, proxyOK := proxy[daemonID]; proxyOK {
+		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
+		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
+	} else if res, targetOK := target[daemonID]; targetOK {
+		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
+		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
+	} else if daemonID == cmn.Proxy {
+		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
+		return templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
+	} else if daemonID == cmn.Target {
+		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
+		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
+	} else if daemonID == "" {
+		body := templates.StatusTemplateHelper{
+			Smap:   smap,
+			Status: proxy,
+		}
+		if err := templates.DisplayOutput(body, c.App.Writer, templates.AllProxyInfoTmpl, useJSON); err != nil {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "\n")
+		if err := templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON); err != nil {
+			return err
+		}
+		fmt.Fprintf(c.App.Writer, "\n")
+		return templates.DisplayOutput(smap, c.App.Writer, templates.ClusterSummary, useJSON)
+	}
+	return fmt.Errorf(invalidDaemonMsg, daemonID)
+}
+
+// Removes existing node from the cluster.
+func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err error) {
+	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
+	return nil
+}
+
 // Displays the stats of a daemon
 func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
 	if res, ok := proxy[daemonID]; ok {
@@ -254,7 +120,7 @@ func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, us
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s works only for targets", daemonID, daecluDiskStats)
+		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s %s works only for targets", daemonID, commandList, subcmdListDisk)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
 		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)
@@ -277,87 +143,6 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 	}
 
 	return nil
-}
-
-// Displays the status of the cluster or daemon
-func daemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, useJSON, hideHeader bool) error {
-	if res, proxyOK := proxy[daemonID]; proxyOK {
-		template := chooseTmpl(templates.ProxyInfoSingleBodyTmpl, templates.ProxyInfoSingleTmpl, hideHeader)
-		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
-	} else if res, targetOK := target[daemonID]; targetOK {
-		template := chooseTmpl(templates.TargetInfoSingleBodyTmpl, templates.TargetInfoSingleTmpl, hideHeader)
-		return templates.DisplayOutput(res, c.App.Writer, template, useJSON)
-	} else if daemonID == cmn.Proxy {
-		template := chooseTmpl(templates.ProxyInfoBodyTmpl, templates.ProxyInfoTmpl, hideHeader)
-		return templates.DisplayOutput(proxy, c.App.Writer, template, useJSON)
-	} else if daemonID == cmn.Target {
-		template := chooseTmpl(templates.TargetInfoBodyTmpl, templates.TargetInfoTmpl, hideHeader)
-		return templates.DisplayOutput(target, c.App.Writer, template, useJSON)
-	} else if daemonID == "" {
-		body := templates.StatusTemplateHelper{
-			Smap:   smap,
-			Status: proxy,
-		}
-		if err := templates.DisplayOutput(body, c.App.Writer, templates.AllProxyInfoTmpl, useJSON); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "\n")
-		if err := templates.DisplayOutput(target, c.App.Writer, templates.TargetInfoTmpl, useJSON); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "\n")
-		return templates.DisplayOutput(smap, c.App.Writer, templates.ClusterSummary, useJSON)
-	}
-	return fmt.Errorf(invalidDaemonMsg, daemonID)
-}
-
-// Adds new node to the cluster.
-func clusterAddNode(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	daemonID := parseStrFlag(c, daemonIDFlag)
-	daemonType := parseStrFlag(c, daemonTypeFlag)
-	socketAddr := parseStrFlag(c, publicAddrFlag)
-	socketAddrParts := strings.Split(socketAddr, ":")
-	if len(socketAddrParts) != 2 {
-		return fmt.Errorf("invalid socket address, should be in format: 'IP:PORT'. Check '--help' flag for more info")
-	}
-
-	if daemonID == "" {
-		// By default generate random string
-		daemonID = cmn.RandString(8)
-	}
-
-	ip, port := socketAddrParts[0], socketAddrParts[1]
-	netInfo := cluster.NetInfo{
-		NodeIPAddr: ip,
-		DaemonPort: port,
-		DirectURL:  "http://" + socketAddr,
-	}
-	nodeInfo := &cluster.Snode{
-		DaemonID:        daemonID,
-		DaemonType:      daemonType,
-		PublicNet:       netInfo,
-		IntraControlNet: netInfo,
-		IntraDataNet:    netInfo,
-	}
-	if err := api.RegisterNode(baseParams, nodeInfo); err != nil {
-		return err
-	}
-	_, _ = fmt.Fprintf(c.App.Writer, "Node with ID %q has been successfully added to the cluster\n", daemonID)
-	return nil
-}
-
-// Removes existing node from the cluster.
-func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err error) {
-	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
-		return err
-	}
-	fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
-	return nil
-}
-
-type targetDiskStats struct {
-	stats    map[string]*ios.SelectedDiskStats
-	targetID string
 }
 
 func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BaseParams) ([]templates.DiskStatsTemplateHelper, error) {
@@ -395,4 +180,88 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 	}
 
 	return allStats, nil
+}
+
+// Displays the config of a daemon
+func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
+	var (
+		daemonID = c.Args().Get(0)
+		section  = c.Args().Get(1)
+		useJSON  = flagIsSet(c, jsonFlag)
+	)
+
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, "daemon ID")
+	}
+
+	body, err := api.GetDaemonConfig(baseParams, daemonID)
+	if err != nil {
+		return err
+	}
+
+	template := templates.ConfigTmpl
+	if section != "" {
+		if t, ok := templates.ConfigSectionTmpl[section]; ok {
+			template = strings.TrimPrefix(t, "\n")
+		} else {
+			return fmt.Errorf("config section %q not found", section)
+		}
+	}
+
+	return templates.DisplayOutput(body, c.App.Writer, template, useJSON)
+}
+
+// Sets config of specific daemon or cluster
+func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
+	daemonID, nvs, err := daemonKeyValueArgs(c)
+	if err != nil {
+		return err
+	}
+
+	if daemonID == "" {
+		if err := api.SetClusterConfig(baseParams, nvs); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(c.App.Writer, "Config has been updated successfully.\n")
+		return nil
+	}
+
+	if err := api.SetDaemonConfig(baseParams, daemonID, nvs); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(c.App.Writer, "Config for node %q has been updated successfully.\n", daemonID)
+	return nil
+}
+
+func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err error) {
+	if c.NArg() == 0 {
+		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
+	}
+
+	args := c.Args()
+	daemonID = args.First()
+	kvs := args.Tail()
+
+	// Case when DAEMON_ID is not provided by the user:
+	// 1. Key-value pair separated with '=': `ais set log.level=5`
+	// 2. Key-value pair separated with space: `ais set log.level 5`. In this case
+	//		the first word is looked up in cmn.ConfigPropList
+	_, isProperty := cmn.ConfigPropList[args.First()]
+	if isProperty || strings.Contains(args.First(), keyAndValueSeparator) {
+		daemonID = ""
+		kvs = args
+	}
+
+	if len(kvs) == 0 {
+		return "", nil, missingArgumentsError(c, "attribute key-value pairs")
+	}
+
+	nvs, err = makePairs(kvs)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return daemonID, nvs, nil
 }

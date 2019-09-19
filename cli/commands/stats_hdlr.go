@@ -19,13 +19,19 @@ import (
 var (
 	statsCmdsFlags = map[string][]cli.Flag{
 		subcmdStatsNode: append(
-			daecluBaseFlags,
-			longRunFlags...,
+			longRunFlags,
+			jsonFlag,
 		),
 		subcmdStatsXaction: {
 			jsonFlag,
 			allItemsFlag,
 			activeFlag,
+		},
+		subcmdStatsObject: {
+			providerFlag,
+			objPropsFlag,
+			noHeaderFlag,
+			jsonFlag,
 		},
 	}
 
@@ -37,19 +43,27 @@ var (
 				{
 					Name:         subcmdStatsNode,
 					Usage:        "displays stats of a node",
-					ArgsUsage:    daemonStatsArgumentText,
+					ArgsUsage:    daemonStatsArgument,
 					Flags:        statsCmdsFlags[subcmdStatsNode],
 					Action:       statsNodeHandler,
-					BashComplete: daemonSuggestions(false /* optional */, false /* omit proxies */),
+					BashComplete: daemonCompletions(false /* optional */, false /* omit proxies */),
 				},
 				{
 					Name:         subcmdStatsXaction,
 					Usage:        "displays stats of an xaction",
-					ArgsUsage:    xactionStopStatsCommandArgumentText,
+					ArgsUsage:    stopStatsCommandXactionArgument,
 					Description:  xactKindsMsg,
 					Flags:        statsCmdsFlags[subcmdStatsXaction],
 					Action:       statsXactionHandler,
-					BashComplete: xactStopStatsCompletions,
+					BashComplete: xactionCompletions,
+				},
+				{
+					Name:         subcmdStatsObject,
+					Usage:        "displays stats of an object",
+					ArgsUsage:    objectArgument,
+					Flags:        statsCmdsFlags[subcmdStatsObject],
+					Action:       statsObjectHandler,
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */),
 				},
 			},
 		},
@@ -63,10 +77,10 @@ func statsNodeHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("daemon ID or '%s'", allArgumentText))
+		return missingArgumentsError(c, fmt.Sprintf("daemon ID or '%s'", allArgument))
 	}
 
-	if daemonID == allArgumentText {
+	if daemonID == allArgument {
 		daemonID = ""
 	}
 
@@ -89,10 +103,10 @@ func statsXactionHandler(c *cli.Context) (err error) {
 	)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgumentText))
+		return missingArgumentsError(c, fmt.Sprintf("xaction name or '%s'", allArgument))
 	}
 
-	if xaction == allArgumentText {
+	if xaction == allArgument {
 		xaction = ""
 		bucket = c.Args().Get(1)
 		if bucket == "" {
@@ -140,4 +154,36 @@ func statsXactionHandler(c *cli.Context) (err error) {
 	}
 
 	return templates.DisplayOutput(xactStatsMap, c.App.Writer, templates.XactStatsTmpl, flagIsSet(c, jsonFlag))
+}
+
+func statsObjectHandler(c *cli.Context) (err error) {
+	var (
+		baseParams  = cliAPIParams(ClusterURL)
+		fullObjName = c.Args().Get(0) // empty string if no arg given
+		provider    string
+		bucket      string
+		object      string
+	)
+
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "object name in format bucket/object")
+	}
+	if provider, err = bucketProvider(c); err != nil {
+		return
+	}
+	bucket, object = splitBucketObject(fullObjName)
+	if bucket == "" {
+		bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
+	}
+	if object == "" {
+		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
+	}
+	if bucket == "" {
+		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
+	}
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+		return
+	}
+
+	return objectStats(c, baseParams, bucket, provider, object)
 }

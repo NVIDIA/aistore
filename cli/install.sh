@@ -6,7 +6,7 @@ if [[ -x "$FILE" ]]; then
     rm ${FILE}
 fi
 
-VERSION="0.3"
+VERSION="0.4"
 BUILD=`git rev-parse --short HEAD`
 BINARY_NAME="ais"
 URL="http://127.0.0.1:8080"

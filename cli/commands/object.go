@@ -1,12 +1,11 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that interact with objects in the cluster
+// This specific file handles object operations.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -25,10 +24,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	outFileStdout = "-"
-)
-
 type uploadParams struct {
 	bucket    string
 	provider  string
@@ -38,255 +33,154 @@ type uploadParams struct {
 	totalSize int64
 }
 
-var (
-	baseObjectFlags = []cli.Flag{
-		bucketFlag,
-		nameFlag,
-		providerFlag,
-	}
-
-	baseLstRngFlags = []cli.Flag{
-		listFlag,
-		rangeFlag,
-		prefixFlag,
-		regexFlag,
-		waitFlag,
-		deadlineFlag,
-	}
-
-	objectFlags = map[string][]cli.Flag{
-		objPut: append(
-			baseObjectFlags,
-			fileFlag,
-			recursiveFlag,
-			baseFlag,
-			concurrencyFlag,
-			refreshFlag,
-			verboseFlag,
-			yesFlag,
-		),
-		objGet: append(
-			baseObjectFlags,
-			outFileFlag,
-			offsetFlag,
-			lengthFlag,
-			checksumFlag,
-			propsFlag,
-			isCachedFlag,
-		),
-		subcommandRename: {
-			nameFlag,
-			newNameFlag,
-			bucketFlag,
-		},
-		objDel: append(
-			baseObjectFlags,
-			baseLstRngFlags...,
-		),
-		objStat: append(
-			baseObjectFlags,
-			objPropsFlag,
-			noHeaderFlag,
-			jsonFlag,
-		),
-		objPrefetch: append(
-			baseLstRngFlags,
-			bucketFlag,
-		),
-		objEvict: append(
-			baseLstRngFlags,
-			bucketFlag,
-			nameFlag,
-		),
-		subcommandList: append(
-			listObjectFlags,
-			providerFlag,
-			bucketFlag,
-		),
-	}
-
-	objectBasicUsageText = "%s object %s --bucket <value> --name <value>"
-	objectGetUsage       = fmt.Sprintf(objectBasicUsageText, cliName, objGet)
-	objectDelUsage       = fmt.Sprintf(objectBasicUsageText, cliName, objDel)
-	objectStatUsage      = fmt.Sprintf(objectBasicUsageText, cliName, objStat)
-	objectPutUsage       = fmt.Sprintf("%s object %s --bucket <value> --name <value> --file <value>", cliName, objPut)
-	objectRenameUsage    = fmt.Sprintf("%s object %s --bucket <value> --name <value> --new-name <value> ", cliName, subcommandRename)
-	objectPrefetchUsage  = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objPrefetch)
-	objectEvictUsage     = fmt.Sprintf("%s object %s [--list <value>] [--range <value> --prefix <value> --regex <value>]", cliName, objEvict)
-	objectListUsage      = fmt.Sprintf("%s object %s --bucket <value> [--prefix <value> --regex <value>]", cliName, subcommandList)
-
-	objectCmds = []cli.Command{
-		{
-			Name:  commandObject,
-			Usage: "interact with objects",
-			Subcommands: []cli.Command{
-				{
-					Name:         objGet,
-					Usage:        "gets the object from the specified bucket",
-					UsageText:    objectGetUsage,
-					Flags:        objectFlags[objGet],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         objPut,
-					Usage:        "puts the object to the specified bucket",
-					UsageText:    objectPutUsage,
-					Flags:        objectFlags[objPut],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         objDel,
-					Usage:        "deletes the object from the specified bucket",
-					UsageText:    objectDelUsage,
-					Flags:        objectFlags[objDel],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         objStat,
-					Usage:        "displays basic information about the object",
-					UsageText:    objectStatUsage,
-					Flags:        objectFlags[objStat],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         subcommandRename,
-					Usage:        "renames the local object",
-					UsageText:    objectRenameUsage,
-					Flags:        objectFlags[subcommandRename],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         objPrefetch,
-					Usage:        "prefetches the object from the specified bucket",
-					UsageText:    objectPrefetchUsage,
-					Flags:        objectFlags[objPrefetch],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         objEvict,
-					Usage:        "evicts the object from the specified bucket",
-					UsageText:    objectEvictUsage,
-					Flags:        objectFlags[objEvict],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         subcommandList,
-					Usage:        "lists bucket objects",
-					UsageText:    objectListUsage,
-					Flags:        objectFlags[subcommandList],
-					Action:       objectHandler,
-					BashComplete: flagList,
-				},
-			},
-		},
-	}
-)
-
-func objectHandler(c *cli.Context) (err error) {
-	if err = checkFlags(c, []cli.Flag{bucketFlag}); err != nil {
-		return
-	}
-
-	baseParams := cliAPIParams(ClusterURL)
-	bucket := parseStrFlag(c, bucketFlag)
-	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
-	if err != nil {
-		return
-	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
-		return
-	}
-
-	commandName := c.Command.Name
-	switch commandName {
-	case objGet:
-		err = objectRetrieve(c, baseParams, bucket, provider)
-	case objPut:
-		err = objectPut(c, baseParams, bucket, provider)
-	case objDel:
-		err = objectDelete(c, baseParams, bucket, provider)
-	case objStat:
-		err = objectStat(c, baseParams, bucket, provider)
-	case subcommandRename:
-		err = objectRename(c, baseParams, bucket)
-	case objPrefetch:
-		err = objectPrefetch(c, baseParams, bucket, provider)
-	case objEvict:
-		err = objectEvict(c, baseParams, bucket, provider)
-	case subcommandList:
-		err = listBucketObj(c, baseParams, bucket)
-	default:
-		return fmt.Errorf(invalidCmdMsg, commandName)
-	}
-	return err
-}
-
-// Get object from bucket
-func objectRetrieve(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
+func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object, outFile string) (err error) {
+	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
-		return objectCheckCached(c, baseParams, bucket, provider, parseStrFlag(c, nameFlag))
+		return objectCheckCached(c, baseParams, bucket, provider, object)
 	}
 
-	if err := checkFlags(c, []cli.Flag{nameFlag, outFileFlag}); err != nil {
-		return err
-	}
+	var (
+		query   = url.Values{}
+		objArgs api.GetObjectInput
+		objLen  int64
+		offset  string
+		length  string
+	)
+
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		return fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+		err = fmt.Errorf("%s and %s flags both need to be set", lengthFlag.Name, offsetFlag.Name)
+		return incorrectUsageError(c, err)
+	}
+	if offset, err = getByteFlagValue(c, offsetFlag); err != nil {
+		return
+	}
+	if length, err = getByteFlagValue(c, lengthFlag); err != nil {
+		return
 	}
 
-	offset, err := getByteFlagValue(c, offsetFlag)
-	if err != nil {
-		return err
-	}
-	length, err := getByteFlagValue(c, lengthFlag)
-	if err != nil {
-		return err
-	}
-	obj := parseStrFlag(c, nameFlag)
-	outFile := parseStrFlag(c, outFileFlag)
-
-	query := url.Values{}
 	query.Add(cmn.URLParamProvider, provider)
 	query.Add(cmn.URLParamOffset, offset)
 	query.Add(cmn.URLParamLength, length)
 
-	var objArgs api.GetObjectInput
-
 	if outFile == outFileStdout {
 		objArgs = api.GetObjectInput{Writer: os.Stdout, Query: query}
 	} else {
-		// Output to user location
-		f, err := os.Create(outFile)
-		if err != nil {
-			return err
+		var file *os.File
+		if file, err = os.Create(outFile); err != nil {
+			return
 		}
-		defer f.Close()
-		objArgs = api.GetObjectInput{Writer: f, Query: query}
+		defer file.Close()
+		objArgs = api.GetObjectInput{Writer: file, Query: query}
 	}
 
-	var objLen int64
 	if flagIsSet(c, checksumFlag) {
-		objLen, err = api.GetObjectWithValidation(baseParams, bucket, obj, objArgs)
+		objLen, err = api.GetObjectWithValidation(baseParams, bucket, object, objArgs)
 	} else {
-		objLen, err = api.GetObject(baseParams, bucket, obj, objArgs)
+		objLen, err = api.GetObject(baseParams, bucket, object, objArgs)
 	}
 	if err != nil {
-		return err
+		return
 	}
 
 	if flagIsSet(c, lengthFlag) {
-		_, _ = fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
-		return err
+		fmt.Fprintf(c.App.ErrWriter, "Read %s (%d B)\n", cmn.B2S(objLen, 2), objLen)
+		return
 	}
-	_, _ = fmt.Fprintf(c.App.ErrWriter, "%s has size %s (%d B)\n", obj, cmn.B2S(objLen, 2), objLen)
-	return err
+
+	fmt.Fprintf(c.App.ErrWriter, "%s has the size %s (%d B)\n", object, cmn.B2S(objLen, 2), objLen)
+	return
+}
+
+func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
+	path := cmn.ExpandPath(fileName)
+	if path, err = filepath.Abs(path); err != nil {
+		return
+	}
+
+	commonBase := parseStrFlag(c, baseFlag)
+	if commonBase != "" {
+		commonBase = cmn.ExpandPath(commonBase)
+		if commonBase, err = filepath.Abs(commonBase); err != nil {
+			return
+		}
+	}
+
+	if objName != "" {
+		// corner case - user gave the object name, upload one file
+		fh, err := cmn.NewFileHandle(path)
+		if err != nil {
+			return err
+		}
+
+		putArgs := api.PutObjectArgs{
+			BaseParams:     baseParams,
+			Bucket:         bucket,
+			BucketProvider: provider,
+			Object:         objName,
+			Reader:         fh,
+		}
+		err = api.PutObject(putArgs)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
+		return nil
+	}
+
+	// enumerate files
+	fmt.Fprintf(c.App.Writer, "Enumerating files\n")
+	files, err := generateFileList(path, commonBase, flagIsSet(c, recursiveFlag))
+	if err != nil {
+		return
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no files found")
+	}
+
+	// check if the bucket is empty
+	msg := cmn.SelectMsg{PageSize: 1}
+	bckList, err := api.ListBucket(baseParams, bucket, &msg, 1)
+	if err != nil {
+		return
+	}
+	if len(bckList.Entries) != 0 {
+		fmt.Fprintf(c.App.Writer, "\nWARNING: destination bucket %q is not empty\n\n", bucket)
+	}
+
+	// calculate total size, group by extension
+	totalSize, extSizes := groupByExt(files)
+	totalCount := int64(len(files))
+	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
+	if err = templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
+		return
+	}
+
+	// ask a user for confirmation
+	if !flagIsSet(c, yesFlag) {
+		var input string
+		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
+		fmt.Scanln(&input)
+		if ok, _ := cmn.ParseBool(input); !ok {
+			return fmt.Errorf("Operation canceled")
+		}
+	}
+
+	refresh, err := calcPutRefresh(c)
+	if err != nil {
+		return
+	}
+
+	numWorkers := parseIntFlag(c, concurrencyFlag)
+	params := uploadParams{
+		bucket:    bucket,
+		provider:  provider,
+		files:     files,
+		workerCnt: numWorkers,
+		refresh:   refresh,
+		totalSize: totalSize,
+	}
+	return uploadFiles(c, baseParams, params)
 }
 
 func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
@@ -388,132 +282,6 @@ func calcPutRefresh(c *cli.Context) (time.Duration, error) {
 	return refresh, nil
 }
 
-// Put object into bucket
-func objectPut(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
-	if err := checkFlags(c, []cli.Flag{fileFlag}); err != nil {
-		return err
-	}
-
-	source := cmn.ExpandPath(parseStrFlag(c, fileFlag))
-	path, err := filepath.Abs(source)
-	if err != nil {
-		return err
-	}
-
-	customName := parseStrFlag(c, nameFlag)
-	objName := customName
-	if objName == "" {
-		// If name was not provided use the last element of the object's path as object's name
-		objName = filepath.Base(source)
-	}
-
-	base := parseStrFlag(c, baseFlag)
-	if base != "" {
-		base = cmn.ExpandPath(base)
-		base, err = filepath.Abs(base)
-		if err != nil {
-			return err
-		}
-	}
-
-	// corner case: user sets custom object name, force one file to upload.
-	// No wildcard support in this case
-	if customName != "" {
-		reader, err := cmn.NewFileHandle(path)
-		if err != nil {
-			return err
-		}
-
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, BucketProvider: provider, Object: objName, Reader: reader}
-		if err := api.PutObject(putArgs); err != nil {
-			return err
-		}
-
-		_, _ = fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
-		return nil
-	}
-
-	// here starts the mass upload.
-	// first, get all files that are to be uploaded. Since it may take
-	// some, show a message to a user
-	_, _ = fmt.Fprintf(c.App.Writer, "Enumerating files\n")
-	files, err := generateFileList(path, base, flagIsSet(c, recursiveFlag))
-	if err != nil {
-		return err
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("No files found")
-	}
-
-	// second,check for bucket is not empty: request only first object
-	msg := cmn.SelectMsg{PageSize: 1}
-	bckList, err := api.ListBucket(baseParams, bucket, &msg, 1)
-	if err != nil {
-		return err
-	}
-
-	// third, calculate total size and group by extensions
-	totalSize, extSizes := groupByExt(files)
-	totalCount := int64(len(files))
-	tmpl := templates.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cmn.B2S(totalSize, 2) + "\n"
-	if err := templates.DisplayOutput(extSizes, c.App.Writer, tmpl); err != nil {
-		return err
-	}
-
-	if len(bckList.Entries) != 0 {
-		fmt.Fprintf(c.App.Writer, "\nWARNING: destination bucket %q is not empty\n\n", bucket)
-	}
-
-	// ask a user for confirmation if '-y' is not set in command line
-	if !flagIsSet(c, yesFlag) {
-		var input string
-		fmt.Fprintf(c.App.Writer, "Proceed? [y/n]: ")
-		fmt.Scanln(&input)
-		if ok, _ := cmn.ParseBool(input); !ok {
-			return fmt.Errorf("Operation canceled")
-		}
-	}
-	refresh, err := calcPutRefresh(c)
-	if err != nil {
-		return err
-	}
-	workers := parseIntFlag(c, concurrencyFlag)
-	params := uploadParams{
-		bucket:    bucket,
-		provider:  provider,
-		files:     files,
-		workerCnt: workers,
-		refresh:   refresh,
-		totalSize: totalSize,
-	}
-	return uploadFiles(c, baseParams, params)
-}
-
-// Deletes object from bucket
-func objectDelete(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) (err error) {
-	if flagIsSet(c, listFlag) && flagIsSet(c, rangeFlag) {
-		return fmt.Errorf("cannot use both %s and %s", listFlag.Name, rangeFlag.Name)
-	}
-
-	// Normal usage
-	if flagIsSet(c, nameFlag) {
-		obj := parseStrFlag(c, nameFlag)
-		if err = api.DeleteObject(baseParams, bucket, obj, provider); err != nil {
-			return
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", obj, bucket)
-		return
-	} else if flagIsSet(c, listFlag) {
-		// List Delete
-		return listOp(c, baseParams, commandRemove, bucket, provider)
-	} else if flagIsSet(c, rangeFlag) {
-		// Range Delete
-		return rangeOp(c, baseParams, commandRemove, bucket, provider)
-	}
-
-	return errors.New(c.Command.UsageText)
-}
-
 func buildObjStatTemplate(props string, showHeaders bool) string {
 	var (
 		headSb strings.Builder
@@ -542,11 +310,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 }
 
 // Displays object properties
-func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
-	if err := checkFlags(c, []cli.Flag{nameFlag}); err != nil {
-		return err
-	}
-
+func objectStats(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
 	props, propsFlag := "local,", ""
 	if flagIsSet(c, objPropsFlag) {
 		propsFlag = parseStrFlag(c, objPropsFlag)
@@ -558,65 +322,13 @@ func objectStat(c *cli.Context, baseParams *api.BaseParams, bucket, provider str
 	}
 
 	tmpl := buildObjStatTemplate(props, !flagIsSet(c, noHeaderFlag))
-	name := parseStrFlag(c, nameFlag)
-	objProps, err := api.HeadObject(baseParams, bucket, provider, name)
+	objProps, err := api.HeadObject(baseParams, bucket, provider, object)
 	if err != nil {
-		return handleObjHeadError(err, bucket, name)
+		return handleObjHeadError(err, bucket, object)
 	}
 
 	return templates.DisplayOutput(objProps, c.App.Writer, tmpl, flagIsSet(c, jsonFlag))
 }
-
-// Prefetch operations
-func objectPrefetch(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) (err error) {
-	if flagIsSet(c, listFlag) {
-		// List prefetch
-		return listOp(c, baseParams, commandPrefetch, bucket, provider)
-	} else if flagIsSet(c, rangeFlag) {
-		// Range prefetch
-		return rangeOp(c, baseParams, commandPrefetch, bucket, provider)
-	}
-
-	return errors.New(c.Command.UsageText)
-}
-
-// Evict operations
-func objectEvict(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) (err error) {
-	if flagIsSet(c, nameFlag) {
-		// Name evict
-		name := parseStrFlag(c, nameFlag)
-		if err := api.EvictObject(baseParams, bucket, name); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", name, bucket)
-		return
-	} else if flagIsSet(c, listFlag) {
-		// List evict
-		return listOp(c, baseParams, commandEvict, bucket, provider)
-	} else if flagIsSet(c, rangeFlag) {
-		// Range evict
-		return rangeOp(c, baseParams, commandEvict, bucket, provider)
-	}
-
-	return errors.New(c.Command.UsageText)
-}
-
-// Renames object
-func objectRename(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	if err = checkFlags(c, []cli.Flag{nameFlag, newNameFlag}); err != nil {
-		return
-	}
-	obj := parseStrFlag(c, nameFlag)
-	newName := parseStrFlag(c, newNameFlag)
-	if err = api.RenameObject(baseParams, bucket, obj, newName); err != nil {
-		return
-	}
-
-	_, _ = fmt.Fprintf(c.App.Writer, "%s renamed to %s\n", obj, newName)
-	return
-}
-
-// ======================= HELPERS =========================
 
 // This function is needed to print a nice error message for the user
 func handleObjHeadError(err error, bucket, object string) error {

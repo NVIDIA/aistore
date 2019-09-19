@@ -38,19 +38,19 @@ var (
 				{
 					Name:      subcmdAuthAdd,
 					Usage:     "adds a new user",
-					ArgsUsage: addUserText,
+					ArgsUsage: addUserArgument,
 					Action:    addUserHandler,
 				},
 				{
 					Name:      subcmdAuthRemove,
 					Usage:     "removes an existing user",
-					ArgsUsage: deleteUserText,
+					ArgsUsage: deleteUserArgument,
 					Action:    deleteUserHandler,
 				},
 				{
 					Name:      subcmdAuthLogin,
 					Usage:     "logs in with existing user credentials",
-					ArgsUsage: userLoginText,
+					ArgsUsage: userLoginArgument,
 					Action:    loginUserHandler,
 				},
 				{

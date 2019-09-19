@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles bash completions for the CLI
+// This specific file handles bash completions for the CLI.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -15,6 +14,91 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/urfave/cli"
 )
+
+/////////////
+// General //
+/////////////
+
+func noSuggestionCompletions(numArgs int) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		if c.NArg() >= numArgs {
+			flagCompletions(c)
+		}
+	}
+}
+
+//////////
+// Flag //
+//////////
+
+func flagCompletions(c *cli.Context) {
+	suggestFlags(c)
+}
+
+func suggestFlags(c *cli.Context, flagsToSkip ...string) {
+	for _, flag := range c.Command.Flags {
+		flagName := cleanFlag(flag.GetName())
+
+		if c.IsSet(flagName) {
+			continue
+		}
+		if cmn.StringInSlice(flagName, flagsToSkip) {
+			continue
+		}
+
+		fmt.Printf("--%s\n", flagName)
+	}
+}
+
+//////////////////////
+// Cluster / Daemon //
+//////////////////////
+
+func daemonCompletions(optional bool, omitProxies bool) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		// daemon already given as argument
+		if c.NArg() >= 1 {
+			flagCompletions(c)
+			return
+		}
+
+		suggestDaemon(omitProxies)
+
+		if optional {
+			flagCompletions(c)
+		}
+	}
+}
+
+func daemonConfigSectionCompletions(daemonOptional bool, configOptional bool) cli.BashCompleteFunc {
+	return func(c *cli.Context) {
+		// daemon and config already given as arguments
+		if c.NArg() >= 2 {
+			flagCompletions(c)
+			return
+		}
+
+		// daemon already given as argument
+		if c.NArg() == 1 {
+			suggestConfigSection(c, configOptional)
+			return
+		}
+
+		// no arguments given
+		suggestDaemon(false /* omit proxies */)
+		if daemonOptional {
+			suggestConfigSection(c, configOptional)
+		}
+	}
+}
+
+func setConfigCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		suggestDaemon(false /* omit proxies */)
+	}
+	suggestUpdatableConfig(c)
+	flagCompletions(c)
+}
 
 func suggestDaemon(omitProxies bool) {
 	smap, err := api.GetClusterMap(cliAPIParams(ClusterURL))
@@ -36,7 +120,7 @@ func suggestConfigSection(c *cli.Context, optional bool) {
 		fmt.Println(k)
 	}
 	if optional {
-		flagList(c)
+		flagCompletions(c)
 	}
 }
 
@@ -48,80 +132,14 @@ func suggestUpdatableConfig(c *cli.Context) {
 	}
 }
 
-func daemonSuggestions(optional bool, omitProxies bool) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		// daemon already given as argument
-		if c.NArg() >= 1 {
-			flagList(c)
-			return
-		}
-
-		suggestDaemon(omitProxies)
-
-		if optional {
-			flagList(c)
-		}
-	}
-}
-
-func daemonConfigSectionSuggestions(daemonOptional bool, configOptional bool) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		// daemon and config already given as arguments
-		if c.NArg() >= 2 {
-			flagList(c)
-			return
-		}
-
-		// daemon already given as argument
-		if c.NArg() == 1 {
-			suggestConfigSection(c, configOptional)
-			return
-		}
-
-		// no arguments given
-		suggestDaemon(false /* omit proxies */)
-		if daemonOptional {
-			suggestConfigSection(c, configOptional)
-		}
-	}
-}
-
-func setConfigSuggestions(c *cli.Context) {
-	if c.NArg() == 0 {
-		suggestDaemon(false /* omit proxies */)
-	}
-	suggestUpdatableConfig(c)
-	flagList(c)
-}
-
-// Returns flags for command
-func flagList(c *cli.Context) {
-	listFlags(c)
-}
-
-func flagListNoBucket(c *cli.Context) {
-	listFlags(c, bucketFlag.Name)
-}
-
-func listFlags(c *cli.Context, flagsToSkip ...string) {
-	for _, flag := range c.Command.Flags {
-		flagName := cleanFlag(flag.GetName())
-
-		if c.IsSet(flagName) {
-			continue
-		}
-		if cmn.StringInSlice(flagName, flagsToSkip) {
-			continue
-		}
-
-		fmt.Printf("--%s\n", flagName)
-	}
-}
+////////////
+// Bucket //
+////////////
 
 // The function lists available providers if the first argument of the command was not yet specified.
 // Additionally, it will list available flags if the provider argument is optional and wasn't specified,
 // or it will list them anyway in case it was.
-func providerList(optional bool) cli.BashCompleteFunc {
+func providerCompletions(optional bool) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() < 1 {
 			fmt.Printf("%s\n", cmn.ProviderAIS)
@@ -131,40 +149,20 @@ func providerList(optional bool) cli.BashCompleteFunc {
 				return
 			}
 		}
-		flagList(c)
+		flagCompletions(c)
 	}
 }
 
-// Function returns the bucket provider either from:
-// 1) Function argument provider (highest priority)
-// 2) Command line flag --provider
-// 3) Environment variable (lowest priority)
-func bucketProvider(c *cli.Context, provider ...string) (string, error) {
-	prov := ""
-	if len(provider) > 0 {
-		prov = provider[0]
-	}
-	if prov == "" {
-		prov = parseStrFlag(c, providerFlag)
-	}
-	if prov == "" {
-		prov = os.Getenv(aisBucketProviderEnvVar)
-	}
-	return cmn.ProviderFromStr(prov)
-}
-
-// The function will list bucket names if the first argument to the command was not yet specified, otherwise it will
-// list flags and everything that `additionalCompletions` list.
-// By default it tries to read `provider` from flag `--provider` or AIS_BUCKET_PROVIDER env variable. If none
-// is provided it lists all buckets.
-// Optional parameter `provider` can be used to specify which buckets will be listed - only local or only cloud.
-func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, separator bool, provider ...string) cli.BashCompleteFunc {
+// The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
+// Bucket names will also be listed after the first argument was given if true is passed to the 'multiple' param
+// Bucket names will contain a path separator '/' if true is passed to the 'separator' param
+func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bool, separator bool, provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() >= 1 && !multiple {
 			for _, f := range additionalCompletions {
 				f(c)
 			}
-			flagList(c)
+			flagCompletions(c)
 			return
 		}
 
@@ -210,13 +208,14 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, sep
 	}
 }
 
-func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, separator bool, provider ...string) cli.BashCompleteFunc {
+// The function lists bucket names for commands that require old and new bucket name
+func oldAndNewBucketCompletions(additionalCompletions []cli.BashCompleteFunc, separator bool, provider ...string) cli.BashCompleteFunc {
 	return func(c *cli.Context) {
 		if c.NArg() >= 2 {
 			for _, f := range additionalCompletions {
 				f(c)
 			}
-			flagList(c)
+			flagCompletions(c)
 			return
 		}
 
@@ -224,76 +223,11 @@ func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, separator
 			return
 		}
 
-		// suggest existing buckets
-
-		provider, err := bucketProvider(c, provider...)
-		if err != nil {
-			return
-		}
-
-		baseParams := cliAPIParams(ClusterURL)
-		bucketNames, err := api.GetBucketNames(baseParams, provider)
-		if err != nil {
-			return
-		}
-
-		sep := ""
-		if separator {
-			sep = "/"
-		}
-
-		printNotUsedBuckets := func(buckets []string) {
-			for _, bucket := range buckets {
-				fmt.Printf("%s%s\n", bucket, sep)
-			}
-		}
-
-		if cmn.IsProviderAIS(provider) || provider == "" {
-			printNotUsedBuckets(bucketNames.AIS)
-		}
-		if cmn.IsProviderCloud(provider) || provider == "" {
-			printNotUsedBuckets(bucketNames.Cloud)
-		}
+		suggestBucket(c, separator, provider...)
 	}
 }
 
-func xactList(_ *cli.Context) {
-	for key := range cmn.XactKind {
-		fmt.Println(key)
-	}
-}
-
-func xactStartCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
-		xactList(c)
-		return
-	}
-
-	xactFlagsBasedOnXactType(c)
-}
-
-func xactStopStatsCompletions(c *cli.Context) {
-	if c.NArg() == 0 {
-		xactList(c)
-		flagListNoBucket(c)
-		return
-	}
-
-	xactFlagsBasedOnXactType(c)
-}
-
-func xactFlagsBasedOnXactType(c *cli.Context) {
-	xactName := c.Args().First()
-	if bucketXactions.Contains(xactName) {
-		flagList(c)
-		return
-	}
-
-	// If this is not a bucket xaction then don't suggest `--bucket` flag
-	flagListNoBucket(c)
-}
-
-func propList(c *cli.Context) {
+func propCompletions(c *cli.Context) {
 	for prop, readonly := range cmn.BucketPropList {
 		if !readonly && !cmn.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)
@@ -301,21 +235,76 @@ func propList(c *cli.Context) {
 	}
 }
 
-func downloadIDListAll(c *cli.Context) {
-	downloadIDList(c, func(*cmn.DlJobInfo) bool { return true })
+func suggestBucket(c *cli.Context, separator bool, provider ...string) {
+	prov, err := bucketProvider(c, provider...)
+	if err != nil {
+		return
+	}
+
+	baseParams := cliAPIParams(ClusterURL)
+	bucketNames, err := api.GetBucketNames(baseParams, prov)
+	if err != nil {
+		return
+	}
+
+	sep := ""
+	if separator {
+		sep = "/"
+	}
+
+	printBuckets := func(buckets []string) {
+		for _, bucket := range buckets {
+			fmt.Printf("%s%s\n", bucket, sep)
+		}
+	}
+
+	if cmn.IsProviderAIS(prov) || prov == "" {
+		printBuckets(bucketNames.AIS)
+	}
+	if cmn.IsProviderCloud(prov) || prov == "" {
+		printBuckets(bucketNames.Cloud)
+	}
 }
 
-func downloadIDListRunning(c *cli.Context) {
-	downloadIDList(c, (*cmn.DlJobInfo).IsRunning)
+/////////////
+// Xaction //
+/////////////
+
+func xactionCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		for key := range cmn.XactKind {
+			fmt.Println(key)
+		}
+		return
+	}
+
+	xactName := c.Args().First()
+	if bucketXactions.Contains(xactName) {
+		suggestBucket(c, false /* separator */)
+		return
+	}
+	flagCompletions(c)
 }
 
-func downloadIDListFinished(c *cli.Context) {
-	downloadIDList(c, (*cmn.DlJobInfo).IsFinished)
+//////////////////////
+// Download / dSort //
+//////////////////////
+
+func downloadIDAllCompletions(c *cli.Context) {
+	suggestDownloadID(c, func(*cmn.DlJobInfo) bool { return true })
 }
 
-func downloadIDList(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
+func downloadIDRunningCompletions(c *cli.Context) {
+	suggestDownloadID(c, (*cmn.DlJobInfo).IsRunning)
+}
+
+func downloadIDFinishedCompletions(c *cli.Context) {
+	suggestDownloadID(c, (*cmn.DlJobInfo).IsFinished)
+}
+
+func suggestDownloadID(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
 	if c.NArg() > 0 {
-		flagList(c)
+		flagCompletions(c)
 		return
 	}
 
@@ -330,21 +319,21 @@ func downloadIDList(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
 	}
 }
 
-func dsortIDListAll(c *cli.Context) {
-	dsortIDList(c, func(*dsort.JobInfo) bool { return true })
+func dsortIDAllCompletions(c *cli.Context) {
+	suggestDsortID(c, func(*dsort.JobInfo) bool { return true })
 }
 
-func dsortIDListRunning(c *cli.Context) {
-	dsortIDList(c, (*dsort.JobInfo).IsRunning)
+func dsortIDRunningCompletions(c *cli.Context) {
+	suggestDsortID(c, (*dsort.JobInfo).IsRunning)
 }
 
-func dsortIDListFinished(c *cli.Context) {
-	dsortIDList(c, (*dsort.JobInfo).IsFinished)
+func dsortIDFinishedCompletions(c *cli.Context) {
+	suggestDsortID(c, (*dsort.JobInfo).IsFinished)
 }
 
-func dsortIDList(c *cli.Context, filter func(*dsort.JobInfo) bool) {
+func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 	if c.NArg() > 0 {
-		flagList(c)
+		flagCompletions(c)
 		return
 	}
 
@@ -355,14 +344,6 @@ func dsortIDList(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)
-		}
-	}
-}
-
-func nRequiredArgsCompletions(n int) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.NArg() >= n {
-			flagList(c)
 		}
 	}
 }

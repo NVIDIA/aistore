@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -33,10 +32,14 @@ import (
 )
 
 var (
-	phasesOrdered = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
+	phasesOrdered = []string{
+		dsort.ExtractionPhase,
+		dsort.SortingPhase,
+		dsort.CreationPhase,
+	}
 
-	dsortFlags = map[string][]cli.Flag{
-		dsortGen: {
+	dSortCmdsFlags = map[string][]cli.Flag{
+		commandGenShards: {
 			extFlag,
 			dsortBucketFlag,
 			dsortTemplateFlag,
@@ -45,73 +48,16 @@ var (
 			cleanupFlag,
 			concurrencyFlag,
 		},
-		dsortStart: {},
-		dsortStatus: {
-			refreshFlag,
-			verboseFlag,
-			logFlag,
-		},
-		dsortAbort:  {},
-		dsortRemove: {},
-		dsortList: {
-			regexFlag,
-		},
 	}
 
 	dSortCmds = []cli.Command{
 		{
-			Name:  commandDsort,
-			Usage: "command that manages distributed sort jobs",
-			Subcommands: []cli.Command{
-				{
-					Name:         dsortGen,
-					Usage:        fmt.Sprintf("put randomly generated shards which then can be used for %s testing", cmn.DSortName),
-					ArgsUsage:    noArgumentsText,
-					Flags:        dsortFlags[dsortGen],
-					Action:       dsortHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         dsortStart,
-					Usage:        fmt.Sprintf("start new %s job with provided specification", cmn.DSortName),
-					ArgsUsage:    jsonSpecArgumentText,
-					Flags:        dsortFlags[dsortStart],
-					Action:       dsortHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         dsortStatus,
-					Usage:        fmt.Sprintf("retrieve statistics and metrics of currently running %s job", cmn.DSortName),
-					ArgsUsage:    idArgumentText,
-					Flags:        dsortFlags[dsortStatus],
-					Action:       dsortHandler,
-					BashComplete: dsortIDListAll,
-				},
-				{
-					Name:         dsortAbort,
-					Usage:        fmt.Sprintf("abort currently running %s job", cmn.DSortName),
-					ArgsUsage:    idArgumentText,
-					Flags:        dsortFlags[dsortAbort],
-					Action:       dsortHandler,
-					BashComplete: dsortIDListRunning,
-				},
-				{
-					Name:         dsortRemove,
-					Usage:        fmt.Sprintf("remove finished %s job from the list", cmn.DSortName),
-					ArgsUsage:    idArgumentText,
-					Flags:        dsortFlags[dsortRemove],
-					Action:       dsortHandler,
-					BashComplete: dsortIDListFinished,
-				},
-				{
-					Name:         dsortList,
-					Usage:        fmt.Sprintf("list all %s jobs and their states", cmn.DSortName),
-					ArgsUsage:    noArgumentsText,
-					Flags:        dsortFlags[dsortList],
-					Action:       dsortHandler,
-					BashComplete: flagList,
-				},
-			},
+			Name:         commandGenShards,
+			Usage:        fmt.Sprintf("puts randomly generated shards that can be used for %s testing", cmn.DSortName),
+			ArgsUsage:    noArguments,
+			Flags:        dSortCmdsFlags[commandGenShards],
+			Action:       genShardsHandler,
+			BashComplete: flagCompletions,
 		},
 	}
 )
@@ -189,13 +135,14 @@ func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) erro
 	return nil
 }
 
-func dsortGenHandler(c *cli.Context, baseParams *api.BaseParams) error {
+func genShardsHandler(c *cli.Context) error {
 	var (
-		ext       = parseStrFlag(c, extFlag)
-		bucket    = parseStrFlag(c, dsortBucketFlag)
-		template  = parseStrFlag(c, dsortTemplateFlag)
-		fileCnt   = parseIntFlag(c, fileCountFlag)
-		concLimit = parseIntFlag(c, concurrencyFlag)
+		baseParams = cliAPIParams(ClusterURL)
+		ext        = parseStrFlag(c, extFlag)
+		bucket     = parseStrFlag(c, dsortBucketFlag)
+		template   = parseStrFlag(c, dsortTemplateFlag)
+		fileCnt    = parseIntFlag(c, fileCountFlag)
+		concLimit  = parseIntFlag(c, concurrencyFlag)
 
 		fileSize int64
 	)
@@ -284,158 +231,6 @@ CreateShards:
 	}
 
 	progress.Wait()
-	return nil
-}
-
-func dsortHandler(c *cli.Context) error {
-	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		id          = c.Args().First()
-		regex       = parseStrFlag(c, regexFlag)
-		commandName = c.Command.Name
-	)
-
-	if commandName == dsortStatus || commandName == dsortAbort || commandName == dsortRemove {
-		if c.NArg() < 1 {
-			return missingArgumentsError(c, cmn.DSortName+" job ID")
-		}
-		if id == "" {
-			return errors.New(cmn.DSortName + " job ID can't be empty")
-		}
-	}
-
-	switch commandName {
-	case dsortGen:
-		return dsortGenHandler(c, baseParams)
-	case dsortStart:
-		if c.NArg() == 0 {
-			return missingArgumentsError(c, "job specification")
-		}
-
-		var rs dsort.RequestSpec
-		body := c.Args().First()
-		if err := json.Unmarshal([]byte(body), &rs); err != nil {
-			return err
-		}
-
-		id, err := api.StartDSort(baseParams, rs)
-		if err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintln(c.App.Writer, id)
-	case dsortStatus:
-		var (
-			verbose = flagIsSet(c, verboseFlag)
-			refresh = flagIsSet(c, refreshFlag)
-			logging = flagIsSet(c, logFlag)
-		)
-
-		// Show progress bar.
-		if !verbose && refresh && !logging {
-			refreshRate, err := calcRefreshRate(c)
-			if err != nil {
-				return err
-			}
-			dsortResult, err := newDSortProgressBar(baseParams, id, refreshRate).run()
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(c.App.Writer, dsortResult)
-			return nil
-		}
-
-		// Show metrics just once.
-		if !refresh && !logging {
-			if verbose {
-				if _, _, err := printMetrics(c.App.Writer, baseParams, id); err != nil {
-					return err
-				}
-
-				_, _ = fmt.Fprintf(c.App.Writer, "\n")
-			}
-
-			return printCondensedStats(c.App.Writer, baseParams, id)
-		}
-
-		// Show metrics once in a while.
-		var (
-			w = c.App.Writer
-		)
-
-		rate, err := calcRefreshRate(c)
-		if err != nil {
-			return err
-		}
-
-		if logging {
-			file, err := cmn.CreateFile(c.String(logFlag.Name))
-			if err != nil {
-				return err
-			}
-			w = file
-			defer file.Close()
-		}
-
-		var (
-			aborted  bool
-			finished bool
-		)
-
-		for {
-			aborted, finished, err = printMetrics(w, baseParams, id)
-			if err != nil {
-				return err
-			}
-			if aborted || finished {
-				break
-			}
-
-			time.Sleep(rate)
-		}
-
-		_, _ = fmt.Fprintf(c.App.Writer, "\n")
-		return printCondensedStats(c.App.Writer, baseParams, id)
-	case dsortAbort:
-		if err := api.AbortDSort(baseParams, id); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "%s job aborted: %s\n", cmn.DSortName, id)
-	case dsortRemove:
-		if err := api.RemoveDSort(baseParams, id); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "%s job removed: %s\n", cmn.DSortName, id)
-	case dsortList:
-		list, err := api.ListDSort(baseParams, regex)
-		if err != nil {
-			return err
-		}
-
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].IsRunning() && !list[j].IsRunning() {
-				return true
-			}
-			if !list[i].IsRunning() && list[j].IsRunning() {
-				return false
-			}
-			if !list[i].Aborted && list[j].Aborted {
-				return true
-			}
-			if list[i].Aborted && !list[j].Aborted {
-				return false
-			}
-
-			return list[i].StartedTime.Before(list[j].StartedTime)
-		})
-
-		err = templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("invalid command name '%s'", commandName)
-	}
 	return nil
 }
 

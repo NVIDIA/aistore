@@ -23,10 +23,10 @@ var (
 				{
 					Name:         subcmdCopyBucket,
 					Usage:        "copies ais buckets",
-					ArgsUsage:    bucketOldNewArgumentText,
+					ArgsUsage:    bucketOldNewArgument,
 					Flags:        copyCmdsFlags[subcmdCopyBucket],
 					Action:       copyBucketHandler,
-					BashComplete: oldAndNewBucketList([]cli.BashCompleteFunc{}, false /* separator */, cmn.AIS),
+					BashComplete: oldAndNewBucketCompletions([]cli.BashCompleteFunc{}, false /* separator */, cmn.AIS),
 				},
 			},
 		},

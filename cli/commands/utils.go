@@ -1,4 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
+// This specific file contains util functions and types.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -29,10 +30,33 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-const (
-	Infinity = -1
+type usageError struct {
+	context      *cli.Context
+	message      string
+	helpData     interface{}
+	helpTemplate string
+}
 
+const (
+	Infinity             = -1
 	keyAndValueSeparator = "="
+	outFileStdout        = "-"
+
+	// Error messages
+	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
+	invalidDaemonMsg      = "%s is not a valid DAEMON_ID"
+	invalidCmdMsg         = "invalid command name '%s'"
+	invalidFlagsMsgFmt    = "flags %s are invalid when arguments have been provided"
+
+	// Scheme parsing
+	defaultScheme        = "https"
+	gsScheme             = "gs"
+	s3Scheme             = "s3"
+	aisScheme            = "ais"
+	gsHost               = "storage.googleapis.com"
+	s3Host               = "s3.amazonaws.com"
+	defaultAISHost       = "http://127.0.0.1:8080"
+	defaultAISDockerHost = "http://172.50.0.2:8080"
 )
 
 var (
@@ -53,25 +77,8 @@ var (
 )
 
 //
-// Errors
+// Error handling
 //
-
-const (
-	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
-
-	invalidDaemonMsg = "%s is not a valid DAEMON_ID"
-	invalidCmdMsg    = "invalid command name '%s'"
-
-	invalidFlagsMsgFmt = "flags %s are invalid when arguments have been provided"
-)
-
-type usageError struct {
-	context *cli.Context
-	message string
-
-	helpData     interface{}
-	helpTemplate string
-}
 
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
@@ -197,20 +204,8 @@ func retrieveStatus(baseParams *api.BaseParams, nodeMap cluster.NodeMap, daeMap 
 }
 
 //
-// Schema parsing
+// Scheme
 //
-
-const (
-	defaultScheme = "https"
-	gsScheme      = "gs"
-	s3Scheme      = "s3"
-	aisScheme     = "ais"
-
-	gsHost               = "storage.googleapis.com"
-	s3Host               = "s3.amazonaws.com"
-	defaultAISHost       = "http://127.0.0.1:8080"
-	defaultAISDockerHost = "http://172.50.0.2:8080"
-)
 
 // Replace protocol (gs://, s3://) with proper google cloud / s3 URL
 func parseSource(rawURL string) (link string, err error) {
@@ -287,6 +282,20 @@ func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
 	bucket = u.Host
 	objName = u.Path
 	return
+}
+
+func getPrefixFromPrimary(baseParams *api.BaseParams) (string, error) {
+	smap, err := api.GetClusterMap(baseParams)
+	if err != nil {
+		return "", err
+	}
+
+	cfg, err := api.GetDaemonConfig(baseParams, smap.ProxySI.DaemonID)
+	if err != nil {
+		return "", err
+	}
+
+	return cfg.Net.HTTP.Proto + "://", nil
 }
 
 //
@@ -558,11 +567,29 @@ func canReachBucket(baseParams *api.BaseParams, bckName, provider string) error 
 	return nil
 }
 
+// Function returns the bucket provider either from:
+// 1) Function argument provider (highest priority)
+// 2) Command line flag --provider
+// 3) Environment variable (lowest priority)
+func bucketProvider(c *cli.Context, provider ...string) (string, error) {
+	prov := ""
+	if len(provider) > 0 {
+		prov = provider[0]
+	}
+	if prov == "" {
+		prov = parseStrFlag(c, providerFlag)
+	}
+	if prov == "" {
+		prov = os.Getenv(aisBucketProviderEnvVar)
+	}
+	return cmn.ProviderFromStr(prov)
+}
+
 //
 // AIS cluster discovery
 //
 
-// cluster URL resolving order
+// GetClusterURL resolving order
 // 1. AIS_URL; if not present:
 // 2. If kubernetes detected, tries to find a primary proxy in k8s cluster
 // 3. Proxy docker containter IP address; if not successful:

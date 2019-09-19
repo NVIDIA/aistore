@@ -1,12 +1,11 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that interact with objects in the cluster
+// This specific file handles download jobs in the cluster.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,153 +18,46 @@ import (
 	"github.com/vbauerster/mpb/decor"
 )
 
+type (
+	downloadingResult struct {
+		totalFiles        int
+		finishedFiles     int
+		downloadingErrors map[string]string
+		aborted           bool
+	}
+
+	fileDownloadingState struct {
+		total      int64
+		downloaded int64
+		bar        *mpb.Bar
+	}
+
+	progressBar struct {
+		id          string
+		params      *api.BaseParams
+		refreshTime time.Duration
+
+		states map[string]*fileDownloadingState
+
+		p        *mpb.Progress
+		totalBar *mpb.Bar
+
+		totalFiles     int
+		finishedFiles  int
+		scheduledFiles int
+
+		aborted       bool
+		allDispatched bool
+
+		errors map[string]string
+	}
+)
+
 const (
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048
 	progressBarWidth      = 64
 )
-
-var (
-	downloadFlags = map[string][]cli.Flag{
-		downloadStart: {
-			timeoutFlag,
-			descriptionFlag,
-		},
-		downloadStatus: {
-			progressBarFlag,
-			refreshFlag,
-			verboseFlag,
-		},
-		downloadAbort:  {},
-		downloadRemove: {},
-		downloadList: {
-			regexFlag,
-		},
-	}
-
-	downloaderCmds = []cli.Command{
-		{
-			Name:  commandDownload,
-			Usage: "command that manages downloading files from external sources",
-			Subcommands: []cli.Command{
-				{
-					Name:         downloadStart,
-					Usage:        "download objects from external source",
-					ArgsUsage:    downloadStartArgumentText,
-					Flags:        downloadFlags[downloadStart],
-					Action:       startDownloadHandler,
-					BashComplete: flagList,
-				},
-				{
-					Name:         downloadStatus,
-					Usage:        "fetch status of download job with given id",
-					ArgsUsage:    idArgumentText,
-					Flags:        downloadFlags[downloadStatus],
-					Action:       downloadAdminHandler,
-					BashComplete: downloadIDListAll,
-				},
-				{
-					Name:         downloadAbort,
-					Usage:        "abort download job with given id",
-					ArgsUsage:    idArgumentText,
-					Flags:        downloadFlags[downloadAbort],
-					Action:       downloadAdminHandler,
-					BashComplete: downloadIDListRunning,
-				},
-				{
-					Name:         downloadRemove,
-					Usage:        "remove download job with given id from the list",
-					ArgsUsage:    idArgumentText,
-					Flags:        downloadFlags[downloadRemove],
-					Action:       downloadAdminHandler,
-					BashComplete: downloadIDListFinished,
-				},
-				{
-					Name:         downloadList,
-					Usage:        "list all download jobs which match provided regex",
-					ArgsUsage:    noArgumentsText,
-					Flags:        downloadFlags[downloadList],
-					Action:       downloadAdminHandler,
-					BashComplete: flagList,
-				},
-			},
-		},
-	}
-)
-
-func downloadAdminHandler(c *cli.Context) error {
-	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		id          = c.Args().First()
-		regex       = parseStrFlag(c, regexFlag)
-		commandName = c.Command.Name
-	)
-
-	if commandName != downloadList {
-		if c.NArg() < 1 {
-			return missingArgumentsError(c, "download job ID")
-		}
-		if id == "" {
-			return errors.New("download job ID can't be empty")
-		}
-	}
-
-	switch commandName {
-	case downloadStatus:
-		showProgressBar := flagIsSet(c, progressBarFlag)
-		if showProgressBar {
-			refreshRate, err := calcRefreshRate(c)
-			if err != nil {
-				return err
-			}
-
-			downloadingResult, err := newProgressBar(baseParams, id, refreshRate).run()
-			if err != nil {
-				return err
-			}
-
-			_, _ = fmt.Fprintln(c.App.Writer, downloadingResult)
-		} else {
-			resp, err := api.DownloadStatus(baseParams, id)
-			if err != nil {
-				return err
-			}
-
-			verbose := flagIsSet(c, verboseFlag)
-			_, _ = fmt.Fprint(c.App.Writer, resp.Print(verbose))
-		}
-	case downloadAbort:
-		if err := api.DownloadAbort(baseParams, id); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "download aborted: %s\n", id)
-	case downloadRemove:
-		if err := api.DownloadRemove(baseParams, id); err != nil {
-			return err
-		}
-		_, _ = fmt.Fprintf(c.App.Writer, "download removed: %s\n", id)
-	case downloadList:
-		list, err := api.DownloadGetList(baseParams, regex)
-		if err != nil {
-			return err
-		}
-
-		err = templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("invalid command name '%s'", commandName)
-	}
-	return nil
-}
-
-type downloadingResult struct {
-	totalFiles        int
-	finishedFiles     int
-	downloadingErrors map[string]string
-	aborted           bool
-}
 
 func (d downloadingResult) String() string {
 	if d.aborted {
@@ -185,32 +77,6 @@ func (d downloadingResult) String() string {
 	}
 
 	return sb.String()
-}
-
-type fileDownloadingState struct {
-	total      int64
-	downloaded int64
-	bar        *mpb.Bar
-}
-
-type progressBar struct {
-	id          string
-	params      *api.BaseParams
-	refreshTime time.Duration
-
-	states map[string]*fileDownloadingState
-
-	p        *mpb.Progress
-	totalBar *mpb.Bar
-
-	totalFiles     int
-	finishedFiles  int
-	scheduledFiles int
-
-	aborted       bool
-	allDispatched bool
-
-	errors map[string]string
 }
 
 func newProgressBar(baseParams *api.BaseParams, id string, refreshTime time.Duration) *progressBar {
@@ -454,6 +320,6 @@ func downloadJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) er
 	}
 
 	verbose := flagIsSet(c, verboseFlag)
-	fmt.Fprint(c.App.Writer, resp.Print(verbose))
+	fmt.Fprintln(c.App.Writer, resp.Print(verbose))
 	return nil
 }

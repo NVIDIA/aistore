@@ -22,6 +22,7 @@ const (
 	metadata = "md"
 )
 
+// AISCLI represents an instance of an AIS command line interface
 type AISCLI struct {
 	app *cli.App
 
@@ -31,6 +32,7 @@ type AISCLI struct {
 	longRunParams *longRunParams
 }
 
+// New returns a new, initialized AISCLI instance
 func New(build, version string) *AISCLI {
 	aisCLI := AISCLI{
 		app:           cli.NewApp(),
@@ -42,6 +44,7 @@ func New(build, version string) *AISCLI {
 	return &aisCLI
 }
 
+// Run runs the CLI
 func (aisCLI *AISCLI) Run(input []string) error {
 	if err := aisCLI.runOnce(input); err != nil {
 		// If the command failed, check if it failed because AIS is unreachable
@@ -135,17 +138,9 @@ func (aisCLI *AISCLI) init(build, version string) {
 func (aisCLI *AISCLI) setupCommands() {
 	app := aisCLI.app
 
-	app.Commands = append(app.Commands, downloaderCmds...)
 	app.Commands = append(app.Commands, dSortCmds...)
-	app.Commands = append(app.Commands, objectCmds...)
-	app.Commands = append(app.Commands, bucketCmds...)
-	app.Commands = append(app.Commands, daeCluCmds...)
-	app.Commands = append(app.Commands, configCmds...)
-	app.Commands = append(app.Commands, xactCmds...)
 	app.Commands = append(app.Commands, helpCommand)
 	app.Commands = append(app.Commands, authCmds...)
-
-	// VERBs
 	app.Commands = append(app.Commands, listCmds...)
 	app.Commands = append(app.Commands, createCmds...)
 	app.Commands = append(app.Commands, renameCmds...)
@@ -154,9 +149,9 @@ func (aisCLI *AISCLI) setupCommands() {
 	app.Commands = append(app.Commands, setCmds...)
 	app.Commands = append(app.Commands, controlCmds...)
 	app.Commands = append(app.Commands, statsCmds...)
+	app.Commands = append(app.Commands, cluSpecificCmds...)
 	app.Commands = append(app.Commands, bucketSpecificCmds...)
 	app.Commands = append(app.Commands, objectSpecificCmds...)
-
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	setupCommandHelp(app.Commands)
@@ -181,7 +176,7 @@ func setupCommandHelp(commands []cli.Command) {
 var helpCommand = cli.Command{
 	Name:      "help",
 	Usage:     "shows a list of commands or help for one command",
-	ArgsUsage: "[command]",
+	ArgsUsage: "[COMMAND]",
 	Action: func(c *cli.Context) error {
 		args := c.Args()
 		if args.Present() {
@@ -190,6 +185,11 @@ var helpCommand = cli.Command{
 
 		cli.ShowAppHelp(c)
 		return nil
+	},
+	BashComplete: func(c *cli.Context) {
+		for _, cmd := range c.App.Commands {
+			fmt.Println(cmd.Name)
+		}
 	},
 }
 
@@ -209,7 +209,7 @@ func testAISURL() (err error) {
 	_, err = api.GetClusterMap(baseParams)
 
 	if cmn.IsErrConnectionRefused(err) {
-		return fmt.Errorf("could not connect to AIS cluser at %s - check if the cluster is running", ClusterURL)
+		return fmt.Errorf("could not connect to AIS cluser at %s - verify that cluster is running", ClusterURL)
 	}
 
 	return err
