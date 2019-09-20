@@ -38,8 +38,8 @@ var _ = Describe("RequestSpec", func() {
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("test"))
-			Expect(parsed.BckProvider).To(Equal(cmn.AIS))
-			Expect(parsed.OutputBckProvider).To(Equal(cmn.AIS))
+			Expect(parsed.Provider).To(Equal(cmn.AIS))
+			Expect(parsed.OutputProvider).To(Equal(cmn.AIS))
 			Expect(parsed.Extension).To(Equal(ExtTar))
 
 			Expect(parsed.InputFormat.Template).To(Equal(cmn.ParsedTemplate{
@@ -72,24 +72,24 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should set buckets correctly", func() {
 			rs := RequestSpec{
-				Bucket:            "test",
-				BckProvider:       cmn.Cloud,
-				OutputBucket:      "testing",
-				OutputBckProvider: cmn.Cloud,
-				Extension:         ExtTar,
-				InputFormat:       "prefix-{0010..0111..2}-suffix",
-				OutputFormat:      "prefix-{10..111}-suffix",
-				OutputShardSize:   "10KB",
-				MaxMemUsage:       "80%",
-				Algorithm:         SortAlgorithm{Kind: SortKindNone},
+				Bucket:          "test",
+				Provider:        cmn.Cloud,
+				OutputBucket:    "testing",
+				OutputProvider:  cmn.Cloud,
+				Extension:       ExtTar,
+				InputFormat:     "prefix-{0010..0111..2}-suffix",
+				OutputFormat:    "prefix-{10..111}-suffix",
+				OutputShardSize: "10KB",
+				MaxMemUsage:     "80%",
+				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(parsed.Bucket).To(Equal("test"))
 			Expect(parsed.OutputBucket).To(Equal("testing"))
-			Expect(parsed.BckProvider).To(Equal(cmn.Cloud))
-			Expect(parsed.OutputBckProvider).To(Equal(cmn.Cloud))
+			Expect(parsed.Provider).To(Equal(cmn.Cloud))
+			Expect(parsed.OutputProvider).To(Equal(cmn.Cloud))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {

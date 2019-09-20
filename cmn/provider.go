@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	bckProviderMap = map[string]string{
+	providerMap = map[string]string{
 		Cloud:          Cloud,
 		ProviderAmazon: Cloud,
 		ProviderGoogle: Cloud,
@@ -42,7 +42,7 @@ func ProviderFromBool(isais bool) string {
 
 func ProviderFromStr(provider string) (val string, err error) {
 	var ok bool
-	val, ok = bckProviderMap[strings.ToLower(provider)]
+	val, ok = providerMap[strings.ToLower(provider)]
 	if !ok {
 		err = errors.New("invalid bucket provider '" + provider + "'")
 	}

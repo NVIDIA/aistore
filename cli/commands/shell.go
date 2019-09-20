@@ -140,17 +140,17 @@ func providerList(optional bool) cli.BashCompleteFunc {
 // 2) Command line flag --provider
 // 3) Environment variable (lowest priority)
 func bucketProvider(c *cli.Context, provider ...string) (string, error) {
-	bckProvider := ""
+	prov := ""
 	if len(provider) > 0 {
-		bckProvider = provider[0]
+		prov = provider[0]
 	}
-	if bckProvider == "" {
-		bckProvider = parseStrFlag(c, bckProviderFlag)
+	if prov == "" {
+		prov = parseStrFlag(c, providerFlag)
 	}
-	if bckProvider == "" {
-		bckProvider = os.Getenv(aisBucketProviderEnvVar)
+	if prov == "" {
+		prov = os.Getenv(aisBucketProviderEnvVar)
 	}
-	return cmn.ProviderFromStr(bckProvider)
+	return cmn.ProviderFromStr(prov)
 }
 
 // The function will list bucket names if the first argument to the command was not yet specified, otherwise it will
@@ -168,12 +168,12 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, sep
 			return
 		}
 
-		bckProvider, err := bucketProvider(c, provider...)
+		provider, err := bucketProvider(c, provider...)
 		if err != nil {
 			return
 		}
 		baseParams := cliAPIParams(ClusterURL)
-		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
+		bucketNames, err := api.GetBucketNames(baseParams, provider)
 		if err != nil {
 			return
 		}
@@ -201,10 +201,10 @@ func bucketList(additionalCompletions []cli.BashCompleteFunc, multiple bool, sep
 			}
 		}
 
-		if cmn.IsProviderAIS(bckProvider) || bckProvider == "" {
+		if cmn.IsProviderAIS(provider) || provider == "" {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if cmn.IsProviderCloud(bckProvider) || bckProvider == "" {
+		if cmn.IsProviderCloud(provider) || provider == "" {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}
@@ -226,13 +226,13 @@ func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, separator
 
 		// suggest existing buckets
 
-		bckProvider, err := bucketProvider(c, provider...)
+		provider, err := bucketProvider(c, provider...)
 		if err != nil {
 			return
 		}
 
 		baseParams := cliAPIParams(ClusterURL)
-		bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
+		bucketNames, err := api.GetBucketNames(baseParams, provider)
 		if err != nil {
 			return
 		}
@@ -248,10 +248,10 @@ func oldAndNewBucketList(additionalCompletions []cli.BashCompleteFunc, separator
 			}
 		}
 
-		if cmn.IsProviderAIS(bckProvider) || bckProvider == "" {
+		if cmn.IsProviderAIS(provider) || provider == "" {
 			printNotUsedBuckets(bucketNames.AIS)
 		}
-		if cmn.IsProviderCloud(bckProvider) || bckProvider == "" {
+		if cmn.IsProviderCloud(provider) || provider == "" {
 			printNotUsedBuckets(bucketNames.Cloud)
 		}
 	}

@@ -83,18 +83,18 @@ type RequestSpec struct {
 	OutputShardSize string `json:"output_shard_size"`
 
 	// Optional
-	Description       string        `json:"description"`
-	OutputBucket      string        `json:"output_bucket"`             // Default: same as `bucket` field
-	Algorithm         SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
-	OrderFileURL      string        `json:"order_file"`                // Default: ""
-	OrderFileSep      string        `json:"order_file_sep"`            // Default: "\t"
-	MaxMemUsage       string        `json:"max_mem_usage"`             // Default: "80%"
-	BckProvider       string        `json:"bprovider"`                 // Default: "local"
-	OutputBckProvider string        `json:"output_bprovider"`          // Default: "local"
-	ExtractConcLimit  int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
-	CreateConcLimit   int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
-	StreamMultiplier  int           `json:"stream_multiplier"`         // Default: transport.IntraBundleMultiplier
-	ExtendedMetrics   bool          `json:"extended_metrics"`          // Default: false
+	Description      string        `json:"description"`
+	OutputBucket     string        `json:"output_bucket"`             // Default: same as `bucket` field
+	Algorithm        SortAlgorithm `json:"algorithm"`                 // Default: alphanumeric, increasing
+	OrderFileURL     string        `json:"order_file"`                // Default: ""
+	OrderFileSep     string        `json:"order_file_sep"`            // Default: "\t"
+	MaxMemUsage      string        `json:"max_mem_usage"`             // Default: "80%"
+	Provider         string        `json:"provider"`                  // Default: "ais"
+	OutputProvider   string        `json:"output_provider"`           // Default: "ais"
+	ExtractConcLimit int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
+	CreateConcLimit  int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
+	StreamMultiplier int           `json:"stream_multiplier"`         // Default: transport.IntraBundleMultiplier
+	ExtendedMetrics  bool          `json:"extended_metrics"`          // Default: false
 
 	// debug
 	DSorterType string `json:"dsorter_type"`
@@ -102,24 +102,24 @@ type RequestSpec struct {
 }
 
 type ParsedRequestSpec struct {
-	Bucket            string                `json:"bucket"`
-	Description       string                `json:"description"`
-	OutputBucket      string                `json:"output_bucket"`
-	BckProvider       string                `json:"bprovider"`
-	OutputBckProvider string                `json:"output_bprovider"`
-	Extension         string                `json:"extension"`
-	OutputShardSize   int64                 `json:"output_shard_size"`
-	InputFormat       *parsedInputTemplate  `json:"input_format"`
-	OutputFormat      *parsedOutputTemplate `json:"output_format"`
-	Algorithm         *SortAlgorithm        `json:"algorithm"`
-	OrderFileURL      string                `json:"order_file"`
-	OrderFileSep      string                `json:"order_file_sep"`
-	MaxMemUsage       cmn.ParsedQuantity    `json:"max_mem_usage"`
-	TargetOrderSalt   []byte                `json:"target_order_salt"`
-	ExtractConcLimit  int                   `json:"extract_concurrency_limit"` // TODO: should be removed
-	CreateConcLimit   int                   `json:"create_concurrency_limit"`  // TODO: should be removed
-	StreamMultiplier  int                   `json:"stream_multiplier"`         // TODO: should be removed
-	ExtendedMetrics   bool                  `json:"extended_metrics"`
+	Bucket           string                `json:"bucket"`
+	Description      string                `json:"description"`
+	OutputBucket     string                `json:"output_bucket"`
+	Provider         string                `json:"provider"`
+	OutputProvider   string                `json:"output_provider"`
+	Extension        string                `json:"extension"`
+	OutputShardSize  int64                 `json:"output_shard_size"`
+	InputFormat      *parsedInputTemplate  `json:"input_format"`
+	OutputFormat     *parsedOutputTemplate `json:"output_format"`
+	Algorithm        *SortAlgorithm        `json:"algorithm"`
+	OrderFileURL     string                `json:"order_file"`
+	OrderFileSep     string                `json:"order_file_sep"`
+	MaxMemUsage      cmn.ParsedQuantity    `json:"max_mem_usage"`
+	TargetOrderSalt  []byte                `json:"target_order_salt"`
+	ExtractConcLimit int                   `json:"extract_concurrency_limit"` // TODO: should be removed
+	CreateConcLimit  int                   `json:"create_concurrency_limit"`  // TODO: should be removed
+	StreamMultiplier int                   `json:"stream_multiplier"`         // TODO: should be removed
+	ExtendedMetrics  bool                  `json:"extended_metrics"`
 
 	// debug
 	DSorterType string `json:"dsorter_type"`
@@ -153,13 +153,13 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if parsedRS.OutputBucket == "" {
 		parsedRS.OutputBucket = parsedRS.Bucket
 	}
-	parsedRS.BckProvider = rs.BckProvider
-	if parsedRS.BckProvider == "" {
-		parsedRS.BckProvider = cmn.AIS
+	parsedRS.Provider = rs.Provider
+	if parsedRS.Provider == "" {
+		parsedRS.Provider = cmn.AIS
 	}
-	parsedRS.OutputBckProvider = rs.OutputBckProvider
-	if parsedRS.OutputBckProvider == "" {
-		parsedRS.OutputBckProvider = cmn.AIS
+	parsedRS.OutputProvider = rs.OutputProvider
+	if parsedRS.OutputProvider == "" {
+		parsedRS.OutputProvider = cmn.AIS
 	}
 
 	var err error

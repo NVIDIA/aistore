@@ -170,7 +170,7 @@ const (
 	URLParamCheckCached = "check_cached" // true: check if object is cached in AIStore
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
-	URLParamBckProvider = "bprovider"    // ais | cloud
+	URLParamProvider    = "provider"     // ais | cloud
 	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
 	URLParamRegex       = "regex"        // dsort/downloader regex
 	// internal use

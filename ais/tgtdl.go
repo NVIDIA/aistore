@@ -183,7 +183,7 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		}
 		description = multiPayload.Describe()
 	} else if err := cloudPayload.Validate(bckIsAIS); err == nil {
-		baseJob := downloader.NewBaseDownloadJob(id, cloudPayload.Bucket, cloudPayload.BckProvider, cloudPayload.Timeout, payload.Description)
+		baseJob := downloader.NewBaseDownloadJob(id, cloudPayload.Bucket, cloudPayload.Provider, cloudPayload.Timeout, payload.Description)
 		return downloader.NewCloudBucketDownloadJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
@@ -198,5 +198,5 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		return nil, err
 	}
 
-	return downloader.NewSliceDownloadJob(input.ID, input.Objs, payload.Bucket, payload.BckProvider, payload.Timeout, payload.Description), nil
+	return downloader.NewSliceDownloadJob(input.ID, input.Objs, payload.Bucket, payload.Provider, payload.Timeout, payload.Description), nil
 }

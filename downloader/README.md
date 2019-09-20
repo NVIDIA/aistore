@@ -41,7 +41,7 @@ This request returns *id* on successful request which can then be used to check 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded object is saved to. |
-**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically | Yes
+**provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically | Yes
 **description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **link** | **string** | URL of where the object is downloaded from. |
@@ -66,7 +66,7 @@ This request returns *id* on successful request which can then be used to check 
 Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
-**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 
@@ -101,7 +101,7 @@ Name | Type | Description | Optional?
 ------------ | ------------- | ------------- | -------------
 **bucket** | **string** | Bucket where the downloaded objects are saved to. |
 **subdir** | **string** | Subdirectory in the **bucket** where the downloaded objects are saved to. | Yes
-**bprovider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
+**provider** | **string** | Determines which bucket (`local` or `cloud`) should be used. By default, locality is determined automatically. | Yes
 **description** | **string** | Description for the download request | Yes
 **timeout** | **string** | Timeout for request to external resource. | Yes
 **base** | **string** | Base URL of the object used to formulate the download URL. |

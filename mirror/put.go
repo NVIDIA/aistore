@@ -66,7 +66,7 @@ func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPut
 	r.wg.Add(1)
 	for _, mpathInfo := range availablePaths {
 		xputJogger := &xputJogger{parent: r, mpathInfo: mpathInfo}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckProvider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = xputJogger
 	}
 	go r.Run()

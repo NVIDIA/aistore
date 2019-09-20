@@ -20,7 +20,7 @@ var (
 		subcmdRemoveBucket: {},
 		subcmdRemoveObject: append(
 			baseLstRngFlags,
-			bckProviderFlag,
+			providerFlag,
 		),
 		subcmdRemoveNode:     {},
 		subcmdRemoveDownload: {},
@@ -92,12 +92,12 @@ func removeBucketHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		bucket      string
-		bckProvider string
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     string
+		provider   string
 	)
 
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
 
@@ -114,7 +114,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
-			return listOrRangeOp(c, baseParams, commandRemove, bucket, bckProvider)
+			return listOrRangeOp(c, baseParams, commandRemove, bucket, provider)
 		}
 
 		err = fmt.Errorf("%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
@@ -133,7 +133,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
-	return multiObjOp(c, baseParams, commandRemove, bckProvider)
+	return multiObjOp(c, baseParams, commandRemove, provider)
 }
 
 func removeNodeHandler(c *cli.Context) (err error) {

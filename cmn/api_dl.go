@@ -140,7 +140,7 @@ func (j *DlJobInfo) String() string {
 type DlBase struct {
 	Description string `json:"description"`
 	Bucket      string `json:"bucket"`
-	BckProvider string `json:"bprovider"`
+	Provider    string `json:"provider"`
 	Timeout     string `json:"timeout"`
 }
 
@@ -148,7 +148,7 @@ func (b *DlBase) InitWithQuery(query url.Values) {
 	if b.Bucket == "" {
 		b.Bucket = query.Get(URLParamBucket)
 	}
-	b.BckProvider = query.Get(URLParamBckProvider)
+	b.Provider = query.Get(URLParamProvider)
 	b.Timeout = query.Get(URLParamTimeout)
 	b.Description = query.Get(URLParamDescription)
 }
@@ -158,8 +158,8 @@ func (b *DlBase) AsQuery() url.Values {
 	if b.Bucket != "" {
 		query.Add(URLParamBucket, b.Bucket)
 	}
-	if b.BckProvider != "" {
-		query.Add(URLParamBckProvider, b.BckProvider)
+	if b.Provider != "" {
+		query.Add(URLParamProvider, b.Provider)
 	}
 	if b.Timeout != "" {
 		query.Add(URLParamTimeout, b.Timeout)

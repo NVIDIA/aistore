@@ -15,7 +15,7 @@ func TestFQN2Info(t *testing.T) {
 		wantMPath       string
 		wantContentType string
 		wantBucket      string
-		wantBckProvider string
+		wantProvider    string
 		wantObjName     string
 		wantErr         bool
 	}{
@@ -129,7 +129,7 @@ func TestFQN2Info(t *testing.T) {
 			if err != nil {
 				return
 			}
-			mpathInfo, gotContentType, gotBucket, gotBckProvider, gotObjName := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.BckProvider, parsedFQN.ObjName
+			mpathInfo, gotContentType, gotBucket, gotProvider, gotObjName := parsedFQN.MpathInfo, parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName
 			gotMPath := mpathInfo.Path
 			if gotMPath != tt.wantMPath {
 				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
@@ -140,8 +140,8 @@ func TestFQN2Info(t *testing.T) {
 			if gotBucket != tt.wantBucket {
 				t.Errorf("fqn2info() gotBucket = %v, want %v", gotBucket, tt.wantBucket)
 			}
-			if gotBckProvider != tt.wantBckProvider {
-				t.Errorf("fqn2info() gotBckProvider = %v, want %v", gotBckProvider, tt.wantBckProvider)
+			if gotProvider != tt.wantProvider {
+				t.Errorf("fqn2info() gotProvider = %v, want %v", gotProvider, tt.wantProvider)
 			}
 			if gotObjName != tt.wantObjName {
 				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)

@@ -348,7 +348,7 @@ func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser)
 	return l, nil
 }
 
-func Del(proxyURL, bucket, object, bckProvider string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
+func Del(proxyURL, bucket, object, provider string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -356,7 +356,7 @@ func Del(proxyURL, bucket, object, bckProvider string, wg *sync.WaitGroup, errCh
 		fmt.Printf("DEL: %s\n", object)
 	}
 	baseParams := BaseAPIParams(proxyURL)
-	err := api.DeleteObject(baseParams, bucket, object, bckProvider)
+	err := api.DeleteObject(baseParams, bucket, object, provider)
 	emitError(nil, err, errCh)
 	return err
 }
@@ -426,11 +426,11 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL, bucket, bckProvider, prefix string, objectCountLimit int) ([]string, error) {
+func ListObjects(proxyURL, bucket, provider, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.SelectMsg{Prefix: prefix}
 	baseParams := BaseAPIParams(proxyURL)
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamProvider, provider)
 
 	data, err := api.ListBucket(baseParams, bucket, msg, objectCountLimit, query)
 	if err != nil {
@@ -449,10 +449,10 @@ func ListObjects(proxyURL, bucket, bckProvider, prefix string, objectCountLimit 
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjectsFast(proxyURL, bucket, bckProvider, prefix string) ([]string, error) {
+func ListObjectsFast(proxyURL, bucket, provider, prefix string) ([]string, error) {
 	baseParams := BaseAPIParams(proxyURL)
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamProvider, provider)
 	if prefix != "" {
 		query.Add(cmn.URLParamPrefix, prefix)
 	}

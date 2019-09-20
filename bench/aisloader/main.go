@@ -10,13 +10,13 @@
 // Examples:
 // 1. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 //    aisloader -bucket=nvais -duration 0s -totalputsize=0
-//    aisloader -bucket=nvais -bckprovider=cloud -cleanup=true -duration 0s -totalputsize=0
+//    aisloader -bucket=nvais -provider=cloud -cleanup=true -duration 0s -totalputsize=0
 // 2. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
-//    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
+//    aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
 // 3. Time-based PUT into ais bucket, random objects names:
-//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 // 4. Mixed 30% PUT and 70% GET to/from Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
-//    aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
+//    aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
 // 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
 //    aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000
 // 6. Use random object names and loaderID for reporting stats
@@ -80,16 +80,16 @@ var (
 
 type (
 	workOrder struct {
-		op          int
-		proxyURL    string
-		bucket      string
-		bckProvider string
-		objName     string // In the format of 'virtual dir' + "/" + objName
-		size        int64
-		err         error
-		start       time.Time
-		end         time.Time
-		latencies   tutils.HTTPLatencies
+		op        int
+		proxyURL  string
+		bucket    string
+		provider  string
+		objName   string // In the format of 'virtual dir' + "/" + objName
+		size      int64
+		err       error
+		start     time.Time
+		end       time.Time
+		latencies tutils.HTTPLatencies
 	}
 
 	params struct {
@@ -105,7 +105,7 @@ type (
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
-		bckProvider          string // "local" or "cloud"
+		provider             string // "ais" or "cloud"
 		bucket               string
 		readerType           string
 		tmpDir               string // used only when usingFile
@@ -238,7 +238,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
-	f.StringVar(&p.bckProvider, "bckprovider", cmn.AIS, "local - for ais bucket, cloud - for Cloud based bucket")
+	f.StringVar(&p.provider, "provider", cmn.AIS, "ais - for AIS bucket, cloud - for Cloud bucket; other supported values include \"gcp\" and \"aws\", for Amazon and Google clouds, respectively")
 
 	cmn.DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -477,7 +477,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if !p.cleanUp.IsSet {
-		p.cleanUp.Val = cmn.IsProviderAIS(p.bckProvider)
+		p.cleanUp.Val = cmn.IsProviderAIS(p.provider)
 	}
 
 	// For Dry-Run on Docker
@@ -539,7 +539,7 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.bckProvider != cmn.AIS || runParams.getConfig {
+	if runParams.provider != cmn.AIS || runParams.getConfig {
 		return nil
 	}
 	baseParams := tutils.BaseAPIParams(runParams.proxyURL)
@@ -845,12 +845,12 @@ func newPutWorkOrder() (*workOrder, error) {
 
 	putPending++
 	return &workOrder{
-		proxyURL:    runParams.proxyURL,
-		bucket:      runParams.bucket,
-		bckProvider: runParams.bckProvider,
-		op:          opPut,
-		objName:     objName,
-		size:        size,
+		proxyURL: runParams.proxyURL,
+		bucket:   runParams.bucket,
+		provider: runParams.provider,
+		op:       opPut,
+		objName:  objName,
+		size:     size,
 	}, nil
 }
 
@@ -895,11 +895,11 @@ func newGetWorkOrder() (*workOrder, error) {
 
 	getPending++
 	return &workOrder{
-		proxyURL:    runParams.proxyURL,
-		bucket:      runParams.bucket,
-		bckProvider: runParams.bckProvider,
-		op:          opGet,
-		objName:     bucketObjsNames.ObjName(),
+		proxyURL: runParams.proxyURL,
+		bucket:   runParams.bucket,
+		provider: runParams.provider,
+		op:       opGet,
+		objName:  bucketObjsNames.ObjName(),
 	}, nil
 }
 
@@ -1010,41 +1010,8 @@ func completeWorkOrder(wo *workOrder) {
 }
 
 func cleanUp() {
-	fmt.Println(prettyTimeStamp() + " Cleaning up ...")
-
 	var wg sync.WaitGroup
-	f := func(objs []string, wg *sync.WaitGroup) {
-		defer wg.Done()
-
-		t := len(objs)
-		b := cmn.Min(t, runParams.batchSize)
-		n := t / b
-		for i := 0; i < n; i++ {
-			err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.bckProvider,
-				objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
-			if err != nil {
-				fmt.Println("delete err ", err)
-			}
-		}
-
-		if t%b != 0 {
-			err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.bckProvider,
-				objs[n*b:], true /* wait */, 0 /* wait forever */)
-			if err != nil {
-				fmt.Println("delete err ", err)
-			}
-		}
-
-		if runParams.usingFile {
-			for _, obj := range objs {
-				err := os.Remove(runParams.tmpDir + "/" + obj)
-				if err != nil {
-					fmt.Println("delete local file err ", err)
-				}
-			}
-		}
-	}
-
+	fmt.Println(prettyTimeStamp() + " Cleaning up ...")
 	if bucketObjsNames != nil {
 		// bucketObjsNames has been actually assigned to/initialized
 		w := runParams.numWorkers
@@ -1052,31 +1019,63 @@ func cleanUp() {
 		n := objsLen / w
 		for i := 0; i < w; i++ {
 			wg.Add(1)
-			go f(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
+			go _cleanup(bucketObjsNames.Names()[i*n:(i+1)*n], &wg)
 		}
-
 		if objsLen%w != 0 {
 			wg.Add(1)
-			go f(bucketObjsNames.Names()[n*w:], &wg)
+			go _cleanup(bucketObjsNames.Names()[n*w:], &wg)
 		}
-
 		wg.Wait()
 	}
 
-	if cmn.IsProviderAIS(runParams.bckProvider) {
+	if cmn.IsProviderAIS(runParams.provider) {
 		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 		api.DestroyBucket(baseParams, runParams.bucket)
 	}
-
 	fmt.Println(prettyTimeStamp() + " Done")
+}
+
+func _cleanup(objs []string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	t := len(objs)
+	if t == 0 {
+		return
+	}
+	b := cmn.Min(t, runParams.batchSize)
+	n := t / b
+	for i := 0; i < n; i++ {
+		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.provider,
+			objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
+		if err != nil {
+			fmt.Println("delete err ", err)
+		}
+	}
+
+	if t%b != 0 {
+		err := api.DeleteList(tutils.BaseAPIParams(runParams.proxyURL), runParams.bucket, runParams.provider,
+			objs[n*b:], true /* wait */, 0 /* wait forever */)
+		if err != nil {
+			fmt.Println("delete err ", err)
+		}
+	}
+
+	if runParams.usingFile {
+		for _, obj := range objs {
+			err := os.Remove(runParams.tmpDir + "/" + obj)
+			if err != nil {
+				fmt.Println("delete local file err ", err)
+			}
+		}
+	}
 }
 
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
-	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.bckProvider, "")
+	names, err := tutils.ListObjectsFast(runParams.proxyURL, runParams.bucket, runParams.provider, "")
 	if err != nil {
 		fmt.Printf("Failed to list bucket %s(%s), proxy %s, err: %v\n",
-			runParams.bucket, runParams.bckProvider, runParams.proxyURL, err)
+			runParams.bucket, runParams.provider, runParams.proxyURL, err)
 		return err
 	}
 

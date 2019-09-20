@@ -230,13 +230,13 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 
 // GetBucketNames API
 //
-// bckProvider takes one of Cloud Provider enum names (see provider.go). If bckProvider is empty, return all names.
+// provider takes one of Cloud Provider enum names (see provider.go). If provider is empty, return all names.
 // Otherwise, return cloud or ais bucket names.
-func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketNames, error) {
+func GetBucketNames(baseParams *BaseParams, provider string) (*cmn.BucketNames, error) {
 	bucketNames := &cmn.BucketNames{}
 	baseParams.Method = http.MethodGet
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets)
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	optParams := OptionalParams{Query: query}
 
 	b, err := DoHTTPRequest(baseParams, path, nil, optParams)
@@ -255,9 +255,9 @@ func GetBucketNames(baseParams *BaseParams, bckProvider string) (*cmn.BucketName
 
 // GetBucketsSummaries API
 //
-// bckProvider takes one of "" (empty), "cloud" or "local". If bckProvider is empty, return all summaries of all buckets.
-// Otherwise return "cloud" or "local" buckets.
-func GetBucketsSummaries(baseParams *BaseParams, bucket, bckProvider string, msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
+// Cloud provider takes one of "", "cloud", "ais", "gcp", "aws".
+// Returns bucket summaries for the specified bucket provider (and all bucket summaries for unspecified ("") provider).
+func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string, msg *cmn.SelectMsg) (summaries cmn.BucketsSummaries, err error) {
 	var (
 		q    = url.Values{}
 		path = cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
@@ -268,7 +268,7 @@ func GetBucketsSummaries(baseParams *BaseParams, bucket, bckProvider string, msg
 	}
 
 	baseParams.Method = http.MethodPost
-	q.Add(cmn.URLParamBckProvider, bckProvider)
+	q.Add(cmn.URLParamProvider, provider)
 
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: msg})
 	if err != nil {
@@ -373,55 +373,55 @@ func RenameBucket(baseParams *BaseParams, oldName, newName string) error {
 // DeleteList API
 //
 // DeleteList sends a HTTP request to remove a list of objects from a bucket
-func DeleteList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+func DeleteList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // DeleteRange API
 //
 // DeleteRange sends a HTTP request to remove a range of objects from a bucket
-func DeleteRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func DeleteRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActDelete, http.MethodDelete, deleteMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 // PrefetchList API
 //
 // PrefetchList sends a HTTP request to prefetch a list of objects from a cloud bucket
-func PrefetchList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+func PrefetchList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 // PrefetchRange API
 //
 // PrefetchRange sends a HTTP request to prefetch a range of objects from a cloud bucket
-func PrefetchRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func PrefetchRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 // EvictList API
 //
 // EvictList sends a HTTP request to evict a list of objects from a cloud bucket
-func EvictList(baseParams *BaseParams, bucket, bckProvider string, fileslist []string, wait bool, deadline time.Duration) error {
+func EvictList(baseParams *BaseParams, bucket, provider string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 // EvictRange API
 //
 // EvictRange sends a HTTP request to evict a range of objects from a cloud bucket
-func EvictRange(baseParams *BaseParams, bucket, bckProvider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+func EvictRange(baseParams *BaseParams, bucket, provider, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeRequest(baseParams, bucket, bckProvider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
+	return doListRangeRequest(baseParams, bucket, provider, cmn.ActEvictObjects, http.MethodDelete, evictMsg)
 }
 
 // EvictCloudBucket API
@@ -682,7 +682,7 @@ func ListBucketFast(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, q
 }
 
 // Handles the List/Range operations (delete, prefetch)
-func doListRangeRequest(baseParams *BaseParams, bucket, bckProvider, action, method string, listrangemsg interface{}) error {
+func doListRangeRequest(baseParams *BaseParams, bucket, provider, action, method string, listrangemsg interface{}) error {
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
 	b, err := jsoniter.Marshal(actionMsg)
 	if err != nil {
@@ -690,7 +690,7 @@ func doListRangeRequest(baseParams *BaseParams, bucket, bckProvider, action, met
 	}
 	baseParams.Method = method
 	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	optParams := OptionalParams{
 		Header: http.Header{
 			"Content-Type": []string{"application/json"},

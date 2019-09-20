@@ -188,9 +188,9 @@ const (
 // Flags
 var (
 	// Common
-	bucketFlag      = cli.StringFlag{Name: "bucket", Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
-	bckProviderFlag = cli.StringFlag{Name: "provider",
-		Usage:  "determines which bucket ('local' or 'cloud') should be used. By default, locality is determined automatically",
+	bucketFlag   = cli.StringFlag{Name: "bucket", Usage: "bucket where the objects are stored, eg. 'imagenet'", EnvVar: aisBucketEnvVar}
+	providerFlag = cli.StringFlag{Name: "provider",
+		Usage:  "determines which type bucket ('ais' or 'cloud') should be used. Other supported values include '' (empty), 'gcp', and 'aws'. By default (i.e., when unspecified), provider of the bucket is determined automatically",
 		EnvVar: aisBucketProviderEnvVar,
 	}
 	objPropsFlag    = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}

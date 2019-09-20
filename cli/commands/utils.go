@@ -550,8 +550,8 @@ func cliAPIParams(proxyURL string) *api.BaseParams {
 	}
 }
 
-func canReachBucket(baseParams *api.BaseParams, bckName, bckProvider string) error {
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+func canReachBucket(baseParams *api.BaseParams, bckName, provider string) error {
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {
 		return fmt.Errorf("could not reach %q bucket: %v", bckName, err)
 	}

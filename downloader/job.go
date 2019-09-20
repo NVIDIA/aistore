@@ -26,7 +26,7 @@ type (
 	DownloadJob interface {
 		ID() string
 		Bucket() string
-		BckProvider() string
+		Provider() string
 
 		// FIXME: change to time.Duration
 		Timeout() string
@@ -43,7 +43,7 @@ type (
 	BaseDownloadJob struct {
 		id          string
 		bucket      string
-		bckProvider string
+		provider    string
 		timeout     string
 		description string
 	}
@@ -89,15 +89,15 @@ type (
 
 func (j *BaseDownloadJob) ID() string          { return j.id }
 func (j *BaseDownloadJob) Bucket() string      { return j.bucket }
-func (j *BaseDownloadJob) BckProvider() string { return j.bckProvider }
+func (j *BaseDownloadJob) Provider() string    { return j.provider }
 func (j *BaseDownloadJob) Timeout() string     { return j.timeout }
 func (j *BaseDownloadJob) Description() string { return j.description }
 
-func NewBaseDownloadJob(id, bucket, bckprovider, timeout, desc string) *BaseDownloadJob {
+func NewBaseDownloadJob(id, bucket, provider, timeout, desc string) *BaseDownloadJob {
 	return &BaseDownloadJob{
 		id:          id,
 		bucket:      bucket,
-		bckProvider: bckprovider,
+		provider:    provider,
 		timeout:     timeout,
 		description: desc,
 	}
@@ -120,12 +120,12 @@ func (j *SliceDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	return objs, true
 }
 
-func NewSliceDownloadJob(id string, objs []cmn.DlObj, bucket, bckProvider, timeout, description string) *SliceDownloadJob {
+func NewSliceDownloadJob(id string, objs []cmn.DlObj, bucket, provider, timeout, description string) *SliceDownloadJob {
 	return &SliceDownloadJob{
 		BaseDownloadJob: BaseDownloadJob{
 			id:          id,
 			bucket:      bucket,
-			bckProvider: bckProvider,
+			provider:    provider,
 			timeout:     timeout,
 			description: description,
 		},

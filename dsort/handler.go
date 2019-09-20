@@ -83,12 +83,12 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
 
-	bck := &cluster.Bck{Name: parsedRS.Bucket, Provider: parsedRS.BckProvider}
+	bck := &cluster.Bck{Name: parsedRS.Bucket, Provider: parsedRS.Provider}
 	if err = bck.Init(ctx.bmdowner); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return
 	}
-	bck = &cluster.Bck{Name: parsedRS.OutputBucket, Provider: parsedRS.OutputBckProvider}
+	bck = &cluster.Bck{Name: parsedRS.OutputBucket, Provider: parsedRS.OutputProvider}
 	if err = bck.Init(ctx.bmdowner); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return

@@ -468,7 +468,7 @@ func (m *Manager) setExtractCreator() (err error) {
 		m.extractCreator = extract.NopExtractCreator(extractCreator)
 	}
 
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.BckProvider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.ctx.node.DaemonID, m.rs.Bucket, m.rs.Provider, m.rs.Extension, m.extractCreator, keyExtractor, onDuplicatedRecords)
 
 	return nil
 }
@@ -631,9 +631,9 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 			return
 		}
 		cksum := cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.CksumValue)
-		bckProvider := cmn.ProviderFromBool(hdr.BckIsAIS)
+		provider := cmn.ProviderFromBool(hdr.BckIsAIS)
 		lom := &cluster.LOM{T: m.ctx.t, Objname: hdr.Objname}
-		if err = lom.Init(hdr.Bucket, bckProvider); err == nil {
+		if err = lom.Init(hdr.Bucket, provider); err == nil {
 			err = lom.Load()
 		}
 		if err != nil {

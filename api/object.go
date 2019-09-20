@@ -49,7 +49,7 @@ type PutObjectArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, checkCached ...bool) (*cmn.ObjectProps, error) {
+func HeadObject(baseParams *BaseParams, bucket, provider, object string, checkCached ...bool) (*cmn.ObjectProps, error) {
 	checkIsCached := false
 	if len(checkCached) > 0 {
 		checkIsCached = checkCached[0]
@@ -57,7 +57,7 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 	baseParams.Method = http.MethodHead
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamProvider, provider)
 	query.Add(cmn.URLParamCheckCached, strconv.FormatBool(checkIsCached))
 	params := OptionalParams{Query: query}
 
@@ -116,10 +116,10 @@ func HeadObject(baseParams *BaseParams, bucket, bckProvider, object string, chec
 // DeleteObject API
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(baseParams *BaseParams, bucket, object, bckProvider string) error {
+func DeleteObject(baseParams *BaseParams, bucket, object, provider string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	params := OptionalParams{Query: query}
 
 	_, err := DoHTTPRequest(baseParams, path, nil, params)
@@ -233,7 +233,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 // PutObject API
 //
 // Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
-// If there is an ais bucket and cloud bucket with the same name, specify with bckProvider ("local", "cloud")
+// If there is an ais bucket and cloud bucket with the same name, specify with provider ("ais", "cloud")
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
@@ -245,7 +245,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	defer handle.Close()
 
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, args.BucketProvider)
+	query.Add(cmn.URLParamProvider, args.BucketProvider)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,

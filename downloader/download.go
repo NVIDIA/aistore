@@ -163,15 +163,15 @@ type (
 	// for a download request. These objects are used by Downloader to process
 	// the request, and are then dispatched to the correct jogger to be handled.
 	request struct {
-		action      string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
-		id          string         // id of the job task
-		regex       *regexp.Regexp // regex of descriptions to return if id is empty
-		obj         cmn.DlObj
-		bucket      string
-		bckProvider string
-		timeout     string
-		fqn         string         // fqn of the object after it has been committed
-		responseCh  chan *response // where the outcome of the request is written
+		action     string         // one of: adminAbort, adminList, adminStatus, adminRemove, taskDownload
+		id         string         // id of the job task
+		regex      *regexp.Regexp // regex of descriptions to return if id is empty
+		obj        cmn.DlObj
+		bucket     string
+		provider   string
+		timeout    string
+		fqn        string         // fqn of the object after it has been committed
+		responseCh chan *response // where the outcome of the request is written
 	}
 
 	progressReader struct {
@@ -185,7 +185,7 @@ type (
 func (req *request) String() (str string) {
 	str += fmt.Sprintf("id: %q, objname: %q, link: %q, from_cloud: %v, ", req.id, req.obj.Objname, req.obj.Link, req.obj.FromCloud)
 	if req.bucket != "" {
-		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.bckProvider)
+		str += fmt.Sprintf("bucket: %q (provider: %q), ", req.bucket, req.provider)
 	}
 
 	return "{" + strings.TrimSuffix(str, ", ") + "}"

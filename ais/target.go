@@ -327,9 +327,9 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 
 	switch apiItems[0] {
 	case cmn.AllBuckets:
-		bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+		provider := r.URL.Query().Get(cmn.URLParamProvider)
 
-		normalizedBckProvider, err := cmn.ProviderFromStr(bckProvider)
+		normalizedProvider, err := cmn.ProviderFromStr(provider)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -340,7 +340,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		if what == cmn.GetWhatBucketMetaX {
 			t.bucketsFromXattr(w, r)
 		} else {
-			t.getbucketnames(w, r, normalizedBckProvider)
+			t.getbucketnames(w, r, normalizedProvider)
 		}
 	default:
 		s := fmt.Sprintf("Invalid route /buckets/%s", apiItems[0])
@@ -380,7 +380,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName := apiItems[0], apiItems[1]
-	bckProvider := query.Get(cmn.URLParamBckProvider)
+	provider := query.Get(cmn.URLParamProvider)
 	started := time.Now()
 	if redirDelta := t.redirectLatency(started, query); redirDelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redirDelta)
@@ -391,7 +391,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom := &cluster.LOM{T: t, Objname: objName}
-	if err = lom.Init(bucket, bckProvider, config); err != nil {
+	if err = lom.Init(bucket, provider, config); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -473,7 +473,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bckProvider := query.Get(cmn.URLParamBckProvider)
+	provider := query.Get(cmn.URLParamProvider)
 	started := time.Now()
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
@@ -487,7 +487,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom := &cluster.LOM{T: t, Objname: objname}
-	if err = lom.Init(bucket, bckProvider); err != nil {
+	if err = lom.Init(bucket, provider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -515,8 +515,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
@@ -550,7 +550,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		fs.Mountpaths.EvictCloudBucket(bucket) // validation handled in proxy.go
 	case cmn.ActDelete, cmn.ActEvictObjects:
 		if len(b) > 0 { // must be a List/Range request
-			err := t.listRangeOperation(r, apitems, bckProvider, msgInt)
+			err := t.listRangeOperation(r, apitems, provider, msgInt)
 			if err != nil {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete/evict objects: %v", err))
 			} else if glog.FastV(4, glog.SmoduleAIS) {
@@ -578,7 +578,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	b, err := cmn.ReadBytes(r)
 	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -593,7 +593,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom := &cluster.LOM{T: t, Objname: objname}
-	if err = lom.Init(bucket, bckProvider); err != nil {
+	if err = lom.Init(bucket, provider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -632,11 +632,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	t.ensureLatestMD(msgInt)
 
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	if len(apiItems) == 0 {
 		switch msgInt.Action {
 		case cmn.ActSummaryBucket:
-			bck := &cluster.Bck{Name: "", Provider: bckProvider}
+			bck := &cluster.Bck{Name: "", Provider: provider}
 			if ok := t.bucketSummary(w, r, bck, msgInt); !ok {
 				return
 			}
@@ -647,7 +647,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket = apiItems[0]
-	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
@@ -656,7 +656,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msgInt.Action {
 	case cmn.ActPrefetch:
-		if err := t.listRangeOperation(r, apiItems, bckProvider, msgInt); err != nil {
+		if err := t.listRangeOperation(r, apiItems, provider, msgInt); err != nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch, err: %v", err))
 			return
 		}
@@ -739,8 +739,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
-	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
 			t.invalmsghdlr(w, r, err.Error())
@@ -834,14 +834,14 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objName = apitems[0], apitems[1]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	invalidHandler := t.invalmsghdlr
 	if silent {
 		invalidHandler = t.invalmsghdlrsilent
 	}
 
 	lom := &cluster.LOM{T: t, Objname: objName}
-	if err = lom.Init(bucket, bckProvider); err != nil {
+	if err = lom.Init(bucket, provider); err != nil {
 		invalidHandler(w, r, err.Error())
 		return
 	}
@@ -942,7 +942,7 @@ func (t *targetrunner) bucketsFromXattr(w http.ResponseWriter, r *http.Request) 
 	t.writeJSON(w, r, body, "getbucketsxattr")
 }
 
-func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bckProvider string) {
+func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {
 	var (
 		bmd         = t.bmdowner.get()
 		bucketNames = &cmn.BucketNames{
@@ -951,7 +951,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 		}
 	)
 
-	if bckProvider != cmn.Cloud {
+	if provider != cmn.Cloud {
 		for bucket := range bmd.LBmap {
 			bucketNames.AIS = append(bucketNames.AIS, bucket)
 		}
@@ -969,12 +969,12 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bc
 	t.writeJSON(w, r, body, "getbucketnames")
 }
 
-// After putting a new version it updates xattr attributes for the object
+// PUT new version and update object metadata
 // ais bucket:
-//  - if bucket versioning is enable("all" or "local") then the version is autoincremented
+//  - if bucket versioning is enabled, the version is autoincremented
 // Cloud bucket:
-//  - if the Cloud returns a new version id then save it to xattr
-// In both case a new checksum is saved to xattrs
+//  - returned version ID is the version
+// In both cases, new checksum is also generated and stored along with the new version.
 func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Time) (err error, errcode int) {
 	var (
 		header     = r.Header
@@ -1092,10 +1092,10 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 		return
 	}
 	bucket, objnameFrom := apitems[0], apitems[1]
-	bckProvider := r.URL.Query().Get(cmn.URLParamBckProvider)
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
 
 	lom := &cluster.LOM{T: t, Objname: objnameFrom}
-	if err = lom.Init(bucket, bckProvider); err != nil {
+	if err = lom.Init(bucket, provider); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}

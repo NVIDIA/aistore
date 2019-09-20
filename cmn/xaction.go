@@ -98,9 +98,7 @@ func (xact *XactBase) Kind() string     { return xact.kind }
 func (xact *XactBase) Bucket() string   { return xact.bucket }
 func (xact *XactBase) BckIsAIS() bool   { return xact.bckIsAIS }
 
-// TODO: remove `BckIsAIS` in favor of BckProvider - this requires change
-// in signature of NewXactBaseWithBucket.
-func (xact *XactBase) BckProvider() string {
+func (xact *XactBase) Provider() string {
 	if xact.bckIsAIS {
 		return AIS
 	}

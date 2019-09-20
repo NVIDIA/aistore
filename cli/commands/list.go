@@ -22,7 +22,7 @@ var (
 		),
 		subcmdListObject: append(
 			listObjectFlags,
-			bckProviderFlag,
+			providerFlag,
 		),
 		subcmdListDownload: {
 			regexFlag,
@@ -142,18 +142,18 @@ func listBckPropsHandler(c *cli.Context) (err error) {
 
 func listObjectsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		bckProvider string
-		bucket      string
+		baseParams = cliAPIParams(ClusterURL)
+		provider   string
+		bucket     string
 	)
 
 	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
 		return
 	}
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 

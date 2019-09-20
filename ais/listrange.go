@@ -33,15 +33,15 @@ const (
 )
 
 type filesWithDeadline struct {
-	ctx         context.Context
-	objnames    []string
-	bucket      string
-	bckProvider string
-	deadline    time.Time
-	done        chan struct{}
+	ctx      context.Context
+	objnames []string
+	bucket   string
+	provider string
+	deadline time.Time
+	done     chan struct{}
 }
 
-type listf func(ct context.Context, objects []string, bucket, bckProvider string, deadline time.Duration, done chan struct{}) error
+type listf func(ct context.Context, objects []string, bucket, provider string, deadline time.Duration, done chan struct{}) error
 
 func (t *targetrunner) getOpFromActionMsg(action string) listf {
 	switch action {
@@ -88,7 +88,7 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 //=============
 
 func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string,
-	bucket, bckProvider string, deadline time.Duration, done chan struct{}) error {
+	bucket, provider string, deadline time.Duration, done chan struct{}) error {
 	xdel := t.xactions.renewEvictDelete(evict)
 	defer func() {
 		if done != nil {
@@ -112,7 +112,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 			continue
 		}
 		lom := &cluster.LOM{T: t, Objname: objname}
-		err := lom.Init(bucket, bckProvider)
+		err := lom.Init(bucket, provider)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -131,14 +131,14 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	return nil
 }
 
-func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket, bckProvider string,
+func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket, provider string,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, bckProvider, deadline, done)
+	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, provider, deadline, done)
 }
 
-func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, bckProvider string,
+func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, provider string,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, bckProvider, deadline, done)
+	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, provider, deadline, done)
 }
 
 //=========
@@ -147,12 +147,12 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket, bc
 //
 //=========
 
-func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, bckProvider string) {
+func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, provider string) {
 	var (
 		vchanged, coldGet bool
 	)
 	lom := &cluster.LOM{T: t, Objname: objName}
-	err := lom.Init(bucket, bckProvider)
+	err := lom.Init(bucket, provider)
 	if err != nil {
 		glog.Error(err)
 		return
@@ -194,7 +194,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName, bucket, bck
 	}
 }
 
-func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string, bckProvider string,
+func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string, provider string,
 	deadline time.Duration, done chan struct{}) error {
 	//Validation is checked in target.go
 	var absdeadline time.Time
@@ -202,7 +202,7 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 		// 0 is no deadline - if deadline == 0, the absolute deadline is 0 time.
 		absdeadline = time.Now().Add(deadline)
 	}
-	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, bckProvider: bckProvider, deadline: absdeadline, done: done}
+	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, provider: provider, deadline: absdeadline, done: done}
 	return nil
 }
 
@@ -341,7 +341,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bckProvider string, msgInt *actionMsgInternal) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, provider string, msgInt *actionMsgInternal) error {
 	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")
@@ -358,17 +358,17 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, bck
 		if err != nil {
 			return fmt.Errorf("%v: %s", err, details)
 		}
-		return t.iterateBucketListPages(r, apitems, bckProvider, rangeMsg, operation)
+		return t.iterateBucketListPages(r, apitems, provider, rangeMsg, operation)
 	}
 	// Parse map into ListMsg
 	listMsg, err := parseListMsg(jsmap)
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, details)
 	}
-	return t.listOperation(r, apitems, bckProvider, listMsg, operation)
+	return t.listOperation(r, apitems, provider, listMsg, operation)
 }
 
-func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvider string, listMsg *cmn.ListMsg, f listf) error {
+func (t *targetrunner) listOperation(r *http.Request, apitems []string, provider string, listMsg *cmn.ListMsg, f listf) error {
 	var (
 		err    error
 		bucket = apitems[0]
@@ -401,7 +401,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 
 		// Asynchronously perform function
 		go func() {
-			err := f(t.contextWithAuth(r.Header), objs, bucket, bckProvider, listMsg.Deadline, done)
+			err := f(t.contextWithAuth(r.Header), objs, bucket, provider, listMsg.Deadline, done)
 			if err != nil {
 				glog.Errorf("Error performing list function: %v", err)
 				t.statsif.Add(stats.ErrListCount, 1)
@@ -419,7 +419,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, bckProvi
 	return err
 }
 
-func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, bckProvider string, rangeMsg *cmn.RangeMsg, operation listf) error {
+func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, provider string, rangeMsg *cmn.RangeMsg, operation listf) error {
 	var (
 		bucketListPage *cmn.BucketList
 		err            error
@@ -429,7 +429,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		msg            = &cmn.SelectMsg{Prefix: prefix, Props: cmn.GetPropsStatus}
 	)
 
-	bck := &cluster.Bck{Name: bucket, Provider: bckProvider}
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err := bck.Init(t.bmdowner); err != nil {
 		return err
 	}
@@ -477,7 +477,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 			}
 
 			// Call listrange function with paged chunk of entries
-			if err := t.listOperation(r, apitems, bckProvider, listMsg, operation); err != nil {
+			if err := t.listOperation(r, apitems, provider, listMsg, operation); err != nil {
 				return err
 			}
 		}

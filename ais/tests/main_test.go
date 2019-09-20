@@ -442,18 +442,38 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket strin
 
 func Test_bucketnames(t *testing.T) {
 	var (
-		err error
+		baseParams = tutils.DefaultBaseAPIParams(t)
+		bucket     = t.Name() + "Bucket"
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
-	buckets, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), "")
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
+
+	buckets, err := api.GetBucketNames(baseParams, "")
+	tassert.CheckError(t, err)
+
+	tutils.Logf("cloud bucket names: %s\n", strings.Join(buckets.Cloud, ", "))
 	tutils.Logf("ais bucket names:\n")
 	printBucketNames(t, buckets.AIS)
 
-	tutils.Logf("cloud bucket names:\n")
-	printBucketNames(t, buckets.Cloud)
+	for _, provider := range []string{cmn.ProviderAmazon, cmn.ProviderGoogle} {
+		cloudBuckets, err := api.GetBucketNames(baseParams, provider)
+		tassert.CheckError(t, err)
+		if len(cloudBuckets.Cloud) != len(buckets.Cloud) {
+			t.Fatalf("cloud buckets: %d != %d\n", len(cloudBuckets.Cloud), len(buckets.Cloud))
+		}
+		if len(cloudBuckets.AIS) != 0 {
+			t.Fatalf("cloud buckets contain ais: %+v\n", cloudBuckets.AIS)
+		}
+	}
+	aisBuckets, err := api.GetBucketNames(baseParams, cmn.ProviderAIS)
+	tassert.CheckError(t, err)
+	if len(aisBuckets.AIS) != len(buckets.AIS) {
+		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets.AIS), len(buckets.AIS))
+	}
+	if len(aisBuckets.Cloud) != 0 {
+		t.Fatalf("ais buckets contain cloud: %+v\n", aisBuckets.Cloud)
+	}
 }
 
 func printBucketNames(t *testing.T, bucketNames []string) {
@@ -481,8 +501,8 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	if !isCloudBucket(t, proxyURL, bucketName) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
-	queryLocal.Add(cmn.URLParamBckProvider, cmn.AIS)
-	queryCloud.Add(cmn.URLParamBckProvider, cmn.Cloud)
+	queryLocal.Add(cmn.URLParamProvider, cmn.AIS)
+	queryCloud.Add(cmn.URLParamProvider, cmn.Cloud)
 
 	putArgsLocal := api.PutObjectArgs{
 		BaseParams:     baseParams,
@@ -617,8 +637,8 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
-	queryLocal.Add(cmn.URLParamBckProvider, cmn.AIS)
-	queryCloud.Add(cmn.URLParamBckProvider, cmn.Cloud)
+	queryLocal.Add(cmn.URLParamProvider, cmn.AIS)
+	queryCloud.Add(cmn.URLParamProvider, cmn.Cloud)
 
 	tutils.CreateFreshBucket(t, proxyURL, bucketName)
 	defer tutils.DestroyBucket(t, proxyURL, bucketName)
@@ -1352,7 +1372,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	if !bProps.Mirror.Enabled {
 		t.Fatalf("Test property hasn't changed")
 	}
-	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
+	query.Add(cmn.URLParamProvider, cmn.Cloud)
 	err = api.EvictCloudBucket(tutils.DefaultBaseAPIParams(t), bucket, query)
 	tassert.CheckFatal(t, err)
 

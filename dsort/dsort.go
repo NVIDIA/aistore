@@ -152,7 +152,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			return nil
 		}
 		lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
-		if err = lom.Init(m.rs.Bucket, m.rs.BckProvider); err == nil {
+		if err = lom.Init(m.rs.Bucket, m.rs.Provider); err == nil {
 			err = lom.Load(false)
 		}
 		if err != nil {
@@ -301,14 +301,14 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		metrics     = m.Metrics.Creation
 
 		// object related variables
-		shardName   = s.Name
-		bucket      = m.rs.OutputBucket
-		bckProvider = m.rs.OutputBckProvider
+		shardName = s.Name
+		bucket    = m.rs.OutputBucket
+		provider  = m.rs.OutputProvider
 
 		errCh = make(chan error, 2)
 	)
 	lom := &cluster.LOM{T: m.ctx.t, Objname: shardName}
-	if err = lom.Init(bucket, bckProvider); err != nil {
+	if err = lom.Init(bucket, provider); err != nil {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
@@ -400,7 +400,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		hdr := transport.Header{
 			Bucket:   bucket,
 			Objname:  shardName,
-			BckIsAIS: cmn.IsProviderAIS(bckProvider),
+			BckIsAIS: cmn.IsProviderAIS(provider),
 			ObjAttrs: transport.ObjectAttrs{
 				Size:       lom.Size(),
 				CksumType:  cksumType,
@@ -794,7 +794,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			}
 
 			query := url.Values{}
-			query.Add(cmn.URLParamBckProvider, m.rs.BckProvider)
+			query.Add(cmn.URLParamProvider, m.rs.Provider)
 			reqArgs := &cmn.ReqArgs{
 				Method: http.MethodPost,
 				Base:   si.URL(cmn.NetworkIntraData),

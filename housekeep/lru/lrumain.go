@@ -69,7 +69,7 @@ type (
 		joggers         map[string]*lructx
 		mpathInfo       *fs.MountpathInfo
 		contentType     string
-		bckProvider     string
+		provider        string
 		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
@@ -109,12 +109,12 @@ func InitAndRun(ini *InitLRU) {
 		//
 		// NOTE the sequence: Cloud buckets first, ais buckets second
 		//
-		startLRUJoggers := func(bckProvider string) (aborted bool) {
+		startLRUJoggers := func(provider string) (aborted bool) {
 			joggers := make(map[string]*lructx, len(availablePaths))
 			errCh := make(chan struct{}, len(availablePaths))
 
 			for mpath, mpathInfo := range availablePaths {
-				joggers[mpath] = newlru(ini, mpathInfo, contentType, bckProvider, contentResolver, config)
+				joggers[mpath] = newlru(ini, mpathInfo, contentType, provider, contentResolver, config)
 			}
 			for _, j := range joggers {
 				wg.Add(1)
@@ -141,7 +141,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, bckProvider string, contentResolver fs.ContentResolver, config *cmn.Config) *lructx {
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, provider string, contentResolver fs.ContentResolver, config *cmn.Config) *lructx {
 	lctx := &lructx{
 		oldwork:         make([]string, 0, 64),
 		misplaced:       make([]*cluster.LOM, 0, 64),
@@ -149,7 +149,7 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType, bckProvider 
 		stopCh:          make(chan struct{}, 1),
 		mpathInfo:       mpathInfo,
 		contentType:     contentType,
-		bckProvider:     bckProvider,
+		provider:        provider,
 		contentResolver: contentResolver,
 		config:          config,
 	}

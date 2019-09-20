@@ -29,8 +29,8 @@ Puts randomly generated shards which then can be used for dSort testing.
 
 
 #### Examples:
-* `ais dsort gen --fsize 262144 --fcount 100` generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. 
-* `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`. 
+* `ais dsort gen --fsize 262144 --fcount 100` generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
+* `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`.
 
 
 ### start
@@ -47,9 +47,9 @@ table describes json keys which can be used in specification.
 | `input_format` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `bucket` | `string` | bucket where shards objects are stored | yes | |
-| `bprovider` | `string` | describes if the bucket is local or cloud | no | `"local"` |
-| `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` field |
-| `output_bprovider` | `string` | describes if the output bucket is local or cloud | no | same as `bpovider` field |
+| `provider` | `string` | Cloud provider (ais or cloudi) | no | `"ais"` |
+| `output_bucket` | `string` | bucket where new output shards will be saved | no | same as `bucket` |
+| `output_provider` | `string` | determines whether the output bucket is ais or cloud | no | same as `provider` |
 | `description` | `string` | description of dsort job | no | `""` |
 | `output_shard_size` | `string` | size (in bytes) of the output shard, can be in form of raw numbers `10240` or suffixed `10KB` | yes | |
 | `algorithm.kind` | `string` | determines which algorithm should be during dSort job, available are: `"alphanumeric"`, `"shuffle"`, `"content"` | no | `"alphanumeric"` |

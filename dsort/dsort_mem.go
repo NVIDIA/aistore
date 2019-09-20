@@ -489,7 +489,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	)
 	fullContentPath := ds.m.recManager.FullContentPath(obj)
 	lom := &cluster.LOM{T: ds.m.ctx.t, Objname: fullContentPath}
-	if err = lom.Init(ds.m.rs.OutputBucket, ds.m.rs.OutputBckProvider); err != nil {
+	if err = lom.Init(ds.m.rs.OutputBucket, ds.m.rs.OutputProvider); err != nil {
 		return
 	}
 	ds.creationPhase.adjuster.read.acquireSema(lom.ParsedFQN.MpathInfo)

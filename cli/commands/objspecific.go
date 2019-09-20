@@ -23,21 +23,21 @@ var (
 	objectSpecificCmdsFlags = map[string][]cli.Flag{
 		commandPrefetch: append(
 			baseLstRngFlags,
-			bckProviderFlag,
+			providerFlag,
 		),
 		commandEvict: append(
 			baseLstRngFlags,
-			bckProviderFlag,
+			providerFlag,
 		),
 		commandGet: {
-			bckProviderFlag,
+			providerFlag,
 			offsetFlag,
 			lengthFlag,
 			checksumFlag,
 			isCachedFlag,
 		},
 		commandPut: {
-			bckProviderFlag,
+			providerFlag,
 			recursiveFlag,
 			baseFlag,
 			concurrencyFlag,
@@ -85,12 +85,12 @@ var (
 
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		bucket      string
-		bckProvider string
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     string
+		provider   string
 	)
 
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
 
@@ -108,7 +108,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
-		return listOrRangeOp(c, baseParams, commandPrefetch, bucket, bckProvider)
+		return listOrRangeOp(c, baseParams, commandPrefetch, bucket, provider)
 	}
 
 	return missingArgumentsError(c, "object list or range")
@@ -116,12 +116,12 @@ func prefetchHandler(c *cli.Context) (err error) {
 
 func evictHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		bucket      string
-		bckProvider string
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     string
+		provider   string
 	)
 
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
 
@@ -138,7 +138,7 @@ func evictHandler(c *cli.Context) (err error) {
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
-			return listOrRangeOp(c, baseParams, commandEvict, bucket, bckProvider)
+			return listOrRangeOp(c, baseParams, commandEvict, bucket, provider)
 		}
 
 		// operation on a given bucket
@@ -152,7 +152,7 @@ func evictHandler(c *cli.Context) (err error) {
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
-	return multiObjOp(c, baseParams, commandEvict, bckProvider)
+	return multiObjOp(c, baseParams, commandEvict, provider)
 }
 
 func getHandler(c *cli.Context) (err error) {
@@ -160,7 +160,7 @@ func getHandler(c *cli.Context) (err error) {
 		baseParams  = cliAPIParams(ClusterURL)
 		fullObjName = c.Args().Get(0) // empty string if arg not given
 		outFile     = c.Args().Get(1) // empty string if arg not given
-		bckProvider string
+		provider    string
 		bucket      string
 		object      string
 	)
@@ -171,7 +171,7 @@ func getHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
 		return missingArgumentsError(c, "output file")
 	}
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
 	bucket, object = splitBucketObject(fullObjName)
@@ -184,11 +184,11 @@ func getHandler(c *cli.Context) (err error) {
 	if bucket == "" {
 		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
 	}
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 
-	return getObject(c, baseParams, bucket, bckProvider, object, outFile)
+	return getObject(c, baseParams, bucket, provider, object, outFile)
 }
 
 func putHandler(c *cli.Context) (err error) {
@@ -196,7 +196,7 @@ func putHandler(c *cli.Context) (err error) {
 		baseParams  = cliAPIParams(ClusterURL)
 		fileName    = c.Args().Get(0)
 		fullObjName = c.Args().Get(1)
-		bckProvider string
+		provider    string
 		bucket      string
 		objName     string
 	)
@@ -207,7 +207,7 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in format bucket/[object]")
 	}
-	if bckProvider, err = bucketProvider(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
 	bucket, objName = splitBucketObject(fullObjName)
@@ -217,17 +217,17 @@ func putHandler(c *cli.Context) (err error) {
 			return incorrectUsageError(c, fmt.Errorf("no bucket specified in '%s'", fullObjName))
 		}
 	}
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 
-	return putObject(c, baseParams, bucket, bckProvider, objName, fileName)
+	return putObject(c, baseParams, bucket, provider, objName, fileName)
 }
 
-func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, object, outFile string) (err error) {
+func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object, outFile string) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
-		return objectCheckCached(c, baseParams, bucket, bckProvider, object)
+		return objectCheckCached(c, baseParams, bucket, provider, object)
 	}
 
 	var (
@@ -249,7 +249,7 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, 
 		return
 	}
 
-	query.Add(cmn.URLParamBckProvider, bckProvider)
+	query.Add(cmn.URLParamProvider, provider)
 	query.Add(cmn.URLParamOffset, offset)
 	query.Add(cmn.URLParamLength, length)
 
@@ -282,7 +282,7 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, 
 	return
 }
 
-func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, objName, fileName string) (err error) {
+func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
 	path := cmn.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return
@@ -306,7 +306,7 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, 
 		putArgs := api.PutObjectArgs{
 			BaseParams:     baseParams,
 			Bucket:         bucket,
-			BucketProvider: bckProvider,
+			BucketProvider: provider,
 			Object:         objName,
 			Reader:         fh,
 		}
@@ -365,7 +365,7 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider, 
 	numWorkers := parseIntFlag(c, concurrencyFlag)
 	params := uploadParams{
 		bucket:    bucket,
-		provider:  bckProvider,
+		provider:  provider,
 		files:     files,
 		workerCnt: numWorkers,
 		refresh:   refresh,

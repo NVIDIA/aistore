@@ -184,7 +184,7 @@ func (d *dispatcher) checkAborted() bool {
 
 func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LOM, error) {
 	lom := &cluster.LOM{T: d.parent.t, Objname: obj.Objname}
-	err := lom.Init(job.Bucket(), job.BckProvider())
+	err := lom.Init(job.Bucket(), job.Provider())
 	if err == nil {
 		err = lom.Load()
 	}
@@ -211,12 +211,12 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 	t := &singleObjectTask{
 		parent: d.parent,
 		request: &request{
-			action:      taskDownload,
-			id:          job.ID(),
-			obj:         obj,
-			bucket:      job.Bucket(),
-			bckProvider: job.BckProvider(),
-			timeout:     job.Timeout(),
+			action:   taskDownload,
+			id:       job.ID(),
+			obj:      obj,
+			bucket:   job.Bucket(),
+			provider: job.Provider(),
+			timeout:  job.Timeout(),
 		},
 		finishedCh: make(chan error, 1),
 	}

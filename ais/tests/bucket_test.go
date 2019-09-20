@@ -185,7 +185,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 	tutils.Logf("Reading bucket %q objects\n", bucket)
 	msg := &cmn.SelectMsg{Prefix: objectDir, Props: cmn.GetPropsVersion}
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
+	query.Add(cmn.URLParamProvider, cmn.Cloud)
 	bckObjs, err := api.ListBucket(baseParams, bucket, msg, 0, query)
 	tassert.CheckError(t, err)
 
@@ -461,7 +461,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		baseParams = tutils.DefaultBaseAPIParams(t)
 		query      = url.Values{}
 	)
-	query.Set(cmn.URLParamBckProvider, "cloud")
+	query.Set(cmn.URLParamProvider, cmn.Cloud)
 
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
@@ -489,7 +489,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 		bucketProps = defaultBucketProps()
 		query       = url.Values{}
 	)
-	query.Set(cmn.URLParamBckProvider, "cloud")
+	query.Set(cmn.URLParamProvider, cmn.Cloud)
 
 	bucket, err := tutils.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
 	tassert.CheckFatal(t, err)
@@ -685,7 +685,7 @@ func TestCloudMirror(t *testing.T) {
 
 	// evict
 	query := make(url.Values)
-	query.Add(cmn.URLParamBckProvider, cmn.Cloud)
+	query.Add(cmn.URLParamProvider, cmn.Cloud)
 	err := api.EvictCloudBucket(baseParams, clibucket, query)
 	tassert.CheckFatal(t, err)
 

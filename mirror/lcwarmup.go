@@ -25,8 +25,8 @@ type (
 // public methods
 //
 
-func NewXactLLC(t cluster.Target, id int64, bucket, bckProvider string) *XactBckLoadLomCache {
-	bckIsAIS := bckProvider == "" || cmn.IsProviderAIS(bckProvider)
+func NewXactLLC(t cluster.Target, id int64, bucket, provider string) *XactBckLoadLomCache {
+	bckIsAIS := provider == "" || cmn.IsProviderAIS(provider)
 	return &XactBckLoadLomCache{xactBckBase: *newXactBckBase(id, cmn.ActLoadLomCache, bucket, t, bckIsAIS)}
 }
 
@@ -50,7 +50,7 @@ func (r *XactBckLoadLomCache) init() (numjs int, err error) {
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
 		xwarmJogger := newXwarmJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckProvider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = xwarmJogger
 		go xwarmJogger.jog()
 	}

@@ -3,7 +3,7 @@
    - [Examples](#examples)
    - [Command-line options](#command-line-options)
    - [Cluster Under Test](#cluster-under-test)
-   - [Local vs Cloud-based bucket](#local-vs-cloud-based-bucket)
+   - [AIS vs Cloud-based bucket](#ais-vs-cloud-based-bucket)
    - [Duration](#duration)
    - [Write vs Read](#write-vs-read)
    - [Read range](#read-range)
@@ -34,27 +34,27 @@ For the most recently updated command-line options and examples, please run `ais
 
 2. Time-based 100% PUT into ais bucket. Upon exit the bucket is emptied (by default):
 ```shell
-# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -bckprovider=local
+# aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
 ```
 
 3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 ```shell
-aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -bckprovider=cloud -cleanup=false
+aisloader -bucket=nvaws -duration 1h -numworkers=30 -pctput=0 -provider=cloud -cleanup=false
 ```
 
 4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup is not disabled, which means that upon completion all generated objects will be deleted:
 ```shell
-# aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -bckprovider=cloud -totalputsize=10G
+# aisloader -bucket=nvaws -duration 0s -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -provider=cloud -totalputsize=10G
 ```
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 ```shell
-# aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -bckprovider=local
+# aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
 ```
 
 6. 100% GET from an ais bucket:
 ```shell
-# aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -bckprovider=local
+# aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
 ```
 
 7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid}):
@@ -91,7 +91,7 @@ For the most recently updated command-line options and examples, please run `ais
 | Command-line option | Description |
 | --- | --- |
 | -batchsize | Batch size to list and delete (default 100) |
-| -bckprovider | local - for ais bucket, cloud - for Cloud based bucket (default "local") |
+| -provider | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively (default "ais") |
 | -bprops | JSON string formatted as per the SetBucketPropsMsg API and containing bucket properties to apply |
 | -bucket | Bucket name (default "nvais") |
 | -check-statsd | true: prior to benchmark make sure that StatsD is reachable |
@@ -146,9 +146,9 @@ GMem2: free memory 7.24GiB > 80% total
 Nothing to read, bucket is empty
 ```
 
-### Local vs Cloud-based bucket
+### AIS vs Cloud-based bucket
 
-In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-local' to select between ais bucket (`-local=true`) or Cloud-based one (`-local=false`).
+In the example above, the "nothing to read" indicates that `aistore` requires a bucket to operate upon. Use the switch '-ais' to select between ais bucket (`-ais=true`) or Cloud-based one (`-ais=false`).
 
 > Terminology: the term *ais bucket* simply means that the bucket in question does **not** cache (or tier) 3rd party Cloud and is not backed by the namesake Cloud bucket. AIS buckets are distributed across the entire AIS cluster. All the [supported storage services](/docs/storage_svcs.md) equally apply to both sorts of buckets.
 
@@ -158,7 +158,7 @@ Further, the name of the bucket is set via the option `-bucket=<bucket name>`.
 For instance:
 
 ```
-$ aisloader -ip=example.com -port=8080 -bucket=abc -local=true
+$ aisloader -ip=example.com -port=8080 -bucket=abc -provider=ais
 ```
 
 ### Duration
@@ -170,7 +170,7 @@ If both options are provided the test finishes on the whatever-comes-first basis
 Example 100% write into the bucket "abc" for 2 hours:
 
 ```shell
-$ aisloader -bucket=abc -local=true -duration 2h -totalputsize=4000000 -pctput=100
+$ aisloader -bucket=abc -provider=ais -duration 2h -totalputsize=4000000 -pctput=100
 ```
 
 The above will run for two hours or until it writes around 4GB data into the bucket, whatever comes first.

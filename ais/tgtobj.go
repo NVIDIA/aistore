@@ -489,7 +489,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 
 func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromBool(lom.IsAIS()))
+	query.Add(cmn.URLParamProvider, cmn.ProviderFromBool(lom.IsAIS()))
 	query.Add(cmn.URLParamIsGFNRequest, "true")
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodGet,

@@ -100,12 +100,12 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			bckIsAIS, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.bckProvider)
+			bckIsAIS, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.provider)
 			if bckIsAIS {
 				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bucket)
 			} else {
 				for _, objname := range fwd.objnames {
-					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.bckProvider)
+					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.provider)
 				}
 			}
 			// Signal completion of prefetch

@@ -33,7 +33,7 @@ const (
 
 var (
 	baseBucketFlags = []cli.Flag{
-		bckProviderFlag,
+		providerFlag,
 	}
 
 	listObjectFlags = []cli.Flag{
@@ -56,7 +56,7 @@ var (
 		bucketCreate: {},
 		propsList: {
 			regexFlag,
-			bckProviderFlag,
+			providerFlag,
 			noHeaderFlag,
 		},
 		bucketDestroy:    {},
@@ -344,7 +344,7 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 
 // Evict a cloud bucket
 func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	query := url.Values{cmn.URLParamBckProvider: []string{cmn.Cloud}}
+	query := url.Values{cmn.URLParamProvider: []string{cmn.Cloud}}
 	if err = api.EvictCloudBucket(baseParams, bucket, query); err != nil {
 		return
 	}
@@ -364,15 +364,15 @@ func listBucketNamesForProvider(c *cli.Context, baseParams *api.BaseParams, prov
 
 // Lists bucket names
 func listBucketNames(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return
 	}
-	bucketNames, err := api.GetBucketNames(baseParams, bckProvider)
+	bucketNames, err := api.GetBucketNames(baseParams, provider)
 	if err != nil {
 		return
 	}
-	printBucketNames(c, bucketNames, parseStrFlag(c, regexFlag), bckProvider, !flagIsSet(c, noHeaderFlag))
+	printBucketNames(c, bucketNames, parseStrFlag(c, regexFlag), provider, !flagIsSet(c, noHeaderFlag))
 	return
 }
 
@@ -398,7 +398,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	}
 
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, parseStrFlag(c, bckProviderFlag))
+	query.Add(cmn.URLParamProvider, parseStrFlag(c, providerFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
 
 	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
@@ -483,22 +483,22 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 
 // show bucket statistics
 func summaryBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return err
 	}
 
 	// make new function to capture arguments
 	fStats := func() error {
-		return summaryBucketSync(c, baseParams, bucket, bckProvider)
+		return summaryBucketSync(c, baseParams, bucket, provider)
 	}
 	return cmn.WaitForFunc(fStats, longCommandTime)
 
 }
 
 // show bucket statistics
-func summaryBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket, bckProvider string) error {
-	summary, err := api.GetBucketsSummaries(baseParams, bucket, bckProvider, nil)
+func summaryBucketSync(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
+	summary, err := api.GetBucketsSummaries(baseParams, bucket, provider, nil)
 	if err != nil {
 		return err
 	}
@@ -544,7 +544,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		propsArgs = c.Args().Tail()
 		bucket    = c.Args().First()
 	)
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return
 	}
@@ -563,7 +563,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return missingArgumentsError(c, "property key-value pairs")
 	}
 
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 
@@ -573,7 +573,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return
 	}
 
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	if err = reformatBucketProps(baseParams, bucket, query, nvs); err != nil {
 		return
 	}
@@ -589,7 +589,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 	if err != nil {
 		return err
 	}
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return err
 	}
@@ -600,7 +600,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 		return err
 	}
 
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	if err := api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
 		return err
 	}
@@ -616,12 +616,12 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return err
 	}
 
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return
 	}
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 
@@ -640,11 +640,11 @@ func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		return err
 	}
 
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return
 	}
-	query := url.Values{cmn.URLParamBckProvider: []string{bckProvider}}
+	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	bckProps, err := api.HeadBucket(baseParams, bucket, query)
 	if err != nil {
 		return
@@ -679,14 +679,14 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps) error {
 
 // Configure bucket as n-way mirror
 func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
-	bckProvider, err := cmn.ProviderFromStr(parseStrFlag(c, bckProviderFlag))
+	provider, err := cmn.ProviderFromStr(parseStrFlag(c, providerFlag))
 	if err != nil {
 		return
 	}
 	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
 		return
 	}
-	if err = canReachBucket(baseParams, bucket, bckProvider); err != nil {
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
 	}
 	copies := c.Int(copiesFlag.Name)
@@ -727,9 +727,9 @@ func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err er
 	return bucket, newBucket, nil
 }
 
-func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, bckProvider string, showHeaders bool) {
-	isBckLocal := cmn.IsProviderAIS(bckProvider)
-	if isBckLocal || bckProvider == "" {
+func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provider string, showHeaders bool) {
+	isBckLocal := cmn.IsProviderAIS(provider)
+	if isBckLocal || provider == "" {
 		aisBuckets := regexFilter(regex, bucketNames.AIS)
 		sort.Strings(aisBuckets) // sort by name
 		if showHeaders {

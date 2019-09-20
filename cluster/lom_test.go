@@ -108,7 +108,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.AIS))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpath))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -129,7 +129,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeTrue())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.AIS))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpath))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketLocalA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -165,7 +165,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.Cloud))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpath))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -185,7 +185,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.IsAIS()).To(BeFalse())
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.Cloud))
+				Expect(lom.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
 				Expect(lom.ParsedFQN.MpathInfo.Path).To(BeEquivalentTo(mpath))
 				Expect(lom.ParsedFQN.Bucket).To(BeEquivalentTo(bucketCloudA))
 				Expect(lom.ParsedFQN.ObjName).To(BeEquivalentTo(testObject))
@@ -640,7 +640,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomEmpty.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomEmpty.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomEmpty.IsAIS()).To(BeTrue())
-			Expect(lomEmpty.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.AIS))
+			Expect(lomEmpty.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 			Expect(lomEmpty.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
 			Expect(lomEmpty.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomEmpty.ParsedFQN.ObjName).To(Equal(testObject))
@@ -654,7 +654,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomLocal.IsAIS()).To(BeTrue())
-			Expect(lomLocal.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.AIS))
+			Expect(lomLocal.ParsedFQN.Provider).To(BeEquivalentTo(cmn.AIS))
 			Expect(lomLocal.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
 			Expect(lomLocal.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomLocal.ParsedFQN.ObjName).To(Equal(testObject))
@@ -668,7 +668,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(cluster.Bo2Uname(sameBucketName, testObject)))
 			Expect(lomCloud.IsAIS()).To(BeFalse())
-			Expect(lomCloud.ParsedFQN.BckProvider).To(BeEquivalentTo(cmn.Cloud))
+			Expect(lomCloud.ParsedFQN.Provider).To(BeEquivalentTo(cmn.Cloud))
 			Expect(lomCloud.ParsedFQN.MpathInfo.Path).To(Equal(mpath))
 			Expect(lomCloud.ParsedFQN.Bucket).To(Equal(sameBucketName))
 			Expect(lomCloud.ParsedFQN.ObjName).To(Equal(testObject))

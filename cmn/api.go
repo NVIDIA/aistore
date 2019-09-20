@@ -222,12 +222,10 @@ type BucketProps struct {
 	// Otherwise, it must be "aws" or "gcp".
 	CloudProvider string `json:"cloud_provider,omitempty"`
 
-	// Versioning defines what kind of buckets should use versioning to
-	// detect if the object must be redownloaded.
-	// Values: "all", "cloud", "local" or "none".
+	// Versioning can be enabled or disabled on a per-bucket basis
 	Versioning VersionConf `json:"versioning,omitempty"`
 
-	// tier location and tier/cloud policies
+	// Tier location and tier/cloud policies
 	Tiering TierConf `json:"tier,omitempty"`
 
 	// Cksum is the embedded struct of the same name

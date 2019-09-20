@@ -104,7 +104,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 
 	// PUT object into different target
 	query := url.Values{}
-	query.Add(cmn.URLParamBckProvider, cmn.ProviderFromBool(lom.IsAIS()))
+	query.Add(cmn.URLParamProvider, cmn.ProviderFromBool(lom.IsAIS()))
 	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.DaemonID)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,

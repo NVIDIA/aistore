@@ -93,7 +93,7 @@ func (r *XactBckMakeNCopies) init() (numjs int, err error) {
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
 		mncJogger := newMncJogger(r, mpathInfo, config)
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.BckProvider())
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = mncJogger
 	}
 	for _, mpather := range r.mpathers {

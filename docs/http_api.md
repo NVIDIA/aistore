@@ -75,11 +75,11 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' 'http://G-primary/v1/cluster'` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance", "value": "start"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance", "value": "start"}' 'http://G/v1/cluster'` |
 | Abort global (automated or manually started) rebalance (proxy) | PUT {"action": "rebalance", "value": "abort"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance", "value": "abort"}' 'http://G/v1/cluster'` |
-| Create local [bucket](bucket.md) (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
-| Destroy local [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
-| Rename local [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
+| Create ais [bucket](bucket.md) (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' 'http://G/v1/buckets/abc'` |
+| Destroy ais [bucket](bucket.md) (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' 'http://G/v1/buckets/abc'` |
+| Rename ais [bucket](bucket.md) (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' 'http://G/v1/buckets/oldname'` |
 | Recover buckets [bucket](bucket.md) (proxy) | POST {"action": "recoverbck"} /v1/buckets?force=true | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "recoverbck"}' 'http://G/v1/buckets'` |
-| Rename/move object (ais buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mylocalbucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
+| Rename/move object (ais buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' 'http://G/v1/objects/mybucket/dir1/CCCCCC'` <sup id="a3">[3](#ft3)</sup> |
 | Check if an object *is cached*  | HEAD /v1/objects/bucket-name/object-name | `curl -L --head 'http://G/v1/objects/mybucket/myobject?check_cached=true'` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject' -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?offset=1024&length=512' -o myobject` |
@@ -125,13 +125,13 @@ ___
 
 ### Bucket Provider
 
-Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, a local one, that happen to share the same name? To resolve the potential naming conflict, AIS supports user-specified *bucket provider*.
+Any storage bucket that AIS handles may originate in a 3rd party Cloud, or be created (and subsequently filled-in) in the AIS itself. But what if there's a pair of buckets, a Cloud-based and, separately, an AIS bucket that happen to share the same name? To resolve the potential naming conflict, AIS supports user-specified *Cloud provider* or, simply, *provider*.
 
-> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `local` and `ais` for ais buckets, and `cloud`, `aws`, `gcp` for cloud buckets.
+> Bucket provider is realized as an optional parameter in the GET, PUT, DELETE and [Range/List](batch.md) operations with supported enumerated values: `ais` - for AIS buckets, and `cloud`, `aws`, or `gcp` - for Cloud buckets.
 
-In all those cases users can add an optional `?bprovider=local` or `?bprovider=cloud` query to the GET (PUT, DELETE, List/Range) request.
+In all those cases users can add an optional `?provider=ais` or `?provider=cloud` query to the GET (PUT, DELETE, List/Range) request.
 
-Example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?bprovider=local'`
+Example: `curl -L -X GET 'http://G/v1/objects/myS3bucket/myobject?provider=ais'`
 
 #### Supported APIs for Bucket Provider
 

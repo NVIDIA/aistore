@@ -170,23 +170,23 @@ func (mi *MountpathInfo) String() string {
 }
 
 // returns top directory for a given content-type
-func (mi *MountpathInfo) MakePath(contentType, bckProvider string) (fqn string) {
-	switch bckProvider {
+func (mi *MountpathInfo) MakePath(contentType, provider string) (fqn string) {
+	switch provider {
 	case cmn.AIS:
 		fqn = filepath.Join(mi.Path, contentType, aisPath)
 	case cmn.Cloud, cmn.ProviderAmazon, cmn.ProviderGoogle:
 		fqn = filepath.Join(mi.Path, contentType, cloudPath)
 	default:
-		cmn.AssertMsg(false, fmt.Sprintf("tried to MakePath with unknown bckProvider: %s", bckProvider))
+		cmn.AssertMsg(false, fmt.Sprintf("tried to MakePath with unknown provider: %s", provider))
 	}
 	return
 }
 
-func (mi *MountpathInfo) MakePathBucket(contentType, bucket, bckProvider string) string {
-	return filepath.Join(mi.MakePath(contentType, bckProvider), bucket)
+func (mi *MountpathInfo) MakePathBucket(contentType, bucket, provider string) string {
+	return filepath.Join(mi.MakePath(contentType, provider), bucket)
 }
-func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, bckProvider, objName string) string {
-	return filepath.Join(mi.MakePath(contentType, bckProvider), bucket, objName)
+func (mi *MountpathInfo) MakePathBucketObject(contentType, bucket, provider, objName string) string {
+	return filepath.Join(mi.MakePath(contentType, provider), bucket, objName)
 }
 
 //
@@ -506,23 +506,23 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 
 // NOTE: caller is responsible to serialize per bucket
 //
-// FIXME: currently we cannot use *cluster.Bck to pass bucketName and bckProvider
+// FIXME: currently we cannot use *cluster.Bck to pass bucketName and provider
 // because there is a import cycle: "cluster -> fs -> cluster"
-func (mfs *MountedFS) CreateBucketDirs(bucketName, bckProvider string, destroyUponRet bool) (err error) {
+func (mfs *MountedFS) CreateBucketDirs(bucketName, provider string, destroyUponRet bool) (err error) {
 	availablePaths, _ := mfs.Get()
 	created := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		bdir := mpathInfo.MakePathBucket(ObjectType, bucketName, bckProvider)
+		bdir := mpathInfo.MakePathBucket(ObjectType, bucketName, provider)
 		if _, err = os.Stat(bdir); err == nil {
 			if isDirEmpty(bdir) {
 				created = append(created, bdir)
 				continue
 			}
-			err = fmt.Errorf("bucket %s (provider: %s): directory %s already exists", bucketName, bckProvider, bdir)
+			err = fmt.Errorf("bucket %s (provider: %s): directory %s already exists", bucketName, provider, bdir)
 			break
 		}
 		if err = cmn.CreateDir(bdir); err != nil {
-			err = fmt.Errorf("bucket %s (provider: %s): failed to create directory %s: %v", bucketName, bckProvider, bdir, err)
+			err = fmt.Errorf("bucket %s (provider: %s): failed to create directory %s: %v", bucketName, provider, bdir, err)
 			break
 		}
 		created = append(created, bdir)
@@ -540,12 +540,12 @@ func (mfs *MountedFS) CreateBucketDirs(bucketName, bckProvider string, destroyUp
 	return
 }
 
-func (mfs *MountedFS) RenameBucketDirs(bucketFrom, bucketTo, bckProvider string) (err error) {
+func (mfs *MountedFS) RenameBucketDirs(bucketFrom, bucketTo, provider string) (err error) {
 	availablePaths, _ := mfs.Get()
 	renamed := make([]*MountpathInfo, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		from := mpathInfo.MakePathBucket(ObjectType, bucketFrom, bckProvider)
-		to := mpathInfo.MakePathBucket(ObjectType, bucketTo, bckProvider)
+		from := mpathInfo.MakePathBucket(ObjectType, bucketFrom, provider)
+		to := mpathInfo.MakePathBucket(ObjectType, bucketTo, provider)
 		if err = os.Rename(from, to); err != nil {
 			break
 		}
@@ -555,8 +555,8 @@ func (mfs *MountedFS) RenameBucketDirs(bucketFrom, bucketTo, bckProvider string)
 		return
 	}
 	for _, mpathInfo := range renamed {
-		from := mpathInfo.MakePathBucket(ObjectType, bucketTo, bckProvider)
-		to := mpathInfo.MakePathBucket(ObjectType, bucketFrom, bckProvider)
+		from := mpathInfo.MakePathBucket(ObjectType, bucketTo, provider)
+		to := mpathInfo.MakePathBucket(ObjectType, bucketFrom, provider)
 		if erd := os.Rename(from, to); erd != nil {
 			glog.Error(erd)
 		}
@@ -574,7 +574,7 @@ func (mfs *MountedFS) updatePaths(available, disabled MPI) {
 	mfs.xattrMpath.Store(unsafe.Pointer(nil))
 }
 
-func (mfs *MountedFS) createDestroyBuckets(create bool, bckProvider, passMsg, failMsg string, buckets ...string) {
+func (mfs *MountedFS) createDestroyBuckets(create bool, provider, passMsg, failMsg string, buckets ...string) {
 	var (
 		contentTypes      = CSM.RegisteredContentTypes
 		availablePaths, _ = mfs.Get()
@@ -589,7 +589,7 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, bckProvider, passMsg, fa
 			}
 			for _, bucket := range buckets {
 				for contentType := range contentTypes {
-					dir := mi.MakePathBucket(contentType, bucket, bckProvider)
+					dir := mi.MakePathBucket(contentType, bucket, provider)
 					if !create {
 						if _, err := os.Stat(dir); os.IsNotExist(err) {
 							continue
