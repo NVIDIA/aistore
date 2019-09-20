@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/bench/aisloader/stats"
@@ -38,11 +39,11 @@ var examples = `
 
 5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
-	$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=local
+	$ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
 
 6. 100% GET from an ais bucket:
 
-	$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=local
+	$ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais
 
 7. PUT 2000 objects named as 'aisloader/hex({0..2000}{loaderid})':
 
@@ -112,7 +113,21 @@ func prettySpeed(n int64) string {
 
 // prettyDuration converts an integer representing a time in nano second to a string
 func prettyDuration(t int64) string {
-	return time.Duration(t).String()
+	d := time.Duration(t).String()
+	i := strings.Index(d, ".")
+	if i < 0 {
+		return d
+	}
+	out := make([]byte, i+1, 32)
+	copy(out, d[0:i+1])
+	for j := i + 1; j < len(d); j++ {
+		if d[j] > '9' || d[j] < '0' {
+			out = append(out, d[j])
+		} else if j < i+4 {
+			out = append(out, d[j])
+		}
+	}
+	return string(out)
 }
 
 // prettyLatency combines three latency min, avg and max into a string
