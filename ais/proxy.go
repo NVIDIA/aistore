@@ -39,6 +39,7 @@ const (
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
+	fmtBckExists  = "bucket %s already exists"
 	guestError    = "guest account does not have permissions for the operation"
 )
 
@@ -723,7 +724,7 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*buck
 
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
-	const fmtErr = "cannot %s: invalid provider %s"
+	const fmtErr = "cannot %s: invalid provider %q"
 	var (
 		msg cmn.ActionMsg
 	)
@@ -755,7 +756,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			msgInt := p.newActionMsgInternal(&msg, nil, bmd)
 			p.metasyncer.sync(false, revspair{bmd, msgInt})
 		case cmn.ActSummaryBucket:
-			p.bucketSummary(w, r, "", provider, msg)
+			bck := &cluster.Bck{Name: "", Provider: provider}
+			p.bucketSummary(w, r, bck, msg)
 		default:
 			p.invalmsghdlr(w, r, "URL path is too short: expecting bucket name")
 		}
@@ -806,13 +808,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		if !bck.IsAIS() {
+		if msg.Action == cmn.ActRenameLB && !bck.IsAIS() {
 			p.invalmsghdlr(w, r, fmt.Sprintf(fmtErr, msg.Action, bck.Provider))
 			return
 		}
-		bucketFrom, bucketTo := bucket, msg.Name
-		if bucketFrom == bucketTo {
-			s := fmt.Sprintf("invalid %s request: duplicate bucket name %q", msg.Action, bucketFrom)
+		bckFrom, bucketTo := bck, msg.Name
+		if bucket == bucketTo {
+			s := fmt.Sprintf("cannot %q: duplicate bucket name %q", msg.Action, bucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -820,7 +822,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		if err := p.copyRenameLB(bucketFrom, bucketTo, &msg, config); err != nil {
+		if err := p.copyRenameLB(bckFrom, bucketTo, &msg, config); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -848,7 +850,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		p.listBucketAndCollectStats(w, r, bck, msg, started, false /* fast listing */)
 	case cmn.ActSummaryBucket:
-		p.bucketSummary(w, r, bucket, provider, msg)
+		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
 		p.makeNCopies(w, r, bck, &msg, config)
 	default:
@@ -925,14 +927,14 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bucket, provider string, amsg cmn.ActionMsg) {
+// bucket == "": all buckets for a given provider
+func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg) {
 	var (
 		taskID    int64
 		err       error
 		summaries cmn.BucketsSummaries
 		smsg      = cmn.SelectMsg{}
 	)
-
 	listMsgJSON := cmn.MustMarshal(amsg.Value)
 	if err := jsoniter.Unmarshal(listMsgJSON, &smsg); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -950,7 +952,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, buck
 	}
 
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
-	if summaries, taskID, err = p.gatherBucketSummary(bucket, provider, smsg, headerID); err != nil {
+	if summaries, taskID, err = p.gatherBucketSummary(bck, smsg, headerID); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -967,7 +969,7 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, buck
 	p.writeJSON(w, r, b, "bucket_summary")
 }
 
-func (p *proxyrunner) gatherBucketSummary(bucket, provider string, msg cmn.SelectMsg, headerID string) (summaries cmn.BucketsSummaries, code int64, err error) {
+func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, headerID string) (summaries cmn.BucketsSummaries, code int64, err error) {
 	var (
 		cfg        = cmn.GCO.Get()
 		smap       = p.smapowner.get()
@@ -981,9 +983,9 @@ func (p *proxyrunner) gatherBucketSummary(bucket, provider string, msg cmn.Selec
 		return nil, 0, err
 	}
 
-	q.Add(cmn.URLParamProvider, provider)
+	q.Add(cmn.URLParamProvider, bck.Provider)
 
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, nil, nil)
 	msgBytes := cmn.MustMarshal(msgInt)
 	results := p.broadcastTo(
@@ -1011,7 +1013,7 @@ func (p *proxyrunner) gatherBucketSummary(bucket, provider string, msg cmn.Selec
 	// all targets are ready, prepare the final result
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
-	q.Add(cmn.URLParamProvider, provider)
+	q.Add(cmn.URLParamProvider, bck.Provider)
 	q.Set(cmn.URLParamSilent, "true")
 	results = p.broadcastTo(
 		urlPath,
@@ -1502,36 +1504,32 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
-	const fmtExists = "destination bucket %s already exists"
-	smap := p.smapowner.get()
-	bmd := p.bmdowner.get().clone()
-	tout := config.Timeout.Default
-
-	bprops, ok := bmd.Get(bucketFrom, true)
-	if !ok {
-		return cmn.NewErrorBucketDoesNotExist(bucketFrom)
-	}
-	if _, ok = bmd.Get(bucketTo, true); ok {
+func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
+	var (
+		smap = p.smapowner.get()
+		bmd  = p.bmdowner.get()
+		tout = config.Timeout.Default
+	)
+	if _, ok := bmd.Get(bucketTo, true); ok {
 		if msg.Action == cmn.ActRenameLB {
-			s := fmt.Sprintf(fmtExists, bucketTo)
-			return fmt.Errorf("%s, cannot rename %s => %s", s, bucketFrom, bucketTo)
+			s := fmt.Sprintf(fmtBckExists, bucketTo)
+			return fmt.Errorf("%s, cannot %s %s => %s", s, msg.Action, bckFrom, bucketTo)
 		}
 		// allow to copy into existing bucket
-		s := fmt.Sprintf(fmtExists, bucketTo)
-		glog.Warningf("%s, proceeding to %s %s => %s anyway", s, msg.Action, bucketFrom, bucketTo)
+		s := fmt.Sprintf(fmtBckExists, bucketTo)
+		glog.Warningf("%s, proceeding to %s %s => %s anyway", s, msg.Action, bckFrom, bucketTo)
 	}
 	// begin
 	msgInt := p.newActionMsgInternal(msg, smap, bmd)
 	body := cmn.MustMarshal(msgInt)
 	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActBegin),
+		cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActBegin),
 		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
 
 	nr := 0
 	for res := range results {
 		if res.err != nil {
-			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
+			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bckFrom, res.err, res.status)
 			glog.Errorln(err.Error())
 			nr++
 		}
@@ -1540,7 +1538,7 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 		// abort
 		if nr < len(results) {
 			_ = p.broadcastTo(
-				cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActAbort),
+				cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActAbort),
 				nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
 		}
 		return
@@ -1553,12 +1551,12 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 		p.smapowner.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
-	results = p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom, cmn.ActCommit),
+	results = p.broadcastTo(cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActCommit),
 		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+
 	for res := range results {
 		if res.err != nil {
-			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bucketFrom, res.err, res.status)
+			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bckFrom, res.err, res.status)
 			glog.Errorln(err.Error())
 		}
 	}
@@ -1569,11 +1567,14 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	p.bmdowner.Lock()
 	nbmd := p.bmdowner.get().clone()
 	if msg.Action == cmn.ActRenameLB {
-		bpropsFrom, _ := nbmd.Get(bucketFrom, true)
+		var bpropsFrom = &cmn.BucketProps{}
+		cmn.CopyStruct(bpropsFrom, bckFrom.Props)
 		bpropsFrom.Renamed = cmn.ActRenameLB
-		nbmd.set(bucketFrom, true, bpropsFrom)
+		nbmd.set(bckFrom.Name, bckFrom.IsAIS(), bpropsFrom)
 	}
-	nbmd.add(bucketTo, true, bprops)
+	var bpropsTo = &cmn.BucketProps{}
+	cmn.CopyStruct(bpropsTo, bckFrom.Props)
+	nbmd.add(bucketTo, true, bpropsTo)
 	p.bmdowner.put(nbmd)
 	p.bmdowner.Unlock()
 
@@ -1583,7 +1584,7 @@ func (p *proxyrunner) copyRenameLB(bucketFrom, bucketTo string, msg *cmn.ActionM
 	}
 	msgInt = p.newActionMsgInternal(msg, nil, nbmd)
 	p.metasyncer.sync(true, revspair{nbmd, msgInt})
-	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bucketFrom, bucketTo, bmdTermName, nbmd.version())
+	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bucketTo, bmdTermName, nbmd.version())
 	return
 }
 

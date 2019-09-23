@@ -92,9 +92,9 @@ func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
 func (lom *LOM) Misplaced() bool           { return lom.HrwFQN != lom.FQN } // subj to resilvering
 func (lom *LOM) SetBID(bid uint64)         { lom.md.bckID, lom.bck.Props.BID = bid, bid }
 func (lom *LOM) Bucket() string            { return lom.bck.Name }
-func (lom *LOM) Provider() string          { return lom.bck.Provider }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
+func (lom *LOM) Bck() *Bck                 { return &lom.bck }
 
 //
 // access perms
@@ -211,7 +211,7 @@ func (lom *LOM) DelExtraCopies() (n int, err error) {
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.Provider(), lom.Objname)
+		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
 		if _, ok := lom.md.copies[cpyfqn]; ok {
 			continue
 		}
@@ -232,7 +232,7 @@ func (lom *LOM) CopyObjectFromAny() (copied bool) {
 		if path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.Provider(), lom.Objname)
+		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
 		if _, err := os.Stat(fqn); err != nil {
 			continue
 		}
@@ -556,9 +556,9 @@ func (lom *LOM) Init(bucket, provider string, config ...*cmn.Config) (err error)
 			return
 		}
 		lom.ParsedFQN.ContentType = fs.ObjectType
-		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, bucket, lom.Provider(), lom.Objname)
+		lom.FQN = fs.CSM.FQN(lom.ParsedFQN.MpathInfo, fs.ObjectType, bucket, lom.bck.Provider, lom.Objname)
 		lom.HrwFQN = lom.FQN
-		lom.ParsedFQN.Provider = lom.Provider()
+		lom.ParsedFQN.Provider = lom.bck.Provider
 		lom.ParsedFQN.Bucket, lom.ParsedFQN.ObjName = bucket, lom.Objname
 	}
 	lom.md.uname = Bo2Uname(bucket, lom.Objname)
@@ -852,7 +852,7 @@ func lomFromLmeta(md *lmeta, bmd *BMD) (lom *LOM, err error) {
 	lom.exists = exists
 	if exists {
 		lom.bck.Provider = cmn.ProviderFromBool(local)
-		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bucket(), lom.Provider(), lom.Objname)
+		lom.FQN, _, err = HrwFQN(fs.ObjectType, lom.Bck(), lom.Objname)
 	}
 	return
 }

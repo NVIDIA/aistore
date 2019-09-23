@@ -20,7 +20,8 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 		return
 	}
 	// NOTE: "misplaced" (when hrwFQN != fqn) is to be checked separately, via lom.Misplaced()
-	hrwFQN, digest, err = HrwFQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Provider, parsedFQN.ObjName)
+	bck := &Bck{Name: parsedFQN.Bucket, Provider: parsedFQN.Provider}
+	hrwFQN, digest, err = HrwFQN(parsedFQN.ContentType, bck, parsedFQN.ObjName)
 	if err != nil {
 		return
 	}
@@ -28,10 +29,10 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	return
 }
 
-func HrwFQN(contentType, bucket, provider, objName string) (fqn string, digest uint64, err error) {
+func HrwFQN(contentType string, bck *Bck, objName string) (fqn string, digest uint64, err error) {
 	var mpathInfo *fs.MountpathInfo
-	if mpathInfo, digest, err = hrwMpath(bucket, objName); err == nil {
-		fqn = fs.CSM.FQN(mpathInfo, contentType, bucket, provider, objName)
+	if mpathInfo, digest, err = hrwMpath(bck.Name, objName); err == nil {
+		fqn = fs.CSM.FQN(mpathInfo, contentType, bck.Name, bck.Provider, objName)
 	}
 	return
 }

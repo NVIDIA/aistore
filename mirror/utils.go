@@ -53,12 +53,15 @@ loop:
 }
 
 func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *cluster.LOM, err error) {
-	orig := lom.ParsedFQN.MpathInfo
-	parsedFQN := lom.ParsedFQN
+	var (
+		orig      = lom.ParsedFQN.MpathInfo
+		parsedFQN = lom.ParsedFQN
+		bck       = lom.Bck()
+	)
 	parsedFQN.MpathInfo = mpathInfo
-	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
-	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.Provider(), lom.Objname)
 
+	workFQN := fs.CSM.GenContentParsedFQN(parsedFQN, fs.WorkfileType, fs.WorkfilePut)
+	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
 	_, err = lom.CopyObject(copyFQN, workFQN, buf, true /*dstIsCopy*/, false /*srcCopyOK=false*/)
 	if err != nil {
 		return

@@ -665,13 +665,18 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			phase                = apiItems[1]
 			bucketFrom, bucketTo = bucket, msgInt.Name
 		)
+		bckFrom := &cluster.Bck{Name: bucketFrom, Provider: provider}
+		if err := bckFrom.Init(t.bmdowner); err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 		switch phase {
 		case cmn.ActBegin:
-			err = t.beginCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+			err = t.beginCopyRenameLB(bckFrom, bucketTo, msgInt.Action)
 		case cmn.ActAbort:
-			err = t.abortCopyRenameLB(bucketFrom, bucketTo, msgInt.Action)
+			err = t.abortCopyRenameLB(bckFrom, bucketTo, msgInt.Action)
 		case cmn.ActCommit:
-			err = t.commitCopyRenameLB(bucketFrom, bucketTo, msgInt)
+			err = t.commitCopyRenameLB(bckFrom, bucketTo, msgInt)
 		default:
 			err = fmt.Errorf("invalid phase %s: %s %s => %s", phase, msgInt.Action, bucketFrom, bucketTo)
 		}
@@ -705,7 +710,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-		t.xactions.renewBckMakeNCopies(bucket, t, copies, bck.IsAIS())
+		t.xactions.renewBckMakeNCopies(bck, t, copies)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)

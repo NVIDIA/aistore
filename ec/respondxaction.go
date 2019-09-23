@@ -1,3 +1,7 @@
+// Package ec provides erasure coding (EC) based data protection for AIStore.
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 package ec
 
 import (
@@ -70,9 +74,9 @@ func (r *XactRespond) Run() (err error) {
 
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
-func (r *XactRespond) removeObjAndMeta(bucket, provider, objName string) error {
+func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	if glog.V(4) {
-		glog.Infof("Delete request for %s/%s", bucket, objName)
+		glog.Infof("Delete request for %s/%s", bck.Name, objName)
 	}
 
 	// to be consistent with PUT, object's files are deleted in a reversed
@@ -82,7 +86,7 @@ func (r *XactRespond) removeObjAndMeta(bucket, provider, objName string) error {
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{MetaType, fs.ObjectType, SliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(tp, bucket, provider, objName)
+		fqnMeta, _, err := cluster.HrwFQN(tp, bck, objName)
 		if err != nil {
 			return err
 		}
@@ -95,15 +99,13 @@ func (r *XactRespond) removeObjAndMeta(bucket, provider, objName string) error {
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
-	provider := cmn.ProviderFromBool(r.t.GetBowner().Get().IsAIS(bucket))
+func (r *XactRespond) DispatchReq(iReq IntraReq, bck *cluster.Bck, objName string) {
 	daemonID := iReq.Sender
-
 	switch iReq.Act {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
-		if err := r.removeObjAndMeta(bucket, provider, objName); err != nil {
-			glog.Errorf("Failed to delete %s/%s: %v", bucket, objName, err)
+		if err := r.removeObjAndMeta(bck, objName); err != nil {
+			glog.Errorf("Failed to delete %s/%s: %v", bck.Name, objName, err)
 		}
 	case reqGet:
 		// slice or replica request: send the object's data to the caller
@@ -115,32 +117,32 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 			if glog.V(4) {
 				glog.Infof("Received request for slice %d of %s", iReq.Meta.SliceID, objName)
 			}
-			fqn, _, err = cluster.HrwFQN(SliceType, bucket, provider, objName)
+			fqn, _, err = cluster.HrwFQN(SliceType, bck, objName)
 		} else {
 			if glog.V(4) {
 				glog.Infof("Received request for replica %s", objName)
 			}
 			// FIXME: (redundant) r.dataResponse() does not need it as it constructs
 			//        LOM right away
-			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bucket, provider, objName)
+			fqn, _, err = cluster.HrwFQN(fs.ObjectType, bck, objName)
 		}
 		if err != nil {
 			glog.Error(err)
 			return
 		}
 
-		if err := r.dataResponse(RespPut, fqn, bucket, objName, daemonID); err != nil {
+		if err := r.dataResponse(RespPut, fqn, bck.Name, objName, daemonID); err != nil {
 			glog.Errorf("Failed to send back [GET req] %q: %v", fqn, err)
 		}
 	case ReqMeta:
 		// metadata request: send the metadata to the caller
-		fqn, _, err := cluster.HrwFQN(MetaType, bucket, provider, objName)
+		fqn, _, err := cluster.HrwFQN(MetaType, bck, objName)
 		if err != nil {
 			glog.Error(err)
 			return
 		}
 
-		if err := r.dataResponse(iReq.Act, fqn, bucket, objName, daemonID); err != nil {
+		if err := r.dataResponse(iReq.Act, fqn, bck.Name, objName, daemonID); err != nil {
 			glog.Errorf("Failed to send back [META req] %q: %v", fqn, err)
 		}
 	default:
@@ -149,12 +151,12 @@ func (r *XactRespond) DispatchReq(iReq IntraReq, bucket, objName string) {
 	}
 }
 
-func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.Sender, bucket, objName)
+func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
+	uname := unique(iReq.Sender, bck.Name, objName)
 
 	drain := func() {
 		if err := cmn.DrainReader(object); err != nil {
-			glog.Warningf("Failed to drain reader %s/%s: %v", bucket, objName, err)
+			glog.Warningf("Failed to drain reader %s/%s: %v", bck.Name, objName, err)
 		}
 	}
 
@@ -172,24 +174,22 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 		meta := iReq.Meta
 		if meta == nil {
 			drain()
-			glog.Errorf("No metadata in request for %s/%s", bucket, objName)
+			glog.Errorf("No metadata in request for %s/%s", bck.Name, objName)
 			return
 		}
 
 		// Check if the request is valid (e.g, a request may come after
 		// the bucket is destroyed.
 		var (
-			objFQN   string
-			lom      *cluster.LOM
-			err      error
-			provider = cmn.ProviderFromBool(r.t.GetBowner().Get().IsAIS(bucket))
+			objFQN string
+			lom    *cluster.LOM
+			err    error
 		)
 		if iReq.IsSlice {
 			if glog.V(4) {
-				glog.Infof("Got slice response from %s (#%d of %s/%s)",
-					iReq.Sender, iReq.Meta.SliceID, bucket, objName)
+				glog.Infof("Got slice response from %s (#%d of %s/%s)", iReq.Sender, iReq.Meta.SliceID, bck.Name, objName)
 			}
-			objFQN, _, err = cluster.HrwFQN(SliceType, bucket, provider, objName)
+			objFQN, _, err = cluster.HrwFQN(SliceType, bck, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)
@@ -197,11 +197,10 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 			}
 		} else {
 			if glog.V(4) {
-				glog.Infof("Got replica response from %s (%s/%s)",
-					iReq.Sender, bucket, objName)
+				glog.Infof("Got replica response from %s (%s/%s)", iReq.Sender, bck.Name, objName)
 			}
 			// FIXME: vs. lom.Fill() a few lines below
-			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bucket, provider, objName)
+			objFQN, _, err = cluster.HrwFQN(fs.ObjectType, bck, objName)
 			if err != nil {
 				drain()
 				glog.Error(err)
@@ -235,8 +234,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bucket, objName string, objAtt
 
 		if err != nil {
 			drain()
-			glog.Errorf("Failed to save %s/%s data to %q: %v",
-				bucket, objName, objFQN, err)
+			glog.Errorf("Failed to save %s/%s data to %q: %v", bck.Name, objName, objFQN, err)
 			slab.Free(buf)
 			return
 		}

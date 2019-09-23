@@ -31,10 +31,9 @@ type (
 // public methods
 //
 
-func NewXactBCR(id int64, bucketFrom, bucketTo, action string, t cluster.Target, slab *memsys.Slab2,
-	local bool) *XactBckCopy {
+func NewXactBCR(id int64, bckFrom *cluster.Bck, bucketTo, action string, t cluster.Target, slab *memsys.Slab2) *XactBckCopy {
 	return &XactBckCopy{
-		xactBckBase: *newXactBckBase(id, action, bucketFrom, t, local),
+		xactBckBase: *newXactBckBase(id, action, bckFrom, t),
 		slab:        slab,
 		bucketTo:    bucketTo,
 	}

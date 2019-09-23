@@ -16,8 +16,14 @@ type Bck struct {
 	Props    *cmn.BucketProps
 }
 
-func (b *Bck) String() string { return fmt.Sprintf("%s(%x, %s)", b.Name, b.Props.BID, b.Provider) }
-func (b *Bck) IsAIS() bool    { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
+func (b *Bck) String() string {
+	var bid uint64
+	if b.Props != nil {
+		bid = b.Props.BID
+	}
+	return fmt.Sprintf("%s(%x, %s)", b.Name, bid, b.Provider)
+}
+func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
 func (b *Bck) IsCloud() bool {
 	return b.Provider == cmn.Cloud || b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
 }

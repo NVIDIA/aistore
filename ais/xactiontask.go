@@ -44,7 +44,7 @@ func (e *bckListTaskEntry) IsTask() bool   { return true }
 func (e *bckListTaskEntry) Get() cmn.Xact  { return e.xact }
 func (e *bckListTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(e.xact == xact)
-	return e.stats.FillFromXact(e.xact, "")
+	return e.stats.FillFromXact(e.xact)
 }
 
 type bckSummaryTaskEntry struct {
@@ -78,5 +78,5 @@ func (e *bckSummaryTaskEntry) IsTask() bool   { return true }
 func (e *bckSummaryTaskEntry) Get() cmn.Xact  { return e.xact }
 func (e *bckSummaryTaskEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(e.xact == xact)
-	return e.stats.FillFromXact(e.xact, "")
+	return e.stats.FillFromXact(e.xact)
 }

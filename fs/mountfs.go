@@ -504,10 +504,8 @@ func (mfs *MountedFS) FetchFSInfo() cmn.FSInfo {
 	return fsInfo
 }
 
-// NOTE: caller is responsible to serialize per bucket
-//
-// FIXME: currently we cannot use *cluster.Bck to pass bucketName and provider
-// because there is a import cycle: "cluster -> fs -> cluster"
+// NOTE:  caller is responsible to serialize per bucket
+// FIXME: cannot pass cluster.Bck - causes "import cycle"
 func (mfs *MountedFS) CreateBucketDirs(bucketName, provider string, destroyUponRet bool) (err error) {
 	availablePaths, _ := mfs.Get()
 	created := make([]string, 0, len(availablePaths))

@@ -108,7 +108,7 @@ func (e *globalRebEntry) postRenewHook(previousEntry xactionGlobalEntry) {
 
 func (e *globalRebEntry) Stats(xact cmn.Xact) stats.XactStats {
 	cmn.Assert(xact == e.xact)
-	e.stats.FillFromXact(e.xact, "")
+	e.stats.FillFromXact(e.xact)
 	e.stats.FillFromTrunner(getstorstatsrunner())
 	return &e.stats
 }
@@ -241,4 +241,4 @@ func (b *baseGlobalEntry) preRenewHook(previousEntry xactionGlobalEntry) (done b
 
 func (b *baseGlobalEntry) postRenewHook(_ xactionGlobalEntry) {}
 
-func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats { return b.stats.FillFromXact(xact, "") }
+func (b *baseGlobalEntry) Stats(xact cmn.Xact) stats.XactStats { return b.stats.FillFromXact(xact) }

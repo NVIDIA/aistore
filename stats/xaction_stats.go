@@ -8,6 +8,7 @@ package stats
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -27,6 +28,7 @@ type BaseXactStats struct {
 	IDX         int64     `json:"id"`
 	KindX       string    `json:"kind"`
 	BucketX     string    `json:"bucket"`
+	ProviderX   string    `json:"provider"`
 	StartTimeX  time.Time `json:"start_time"`
 	EndTimeX    time.Time `json:"end_time"`
 	ObjCountX   int64     `json:"obj_count"`
@@ -50,12 +52,15 @@ func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
 func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
 func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
 func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
-func (b *BaseXactStats) FillFromXact(xact cmn.Xact, bucket string) *BaseXactStats {
+func (b *BaseXactStats) FillFromXact(xact cmn.Xact, bcks ...*cluster.Bck) *BaseXactStats {
 	b.IDX = xact.ID()
 	b.KindX = xact.Kind()
 	b.StartTimeX = xact.StartTime()
 	b.EndTimeX = xact.EndTime()
-	b.BucketX = bucket
+	if len(bcks) > 0 {
+		bck := bcks[0]
+		b.BucketX, b.ProviderX = bck.Name, bck.Provider
+	}
 	b.ObjCountX = xact.ObjectsCnt()
 	b.BytesCountX = xact.BytesCnt()
 	b.AbortedX = xact.Aborted()

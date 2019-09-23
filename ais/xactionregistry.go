@@ -102,7 +102,7 @@ type (
 		sync.RWMutex
 		globalXacts   map[string]xactionGlobalEntry
 		taskXacts     sync.Map // map[string]xactionEntry
-		bucketXacts   sync.Map // map[string]*bucketXactions
+		bucketXacts   sync.Map // map[string]*bucketXactions; FIXME: bucket name (key) cannot be considered unique
 		byID          sync.Map // map[int64]xactionEntry
 		byIDSize      atomic.Int64
 		byIDTaskCount atomic.Int64
@@ -416,7 +416,7 @@ func (r *xactionsRegistry) allXactsStats(onlyRecent bool) map[int64]stats.XactSt
 		taskXact := val.(*bckListTaskEntry)
 
 		stat := &stats.BaseXactStats{}
-		stat.FillFromXact(taskXact.xact, "")
+		stat.FillFromXact(taskXact.xact)
 		matching[taskXact.xact.ID()] = stat
 		return true
 	})
@@ -512,24 +512,23 @@ func (r *xactionsRegistry) doAbort(kind, bucket string) {
 }
 
 func (r *xactionsRegistry) getBucketsXacts(bucket string) (xactions *bucketXactions, ok bool) {
-	val, ok := r.bucketXacts.Load(bucket)
+	val, ok := r.bucketXacts.Load(bucket) // TODO -- FIXME: support same-name Cloud and AIS
 	if !ok {
 		return nil, false
 	}
 	return val.(*bucketXactions), true
 }
 
-func (r *xactionsRegistry) bucketsXacts(bucket string) *bucketXactions {
+func (r *xactionsRegistry) bucketsXacts(bck *cluster.Bck) *bucketXactions {
 	// NOTE: Load and then LoadOrStore saves us creating new object with
 	// newBucketXactions every time this function is called, putting additional,
 	// unnecessary stress on GC
-	val, loaded := r.bucketXacts.Load(bucket)
-
+	val, loaded := r.bucketXacts.Load(bck.Name)
 	if loaded {
 		return val.(*bucketXactions)
 	}
 
-	val, _ = r.bucketXacts.LoadOrStore(bucket, newBucketXactions(r, bucket))
+	val, _ = r.bucketXacts.LoadOrStore(bck.Name, newBucketXactions(r))
 	return val.(*bucketXactions)
 }
 
@@ -752,7 +751,8 @@ func (r *xactionsRegistry) renewBckListXact(ctx context.Context, t *targetrunner
 	return e.xact, nil
 }
 
-func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrunner, bck *cluster.Bck, msg *cmn.SelectMsg, cached bool) (*xactBckSummaryTask, error) {
+func (r *xactionsRegistry) renewBckSummaryXact(ctx context.Context, t *targetrunner, bck *cluster.Bck,
+	msg *cmn.SelectMsg, cached bool) (*xactBckSummaryTask, error) {
 	id := msg.TaskID
 	if err := r.removeFinishedByID(id); err != nil {
 		return nil, err
@@ -820,14 +820,10 @@ func (r *xactBckSummaryTask) Run() {
 		buckets []*cluster.Bck
 		bmd     = r.t.bmdowner.get()
 	)
-
 	if r.bck.Name != "" {
-		if err := r.bck.Init(r.t.bmdowner); err != nil {
-			r.UpdateResult(nil, err)
-			return
-		}
-		buckets = append(buckets, &cluster.Bck{Name: r.bck.Name, Provider: r.bck.Provider})
+		buckets = append(buckets, r.bck)
 	} else {
+		// all buckets
 		if r.bck.Provider == "" || cmn.IsProviderAIS(r.bck.Provider) {
 			for name := range bmd.LBmap {
 				buckets = append(buckets, &cluster.Bck{Name: name, Provider: cmn.AIS})

@@ -46,11 +46,8 @@ type (
 	}
 )
 
-func newXactBckBase(id int64, kind, bucket string, t cluster.Target, blocal bool) *xactBckBase {
-	return &xactBckBase{
-		XactBase: *cmn.NewXactBaseWithBucket(id, kind, bucket, blocal),
-		t:        t,
-	}
+func newXactBckBase(id int64, kind string, bck *cluster.Bck, t cluster.Target) *xactBckBase {
+	return &xactBckBase{XactBase: *cmn.NewXactBaseWithBucket(id, kind, bck.Name, bck.IsAIS()), t: t}
 }
 
 //

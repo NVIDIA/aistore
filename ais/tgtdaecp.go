@@ -411,34 +411,33 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		case cmn.ActPrefetch:
 			go t.Prefetch()
 		case cmn.ActDownload, cmn.ActEvictObjects, cmn.ActDelete:
-			return fmt.Errorf("%s xaction start not supported", kind)
+			return fmt.Errorf("%q xaction start not supported", kind)
 		case cmn.ActElection:
-			return fmt.Errorf("%s not supported by target node", kind)
+			return fmt.Errorf("%q not supported by target node", kind)
 		case cmn.ActECPut, cmn.ActECGet, cmn.ActECRespond:
-			return fmt.Errorf("%s requires a bucket to start", kind)
+			return fmt.Errorf("%q requires a bucket to start", kind)
 		default:
-			return fmt.Errorf("unknown %s xaction", kind)
+			return fmt.Errorf("unknown %q xaction", kind)
 		}
 		return nil
 	}
-
-	if !t.bmdowner.Get().IsAIS(bucket) {
-		return fmt.Errorf("%s bucket is not an ais bucket", bucket)
+	// henceforth supporting only ais buckets
+	bck := &cluster.Bck{Name: bucket, Provider: cmn.ProviderFromBool(true /* is ais */)}
+	if err := bck.Init(t.bmdowner); err != nil {
+		return err
 	}
-
 	switch kind {
 	case cmn.ActECPut:
-		t.ecmanager.restoreBckPutXact(bucket)
+		t.ecmanager.restoreBckPutXact(bck)
 	case cmn.ActECGet:
-		t.ecmanager.restoreBckGetXact(bucket)
+		t.ecmanager.restoreBckGetXact(bck)
 	case cmn.ActECRespond:
-		t.ecmanager.restoreBckRespXact(bucket)
+		t.ecmanager.restoreBckRespXact(bck)
 	case cmn.ActMakeNCopies:
 		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
 	case cmn.ActPutCopies:
 		return fmt.Errorf("%s currently not supported", kind)
 	}
-
 	return nil
 }
 
@@ -1233,26 +1232,22 @@ func (t *targetrunner) enable() error {
 //
 // copy-rename bucket: 2-phase commit
 //
-func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
+func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) (err error) {
 	if action == cmn.ActRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
-		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bucketFrom)
+		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bckFrom)
 	}
 	t.bmdowner.Lock()
 	defer t.bmdowner.Unlock()
 	bmd := t.bmdowner.get()
 
-	bckFrom := &cluster.Bck{Name: bucketFrom, Provider: cmn.AIS}
-	if err := bckFrom.Init(t.bmdowner); err != nil {
-		return err
-	}
 	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
 	if err := bckTo.Init(t.bmdowner); err == nil {
 		if action == cmn.ActRenameLB {
 			return cmn.NewErrorBucketAlreadyExists(bckTo.Name)
 		}
-
 		// allow to copy into existing bucket
-		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bckFrom, action, bckFrom, bckTo)
+		s := fmt.Sprintf(fmtBckExists, bucketTo)
+		glog.Warningf("%s, proceeding to %s %s => %s", s, action, bckFrom, bckTo)
 	}
 
 	switch action {
@@ -1275,7 +1270,7 @@ func (t *targetrunner) beginCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	return
 }
 
-func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (err error) {
+func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) (err error) {
 	t.bmdowner.Lock()
 	defer t.bmdowner.Unlock()
 
@@ -1284,7 +1279,7 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	if !ok {
 		return
 	}
-	b := t.xactions.bucketsXacts(bucketFrom)
+	b := t.xactions.bucketsXacts(bckFrom)
 	if b == nil {
 		return
 	}
@@ -1293,7 +1288,7 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 		return
 	}
 	ee := e.(*fastRenEntry)
-	if ee.bckName != bucketFrom {
+	if ee.bck.Name != bckFrom.Name {
 		return
 	}
 	switch action {
@@ -1310,13 +1305,9 @@ func (t *targetrunner) abortCopyRenameLB(bucketFrom, bucketTo, action string) (e
 	return
 }
 
-func (t *targetrunner) commitCopyRenameLB(bucketFrom, bucketTo string, msgInt *actionMsgInternal) (err error) {
-	bckFrom := &cluster.Bck{Name: bucketFrom, Provider: cmn.AIS}
-	if err := bckFrom.Init(t.bmdowner); err != nil {
-		return err
-	}
+func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string, msgInt *actionMsgInternal) (err error) {
 	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
-	if err := bckFrom.Init(t.bmdowner); err != nil {
+	if err := bckTo.Init(t.bmdowner); err != nil {
 		return err
 	}
 

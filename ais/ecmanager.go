@@ -155,31 +155,31 @@ func (mgr *ecManager) newRespondXact(bucket string) *ec.XactRespond {
 		bucket, mgr.reqBundle, mgr.respBundle)
 }
 
-func (mgr *ecManager) restoreBckGetXact(bckName string) *ec.XactGet {
-	xact := mgr.getBckXacts(bckName).Get()
+func (mgr *ecManager) restoreBckGetXact(bck *cluster.Bck) *ec.XactGet {
+	xact := mgr.getBckXacts(bck.Name).Get()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewGetEC(bckName)
-		mgr.getBckXacts(bckName).SetGet(xact)
+		xact = mgr.t.xactions.renewGetEC(bck)
+		mgr.getBckXacts(bck.Name).SetGet(xact)
 	}
 
 	return xact
 }
 
-func (mgr *ecManager) restoreBckPutXact(bckName string) *ec.XactPut {
-	xact := mgr.getBckXacts(bckName).Put()
+func (mgr *ecManager) restoreBckPutXact(bck *cluster.Bck) *ec.XactPut {
+	xact := mgr.getBckXacts(bck.Name).Put()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewPutEC(bckName)
-		mgr.getBckXacts(bckName).SetPut(xact)
+		xact = mgr.t.xactions.renewPutEC(bck)
+		mgr.getBckXacts(bck.Name).SetPut(xact)
 	}
 
 	return xact
 }
 
-func (mgr *ecManager) restoreBckRespXact(bckName string) *ec.XactRespond {
-	xact := mgr.getBckXacts(bckName).Req()
+func (mgr *ecManager) restoreBckRespXact(bck *cluster.Bck) *ec.XactRespond {
+	xact := mgr.getBckXacts(bck.Name).Req()
 	if xact == nil || xact.Finished() {
-		xact = mgr.t.xactions.renewRespondEC(bckName)
-		mgr.getBckXacts(bckName).SetReq(xact)
+		xact = mgr.t.xactions.renewRespondEC(bck)
+		mgr.getBckXacts(bck.Name).SetReq(xact)
 	}
 
 	return xact
@@ -200,6 +200,7 @@ func (mgr *ecManager) getBckXacts(bckName string) *ec.BckXacts {
 }
 
 // A function to process command requests from other targets
+// FIXME: must be a method of the ecManager
 func (mgr *ecManager) makeRecvRequest() transport.Receive {
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
@@ -226,12 +227,17 @@ func (mgr *ecManager) makeRecvRequest() transport.Receive {
 				return
 			}
 		}
-
-		mgr.restoreBckRespXact(hdr.Bucket).DispatchReq(iReq, hdr.Bucket, hdr.Objname)
+		// FIXME: transport header does not contain correct BckIsAIS value - always be false?
+		// FIXME: bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+		bmd := mgr.bowner.get()
+		_, isais := bmd.Get(hdr.Bucket, true)
+		bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(isais)}
+		mgr.restoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.Objname)
 	}
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
+// FIXME: must be a method of the ecManager
 func (mgr *ecManager) makeRecvResponse() transport.Receive {
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
@@ -249,14 +255,18 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 			glog.Errorf("Failed to unmarshal request: %v", err)
 			return
 		}
-
+		// FIXME: transport header does not contain correct BckIsAIS value - always be false?
+		// FIXME: bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+		bmd := mgr.bowner.get()
+		_, isais := bmd.Get(hdr.Bucket, true)
+		bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(isais)}
 		switch iReq.Act {
 		case ec.ReqPut:
-			mgr.restoreBckRespXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
+			mgr.restoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
 		case ec.ReqMeta, ec.RespPut:
 			// Process this request even if there might not be enough targets. It might have been started when there was,
 			// so there is a chance to complete restore successfully
-			mgr.restoreBckGetXact(hdr.Bucket).DispatchResp(iReq, hdr.Bucket, hdr.Objname, hdr.ObjAttrs, object)
+			mgr.restoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
 		default:
 			glog.Errorf("Unknown EC response action %d", iReq.Act)
 		}
@@ -299,7 +309,7 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		return err
 	}
 
-	mgr.restoreBckPutXact(lom.Bucket()).Encode(req)
+	mgr.restoreBckPutXact(lom.Bck()).Encode(req)
 
 	return nil
 }
@@ -315,7 +325,7 @@ func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
 		LOM:    lom,
 	}
 
-	mgr.restoreBckPutXact(lom.Bucket()).Cleanup(req)
+	mgr.restoreBckPutXact(lom.Bck()).Cleanup(req)
 }
 
 func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
@@ -337,24 +347,24 @@ func (mgr *ecManager) RestoreObject(lom *cluster.LOM) error {
 		ErrCh:  make(chan error), // unbuffered
 	}
 
-	mgr.restoreBckGetXact(lom.Bucket()).Decode(req)
+	mgr.restoreBckGetXact(lom.Bck()).Decode(req)
 
 	// wait for EC completes restoring the object
 	return <-req.ErrCh
 }
 
 // disableBck starts to reject new EC requests, rejects pending ones
-func (mgr *ecManager) disableBck(bckName string) {
-	mgr.restoreBckGetXact(bckName).ClearRequests()
-	mgr.restoreBckPutXact(bckName).ClearRequests()
+func (mgr *ecManager) disableBck(bck *cluster.Bck) {
+	mgr.restoreBckGetXact(bck).ClearRequests()
+	mgr.restoreBckPutXact(bck).ClearRequests()
 }
 
 // enableBck aborts xact disable and starts to accept new EC requests
 // enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
-func (mgr *ecManager) enableBck(bckName string) {
-	mgr.restoreBckGetXact(bckName).EnableRequests()
-	mgr.restoreBckPutXact(bckName).EnableRequests()
+func (mgr *ecManager) enableBck(bck *cluster.Bck) {
+	mgr.restoreBckGetXact(bck).EnableRequests()
+	mgr.restoreBckPutXact(bck).EnableRequests()
 }
 
 func (mgr *ecManager) BucketsMDChanged() {
@@ -378,13 +388,14 @@ func (mgr *ecManager) BucketsMDChanged() {
 	}
 
 	for bckName, newBck := range newBckMD.LBmap {
+		bck := &cluster.Bck{Name: bckName, Provider: cmn.ProviderFromBool(true /* is ais */)}
 		// Disable EC for buckets that existed and have changed EC.Enabled to false
 		// Enable EC for buckets that existed and have change EC.Enabled to true
 		if oldBck, existed := oldBckMD.LBmap[bckName]; existed {
 			if !oldBck.EC.Enabled && newBck.EC.Enabled {
-				mgr.enableBck(bckName)
+				mgr.enableBck(bck)
 			} else if oldBck.EC.Enabled && !newBck.EC.Enabled {
-				mgr.disableBck(bckName)
+				mgr.disableBck(bck)
 			}
 		}
 	}

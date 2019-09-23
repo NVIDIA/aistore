@@ -60,8 +60,8 @@ func NewGetXact(t cluster.Target, smap cluster.Sowner,
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
-	uname := unique(iReq.Sender, bucket, objName)
+func (r *XactGet) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName string, objAttrs transport.ObjectAttrs, object io.Reader) {
+	uname := unique(iReq.Sender, bck.Name, objName)
 
 	switch iReq.Act {
 	// a remote target sent/responded object's metadata. A slice should be waiting
@@ -92,7 +92,7 @@ func (r *XactGet) DispatchResp(iReq IntraReq, bucket, objName string, objAttrs t
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			glog.Errorf("No writer for %s/%s", bucket, objName)
+			glog.Errorf("No writer for %s/%s", bck.Name, objName)
 			return
 		}
 
