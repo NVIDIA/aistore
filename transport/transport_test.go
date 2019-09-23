@@ -545,7 +545,11 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
-	for time.Since(now) < duration {
+	runFor := duration
+	if testing.Short() {
+		runFor = 10 * time.Second
+	}
+	for time.Since(now) < runFor {
 		hdr, reader := makeRandReader()
 		stream.Send(hdr, reader, nil, nil)
 		num++

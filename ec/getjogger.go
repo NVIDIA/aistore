@@ -371,9 +371,10 @@ func (c *getJogger) requestSlices(req *Request, meta *Metadata, nodes map[string
 	iReq.IsSlice = true
 	request := iReq.Marshal()
 	hdr := transport.Header{
-		Bucket:  req.LOM.Bucket(),
-		Objname: req.LOM.Objname,
-		Opaque:  request,
+		Bucket:   req.LOM.Bucket(),
+		BckIsAIS: req.LOM.IsAIS(),
+		Objname:  req.LOM.Objname,
+		Opaque:   request,
 	}
 
 	// broadcast slice request and wait for all targets respond
@@ -615,7 +616,7 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 
 	// FIXME: slice meta file should be a different kind of LOM
 	metaLom := &cluster.LOM{T: c.parent.t, FQN: metaFQN}
-	if err := metaLom.Init("", ""); err != nil {
+	if err := metaLom.Init(req.LOM.Bucket(), cmn.ProviderFromBool(req.LOM.IsAIS())); err != nil {
 		return restored, err
 	}
 
@@ -860,9 +861,10 @@ func (c *getJogger) requestMeta(req *Request) (meta *Metadata, nodes map[string]
 	metaWG := cmn.NewTimeoutGroup()
 	request := c.parent.newIntraReq(ReqMeta, nil).Marshal()
 	hdr := transport.Header{
-		Bucket:  req.LOM.Bucket(),
-		Objname: req.LOM.Objname,
-		Opaque:  request,
+		Bucket:   req.LOM.Bucket(),
+		BckIsAIS: req.LOM.IsAIS(),
+		Objname:  req.LOM.Objname,
+		Opaque:   request,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: 0,
 		},

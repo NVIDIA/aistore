@@ -214,7 +214,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 		_, err = cmn.SaveReaderSafe(tmpFQN, objFQN, object, buf, false)
 		if err == nil {
 			lom = &cluster.LOM{T: r.t, FQN: objFQN}
-			err = lom.Init("", "")
+			err = lom.Init(bck.Name, cmn.ProviderFromBool(bck.IsAIS()))
 			if err != nil {
 				glog.Errorf("Failed to read resolve FQN %s: %s", objFQN, err)
 				slab.Free(buf)
@@ -247,7 +247,7 @@ func (r *XactRespond) DispatchResp(iReq IntraReq, bck *cluster.Bck, objName stri
 
 		if err == nil {
 			lom = &cluster.LOM{T: r.t, FQN: metaFQN}
-			err = lom.Init("", "")
+			err = lom.Init(bck.Name, cmn.ProviderFromBool(bck.IsAIS()))
 			if err == nil {
 				lom.SetSize(int64(metaLen))
 				err = lom.Persist()

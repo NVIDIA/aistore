@@ -296,6 +296,10 @@ func TestRegressionBuckets(t *testing.T) {
 }
 
 func TestRenameBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
 	var (
 		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestBucketName

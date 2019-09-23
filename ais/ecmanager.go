@@ -74,11 +74,11 @@ func newECM(t *targetrunner) *ecManager {
 	}
 
 	var err error
-	if _, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.makeRecvRequest()); err != nil {
+	if _, err = transport.Register(ECM.netReq, ec.ReqStreamName, ECM.recvRequest); err != nil {
 		glog.Errorf("Failed to register recvRequest: %v", err)
 		return nil
 	}
-	if _, err = transport.Register(ECM.netResp, ec.RespStreamName, ECM.makeRecvResponse()); err != nil {
+	if _, err = transport.Register(ECM.netResp, ec.RespStreamName, ECM.recvResponse); err != nil {
 		glog.Errorf("Failed to register respResponse: %v", err)
 		return nil
 	}
@@ -200,76 +200,62 @@ func (mgr *ecManager) getBckXacts(bckName string) *ec.BckXacts {
 }
 
 // A function to process command requests from other targets
-// FIXME: must be a method of the ecManager
-func (mgr *ecManager) makeRecvRequest() transport.Receive {
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		if err != nil {
-			glog.Errorf("Request failed: %v", err)
-			return
-		}
-		// check if the header contains a valid request
-		if len(hdr.Opaque) == 0 {
-			glog.Error("Empty request")
-			return
-		}
-
-		iReq := ec.IntraReq{}
-		if err := iReq.Unmarshal(hdr.Opaque); err != nil {
-			glog.Errorf("Failed to unmarshal request: %v", err)
-			return
-		}
-
-		// command requests should not have a body, but if it has,
-		// the body must be drained to avoid errors
-		if hdr.ObjAttrs.Size != 0 {
-			if _, err := ioutil.ReadAll(object); err != nil {
-				glog.Errorf("Failed to read request body: %v", err)
-				return
-			}
-		}
-		// FIXME: transport header does not contain correct BckIsAIS value - always be false?
-		// FIXME: bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
-		bmd := mgr.bowner.get()
-		_, isais := bmd.Get(hdr.Bucket, true)
-		bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(isais)}
-		mgr.restoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.Objname)
+func (mgr *ecManager) recvRequest(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	if err != nil {
+		glog.Errorf("Request failed: %v", err)
+		return
 	}
+	// check if the header contains a valid request
+	if len(hdr.Opaque) == 0 {
+		glog.Error("Empty request")
+		return
+	}
+
+	iReq := ec.IntraReq{}
+	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+		glog.Errorf("Failed to unmarshal request: %v", err)
+		return
+	}
+
+	// command requests should not have a body, but if it has,
+	// the body must be drained to avoid errors
+	if hdr.ObjAttrs.Size != 0 {
+		if _, err := ioutil.ReadAll(object); err != nil {
+			glog.Errorf("Failed to read request body: %v", err)
+			return
+		}
+	}
+	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	mgr.restoreBckRespXact(bck).DispatchReq(iReq, bck, hdr.Objname)
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
-// FIXME: must be a method of the ecManager
-func (mgr *ecManager) makeRecvResponse() transport.Receive {
-	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
-		if err != nil {
-			glog.Errorf("Receive failed: %v", err)
-			return
-		}
-		// check if the request is valid
-		if len(hdr.Opaque) == 0 {
-			glog.Error("Empty request")
-			return
-		}
+func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
+	if err != nil {
+		glog.Errorf("Receive failed: %v", err)
+		return
+	}
+	// check if the request is valid
+	if len(hdr.Opaque) == 0 {
+		glog.Error("Empty request")
+		return
+	}
 
-		iReq := ec.IntraReq{}
-		if err := iReq.Unmarshal(hdr.Opaque); err != nil {
-			glog.Errorf("Failed to unmarshal request: %v", err)
-			return
-		}
-		// FIXME: transport header does not contain correct BckIsAIS value - always be false?
-		// FIXME: bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
-		bmd := mgr.bowner.get()
-		_, isais := bmd.Get(hdr.Bucket, true)
-		bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(isais)}
-		switch iReq.Act {
-		case ec.ReqPut:
-			mgr.restoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
-		case ec.ReqMeta, ec.RespPut:
-			// Process this request even if there might not be enough targets. It might have been started when there was,
-			// so there is a chance to complete restore successfully
-			mgr.restoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
-		default:
-			glog.Errorf("Unknown EC response action %d", iReq.Act)
-		}
+	iReq := ec.IntraReq{}
+	if err := iReq.Unmarshal(hdr.Opaque); err != nil {
+		glog.Errorf("Failed to unmarshal request: %v", err)
+		return
+	}
+	bck := &cluster.Bck{Name: hdr.Bucket, Provider: cmn.ProviderFromBool(hdr.BckIsAIS)}
+	switch iReq.Act {
+	case ec.ReqPut:
+		mgr.restoreBckRespXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
+	case ec.ReqMeta, ec.RespPut:
+		// Process this request even if there might not be enough targets. It might have been started when there was,
+		// so there is a chance to complete restore successfully
+		mgr.restoreBckGetXact(bck).DispatchResp(iReq, bck, hdr.Objname, hdr.ObjAttrs, object)
+	default:
+		glog.Errorf("Unknown EC response action %d", iReq.Act)
 	}
 }
 

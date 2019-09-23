@@ -183,9 +183,10 @@ func (c *putJogger) cleanup(req *Request) error {
 
 	request := c.parent.newIntraReq(reqDel, nil).Marshal()
 	hdr := transport.Header{
-		Bucket:  req.LOM.Bucket(),
-		Objname: req.LOM.Objname,
-		Opaque:  request,
+		Bucket:   req.LOM.Bucket(),
+		BckIsAIS: req.LOM.IsAIS(),
+		Objname:  req.LOM.Objname,
+		Opaque:   request,
 		ObjAttrs: transport.ObjectAttrs{
 			Size: 0,
 		},

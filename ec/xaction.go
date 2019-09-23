@@ -173,6 +173,7 @@ func (r *xactECBase) dataResponse(act intraReqType, fqn, bucket, objname, id str
 
 	rHdr := transport.Header{
 		Bucket:   bucket,
+		BckIsAIS: lom.IsAIS(),
 		Objname:  objname,
 		ObjAttrs: objAttrs,
 	}
@@ -237,9 +238,10 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.Header,
 // * writer - an opened writer that will receive the replica/slice/meta
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) error {
 	hdr := transport.Header{
-		Bucket:  lom.Bucket(),
-		Objname: lom.Objname,
-		Opaque:  request,
+		Bucket:   lom.Bucket(),
+		BckIsAIS: lom.IsAIS(),
+		Objname:  lom.Objname,
+		Opaque:   request,
 	}
 	var reader cmn.ReadOpenCloser
 	reader, hdr.ObjAttrs.Size = nil, 0
@@ -332,6 +334,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	hdr := transport.Header{
 		Objname:  lom.Objname,
 		Bucket:   lom.Bucket(),
+		BckIsAIS: lom.IsAIS(),
 		Opaque:   putData,
 		ObjAttrs: objAttrs,
 	}
