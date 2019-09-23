@@ -74,7 +74,7 @@ exit $?
   ;;
 test-short)
   echo "Running short tests..." >&2
-  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 20m -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  errs=$(BUCKET=${BUCKET} AISURL=${AISURL} go test -v -p 1 -count 1 -timeout 30m -short ../... 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
   err_count=$(echo "${errs}" | wc -l)
   if [ ! -z "${errs}" ]; then
       echo "${errs}" >&2
