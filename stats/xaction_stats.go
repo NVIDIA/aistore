@@ -22,6 +22,7 @@ type XactStats interface {
 	BytesCount() int64
 	Aborted() bool
 	Running() bool
+	Finished() bool
 }
 
 type BaseXactStats struct {
@@ -52,6 +53,7 @@ func (b *BaseXactStats) ObjCount() int64      { return b.ObjCountX }
 func (b *BaseXactStats) BytesCount() int64    { return b.BytesCountX }
 func (b *BaseXactStats) Aborted() bool        { return b.AbortedX }
 func (b *BaseXactStats) Running() bool        { return b.EndTimeX.IsZero() }
+func (b *BaseXactStats) Finished() bool       { return !b.EndTimeX.IsZero() }
 func (b *BaseXactStats) FillFromXact(xact cmn.Xact, bcks ...*cluster.Bck) *BaseXactStats {
 	b.IDX = xact.ID()
 	b.KindX = xact.Kind()

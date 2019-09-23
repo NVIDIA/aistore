@@ -1039,7 +1039,6 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	time.Sleep(time.Second * 2)
 	m.puts()
 
 	// Start getting objects and enable mountpaths in parallel
@@ -2060,7 +2059,7 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.reregisterTarget(target)
-	waitForGlobalRebalanceToStart(t, baseParams, rebalanceStartTimeout)
+	waitForBucketXactionToStart(t, cmn.ActGlobalReb, "", baseParams, rebalanceStartTimeout)
 	tutils.Logf("automatic global rebalance started\n")
 
 	m.wg.Add(m.num*m.numGetsEachFile + 2)

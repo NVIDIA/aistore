@@ -1170,7 +1170,14 @@ func networkFailurePrimary(t *testing.T) {
 
 	// give a little time to original primary, so it picks up the network
 	// connections and starts talking to neighbors
-	waitProgressBar("Wait for old primary is connected to network", 5*time.Second)
+	_, err = tutils.WaitForPrimaryProxy(
+		oldPrimaryID,
+		"original primary is restored",
+		smap.Version, testing.Verbose(),
+		proxyCount,
+		targetCount,
+	)
+	tassert.CheckFatal(t, err)
 
 	oldSmap := getClusterMap(t, oldPrimaryURL)
 	// the original primary still thinks that it is the primary, so its smap

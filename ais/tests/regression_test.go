@@ -23,16 +23,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -792,9 +791,10 @@ func TestConfig(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		errCh    = make(chan error, 100)
-		usedpct  = int32(100)
-		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+		errCh      = make(chan error, 100)
+		usedPct    = int32(100)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -832,13 +832,13 @@ func TestLRU(t *testing.T) {
 	for k, v := range stats.Target {
 		bytesEvictedOrig[k], filesEvictedOrig[k] = getNamedTargetStats(v, "lru.evict.size"), getNamedTargetStats(v, "lru.evict.n")
 		for _, c := range v.Capacity {
-			usedpct = cmn.MinI32(usedpct, c.Usedpct)
+			usedPct = cmn.MinI32(usedPct, c.Usedpct)
 		}
 	}
-	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
+	tutils.Logf("LRU: current min space usage in the cluster: %d%%\n", usedPct)
 	var (
-		lowwm  = usedpct - 5
-		highwm = usedpct - 1
+		lowwm  = usedPct - 5
+		highwm = usedPct - 1
 	)
 	if int(lowwm) < 3 {
 		t.Logf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
@@ -853,7 +853,6 @@ func TestLRU(t *testing.T) {
 	// all targets: set new watermarks; restore upon exit
 	//
 	olruconfig := oconfig.LRU
-	operiodic := oconfig.Periodic
 	defer func() {
 		oldhwm, _ := cmn.ConvertToString(olruconfig.HighWM)
 		oldlwm, _ := cmn.ConvertToString(olruconfig.LowWM)
@@ -878,26 +877,21 @@ func TestLRU(t *testing.T) {
 	//
 	// cluster-wide reduce dont-evict-time
 	//
-	dontevicttimestr := "30s"
-	capacityupdtimestr := "5s"
-	sleeptime, err := time.ParseDuration(operiodic.StatsTimeStr) // to make sure the stats get updated
-	if err != nil {
-		t.Fatalf("Failed to parse stats_time: %v", err)
-	}
 	lowwmStr, _ := cmn.ConvertToString(lowwm)
 	hwmStr, _ := cmn.ConvertToString(highwm)
 	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"dont_evict_time":   dontevicttimestr,
-		"capacity_upd_time": capacityupdtimestr,
+		"dont_evict_time":   "30s",
+		"capacity_upd_time": "5s",
 		"lowwm":             lowwmStr,
 		"highwm":            hwmStr,
 	})
 	if t.Failed() {
 		return
 	}
-	waitProgressBar("LRU: ", sleeptime/2)
+	waitForBucketXactionToStart(t, cmn.ActLRU, "", baseParams)
 	getRandomFiles(proxyURL, 1, clibucket, "", t, errCh)
-	waitProgressBar("LRU: ", sleeptime/2)
+	waitForBucketXactionToComplete(t, cmn.ActLRU, "", baseParams, rebalanceTimeout)
+
 	//
 	// results
 	//
@@ -1337,7 +1331,7 @@ func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 	var (
 		wg    = &sync.WaitGroup{}
 		ch    = make(chan error, 1)
-		sleep = time.Second * 5
+		sleep = 3 * time.Second
 		i     time.Duration
 	)
 	wg.Add(1)
@@ -1367,7 +1361,7 @@ func waitForBucketXactionToComplete(t *testing.T, kind, bucket string, baseParam
 	}
 }
 
-func waitForGlobalRebalanceToStart(t *testing.T, baseParams *api.BaseParams, timeouts ...time.Duration) {
+func waitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams *api.BaseParams, timeouts ...time.Duration) {
 	var (
 		start   = time.Now()
 		timeout = time.Duration(0)
@@ -1379,27 +1373,31 @@ func waitForGlobalRebalanceToStart(t *testing.T, baseParams *api.BaseParams, tim
 	}
 
 	for {
-		time.Sleep(1 * time.Second)
-		globRebStats, err := tutils.GetXactionStats(baseParams, cmn.ActGlobalReb)
+		stats, err := tutils.GetXactionStats(baseParams, kind, bucket)
 		checkXactAPIErr(t, err)
-
-		for _, targetStats := range globRebStats {
+		glog.Error(stats)
+		for _, targetStats := range stats {
 			for _, xaction := range targetStats {
 				if xaction.Running() {
-					return // global rebalance started
+					return // xaction started
 				}
 			}
 		}
+		if len(stats) > 0 {
+			return // all xaction finished
+		}
 
 		if !logged {
-			tutils.Logf("waiting for global rebalance to start\n")
+			tutils.Logf("waiting for %s to start\n", kind)
 			logged = true
 		}
 
 		if timeout != 0 && time.Since(start) > timeout {
-			t.Fatalf("global rebalance has not started before %s", timeout)
+			t.Fatalf("%s has not started before %s", kind, timeout)
 			return
 		}
+
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -1471,25 +1469,6 @@ func waitForRebalanceToComplete(t *testing.T, baseParams *api.BaseParams, timeou
 	for err := range ch {
 		t.Fatal(err)
 	}
-}
-
-func waitProgressBar(prefix string, wait time.Duration) {
-	const tickerStep = time.Second * 1
-
-	ticker := time.NewTicker(tickerStep)
-	tutils.Logf(prefix)
-	idx := 1
-
-	for range ticker.C {
-		elapsed := tickerStep * time.Duration(idx)
-		tutils.Logf("----%d%%", (elapsed * 100 / wait))
-		if elapsed >= wait {
-			tutils.Logln("")
-			break
-		}
-		idx++
-	}
-	ticker.Stop()
 }
 
 func getClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
