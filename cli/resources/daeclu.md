@@ -1,88 +1,139 @@
-## Daemon/Cluster 
+## Daemon/Cluster
 
 The CLI allows users to interact with AIS daemons or cluster.
 
-## Command List
+### Cluster or daemon status
 
-### status
+`ais status [DAEMON_TYPE]|[DAEMON_ID]`
 
-`ais status [DAEMON_TYPE]`
-
-Returns the status of the `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy`, `target`, or `DAEMON_ID`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
+Returns the status of the `DAEMON_TYPE` or `DAEMON_ID`. `DAEMON_TYPE` is either `proxy` or `target`. If `DAEMON_TYPE` is not set, it will return the status of all the daemons in the AIS cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-| `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
-| `--count` | `int` | total number of generated reports | `1` |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
+| `--count` | `int` | Total number of generated reports | `1` |
+| `--refresh` | `string` | Time duration between reports | `1s` |
+| `--no-headers` | `bool` | Display tables without headers | `false` |
 
-#### Examples:
-* `ais status --count 5` - displays 5 reports with statuses of all daemons in the cluster with 1s interval between each report
-* `ais status proxy --count 5 --refresh 10s` - displays 5 reports with statuses of all proxies in the cluster with 10s interval between each report
-* `ais status target --refresh 2s` - displays a continuous report with statuses of all targets in the cluster with 2s interval between each report
+#### Examples
 
-Note: more detailed information about target's status can be retreived by [`ais xaction`](./xaction.md) command.
+| Command | Explanation |
+| --- | --- |
+| `ais status --count 5` | Displays 5 reports showing status of all daemons in the cluster with 1s interval between each report |
+| `ais status target --refresh 2s` | Displays a continuous report showing status of all targets in the cluster with 2s interval between each report |
 
-### smap
+### Cluster map
 
-`ais smap [DAEMON_ID]`
-Returns the cluster map (smap) of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the smap of the daemon that the `AIS_URL` is pointed at.
+`ais ls smap [DAEMON_ID]`
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-
-### stats
-
-`ais stats [DAEMON_ID]`
-Returns the stats of the `DAEMON_ID`. If `DAEMON_ID` is not set, it will return the stats of a current primary proxy and all the targets in the cluster.
+Shows the cluster map (smap) copy of the `DAEMON_ID`. If `DAEMON_ID` isn't given, it will show the smap of the daemon that the `AIS_URL` points at.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-| `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
-| `--count` | `int` | total number of generated reports | `1` |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
 
-#### Examples:
-* `ais stats --count 5` - displays 5 reports with statistics of a current primary proxy and all targets in the cluster with 1s interval between each report
-* `ais stats --count 5 --refresh 10s` - displays 5 reports with statistics of a current primary proxy and all targets in the cluster with 10s interval between each report
-* `ais stats --refresh 2s` - displays a continuous report with statistics of a current primary proxy and all targets in the cluster with 2s interval between each report
+#### Examples
 
-### disk
+| Command | Explanation |
+| --- | --- |
+| `ais ls smap 1048575_8084` | Shows smap copy of daemon with ID `1048575_8084` |
 
-`ais disk [TARGET_ID]`
-Returns the disk stats of the `TARGET_ID`. `TARGET_ID` is optional, if not present disk stats for all targets will be returned.
+### Node stats
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | output in JSON format | `false` |
-| `--refresh` | `string` | time.Duration string that specifies the amount of time between reports | `1s` |
-| `--count` | `int` | total number of generated reports | `1` |
+`ais stats node DAEMON_ID|all`
 
-#### Examples:
-* `ais disk --count 5` - displays 5 reports with disk statistics of all targets in the cluster with 1s interval between each report
-* `ais disk --count 5 --refresh 10s` - displays 5 reports with disk statistics of all targets in the cluster with 10s interval between each report
-* `ais disk --refresh 2s` - displays a continuous report with disk statistics of all targets in the cluster with 2s interval between each report
-
-
-### node add
-
-`ais node add --daemon-id <value> --daemon-type <value> --public-addr <IP:PORT>`
-Adds a new node to the cluster.
+Shows the stats of the `DAEMON_ID`. If the first argument is `all`, it will return the stats of the current primary proxy and all the targets in the cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--daemon-id` | `string` | unique id for the new node | `""` |
-| `--daemon-type` | `string` | type of the node to be added. Either `"target"` or `"proxy"` | `"target"` |
-| `--public-addr` | `string` | public socket address to the node, must be in format `IP:PORT` | `""` |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
+| `--count` | `int` | Total number of generated reports | `1` |
+| `--refresh` | `string` | Time duration between reports | `1s` |
 
-#### Examples:
-* `ais node add --daemon-id 23kfa10f --daemon-type proxy --public-addr 192.168.0.185:8086` - adds a new proxy node with id `23kfa10f` which can be contacted at `192.168.0.185:8086`
+#### Examples
 
-### node remove
+| Command | Explanation |
+| --- | --- |
+| `ais stats node all --count 5` | Displays 5 reports with statistics of the current primary proxy and all targets in the cluster with 1s interval between each report |
+| `ais stats node all --count 5 --refresh 10s` | Same as above, but with 10s intervals between each report |
+| `ais stats node 1048575_8084 --refresh 2s` | Displays a continuous report with statistics of the node with ID `1048575_8084`, with 2s interval between each report |
 
-`ais node remove [DAEMON_ID]`
+### Disk stats
+
+`ais show disk [TARGET_ID]`
+
+Shows the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats for all targets will be shown.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
+| `--count` | `int` | Total number of generated reports | `1` |
+| `--refresh` | `string` | Time duration between reports | `1s` |
+| `--no-headers` | `bool` | Display tables without headers | `false` |
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais show disk --count 5` | Displays 5 reports with disk statistics of all targets in the cluster with 1s interval between each report |
+| `ais show disk --count 5 --refresh 10s` | Same as above, but with 10s intervals between each report |
+| `ais show disk 1048575_8084 --refresh 2s` | Displays a continuous report with disk statistics of target with ID `1048575_8084`, with 2s interval between each report |
+
+### Register a node
+
+`ais register proxy IP:PORT [DAEMON_ID]`
+
+Registers a proxy in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+
+`ais register target IP:PORT [DAEMON_ID]`
+
+Registers a target in the cluster. If `DAEMON_ID` isn't given, it will be randomly generated.
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais register proxy 192.168.0.185:8086 23kfa10f` | Registers a proxy node with ID `23kfa10f` and address `192.168.0.185:8086` |
+
+### Remove a node
+
+`ais rm node DAEMON_ID`
+
 Removes an existing node from the cluster.
 
-#### Examples:
-* `ais node remove 23kfa10f` - removes node with id `23kfa10f` from the cluster 
+#### Examples
+| Command | Explanation |
+| --- | --- |
+| `ais rm node 23kfa10f` | Removes node with ID `23kfa10f` from the cluster |
+
+### List config
+
+`ais ls config DAEMON_ID [CONFIG_SECTION]`
+
+Displays the configuration of `DAEMON_ID`. If `CONFIG_SECTION` is given, only that specific section will be shown.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--json, -j` | `bool` | Output in JSON format | `false` |
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais ls config 844974_8080` | Displays config of the node with ID `844974_8080` |
+| `ais ls config 844974_8080 lru` | Displays only the LRU config section of the node with ID `844974_8080` |
+
+### Set config
+
+`ais set config [DAEMON_ID] KEY=VALUE [KEY=VALUE...]`
+
+Sets configuration for a specific daemon or the entire cluster by specifying key-value pairs. To set config for the entire cluster, omit the `DEAMON_ID` argument. For the list of available runtime configurations, see [here](../../docs/configuration.md#runtime-configuration).
+
+Key and value can be separated with `=` character or with a space. The former case supports both short and fully-qualified option names. The latter case requires the key to be a fully-qualified name.
+
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais set config stats_time=10s disk_util_low_wm=40` | Sets config for the entire cluster using short names and `=` as a separator |
+| `ais set config periodic.stats_time 10s disk.disk_util_low_wm 40` | Sets config for the entire cluster using fully-qualified names and space as a separator |

@@ -14,8 +14,8 @@ The script also allows you to install [shell autocompletions](#ais-cli-shell-aut
 
 AIS CLI makes requests to AIStore cluster. It resolves cluster address in the following order:
 1. `AIS_URL` environment variable (eg. `http://<YOUR_CLUSTER_IP>:<PORT>`); if not present:
-2. Discover IP address of proxy kubernetes pod; if kubernetes runs multiple clusters, set an environment variable `AIS_NAMESPACE` to select a proxy from the given namespace
-3. Discover IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
+2. Discovers IP address of proxy kubernetes pod; if kubernetes runs multiple clusters, set an environment variable `AIS_NAMESPACE` to select a proxy from the given namespace
+3. Discovers IP address of proxy docker container; if multiple docker clusters running, picks the IP address of one of them and prints relevant message;
 if not successful or local non-containerized deployment:
 4. Default `http://172.50.0.2:8080` and `http://127.0.0.1:8080` for local containerized and non-containerized deployments respectively
 
@@ -47,40 +47,43 @@ List of available CLI resources
 
 * [Bucket](./resources/bucket.md)
 
-* [Daemon/Cluster](./resources/daeclu.md)
-
-* [Downloader](./resources/download.md)
-
 * [Object](./resources/object.md)
+
+* [Daemon/Cluster](./resources/daeclu.md)
 
 * [Xaction](./resources/xaction.md)
 
+* [Downloader](./resources/download.md)
+
 * [DSort](./resources/dsort.md)
+
+* [Auth](./resources/users.md)
 
 ## Info For Developers
 
-The framework that the CLI uses is [urfave](https://github.com/urfave/cli). It is a simple framework that enables developers to create custom CLI commands quickly.
+The framework that the CLI uses is [urfave/cli](https://github.com/urfave/cli). It is a simple framework that enables developers to create custom CLI commands quickly.
 
 ### Adding New Commands
 
-Currently, the CLI has the format of '`ais <resource> <command>`'.
+Currently, the CLI has the format of '`ais <command> <resource>`'.
 
-To add a new command to an existing resource,
+To add a new resource to an existing command,
 
-1. Create an entry in the resource's flag map and add the entry to the commands object
-2. Register the new command in the corresponding resource handler (it should be named something similar to `XXXHandler`)
+1. Create a subcommand entry for the resource in the command object
+2. Create an entry in the command's flag map for the new resource
+3. Register flags in the subcommand object
+4. Register the handler function (named `XXXHandler`) in the subcommand object
 
-To add a new command to a new resource,
+To add a new resource to a new command,
 
-1. Create a new `.go` file with the name of the new resource and follow the format of the existing files
-2. Once the new resource and commands are implemented, make sure to add the new command set to the main function located in `ais.go`.
+1. Create a new Go file (named `xxx_hdlr.go`) with the name of the new command and follow the format of existing files
+2. Once the new command and subcommands are implemented, make sure to register the new command with the CLI (see `setupCommands()` in `app.go`)
 
 ## Default flag and argument values via environment variables
 
 #### Bucket
-If `AIS_BUCKET` environment variable is set, the `--bucket` flag is set to the value of this variable.
-Setting `--bucket` flag overwrites the default value.
-Setting `AIS_BUCKET` also allows you to omit one of the arguments to `ais bucket` commands. For more information, check [here](./resources/bucket.md#default-bucket-argument-value).
+If `AIS_BUCKET` environment variable is set, its value is used as the default
+bucket name if no other name is provided by the user. Otherwise, the given bucket name is used.
 
 #### Bucket Provider
 If `AIS_BUCKET_PROVIDER` environment variable is set, the `--provider` flag is set to the value of this variable.

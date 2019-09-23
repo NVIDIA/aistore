@@ -80,7 +80,7 @@ var (
 				{
 					Name:         subcmdListConfig,
 					Usage:        "lists daemon configuration",
-					ArgsUsage:    daemonIDArgument,
+					ArgsUsage:    listConfigArgument,
 					Flags:        listCmdsFlags[subcmdListConfig],
 					Action:       listConfigHandler,
 					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */, true /* config optional */),

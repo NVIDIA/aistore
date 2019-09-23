@@ -2,128 +2,95 @@
 
 The CLI allows users to interact with [buckets](../../docs/bucket.md) in the AIS cluster.
 
-## Command List
+### Create
 
-### create
-
-`ais bucket create BUCKET [BUCKET...]`
+`ais create bucket BUCKET_NAME [BUCKET_NAME...]`
 
 Creates an ais bucket or buckets.
 
 
-### destroy
+### Delete
 
-`ais bucket destroy BUCKET [BUCKET...]`
+`ais rm bucket BUCKET [BUCKET...]`
 
-Destroys an ais bucket or buckets.
+Deletes an ais bucket or buckets.
 
-### list
+### List bucket names
 
-`ais bucket ls`
+`ais ls bucket [BUCKET_PROVIDER]`
 
-Returns the names of the buckets.
+Lists bucket names. If the `BUCKET_PROVIDER` argument is given, only bucket names
+from the specified provider are listed.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--regex` | string | pattern for bucket matching | `""` |
-| `--provider` | [Provider](../README.md#enums) | returns `local` or `cloud` buckets. If empty, returns all bucket names. | `""` or [default](../README.md#bucket-provider) |
+| `--regex` | `string` | Pattern for bucket name matching | `""` |
+| `--no-headers` | `bool` | Display tables without headers | `false` |
 
-### evict
+### Evict
 
-`ais bucket evict BUCKET`
+`ais evict BUCKET_NAME/`
 
 Evicts a cloud bucket. It also resets the properties of the bucket (if changed).
 
-### rename
+### Rename
 
-`ais bucket rename BUCKET NEW_BUCKET`
+`ais rename bucket BUCKET_NAME NEW_NAME`
 
 Renames an ais bucket.
 
-### copy
+### Copy
 
-`ais bucket cp BUCKET NEW_BUCKET`
+`ais cp bucket BUCKET_NAME NEW_NAME`
 
 Copies an existing ais bucket to a new ais bucket.
 
-### objects
+### Summary
 
-`ais bucket objects BUCKET`
+`ais show bucket [BUCKET_NAME]`
 
-Lists all the objects along with some of the objects' properties. For the full list of properties, see [here](../../docs/bucket.md#list-bucket).
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--props` | string | comma separated list of properties to return with object names | `size,version` |
-| `--regex` | string | pattern for object matching | `""` |
-| `--prefix` | string | prefix for object matching | `""` |
-| `--template` | string | bash-style template for object matching | `""` |
-| `--page-size` | string | maximum number of object names returned in response | `1000` (cloud), `65536` (local) |
-| `--limit` | string | limit of object count | `0` (unlimited) |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
-| `--show-unmatched` | bool | also return objects that did not match the filters (`regex`, `template`) | false |
-| `--paged` | bool | fetch objects page by page and print the next page immediately after it is received. Can be useful to quick check the bucket content. Ignored in fast mode | false |
-| `--max-pages` | int | limit the number or displayed pages in paged mode, 0 - display all pages | 0 |
-| `--marker` | string | start listing bucket objects from the object that follows the marker(in alphabetical order). Can be useful if used with limit flag to quick list a few objects starting from a given object. Ignored in fast mode | "" |
-
-**Example:**
-
-* `ais bucket objects mylocalbucket --prefix "mytestfolder/" --regex ".txt`
-Returns all objects matching `.txt` under the `mytestfolder` directory from `mylocalbucket` bucket
-* `AIS_BUCKET=mylocalbucket ais bucket objects --template="shard-{0..99}.tgz" --show-unmatched`
-Returns all objects with names from `shard-0.tgz` to `shard-99.tgz` from `mylocalbucket`.
-Also returns a separate list of objects that do not match the template.
-* `ais bucket objects mylocalbucket --limit 10`
-Displays first 10 objects of `mylocalbucket`
-* `ais bucket objects mylocalbucket --limit 10 --marker "imageset/object0100"`
-Displays the next 10 objects of bucket `mylocalbucket` that follow alphabetically object `"imageset/object0100"`: `imageset/object0101`, `imageset/object0102` etc
-* `ais bucket objects mylocalbucket --paged --props=all -H`
-Prints out the entire list of bucket objects with all properties page by page. Every page is displayed immediately after it is fetched. Header is off(`-H`) that makes the output easy to parse with scripts. Press Ctrl+C to interrupt.
-
-### summary
-
-`ais bucket summary BUCKET`
-
-Displays aggregated information about objects in the `BUCKET`.
+Shows aggregated information about objects in the bucket `BUCKET_NAME`.
+If `BUCKET_NAME` is omitted, shows informations about all buckets.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--regex` | string | pattern for names of objects used for aggregation | `""` |
-| `--prefix` | string | prefix for named of objects used for aggregation | `""` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
-### makencopies
+### Make N copies
 
-`ais bucket makencopies BUCKET --copies <value>`
+`ais set-copies BUCKET_NAME --copies <value>`
 
-Starts an extended action (xaction) to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
+Starts an extended action to bring a given bucket to a certain redundancy level (num copies). Read more about this feature [here](../../docs/storage_svcs.md#n-way-mirror).
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--copies` | int | number of copies | `1` |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--copies` | `int` | number of copies | `1` |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
-### props list
+### List bucket props
 
-`ais bucket props ls BUCKET`
+`ais ls props BUCKET_NAME`
 
 Lists [properties](../../docs/bucket.md#properties-and-options) of the bucket.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--json` | `bool` | Output in JSON format | `false` |
 
-### props set
+### Set bucket props
 
-`ais bucket props set BUCKET <list of key=value | --jsonspec <json>>`
+`ais set props BUCKET_NAME KEY=VALUE [KEY=VALUE...]`
 
 Sets bucket properties. For the available options, see [bucket-properties](../../docs/bucket.md#properties-and-options).
-If `--jsonspec` is used **all** properties of the bucket are set based on the values in the JSON.
+If `--reset` flag is set, arguments are ignored and bucket properties are reset to original state.
+If `--jsonspec` option is used, **all** properties of the bucket are set based on the values in the JSON object.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider)|
-| `--jsonspec` | string | bucket properties in a JSON format | `` |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider)|
+| `--jsonspec` | `string` | bucket properties in a JSON format | `` |
+| `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
 When `--jsonspec` is not used, some properties support user-friendly aliases:
 
@@ -132,19 +99,18 @@ When `--jsonspec` is not used, some properties support user-friendly aliases:
 | aattrs | ro | Disables bucket modifications: denies PUT, DELETE, and ColdGET requests |
 | aattrs | rw | Enables bucket modifications: allows PUT, DELETE, and ColdGET requests |
 
-**Examples:**
+#### Examples
 
-* `ais bucket props set mybucket 'mirror.enabled=true' 'mirror.copies=2'`
+| Command | Explanation |
+| --- | --- |
+| `ais set props mybucket 'mirror.enabled=true' 'mirror.copies=2'` | Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively, for the bucket `mybucket` |
+| `ais set props mybucket 'aattrs=ro'` | Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail |
+| `ais set props --reset mybucket` | Resets properties for the bucket `mybucket` |
 
-Sets the `mirror.enabled` and `mirror.copies` properties to `true` and `2` respectively.
 
-* `ais bucket props set mybucket 'aattrs=ro'`
-
-Sets read-only access to the bucket `mybucket`. All PUT and DELETE requests will fail.
-
-* Setting **all** bucket attributes based on the provided JSON specification
+Setting **all** bucket attributes based on the provided JSON specification
 ```bash
-ais bucket props set mybucket --jsonspec '{
+ais set props mybucket --jsonspec '{
     "cloud_provider": "ais",
     "versioning": {
       "type": "own",
@@ -184,7 +150,7 @@ ais bucket props set mybucket --jsonspec '{
     "aattrs": 255
 }'
 ```
-After which `ais bucket props list mybucket` results in:
+> After which `ais ls props mybucket` results in:
 ```
 ais bucket props list mybucket
 Property	Value
@@ -199,9 +165,9 @@ Tiering		Disabled
 
 ```
 
-* If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty/false/nil):
+If not all properties are mentioned in the JSON, the missing ones are set to zero values (empty / `false` / `nil`):
 ```bash
-ais bucket props set mybucket --jsonspec '{
+ais set props mybucket --jsonspec '{
     "cloud_provider": "ais",
     "versioning": {
       "type": "own",
@@ -210,7 +176,7 @@ ais bucket props set mybucket --jsonspec '{
     }
 }'
 ```
-After which `ais bucket props list mybucket` results in:
+> After which `ais ls props mybucket` results in:
 ```
 Property        Value
 Provider        ais
@@ -223,21 +189,14 @@ Versioning      (validation: WarmGET=yes)
 Tiering         Disabled
 ```
 
-To see how setting zero values affect properties, you can run `ais bucket props set mybucket --jsonspec '{}'`
+To see how setting zero values affect properties, run:  `ais set props mybucket --jsonspec '{}'`
 
-### props reset
+### Default `BUCKET_NAME` argument value
+If `AIS_BUCKET` environment variable is set, its value is used as the default value for `BUCKET_NAME` arguments
+in above-mentioned commands if `BUCKET_NAME` argument is not given by the user. For example, the following pairs of commands have the same effect:
 
-`ais bucket props reset BUCKET`
-
-Reset bucket properties to cluster default.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--provider` | [Provider](../README.md#enums) | locality of the bucket | `""` or [default](../README.md#bucket-provider) |
-
-### Default `bucket` argument value
-If you set `AIS_BUCKET` environment variable you can omit the argument that represents the name of the bucket (`BUCKET`) in
-all of the commands above. For example, the following pairs of commands have the same effect:
- * `AIS_BUCKET=mybucket ais bucket create` and `ais bucket create mybucket`
- * `AIS_BUCKET=mybucket ais bucket rename mybucket1` and `ais bucket rename mybucket mybucket1`
- * `AIS_BUCKET=mybucket ais bucket props set 'aattrs=ro'` and `AIS_BUCKET=mybucket ais bucket props set mybck 'aattrs=ro'`
+| With `AIS_BUCKET` | Without `AIS_BUCKET` |
+| --- | --- |
+| `AIS_BUCKET=mybucket ais create bucket` | `ais create bucket mybucket` |
+| `AIS_BUCKET=mybucket ais rename bucket mybucket1` | `ais rename bucket mybucket mybucket1` |
+| `AIS_BUCKET=mybucket ais set props 'aattrs=ro'` | `ais set props mybucket 'aattrs=ro'` |

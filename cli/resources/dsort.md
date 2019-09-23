@@ -1,43 +1,36 @@
 ## Distributed Sort
 
-[AIS DSort](/dsort/README.md) supports following types of dSort requests:
+The CLI allows users to manage [AIS DSort](/dsort/README.md) jobs.
 
-* **gen** - put randomly generated shards which then can be used for dSort testing
-* **start** - start new dSort job with provided specification
-* **status** - retrieve statistics and metrics of currently running dSort job
-* **abort** - abort currently running dSort job
-* **rm** - remove finished dSort job from the dsort job list
-* **ls** - list all dSort jobs and their states
+### Randomly generate shards
 
-## Command List
+`ais gen-shards --template <value> --fsize <value> --fcount <value>`
 
-### gen
-
-`ais dsort gen --template <value> --fsize <value> --fcount <value>`
-
-Puts randomly generated shards which then can be used for dSort testing.
+Puts randomly generated shards that can be used for dSort testing.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--ext` | `string` | extension for shards (either '.tar' or '.tgz') | `.tar` |
-| `--bucket` | `string` | bucket where shards will be put | `dsort-testing` |
-| `--template` | `string` | template of input shard name | `shard-{0..9}` |
-| `--fsize` | `string` | single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
-| `--fcount` | `int` | number of files inside single shard | `5` |
-| `--cleanup` | `bool` | when set, the old bucket will be deleted and created again | `false` |
-| `--conc` | `int` | limits number of concurrent put requests and number of concurrent shards created | `10` |
+| `--ext` | `string` | Extension for shards (either `.tar` or `.tgz`) | `.tar` |
+| `--bucket` | `string` | Bucket where shards will be put | `dsort-testing` |
+| `--template` | `string` | Template of input shard name | `shard-{0..9}` |
+| `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
+| `--fcount` | `int` | Number of files inside single shard | `5` |
+| `--cleanup` | `bool` |When set, the old bucket will be deleted and created again | `false` |
+| `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
 
 
-#### Examples:
-* `ais dsort gen --fsize 262144 --fcount 100` generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
-* `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`.
+#### Examples
 
+| Command | Explanation |
+| --- | --- |
+| `ais dsort gen --fsize 262144 --fcount 100` | Generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar` |
+| `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` | Generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz` |
 
-### start
+### Start
 
-`ais dsort start JSON_SPECIFICATION`
+`ais start dsort JSON_SPECIFICATION`
 
-Starts new dSort job with provided specification. Upon creation, `ID` of the 
+Starts new dSort job with provided specification. Upon creation, `JOB_ID` of the
 job is returned - it can then be used to abort it or retrieve metrics. Following
 table describes json keys which can be used in specification.
 
@@ -65,9 +58,9 @@ table describes json keys which can be used in specification.
 | `extended_metrics` | `bool` | determines if dsort should collect extended statistics | no | `false` |
 
 #### Examples:
-* starts (alphanumeric) sorting dSort job with extended metrics for shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. Each of output shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ... 
+* Starts (alphanumeric) sorting dSort job with extended metrics for shards with names `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`. Each of output shards will have at least `10240` bytes and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 ```bash
-ais dsort start '{
+ais start dsort '{
     "extension": ".tar",
     "bucket": "dsort-testing",
     "input_format": "shard-{0..9}",
@@ -83,56 +76,50 @@ ais dsort start '{
 }'
 ```
 
-### status
+### Show jobs and job status
 
-`ais dsort status ID`
+`ais show dsort [JOB_ID]`
 
-Retrieves status of the dSort with provided `ID` which is returned upon creation.
+Retrieves status of the dSort with provided `JOB_ID` which is returned upon creation.
+Lists all dSort jobs if the `JOB_ID` argument is omitted.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--refresh` | `int` | refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
-| `--verbose, -v` | `bool` | if set, detailed metrics will be shown | `false` |
-| `--log` | `string` | path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
+| `--regex` | `string` | Regex for the description of dSort jobs | `""` |
+| `--refresh` | `int` | Refreshing rate of the progress bar refresh or metrics refresh (in milliseconds) | `1000` |
+| `--verbose, -v` | `bool` | Show detailed metrics | `false` |
+| `--log` | `string` | Path to file where the metrics will be saved (does not work with progress bar) | `/tmp/dsort_run.txt` |
 
-#### Examples:
-* `ais dsort status 5JjIuGemR` returns short status description of the dSort job
-* `ais dsort status 5JjIuGemR -v` returns detailed metrics of dSort job
-* `ais dsort status 5JjIuGemR --refresh 500` creates progress bar for the dSort job and refreshes it every `500` milliseconds
-* `ais dsort status 5JjIuGemR --refresh 500 -v` every `500` milliseconds returns newly fetched metrics of the dSort job
-* `ais dsort status 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"` every `500` milliseconds saves newly fetched metrics of the dSort job to `/tmp/dsort_run.txt` file
+#### Examples
+| Command | Explanation |
+| --- | --- |
+| `ais show dsort` | Shows all dSort jobs |
+| `ais show dsort --regex "^dsort-(.*)"` | Shows all dSort jobs with descriptions starting with `dsort-` prefix |
+| `ais show dsort 5JjIuGemR` | Shows short status description of the dSort job with ID `5JjIuGemR` |
+| `ais show dsort 5JjIuGemR -v` | Shows detailed metrics of the dSort job with ID `5JjIuGemR` |
+| `ais show dsort 5JjIuGemR --refresh 500` | Creates progress bar for the dSort job with ID `5JjIuGemR` and refreshes it every `500` milliseconds |
+| `ais show dsort 5JjIuGemR --refresh 500 -v` |  Returns newly fetched metrics of the dSort job with ID `5JjIuGemR` every `500` milliseconds |
+| `ais show dsort 5JjIuGemR --refresh 500 --log "/tmp/dsort_run.txt"` | Saves newly fetched metrics of the dSort job with ID `5JjIuGemR` to `/tmp/dsort_run.txt` file every `500` milliseconds |
 
-### abort
+### Stop
 
-`ais dsort abort ID`
+`ais stop dsort JOB_ID`
 
-Aborts dSort job given its `ID`.
+Stops the dSort job with given `JOB_ID`.
 
-#### Examples:
-* `ais dsort abort 5JjIuGemR` aborts the dSort job
+#### Examples
+
+| Command | Explanation |
+| --- | --- |
+| `ais stop dsort 5JjIuGemR` | Stops the dSort job with ID `5JjIuGemR` |
 
 ### rm
 
-`ais dsort rm ID`
+`ais rm dsort JOB_ID`
 
-Removes finished dSort job from the list given its `ID`.
+Removes the finished dSort job with given `JOB_ID` from the job list.
 
-#### Examples:
-* `ais dsort rm 5JjIuGemR` removes the dSort job
-
-### ls
-
-`ais dsort ls --regex <value>`
-
-Lists dSort jobs whose descriptions match given `regex`.
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--regex` | `string` | regex for the description of dSort jobs | `""` |
-
-#### Examples:
-* `ais dsort ls` lists all dSorts jobs
-* `ais dsort ls --regex "^dsort-(.*)"` lists all dSorts jobs which description starts with `dsort-` prefix
-
-
-
+#### Examples
+| Command | Explanation |
+| --- | --- |
+| `ais rm dsort 5JjIuGemR` | Removes the dSort job with ID `5JjIuGemR` from the list of dSort jobs |

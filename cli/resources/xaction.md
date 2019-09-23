@@ -2,37 +2,29 @@
 
 The CLI allows users to interact with AIStore [Xactions](../../docs/xaction.md).
 
-### start
+### Start
 
-`ais xaction start XACTION_NAME`
+`ais start xaction XACTION_NAME [BUCKET_NAME]`
 
-Starts xaction(s).
+Starts xaction(s). Some xactions require a bucket name to execute.
+The second argument is used to determine the bucket name if it is required.
 
-> Some xactions require a bucket to execute.
+### Stop
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--bucket` | string | Name of the bucket to start the xaction | `""` |
+`ais stop xaction XACTION_NAME|all [BUCKET_NAME]`
 
-### stop
+Stops xaction(s). If the first argument is `all`, all xactions are stopped.
+The second argument is used to determine the bucket name if it is required.
 
-`ais xaction stop [XACTION_NAME]`
+### Show stats
 
-Stops xaction(s). If `XACTION_NAME` is not provided, all xactions are stopped.
+`ais stats xaction XACTION_NAME|all [BUCKET_NAME]`
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--bucket` | string | Name of the bucket to stop the xaction | `""` |
-
-### stats
-
-`ais xaction stats [XACTION_NAME]`
-
-Returns the stats of `XACTION_NAME` xaction. If `XACTION_NAME` is not provided, displays stats of all xactions.
-
+Displays the stats of `XACTION_NAME` xaction. If the first argument is `all`, displays stats of all xactions.
+The second argument is used to determine the bucket name if it is required.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--json` | bool | Output the stats in JSON format | `false` |
-| `--bucket` | string | Name of the bucket on which the xaction operates | `""` |
-| `--all` | bool | If set, additionally displays old, finished xactions | `false` |
+| `--json` | `bool` | Output the stats in JSON format | `false` |
+| `--all-items` | `bool` | If set, additionally displays old, finished xactions | `false` |
+| `--active` | `bool` | If set, displays only running xactions | `false` |
