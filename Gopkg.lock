@@ -266,15 +266,15 @@
   version = "v1.4.2"
 
 [[projects]]
-  digest = "1:f690a0a27cefae695fa9587aa3ed23652e593be1d98b35f8184d10bccec30444"
+  digest = "1:cef870622e603ac1305922eb5d380455cad27e354355ae7a855d8633ffa66197"
   name = "github.com/pierrec/lz4"
   packages = [
     ".",
     "internal/xxh32",
   ]
   pruneopts = "UT"
-  revision = "057d66e894a4e55853274a3bbbf7de02ba639e43"
-  version = "v2.2.4"
+  revision = "645f9b948eee34cbcc335c70999f79c29c420fbf"
+  version = "v2.3.0"
 
 [[projects]]
   digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"

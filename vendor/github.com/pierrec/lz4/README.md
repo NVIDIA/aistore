@@ -103,3 +103,4 @@ Thanks to all contributors so far:
 - [@ikkeps](https://github.com/ikkeps)
 
 Special thanks to [@Zariel](https://github.com/Zariel) for his asm implementation of the decoder
+Special thanks to [@klauspost](https://github.com/klauspost) for his work on optimizing the code

@@ -46,11 +46,13 @@ func (z *Writer) writeHeader() error {
 	}
 	// Allocate the compressed/uncompressed buffers.
 	// The compressed buffer cannot exceed the uncompressed one.
-	if n := 2 * bSize; cap(z.zdata) < n {
-		z.zdata = make([]byte, n, n)
+	if cap(z.zdata) < bSize {
+		// Only allocate if there is not enough capacity.
+		// Allocate both buffers at once.
+		z.zdata = make([]byte, 2*bSize)
 	}
-	z.data = z.zdata[:bSize]
-	z.zdata = z.zdata[:cap(z.zdata)][bSize:]
+	z.data = z.zdata[:bSize]                 // Uncompressed buffer is the first half.
+	z.zdata = z.zdata[:cap(z.zdata)][bSize:] // Compressed buffer is the second half.
 	z.idx = 0
 
 	// Size is optional.
