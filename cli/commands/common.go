@@ -52,11 +52,14 @@ const (
 	subcmdListBucket   = subcmdBucket
 	subcmdListBckProps = subcmdProps
 	subcmdListObject   = subcmdObject
-	subcmdListDownload = subcmdDownload
-	subcmdListDsort    = subcmdDsort
 	subcmdListConfig   = subcmdConfig
-	subcmdListDisk     = subcmdDisk
 	subcmdListSmap     = subcmdSmap
+
+	// Show subcommands
+	subcmdShowBucket   = subcmdBucket
+	subcmdShowDisk     = subcmdDisk
+	subcmdShowDownload = subcmdDownload
+	subcmdShowDsort    = subcmdDsort
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket
@@ -122,6 +125,7 @@ const (
 	// Buckets
 	optionalProviderArgument = "[BUCKET_PROVIDER]"
 	bucketArgument           = "BUCKET_NAME"
+	optionalBucketArgument   = "[BUCKET_NAME]"
 	bucketsArgument          = "BUCKET_NAME [BUCKET_NAME...]"
 	bucketOldNewArgument     = bucketArgument + " NEW_NAME"
 	bucketPropsArgument      = bucketArgument + " " + keyValuePairsArgument
@@ -137,7 +141,7 @@ const (
 	// Daemons
 	daemonIDArgument           = "DAEMON_ID"
 	optionalDaemonIDArgument   = "[DAEMON_ID]"
-	targetIDArgument           = "[TARGET_ID]"
+	optionalTargetIDArgument   = "[TARGET_ID]"
 	optionalDaemonTypeArgument = "[DAEMON_TYPE]"
 	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonTypeArgument
 	daemonStatsArgument        = daemonIDArgument + "|" + allArgument

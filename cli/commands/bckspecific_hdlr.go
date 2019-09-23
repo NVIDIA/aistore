@@ -6,8 +6,6 @@
 package commands
 
 import (
-	"os"
-
 	"github.com/urfave/cli"
 )
 
@@ -16,9 +14,6 @@ var (
 		commandSetCopies: {
 			providerFlag,
 			copiesFlag,
-		},
-		commandShow: {
-			providerFlag,
 		},
 	}
 
@@ -29,14 +24,6 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
 			Action:       setCopiesHandler,
-			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
-		},
-		{
-			Name:         commandShow,
-			Usage:        "show details about a bucket",
-			ArgsUsage:    bucketArgument,
-			Flags:        bucketSpecificCmdsFlags[commandShow],
-			Action:       showHandler,
 			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 		},
 	}
@@ -53,23 +40,4 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	}
 
 	return configureNCopies(c, baseParams, bucket)
-}
-
-func showHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		provider   string
-		bucket     string
-	)
-
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
-
-	bucket = c.Args().First()
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-	}
-
-	return bucketDetails(c, baseParams, bucket, provider)
 }

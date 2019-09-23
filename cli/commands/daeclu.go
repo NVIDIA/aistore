@@ -120,7 +120,7 @@ func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, us
 // Displays the disk stats of a target
 func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
-		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s %s works only for targets", daemonID, commandList, subcmdListDisk)
+		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s %s works only for targets", daemonID, commandShow, subcmdShowDisk)
 	}
 	if _, ok := target[daemonID]; daemonID != "" && !ok {
 		return fmt.Errorf("invalid target ID (%s) - no such target", daemonID)

@@ -1,5 +1,5 @@
 // Package commands provides the set of CLI commands used to communicate with the AIS cluster.
-// This specific file handles the CLI commands that list information about entities in the cluster.
+// This specific file handles the CLI commands that list cluster metadata information.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
@@ -40,26 +40,9 @@ var (
 			listObjectFlags,
 			providerFlag,
 		),
-		subcmdListDownload: {
-			regexFlag,
-			progressBarFlag,
-			refreshFlag,
-			verboseFlag,
-		},
-		subcmdListDsort: {
-			regexFlag,
-			refreshFlag,
-			verboseFlag,
-			logFlag,
-		},
 		subcmdListConfig: {
 			jsonFlag,
 		},
-		subcmdListDisk: append(
-			longRunFlags,
-			jsonFlag,
-			noHeaderFlag,
-		),
 		subcmdListSmap: {
 			jsonFlag,
 		},
@@ -68,7 +51,7 @@ var (
 	listCmds = []cli.Command{
 		{
 			Name:  commandList,
-			Usage: "lists information about entities in the cluster",
+			Usage: "lists cluster metadata information",
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdListBucket,
@@ -95,36 +78,12 @@ var (
 					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
-					Name:         subcmdListDownload,
-					Usage:        "lists download jobs",
-					ArgsUsage:    optionalJobIDArgument,
-					Flags:        listCmdsFlags[subcmdListDownload],
-					Action:       listDownloadsHandler,
-					BashComplete: downloadIDAllCompletions,
-				},
-				{
-					Name:         subcmdListDsort,
-					Usage:        "lists dSort jobs",
-					ArgsUsage:    optionalJobIDArgument,
-					Flags:        listCmdsFlags[subcmdListDsort],
-					Action:       listDsortHandler,
-					BashComplete: dsortIDAllCompletions,
-				},
-				{
 					Name:         subcmdListConfig,
 					Usage:        "lists daemon configuration",
 					ArgsUsage:    daemonIDArgument,
 					Flags:        listCmdsFlags[subcmdListConfig],
 					Action:       listConfigHandler,
 					BashComplete: daemonConfigSectionCompletions(false /* daemon optional */, true /* config optional */),
-				},
-				{
-					Name:         subcmdListDisk,
-					Usage:        "lists disk stats for targets",
-					ArgsUsage:    targetIDArgument,
-					Flags:        listCmdsFlags[subcmdListDisk],
-					Action:       listDisksHandler,
-					BashComplete: daemonCompletions(true /* optional */, true /* omit proxies */),
 				},
 				{
 					Name:         subcmdListSmap,
@@ -177,56 +136,11 @@ func listObjectsHandler(c *cli.Context) (err error) {
 	return listBucketObj(c, baseParams, bucket)
 }
 
-func listDownloadsHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		id         = c.Args().First()
-	)
-
-	if c.NArg() < 1 { // list all download jobs
-		return downloadJobsList(c, baseParams, parseStrFlag(c, regexFlag))
-	}
-
-	// display status of a download job with given id
-	return downloadJobStatus(c, baseParams, id)
-}
-
-func listDsortHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		id         = c.Args().First()
-	)
-
-	if c.NArg() < 1 { // list all dsort jobs
-		return dsortJobsList(c, baseParams, parseStrFlag(c, regexFlag))
-	}
-
-	// display status of a dsort job with given id
-	return dsortJobStatus(c, baseParams, id)
-}
-
 func listConfigHandler(c *cli.Context) (err error) {
 	if _, err = fillMap(ClusterURL); err != nil {
 		return
 	}
 	return getConfig(c, cliAPIParams(ClusterURL))
-}
-
-func listDisksHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		daemonID   = c.Args().First()
-	)
-
-	if _, err = fillMap(ClusterURL); err != nil {
-		return
-	}
-
-	if err = updateLongRunParams(c); err != nil {
-		return
-	}
-
-	return daemonDiskStats(c, baseParams, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func listSmapHandler(c *cli.Context) (err error) {
