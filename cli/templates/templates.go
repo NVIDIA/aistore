@@ -73,34 +73,36 @@ const (
 	ClusterSummary = "Summary:\n Proxies:\t{{len .Pmap}} ({{len .NonElects}} - unelectable)\n Targets:\t{{len .Tmap}}\n Primary Proxy:\t{{.ProxySI.DaemonID}}\n Smap Version:\t{{.Version}}\n"
 
 	// Stats
-	StatsHeader = "{{$obj := . }}\nDaemon: {{ .Snode.DaemonID }}\t Type: {{ .Snode.DaemonType }}\n\nStats\n"
+	StatsHeader = "{{$obj := . }}Daemon:\t{{ .Snode.DaemonID }}\nType:\t{{ .Snode.DaemonType }}\n\nStats\n-----\n"
 	StatsBody   = "{{range $key, $val := $obj.Stats.Tracker }}" +
 		"{{$statVal := ExtractStat $obj.Stats $key}}" +
 		"{{if (eq $statVal 0)}}{{else}}{{$key}}\t{{$statVal}}\n{{end}}" +
-		"{{end}}\n"
+		"{{end}}"
 
 	ProxyStatsTmpl  = StatsHeader + StatsBody
 	TargetStatsTmpl = StatsHeader + StatsBody +
-		"Mountpaths\t %CapacityUsed\t CapacityAvail\n" +
+		"\nMountpaths\t %CapacityUsed\t CapacityAvail\n" +
+		"----------\t -------------\t -------------\n" +
 		"{{range $key, $val := $obj.Capacity}}" +
 		"{{$key}}\t {{$val.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $val.Avail 5}}\n" +
-		"{{end}}\n"
+		"{{end}}"
 
-	StatsTmpl = "{{$obj := .Proxy }}\nProxy Stats\n" +
+	StatsTmpl = "{{$obj := .Proxy }}===========\nProxy Stats\n===========\n" +
 		"{{range $key, $ := $obj.Tracker }}" +
 		"{{$statVal := ExtractStat $obj $key}}" +
-		"{{if (eq $statVal 0)}}{{else}}{{$key}}\t{{$statVal}}\n{{end}}" +
+		"{{if (eq $statVal 0)}}{{else}}\t{{$key}}\t{{$statVal}}\n{{end}}" +
 		"{{end}}\n" +
 		"{{range $key, $val := .Target }}" +
-		"Target: {{$key}}\n" +
+		"====================\nTarget: {{$key}}\n====================\n" +
 		"{{range $statKey, $ := $val.Core.Tracker}}" +
 		"{{$statVal := ExtractStat $val.Core $statKey}}" +
-		"{{if (eq $statVal 0)}}{{else}}{{$statKey}}\t{{$statVal}}\n{{end}}" +
+		"{{if (eq $statVal 0)}}{{else}}\t{{$statKey}}\t{{$statVal}}\n{{end}}" +
 		"{{end}}\n" +
-		"Mountpaths\t %CapacityUsed\t CapacityAvail\n" +
+		"\tMountpaths\t %CapacityUsed\t CapacityAvail\n" +
+		"\t----------\t -------------\t -------------\n" +
 		"{{range $mount, $capa := $val.Capacity}}" +
-		"{{$mount}}\t {{$capa.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $capa.Avail 5}}\n" +
-		"{{end}}\n\n" +
+		"\t{{$mount}}\t {{$capa.Usedpct | printf `%0.2d`}}\t {{FormatBytesUnsigned $capa.Avail 5}}\n" +
+		"{{end}}\n" +
 		"{{end}}"
 
 	// Disk Stats

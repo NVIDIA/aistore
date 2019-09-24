@@ -39,6 +39,8 @@ const (
 	subcmdSmap     = cmn.GetWhatSmap
 	subcmdDisk     = cmn.GetWhatDiskStats
 	subcmdConfig   = cmn.GetWhatConfig
+	subcmdAIS      = "ais"
+	subcmdCloud    = "cloud"
 	subcmdBucket   = "bucket"
 	subcmdObject   = "object"
 	subcmdProps    = "props"
@@ -49,9 +51,10 @@ const (
 	subcmdTarget   = "target"
 
 	// List subcommands
+	subcmdListAIS      = subcmdAIS
+	subcmdListCloud    = subcmdCloud
 	subcmdListBucket   = subcmdBucket
 	subcmdListBckProps = subcmdProps
-	subcmdListObject   = subcmdObject
 	subcmdListConfig   = subcmdConfig
 	subcmdListSmap     = subcmdSmap
 
@@ -60,6 +63,9 @@ const (
 	subcmdShowDisk     = subcmdDisk
 	subcmdShowDownload = subcmdDownload
 	subcmdShowDsort    = subcmdDsort
+	subcmdShowObject   = subcmdObject
+	subcmdShowNode     = subcmdNode
+	subcmdShowXaction  = subcmdXaction
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket
@@ -96,11 +102,6 @@ const (
 	subcmdRegisterProxy  = subcmdProxy
 	subcmdRegisterTarget = subcmdTarget
 
-	// Stats subcommands
-	subcmdStatsNode    = subcmdNode
-	subcmdStatsXaction = subcmdXaction
-	subcmdStatsObject  = subcmdObject
-
 	// Env. var. related constants
 	aisBucketEnvVar         = "AIS_BUCKET"
 	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
@@ -123,12 +124,11 @@ const (
 	optionalJobIDArgument = "[JOB_ID]"
 
 	// Buckets
-	optionalProviderArgument = "[BUCKET_PROVIDER]"
-	bucketArgument           = "BUCKET_NAME"
-	optionalBucketArgument   = "[BUCKET_NAME]"
-	bucketsArgument          = "BUCKET_NAME [BUCKET_NAME...]"
-	bucketOldNewArgument     = bucketArgument + " NEW_NAME"
-	bucketPropsArgument      = bucketArgument + " " + keyValuePairsArgument
+	bucketArgument         = "BUCKET_NAME"
+	optionalBucketArgument = "[BUCKET_NAME]"
+	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
+	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
+	bucketPropsArgument    = bucketArgument + " " + keyValuePairsArgument
 
 	// Objects
 	getObjectArgument            = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
@@ -144,7 +144,6 @@ const (
 	optionalTargetIDArgument   = "[TARGET_ID]"
 	optionalDaemonTypeArgument = "[DAEMON_TYPE]"
 	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonIDArgument
-	daemonStatsArgument        = daemonIDArgument + "|" + allArgument
 	listConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
 	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
 	registerNodeArgumentText   = "IP:PORT " + optionalDaemonIDArgument
@@ -152,9 +151,10 @@ const (
 	jsonSpecArgument           = "JSON_SPECIFICATION"
 
 	// Xactions
-	xactionArgument                   = "XACTION_NAME"
-	xactionWithOptionalBucketArgument = "XACTION_NAME [BUCKET_NAME]"
-	stopStatsCommandXactionArgument   = "XACTION_NAME|" + allArgument + " [BUCKET_NAME]"
+	xactionArgument                           = "XACTION_NAME"
+	xactionWithOptionalBucketArgument         = "XACTION_NAME [BUCKET_NAME]"
+	optionalXactionWithOptionalBucketArgument = "[XACTION_NAME] [BUCKET_NAME]"
+	stopCommandXactionArgument                = "XACTION_NAME|" + allArgument + " [BUCKET_NAME]"
 
 	// Auth
 	addUserArgument    = "USER_NAME USER_PASSWORD"
@@ -238,7 +238,7 @@ var (
 	copiesFlag        = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1}
 	maxPagesFlag      = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
 	allItemsFlag      = cli.BoolTFlag{Name: "all-items", Usage: "show all items including old, duplicated etc"}
-	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all', 'limit', and 'page-size' are ignored in this mode"}
+	fastFlag          = cli.BoolTFlag{Name: "fast", Usage: "use fast API to list all object names in a bucket. Flags 'props', 'all-items', 'limit', and 'page-size' are ignored in this mode"}
 	pagedFlag         = cli.BoolFlag{Name: "paged", Usage: "fetch and print the bucket list page by page, ignored in fast mode"}
 	showUnmatchedFlag = cli.BoolTFlag{Name: "show-unmatched", Usage: "also list objects that were not matched by regex and template"}
 	activeFlag        = cli.BoolFlag{Name: "active", Usage: "show only running xactions"}

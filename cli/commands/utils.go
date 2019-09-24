@@ -496,14 +496,6 @@ func chooseTmpl(tmplShort, tmplLong string, useShort bool) string {
 	return tmplLong
 }
 
-func providerFromArgsOrEnv(c *cli.Context) (string, error) {
-	provider := c.Args().First()
-	if provider == "" {
-		provider, _ = os.LookupEnv(aisBucketProviderEnvVar)
-	}
-	return cmn.ProviderFromStr(provider)
-}
-
 func splitBucketObject(objname string) (bucket string, object string) {
 	s := strings.Split(objname, "/")
 	if len(s) > 1 {

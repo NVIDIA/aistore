@@ -38,11 +38,11 @@ Shows the cluster map (smap) copy of the `DAEMON_ID`. If `DAEMON_ID` isn't given
 | --- | --- |
 | `ais ls smap 1048575_8084` | Shows smap copy of daemon with ID `1048575_8084` |
 
-### Node stats
+### Node details
 
-`ais stats node DAEMON_ID|all`
+`ais show node [DAEMON_ID]`
 
-Shows the stats of the `DAEMON_ID`. If the first argument is `all`, it will return the stats of the current primary proxy and all the targets in the cluster.
+Shows details about `DAEMON_ID`. If `DAEMON_ID` is omitted, shows details about the current primary proxy and all the targets in the cluster.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |

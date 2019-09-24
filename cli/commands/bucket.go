@@ -72,12 +72,7 @@ func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string
 }
 
 // Rename ais bucket
-func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bucket, newBucket, err := getRenameBucketParameters(c)
-	if err != nil {
-		return err
-	}
-
+func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket string) (err error) {
 	if err = api.RenameBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -88,12 +83,7 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bucket, newBucket, err := getRenameBucketParameters(c)
-	if err != nil {
-		return err
-	}
-
+func copyBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket string) (err error) {
 	if err = api.CopyBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -439,8 +429,7 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 // Rename bucket expects 2 arguments - bucket name and new bucket name.
 // This function returns bucket name and new bucket name based on arguments provided to the command
 // and AIS_BUCKET env variable. In case something is missing it also generates a meaningful error message.
-// TODO: move this to appropriate handlers
-func getRenameBucketParameters(c *cli.Context) (bucket, newBucket string, err error) {
+func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 	var (
 		args     = c.Args()
 		argCount = c.NArg()

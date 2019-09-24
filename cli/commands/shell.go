@@ -136,23 +136,6 @@ func suggestUpdatableConfig(c *cli.Context) {
 // Bucket //
 ////////////
 
-// The function lists available providers if the first argument of the command was not yet specified.
-// Additionally, it will list available flags if the provider argument is optional and wasn't specified,
-// or it will list them anyway in case it was.
-func providerCompletions(optional bool) cli.BashCompleteFunc {
-	return func(c *cli.Context) {
-		if c.NArg() < 1 {
-			fmt.Printf("%s\n", cmn.ProviderAIS)
-			fmt.Printf("%s\n", cmn.ProviderAmazon)
-			fmt.Printf("%s\n", cmn.ProviderGoogle)
-			if !optional {
-				return
-			}
-		}
-		flagCompletions(c)
-	}
-}
-
 // The function lists buckets names if the first argument was not yet given, otherwise it lists flags and additional completions
 // Bucket names will also be listed after the first argument was given if true is passed to the 'multiple' param
 // Bucket names will contain a path separator '/' if true is passed to the 'separator' param

@@ -75,7 +75,7 @@ var (
 				{
 					Name:         subcmdStopXaction,
 					Usage:        "stops xactions",
-					ArgsUsage:    stopStatsCommandXactionArgument,
+					ArgsUsage:    stopCommandXactionArgument,
 					Description:  xactKindsMsg,
 					Flags:        stopCmdsFlags[subcmdStopXaction],
 					Action:       stopXactionHandler,
@@ -300,7 +300,7 @@ func stopDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job %s has been stopped successfully\n\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "%s job %s has been stopped successfully\n", cmn.DSortName, id)
 	return
 }
 

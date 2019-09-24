@@ -7,6 +7,7 @@ package commands
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -28,18 +29,22 @@ var (
 	}
 
 	listCmdsFlags = map[string][]cli.Flag{
-		subcmdListBucket: {
+		subcmdListAIS: {
 			regexFlag,
 			noHeaderFlag,
 		},
+		subcmdListCloud: {
+			regexFlag,
+			noHeaderFlag,
+		},
+		subcmdListBucket: append(
+			listObjectFlags,
+			providerFlag,
+		),
 		subcmdListBckProps: {
 			providerFlag,
 			jsonFlag,
 		},
-		subcmdListObject: append(
-			listObjectFlags,
-			providerFlag,
-		),
 		subcmdListConfig: {
 			jsonFlag,
 		},
@@ -56,10 +61,26 @@ var (
 				{
 					Name:         subcmdListBucket,
 					Usage:        "lists bucket names",
-					ArgsUsage:    optionalProviderArgument,
+					ArgsUsage:    bucketArgument,
 					Flags:        listCmdsFlags[subcmdListBucket],
 					Action:       listBucketsHandler,
-					BashComplete: providerCompletions(true /* optional */),
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+				},
+				{
+					Name:         subcmdListAIS,
+					Usage:        "lists ais buckets",
+					ArgsUsage:    noArguments,
+					Flags:        listCmdsFlags[subcmdListAIS],
+					Action:       listAISBucketsHandler,
+					BashComplete: flagCompletions,
+				},
+				{
+					Name:         subcmdListCloud,
+					Usage:        "lists cloud buckets",
+					ArgsUsage:    noArguments,
+					Flags:        listCmdsFlags[subcmdListCloud],
+					Action:       listCloudBucketsHandler,
+					BashComplete: flagCompletions,
 				},
 				{
 					Name:         subcmdListBckProps,
@@ -67,14 +88,6 @@ var (
 					ArgsUsage:    bucketArgument,
 					Flags:        listCmdsFlags[subcmdListBckProps],
 					Action:       listBckPropsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
-				},
-				{
-					Name:         subcmdListObject,
-					Usage:        "lists bucket objects",
-					ArgsUsage:    bucketArgument,
-					Flags:        listCmdsFlags[subcmdListObject],
-					Action:       listObjectsHandler,
 					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 				},
 				{
@@ -98,35 +111,27 @@ var (
 	}
 )
 
-func listBucketsHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(ClusterURL)
-		provider   string
-	)
-
-	if provider, err = providerFromArgsOrEnv(c); err != nil {
-		return
-	}
-
-	return listBucketNames(c, baseParams, provider)
-}
-
-func listBckPropsHandler(c *cli.Context) (err error) {
+func listAISBucketsHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
-	return listBucketProps(c, baseParams)
+	return listBucketNames(c, baseParams, cmn.AIS)
 }
 
-func listObjectsHandler(c *cli.Context) (err error) {
+func listCloudBucketsHandler(c *cli.Context) (err error) {
+	baseParams := cliAPIParams(ClusterURL)
+	return listBucketNames(c, baseParams, cmn.Cloud)
+}
+
+func listBucketsHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
 		provider   string
 		bucket     string
 	)
 
-	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
+	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
-	if provider, err = bucketProvider(c); err != nil {
+	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
 		return
 	}
 	if err = canReachBucket(baseParams, bucket, provider); err != nil {
@@ -134,6 +139,11 @@ func listObjectsHandler(c *cli.Context) (err error) {
 	}
 
 	return listBucketObj(c, baseParams, bucket)
+}
+
+func listBckPropsHandler(c *cli.Context) (err error) {
+	baseParams := cliAPIParams(ClusterURL)
+	return listBucketProps(c, baseParams)
 }
 
 func listConfigHandler(c *cli.Context) (err error) {

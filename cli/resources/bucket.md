@@ -15,17 +15,41 @@ Creates an ais bucket or buckets.
 
 Deletes an ais bucket or buckets.
 
-### List bucket names
+### List bucket names and objects
 
-`ais ls bucket [BUCKET_PROVIDER]`
+`ais ls ais`
 
-Lists bucket names. If the `BUCKET_PROVIDER` argument is given, only bucket names
-from the specified provider are listed.
+Lists AIS bucket names.
+
+`ais ls cloud`
+
+Lists cloud bucket names.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--regex` | `string` | Pattern for bucket name matching | `""` |
+| `--regex` | `string` | Pattern for matching bucket names | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
+
+`ais ls bucket BUCKET_NAME`
+
+Lists objects in the bucket `BUCKET_NAME`.
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--regex` | `string` | Pattern for matching object names | `""` |
+| `--template` | `string` | Template for matching object names | `""` |
+| `--prefix` | `string` | Prefix for matching object names | `""` |
+| `--fast` | `bool` | Use fast API to list all object names | `false` |
+| `--paged` | `bool` | Fetch and print objects page by page (ignored in fast mode) | `false` |
+| `--max-pages` | `int` | Max. number of pages to list | `0` |
+| `--page-size` | `int` | Max. number of object names per page | `1000` |
+| `--props` | `string` | Comma-separated properties to return with object names (ignored in fast mode) | `"size,version"`
+| `--limit` | `int` | Max. number of object names to list (ignored in fast mode) | `0` |
+| `--show-unmatched` | `bool` | List objects unmatched by regex and template as well, after the matched ones | `false` |
+| `--all-items` | `bool` | Show all items, including all, duplicated, etc. (ignored in fast mode) | `false` |
+| `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
+| `--no-headers` | `bool` | Display tables without headers | `false` |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### Evict
 

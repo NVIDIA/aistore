@@ -35,5 +35,9 @@ var (
 
 func copyBucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
-	return copyBucket(c, baseParams)
+	bucket, newBucket, err := getOldNewBucketName(c)
+	if err != nil {
+		return
+	}
+	return copyBucket(c, baseParams, bucket, newBucket)
 }

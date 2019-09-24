@@ -49,7 +49,11 @@ var (
 
 func renameBucketHandler(c *cli.Context) (err error) {
 	baseParams := cliAPIParams(ClusterURL)
-	return renameBucket(c, baseParams)
+	bucket, newBucket, err := getOldNewBucketName(c)
+	if err != nil {
+		return
+	}
+	return renameBucket(c, baseParams, bucket, newBucket)
 }
 
 func renameObjectHandler(c *cli.Context) (err error) {
