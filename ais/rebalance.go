@@ -38,6 +38,7 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
+	rebStageECNameSpace
 	rebStageWaitAck
 	rebStageFin
 	rebStageFinStreams
@@ -89,6 +90,14 @@ type (
 		mu *sync.Mutex
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
+	globalRebArgs struct {
+		smap      *smapX
+		config    *cmn.Config
+		xreb      *xactGlobalReb
+		paths     fs.MPI
+		pmarker   string
+		globRebID int64
+	}
 )
 
 var rebStage = map[uint32]string{
@@ -114,50 +123,43 @@ func (reb *rebManager) loghdr(globRebID int64, smap *smapX) string {
 	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.version(), stage)
 }
 
-// main method: 10 stages
-func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...string) {
-	var (
-		ver         = smap.version()
-		config      = cmn.GCO.Get()
-		sleep       = config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
-		maxwt       = config.Rebalance.DestRetryTime
-		wg          = &sync.WaitGroup{}
-		curwt       time.Duration
-		aPaths      fs.MPI
-		xreb        *xactGlobalReb
-		errCnt, cnt int
-	)
+func (reb *rebManager) globalRebPrecheck(md *globalRebArgs) bool {
 	// 1. check whether other targets are up and running
-	if errCnt = reb.bcast(smap, globRebID, config, reb.pingTarget, nil /*xreb*/); errCnt > 0 {
-		return
+	if errCnt := reb.bcast(md.smap, md.globRebID, md.config, reb.pingTarget, nil /*xreb*/); errCnt > 0 {
+		return false
 	}
-	if smap.version() == 0 {
-		smap = reb.t.smapowner.get()
+	if md.smap.version() == 0 {
+		md.smap = reb.t.smapowner.get()
 	}
+
 	// 2. serialize (rebalancing operations - one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
-	if newerSmap, alreadyRunning := reb.serialize(smap, config, globRebID); newerSmap || alreadyRunning {
-		return
+	if newerSmap, alreadyRunning := reb.serialize(md.smap, md.config, md.globRebID); newerSmap || alreadyRunning {
+		return false
 	}
-	if smap.version() == 0 {
-		smap = reb.t.smapowner.get()
+	if md.smap.version() == 0 {
+		md.smap = reb.t.smapowner.get()
 	}
 
+	md.paths, _ = fs.Mountpaths.Get()
+	return true
+}
+
+func (reb *rebManager) globalRebInit(md *globalRebArgs, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
-	availablePaths, _ := fs.Mountpaths.Get()
-	xreb = reb.t.xactions.renewGlobalReb(ver, globRebID, len(availablePaths)*2)
-	cmn.Assert(xreb != nil) // must renew given the CAS and checks above
+	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.version(), md.globRebID, len(md.paths)*2)
+	cmn.Assert(md.xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
-		xreb.bucket = buckets[0] // for better identity (limited usage)
+		md.xreb.bucket = buckets[0] // for better identity (limited usage)
 	}
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
-	reb.beginStreams(config)
+	reb.beginStreams(md.config)
 	reb.filterGFN.Reset() // start with empty filters
-	reb.tcache.tmap = make(cluster.NodeMap, smap.CountTargets()-1)
+	reb.tcache.tmap = make(cluster.NodeMap, md.smap.CountTargets()-1)
 	reb.tcache.mu = &sync.Mutex{}
 	acks := reb.lomAcks()
 	for i := 0; i < len(acks); i++ { // init lom acks
@@ -165,160 +167,218 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	}
 
 	// 4. create persistent mark
-	pmarker := persistentMarker(cmn.ActGlobalReb)
-	file, err := cmn.CreateFile(pmarker)
+	md.pmarker = persistentMarker(cmn.ActGlobalReb)
+	file, err := cmn.CreateFile(md.pmarker)
 	if err != nil {
-		glog.Errorln("Failed to create", pmarker, err)
-		pmarker = ""
+		glog.Errorln("Failed to create", md.pmarker, err)
+		md.pmarker = ""
 	} else {
 		_ = file.Close()
 	}
 
 	// 5. ready - can receive objects
-	reb.smap.Store(unsafe.Pointer(smap))
-	reb.globRebID.Store(globRebID)
-	glog.Infof("%s: %s", reb.loghdr(globRebID, smap), xreb.String())
+	reb.smap.Store(unsafe.Pointer(md.smap))
+	reb.globRebID.Store(md.globRebID)
+	glog.Infof("%s: %s", reb.loghdr(md.globRebID, md.smap), md.xreb.String())
 
-	// 6. capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
-	reb.stage.Store(rebStageTraverse)
+	return true
+}
 
-	// 6.5. synchronize
-	glog.Infof("%s: poll targets for: stage=%s", reb.loghdr(globRebID, smap), rebStage[rebStageTraverse])
-	_ = reb.bcast(smap, globRebID, config, reb.rxReady, xreb) // NOTE: ignore timeout
-	if xreb.Aborted() {
-		glog.Infof("%s: abrt", reb.loghdr(globRebID, smap))
-		goto term
+// when at least one bucket has EC enabled
+func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
+	ecScrub := newECScrubber(reb.t, md.xreb, md.globRebID)
+	if err := ecScrub.run(); err != nil {
+		return err
 	}
-	for _, mpathInfo := range availablePaths {
+
+	reb.stage.Store(rebStageECNameSpace)
+	err := ecScrub.waiter.waitAllStage(reb, md.xreb, rebStageECNameSpace)
+
+	// stub to test if it found all items correctly:
+	//   -  sum of all RxRebCount must equal the number of objects
+	//   -  sum of all TxRebCount must equal the total number of slices/replicas
+	//		minus the number of objects
+	// TODO: remove after implementing the next step
+	locSlices := int64(0)
+	remSlices := int64(0)
+	for sid, slices := range ecScrub.slices {
+		if sid == reb.t.si.DaemonID {
+			locSlices += int64(len(slices))
+		} else {
+			remSlices += int64(len(slices))
+		}
+	}
+	reb.t.statsif.AddMany(
+		stats.NamedVal64{stats.TxRebCount, remSlices},
+		stats.NamedVal64{stats.RxRebCount, locSlices})
+
+	/* TODO:
+			- send all collected info to other targets
+			- wait for all to send
+	        - merge, sort, and change state to ecScrubStageCompleted
+	*/
+
+	ecScrub.stop()
+	return err
+}
+
+// when no bucket has EC enabled
+func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
+	wg := &sync.WaitGroup{}
+	ver := md.smap.version()
+	multiplier := md.config.Rebalance.Multiplier
+	_ = reb.bcast(md.smap, md.globRebID, md.config, reb.rxReady, md.xreb) // NOTE: ignore timeout
+	if md.xreb.Aborted() {
+		err := fmt.Errorf("%s: aborted", reb.loghdr(md.globRebID, md.smap))
+		return err
+	}
+	for _, mpathInfo := range md.paths {
 		var (
 			sema   chan struct{}
 			mpathL string
 		)
 		mpathL = mpathInfo.MakePath(fs.ObjectType, cmn.AIS)
-		if config.Rebalance.Multiplier > 1 {
-			sema = make(chan struct{}, config.Rebalance.Multiplier)
+		if multiplier > 1 {
+			sema = make(chan struct{}, multiplier)
 		}
-		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &xreb.xactRebBase, wg: wg},
-			smap: smap, sema: sema, ver: ver}
+		rl := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathL, xreb: &md.xreb.xactRebBase, wg: wg},
+			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rl.jog()
 	}
-	for _, mpathInfo := range availablePaths {
+	for _, mpathInfo := range md.paths {
 		var sema chan struct{}
 		mpathC := mpathInfo.MakePath(fs.ObjectType, cmn.Cloud)
-		if config.Rebalance.Multiplier > 1 {
-			sema = make(chan struct{}, config.Rebalance.Multiplier)
+		if multiplier > 1 {
+			sema = make(chan struct{}, multiplier)
 		}
-		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &xreb.xactRebBase, wg: wg},
-			smap: smap, sema: sema, ver: ver}
+		rc := &globalRebJogger{rebJoggerBase: rebJoggerBase{m: reb, mpath: mpathC, xreb: &md.xreb.xactRebBase, wg: wg},
+			smap: md.smap, sema: sema, ver: ver}
 		wg.Add(1)
 		go rc.jog()
 	}
 	wg.Wait()
-	if xreb.Aborted() {
-		glog.Infof("%s: abrt", reb.loghdr(globRebID, smap))
-		goto term
+	if md.xreb.Aborted() {
+		err := fmt.Errorf("%s: aborted", reb.loghdr(md.globRebID, md.smap))
+		return err
+	}
+	return nil
+}
+
+func (reb *rebManager) globalRebSyncAndRun(md *globalRebArgs) error {
+	// 6. capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
+	reb.stage.Store(rebStageTraverse)
+	glog.Infof("%s: poll targets for: stage=%s", reb.loghdr(md.globRebID, md.smap), rebStage[rebStageTraverse])
+
+	if reb.t.bmdowner.get().ecUsed() {
+		return reb.globalRebRunEC(md)
 	}
 
-	// 7. wait for ACKs
-wack:
+	return reb.globalRebRun(md)
+}
+
+func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 	reb.stage.Store(rebStageWaitAck)
-	curwt = 0
-	maxwt += time.Duration(int64(time.Minute) * int64(smap.CountTargets()/10))
-	maxwt = cmn.MinDur(maxwt, config.Rebalance.DestRetryTime*2)
-	// poll for no more than maxwt while keeping track of the cumulative polling time via curwt
-	// (here and elsewhere)
-	for curwt < maxwt {
-		cnt = 0
-		var logged bool
-		for _, lomack := range reb.lomAcks() {
-			lomack.mu.Lock()
-			if l := len(lomack.q); l > 0 {
-				cnt += l
-				if !logged {
-					for _, lom := range lomack.q {
-						tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
-						if err == nil {
-							glog.Infof("waiting for %s ACK from %s", lom, tsi)
-							logged = true
-							break
+	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
+	maxwt := md.config.Rebalance.DestRetryTime
+	cnt := 0
+	maxwt += time.Duration(int64(time.Minute) * int64(md.smap.CountTargets()/10))
+	maxwt = cmn.MinDur(maxwt, md.config.Rebalance.DestRetryTime*2)
+
+	for {
+		curwt := time.Duration(0)
+		// poll for no more than maxwt while keeping track of the cumulative polling time via curwt
+		// (here and elsewhere)
+		for curwt < maxwt {
+			cnt = 0
+			var logged bool
+			for _, lomack := range reb.lomAcks() {
+				lomack.mu.Lock()
+				if l := len(lomack.q); l > 0 {
+					cnt += l
+					if !logged {
+						for _, lom := range lomack.q {
+							tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, &md.smap.Smap)
+							if err == nil {
+								glog.Infof("waiting for %s ACK from %s", lom, tsi)
+								logged = true
+								break
+							}
 						}
 					}
 				}
+				lomack.mu.Unlock()
+				if md.xreb.Aborted() {
+					glog.Infof("%s: abrt", reb.loghdr(md.globRebID, md.smap))
+					return
+				}
 			}
-			lomack.mu.Unlock()
-			if xreb.Aborted() {
-				glog.Infof("%s: abrt", reb.loghdr(globRebID, smap))
-				goto term
+			if cnt == 0 {
+				glog.Infof("%s: received all ACKs", reb.loghdr(md.globRebID, md.smap))
+				break
 			}
+			glog.Warningf("%s: waiting for %d ACKs", reb.loghdr(md.globRebID, md.smap), cnt)
+			if md.xreb.abortedAfter(sleep) {
+				glog.Infof("%s: abrt", reb.loghdr(md.globRebID, md.smap))
+				return
+			}
+			curwt += sleep
 		}
-		if cnt == 0 {
-			glog.Infof("%s: received all ACKs", reb.loghdr(globRebID, smap))
+		if cnt > 0 {
+			glog.Warningf("%s: timed-out waiting for %d ACK(s)", reb.loghdr(md.globRebID, md.smap), cnt)
+		}
+		if md.xreb.Aborted() {
+			return
+		}
+
+		// NOTE: requires locally migrated objects *not* to be removed at the src
+		aPaths, _ := fs.Mountpaths.Get()
+		if len(aPaths) > len(md.paths) {
+			glog.Warningf("%s: mountpath changes detected (%d, %d)", reb.loghdr(md.globRebID, md.smap), len(aPaths), len(md.paths))
+		}
+
+		// 8. synchronize
+		glog.Infof("%s: poll targets for: stage=(%s or %s***)", reb.loghdr(md.globRebID, md.smap), rebStage[rebStageFin], rebStage[rebStageWaitAck])
+		errCnt = reb.bcast(md.smap, md.globRebID, md.config, reb.waitFinExtended, md.xreb)
+		if md.xreb.Aborted() {
+			return
+		}
+
+		// 9. retransmit if needed
+		cnt = reb.retransmit(md.xreb, md.globRebID)
+		if cnt == 0 || md.xreb.Aborted() {
 			break
 		}
-		glog.Warningf("%s: waiting for %d ACKs", reb.loghdr(globRebID, smap), cnt)
-		if xreb.abortedAfter(sleep) {
-			glog.Infof("%s: abrt", reb.loghdr(globRebID, smap))
-			goto term
-		}
-		curwt += sleep
-	}
-	if cnt > 0 {
-		glog.Warningf("%s: timed-out waiting for %d ACK(s)", reb.loghdr(globRebID, smap), cnt)
-	}
-	if xreb.Aborted() {
-		goto term
+		glog.Warningf("%s: retransmitted %d, more wack...", reb.loghdr(md.globRebID, md.smap), cnt)
 	}
 
-	// NOTE: requires locally migrated objects *not* to be removed at the src
-	aPaths, _ = fs.Mountpaths.Get()
-	if len(aPaths) > len(availablePaths) {
-		glog.Warningf("%s: mountpath changes detected (%d, %d)", reb.loghdr(globRebID, smap), len(aPaths), len(availablePaths))
-	}
+	return
+}
 
-	// 8. synchronize
-	glog.Infof("%s: poll targets for: stage=(%s or %s***)", reb.loghdr(globRebID, smap), rebStage[rebStageFin], rebStage[rebStageWaitAck])
-	errCnt = reb.bcast(smap, globRebID, config, reb.waitFinExtended, xreb)
-	if xreb.Aborted() {
-		goto term
-	}
-
-	// 9. retransmit if needed
-	cnt = reb.retransmit(xreb, globRebID)
-	if cnt > 0 && !xreb.Aborted() {
-		glog.Warningf("%s: retransmitted %d, more wack...", reb.loghdr(globRebID, smap), cnt)
-		goto wack
-	}
-term:
-	// 10. close streams, end xaction, deactivate GFN (FIXME: hardcoded sleep)
-	reb.stage.Store(rebStageFin)
-
+func (reb *rebManager) globalRebFini(md *globalRebArgs) {
+	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	// 10.5. keep at it... (can't close the streams as long as)
-	for errCnt > 0 && !xreb.Aborted() {
-		errCnt = reb.bcast(smap, globRebID, config, reb.waitFinExtended, xreb)
-	}
-
 	quiescent, maxquiet := 0, 10 // e.g., 10 * 2s (Cplane) = 20 seconds of /quiet/ time - see laterx
-	aborted := xreb.Aborted()
+	aborted := md.xreb.Aborted()
 	for quiescent < maxquiet && !aborted {
 		if !reb.laterx.CAS(true, false) {
 			quiescent++
 		} else {
 			quiescent = 0
 		}
-		aborted = xreb.abortedAfter(sleep)
+		aborted = md.xreb.abortedAfter(sleep)
 	}
 	if !aborted {
-		if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
-			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(globRebID, smap), pmarker, err)
+		if err := os.Remove(md.pmarker); err != nil && !os.IsNotExist(err) {
+			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(md.globRebID, md.smap), md.pmarker, err)
 		}
 	}
 	reb.endStreams()
 	reb.t.gfn.global.deactivate()
-	if !xreb.Finished() {
-		xreb.EndTime(time.Now())
+	if !md.xreb.Finished() {
+		md.xreb.EndTime(time.Now())
 	} else {
-		glog.Infoln(xreb.String())
+		glog.Infoln(md.xreb.String())
 	}
 	{
 		status := &rebStatus{}
@@ -330,6 +390,33 @@ term:
 	}
 	reb.stage.Store(rebStageDone)
 	reb.semaCh <- struct{}{}
+}
+
+// main method: 10 stages
+func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...string) {
+	md := &globalRebArgs{
+		smap:      smap,
+		config:    cmn.GCO.Get(),
+		globRebID: globRebID,
+	}
+	if !reb.globalRebPrecheck(md) {
+		return
+	}
+	if !reb.globalRebInit(md, buckets...) {
+		return
+	}
+
+	errCnt := 0
+	if err := reb.globalRebSyncAndRun(md); err == nil {
+		errCnt = reb.globalRebWaitAck(md)
+	} else {
+		glog.Warning(err)
+	}
+	reb.stage.Store(rebStageFin)
+	for errCnt != 0 && !md.xreb.Aborted() {
+		errCnt = reb.bcast(md.smap, md.globRebID, md.config, reb.waitFinExtended, md.xreb)
+	}
+	reb.globalRebFini(md)
 }
 
 func (reb *rebManager) serialize(smap *smapX, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {

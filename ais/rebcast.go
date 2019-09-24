@@ -205,7 +205,7 @@ func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, smap *smapX, globRebI
 			glog.Infof("%s: abrt wack", reb.loghdr(globRebID, smap))
 			return
 		}
-		if status.Stage <= rebStageTraverse {
+		if status.Stage <= rebStageECNameSpace {
 			glog.Infof("%s: keep waiting for %s[%s]", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[status.Stage])
 			time.Sleep(sleepRetry)
 			curwt += sleepRetry

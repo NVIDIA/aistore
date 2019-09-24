@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -1375,7 +1374,6 @@ func waitForBucketXactionToStart(t *testing.T, kind, bucket string, baseParams *
 	for {
 		stats, err := tutils.GetXactionStats(baseParams, kind, bucket)
 		checkXactAPIErr(t, err)
-		glog.Error(stats)
 		for _, targetStats := range stats {
 			for _, xaction := range targetStats {
 				if xaction.Running() {

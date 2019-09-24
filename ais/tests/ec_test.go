@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
 	"github.com/NVIDIA/aistore/tutils/tassert"
 )
@@ -645,6 +646,41 @@ func createECReplicas(t *testing.T, baseParams *api.BaseParams, bucket, objName 
 
 	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
 	tassert.Errorf(t, mainObjPath != "", "Full copy is not found")
+}
+
+func createECObject(t *testing.T, baseParams *api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) int {
+	const (
+		smallEvery = 7 // Every N-th object is small
+	)
+
+	o.sema <- struct{}{}
+	defer func() {
+		<-o.sema
+	}()
+
+	totalCnt, objSize, sliceSize, doEC := randObjectSize(idx, smallEvery, o)
+	objPath := ecTestDir + objName
+	ecStr := "-"
+	if doEC {
+		ecStr = "EC"
+	}
+	tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
+	r, err := tutils.NewRandReader(objSize, false)
+	tassert.CheckFatal(t, err)
+	defer r.Close()
+
+	putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: bucket, Object: objPath, Reader: r}
+	err = api.PutObject(putArgs)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logf("waiting for %s\n", objPath)
+	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
+
+	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
+	if mainObjPath == "" {
+		t.Errorf("Full copy is not found")
+	}
+	return totalCnt
 }
 
 func createDamageRestoreECFile(t *testing.T, baseParams *api.BaseParams, bucket, objName string, idx int, fullPath string, o *ecOptions) {
@@ -2021,6 +2057,94 @@ func TestECEmergencyMpath(t *testing.T) {
 	reslist.Entries = filterObjListOK(reslist.Entries)
 	if len(reslist.Entries) != o.objCount {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), o.objCount)
+	}
+}
+
+func globalRebCounters(baseParams *api.BaseParams) (int, int) {
+	rebStats, err := api.MakeXactGetRequest(baseParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
+	if err != nil {
+		// no xaction - all zeroes
+		return 0, 0
+	}
+	objCount := 0
+	sliceCount := 0
+	for _, daemonStats := range rebStats {
+		for _, st := range daemonStats {
+			extStats := st.Ext.(map[string]interface{})
+			sliceCount += int(extStats[stats.TxRebCount].(float64))
+			objCount += int(extStats[stats.RxRebCount].(float64))
+		}
+	}
+	return objCount, sliceCount
+}
+
+// Simple test to check if EC correctly finds all the objects and its slices
+// that will be used by rebalance
+func TestECRebalance(t *testing.T) {
+	var (
+		bucket   = TestBucketName
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+	)
+
+	o := ecOptions{
+		objCount: 50,
+		concurr:  8,
+		pattern:  "obj-reb-chk-%04d",
+		isAIS:    true,
+	}.init()
+
+	smap := getClusterMap(t, proxyURL)
+	err := ecSliceNumInit(t, smap, o)
+	tassert.CheckFatal(t, err)
+
+	sgl := tutils.Mem2.NewSGL(0)
+	defer sgl.Free()
+
+	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
+
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
+
+	wg := sync.WaitGroup{}
+
+	var sliceTotal atomic.Int32
+	wg.Add(o.objCount)
+	for i := 0; i < o.objCount; i++ {
+		objName := fmt.Sprintf(o.pattern, i)
+		go func(i int) {
+			defer wg.Done()
+			total := createECObject(t, baseParams, bucket, objName, i, fullPath, o)
+			// divide returned total by 2 because it includes metadata files
+			sliceTotal.Add(int32(total / 2))
+		}(i)
+	}
+	wg.Wait()
+
+	defer clearAllECObjects(t, bucket, true, o)
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	assertBucketSize(t, baseParams, bucket, o.objCount)
+
+	oldObjCount, oldSliceCount := globalRebCounters(baseParams)
+	// Manual rebalance call
+	err = api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "")
+	tassert.CheckFatal(t, err)
+	tutils.Logf("%d objects created, starting global rebalance\n", o.objCount)
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	newObjCount, newSliceCount := globalRebCounters(baseParams)
+	objCount, sliceCount := newObjCount-oldObjCount, newSliceCount-oldSliceCount
+	tutils.Logf("Rebalance found %d objects and %d slices\n", objCount, sliceCount)
+	if objCount != o.objCount {
+		t.Errorf("Invalid number of objects: found %d, expected %d", objCount, o.objCount)
+	}
+	if objCount+sliceCount != int(sliceTotal.Load()) {
+		t.Errorf("Invalid number of slices: found %d, expected %d", objCount+sliceCount, sliceTotal.Load())
 	}
 }
 
