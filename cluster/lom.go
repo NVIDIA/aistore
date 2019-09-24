@@ -644,19 +644,19 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 // this code does an extra check only for an ais bucket
 func (lom *LOM) Exists() bool {
 	cmn.Dassert(lom.loaded, pkgName) // cannot check existence without first calling lom.Load()
-	if lom.IsAIS() && lom.exists {
-		bmd := lom.T.GetBowner().Get()
-		lom.bck.Props, _ = bmd.Get(lom.bck)
-		if lom.bck.Props != nil && lom.md.bckID == lom.bck.Props.BID {
-			return true
-		}
-		// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
-		lom.Uncache()
-		lom.exists = false
+	if !lom.exists {
 		return false
 	}
-	// not yet enforcing Cloud buckets pre-(PUT/cold-GET)-existence
-	return lom.exists
+
+	bmd := lom.T.GetBowner().Get()
+	lom.bck.Props, _ = bmd.Get(lom.bck)
+	if lom.bck.Props != nil && lom.md.bckID == lom.bck.Props.BID {
+		return true
+	}
+	// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
+	lom.Uncache()
+	lom.exists = false
+	return false
 }
 
 func (lom *LOM) ReCache() {
