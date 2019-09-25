@@ -182,16 +182,19 @@ type BucketList struct {
 }
 
 type BucketSummary struct {
-	Name     string `json:"name"`
-	ObjCount uint64 `json:"count"`
-	Size     uint64 `json:"size"`
-	UsedPct  uint64 `json:"used_pct"`
-	Provider string `json:"provider"`
+	Name           string `json:"name"`
+	ObjCount       uint64 `json:"count"`
+	Size           uint64 `json:"size"`
+	TotalDisksSize uint64 `json:"disks_size"`
+	UsedPct        uint64 `json:"used_pct"`
+	Provider       string `json:"provider"`
 }
 
 func (bs *BucketSummary) Aggregate(bckSummary BucketSummary) {
 	bs.ObjCount += bckSummary.ObjCount
 	bs.Size += bckSummary.Size
+	bs.TotalDisksSize += bckSummary.TotalDisksSize
+	bs.UsedPct = bs.Size * 100 / bs.TotalDisksSize
 }
 
 type BucketsSummaries map[string]BucketSummary

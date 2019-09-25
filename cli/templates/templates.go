@@ -311,7 +311,10 @@ const (
 		XactionExtBody +
 		"{{end}}" +
 		"{{end}}"
-	BucketsSummariesTmpl = "Name\tObjects\tSize\tUsed(%)\tProvider\n{{range $k, $v := . }}{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{$v.UsedPct}}%\t{{$v.Provider}}\n{{end}}"
+	BucketsSummariesTmpl = "Name\tObjects\tSize\tUsed(%)\tProvider\n" +
+		"{{range $k, $v := . }}" +
+		"{{$v.Name}}\t{{$v.ObjCount}}\t{{FormatBytesUnsigned $v.Size 2}}\t{{$v.UsedPct}}%\t{{$v.Provider}}\n" +
+		"{{end}}"
 
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t

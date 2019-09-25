@@ -18,9 +18,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/downloader"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/housekeep/lru"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -843,13 +843,11 @@ func (r *xactBckSummaryTask) Run() {
 	)
 	wg.Add(len(buckets))
 
-	// TODO: we should have general way to get size of the disk
-	blocks, _, blockSize, err := ios.GetFSStats("/")
+	totalDisksSize, err := fs.GetTotalDisksSize()
 	if err != nil {
 		r.UpdateResult(nil, err)
 		return
 	}
-	totalDisksSize := blocks * uint64(blockSize)
 
 	for _, bck := range buckets {
 		go func(bck *cluster.Bck) {
@@ -860,8 +858,9 @@ func (r *xactBckSummaryTask) Run() {
 			)
 
 			summary := cmn.BucketSummary{
-				Name:     bck.Name,
-				Provider: bck.Provider,
+				Name:           bck.Name,
+				Provider:       bck.Provider,
+				TotalDisksSize: totalDisksSize,
 			}
 
 			for {
@@ -885,7 +884,6 @@ func (r *xactBckSummaryTask) Run() {
 				msg.PageMarker = list.PageMarker
 			}
 
-			summary.UsedPct = summary.Size * 100 / totalDisksSize
 			summaries[bck.Name] = summary
 		}(bck)
 	}
