@@ -8,7 +8,7 @@ MAKEFLAGS += --no-print-directory
 # Build version, flags, and tags
 VERSION = $(shell git rev-parse --short HEAD)
 BUILD = $(shell date +%FT%T%z)
-FLAGS = $(if $(strip $(GORACE)),-race,)
+GOFLAGS = $(if $(strip $(GORACE)),-race,)
 ifdef TAGS
 	BUILD_TAGS = "$(CLDPROVIDER) $(TAGS)"
 else
@@ -61,7 +61,7 @@ ifneq ($(strip $(GORACE)),)
 	@echo "Deploying with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>"
 endif
 	@GORACE=$(GORACE) GODEBUG="madvdontneed=1" \
-		go install $(FLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
+		go install $(GOFLAGS) -tags=$(BUILD_TAGS) $(GCFLAGS) $(LDFLAGS) $(BUILD_SRC)
 	@echo "done."
 
 aisfs: ## Build 'aisfs' binary
@@ -78,7 +78,7 @@ cli-autocomplete: ## Add CLI autocompletions
 
 authn: ## Build 'authn' binary
 	@echo -n "Building authn... "
-	@go install $(FLAGS) $(LDFLAGS) ./authn
+	@go install $(GOFLAGS) $(LDFLAGS) ./authn
 	@echo "done."
 
 aisloader: ## Build 'aisloader' binary
@@ -158,7 +158,7 @@ test-soak: ## Run soaking tests
 ifeq ($(FLAGS),)
 	$(warning FLAGS="soak test flags" not passed, using defaults)
 endif
-	-@./bench/soaktest/soaktest.sh $(FLAGS)
+	@./bench/soaktest/soaktest.sh $(FLAGS)
 
 
 test-envcheck:

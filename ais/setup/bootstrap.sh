@@ -104,7 +104,7 @@ test-long)
   err_count=$(echo "${errs}" | wc -l)
   if [[ -n ${errs} ]]; then
     echo "${errs}" >&2
-    echo "test-short: ${err_count} failed" >&2
+    echo "test-long: ${err_count} failed" >&2
     exit 1
   fi
   exit 0
