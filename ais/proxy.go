@@ -356,7 +356,7 @@ func (p *proxyrunner) objGetRProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -405,7 +405,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -448,7 +448,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objName, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objName, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -482,7 +482,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -861,7 +861,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg cmn.ActionMsg, started time.Time, fast bool) {
+func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request, bck *cluster.Bck,
+	amsg cmn.ActionMsg, started time.Time, fast bool) {
 	var (
 		taskID  int64
 		err     error
@@ -892,7 +893,13 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 		}
 		smsg.TaskID = id
 	}
-	if bckList, taskID, err = p.listBucket(r, bck, smsg); err != nil {
+	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
+	if bck.IsAIS() {
+		bckList, taskID, err = p.listAisBucket(bck, smsg, headerID)
+	} else {
+		bckList, taskID, err = p.listCloudBucket(r, bck, headerID, smsg)
+	}
+	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -1070,7 +1077,12 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		p.objRename(w, r)
+		if !bck.IsAIS() {
+			err := cmn.NewErrorBucketDoesNotExist(bucket)
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		p.objRename(w, r, bck)
 		return
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
@@ -1424,7 +1436,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(bucket, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -1813,14 +1825,19 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 	return allOK, err
 }
 
-func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerID string) (allEntries *cmn.BucketList, code int64, err error) {
+// reads object list from all targets, combines, sorts and returns the list
+// returns:
+//      * the list of objects if the aync task finished (taskID is 0 in this case)
+//      * non-zero taskID if the task is still running
+//      * error
+func (p *proxyrunner) listAisBucket(bck *cluster.Bck, msg cmn.SelectMsg,
+	headerID string) (allEntries *cmn.BucketList, code int64, err error) {
 	pageSize := cmn.DefaultPageSize
 	if msg.PageSize != 0 {
 		pageSize = msg.PageSize
 	}
 
-	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
-	// it is a request to start a new async task
+	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
@@ -1828,20 +1845,13 @@ func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerI
 
 	smap := p.smapowner.get()
 	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	method := http.MethodPost
 	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
 	msgBytes := cmn.MustMarshal(msgInt)
 	results := p.broadcastTo(
 		urlPath,
-		q,
-		method,
-		msgBytes,
-		smap,
-		reqTimeout,
-		cmn.NetworkPublic,
-		cluster.Targets,
-	)
+		q, method, msgBytes, smap, reqTimeout, cmn.NetworkPublic, cluster.Targets)
 
 	allOK, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
@@ -1860,14 +1870,7 @@ func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerI
 	q.Set(cmn.URLParamSilent, "true")
 	results = p.broadcastTo(
 		urlPath,
-		q,
-		method,
-		msgBytes,
-		smap,
-		reqTimeout,
-		cmn.NetworkPublic,
-		cluster.Targets,
-	)
+		q, method, msgBytes, smap, reqTimeout, cmn.NetworkPublic, cluster.Targets)
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
@@ -1927,19 +1930,26 @@ func (p *proxyrunner) getBucketObjects(bucket string, msg cmn.SelectMsg, headerI
 	return allEntries, 0, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID string,
+// selects a random target to GET the list of objects from the cloud
+// - if iscached or atime property is requested performs extra steps:
+//      * get list of cached files info from all targets
+//      * updates the list of objects from the cloud with cached info
+// returns:
+//      * the list of objects if the aync task finished (taskID is 0 in this case)
+//      * non-zero taskID if the task is still running
+//      * error
+func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerID string,
 	msg cmn.SelectMsg) (allEntries *cmn.BucketList, code int64, err error) {
 	useCache, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamCached))
 	if msg.PageSize > maxPageSize {
-		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bucket, maxPageSize)
+		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.PageSize, bck, maxPageSize)
 	}
 	pageSize := msg.PageSize
 	if pageSize == 0 {
 		pageSize = cmn.DefaultPageSize
 	}
 
-	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
-	// it is a request to start a new async task
+	// start new async task if client did not provide taskID (neither in headers nor in SelectMsg)
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
 	if err != nil {
 		return nil, 0, err
@@ -1951,7 +1961,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 
 	smap := p.smapowner.get()
 	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
 	method := http.MethodPost
 	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
 	msgBytes := cmn.MustMarshal(msgInt)
@@ -2058,7 +2068,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 
 	if msg.WantProp(cmn.GetTargetURL) {
 		for _, e := range allEntries.Entries {
-			si, err := cluster.HrwTarget(bucket, e.Name, &smap.Smap)
+			si, err := cluster.HrwTarget(bck, e.Name, &smap.Smap)
 			if err == nil {
 				e.TargetURL = si.URL(cmn.NetworkPublic)
 			}
@@ -2069,27 +2079,6 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket, headerID st
 	return allEntries, 0, nil
 }
 
-// ais bucket:
-//   - reads object list from all targets, combines, sorts and returns the list
-// Cloud bucket:
-//   - selects a random target to read the list of objects from cloud
-//   - if iscached or atime property is requested it does extra steps:
-//      * get list of cached files info from all targets
-//      * updates the list of objects from the cloud with cached info
-//   - returns:
-//      * the list of objects if the aync task finished (taskID is 0 in this case)
-//      * non-zero taskID if the task is still running
-//      * error
-func (p *proxyrunner) listBucket(r *http.Request, bck *cluster.Bck, msg cmn.SelectMsg) (bckList *cmn.BucketList, taskID int64, err error) {
-	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
-	if !bck.IsAIS() {
-		bckList, taskID, err = p.getCloudBucketObjects(r, bck.Name, headerID, msg)
-	} else {
-		bckList, taskID, err = p.getBucketObjects(bck.Name, msg, headerID)
-	}
-	return
-}
-
 func (p *proxyrunner) savebmdconf(bmd *bucketMD, config *cmn.Config) (err error) {
 	bmdFullPath := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
 	if err := cmn.LocalSave(bmdFullPath, bmd); err != nil {
@@ -2098,27 +2087,21 @@ func (p *proxyrunner) savebmdconf(bmd *bucketMD, config *cmn.Config) (err error)
 	return nil
 }
 
-func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	started := time.Now()
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	lbucket, objname := apitems[0], apitems[1]
-	if !p.bmdowner.get().IsAIS(lbucket) {
-		err := cmn.NewErrorBucketDoesNotExist(lbucket)
-		p.invalmsghdlr(w, r, fmt.Sprintf("%v - cannot rename %s/%s", err, lbucket, objname))
-		return
-	}
-
+	objname := apitems[1]
 	smap := p.smapowner.get()
-	si, err := cluster.HrwTarget(lbucket, objname, &smap.Smap)
+	si, err := cluster.HrwTarget(bck, objname, &smap.Smap)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si)
+		glog.Infof("RENAME %s %s/%s => %s", r.Method, bck.Name, objname, si)
 	}
 
 	// NOTE:

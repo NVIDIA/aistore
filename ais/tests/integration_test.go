@@ -7,6 +7,7 @@ package ais_test
 import (
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -1313,6 +1314,70 @@ func TestCopyBucket(t *testing.T) {
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
+	m.ensureNoErrors()
+}
+
+func TestCopyCloudBucket(t *testing.T) {
+	var (
+		m = ioContext{
+			t:               t,
+			numGetsEachFile: 1,
+		}
+	)
+	// Initialize ioContext
+	m.saveClusterState()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	if !isCloudBucket(t, m.proxyURL, clibucket) {
+		t.Skipf("%s is not a cloud bucket", clibucket)
+	}
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
+	query := make(url.Values)
+	query.Set(cmn.URLParamCached, "true")
+	bucketList, err := api.ListBucket(baseParams, clibucket, msg, 0, query)
+	tassert.CheckFatal(t, err)
+	m.num = len(bucketList.Entries)
+	if m.num == 0 {
+		putCloud(t, 2) // make sure we have at least so many cached; FIXME: cold GET instead
+		bucketList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
+		tassert.CheckFatal(t, err)
+		m.num = len(bucketList.Entries)
+	}
+	tutils.Logf("cloud bucket %s: %d cached objects\n", clibucket, m.num)
+
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+
+	tutils.Logf("copying %s => %s\n", clibucket, m.bucket)
+	err = api.CopyBucket(baseParams, clibucket, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActCopyLB /* = kind */, clibucket, baseParams, rebalanceTimeout)
+
+	copiedList, err := api.ListBucketFast(baseParams, m.bucket, nil)
+	tassert.CheckFatal(t, err)
+	if len(copiedList.Entries) != len(bucketList.Entries) {
+		t.Fatalf("list-bucket: dst %d != %d src", len(copiedList.Entries), len(bucketList.Entries))
+	}
+
+	m.ensureNoErrors()
+}
+
+func putCloud(t *testing.T, num int) {
+	var (
+		m = ioContext{
+			t:               t,
+			bucket:          clibucket,
+			num:             num,
+			numGetsEachFile: 1,
+		}
+	)
+	m.saveClusterState()
+	m.puts()
 	m.ensureNoErrors()
 }
 

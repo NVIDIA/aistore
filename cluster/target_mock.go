@@ -54,8 +54,8 @@ func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error,
 func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ *cmn.Cksum, _ time.Time) error {
 	return nil
 }
-func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error    { return nil }
-func (t *TargetMock) CopyObject(_ *LOM, _ string, _ []byte, _ bool) error { return nil }
+func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error  { return nil }
+func (t *TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) error { return nil }
 
 func (*TargetMock) GetFSPRG() fs.PathRunGroup { return nil }
 func (*TargetMock) Cloud() CloudProvider      { return nil }

@@ -452,7 +452,7 @@ func (mfs *MountedFS) Get() (MPI, MPI) {
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
 
-func (mfs *MountedFS) CreateDestroyBuckets(op string, create bool, buckets ...string) {
+func (mfs *MountedFS) CreateDestroyBuckets(op string, create bool, provider string, buckets ...string) {
 	const (
 		failFmt    = "%s: failed to %s"
 		passFmt    = "%s: %s"
@@ -466,7 +466,7 @@ func (mfs *MountedFS) CreateDestroyBuckets(op string, create bool, buckets ...st
 	failMsg := fmt.Sprintf(failFmt, op, text)
 	passMsg := fmt.Sprintf(passFmt, op, text)
 
-	mfs.createDestroyBuckets(create, cmn.AIS, passMsg, failMsg, buckets...)
+	mfs.createDestroyBuckets(create, provider, passMsg, failMsg, buckets...)
 }
 
 func (mfs *MountedFS) EvictCloudBucket(bucket string) {

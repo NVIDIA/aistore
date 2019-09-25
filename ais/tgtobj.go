@@ -418,7 +418,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		aborted, running = goi.t.xactions.isRebalancing(cmn.ActLocalReb)
 		gfnActive        = goi.t.gfn.local.active()
 	)
-	tsi, err = cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
+	tsi, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
 	if err != nil {
 		return
 	}

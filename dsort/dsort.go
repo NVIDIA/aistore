@@ -144,7 +144,9 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 		defer phaseInfo.adjuster.releaseGoroutineSema()
 
 		shardName := name + m.rs.Extension
-		si, err := cluster.HrwTarget(m.rs.Bucket, shardName, m.smap)
+		// TODO -- FIXME: must be inited and checked elsewhere
+		bck := &cluster.Bck{Name: m.rs.Bucket, Provider: "" /* FIXME */}
+		si, err := cluster.HrwTarget(bck, shardName, m.smap)
 		if err != nil {
 			return err
 		}
@@ -376,8 +378,8 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return err
 	}
 
-	si, err := cluster.HrwTarget(bucket, shardName, m.smap)
-	cmn.AssertNoErr(err)
+	si, err := cluster.HrwTarget(lom.Bck(), shardName, m.smap)
+	cmn.AssertNoErr(err) // TODO -- FIXME: remove this assert, handle errors
 
 	// If the newly created shard belongs on a different target
 	// according to HRW, send it there. Since it doesn't really matter
@@ -754,8 +756,11 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
+	// TODO -- FIXME: must be inited and checked elsewhere
+	bck := &cluster.Bck{Name: m.rs.OutputBucket, Provider: "" /* FIXME */}
+
 	for _, s := range shards {
-		si, err := cluster.HrwTarget(m.rs.OutputBucket, s.Name, m.smap)
+		si, err := cluster.HrwTarget(bck, s.Name, m.smap)
 		cmn.AssertNoErr(err)
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 

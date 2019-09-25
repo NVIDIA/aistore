@@ -18,12 +18,12 @@ import (
 const sliceDownloadBatchSize = 1000
 
 var (
-	_ DownloadJob = &SliceDownloadJob{}
-	_ DownloadJob = &CloudBucketDownloadJob{}
+	_ DlJob = &SliceDlJob{}
+	_ DlJob = &CloudBucketDlJob{}
 )
 
 type (
-	DownloadJob interface {
+	DlJob interface {
 		ID() string
 		Bucket() string
 		Provider() string
@@ -40,23 +40,22 @@ type (
 		Len() int
 	}
 
-	BaseDownloadJob struct {
+	BaseDlJob struct {
 		id          string
-		bucket      string
-		provider    string
+		bck         *cluster.Bck
 		timeout     string
 		description string
 	}
 
-	SliceDownloadJob struct {
-		BaseDownloadJob
+	SliceDlJob struct {
+		BaseDlJob
 		objs    []cmn.DlObj
 		timeout string
 		current int
 	}
 
-	CloudBucketDownloadJob struct {
-		BaseDownloadJob
+	CloudBucketDlJob struct {
+		BaseDlJob
 		t   cluster.Target
 		ctx context.Context // context for the request, user etc...
 
@@ -87,24 +86,18 @@ type (
 	TargetObjsCb     func(objects cmn.SimpleKVs, bucket string, cloud bool) ([]cmn.DlObj, error)
 )
 
-func (j *BaseDownloadJob) ID() string          { return j.id }
-func (j *BaseDownloadJob) Bucket() string      { return j.bucket }
-func (j *BaseDownloadJob) Provider() string    { return j.provider }
-func (j *BaseDownloadJob) Timeout() string     { return j.timeout }
-func (j *BaseDownloadJob) Description() string { return j.description }
+func (j *BaseDlJob) ID() string          { return j.id }
+func (j *BaseDlJob) Bucket() string      { return j.bck.Name }
+func (j *BaseDlJob) Provider() string    { return j.bck.Provider }
+func (j *BaseDlJob) Timeout() string     { return j.timeout }
+func (j *BaseDlJob) Description() string { return j.description }
 
-func NewBaseDownloadJob(id, bucket, provider, timeout, desc string) *BaseDownloadJob {
-	return &BaseDownloadJob{
-		id:          id,
-		bucket:      bucket,
-		provider:    provider,
-		timeout:     timeout,
-		description: desc,
-	}
+func NewBaseDlJob(id string, bck *cluster.Bck, timeout, desc string) *BaseDlJob {
+	return &BaseDlJob{id: id, bck: bck, timeout: timeout, description: desc}
 }
 
-func (j *SliceDownloadJob) Len() int { return len(j.objs) }
-func (j *SliceDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
+func (j *SliceDlJob) Len() int { return len(j.objs) }
+func (j *SliceDlJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	if j.current == len(j.objs) {
 		return []cmn.DlObj{}, false
 	}
@@ -120,22 +113,16 @@ func (j *SliceDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	return objs, true
 }
 
-func NewSliceDownloadJob(id string, objs []cmn.DlObj, bucket, provider, timeout, description string) *SliceDownloadJob {
-	return &SliceDownloadJob{
-		BaseDownloadJob: BaseDownloadJob{
-			id:          id,
-			bucket:      bucket,
-			provider:    provider,
-			timeout:     timeout,
-			description: description,
-		},
-		objs:    objs,
-		timeout: timeout,
+func NewSliceDlJob(id string, objs []cmn.DlObj, bck *cluster.Bck, timeout, description string) *SliceDlJob {
+	return &SliceDlJob{
+		BaseDlJob: BaseDlJob{id: id, bck: bck, timeout: timeout, description: description},
+		objs:      objs,
+		timeout:   timeout,
 	}
 }
 
-func (j *CloudBucketDownloadJob) Len() int { return -1 }
-func (j *CloudBucketDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
+func (j *CloudBucketDlJob) Len() int { return -1 }
+func (j *CloudBucketDlJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	j.wg.Wait()
 
 	if len(j.objs) == 0 {
@@ -157,7 +144,7 @@ func (j *CloudBucketDownloadJob) GenNext() (objs []cmn.DlObj, ok bool) {
 	return readyToDownloadObjs, true
 }
 
-func (j *CloudBucketDownloadJob) GetNextObjs() error {
+func (j *CloudBucketDlJob) GetNextObjs() error {
 	if j.pagesCnt > 0 && j.pageMarker == "" {
 		// Cloud ListBucket returned empty pageMarker after at least one reqest
 		// this means there are no more objects in to list
@@ -173,7 +160,7 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 		PageSize:   cmn.DefaultPageSize,
 	}
 
-	bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bucket, msg)
+	bckList, err, _ := j.t.Cloud().ListBucket(j.ctx, j.bck.Name, msg)
 	if err != nil {
 		return err
 	}
@@ -182,7 +169,7 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 	objects := make(cmn.SimpleKVs, cmn.DefaultPageSize)
 	smap := j.t.GetSmap()
 	for _, entry := range bckList.Entries {
-		si, err := cluster.HrwTarget(j.bucket, entry.Name, smap)
+		si, err := cluster.HrwTarget(j.bck, entry.Name, smap)
 		if err != nil {
 			return err
 		}
@@ -193,7 +180,7 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 		objects[entry.Name] = ""
 	}
 
-	dl, err := GetTargetDlObjs(j.t, objects, j.bucket, true)
+	dl, err := GetTargetDlObjs(j.t, objects, j.bck, true /* is cloud - FIXME: deprecated */)
 	if err != nil {
 		return err
 	}
@@ -202,15 +189,15 @@ func (j *CloudBucketDownloadJob) GetNextObjs() error {
 	return nil
 }
 
-func NewCloudBucketDownloadJob(ctx context.Context, t cluster.Target, base *BaseDownloadJob, prefix, suffix string) (*CloudBucketDownloadJob, error) {
-	job := &CloudBucketDownloadJob{
-		BaseDownloadJob: *base,
-		pageMarker:      "",
-		t:               t,
-		ctx:             ctx,
-		prefix:          prefix,
-		suffix:          suffix,
-		wg:              &sync.WaitGroup{},
+func NewCloudBucketDlJob(ctx context.Context, t cluster.Target, base *BaseDlJob, prefix, suffix string) (*CloudBucketDlJob, error) {
+	job := &CloudBucketDlJob{
+		BaseDlJob:  *base,
+		pageMarker: "",
+		t:          t,
+		ctx:        ctx,
+		prefix:     prefix,
+		suffix:     suffix,
+		wg:         &sync.WaitGroup{},
 	}
 
 	err := job.GetNextObjs()

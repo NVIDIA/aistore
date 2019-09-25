@@ -100,12 +100,13 @@ loop:
 			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
 				continue
 			}
-			bckIsAIS, _ := t.bmdowner.get().ValidateBucket(fwd.bucket, fwd.provider)
-			if bckIsAIS {
-				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bucket)
+			if err := fwd.bck.Init(t.bmdowner); err != nil {
+				glog.Errorf("prefetch: %s, err: %v", fwd.bck, err)
+			} else if fwd.bck.IsAIS() {
+				glog.Errorf("prefetch: %s is ais bucket, nothing to do", fwd.bck)
 			} else {
 				for _, objname := range fwd.objnames {
-					t.prefetchMissing(fwd.ctx, objname, fwd.bucket, fwd.provider)
+					t.prefetchMissing(fwd.ctx, objname, fwd.bck)
 				}
 			}
 			// Signal completion of prefetch
@@ -154,8 +155,8 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 	return err
 }
 
-func (t *targetrunner) CopyObject(lom *cluster.LOM, bucketTo string, buf []byte, uncache bool) (err error) {
-	ri := &replicInfo{smap: t.smapowner.get(), bucketTo: bucketTo, t: t, buf: buf, uncache: uncache}
+func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte, uncache bool) (err error) {
+	ri := &replicInfo{smap: t.smapowner.get(), bckTo: bckTo, t: t, buf: buf, uncache: uncache}
 	_, err = ri.copyObject(lom, lom.Objname)
 	return
 }

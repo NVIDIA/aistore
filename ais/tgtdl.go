@@ -12,6 +12,7 @@ import (
 	"regexp"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -125,9 +126,9 @@ func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// parseStartDownloadRequest translates external http request into internal representation: DownloadJob interface
-// based on different type of request DownloadJob might of different type which implements the interface
-func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (downloader.DownloadJob, error) {
+// parseStartDownloadRequest translates external http request into internal representation: DlJob interface
+// based on different type of request DlJob might of different type which implements the interface
+func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (downloader.DlJob, error) {
 	var (
 		// link -> objname
 		objects cmn.SimpleKVs
@@ -183,8 +184,12 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		}
 		description = multiPayload.Describe()
 	} else if err := cloudPayload.Validate(bckIsAIS); err == nil {
-		baseJob := downloader.NewBaseDownloadJob(id, cloudPayload.Bucket, cloudPayload.Provider, cloudPayload.Timeout, payload.Description)
-		return downloader.NewCloudBucketDownloadJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
+		//
+		// TODO -- FIXME: bckIsAIS must be removed; init bck (below) and check conditions&errors
+		//
+		bck := &cluster.Bck{Name: cloudPayload.Bucket, Provider: cloudPayload.Provider}
+		baseJob := downloader.NewBaseDlJob(id, bck, cloudPayload.Timeout, payload.Description)
+		return downloader.NewCloudBucketDlJob(t.contextWithAuth(r.Header), t, baseJob, cloudPayload.Prefix, cloudPayload.Suffix)
 	} else {
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, cloud)")
 	}
@@ -198,5 +203,9 @@ func (t *targetrunner) parseStartDownloadRequest(r *http.Request, id string) (do
 		return nil, err
 	}
 
-	return downloader.NewSliceDownloadJob(input.ID, input.Objs, payload.Bucket, payload.Provider, payload.Timeout, payload.Description), nil
+	//
+	// TODO -- FIXME: bckIsAIS must be removed; init bck (below) and check conditions&errors
+	//
+	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
+	return downloader.NewSliceDlJob(input.ID, input.Objs, bck, payload.Timeout, payload.Description), nil
 }

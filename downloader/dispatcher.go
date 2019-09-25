@@ -26,7 +26,7 @@ type (
 		joggers  map[string]*jogger       // mpath -> jogger
 		abortJob map[string]chan struct{} //jobID -> abort job chan
 
-		dispatchDownloadCh chan DownloadJob
+		dispatchDownloadCh chan DlJob
 
 		stopCh cmn.StopCh
 		sync.RWMutex
@@ -38,7 +38,7 @@ func newDispatcher(parent *Downloader) *dispatcher {
 		parent:  parent,
 		joggers: make(map[string]*jogger, 8),
 
-		dispatchDownloadCh: make(chan DownloadJob, jobsChSize),
+		dispatchDownloadCh: make(chan DlJob, jobsChSize),
 		stopCh:             cmn.NewStopCh(),
 		abortJob:           make(map[string]chan struct{}, jobsChSize),
 	}
@@ -102,7 +102,7 @@ func (d *dispatcher) cleanUpAborted(jobID string) {
 	d.Unlock()
 }
 
-func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
+func (d *dispatcher) ScheduleForDownload(job DlJob) {
 	d.Lock()
 	d.abortJob[job.ID()] = make(chan struct{}, 1)
 	d.Unlock()
@@ -114,7 +114,7 @@ func (d *dispatcher) ScheduleForDownload(job DownloadJob) {
  * dispatcher's dispatch methods (forwards request to jogger)
  */
 
-func (d *dispatcher) dispatchDownload(job DownloadJob) (ok bool) {
+func (d *dispatcher) dispatchDownload(job DlJob) (ok bool) {
 	defer func() {
 		dlStore.markFinished(job.ID())
 		dlStore.flush(job.ID())
@@ -164,7 +164,7 @@ func (d *dispatcher) jobAbortedCh(jobID string) <-chan struct{} {
 	return abCh
 }
 
-func (d *dispatcher) checkAbortedJob(job DownloadJob) bool {
+func (d *dispatcher) checkAbortedJob(job DlJob) bool {
 	select {
 	case <-d.jobAbortedCh(job.ID()):
 		return true
@@ -182,7 +182,7 @@ func (d *dispatcher) checkAborted() bool {
 	}
 }
 
-func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LOM, error) {
+func (d *dispatcher) createTasksLom(job DlJob, obj cmn.DlObj) (*cluster.LOM, error) {
 	lom := &cluster.LOM{T: d.parent.t, Objname: obj.Objname}
 	err := lom.Init(job.Bucket(), job.Provider())
 	if err == nil {
@@ -207,7 +207,7 @@ func (d *dispatcher) createTasksLom(job DownloadJob, obj cmn.DlObj) (*cluster.LO
 	return lom, nil
 }
 
-func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectTask, *jogger, error) {
+func (d *dispatcher) prepareTask(job DlJob, obj cmn.DlObj) (*singleObjectTask, *jogger, error) {
 	t := &singleObjectTask{
 		parent: d.parent,
 		request: &request{
@@ -243,7 +243,7 @@ func (d *dispatcher) prepareTask(job DownloadJob, obj cmn.DlObj) (*singleObjectT
 }
 
 // returns false if dispatcher was aborted in the meantime, true otherwise
-func (d *dispatcher) blockingDispatchDownloadSingle(job DownloadJob, obj cmn.DlObj) (err error, ok bool) {
+func (d *dispatcher) blockingDispatchDownloadSingle(job DlJob, obj cmn.DlObj) (err error, ok bool) {
 	_ = dlStore.incScheduled(job.ID())
 	task, jogger, err := d.prepareTask(job, obj)
 	if err != nil {

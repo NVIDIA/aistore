@@ -43,7 +43,7 @@ type Target interface {
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
-	CopyObject(lom *LOM, bucketTo string, buf []byte, uncache bool) error
+	CopyObject(lom *LOM, bckTo *Bck, buf []byte, uncache bool) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 }
 

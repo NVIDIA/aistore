@@ -31,10 +31,10 @@ func Uname2Bo(uname string) (bucket, objName string) {
 }
 
 // Requires elements of smap.Tmap to have their idDigest initialized
-func HrwTarget(bucket, objName string, smap *Smap) (si *Snode, err error) {
+func HrwTarget(bck *Bck, objName string, smap *Smap) (si *Snode, err error) {
 	var (
 		max    uint64
-		name   = Bo2Uname(bucket, objName)
+		name   = Bo2Uname(bck.Name, objName)
 		digest = xxhash.ChecksumString64S(name, cmn.MLCG32)
 	)
 	for _, sinfo := range smap.Tmap {

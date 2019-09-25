@@ -286,44 +286,44 @@ func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPut
 }
 
 //
-// bcrEntry
+// bccEntry
 //
-type bcrEntry struct {
+type bccEntry struct {
 	baseBckEntry
-	t        *targetrunner
-	xact     *mirror.XactBckCopy
-	bucketTo string
-	action   string
-	phase    string
+	t      *targetrunner
+	xact   *mirror.XactBckCopy
+	bckTo  *cluster.Bck
+	action string
+	phase  string
 }
 
-func (e *bcrEntry) Start(id int64) error {
+func (e *bccEntry) Start(id int64) error {
 	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCR(id, e.bck, e.bucketTo, e.action, e.t, slab)
+	e.xact = mirror.NewXactBCC(id, e.bck, e.bckTo, e.action, e.t, slab)
 	return nil
 }
-func (e *bcrEntry) Kind() string  { return e.action }
-func (e *bcrEntry) Get() cmn.Xact { return e.xact }
+func (e *bccEntry) Kind() string  { return e.action }
+func (e *bccEntry) Get() cmn.Xact { return e.xact }
 
-func (e *bcrEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, err error) {
-	prev := previousEntry.(*bcrEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bucketTo == e.bucketTo {
+func (e *bccEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, err error) {
+	prev := previousEntry.(*bccEntry)
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckTo.Equal(e.bckTo) {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)", prev.xact, prev.bck, prev.bucketTo, prev.phase, e.phase, e.bucketTo)
+	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)", prev.xact, prev.bck, prev.bckTo, prev.phase, e.phase, e.bckTo)
 	return
 }
 
 func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bckFrom, bckTo *cluster.Bck, phase string) (*mirror.XactBckCopy, error) {
 	b := r.bucketsXacts(bckFrom)
-	e := &bcrEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
-		t:        t,
-		bucketTo: bckTo.Name,
-		action:   cmn.ActCopyLB, // kind
-		phase:    phase,
+	e := &bccEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
+		t:      t,
+		bckTo:  bckTo,
+		action: cmn.ActCopyLB, // kind
+		phase:  phase,
 	}
 	ee, err := b.renewBucketXaction(e)
 	if err != nil {

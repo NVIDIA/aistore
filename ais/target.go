@@ -392,8 +392,15 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bucket, provider, config); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			time.Sleep(100 * time.Millisecond)
+			t.bmdVersionFixup()
+			err = lom.Init(bucket, provider, config)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	}
 	if err = lom.AllowGET(); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
@@ -1115,7 +1122,7 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	buf, slab := nodeCtx.mm.AllocDefault()
-	ri := &replicInfo{smap: t.smapowner.get(), t: t, bucketTo: bucket, buf: buf}
+	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf}
 	if copied, err := ri.copyObject(lom, msg.Name /* new objname */); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 	} else if copied {

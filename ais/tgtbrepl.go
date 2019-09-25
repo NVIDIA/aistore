@@ -17,7 +17,7 @@ import (
 type replicInfo struct {
 	t         *targetrunner
 	smap      *smapX
-	bucketTo  string
+	bckTo     *cluster.Bck
 	buf       []byte
 	localCopy bool
 	uncache   bool
@@ -35,7 +35,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	)
 	if ri.smap != nil {
 		cmn.Assert(!ri.localCopy)
-		if si, err = cluster.HrwTarget(ri.bucketTo, objnameTo, &ri.smap.Smap); err != nil {
+		if si, err = cluster.HrwTarget(ri.bckTo, objnameTo, &ri.smap.Smap); err != nil {
 			return
 		}
 	} else {
@@ -58,7 +58,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 	// local op
 	if si.DaemonID == ri.t.si.DaemonID {
 		dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
-		err = dst.Init(ri.bucketTo, cmn.AIS)
+		err = dst.Init(ri.bckTo.Name, ri.bckTo.Provider)
 		if err != nil {
 			return
 		}
@@ -102,12 +102,12 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 
 	// PUT object into different target
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, lom.Bck().Provider)
+	query.Add(cmn.URLParamProvider, ri.bckTo.Provider)
 	query.Add(cmn.URLParamProxyID, ri.smap.ProxySI.DaemonID)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   si.URL(cmn.NetworkIntraData),
-		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bucketTo, objnameTo),
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, ri.bckTo.Name, objnameTo),
 		Query:  query,
 		BodyR:  file,
 	}

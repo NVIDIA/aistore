@@ -141,7 +141,7 @@ type (
 
 		mpathReqCh chan fs.ChangeReq
 		adminCh    chan *request
-		downloadCh chan DownloadJob
+		downloadCh chan DlJob
 
 		dispatcher *dispatcher
 	}
@@ -254,7 +254,7 @@ func NewDownloader(t cluster.Target, stats stats.Tracker, f *fs.MountedFS, id in
 		mountpaths:     f,
 		mpathReqCh:     make(chan fs.ChangeReq, 1),
 		adminCh:        make(chan *request),
-		downloadCh:     make(chan DownloadJob, jobsChSize),
+		downloadCh:     make(chan DlJob, jobsChSize),
 	}
 
 	downloader.dispatcher = newDispatcher(downloader)
@@ -321,7 +321,7 @@ func (d *Downloader) Stop(err error) {
 /*
  * Downloader's exposed methods
  */
-func (d *Downloader) Download(dJob DownloadJob) (resp interface{}, err error, statusCode int) {
+func (d *Downloader) Download(dJob DlJob) (resp interface{}, err error, statusCode int) {
 	d.IncPending()
 	defer d.DecPending()
 	dlStore.setJob(dJob.ID(), dJob)

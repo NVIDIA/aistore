@@ -31,10 +31,10 @@ func (b *Bck) Equal(other *Bck) bool {
 	if b.Name != other.Name {
 		return false
 	}
-	if b.Provider == "" || other.Provider == "" {
-		return false
+	if b.IsAIS() && other.IsAIS() {
+		return true
 	}
-	return b.IsAIS() == other.IsAIS()
+	return b.IsCloud() && other.IsCloud()
 }
 
 // NOTE: when the specified bucket is not present in the BMD:

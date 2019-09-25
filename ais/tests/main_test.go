@@ -1058,10 +1058,10 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		cksumVal string
 	)
 
-	t.Logf("Worker %2d: GET %q", id, url)
+	t.Logf("%2d: GET %q", id, url)
 	resp, err := http.Get(url)
 	if err == nil && resp == nil {
-		err = fmt.Errorf("HTTP returned empty response")
+		err = fmt.Errorf("empty response")
 	}
 
 	if err != nil {
@@ -1074,8 +1074,7 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf("worker %2d: get key %s from bucket %s http error %d",
-			id, keyname, bucket, resp.StatusCode)
+		err = fmt.Errorf("%2d: Get %s from bucket %s http error %d", id, keyname, bucket, resp.StatusCode)
 		errCh <- err
 		t.Error(err)
 		failed = true
@@ -1089,52 +1088,51 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 	fname := filepath.Join(LocalDestDir, keyname)
 	file, err := cmn.CreateFile(fname)
 	if err != nil {
-		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
+		t.Errorf("%2d: Failed to create object, err: %v", id, err)
 		failed = true
 		return
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			errstr = fmt.Sprintf("Failed to close file, err: %s", err)
-			t.Errorf("Worker %2d: %s", id, errstr)
+			t.Errorf("%2d: %v", id, err)
 		}
 	}()
 	if hdhashtype == cmn.ChecksumXXHash {
 		written, cksumVal, err = cmn.WriteWithHash(file, resp.Body, nil)
 		if err != nil {
-			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
+			t.Errorf("%2d: failed to write object, err: %v", id, err)
 			failed = true
 			return
 		}
 		if hdhash != cksumVal {
-			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumXXHash, hdhash, cksumVal)
+			t.Errorf("%2d: header's %s %s doesn't match object's %s", id, cmn.ChecksumXXHash, hdhash, cksumVal)
 			failed = true
 			return
 		}
-		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumXXHash, hdhash, cksumVal)
+		tutils.Logf("%2d: header's %s %s matches object's %s\n", id, cmn.ChecksumXXHash, hdhash, cksumVal)
 	} else if hdhashtype == cmn.ChecksumMD5 {
 		md5 := md5.New()
 		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil, md5)
 		if err != nil {
-			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
+			t.Errorf("%2d: failed to write object, err: %v", id, err)
 			return
 		}
 		md5hash := cmn.HashToStr(md5)[:16]
 		if errstr != "" {
-			t.Errorf("Worker %2d: failed to compute %s, err: %s", id, cmn.ChecksumMD5, errstr)
+			t.Errorf("%2d: failed to compute %s, err: %s", id, cmn.ChecksumMD5, errstr)
 			failed = true
 			return
 		}
 		if hdhash != md5hash {
-			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumMD5, hdhash, md5hash)
+			t.Errorf("%2d: header's %s %s doesn't match object's %s", id, cmn.ChecksumMD5, hdhash, md5hash)
 			failed = true
 			return
 		}
-		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumMD5, hdhash, md5hash)
+		tutils.Logf("%2d: header's %s %s matches object's %s\n", id, cmn.ChecksumMD5, hdhash, md5hash)
 	} else {
 		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil)
 		if err != nil {
-			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
+			t.Errorf("%2d: failed to write object, err: %v", id, err)
 			failed = true
 			return
 		}

@@ -665,7 +665,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		time.Sleep(5 * time.Second) // wait some time before reregistering next target
 	}
 	wg.Wait()
-	tutils.Logf("Stopping GETS...\n")
+	tutils.Logf("Stopping GETs...\n")
 	m.stopGets()
 
 	m.wg.Wait()

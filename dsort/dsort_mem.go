@@ -392,7 +392,9 @@ func (ds *dsorterMem) createShardsLocally() (err error) {
 					return func() error {
 						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
-						toNode, err := cluster.HrwTarget(ds.m.rs.OutputBucket, shard.Name, ds.m.ctx.smap.Get())
+						// TODO -- FIXME: must be inited and checked elsewhere
+						bck := &cluster.Bck{Name: ds.m.rs.OutputBucket, Provider: "" /* FIXME */}
+						toNode, err := cluster.HrwTarget(bck, shard.Name, ds.m.ctx.smap.Get())
 						if err != nil {
 							return err
 						}

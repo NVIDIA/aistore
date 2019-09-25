@@ -71,18 +71,18 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 }
 
 // Generates an object name that hashes to a different target than `baseName`.
-func GenerateNotConflictingObjectName(baseName, newNamePrefix, bucketName string, smap *cluster.Smap) string {
+func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck *cluster.Bck, smap *cluster.Smap) string {
 	// Init digests - HrwTarget() requires it
 	smap.InitDigests()
 
 	newName := newNamePrefix
 
-	baseNameHrw, _ := cluster.HrwTarget(bucketName, baseName, smap)
-	newNameHrw, _ := cluster.HrwTarget(bucketName, newName, smap)
+	baseNameHrw, _ := cluster.HrwTarget(bck, baseName, smap)
+	newNameHrw, _ := cluster.HrwTarget(bck, newName, smap)
 
 	for i := 0; baseNameHrw == newNameHrw; i++ {
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, _ = cluster.HrwTarget(bucketName, newName, smap)
+		newNameHrw, _ = cluster.HrwTarget(bck, newName, smap)
 	}
 	return newName
 }

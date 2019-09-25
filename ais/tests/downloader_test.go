@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tutils"
@@ -478,7 +479,8 @@ func TestDownloadStatus(t *testing.T) {
 		return
 	}
 
-	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", TestBucketName, m.smap)
+	bck := &cluster.Bck{Name: TestBucketName, Provider: cmn.AIS}
+	longFileName := tutils.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",

@@ -78,7 +78,7 @@ func (is *infoStore) getList(descRegex *regexp.Regexp) []*DownloadJobInfo {
 	return jobsInfo
 }
 
-func (is *infoStore) setJob(id string, job DownloadJob) {
+func (is *infoStore) setJob(id string, job DlJob) {
 	jInfo := &DownloadJobInfo{
 		ID:          job.ID(),
 		Total:       job.Len(),

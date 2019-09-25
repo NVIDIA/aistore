@@ -160,7 +160,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
 		}
-		si, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, ci.smap)
+		si, err := cluster.HrwTarget(lom.Bck(), lom.Objname, ci.smap)
 		if err != nil {
 			glog.Errorf("%s: %s", lom, err)
 		}

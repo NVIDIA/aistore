@@ -704,6 +704,12 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
+	if tag != bucketMDRegister {
+		// Don't call ecmanager as it has not been initialized just yet
+		// ecmanager will pick up fresh bucketMD when initialized
+		t.ecmanager.BucketsMDChanged()
+	}
+
 	// Delete buckets that do not exist in the new bucket metadata
 	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
 	for bucket := range bucketmd.LBmap {
@@ -720,7 +726,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 	//       disable mirroring (needed in part for cloud buckets)
 	t.xactions.abortAllBuckets(true, bucketsToDelete...)
 
-	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
+	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", false /*false=destroy*/, cmn.AIS, bucketsToDelete...)
 
 	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
@@ -729,14 +735,16 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msgInt *actionMsgI
 			bucketsToCreate = append(bucketsToCreate, bckName)
 		}
 	}
+	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cmn.AIS, bucketsToCreate...)
 
-	if tag != bucketMDRegister {
-		// Don't call ecmanager as it has not benn initialized just yet
-		// ecmanager will pick up fresh bucketMD when initialized
-		t.ecmanager.BucketsMDChanged()
+	bucketsToCreate = make([]string, 0, len(newbucketmd.CBmap))
+	for bckName := range newbucketmd.CBmap {
+		if _, ok := bucketmd.CBmap[bckName]; !ok {
+			bucketsToCreate = append(bucketsToCreate, bckName)
+		}
 	}
+	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, cmn.Cloud, bucketsToCreate...)
 
-	fs.Mountpaths.CreateDestroyBuckets("receive-bucketmd", true /*true=create*/, bucketsToCreate...)
 	return
 }
 
@@ -950,7 +958,7 @@ func (t *targetrunner) bmdVersionFixup(renamed ...string) {
 		glog.Error(err)
 		return
 	}
-	var msgInt = t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newBucketMD)
+	msgInt := t.newActionMsgInternalStr("get-what="+cmn.GetWhatBucketMeta, nil, newBucketMD)
 	t.receiveBucketMD(newBucketMD, msgInt, bucketMDFixup, "")
 }
 

@@ -237,7 +237,7 @@ wack:
 				cnt += l
 				if !logged {
 					for _, lom := range lomack.q {
-						tsi, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
+						tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
 						if err == nil {
 							glog.Infof("waiting for %s ACK from %s", lom, tsi)
 							logged = true
@@ -593,7 +593,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 				delete(lomack.q, uname)
 				continue
 			}
-			tsi, _ := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap)
+			tsi, _ := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
 			if reb.t.lookupRemote(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
@@ -683,7 +683,7 @@ func (rj *globalRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 	// rebalance, maybe
-	tsi, err = cluster.HrwTarget(lom.Bucket(), lom.Objname, &rj.smap.Smap)
+	tsi, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &rj.smap.Smap)
 	if err != nil {
 		return err
 	}
@@ -896,7 +896,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	// optionally, skip those that must be globally rebalanced
 	if rj.skipGlobMisplaced {
 		smap := t.smapowner.get()
-		if tsi, err := cluster.HrwTarget(lom.Bucket(), lom.Objname, &smap.Smap); err == nil {
+		if tsi, err := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap); err == nil {
 			if tsi.DaemonID != t.si.DaemonID {
 				return nil
 			}
@@ -907,7 +907,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	ri := &replicInfo{t: t, bucketTo: lom.Bucket(), buf: rj.buf, localCopy: true}
+	ri := &replicInfo{t: t, bckTo: lom.Bck(), buf: rj.buf, localCopy: true}
 	copied, err := ri.copyObject(lom, lom.Objname)
 	if err != nil {
 		glog.Warningf("%s: %v", lom, err)

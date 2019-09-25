@@ -205,7 +205,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 	localID := w.t.Snode().DaemonID
 	smap := w.t.GetSmap()
 	for _, e := range bucketList.Entries {
-		si, _ := cluster.HrwTarget(w.bck.Name, e.Name, smap)
+		si, _ := cluster.HrwTarget(w.bck, e.Name, smap)
 		if si.DaemonID != localID {
 			continue
 		}

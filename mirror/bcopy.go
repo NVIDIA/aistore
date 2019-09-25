@@ -17,8 +17,8 @@ import (
 type (
 	XactBckCopy struct {
 		xactBckBase
-		slab     *memsys.Slab2
-		bucketTo string
+		slab  *memsys.Slab2
+		bckTo *cluster.Bck
 	}
 	bccJogger struct { // one per mountpath
 		joggerBckBase
@@ -31,11 +31,11 @@ type (
 // public methods
 //
 
-func NewXactBCR(id int64, bckFrom *cluster.Bck, bucketTo, action string, t cluster.Target, slab *memsys.Slab2) *XactBckCopy {
+func NewXactBCC(id int64, bckFrom, bckTo *cluster.Bck, action string, t cluster.Target, slab *memsys.Slab2) *XactBckCopy {
 	return &XactBckCopy{
 		xactBckBase: *newXactBckBase(id, action, bckFrom, t),
 		slab:        slab,
-		bucketTo:    bucketTo,
+		bckTo:       bckTo,
 	}
 }
 
@@ -44,7 +44,7 @@ func (r *XactBckCopy) Run() (err error) {
 	if numjs, err = r.init(); err != nil {
 		return
 	}
-	glog.Infoln(r.String(), r.Bucket(), "=>", r.bucketTo)
+	glog.Infoln(r.String(), r.Bucket(), "=>", r.bckTo)
 	return r.xactBckBase.run(numjs)
 }
 
@@ -94,5 +94,5 @@ func (j *bccJogger) jog() {
 }
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
-	return j.parent.Target().CopyObject(lom, j.parent.bucketTo, j.buf, false /*uncache=false*/)
+	return j.parent.Target().CopyObject(lom, j.parent.bckTo, j.buf, false /*uncache=false*/)
 }

@@ -16,17 +16,19 @@ func BuildDownloaderInput(t cluster.Target, id string, payload *cmn.DlBase, obje
 		err    error
 		dlBody = &cmn.DlBody{ID: id}
 	)
-	dlBody.Bucket = payload.Bucket
-	dlBody.Provider = payload.Provider
+	dlBody.Bucket = payload.Bucket     // TODO -- FIXME: must use cluster.Bck{} - inited and error-handled
+	dlBody.Provider = payload.Provider // ditto
 	dlBody.Timeout = payload.Timeout
 	dlBody.Description = payload.Description
 
-	dlBody.Objs, err = GetTargetDlObjs(t, objects, payload.Bucket, cloud)
+	bck := &cluster.Bck{Name: payload.Bucket, Provider: payload.Provider}
+	dlBody.Objs, err = GetTargetDlObjs(t, objects, bck, cloud)
 
 	return dlBody, err
 }
 
-func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bucket string, cloud bool) ([]cmn.DlObj, error) {
+// TODO -- FIXME: `cloud bool` is deprecated
+func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bck *cluster.Bck, cloud bool) ([]cmn.DlObj, error) {
 	// Filter out objects that will be handled by other targets
 	dlObjs := make([]cmn.DlObj, 0, len(objects))
 	smap := t.GetSmap()
@@ -39,7 +41,7 @@ func GetTargetDlObjs(t cluster.Target, objects cmn.SimpleKVs, bucket string, clo
 		// Make sure that link contains protocol (absence of protocol can result in errors).
 		link = cmn.PrependProtocol(link)
 
-		si, err := cluster.HrwTarget(bucket, objName, smap)
+		si, err := cluster.HrwTarget(bck, objName, smap)
 		if err != nil {
 			return nil, err
 		}
