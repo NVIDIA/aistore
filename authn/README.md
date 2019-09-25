@@ -3,15 +3,15 @@ AIStore Authentication Server (AuthN)
 
 ## Overview
 
-AIStore Authentication Server provides a token-based security access to AIStore REST API. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
+AIStore Authentication Server (AuthN) provides a token-based secure access to AIStore. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
 
-The server is a standalone application that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has updated set of valid tokens that grant access to the AIStore and Cloud resources.
+AuthN is a standalone process that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has updated set of valid tokens that grant access to the AIStore and Cloud resources.
 
-For a client application, a typical workflow looks as follows:
+For a client, a typical workflow looks as follows:
 
 <img src="images/authn_flow.gif" alt="Authn workflow">
 
-AuthN supports both HTTP and HTTPS protocols. By default, the server starts as HTTP server listening on port 8203. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
+AuthN supports both HTTP and HTTPS protocols. By default, AuthN starts as HTTP server listening on port 8203. If you enable HTTPS access make sure that the configuration file options `server_cert` and `server_key` point to the correct SSL certificate and key.
 
 
 ## Getting started
