@@ -27,6 +27,15 @@ func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.P
 func (b *Bck) IsCloud() bool {
 	return b.Provider == cmn.Cloud || b.Provider == cmn.ProviderAmazon || b.Provider == cmn.ProviderGoogle
 }
+func (b *Bck) Equal(other *Bck) bool {
+	if b.Name != other.Name {
+		return false
+	}
+	if b.Provider == "" || other.Provider == "" {
+		return false
+	}
+	return b.IsAIS() == other.IsAIS()
+}
 
 // NOTE: when the specified bucket is not present in the BMD:
 //       - always returns the corresponding *DoesNotExist error
