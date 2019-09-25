@@ -33,14 +33,14 @@ var (
 				{
 					Name:      subcmdRegisterProxy,
 					Usage:     "adds a proxy node to the cluster",
-					ArgsUsage: registerNodeArgumentText,
+					ArgsUsage: registerNodeArgument,
 					Flags:     registerCmdsFlags[subcmdRegisterProxy],
 					Action:    registerNodeHandler,
 				},
 				{
 					Name:      subcmdRegisterTarget,
 					Usage:     "adds a target node to the cluster",
-					ArgsUsage: registerNodeArgumentText,
+					ArgsUsage: registerNodeArgument,
 					Flags:     registerCmdsFlags[subcmdRegisterTarget],
 					Action:    registerNodeHandler,
 				},

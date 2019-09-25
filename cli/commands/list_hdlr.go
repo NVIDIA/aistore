@@ -6,6 +6,9 @@
 package commands
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
@@ -29,18 +32,9 @@ var (
 	}
 
 	listCmdsFlags = map[string][]cli.Flag{
-		subcmdListAIS: {
-			regexFlag,
-			noHeaderFlag,
-		},
-		subcmdListCloud: {
-			regexFlag,
-			noHeaderFlag,
-		},
-		subcmdListBucket: append(
-			listObjectFlags,
-			providerFlag,
-		),
+		commandList:     listObjectFlags,
+		subcmdListAIS:   listObjectFlags,
+		subcmdListCloud: listObjectFlags,
 		subcmdListBckProps: {
 			providerFlag,
 			jsonFlag,
@@ -55,32 +49,27 @@ var (
 
 	listCmds = []cli.Command{
 		{
-			Name:  commandList,
-			Usage: "lists cluster metadata information",
+			Name:      commandList,
+			Usage:     "lists cluster metadata information",
+			Action:    defaultListHandler,
+			ArgsUsage: listCommandArgument,
+			Flags:     listCmdsFlags[commandList],
 			Subcommands: []cli.Command{
-				{
-					Name:         subcmdListBucket,
-					Usage:        "lists bucket names",
-					ArgsUsage:    bucketArgument,
-					Flags:        listCmdsFlags[subcmdListBucket],
-					Action:       listBucketsHandler,
-					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
-				},
 				{
 					Name:         subcmdListAIS,
 					Usage:        "lists ais buckets",
-					ArgsUsage:    noArguments,
+					ArgsUsage:    optionalBucketWithSeparatorArgument,
 					Flags:        listCmdsFlags[subcmdListAIS],
 					Action:       listAISBucketsHandler,
-					BashComplete: flagCompletions,
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.AIS),
 				},
 				{
 					Name:         subcmdListCloud,
 					Usage:        "lists cloud buckets",
-					ArgsUsage:    noArguments,
+					ArgsUsage:    optionalBucketWithSeparatorArgument,
 					Flags:        listCmdsFlags[subcmdListCloud],
 					Action:       listCloudBucketsHandler,
-					BashComplete: flagCompletions,
+					BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, true /* separator */, cmn.Cloud),
 				},
 				{
 					Name:         subcmdListBckProps,
@@ -111,34 +100,74 @@ var (
 	}
 )
 
-func listAISBucketsHandler(c *cli.Context) (err error) {
-	baseParams := cliAPIParams(ClusterURL)
-	return listBucketNames(c, baseParams, cmn.AIS)
-}
-
-func listCloudBucketsHandler(c *cli.Context) (err error) {
-	baseParams := cliAPIParams(ClusterURL)
-	return listBucketNames(c, baseParams, cmn.Cloud)
-}
-
-func listBucketsHandler(c *cli.Context) (err error) {
+// Note: This handler ignores aisBucketEnvVar and aisBucketProviderEnvVar
+// because the intention is to list all buckets or auto-detect bucket provider
+// for a given bucket.
+func defaultListHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		provider   string
-		bucket     string
+		bucket     = c.Args().First()
 	)
 
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
-	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
-		return
-	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
-		return
+	if bucket == "" {
+		return listBucketNames(c, baseParams, "" /* any provider */)
 	}
 
-	return listBucketObj(c, baseParams, bucket)
+	if strings.HasSuffix(bucket, "/") {
+		bucket = strings.TrimSuffix(bucket, "/")
+		if err = canReachBucket(baseParams, bucket, "" /* auto-detect provider */); err != nil {
+			return
+		}
+		return listBucketObj(c, baseParams, bucket)
+	}
+
+	return commandNotFoundError(c, c.Args().First())
+}
+
+// Note: This handler ignores aisBucketEnvVar because the intention
+// is to list ais bucket names if bucket name isn't given.
+func listAISBucketsHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     = c.Args().First()
+	)
+
+	if bucket == "" {
+		return listBucketNames(c, baseParams, cmn.AIS)
+	}
+
+	if strings.HasSuffix(bucket, "/") {
+		bucket = strings.TrimSuffix(bucket, "/")
+		if err = canReachBucket(baseParams, bucket, cmn.AIS); err != nil {
+			return
+		}
+		return listBucketObj(c, baseParams, bucket)
+	}
+
+	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))
+}
+
+// Note: This handler ignores aisBucketEnvVar because the intention
+// is to list cloud bucket names if bucket name isn't given.
+func listCloudBucketsHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     = c.Args().First()
+	)
+
+	if bucket == "" {
+		return listBucketNames(c, baseParams, cmn.Cloud)
+	}
+
+	if strings.HasSuffix(bucket, "/") {
+		bucket = strings.TrimSuffix(bucket, "/")
+		if err = canReachBucket(baseParams, bucket, cmn.Cloud); err != nil {
+			return
+		}
+		return listBucketObj(c, baseParams, bucket)
+	}
+
+	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {

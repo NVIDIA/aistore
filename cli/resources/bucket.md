@@ -15,7 +15,11 @@ Creates an ais bucket or buckets.
 
 Deletes an ais bucket or buckets.
 
-### List bucket names and objects
+### List bucket names
+
+`ais ls`
+
+Lists all bucket names.
 
 `ais ls ais`
 
@@ -25,14 +29,32 @@ Lists AIS bucket names.
 
 Lists cloud bucket names.
 
+#### Flags for listing bucket names
+
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--regex` | `string` | Pattern for matching bucket names | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
 
-`ais ls bucket BUCKET_NAME`
+#### List object names
 
-Lists objects in the bucket `BUCKET_NAME`.
+#### With provider auto-detection
+
+`ais ls BUCKET_NAME/`
+
+Lists object names in the bucket `BUCKET_NAME`. Bucket provider is auto-detected.
+
+#### From the specific provider
+
+`ais ls ais BUCKET_NAME/`
+
+Lists objects in the AIS bucket `BUCKET_NAME`.
+
+`ais ls cloud BUCKET_NAME/`
+
+Lists objects in the cloud bucket `BUCKET_NAME`.
+
+#### Flags for listing object names
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -49,7 +71,6 @@ Lists objects in the bucket `BUCKET_NAME`.
 | `--all-items` | `bool` | Show all items, including all, duplicated, etc. (ignored in fast mode) | `false` |
 | `--marker` | `string` | Start listing objects starting from the object that follows the marker alphabetically (ignored in fast mode) | `""` |
 | `--no-headers` | `bool` | Display tables without headers | `false` |
-| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### Evict
 

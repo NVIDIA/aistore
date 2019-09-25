@@ -53,7 +53,6 @@ const (
 	// List subcommands
 	subcmdListAIS      = subcmdAIS
 	subcmdListCloud    = subcmdCloud
-	subcmdListBucket   = subcmdBucket
 	subcmdListBckProps = subcmdProps
 	subcmdListConfig   = subcmdConfig
 	subcmdListSmap     = subcmdSmap
@@ -124,11 +123,12 @@ const (
 	optionalJobIDArgument = "[JOB_ID]"
 
 	// Buckets
-	bucketArgument         = "BUCKET_NAME"
-	optionalBucketArgument = "[BUCKET_NAME]"
-	bucketsArgument        = "BUCKET_NAME [BUCKET_NAME...]"
-	bucketOldNewArgument   = bucketArgument + " NEW_NAME"
-	bucketPropsArgument    = bucketArgument + " " + keyValuePairsArgument
+	bucketArgument                      = "BUCKET_NAME"
+	optionalBucketArgument              = "[BUCKET_NAME]"
+	optionalBucketWithSeparatorArgument = "[BUCKET_NAME/]"
+	bucketsArgument                     = "BUCKET_NAME [BUCKET_NAME...]"
+	bucketOldNewArgument                = bucketArgument + " NEW_NAME"
+	bucketPropsArgument                 = bucketArgument + " " + keyValuePairsArgument
 
 	// Objects
 	getObjectArgument            = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
@@ -146,7 +146,7 @@ const (
 	daemonStatusArgument       = optionalDaemonTypeArgument + "|" + optionalDaemonIDArgument
 	listConfigArgument         = "DAEMON_ID [CONFIG_SECTION]"
 	setConfigArgument          = optionalDaemonIDArgument + " " + keyValuePairsArgument
-	registerNodeArgumentText   = "IP:PORT " + optionalDaemonIDArgument
+	registerNodeArgument       = "IP:PORT " + optionalDaemonIDArgument
 	startDownloadArgument      = "SOURCE DESTINATION"
 	jsonSpecArgument           = "JSON_SPECIFICATION"
 
@@ -155,6 +155,9 @@ const (
 	xactionWithOptionalBucketArgument         = "XACTION_NAME [BUCKET_NAME]"
 	optionalXactionWithOptionalBucketArgument = "[XACTION_NAME] [BUCKET_NAME]"
 	stopCommandXactionArgument                = "XACTION_NAME|" + allArgument + " [BUCKET_NAME]"
+
+	// List command
+	listCommandArgument = "[COMMAND | BUCKET_NAME/]"
 
 	// Auth
 	addUserArgument    = "USER_NAME USER_PASSWORD"
@@ -200,7 +203,7 @@ OPTIONS:
    {{.HelpName}} - {{if .Description}}{{.Description}}{{else}}{{.Usage}}{{end}}
 
 USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} COMMAND{{if .VisibleFlags}} [COMMAND OPTIONS...]{{end}}{{end}}
+   {{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}COMMAND{{end}}{{if .VisibleFlags}} [COMMAND OPTIONS...]{{end}}
 
 COMMANDS:{{range .VisibleCategories}}{{if .Name}}
    {{.Name}}:{{end}}{{range .VisibleCommands}}

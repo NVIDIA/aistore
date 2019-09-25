@@ -455,17 +455,17 @@ func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
 }
 
 func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provider string, showHeaders bool) {
-	isBckLocal := cmn.IsProviderAIS(provider)
-	if isBckLocal || provider == "" {
+	isAISBck := cmn.IsProviderAIS(provider)
+	if isAISBck || provider == "" {
 		aisBuckets := regexFilter(regex, bucketNames.AIS)
 		sort.Strings(aisBuckets) // sort by name
 		if showHeaders {
-			fmt.Fprintf(c.App.Writer, "AIS Buckets (%d)\n", len(aisBuckets))
+			fmt.Fprintf(c.App.Writer, "AIS Buckets (%d)\n\\_\n", len(aisBuckets))
 		}
 		for _, bucket := range aisBuckets {
-			fmt.Fprintln(c.App.Writer, bucket)
+			fmt.Fprintf(c.App.Writer, "  %s\n", bucket)
 		}
-		if isBckLocal {
+		if isAISBck {
 			return
 		}
 		if showHeaders {
@@ -476,10 +476,10 @@ func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provi
 	cloudBuckets := regexFilter(regex, bucketNames.Cloud)
 	sort.Strings(cloudBuckets) // sort by name
 	if showHeaders {
-		fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n", len(cloudBuckets))
+		fmt.Fprintf(c.App.Writer, "Cloud Buckets (%d)\n\\_\n", len(cloudBuckets))
 	}
 	for _, bucket := range cloudBuckets {
-		fmt.Fprintln(c.App.Writer, bucket)
+		fmt.Fprintf(c.App.Writer, "  %s\n", bucket)
 	}
 }
 
