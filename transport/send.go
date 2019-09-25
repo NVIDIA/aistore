@@ -367,7 +367,9 @@ func (s *Stream) terminate() {
 	} else {
 		gc.remove(s)
 		s.Stop()
-		close(s.cmplCh)
+		hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
+		obj := obj{hdr: hdr}
+		s.cmplCh <- cmpl{obj, s.term.err}
 	}
 	if s.compressed() {
 		s.lz4s.sgl.Free()
@@ -449,13 +451,12 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 
 func (s *Stream) cmplLoop() {
 	for {
-		if cmpl, ok := <-s.cmplCh; ok {
-			obj := &cmpl.obj
-			cmn.Assert(!obj.hdr.IsLast()) // remove
-			s.objDone(obj, cmpl.err)
-		} else {
+		cmpl, ok := <-s.cmplCh
+		obj := &cmpl.obj
+		if !ok || obj.hdr.IsLast() {
 			break
 		}
+		s.objDone(&cmpl.obj, cmpl.err)
 	}
 	s.wg.Done()
 }

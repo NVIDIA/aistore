@@ -137,11 +137,17 @@ func (gc *collector) do() {
 			if s.time.ticks <= 0 {
 				delete(gc.streams, lid)
 				close(s.workCh) // delayed close
+				close(s.cmplCh) // ditto
 				if s.term.err == nil {
 					s.term.err = errors.New(reasonUnknown)
 				}
 				for obj := range s.workCh {
 					s.objDone(&obj, s.term.err)
+				}
+				for cmpl := range s.cmplCh {
+					if !cmpl.obj.hdr.IsLast() {
+						s.objDone(&cmpl.obj, cmpl.err)
+					}
 				}
 			}
 		} else if s.sessST.Load() == active {
