@@ -104,6 +104,9 @@ func (aisCLI *AISCLI) handleCLIError(err error) error {
 		return errors.New(cmn.StrToSentence(err.Message))
 	case *usageError:
 		return err
+	case *additionalInfoError:
+		err.baseErr = aisCLI.handleCLIError(err.baseErr)
+		return err
 	default:
 		return errors.New(cmn.StrToSentence(err.Error()))
 	}

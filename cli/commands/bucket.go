@@ -309,7 +309,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
 		return
 	}
-	fmt.Fprintln(c.App.Writer)
+	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
 	return
 }
 

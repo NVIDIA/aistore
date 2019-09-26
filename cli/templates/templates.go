@@ -270,10 +270,10 @@ const (
 	BucketPropsTmpl = "\nCloud Provider: {{.CloudProvider}}\n" +
 		BucketVerConfTmpl + CksumConfTmpl + LRUConfTmpl + MirrorConfTmpl + ECConfTmpl
 
-	BucketPropsSimpleTmpl = "Property\tValue\n" +
+	BucketPropsSimpleTmpl = "Property\tValue\n========\t=====\n" +
 		"{{range $p := . }}" +
 		"{{$p.Name}}\t{{$p.Val}}\n" +
-		"{{end}}\n"
+		"{{end}}"
 
 	DownloadListHeader = "JobID\t Status\t Errors\t Description\n"
 	DownloadListBody   = "{{$value.ID}}\t " +

@@ -30,13 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-type usageError struct {
-	context      *cli.Context
-	message      string
-	helpData     interface{}
-	helpTemplate string
-}
-
 const (
 	Infinity             = -1
 	keyAndValueSeparator = "="
@@ -79,6 +72,18 @@ var (
 //
 // Error handling
 //
+
+type usageError struct {
+	context      *cli.Context
+	message      string
+	helpData     interface{}
+	helpTemplate string
+}
+
+type additionalInfoError struct {
+	baseErr        error
+	additionalInfo string
+}
 
 func (e *usageError) Error() string {
 	msg := helpMessage(e.helpTemplate, e.helpData)
@@ -141,6 +146,18 @@ func commandNotFoundError(c *cli.Context, cmd string) error {
 		message:      fmt.Sprintf("unknown command %q", cmd),
 		helpData:     c.App,
 		helpTemplate: cli.SubcommandHelpTemplate,
+	}
+}
+
+func (e *additionalInfoError) Error() string {
+	return fmt.Sprintf("%s %s", e.baseErr.Error(), cmn.StrToSentence(e.additionalInfo))
+}
+
+func newAdditionalInfoError(err error, info string) error {
+	cmn.Assert(err != nil)
+	return &additionalInfoError{
+		baseErr:        err,
+		additionalInfo: info,
 	}
 }
 

@@ -293,37 +293,30 @@ func (c *CksumConf) String() string {
 		return "Disabled"
 	}
 
-	yesProps := make([]string, 0)
-	noProps := make([]string, 0)
+	toValidate := make([]string, 0)
 	add := func(val bool, name string) {
 		if val {
-			yesProps = append(yesProps, name)
-		} else {
-			noProps = append(noProps, name)
+			toValidate = append(toValidate, name)
 		}
 	}
-
 	add(c.ValidateColdGet, "ColdGET")
 	add(c.ValidateWarmGet, "WarmGET")
 	add(c.ValidateObjMove, "ObjectMove")
 	add(c.EnableReadRange, "ReadRange")
 
-	props := make([]string, 0, 2)
-	if len(yesProps) != 0 {
-		props = append(props, strings.Join(yesProps, ",")+"=yes")
-	}
-	if len(noProps) != 0 {
-		props = append(props, strings.Join(noProps, ",")+"=no")
+	toValidateStr := "Nothing"
+	if len(toValidate) > 0 {
+		toValidateStr = strings.Join(toValidate, ",")
 	}
 
-	return fmt.Sprintf("%s (validation: %s)", c.Type, strings.Join(props, ", "))
+	return fmt.Sprintf("Type: %s | Validate: %s", c.Type, toValidateStr)
 }
 
 func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return "Disabled"
 	}
-	return fmt.Sprintf("Watermarks: %d/%d, do not evict time: %s, OOS: %v",
+	return fmt.Sprintf("Watermarks: %d%%/%d%% | Do not evict time: %s | OOS: %v%%",
 		c.LowWM, c.HighWM, c.DontEvictTimeStr, c.OOS)
 }
 

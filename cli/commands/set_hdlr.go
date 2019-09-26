@@ -5,7 +5,11 @@
  */
 package commands
 
-import "github.com/urfave/cli"
+import (
+	"fmt"
+
+	"github.com/urfave/cli"
+)
 
 var (
 	setCmdsFlags = map[string][]cli.Flag{
@@ -58,5 +62,9 @@ func setPropsHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, resetFlag) { // ignores any arguments, resets bucket props
 		return resetBucketProps(c, baseParams)
 	}
-	return setBucketProps(c, baseParams)
+	if err = setBucketProps(c, baseParams); err != nil {
+		helpMsg := fmt.Sprintf("To list bucket properties, run: %s %s %s BUCKET_NAME", cliName, commandList, subcmdListBckProps)
+		return newAdditionalInfoError(err, helpMsg)
+	}
+	return
 }
