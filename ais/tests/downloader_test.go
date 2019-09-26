@@ -462,10 +462,6 @@ func TestDownloadCloud(t *testing.T) {
 }
 
 func TestDownloadStatus(t *testing.T) {
-	if testing.Short() {
-		t.Skip(tutils.SkipMsg)
-	}
-
 	var (
 		bucket        = TestBucketName
 		params        = tutils.DefaultBaseAPIParams(t)
@@ -484,7 +480,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-		longFileName:  "http://releases.ubuntu.com/18.04/ubuntu-18.04.2-desktop-amd64.iso",
+		longFileName:  "https://storage.googleapis.com/lpr-vision/imagenet/imagenet_train-000001.tgz",
 	}
 
 	clearDownloadList(t)
