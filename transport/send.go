@@ -72,11 +72,11 @@ type (
 		postCh   chan struct{} // to indicate that workCh has work
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
-			start      atomic.Int64  // to support idle(%)
-			idleOut    time.Duration // idle timeout
-			sendCalled atomic.Bool   // determines if there was any Send() invocation since the last pass by StreamCollector (gc)
-			ticks      int           // num 1s ticks until idle timeout
-			index      int           // heap stuff
+			start   atomic.Int64  // to support idle(%)
+			idleOut time.Duration // idle timeout
+			inSend  atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
+			ticks   int           // num 1s ticks until idle timeout
+			index   int           // heap stuff
 		}
 		wg        sync.WaitGroup
 		sendoff   sendoff
@@ -319,9 +319,7 @@ func (s *Stream) compressed() bool { return s.lz4s.s == s }
 //
 // ---------------------------------------------------------------------------------------
 func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, cmplPtr unsafe.Pointer, prc ...*atomic.Int64) (err error) {
-	// This needs to be updated before terminated check to avoid any races which
-	// occur between the terminated check and setting called to 'true'.
-	s.time.sendCalled.Store(true)
+	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 
 	if s.Terminated() {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot send [%s/%s(%d)]",
@@ -558,6 +556,7 @@ func (s *Stream) doRequest(ctx context.Context) (err error) {
 
 // as io.Reader
 func (s *Stream) Read(b []byte) (n int, err error) {
+	s.time.inSend.Store(true) // indication for Collector to delay cleanup
 	obj := &s.sendoff.obj
 	if obj.reader != nil { // have object
 		if s.sendoff.dod != 0 { // fast path

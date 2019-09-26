@@ -127,7 +127,7 @@ func (gc *collector) Pop() interface{} {
 func (gc *collector) do() {
 	for lid, s := range gc.streams {
 		if s.Terminated() {
-			if s.time.sendCalled.Swap(false) {
+			if s.time.inSend.Swap(false) {
 				gc.drain(s)
 				s.time.ticks = 1
 				continue
@@ -159,7 +159,7 @@ func (gc *collector) do() {
 			continue
 		}
 		gc.update(s, int(s.time.idleOut/tickUnit))
-		if s.time.sendCalled.Swap(false) {
+		if s.time.inSend.Swap(false) {
 			continue
 		}
 		if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
