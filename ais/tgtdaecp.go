@@ -466,6 +466,16 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
 			}
 			gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
+
+			// Receive most recent smap and bmd.
+			var meta targetRegMeta
+			if err := cmn.ReadJSON(w, r, &meta); err != nil {
+				return
+			}
+
+			msgInt := t.newActionMsgInternalStr(cmn.ActRegTarget, meta.Smap, meta.BMD)
+			t.receiveBucketMD(meta.BMD, msgInt, bucketMDRegister, "")
+			t.smapowner.synchronize(meta.Smap, false /*saveSmap*/, true /* lesserIsErr */)
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)

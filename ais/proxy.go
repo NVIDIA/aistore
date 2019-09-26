@@ -3047,11 +3047,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			if glog.V(3) {
 				glog.Infof("register %s (num targets before %d)", nsi.Name(), smap.CountTargets())
 			}
+
+			// Sending current bmd and smap - target can have outdated versions
+			// so eg. gfn will be done on old smap which may not be accurate
+			// and will result in failures.
+			bmd := p.bmdowner.get()
+			meta := &targetRegMeta{smap, bmd, p.si}
+			body := cmn.MustMarshal(meta)
+
 			args := callArgs{
 				si: nsi,
 				req: cmn.ReqArgs{
 					Method: http.MethodPost,
 					Path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
+					Body:   body,
 				},
 				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 			}
