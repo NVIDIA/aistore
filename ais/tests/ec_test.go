@@ -33,9 +33,9 @@ const (
 	ecMetaDir  = "/" + ec.MetaType + "/"
 	ecDataDir  = "/" + fs.ObjectType + "/"
 	ecWorkDir  = "/" + fs.WorkfileType + "/"
-	ecLogDir   = "/log/"
-	ecLocalDir = "/local/"
-	ecCloudDir = "/cloud/"
+	ecLogDir   = "/log/"   // TODO -- FIXME: hardcoding is illegal, use fs.MakePath*
+	ecLocalDir = "/local/" // TODO -- FIXME: ditto
+	ecCloudDir = "/cloud/" // TODO -- FIXME: ditto
 	ecTestDir  = "ec-test/"
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
@@ -114,8 +114,8 @@ func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
 	return nil
 }
 
-// Since all replicas are equal, it is hard to tell main one from others. Main
-// replica is the replica that is on the target chosen by proxy using HrwTarget
+// Since all replicas are identical, it is difficult to differentiate main one from others.
+// The main replica is the replica that is on the target chosen by proxy using HrwTarget
 // algorithm on GET request from a client.
 // The function uses heuristics to detect the main one: it should be the oldest
 func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map[string]ecSliceMD, string) {
@@ -132,6 +132,9 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 		bckType = cmn.Cloud
 	}
 
+	//
+	// FIXME -- TODO: must be redone using fs.MakePath and friends
+	//
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
@@ -153,10 +156,10 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 
 			var cksumVal string
 			if strings.Contains(path, ecMetaDir) && err != nil {
-				// meta file of the original object on the main target doesn't have meta saved on a disk
+				// metafile of the original object on the main target doesn't have meta saved on disk
 				noObjCnt++
 			} else if !strings.Contains(path, ecMetaDir) {
-				// meta files contain checksum inside, but dont have a checksum itself in a lom
+				// metafiles contain checksum inside but don't have a checksum in a lom
 				if sliceLom.Cksum() != nil {
 					_, cksumVal = sliceLom.Cksum().Get()
 				}
@@ -175,7 +178,7 @@ func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map
 	filepath.Walk(rootDir, fsWalkFunc)
 
 	if noObjCnt > 1 {
-		tutils.Logf("meta not found for %v files matching object name %s\n", noObjCnt, objName)
+		tutils.Logf("meta not found for %d files matching object name %s\n", noObjCnt, objName)
 	}
 
 	return foundParts, main
@@ -228,7 +231,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 			}
 		} else {
 			tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
-			tassert.Errorf(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
+			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 			mainObjPath = k
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
@@ -400,7 +403,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams *api.BaseParams, 
 				} else {
 					objFullPath := fullPath + objName
 					tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '..%s']", k, objFullPath)
-					tassert.Errorf(t, md.size == objSize, "File %q size mismatch: got %d, expected %d", k, md.size, objSize)
+					tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
 					mainObjPath = k
 					replCnt++
 				}
@@ -426,7 +429,7 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams *api.BaseParams, 
 			partsAfterRemove, _ := ecGetAllSlices(t, objName, bckName, o)
 			_, ok := partsAfterRemove[mainObjPath]
 			if ok || len(partsAfterRemove) >= len(foundParts) {
-				t.Errorf("File is not deleted: %#v", partsAfterRemove)
+				t.Errorf("Object is not deleted: %#v", partsAfterRemove)
 				return
 			}
 
@@ -437,12 +440,12 @@ func doECPutsAndCheck(t *testing.T, bckName string, baseParams *api.BaseParams, 
 				partsAfterRestore, _ := ecGetAllSlices(t, objName, bckName, o)
 				md, ok := partsAfterRestore[mainObjPath]
 				if !ok || len(partsAfterRestore) != len(foundParts) {
-					t.Errorf("File is not restored: %#v", partsAfterRestore)
+					t.Errorf("Object is not restored: %#v", partsAfterRestore)
 					return
 				}
 
 				if md.size != objSize {
-					t.Errorf("File is restored incorrectly, size mismatches: %d, expected %d", md.size, objSize)
+					t.Errorf("Object is restored incorrectly, size mismatches: %d, expected %d", md.size, objSize)
 					return
 				}
 			}
@@ -809,7 +812,7 @@ func TestECRestoreObjAndSliceCloud(t *testing.T) {
 //  - PUTs an object to the bucket
 //  - filepath.Walk checks that the number of metafiles and slices are correct
 //  - Either original object or original object and a random slice are deleted
-//  - GET should detect that original file has gone
+//  - GET should detect that original object is gone
 //  - The target restores the original object from slices and missing slices
 func TestECRestoreObjAndSlice(t *testing.T) {
 	var (
@@ -890,8 +893,8 @@ func createECFile(t *testing.T, bucket, objName, fullPath string, baseParams *ap
 }
 
 // Creates 2 EC files and then corrupts their slices
-// Checks that after corrupting one slice it is still possible to recover a file
-// Checks that after corrupting all slices it is not possible to recover a file
+// Checks that after corrupting one slice it is still possible to recover an object
+// Checks that after corrupting all slices it is not possible to recover an object
 func TestECChecksum(t *testing.T) {
 	if containers.DockerRunning() {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
@@ -1182,7 +1185,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 //  - PUTs objects to the bucket
 //  - filepath.Walk checks that the number of metafiles and slices are correct
 //  - The original object is deleted
-//  - GET should detect that original file has gone and that there are EC slices
+//  - GET should detect that original object is gone and that there are EC slices
 //  - The target restores the original object from slices/copies and returns it
 //  - No errors must occur
 func TestECStress(t *testing.T) {
@@ -1613,7 +1616,7 @@ func TestECDestroyBucket(t *testing.T) {
 			}()
 
 			if i%10 == 0 {
-				tutils.Logf("ec file %s into bucket %s\n", objName, bucket)
+				tutils.Logf("ec object %s into bucket %s\n", objName, bucket)
 			}
 			if putECFile(baseParams, bucket, objName) != nil {
 				errCnt.Inc()
@@ -1814,7 +1817,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
-	// put a file
+	// PUT object
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
 		objName := fmt.Sprintf(o.pattern, i)

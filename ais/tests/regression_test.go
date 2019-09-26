@@ -179,7 +179,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		}
 		err := api.DeleteList(tutils.BaseAPIParams(proxyURL), bucketName, cmn.Cloud, files, true, 0)
 		if err != nil {
-			t.Error("Unable to delete files during cleanup from cloud bucket.")
+			t.Errorf("Failed to delete objects from bucket %s, err: %v", bucketName, err)
 		}
 	}()
 

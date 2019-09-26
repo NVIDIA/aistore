@@ -1340,11 +1340,25 @@ func TestCopyCloudBucket(t *testing.T) {
 	bucketList, err := api.ListBucket(baseParams, clibucket, msg, 0, query)
 	tassert.CheckFatal(t, err)
 	m.num = len(bucketList.Entries)
+
+	// none cached - PUT some and cache them as well
 	if m.num == 0 {
-		putCloud(t, 2) // make sure we have at least so many cached; FIXME: cold GET instead
+		objs := cloudPUT(t)
 		bucketList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
 		tassert.CheckFatal(t, err)
 		m.num = len(bucketList.Entries)
+		if m.num != len(objs) {
+			t.Errorf("list-bucket err: %d != %d", m.num, len(objs))
+		}
+		// cleanup
+		defer func(objs []string) {
+			err := api.DeleteList(baseParams, clibucket, cmn.Cloud, objs, true, 0)
+			if err != nil {
+				t.Errorf("Failed to delete objects from bucket %s, err: %v", clibucket, err)
+			} else {
+				tutils.Logf("DELETE done.\n")
+			}
+		}(objs)
 	}
 	tutils.Logf("cloud bucket %s: %d cached objects\n", clibucket, m.num)
 
@@ -1363,22 +1377,39 @@ func TestCopyCloudBucket(t *testing.T) {
 	if len(copiedList.Entries) != len(bucketList.Entries) {
 		t.Fatalf("list-bucket: dst %d != %d src", len(copiedList.Entries), len(bucketList.Entries))
 	}
-
-	m.ensureNoErrors()
+	for _, a := range bucketList.Entries {
+		var found bool
+		for _, b := range copiedList.Entries {
+			if a.Name == b.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("%s/%s is missing in the copied objects", m.bucket, a.Name)
+		}
+	}
 }
 
-func putCloud(t *testing.T, num int) {
+func cloudPUT(t *testing.T) (objs []string) {
 	var (
-		m = ioContext{
-			t:               t,
-			bucket:          clibucket,
-			num:             num,
-			numGetsEachFile: 1,
-		}
+		prefix   = "copy/cloud_"
+		wg       = &sync.WaitGroup{}
+		errCh    = make(chan error, numfiles)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
-	m.saveClusterState()
-	m.puts()
-	m.ensureNoErrors()
+	for i := 0; i < numfiles; i++ {
+		r, err := tutils.NewRandReader(1024 /*size */, true /* withHash */)
+		tassert.CheckFatal(t, err)
+		objname := fmt.Sprintf("%s%d", prefix, i)
+		wg.Add(1)
+		go tutils.PutAsync(wg, proxyURL, clibucket, objname, r, errCh)
+		objs = append(objs, objname)
+	}
+	wg.Wait()
+	selectErr(errCh, "put", t, true)
+	tutils.Logf("PUT done.\n")
+	return
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {

@@ -22,7 +22,7 @@ Further, AIS:
 * natively supports Amazon S3 and Google Cloud backends;
 * focuses on AI and, specifically, on the performance of large-scale deep learning.
 
-Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `scp` and such. For a detailed introduction that includes design philosophy, key concepts, and system components, please see [AIS overview](docs/overview.md).
+Last but not the least, AIS features open format and, therefore, freedom to copy or move your data off of AIS at any time using familiar Linux `scp(1)` and `rsync(1)`. For general description, design philosophy, key concepts, and system components, please see [AIS overview](docs/overview.md).
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
