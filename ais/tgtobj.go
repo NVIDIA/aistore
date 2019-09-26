@@ -127,9 +127,11 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 		poi.lom.Uncache()
 		return
 	}
-	if err1 := poi.t.ecmanager.EncodeObject(poi.lom); err1 != nil && err1 != ec.ErrorECDisabled {
-		err = err1
+	if ecErr := poi.t.ecmanager.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
+		err = ecErr
+		return
 	}
+
 	poi.t.putMirror(poi.lom)
 	return
 }

@@ -291,10 +291,6 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		LOM:    lom,
 	}
 
-	if err := lom.Load(); err != nil {
-		return err
-	}
-
 	mgr.restoreBckPutXact(lom.Bck()).Encode(req)
 
 	return nil
