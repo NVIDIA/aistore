@@ -95,6 +95,7 @@ func (lom *LOM) Bucket() string            { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
 func (lom *LOM) IsAIS() bool               { return lom.bck.IsAIS() }
 func (lom *LOM) Bck() *Bck                 { return lom.bck }
+func (lom *LOM) Exists() bool              { return lom.exists }
 
 //
 // access perms
@@ -620,6 +621,11 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 			lom.exists = true
 			lmeta := md.(*lmeta)
 			lom.md = *lmeta
+			if err := lom.checkBucket(); err != nil {
+				return err
+			}
+
+			// If correct bucket still exists we can assume this is good.
 			if lom.Exists() {
 				return
 			}
@@ -641,22 +647,28 @@ func (lom *LOM) Load(adds ...bool) (err error) {
 	return
 }
 
-// this code does an extra check only for an ais bucket
-func (lom *LOM) Exists() bool {
-	cmn.Dassert(lom.loaded, pkgName) // cannot check existence without first calling lom.Load()
-	if !lom.exists {
-		return false
+func (lom *LOM) checkBucket() error {
+	cmn.Dassert(lom.loaded, pkgName) // cannot check bucket without first calling lom.Load()
+	var (
+		present bool
+		bmd     = lom.T.GetBowner().Get()
+	)
+	lom.bck.Props, present = bmd.Get(lom.bck)
+	if !present {
+		// Report non-existing bucket error to prevent numerous errors and panics
+		// which could happen when `lom.bck.Props` is nil.
+		if lom.bck.IsCloud() {
+			return cmn.NewErrorCloudBucketDoesNotExist(lom.Bucket())
+		}
+		return cmn.NewErrorBucketDoesNotExist(lom.Bucket())
 	}
-
-	bmd := lom.T.GetBowner().Get()
-	lom.bck.Props, _ = bmd.Get(lom.bck)
-	if lom.bck.Props != nil && lom.md.bckID == lom.bck.Props.BID {
-		return true
+	if lom.md.bckID == lom.bck.Props.BID {
+		return nil
 	}
 	// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
 	lom.Uncache()
 	lom.exists = false
-	return false
+	return nil
 }
 
 func (lom *LOM) ReCache() {
