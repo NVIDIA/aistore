@@ -32,7 +32,6 @@ build:
 lint:
   stage: build
   script:
-    - make lint-install
     - make lint
     - make fmt-check
     - make spell-check
