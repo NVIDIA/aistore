@@ -134,19 +134,19 @@ This (above) does two things: updates `stats_time` to 1 minute and stores the up
 AIS command-line allows to override (and, optionally, persist) configuration at AIS node's startup. For example:
 
 ```shell
-# ais -config=/etc/ais.json -role=target -persist=true -confjson="{\"default_timeout\": \"13s\" }"
+# aisnode -config=/etc/ais.json -role=target -persist=true -confjson="{\"default_timeout\": \"13s\" }"
 ```
 
 As shown above, the CLI option in-question is: `confjson`. It's value is a JSON-formatted map of string names and string values. You can *persist* the updated configuration either via `-persist` command-line option or via an additional JSON tuple:
 
 ```shell
-# ais -config=/etc/ais.json -role=target -confjson="{\"default_timeout\": \"13s\", \"persist\": \"true\" }"
+# aisnode -config=/etc/ais.json -role=target -confjson="{\"default_timeout\": \"13s\", \"persist\": \"true\" }"
 ```
 
 Another example. To temporarily override locally-configured address of the primary proxy, run:
 
 ```shell
-# ais -config=/etc/ais.json -role=target -proxyurl=http://G
+# aisnode -config=/etc/ais.json -role=target -proxyurl=http://G
 
 where G denotes the designated primary's hostname and port.
 ```
@@ -154,7 +154,7 @@ where G denotes the designated primary's hostname and port.
 To achieve the same on a more permanent basis, add `-persist=true` as follows:
 
 ```shell
-# ais -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true
+# aisnode -config=/etc/ais.json -role=target -proxyurl=http://G -persist=true
 ```
 
 > Please see [AIS command-line](command_line.md) for other command-line options and details.
@@ -232,7 +232,7 @@ or, same:
 [AIS CLI](../cli/README.md) is an integrated management-and-monitoring command line tool. The following CLI command sequence, first - finds out all AIS knobs that contain substring "time" in their names, second - modifies `list_timeout` from 2 minutes to 5 minutes, and finally, displays the modified value:
 
 ```shell
-# ais config get --json | grep time
+# ais ls config 844974_8080 --json | grep time
         "stats_time": "10s",
         "retry_sync_time": "2s"
     "timeout": {
@@ -249,9 +249,9 @@ or, same:
         "timeout_factor": 3
         "timeout": "1h"
         "call_timeout": "10m"
-# ais config set timeout.list_timeout=5m
-
-# ais config get --json | grep list_timeout
+# ais set config timeout.list_timeout=5m
+Config has been updated successfully.
+# ais ls config 844974_8080 --json | grep list_timeout
         "list_timeout": "5m"
 ```
 

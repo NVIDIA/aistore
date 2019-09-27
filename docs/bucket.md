@@ -1,19 +1,18 @@
 ## Table of Contents
 - [Bucket](#bucket)
-    - [Bucket Provider](#bucket-provider)
+  - [Bucket Provider](#bucket-provider)
 - [AIS Bucket](#ais-bucket)
-    - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
+  - [Curl examples: create, rename and, destroy ais bucket](#curl-examples-create-rename-and-destroy-ais-bucket)
 - [Cloud Bucket](#cloud-bucket)
-    - [Prefetch/Evict Objects](#prefetchevict-objects)
-    - [Evict Cloud Bucket](#evict-cloud-bucket)
+  - [Prefetch/Evict Objects](#prefetchevict-objects)
+  - [Evict Cloud Bucket](#evict-cloud-bucket)
 - [Bucket Access Attributes](#bucket-access-attributes)
 - [List Bucket](#list-bucket)
-    - [Properties and Options](#properties-and-options)
-    - [Curl example: listing local and Cloud buckets](#curl-example-listing-local-and-cloud-buckets)
-    - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
-    - [Go code example: listing all pages](#go-code-example-listing-all-pages)
+  - [Properties and Options](#properties-and-options)
+  - [Curl example: listing ais and Cloud buckets](#curl-example-listing-ais-and-cloud-buckets)
+  - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Recover Buckets](#recover-buckets)
-    - [Curl example: recovering buckets](#curl-example-recovering-buckets)
+  - [Example: recovering buckets](#example-recovering-buckets)
 
 ## Bucket
 
@@ -116,7 +115,7 @@ Bucket access is controlled by a single 64-bit `aattrs` value in the [Bucket Pro
 For instance, to make bucket `abc` read-only, execute the following [AIS CLI](../cli/README.md) command:
 
 ```shell
-ais bucket setprops abc 'aattrs=ro'
+ais set props abc 'aattrs=ro'
 ```
 
 The same expressed via `curl` will look as follows:
@@ -247,32 +246,32 @@ For many more examples, please refer to the [test sources](/ais/tests/) in the r
 1. List bucket properties:
 
 ```shell
-$ AIS_BUCKET=mybucket ais bucket props list
+$ AIS_BUCKET=mybucket ais ls props
 ```
 
 or, same via command argument (and without the environment variable):
 
 ```shell
-$ ais bucket props list mybucket
+$ ais ls props mybucket
 ```
 
 or, the same to get output in a (raw) JSON form:
 
 ```shell
-$ ais bucket props list mybucket --json
+$ ais ls props mybucket --json
 ```
 
 2. Enable erasure coding on a bucket:
 
 ```shell
-$ AIS_BUCKET=mybucket ais bucket props set ec.enabled=true
+$ AIS_BUCKET=mybucket ais set props ec.enabled=true
 ```
 
 3. Enable object versioning and then list updated bucket properties:
 
 ```shell
-$ AIS_BUCKET=mybucket ais bucket props set ver.enabled=true
-$ AIS_BUCKET=mybucket ais bucket props list
+$ AIS_BUCKET=mybucket ais set props ver.enabled=true
+$ AIS_BUCKET=mybucket ais ls props
 ```
 
 ## Recover Buckets

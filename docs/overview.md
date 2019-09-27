@@ -180,7 +180,7 @@ the tool will suggest the following "expansion" from which you can further choos
 
  ```sh
 $ ais s
-setconfig  smap       stats      status
+set          set-copies   show         start        status       stop
  ```
 
 AIS CLI is still at its early stage and will keep quickly developing. For more information, please see the project's own [README](cli/README.md).

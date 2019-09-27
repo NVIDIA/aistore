@@ -1,12 +1,12 @@
 ## Table of Contents
 - [Storage Services](#storage-services)
-   - [Notation](#notation)
+  - [Notation](#notation)
 - [Checksumming](#checksumming)
 - [LRU](#lru)
 - [Erasure coding](#erasure-coding)
 - [N-way mirror](#n-way-mirror)
-   - [Read load balancing](#read-load-balancing)
-   - [More examples](#more-examples)
+  - [Read load balancing](#read-load-balancing)
+  - [More examples](#more-examples)
 
 ## Storage Services
 
@@ -101,18 +101,19 @@ or using AIS CLI utility:
 enable EC for a bucket with custom number of data and parity slices. It should be done using 2 commands: the first one changes the numbers while EC is disabled, and the second one enables EC with new slice count:
 
 ```shell
-$ ais bucket props set mybucket ec.data_slices=3 ec.parity_slices=3
-$ ais bucket props set mybucket ec.enabled=true
+$ ais set props mybucket ec.data_slices=3 ec.parity_slices=3
+$ ais set props mybucket ec.enabled=true
 ```
 
 check that EC properties are applied:
 
 ```shell
-$ ais bucket props ls mybucket
+$ ais ls props mybucket
 Property        Value
+========        =====
 Provider        ais
 Access          GET,PUT,DELETE,HEAD,ColdGET
-Checksum        xxhash (validation: ColdGET=yes, WarmGET,ObjectMove,ReadRange=no)
+Checksum        Type: xxhash | Validate: ColdGET
 Mirror          Disabled
 EC              3:3 (256KiB)
 LRU             Disabled
