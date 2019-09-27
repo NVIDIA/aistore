@@ -8,7 +8,11 @@ package commands
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"sort"
 	"strings"
+	"text/tabwriter"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -24,6 +28,10 @@ type targetDiskStats struct {
 	stats    map[string]*ios.SelectedDiskStats
 	targetID string
 }
+
+const (
+	rebalanceStatsFmt = "%s\t%0.0f\t%0.0f\t%s\t%0.0f\t%s\t%s\t%s\t%t\n"
+)
 
 var (
 	proxy  = make(map[string]*stats.DaemonStatus)
@@ -264,4 +272,78 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	}
 
 	return daemonID, nvs, nil
+}
+
+func monitorGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, refreshRate time.Duration) error {
+	tw := &tabwriter.Writer{}
+	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+
+	// run until global rebalance is completed
+	for {
+		allFinished := true
+
+		rebStats, err := api.MakeXactGetRequest(baseParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
+		if err != nil {
+			switch err := err.(type) {
+			case *cmn.HTTPError:
+				if err.Status == http.StatusNotFound {
+					fmt.Fprintln(c.App.Writer, "Global rebalance has not been started yet.")
+					return nil
+				}
+				return err
+			default:
+				return err
+			}
+		}
+
+		for _, daemonStats := range rebStats {
+			for _, xactStats := range daemonStats {
+				if xactStats.Running() {
+					allFinished = false
+					break
+				}
+			}
+		}
+
+		for daemonID, daemonStats := range rebStats {
+			if len(daemonStats) == 0 {
+				delete(rebStats, daemonID)
+			}
+		}
+
+		sortedIDs := make([]string, 0, len(rebStats))
+		for daemonID := range rebStats {
+			sortedIDs = append(sortedIDs, daemonID)
+		}
+		sort.Strings(sortedIDs)
+
+		fmt.Fprintln(tw, "DaemonID\tGlobalRebID\tObjRcv\tSizeRcv\tObjSent\tSizeSent\tStartTime\tEndTime\tAborted")
+		fmt.Fprintln(tw, strings.Repeat("======\t", 9 /* num of columns */))
+		for _, daemonID := range sortedIDs {
+			st := rebStats[daemonID][0]
+			extStats := st.Ext.(map[string]interface{})
+			i2s := func(stat string) string {
+				// TODO: Replace with a more elegant solution
+				return cmn.B2S(int64(extStats[stat].(float64)), 2)
+			}
+
+			endTime := "<not completed>"
+			if !st.EndTimeX.IsZero() {
+				endTime = st.EndTimeX.Format("01-02 15:04:05")
+			}
+			startTime := st.StartTimeX.Format("01-02 15:04:05")
+
+			fmt.Fprintf(tw, rebalanceStatsFmt, daemonID, extStats[stats.RebGlobID], extStats[stats.RxRebCount], i2s(stats.RxRebSize),
+				extStats[stats.TxRebCount], i2s(stats.TxRebSize), startTime, endTime, st.AbortedX)
+		}
+		tw.Flush()
+
+		if allFinished {
+			fmt.Fprintln(c.App.Writer, "\nGlobal rebalance has been completed.")
+			break
+		}
+
+		time.Sleep(refreshRate)
+	}
+	return nil
 }

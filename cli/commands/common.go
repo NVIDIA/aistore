@@ -35,20 +35,21 @@ const (
 	commandPut       = "put"
 
 	// Subcommands - preferably nouns
-	subcmdDsort    = cmn.DSortNameLowercase
-	subcmdSmap     = cmn.GetWhatSmap
-	subcmdDisk     = cmn.GetWhatDiskStats
-	subcmdConfig   = cmn.GetWhatConfig
-	subcmdAIS      = "ais"
-	subcmdCloud    = "cloud"
-	subcmdBucket   = "bucket"
-	subcmdObject   = "object"
-	subcmdProps    = "props"
-	subcmdDownload = "download"
-	subcmdXaction  = "xaction"
-	subcmdNode     = "node"
-	subcmdProxy    = "proxy"
-	subcmdTarget   = "target"
+	subcmdDsort     = cmn.DSortNameLowercase
+	subcmdSmap      = cmn.GetWhatSmap
+	subcmdDisk      = cmn.GetWhatDiskStats
+	subcmdConfig    = cmn.GetWhatConfig
+	subcmdRebalance = cmn.ActGlobalReb
+	subcmdAIS       = "ais"
+	subcmdCloud     = "cloud"
+	subcmdBucket    = "bucket"
+	subcmdObject    = "object"
+	subcmdProps     = "props"
+	subcmdDownload  = "download"
+	subcmdXaction   = "xaction"
+	subcmdNode      = "node"
+	subcmdProxy     = "proxy"
+	subcmdTarget    = "target"
 
 	// List subcommands
 	subcmdListAIS      = subcmdAIS
@@ -58,13 +59,14 @@ const (
 	subcmdListSmap     = subcmdSmap
 
 	// Show subcommands
-	subcmdShowBucket   = subcmdBucket
-	subcmdShowDisk     = subcmdDisk
-	subcmdShowDownload = subcmdDownload
-	subcmdShowDsort    = subcmdDsort
-	subcmdShowObject   = subcmdObject
-	subcmdShowNode     = subcmdNode
-	subcmdShowXaction  = subcmdXaction
+	subcmdShowBucket    = subcmdBucket
+	subcmdShowDisk      = subcmdDisk
+	subcmdShowDownload  = subcmdDownload
+	subcmdShowDsort     = subcmdDsort
+	subcmdShowObject    = subcmdObject
+	subcmdShowNode      = subcmdNode
+	subcmdShowXaction   = subcmdXaction
+	subcmdShowRebalance = subcmdRebalance
 
 	// Create subcommands
 	subcmdCreateBucket = subcmdBucket

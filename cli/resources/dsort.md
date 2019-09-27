@@ -23,8 +23,8 @@ Puts randomly generated shards that can be used for dSort testing.
 
 | Command | Explanation |
 | --- | --- |
-| `ais dsort gen --fsize 262144 --fcount 100` | Generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar` |
-| `ais dsort gen --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` | Generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz` |
+| `ais gen-shards --fsize 262144 --fcount 100` | Generates 10 shards each containing 100 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar` |
+| `ais gen-shards --ext .tgz --template "super_shard_{000..099}_last" --fsize 262144 --cleanup` | Generates 100 shards each containing 5 files of size 256KB and puts them inside `dsort-testing` bucket. Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz` |
 
 ### Start
 

@@ -19,7 +19,8 @@ import (
 )
 
 //
-// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes), "*.bps" - throughput (in byte/s)
+// NOTE Naming Convention: "*.n" - counter, "*.µs" - latency, "*.size" - size (in bytes),
+// "*.bps" - throughput (in byte/s), "*.id" - ID
 //
 const (
 	// KindCounter - QPS and byte counts (always incremented, never reset)
@@ -53,6 +54,9 @@ const (
 
 	// KindThroughput
 	GetThroughput = "get.bps" // bytes per second
+
+	// KindID
+	RebGlobID = "reb.glob.id"
 )
 
 // the item that changes in every collection cycle; the target is idle when there are

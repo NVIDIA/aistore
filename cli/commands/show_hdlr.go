@@ -8,6 +8,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cli/templates"
@@ -53,6 +54,9 @@ var (
 			jsonFlag,
 			allItemsFlag,
 			activeFlag,
+		},
+		subcmdShowRebalance: {
+			refreshFlag,
 		},
 	}
 
@@ -117,6 +121,14 @@ var (
 					Flags:        showCmdsFlags[subcmdShowXaction],
 					Action:       showXactionHandler,
 					BashComplete: xactionCompletions,
+				},
+				{
+					Name:         subcmdShowRebalance,
+					Usage:        "shows details about global rebalance",
+					ArgsUsage:    noArguments,
+					Flags:        showCmdsFlags[subcmdShowRebalance],
+					Action:       showRebalanceHandler,
+					BashComplete: flagCompletions,
 				},
 			},
 		},
@@ -288,4 +300,17 @@ func showObjectHandler(c *cli.Context) (err error) {
 	}
 
 	return objectStats(c, baseParams, bucket, provider, object)
+}
+
+func showRebalanceHandler(c *cli.Context) (err error) {
+	var (
+		baseParams  = cliAPIParams(ClusterURL)
+		refreshRate time.Duration
+	)
+
+	if refreshRate, err = calcRefreshRate(c); err != nil {
+		return err
+	}
+
+	return monitorGlobalRebalance(c, baseParams, refreshRate)
 }
