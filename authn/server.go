@@ -329,11 +329,10 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // Borrowed from ais (modified cmn.InvalidHandler calls)
-func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (ok bool) {
+func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
-		ok = true
 		return
 	}
 	if isSyscallWriteError(err) {
@@ -344,7 +343,6 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 	}
 	msg := fmt.Sprintf("%s: failed to write json, err: %v", tag, err)
 	cmn.InvalidHandlerWithMsg(w, r, msg, http.StatusInternalServerError)
-	return
 }
 
 // Removes user credentials

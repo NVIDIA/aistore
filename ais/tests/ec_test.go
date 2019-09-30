@@ -210,7 +210,7 @@ func filterObjListOK(lst []*cmn.BucketEntry) []*cmn.BucketEntry {
 
 func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 	objFullPath string, objSize, sliceSize int64,
-	totalCnt int) (mainObjPath string) {
+	totalCnt int) {
 	tassert.Errorf(t, len(sliceList) == totalCnt, "Expected number of objects for %q: %d, found: %d\n%+v",
 		objFullPath, totalCnt, len(sliceList), sliceList)
 
@@ -232,7 +232,6 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 		} else {
 			tassert.Errorf(t, strings.HasSuffix(k, objFullPath), "Invalid object name: %s [expected '../%s']", k, objFullPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
-			mainObjPath = k
 			if sliced {
 				if _, ok := hashes[md.hash]; ok {
 					t.Errorf("Duplicated slice hash(main) %q: %s\n", objFullPath, md.hash)
@@ -244,8 +243,6 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 
 	metaCntMust := totalCnt / 2
 	tassert.Errorf(t, metaCnt == metaCntMust, "Number of metafiles mismatch: %d, expected %d", metaCnt, metaCntMust)
-
-	return
 }
 
 func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doEC bool,
