@@ -4,7 +4,9 @@
  */
 package cmn
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Common errors
 
@@ -65,4 +67,12 @@ func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDeni
 }
 func NewObjectAccessDenied(name, oper string, aattrs uint64) *ObjectAccessDenied {
 	return &ObjectAccessDenied{errAccessDenied{name, oper, aattrs}}
+}
+
+func IsErrBucketDoesNotExist(err error) bool {
+	if _, ok := err.(*ErrorBucketDoesNotExist); ok {
+		return true
+	}
+	_, ok := err.(*ErrorCloudBucketDoesNotExist)
+	return ok
 }

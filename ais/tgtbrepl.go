@@ -48,7 +48,7 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		err = fmt.Errorf("%s: err: %v", lom, err)
 		return
 	}
-	if !lom.Exists() || lom.IsCopy() {
+	if !lom.Exists() {
 		return
 	}
 	if ri.uncache {
@@ -73,6 +73,8 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 				copied = true
 				return
 			}
+		} else if cmn.IsErrBucketDoesNotExist(err) {
+			return
 		}
 
 		// do

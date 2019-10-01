@@ -107,7 +107,7 @@ func (lctx *lructx) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	// includes post-rebalancing cleanup
-	if lom.Misplaced() {
+	if !lom.IsHRW() {
 		lctx.misplaced = append(lctx.misplaced, lom)
 		return nil
 	}

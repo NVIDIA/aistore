@@ -154,7 +154,7 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if lom.IsCopy() {
 		return nil
 	}
-	if lom.Misplaced() {
+	if !lom.IsHRW() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
 		if err != nil {

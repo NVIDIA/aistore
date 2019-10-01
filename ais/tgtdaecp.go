@@ -615,7 +615,6 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	t.gfn.local.activate()
 	enabled, err := t.fsprg.enableMountpath(mountpath)
-
 	if err != nil {
 		if _, ok := err.(cmn.NoMountpathError); ok {
 			t.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
@@ -642,6 +641,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	t.gfn.local.activate()
 	disabled, err := t.fsprg.disableMountpath(mountpath)
 	if err != nil {
 		if _, ok := err.(*cmn.NoMountpathError); ok {
@@ -664,8 +664,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	t.gfn.local.activate()
-	err := t.fsprg.addMountpath(mountpath)
-	if err != nil {
+	if err := t.fsprg.addMountpath(mountpath); err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %s", err.Error()))
 		t.gfn.local.deactivate()
 		return
@@ -681,6 +680,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	t.gfn.local.activate()
 	if err := t.fsprg.removeMountpath(mountpath); err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %s", err.Error()))
 		return

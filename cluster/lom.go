@@ -89,7 +89,7 @@ func (lom *LOM) AtimeUnix() int64          { return lom.md.atime }
 func (lom *LOM) SetAtimeUnix(tu int64)     { lom.md.atime = tu }
 func (lom *LOM) ECEnabled() bool           { return lom.Bprops().EC.Enabled }
 func (lom *LOM) LRUEnabled() bool          { return lom.Bprops().LRU.Enabled }
-func (lom *LOM) Misplaced() bool           { return lom.HrwFQN != lom.FQN } // subj to resilvering
+func (lom *LOM) IsHRW() bool               { return lom.HrwFQN == lom.FQN } // subj to resilvering
 func (lom *LOM) SetBID(bid uint64)         { lom.md.bckID, lom.bck.Props.BID = bid, bid }
 func (lom *LOM) Bucket() string            { return lom.bck.Name }
 func (lom *LOM) Bprops() *cmn.BucketProps  { return lom.bck.Props }
@@ -187,7 +187,7 @@ func (lom *LOM) IsCopy() bool {
 	if !lom.bck.Props.Mirror.Enabled {
 		return false
 	}
-	return lom.FQN != lom.HrwFQN
+	return !lom.IsHRW()
 }
 
 func (lom *LOM) addCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
@@ -222,7 +222,7 @@ func (lom *LOM) DelCopy(copiesFQN ...string) (err error) {
 	if lom._whingeCopy() {
 		return
 	}
-	if lom.Misplaced() {
+	if !lom.IsHRW() {
 		return
 	}
 
@@ -288,7 +288,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 // NOTE: uname for LOM must be already locked.
 func (lom *LOM) syncMetaWithCopies() (err error) {
 	// Only object on default location with copies can sync meta.
-	if !lom.Misplaced() && lom.HasCopies() {
+	if !lom.IsHRW() || !lom.HasCopies() {
 		return nil
 	}
 
@@ -340,7 +340,6 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 		}
 		src := lom.Clone(fqn)
 		if err := src.Init(lom.bck.Name, lom.bck.Provider, lom.Config()); err != nil {
-			lom.Unlock(true)
 			continue
 		}
 		if err := src.Load(false); err != nil {
@@ -428,7 +427,7 @@ func (lom *LOM) _string(b string) string {
 	} else if !lom.exists {
 		a = "(x)"
 	} else {
-		if lom.Misplaced() {
+		if !lom.IsHRW() {
 			a += "(misplaced)"
 		}
 		if lom.IsCopy() {

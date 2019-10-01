@@ -19,7 +19,7 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 	if err != nil {
 		return
 	}
-	// NOTE: "misplaced" (when hrwFQN != fqn) is to be checked separately, via lom.Misplaced()
+	// NOTE: "misplaced" (when hrwFQN != fqn) is to be checked separately, via lom.IsHRW()
 	bck := &Bck{Name: parsedFQN.Bucket, Provider: parsedFQN.Provider}
 	hrwFQN, digest, err = HrwFQN(parsedFQN.ContentType, bck, parsedFQN.ObjName)
 	if err != nil {

@@ -990,7 +990,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		}
 	}
 	// skip those that are _not_ locally misplaced
-	if !lom.Misplaced() {
+	if lom.IsHRW() {
 		return nil
 	}
 

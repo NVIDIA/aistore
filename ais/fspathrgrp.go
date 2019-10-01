@@ -60,15 +60,8 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
 	for _, r := range g.runners {
 		r.ReqEnableMountpath(mpath)
 	}
-	glog.Infof("Re-enabled mountpath %s", mpath)
-	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
-
-	availablePaths, _ := fs.Mountpaths.Get()
-	if len(availablePaths) == 1 {
-		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
-		}
-	}
+	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	g.checkEnable("Enabled", mpath)
 	return
 }
 
@@ -83,7 +76,9 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) 
 	for _, r := range g.runners {
 		r.ReqDisableMountpath(mpath)
 	}
-	g.checkNoMountpaths("Disabled")
+	if !g.checkDisable("Disabled") {
+		go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	}
 	return true, nil
 }
 
@@ -103,17 +98,8 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	for _, r := range g.runners {
 		r.ReqAddMountpath(mpath)
 	}
-	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced=false*/)
-
-	availablePaths, _ := fs.Mountpaths.Get()
-	if len(availablePaths) > 1 {
-		glog.Infof("Added mountpath %s", mpath)
-	} else {
-		glog.Infof("Added the first mountpath %s", mpath)
-		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
-		}
-	}
+	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	g.checkEnable("Added", mpath)
 	return
 }
 
@@ -126,19 +112,34 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 	for _, r := range g.runners {
 		r.ReqRemoveMountpath(mpath)
 	}
-	g.checkNoMountpaths("Removed")
+	if !g.checkDisable("Removed") {
+		go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	}
 	return
 }
 
 // check for no-mounpaths and UNREGISTER
-func (g *fsprungroup) checkNoMountpaths(action string) {
+func (g *fsprungroup) checkDisable(action string) (disabled bool) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) > 0 {
-		return
+		return false
 	}
 	if err := g.t.disable(); err != nil {
 		glog.Errorf("%s the last available mountpath, failed to unregister target %s (self), err: %v", action, g.t.si, err)
 	} else {
 		glog.Errorf("%s the last available mountpath and unregistered target %s (self)", action, g.t.si)
+	}
+	return true
+}
+
+func (g *fsprungroup) checkEnable(action, mpath string) {
+	availablePaths, _ := fs.Mountpaths.Get()
+	if len(availablePaths) > 1 {
+		glog.Infof("%s mountpath %s", action, mpath)
+	} else {
+		glog.Infof("%s the first mountpath %s", action, mpath)
+		if err := g.t.enable(); err != nil {
+			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
+		}
 	}
 }

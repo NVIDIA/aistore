@@ -2185,16 +2185,14 @@ func TestRenewRebalance(t *testing.T) {
 }
 
 func TestGetFromMirroredBucket(t *testing.T) {
-	t.Skip("Functionality not yet implemented")
-
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
 
 	m := ioContext{
 		t:               t,
-		num:             500,
-		numGetsEachFile: 1,
+		num:             5000,
+		numGetsEachFile: 4,
 	}
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
@@ -2230,14 +2228,19 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Step 5: GET objects from the bucket
-	// TODO: use m.getsUntilStop()
 	m.wg.Add(m.num * m.numGetsEachFile)
 	m.gets()
 	m.wg.Wait()
+
+	// TODO: ensure that all objects have been recovered and have still 2 copies.
 
 	// Step 6: Enable previously disabled mountpath
 	err = api.EnableMountpath(baseParams, target, mpath)
 	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	// TODO: ensure that all objects have still 2 copies.
+
+	m.ensureNoErrors()
 }
