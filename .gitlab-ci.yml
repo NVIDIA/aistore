@@ -3,7 +3,7 @@ image: golang:1.13
 stages:
   - build
   - lint
-  - test
+  - test-short
 
 cache:
   paths:
@@ -15,7 +15,7 @@ cache:
 
 before_script:
   - apt-get clean && apt-get update
-  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential
+  - apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof
   - apt-get -y clean all
   - mkdir -p /go/src/github.com/NVIDIA /go/src/_/builds
   - cp -r $CI_PROJECT_DIR /go/src/github.com/NVIDIA/aistore
@@ -36,8 +36,8 @@ lint:
     - make fmt-check
     - make spell-check
 
-test:
-  stage: test
+test-short:
+  stage: test-short
   script:
     - printf '5\n5\n2\n0' | make deploy
     - BUCKET=test make test-short

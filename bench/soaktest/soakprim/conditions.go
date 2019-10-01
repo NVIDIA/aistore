@@ -15,7 +15,7 @@ import (
 )
 
 type PreConds struct {
-	ExpBuckets []string //non-prefixed
+	ExpBuckets []string // non-prefixed
 	NumTargets int
 }
 
@@ -23,7 +23,7 @@ type PostConds struct {
 	NumTargets int
 }
 
-//Pre checks are run before a phase of a recipe, if not met, the recipe halts
+// Pre checks are run before a phase of a recipe, if not met, the recipe halts
 func (rctx *RecipeContext) Pre(conds *PreConds) {
 	defer func() {
 		if Terminated {
@@ -79,7 +79,7 @@ func (rctx *RecipeContext) Pre(conds *PreConds) {
 	}
 }
 
-//Post checks are run after a recipe, to see if there's degradation
+// Post checks are run after a recipe, to see if there's degradation
 func (rctx *RecipeContext) Post(conds *PostConds) {
 	defer func() {
 		report.Flush()

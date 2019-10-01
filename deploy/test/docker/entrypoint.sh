@@ -28,7 +28,7 @@ echo -e "4\n4\n3\n${CLD_PROVIDER}" > deploy.tmp && make deploy < deploy.tmp && s
 popd > /dev/null
 
 # test
-BUCKET=${BUCKET} gotest -v -p 1 -count 1 -timeout 1h ./...
+BUCKET=${BUCKET} gotest -v -p 1 -count 1 -timeout 2h ./...
 EXIT_CODE=$?
 popd > /dev/null
 

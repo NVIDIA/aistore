@@ -11,9 +11,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func recECTargDown(rctx *soakprim.RecipeContext) {
-	// basic test for ec by bringing a target down
-
+// Basic test for ec by bringing a target down
+func recECTargetDown(rctx *soakprim.RecipeContext) {
 	conds := &soakprim.PreConds{
 		NumTargets: 4,
 	}

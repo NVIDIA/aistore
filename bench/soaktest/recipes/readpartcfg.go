@@ -10,9 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 )
 
+// Reads parts of objects and config
 func recReadPartCfg(rctx *soakprim.RecipeContext) {
-	//reads parts of files and config
-
 	conds := &soakprim.PreConds{
 		ExpBuckets: []string{},
 	}

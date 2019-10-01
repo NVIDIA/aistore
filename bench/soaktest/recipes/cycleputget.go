@@ -11,9 +11,8 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 )
 
+// Cycles through the 3 buckets, putting in cur, reading from last, and deleting last2
 func recCyclePut(rctx *soakprim.RecipeContext) {
-	//cycles through the 3 buckets, putting in cur, reading from last, and deleting last2
-
 	cur := 3
 	last := 2
 	last2 := 1

@@ -10,10 +10,10 @@ import (
 	"github.com/NVIDIA/aistore/bench/soaktest/soakprim"
 )
 
-func recBasicTargDown(rctx *soakprim.RecipeContext) {
-	//basic recipe with a target going down,
-	// note that it does not restore the target at the end and expects the recipe framework for doing so
-
+// Basic recipe with a target going down.
+// Note: that it does not restore the target at the end and expects
+// the recipe framework for doing so.
+func recBasicTargetDown(rctx *soakprim.RecipeContext) {
 	conds := &soakprim.PreConds{
 		NumTargets: 3,
 	}

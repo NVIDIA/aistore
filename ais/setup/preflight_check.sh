@@ -105,6 +105,24 @@ test-run)
   fi
   exit 0
   ;;
+test-docker)
+  docker_state=$(docker info >/dev/null 2>&1)
+  if [[ $? -ne 0 ]]; then
+    echo "Docker does not seem to be running, run it first and retry."
+    exit 1
+  fi
+
+  echo "Running test in Docker..." >&2
+  branch=$(git branch | grep \* | cut -d ' ' -f2)
+  errs=$(../deploy/test/docker/test.sh --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^FAIL\|^--- FAIL" )
+  err_count=$(echo "${errs}" | wc -l)
+  if [ ! -z "${errs}" ]; then
+      echo "${errs}" >&2
+      echo "test-run: ${err_count} failed" >&2
+      exit 1
+  fi
+  exit 0
+  ;;
 "")
   echo "missing environment variable: CHECK=\"checkname\""
   exit 1

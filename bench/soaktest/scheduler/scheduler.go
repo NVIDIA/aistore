@@ -31,7 +31,7 @@ func RunRegressionPhase(rctx *soakprim.RecipeContext) {
 	report.Writef(report.ConsoleLevel, "[finished regression]\n")
 }
 
-//RunRandom runs all recipes in random order
+// RunRandom runs all recipes in random order
 func RunRandom() {
 	rctx := &soakprim.RecipeContext{}
 

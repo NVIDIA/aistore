@@ -92,7 +92,6 @@ func AISExec(ch chan *stats.PrimitiveStat, opType string, bucket string, numWork
 		spf("-readoff=%v", params.readoff),
 		spf("-readlen=%v", params.readlen),
 		spf("-stats-output=%s", filename),
-		spf("-stopable=%t", params.stopable),
 		"-statsinterval=0", "-cleanup=false", "-json=true")
 	cmd.Dir = aisloaderSrc
 

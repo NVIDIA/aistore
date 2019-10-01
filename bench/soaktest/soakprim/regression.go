@@ -33,8 +33,7 @@ type regressionContext struct {
 	stopCh chan struct{}
 }
 
-//regression runs a constant get request throughout the testing
-
+// Regression runs a constant get request throughout the testing
 func cleanupRegression() {
 	names, err := api.GetBucketNames(tutils.BaseAPIParams(primaryURL), cmn.AIS)
 	cmn.AssertNoErr(err)
@@ -68,7 +67,7 @@ func setupRegression() *regressionContext {
 	return regctx
 }
 
-// worker function for regression. Must call in go func
+// Worker function for regression. Must call in go func
 func regressionWorker(tag string, bucket string, stopCh chan struct{}, wg *sync.WaitGroup, recordRegression func(*stats.PrimitiveStat)) {
 	aisLoaderExecParams := &AISLoaderExecParams{
 		pctput:     0,
@@ -103,7 +102,7 @@ func regressionWorker(tag string, bucket string, stopCh chan struct{}, wg *sync.
 }
 
 func (rctx *RecipeContext) StartRegression() {
-	//Record system stats when we start
+	// Record system stats when we start
 	updateSysInfo()
 
 	if rctx.regCtx == nil {
@@ -130,7 +129,7 @@ func (rctx *RecipeContext) FinishRegression() {
 		return
 	}
 
-	//Record system stats when we finish
+	// Record system stats when we finish
 	updateSysInfo()
 
 	if regCtx.wg != nil {

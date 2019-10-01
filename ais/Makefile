@@ -106,7 +106,7 @@ endif
 #
 # tests
 #
-.PHONY: test-soak test-envcheck test-short test-long test-run test
+.PHONY: test-soak test-envcheck test-short test-long test-run test-docker test
 
 # Target for soak test
 test-soak:
@@ -133,6 +133,9 @@ ifeq ($(RE),)
 	$(error missing environment variable: RE="testnameregex")
 endif
 	@CHECK="test-run" RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
+
+test-docker:
+	@CHECK="test-docker" $(SHELL) ./setup/preflight_check.sh
 
 test: test-envcheck spell-check fmt-check lint test-short #main preflight test
 
