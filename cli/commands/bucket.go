@@ -73,6 +73,9 @@ func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string
 
 // Rename ais bucket
 func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket string) (err error) {
+	if err = canReachBucket(baseParams, bucket, cmn.AIS); err != nil {
+		return
+	}
 	if err = api.RenameBucket(baseParams, bucket, newBucket); err != nil {
 		return
 	}
@@ -114,7 +117,12 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams, provider string
 }
 
 // Lists objects in bucket
-func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, provider string) error {
+	err := canReachBucket(baseParams, bucket, provider)
+	if err != nil {
+		return err
+	}
+
 	objectListFilter, err := newObjectListFilter(c)
 	if err != nil {
 		return err
@@ -137,6 +145,13 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string) er
 	query := url.Values{}
 	query.Add(cmn.URLParamProvider, parseStrFlag(c, providerFlag))
 	query.Add(cmn.URLParamPrefix, prefix)
+	if flagIsSet(c, cachedFlag) {
+		if provider == cmn.AIS {
+			fmt.Fprintf(c.App.ErrWriter, "warning: ignoring %s flag: irrelevant for ais buckets\n", cachedFlag.Name)
+		} else {
+			query.Add(cmn.URLParamCached, "true")
+		}
+	}
 
 	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
 	if flagIsSet(c, fastFlag) {

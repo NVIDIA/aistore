@@ -798,6 +798,12 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = bck.Init(p.bmdowner); err != nil {
+		_, ok := err.(*cmn.ErrorCloudBucketDoesNotExist)
+		if ok && (msg.Action == cmn.ActCopyLB || msg.Action == cmn.ActRenameLB) {
+			errMsg := fmt.Sprintf("cannot %q: ais bucket %q does not exist", msg.Action, bucket)
+			p.invalmsghdlr(w, r, errMsg, http.StatusNotFound)
+			return
+		}
 		if bck, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}

@@ -29,6 +29,7 @@ var (
 		pagedFlag,
 		maxPagesFlag,
 		markerFlag,
+		cachedFlag,
 	}
 
 	listCmdsFlags = map[string][]cli.Flag{
@@ -47,13 +48,23 @@ var (
 		},
 	}
 
+	// add subcommand names for completion
+	listSubcmds = []string{
+		subcmdListAIS,
+		subcmdListCloud,
+		subcmdListBckProps,
+		subcmdListConfig,
+		subcmdListSmap,
+	}
+
 	listCmds = []cli.Command{
 		{
-			Name:      commandList,
-			Usage:     "lists cluster metadata information",
-			Action:    defaultListHandler,
-			ArgsUsage: listCommandArgument,
-			Flags:     listCmdsFlags[commandList],
+			Name:         commandList,
+			Usage:        "lists cluster metadata information",
+			Action:       defaultListHandler,
+			ArgsUsage:    listCommandArgument,
+			Flags:        listCmdsFlags[commandList],
+			BashComplete: listCompletions,
 			Subcommands: []cli.Command{
 				{
 					Name:         subcmdListAIS,
@@ -115,10 +126,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 
 	if strings.HasSuffix(bucket, "/") {
 		bucket = strings.TrimSuffix(bucket, "/")
-		if err = canReachBucket(baseParams, bucket, "" /* auto-detect provider */); err != nil {
-			return
-		}
-		return listBucketObj(c, baseParams, bucket)
+		return listBucketObj(c, baseParams, bucket, "" /* auto-detect provider */)
 	}
 
 	return commandNotFoundError(c, c.Args().First())
@@ -138,10 +146,7 @@ func listAISBucketsHandler(c *cli.Context) (err error) {
 
 	if strings.HasSuffix(bucket, "/") {
 		bucket = strings.TrimSuffix(bucket, "/")
-		if err = canReachBucket(baseParams, bucket, cmn.AIS); err != nil {
-			return
-		}
-		return listBucketObj(c, baseParams, bucket)
+		return listBucketObj(c, baseParams, bucket, cmn.AIS)
 	}
 
 	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))
@@ -161,10 +166,7 @@ func listCloudBucketsHandler(c *cli.Context) (err error) {
 
 	if strings.HasSuffix(bucket, "/") {
 		bucket = strings.TrimSuffix(bucket, "/")
-		if err = canReachBucket(baseParams, bucket, cmn.Cloud); err != nil {
-			return
-		}
-		return listBucketObj(c, baseParams, bucket)
+		return listBucketObj(c, baseParams, bucket, cmn.Cloud)
 	}
 
 	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))

@@ -273,6 +273,7 @@ var (
 	offsetFlag    = cli.StringFlag{Name: "offset", Usage: "object read offset"}
 	rangeFlag     = cli.StringFlag{Name: "range", Usage: "colon separated interval of object indices, eg. <START>:<STOP>"}
 	isCachedFlag  = cli.BoolFlag{Name: "is-cached", Usage: "check if an object is cached"}
+	cachedFlag    = cli.BoolFlag{Name: "cached", Usage: "list only cached objects"}
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	waitFlag      = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}

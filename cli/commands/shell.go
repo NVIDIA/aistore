@@ -249,6 +249,20 @@ func suggestBucket(c *cli.Context, separator bool, provider ...string) {
 	}
 }
 
+//////////
+// List //
+//////////
+
+func listCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		for _, subcmd := range listSubcmds {
+			fmt.Println(subcmd)
+		}
+		suggestBucket(c, true /* separator */)
+		return
+	}
+}
+
 /////////////
 // Xaction //
 /////////////
