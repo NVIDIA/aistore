@@ -12,6 +12,8 @@ require (
 	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/google/martian v2.1.0+incompatible // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
+	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
+	github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/json-iterator/go v1.1.7
 	github.com/karrick/godirwalk v1.12.0

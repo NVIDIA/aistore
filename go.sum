@@ -42,6 +42,10 @@ github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1 h1:EGx4pi6eqNxGa
 github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
+github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f h1:X+tnaqoCcBgAwSTJtoYW6p0qKiuPyMfofEHEFUf2kdU=
+github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f/go.mod h1:Ip4fOwzCrnDVuluHBd7FXIMb7SHOKfkt9/UDrYSZvqI=
+github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4 h1:eDSIm6ulR+w2iC3rM3i4FsYdyt4ChkTViJ3Sv0FXeiA=
+github.com/jacobsa/fuse v0.0.0-20190923155423-081e9f4bc7d4/go.mod h1:9Aml1MG17JVeXrN4D2mtJvYHtHklJH5bESjCKNzVjFU=
 github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 h1:EFT6MH3igZK/dIVqgGbTqWVvkZ7wJ5iGN03SVtvvdd8=
 github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25/go.mod h1:sWkGw/wsaHtRsT9zGQ/WyJCotGWG/Anow/9hsAcBWRw=
 github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 h1:12VvqtR6Aowv3l/EQUlocDHW2Cp4G9WJVH7uyH8QFJE=
