@@ -2081,6 +2081,10 @@ func globalRebCounters(baseParams *api.BaseParams) (int, int) {
 // Simple test to check if EC correctly finds all the objects and its slices
 // that will be used by rebalance
 func TestECRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
 	var (
 		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
@@ -2128,13 +2132,14 @@ func TestECRebalance(t *testing.T) {
 		t.FailNow()
 	}
 
-	assertBucketSize(t, baseParams, bucket, o.objCount)
-
 	oldObjCount, oldSliceCount := globalRebCounters(baseParams)
-	// Manual rebalance call
-	err = api.ExecXaction(baseParams, cmn.ActGlobalReb, cmn.ActXactStart, "")
-	tassert.CheckFatal(t, err)
 	tutils.Logf("%d objects created, starting global rebalance\n", o.objCount)
+
+	// Kill a random target
+	var removedTarget *cluster.Snode
+	smap, removedTarget = tutils.RemoveTarget(t, proxyURL, smap)
+	// Initiate rebalance
+	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	newObjCount, newSliceCount := globalRebCounters(baseParams)
