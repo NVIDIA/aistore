@@ -545,7 +545,7 @@ var _ = Describe("LOM", func() {
 
 			It("should be able to get copy", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
-				lom.SetCopies(copyFQN, nil)
+				lom.AddCopy(copyFQN, nil)
 				lom.SetSize(int64(testFileSize))
 				addBucket(bmd, lom)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -593,9 +593,9 @@ var _ = Describe("LOM", func() {
 			Expect(os.IsNotExist(err)).To(BeFalse())
 
 			if setXCopy {
-				lom.SetCopies(dst.FQN, nil)
+				lom.AddCopy(dst.FQN, nil)
 				Expect(lom.Persist()).ShouldNot(HaveOccurred())
-				dst.SetCopies(lom.FQN, nil)
+				dst.AddCopy(lom.FQN, nil)
 				Expect(dst.Persist()).ShouldNot(HaveOccurred())
 			}
 
@@ -648,7 +648,7 @@ var _ = Describe("LOM", func() {
 			It("Should be able to delete all copies", func() {
 				lom, dst := prepareLomWithCopy(true /*setXCopy*/, true /*makeCopy*/)
 
-				Expect(lom.GetCopies()).To(HaveLen(1))
+				Expect(lom.GetCopies()).To(HaveLen(2))
 				Expect(lom.NumCopies()).To(Equal(2))
 				Expect(lom.HasCopies()).To(BeTrue())
 

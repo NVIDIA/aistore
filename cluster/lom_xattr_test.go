@@ -68,7 +68,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[0], copyMpathInfo)
 				lom.AddCopy(fqns[1], copyMpathInfo)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
@@ -82,7 +82,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
-				Expect(lom.GetCopies()).To(HaveLen(2))
+				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 
@@ -90,13 +90,13 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(localFQN, testFileSize, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version1")
-				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[0], copyMpathInfo)
 				lom.AddCopy(fqns[1], copyMpathInfo)
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version2")
-				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[0], copyMpathInfo)
 				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -111,7 +111,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Cksum()).To(BeEquivalentTo(newLom.Cksum()))
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
-				Expect(lom.GetCopies()).To(HaveLen(2))
+				Expect(lom.GetCopies()).To(HaveLen(3))
 				Expect(lom.GetCopies()).To(BeEquivalentTo(newLom.GetCopies()))
 			})
 		})
@@ -123,7 +123,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom2 := NewBasicLom(localFQN, tMock)
 				lom1.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom1.SetVersion("dummy_version")
-				lom1.SetCopies(fqns[0], copyMpathInfo)
+				lom1.AddCopy(fqns[0], copyMpathInfo)
 				lom1.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom1.Persist()).NotTo(HaveOccurred())
@@ -132,7 +132,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				Expect(lom1.Cksum()).To(BeEquivalentTo(lom2.Cksum()))
 				Expect(lom1.Version()).To(BeEquivalentTo(lom2.Version()))
-				Expect(lom1.GetCopies()).To(HaveLen(2))
+				Expect(lom1.GetCopies()).To(HaveLen(3))
 				Expect(lom1.GetCopies()).To(BeEquivalentTo(lom2.GetCopies()))
 			})
 
@@ -141,7 +141,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := NewBasicLom(localFQN, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[0], copyMpathInfo)
 				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())
@@ -162,7 +162,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := NewBasicLom(localFQN, tMock)
 				lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "test_checksum"))
 				lom.SetVersion("dummy_version")
-				lom.SetCopies(fqns[0], copyMpathInfo)
+				lom.AddCopy(fqns[0], copyMpathInfo)
 				lom.AddCopy(fqns[1], copyMpathInfo)
 
 				Expect(lom.Persist()).NotTo(HaveOccurred())

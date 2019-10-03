@@ -170,7 +170,7 @@ func (lctx *lructx) evict() (err error) {
 			glog.Warningf("%s: %v", lom, err)
 		} else if err = lom.Load(false); err != nil {
 			glog.Warningf("%s: %v", lom, err)
-		} else if _, err = lom.DelExtraCopies(); err != nil {
+		} else if err = lom.DelExtraCopies(); err != nil {
 			glog.Warningf("%s: %v", lom, err)
 		}
 		if capCheck, err = lctx.postRemove(capCheck, lom); err != nil {

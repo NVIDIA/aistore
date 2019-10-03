@@ -132,9 +132,9 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 func (lom *LOM) CopyMetadata(from *LOM) {
 	if lom.MirrorConf().Enabled {
 		for fqn, mpathInfo := range from.GetCopies() {
-			lom.AddCopy(fqn, mpathInfo)
+			lom.addCopyMD(fqn, mpathInfo)
 		}
-		lom.AddCopy(from.FQN, from.ParsedFQN.MpathInfo)
+		lom.addCopyMD(from.FQN, from.ParsedFQN.MpathInfo)
 		// TODO: in future we should have invariant: cmn.Assert(lom.NumCopies() == from.NumCopies())
 	}
 
@@ -144,114 +144,12 @@ func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.atime = from.md.atime
 }
 
+////////////////////////////
+// LOCAL COPY MANAGEMENT //
+///////////////////////////
 //
-// local copy management
 // TODO -- FIXME: lom.md.copies are not protected and are subject to races
 //                the caller to use lom.Lock/Unlock (as in mirror)
-//
-func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
-
-// NumCopies returns number of copies: different mountpaths + itself.
-func (lom *LOM) NumCopies() int {
-	if len(lom.md.copies) == 0 {
-		return 1
-	}
-
-	// If lom contains itself we do not need to add +1
-	_, ok := lom.md.copies[lom.FQN]
-	if !ok {
-		return len(lom.md.copies) + 1
-	}
-	return len(lom.md.copies)
-}
-
-// TODO: maybe we can do that with no-allocation? Like an iterator which would skip lom.FQN?
-func (lom *LOM) GetCopies() fs.MPI {
-	// If lom contains itself in copies it should be removed when iterating.
-	_, ok := lom.md.copies[lom.FQN]
-	if !ok {
-		return lom.md.copies
-	}
-	copies := make(fs.MPI, len(lom.md.copies)-1)
-	for k, v := range lom.md.copies {
-		if k == lom.FQN {
-			continue
-		}
-		copies[k] = v
-	}
-	return copies
-}
-func (lom *LOM) IsCopy() bool {
-	if !lom.bck.Props.Mirror.Enabled {
-		return false
-	}
-	return lom.FQN != lom.HrwFQN
-}
-func (lom *LOM) SetCopies(cpyfqn string, mpi *fs.MountpathInfo) {
-	lom.md.copies = make(fs.MPI, 1)
-	lom.md.copies[cpyfqn] = mpi
-	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
-}
-func (lom *LOM) AddCopy(cpyfqn string, mpi *fs.MountpathInfo) {
-	if lom.md.copies == nil {
-		lom.SetCopies(cpyfqn, mpi)
-	} else {
-		lom.md.copies[cpyfqn] = mpi
-		lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
-	}
-}
-func (lom *LOM) DelCopy(cpyfqn string) (err error) {
-	numCopies := lom.NumCopies()
-	copies := lom.GetCopies()
-	if _, ok := copies[cpyfqn]; !ok {
-		return fmt.Errorf("lom %s(%d): copy %s %s", lom, numCopies, cpyfqn, cmn.DoesNotExist)
-	}
-	if numCopies == 1 {
-		return lom.DelAllCopies()
-	}
-	if lom._whingeCopy() {
-		return
-	}
-	delete(lom.md.copies, cpyfqn)
-	if err := os.Remove(cpyfqn); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return
-}
-
-// syncMetaWithCopies tries to match metadata with all existing copies.
-// NOTE: uname for LOM must be already locked.
-//
-// TODO: it is very similar to `RestoreObjectFromAny` method. Needs to be consolidated.
-func (lom *LOM) syncMetaWithCopies() (err error) {
-	availablePaths, _ := fs.Mountpaths.Get()
-
-	bck := lom.Bck()
-	for path, mpathInfo := range availablePaths {
-		if path == lom.ParsedFQN.MpathInfo.Path {
-			continue
-		}
-
-		fqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
-		src := lom.Clone(fqn)
-		if err := src.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
-			continue
-		}
-		if err := src.Load(false); err != nil {
-			continue
-		}
-		if !src.Exists() {
-			continue
-		}
-
-		src.CopyMetadata(lom)
-		if err := src.Persist(); err != nil {
-			// TODO: rollback
-			return err
-		}
-	}
-	return nil
-}
 
 func (lom *LOM) _whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
@@ -263,56 +161,173 @@ func (lom *LOM) _whingeCopy() (yes bool) {
 	return true
 }
 
-func (lom *LOM) DelAllCopies() (err error) {
-	if lom._whingeCopy() {
+func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
+
+// NumCopies returns number of copies: different mountpaths + itself.
+func (lom *LOM) NumCopies() int {
+	if len(lom.md.copies) == 0 {
+		return 1
+	}
+	if _, ok := lom.md.copies[lom.FQN]; !ok {
+		msg := fmt.Sprintf("md.copies does not contain itself %s, copies: %v", lom.FQN, lom.md.copies)
+		cmn.DassertMsg(false, msg, pkgName)
+	}
+	return len(lom.md.copies)
+}
+
+// GetCopies returns all copies.
+//
+// NOTE: This method can also return the mpath/FQN of current lom.
+// This means that the caller is responsible for filtering it out if necessary!
+func (lom *LOM) GetCopies() fs.MPI {
+	return lom.md.copies
+}
+
+func (lom *LOM) IsCopy() bool {
+	if !lom.bck.Props.Mirror.Enabled {
+		return false
+	}
+	return lom.FQN != lom.HrwFQN
+}
+
+func (lom *LOM) addCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
+	if lom.md.copies == nil {
+		lom.md.copies = make(fs.MPI, 2)
+	}
+	lom.md.copies[copyFQN] = mpi
+	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
+}
+func (lom *LOM) delCopyMD(copyFQN string) {
+	delete(lom.md.copies, copyFQN)
+	if len(lom.md.copies) <= 1 {
+		lom.md.copies = nil
+	}
+}
+
+func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
+	lom.addCopyMD(copyFQN, mpi)
+	if err := lom.syncMetaWithCopies(); err != nil {
+		lom.delCopyMD(copyFQN) // revert addition, there was some error
+		glog.Error(err)
+		return err
+	}
+	return nil
+}
+
+// TODO: rollback
+func (lom *LOM) DelCopy(copiesFQN ...string) (err error) {
+	if !lom.HasCopies() {
 		return
 	}
-	if !lom.HasCopies() {
+	if lom._whingeCopy() {
 		return
 	}
 	if lom.Misplaced() {
 		return
 	}
+
 	numCopies := lom.NumCopies()
-	n := 1
-	for cpyfqn := range lom.GetCopies() {
-		if err1 := os.Remove(cpyfqn); err1 != nil && !os.IsNotExist(err1) {
-			err = err1
+	// 1. Delete all copies from metadata
+	for _, copyFQN := range copiesFQN {
+		if _, ok := lom.md.copies[copyFQN]; !ok {
+			return fmt.Errorf("lom %s(num: %d): copy %s %s", lom, numCopies, copyFQN, cmn.DoesNotExist)
+		}
+		lom.delCopyMD(copyFQN)
+	}
+
+	// 2. Try to update metadata on left copies
+	if err := lom.syncMetaWithCopies(); err != nil {
+		return err
+	}
+
+	// 3. If everything succeeded, finally remove the requested copies.
+	//
+	// NOTE: We should not report error if there was problem with removing copies.
+	// LRU should take care of that later.
+	for _, copyFQN := range copiesFQN {
+		// FIXME: create a cmn function that removes object only when does not exist:
+		if err1 := os.Remove(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+			glog.Error(err1)
 			continue
 		}
-		delete(lom.md.copies, cpyfqn)
-		n++
-	}
-	if n < numCopies {
-		glog.Errorf("%s: failed to remove some copies(%d < %d), err: %s", lom, n, numCopies, err)
-	} else {
-		lom.md.copies = nil
 	}
 	return
 }
 
-func (lom *LOM) DelExtraCopies() (n int, err error) {
+func (lom *LOM) DelAllCopies() (err error) {
+	copiesFQN := make([]string, 0, len(lom.md.copies))
+	for copyFQN := range lom.md.copies {
+		if lom.FQN == copyFQN {
+			continue
+		}
+		copiesFQN = append(copiesFQN, copyFQN)
+	}
+	return lom.DelCopy(copiesFQN...)
+}
+
+// DelExtraCopies deletes objects which are not part of lom.md.copies metadata (leftovers).
+func (lom *LOM) DelExtraCopies() (err error) {
 	if lom._whingeCopy() {
 		return
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
-		cpyfqn := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
-		if _, ok := lom.md.copies[cpyfqn]; ok {
+		copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, lom.Bucket(), lom.bck.Provider, lom.Objname)
+		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
-		if er := os.Remove(cpyfqn); er == nil {
-			n++
-		} else if !os.IsNotExist(er) {
-			err = er
+		if err1 := os.Remove(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+			err = err1
+			continue
 		}
 	}
 	return
 }
 
-// RestoreObjectFromAny tries to restore object either from an object that
-// was not yet moved by rebalance or from any of the copy.
+// syncMetaWithCopies tries to match metadata with all existing copies.
+// NOTE: uname for LOM must be already locked.
+func (lom *LOM) syncMetaWithCopies() (err error) {
+	// Only object on default location with copies can sync meta.
+	if !lom.Misplaced() && lom.HasCopies() {
+		return nil
+	}
+
+	bck := lom.Bck()
+	for copyFQN := range lom.md.copies {
+		copyLom := lom.Clone(copyFQN)
+		if err := copyLom.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
+			continue
+		}
+		if err := copyLom.Load(false); err != nil {
+			continue
+		}
+		if !copyLom.Exists() {
+			continue
+		}
+
+		copyLom.CopyMetadata(lom)
+		if err = copyLom.Persist(); err != nil {
+			// TODO: do proper rollback
+			glog.Error(err)
+		}
+	}
+	return err
+}
+
+// RestoreObjectFromAny tries to restore the object at its default location.
 func (lom *LOM) RestoreObjectFromAny() (copied bool) {
+	// Need to lock whole loop. This is because there could be another process
+	// trying to restore the object. Therefore, they could potentially have a race.
+	lom.Lock(true)
+	defer lom.Unlock(true)
+
+	// Reload lom and check if it already exists
+	if err := lom.Load(false); err == nil {
+		if lom.Exists() {
+			return // object already restored, nothing to do.
+		}
+	}
+
 	availablePaths, _ := fs.Mountpaths.Get()
 	buf, slab := lom.T.GetMem2().AllocDefault()
 	for path, mpathInfo := range availablePaths {
@@ -324,24 +339,17 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 			continue
 		}
 		src := lom.Clone(fqn)
-
-		lom.Lock(true)
 		if err := src.Init(lom.bck.Name, lom.bck.Provider, lom.Config()); err != nil {
 			lom.Unlock(true)
 			continue
 		}
 		if err := src.Load(false); err != nil {
-			lom.Unlock(true)
 			continue
 		}
 		if !src.Exists() {
-			lom.Unlock(true)
 			continue
 		}
-
 		_, err := src.CopyObject(lom.FQN, buf)
-		lom.Unlock(true)
-
 		if err == nil {
 			copied = true
 			break

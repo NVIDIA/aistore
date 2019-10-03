@@ -91,14 +91,14 @@ var _ = Describe("Mirror", func() {
 			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
-			Expect(clone.GetCopies()).To(HaveLen(1))
+			Expect(clone.GetCopies()).To(HaveLen(2))
 			_, ok := clone.GetCopies()[testFQN]
 			Expect(ok).To(BeTrue())
 
 			newLom := newBasicLom(testFQN, tMock)
 			err = newLom.Load(false)
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(newLom.GetCopies()).To(HaveLen(1))
+			Expect(newLom.GetCopies()).To(HaveLen(2))
 			_, ok = newLom.GetCopies()[expectedCopyFQN]
 			Expect(ok).To(BeTrue())
 

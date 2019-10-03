@@ -65,12 +65,6 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 // TODO: in case of error previous metadata should be restored.
 func (lom *LOM) Persist() (err error) {
-	if !lom.Misplaced() && lom.HasCopies() {
-		if err := lom.syncMetaWithCopies(); err != nil {
-			return err
-		}
-	}
-
 	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
 	cmn.AssertNoErr(err)
 	buf := slab.Alloc()

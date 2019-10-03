@@ -5,6 +5,7 @@
 package mirror
 
 import (
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -69,7 +70,10 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	if err != nil {
 		return
 	}
-	lom.AddCopy(copyFQN, mpathInfo)
+	if err = lom.AddCopy(copyFQN, mpathInfo); err != nil {
+		os.Remove(copyFQN)
+		return
+	}
 	if err = lom.Persist(); err != nil {
 		_ = lom.DelCopy(copyFQN)
 		return
