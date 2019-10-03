@@ -43,7 +43,7 @@ const (
 	ActCreateLB      = "createlb"
 	ActDestroyLB     = "destroylb"
 	ActRenameLB      = "renamelb"
-	ActCopyLB        = "copylb"
+	ActCopyBucket    = "copybck"
 	ActRegisterCB    = "registercb"
 	ActEvictCB       = "evictcb"
 	ActResetProps    = "resetprops"

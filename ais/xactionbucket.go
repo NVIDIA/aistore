@@ -322,7 +322,7 @@ func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bckFrom, bckTo *cluster
 	e := &bccEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
 		t:      t,
 		bckTo:  bckTo,
-		action: cmn.ActCopyLB, // kind
+		action: cmn.ActCopyBucket, // kind
 		phase:  phase,
 	}
 	ee, err := b.renewBucketXaction(e)

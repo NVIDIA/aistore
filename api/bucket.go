@@ -346,7 +346,7 @@ func DoesBucketExist(baseParams *BaseParams, bucket string) (bool, error) {
 // CopyBucket creates a new ais bucket newName and
 // copies into it contents of the existing oldName bucket
 func CopyBucket(baseParams *BaseParams, oldName, newName string) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyLB, Name: newName})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCopyBucket, Name: newName})
 	if err != nil {
 		return err
 	}

@@ -1274,7 +1274,7 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 		if err == nil {
 			err = fs.Mountpaths.CreateBucketDirs(bckTo.Name, bckTo.Provider, true /*destroy*/)
 		}
-	case cmn.ActCopyLB:
+	case cmn.ActCopyBucket:
 		_, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActBegin)
 	default:
 		cmn.Assert(false)
@@ -1314,7 +1314,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 		tag := cmn.ActAbort + ":" + action
 		fs.Mountpaths.CreateDestroyBuckets(tag, false /*false=destroy*/, bucketTo)
 	default:
-		cmn.Assert(action == cmn.ActCopyLB)
+		cmn.Assert(action == cmn.ActCopyBucket)
 	}
 	// rm bucketTo to this target's BMD wo/ increasing the version
 	clone := bmd.clone()
@@ -1347,7 +1347,7 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 		t.gfn.global.activate()
 		go xact.run(msgInt.GlobRebID)      // do the work
 		time.Sleep(100 * time.Millisecond) // FIXME: likely no need
-	case cmn.ActCopyLB:
+	case cmn.ActCopyBucket:
 		var xact *mirror.XactBckCopy
 		xact, err = t.xactions.renewBckCopy(t, bckFrom, bckTo, cmn.ActCommit)
 		if err != nil {

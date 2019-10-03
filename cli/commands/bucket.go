@@ -92,7 +92,7 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket st
 	}
 
 	msgFmt := "Copying bucket %s to %s in progress.\nTo check the status, run: ais stats xaction %s %s\n"
-	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActCopyLB, bucket)
+	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActCopyBucket, bucket)
 	return
 }
 

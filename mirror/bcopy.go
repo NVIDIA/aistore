@@ -68,7 +68,7 @@ func (r *XactBckCopy) init() (numjs int, err error) {
 }
 
 func (r *XactBckCopy) Description() string {
-	cmn.Assert(r.Kind() == cmn.ActCopyLB)
+	cmn.Assert(r.Kind() == cmn.ActCopyBucket)
 	return "copy ais bucket"
 }
 

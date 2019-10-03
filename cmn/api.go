@@ -45,7 +45,7 @@ var XactKind = XactKindType{
 	ActPutCopies:   {},
 	ActAsyncTask:   {},
 	ActRenameLB:    {},
-	ActCopyLB:      {},
+	ActCopyBucket:  {},
 }
 
 // BucketPropList is a map bucket property <-> readonly, groupped by type

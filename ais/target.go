@@ -667,7 +667,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch, err: %v", err))
 			return
 		}
-	case cmn.ActCopyLB, cmn.ActRenameLB:
+	case cmn.ActCopyBucket, cmn.ActRenameLB:
 		var (
 			phase                = apiItems[1]
 			bucketFrom, bucketTo = bucket, msgInt.Name

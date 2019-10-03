@@ -1308,7 +1308,7 @@ func TestCopyBucket(t *testing.T) {
 	err := api.CopyBucket(baseParams, srcBucketName, m.bucket)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActCopyLB /* = kind */, srcBucketName, baseParams, rebalanceTimeout)
+	waitForBucketXactionToComplete(t, cmn.ActCopyBucket /* = kind */, srcBucketName, baseParams, rebalanceTimeout)
 
 	// Gets on copied ais bucket
 	m.wg.Add(m.num * m.numGetsEachFile)
@@ -1370,7 +1370,7 @@ func TestCopyCloudBucket(t *testing.T) {
 	err = api.CopyBucket(baseParams, clibucket, m.bucket)
 	tassert.CheckFatal(t, err)
 
-	waitForBucketXactionToComplete(t, cmn.ActCopyLB /* = kind */, clibucket, baseParams, rebalanceTimeout)
+	waitForBucketXactionToComplete(t, cmn.ActCopyBucket /* = kind */, clibucket, baseParams, rebalanceTimeout)
 
 	copiedList, err := api.ListBucketFast(baseParams, m.bucket, nil)
 	tassert.CheckFatal(t, err)

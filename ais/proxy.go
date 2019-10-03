@@ -799,7 +799,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	if err = bck.Init(p.bmdowner); err != nil {
 		_, ok := err.(*cmn.ErrorCloudBucketDoesNotExist)
-		if ok && (msg.Action == cmn.ActCopyLB || msg.Action == cmn.ActRenameLB) {
+		if ok && msg.Action == cmn.ActRenameLB {
 			errMsg := fmt.Sprintf("cannot %q: ais bucket %q does not exist", msg.Action, bucket)
 			p.invalmsghdlr(w, r, errMsg, http.StatusNotFound)
 			return
@@ -811,7 +811,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 	// 4. {action} on bucket
 	switch msg.Action {
-	case cmn.ActCopyLB, cmn.ActRenameLB:
+	case cmn.ActCopyBucket, cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}

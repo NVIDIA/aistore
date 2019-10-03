@@ -741,7 +741,7 @@ func (lom *LOM) checkBucket() error {
 	if lom.md.bckID == lom.bck.Props.BID {
 		return nil
 	}
-	// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copylb | renamelb
+	// glog.Errorf("%s: md.BID %x != %x bprops.BID", lom, lom.md.bckID, lom.BckProps.BID) TODO -- FIXME vs copybck | renamelb
 	lom.Uncache()
 	lom.exists = false
 	return nil
