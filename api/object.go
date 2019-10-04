@@ -49,16 +49,16 @@ type PutObjectArgs struct {
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(baseParams *BaseParams, bucket, provider, object string, checkCached ...bool) (*cmn.ObjectProps, error) {
+func HeadObject(baseParams *BaseParams, bucket, provider, object string, checkExists ...bool) (*cmn.ObjectProps, error) {
 	checkIsCached := false
-	if len(checkCached) > 0 {
-		checkIsCached = checkCached[0]
+	if len(checkExists) > 0 {
+		checkIsCached = checkExists[0]
 	}
 	baseParams.Method = http.MethodHead
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	query := url.Values{}
 	query.Add(cmn.URLParamProvider, provider)
-	query.Add(cmn.URLParamCheckCached, strconv.FormatBool(checkIsCached))
+	query.Add(cmn.URLParamCheckExists, strconv.FormatBool(checkIsCached))
 	params := OptionalParams{Query: query}
 
 	r, err := doHTTPRequestGetResp(baseParams, path, nil, params)

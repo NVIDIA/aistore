@@ -835,10 +835,11 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objmeta         cmn.SimpleKVs
 		query           = r.URL.Query()
 
-		errCode        int
-		exists         bool
-		checkCached, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
-		silent, _      = cmn.ParseBool(query.Get(cmn.URLParamSilent))
+		errCode           int
+		exists            bool
+		checkExists, _    = cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
+		checkExistsAny, _ = cmn.ParseBool(query.Get(cmn.URLParamCheckExistsAny))
+		silent, _         = cmn.ParseBool(query.Get(cmn.URLParamSilent))
 	)
 
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -874,19 +875,20 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	exists = lom.Exists()
 
 	// NOTE: DEFINITION
-	// * checkCached establishes local presence by looking up all mountpaths (and not only the current (hrw))
-	// * checkCached also copies (i.e., effectively, recovers) misplaced object if it finds one
+	// * checkExists and checkExistsAny establish local presence of the object by looking up all mountpaths
+	// * checkExistsAny does it *even* if the object *may* not have local copies
 	// * see also: GFN
-	if !exists && checkCached {
-		exists = lom.RestoreObjectFromAny()
+	// TODO -- FIXME: Bprops.Copies vs actual
+	if !exists && (checkExists && lom.Bprops().Mirror.Copies > 1 || checkExistsAny) {
+		exists = lom.RestoreObjectFromAny() // lookup and restore the object to its default location
 	}
 
-	if lom.IsAIS() || checkCached {
+	if lom.IsAIS() || checkExists {
 		if !exists {
 			invalidHandler(w, r, fmt.Sprintf("%s/%s %s", bucket, objName, cmn.DoesNotExist), http.StatusNotFound)
 			return
 		}
-		if checkCached {
+		if checkExists {
 			return
 		}
 		objmeta = make(cmn.SimpleKVs)

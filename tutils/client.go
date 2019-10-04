@@ -362,7 +362,7 @@ func Del(proxyURL, bucket, object, provider string, wg *sync.WaitGroup, errCh ch
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckCached + "=true"
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckExists + "=true"
 	r, err := HTTPClient.Head(url)
 	if err != nil {
 		return false, err

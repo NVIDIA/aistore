@@ -167,13 +167,14 @@ const (
 	// user/app API
 	URLParamWhat        = "what"         // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
 	URLParamProps       = "props"        // e.g. "checksum, size"|"atime, size"|"iscached"|"bucket, size"| ...
-	URLParamCheckCached = "check_cached" // true: check if object is cached in AIStore
+	URLParamCheckExists = "check_cached" // true: check if object exists
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
 	URLParamProvider    = "provider"     // ais | cloud
 	URLParamPrefix      = "prefix"       // prefix for list objects in a bucket
 	URLParamRegex       = "regex"        // dsort/downloader regex
 	// internal use
+	URLParamCheckExistsAny   = "cea" // true: lookup object in all mountpaths (NOTE: compare with URLParamCheckExists)
 	URLParamProxyID          = "pid" // ID of the redirecting proxy
 	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
 	URLParamCached           = "cho" // true: return cached objects (names & metadata); false: list Cloud bucket

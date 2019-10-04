@@ -1203,7 +1203,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (er
 			if v, err := cmn.ParseBool(value); err == nil {
 				bprops.Mirror.Enabled = v
 				if v && bprops.Mirror.Copies == 1 {
-					bprops.Mirror.Copies = 2
+					bprops.Mirror.Copies = cmn.MaxI64(config.Mirror.Copies, 2)
 				}
 			} else {
 				errRet = fmt.Errorf(errFmt, name, value, err)
@@ -1424,7 +1424,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	query := r.URL.Query()
-	checkCached, _ := cmn.ParseBool(query.Get(cmn.URLParamCheckCached))
+	checkExists, _ := cmn.ParseBool(query.Get(cmn.URLParamCheckExists))
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1451,8 +1451,8 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetworkIntraControl)
-	if checkCached {
-		redirectURL += fmt.Sprintf("&%s=true", cmn.URLParamCheckCached)
+	if checkExists {
+		redirectURL += fmt.Sprintf("&%s=true", cmn.URLParamCheckExists)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }

@@ -989,7 +989,7 @@ func TestHeadNonexistentObject(t *testing.T) {
 	}
 }
 
-func TestHeadObjectCheckCached(t *testing.T) {
+func TestHeadObjectCheckExists(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		fileName = "headobject_check_cached_test_file"

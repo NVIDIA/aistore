@@ -36,7 +36,7 @@ type uploadParams struct {
 func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object, outFile string) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
-		return objectCheckCached(c, baseParams, bucket, provider, object)
+		return objectCheckExists(c, baseParams, bucket, provider, object)
 	}
 
 	var (
@@ -183,7 +183,7 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 	return uploadFiles(c, baseParams, params)
 }
 
-func objectCheckCached(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
+func objectCheckExists(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
 	_, err := api.HeadObject(baseParams, bucket, provider, object, true)
 	if err != nil {
 		if err.(*cmn.HTTPError).Status == http.StatusNotFound {

@@ -315,16 +315,16 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 }
 
 // RestoreObjectFromAny tries to restore the object at its default location.
-func (lom *LOM) RestoreObjectFromAny() (copied bool) {
-	// Need to lock whole loop. This is because there could be another process
-	// trying to restore the object. Therefore, they could potentially have a race.
+// Returns true if object exists, false otherwise
+func (lom *LOM) RestoreObjectFromAny() (exists bool) {
+	// locking vs concurrent restore, for instance; TODO: (read-lock object + write-lock meta)
 	lom.Lock(true)
-	defer lom.Unlock(true)
 
-	// Reload lom and check if it already exists
+	// check existence under lock
 	if err := lom.Load(false); err == nil {
 		if lom.Exists() {
-			return // object already restored, nothing to do.
+			lom.Unlock(true)
+			return true // nothing to do
 		}
 	}
 
@@ -348,12 +348,14 @@ func (lom *LOM) RestoreObjectFromAny() (copied bool) {
 		if !src.Exists() {
 			continue
 		}
+		// restore at default location
 		_, err := src.CopyObject(lom.FQN, buf)
 		if err == nil {
-			copied = true
+			exists = true
 			break
 		}
 	}
+	lom.Unlock(true)
 	slab.Free(buf)
 	return
 }
