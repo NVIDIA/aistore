@@ -131,10 +131,10 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 
 func (lom *LOM) CopyMetadata(from *LOM) {
 	if lom.MirrorConf().Enabled {
+		lom.setCopyMD(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMD(fqn, mpathInfo)
 		}
-		lom.addCopyMD(from.FQN, from.ParsedFQN.MpathInfo)
 		// TODO: in future we should have invariant: cmn.Assert(lom.NumCopies() == from.NumCopies())
 	}
 
@@ -190,6 +190,11 @@ func (lom *LOM) IsCopy() bool {
 	return !lom.IsHRW()
 }
 
+func (lom *LOM) setCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
+	lom.md.copies = make(fs.MPI, 2)
+	lom.md.copies[copyFQN] = mpi
+	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
+}
 func (lom *LOM) addCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
 	if lom.md.copies == nil {
 		lom.md.copies = make(fs.MPI, 2)
@@ -375,6 +380,9 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	dst = lom.Clone(dstFQN)
+	if err = dst.Init("", "", lom.Config()); err != nil {
+		return
+	}
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := os.Remove(workFQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
@@ -389,6 +397,12 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	dst.CopyMetadata(lom)
+	if lom.MirrorConf().Enabled {
+		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
+			os.Remove(dst.FQN)
+			return
+		}
+	}
 	dst.SetAtimeUnix(time.Now().UnixNano())
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dstFQN); errRemove != nil {
