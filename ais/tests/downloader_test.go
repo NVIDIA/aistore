@@ -79,6 +79,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 	for {
 		if time.Now().After(deadline) {
 			t.Errorf("Timed out waiting for download %s.", id)
+			return
 		}
 
 		all := true

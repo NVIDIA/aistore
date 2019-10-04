@@ -250,8 +250,7 @@ func (lom *LOM) DelCopy(copiesFQN ...string) (err error) {
 	// NOTE: We should not report error if there was problem with removing copies.
 	// LRU should take care of that later.
 	for _, copyFQN := range copiesFQN {
-		// FIXME: create a cmn function that removes object only when does not exist:
-		if err1 := os.Remove(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
 			glog.Error(err1)
 			continue
 		}
@@ -281,7 +280,7 @@ func (lom *LOM) DelExtraCopies() (err error) {
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
-		if err1 := os.Remove(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+		if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
 			err = err1
 			continue
 		}
@@ -384,7 +383,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
-		if errRemove := os.Remove(workFQN); errRemove != nil {
+		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
 		}
 		return

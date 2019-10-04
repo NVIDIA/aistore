@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -183,7 +182,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	defer func() {
 		if err != nil {
 			lom.Unlock(true)
-			if errRemove := os.Remove(workFQN); errRemove != nil {
+			if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", err, workFQN, errRemove)
 				t.fshc(errRemove, workFQN)
 			}

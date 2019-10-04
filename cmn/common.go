@@ -675,6 +675,14 @@ func Rename(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
+// RemoveFile removes object from path and ignores if the path no longer exists.
+func RemoveFile(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // computes xxhash if requested
 func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum *Cksum, err error) {
 	var (

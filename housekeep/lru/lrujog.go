@@ -8,7 +8,6 @@ package lru
 import (
 	"container/heap"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -142,10 +141,8 @@ func (lctx *lructx) evict() (err error) {
 	)
 	// 1.
 	for _, workfqn := range lctx.oldwork {
-		if err = os.Remove(workfqn); err != nil {
-			if !os.IsNotExist(err) {
-				glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
-			}
+		if err = cmn.RemoveFile(workfqn); err != nil {
+			glog.Warningf("Failed to remove old work %q: %v", workfqn, err)
 		}
 	}
 	lctx.oldwork = lctx.oldwork[:0]
@@ -155,10 +152,8 @@ func (lctx *lructx) evict() (err error) {
 			continue
 		}
 		// 2.1: remove misplaced obj
-		if err = os.Remove(lom.FQN); err != nil {
-			if !os.IsNotExist(err) {
-				glog.Warningf("%s: %v", lom, err)
-			}
+		if err = cmn.RemoveFile(lom.FQN); err != nil {
+			glog.Warningf("%s: %v", lom, err)
 			continue
 		}
 		lom.Uncache()

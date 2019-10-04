@@ -120,7 +120,7 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 				err1 = err
 			}
 			poi.t.fshc(err, poi.workFQN)
-			if err = os.Remove(poi.workFQN); err != nil {
+			if err = cmn.RemoveFile(poi.workFQN); err != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", err1, poi.workFQN, err)
 			}
 		}
@@ -221,7 +221,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 			if nestedErr := file.Close(); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, poi.workFQN, nestedErr)
 			}
-			if nestedErr := os.Remove(poi.workFQN); nestedErr != nil {
+			if nestedErr := cmn.RemoveFile(poi.workFQN); nestedErr != nil {
 				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, poi.workFQN, nestedErr)
 			}
 		}

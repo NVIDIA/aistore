@@ -267,6 +267,26 @@ func TestRename(t *testing.T) {
 	os.RemoveAll(tmpDir)
 }
 
+func TestRemoveFile(t *testing.T) {
+	// Should not error when src does not exist
+	if err := cmn.RemoveFile("/some/non/existing/file.txt"); err != nil {
+		t.Error("Remove should not fail when file does not exist")
+	}
+
+	// Should not error when file does exist
+	{
+		nonExistingFile := filepath.Join(tmpDir, "file.txt")
+		file, _ := cmn.CreateFile(nonExistingFile)
+		file.Close()
+		if err := cmn.RemoveFile(nonExistingFile); err != nil {
+			t.Error("Remove should not fail when file does exist")
+		}
+		ensurePathNotExists(t, nonExistingFile)
+	}
+
+	os.RemoveAll(tmpDir)
+}
+
 func TestParseBool(t *testing.T) {
 	trues := []string{"1", "ON", "yes", "Y", "trUe"}
 	falses := []string{"0", "off", "No", "n", "falsE", ""}

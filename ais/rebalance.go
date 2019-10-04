@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -369,7 +368,7 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 		aborted = md.xreb.abortedAfter(sleep)
 	}
 	if !aborted {
-		if err := os.Remove(md.pmarker); err != nil && !os.IsNotExist(err) {
+		if err := cmn.RemoveFile(md.pmarker); err != nil {
 			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(md.globRebID, md.smap), md.pmarker, err)
 		}
 	}
@@ -937,7 +936,7 @@ wait:
 
 	if pmarker != "" {
 		if !xreb.Aborted() {
-			if err := os.Remove(pmarker); err != nil && !os.IsNotExist(err) {
+			if err := cmn.RemoveFile(pmarker); err != nil {
 				glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.t.si.Name(), pmarker, err)
 			}
 		}
@@ -1008,7 +1007,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 	}
 	// misplaced with no copies? remove right away
 	lom.Lock(true)
-	if err = os.Remove(lom.FQN); err != nil {
+	if err = cmn.RemoveFile(lom.FQN); err != nil {
 		glog.Warningf("%s: %v", lom, err)
 	}
 	lom.Unlock(true)

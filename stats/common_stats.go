@@ -501,7 +501,7 @@ func (r *statsRunner) removeOlderLogs(tot, maxtotal int64, logdir, logtype strin
 	filteredInfos = filteredInfos[:l-1] // except the last = current
 	for _, logfi := range filteredInfos {
 		logfqn := filepath.Join(logdir, logfi.Name())
-		if err := os.Remove(logfqn); err == nil {
+		if err := cmn.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)
 			if tot < maxtotal {
