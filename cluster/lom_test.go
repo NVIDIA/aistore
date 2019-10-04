@@ -714,6 +714,45 @@ var _ = Describe("LOM", func() {
 					Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
 				}
 			})
+
+			It("should check for missing copies during `syncMetaWithCopies`", func() {
+				lom := prepareLOM(mirrorFQNs[0])
+				_ = prepareCopy(lom, mirrorFQNs[1])
+				expectedHash := getTestFileHash(lom.FQN)
+
+				// Check that copies were added to metadata.
+				Expect(lom.IsCopy()).To(BeFalse())
+				Expect(lom.HasCopies()).To(BeTrue())
+				Expect(lom.NumCopies()).To(Equal(2))
+				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
+
+				// Make one copy disappear.
+				cmn.RemoveFile(mirrorFQNs[1])
+
+				// Prepare another one (to trigger `syncMetaWithCopies`).
+				_ = prepareCopy(lom, mirrorFQNs[2])
+
+				// Check metadata of left copies (it also checks default object).
+				for _, copyFQN := range []string{mirrorFQNs[0], mirrorFQNs[2]} {
+					copyLOM := NewBasicLom(copyFQN, tMock)
+					Expect(copyLOM.Load(false)).NotTo(HaveOccurred())
+
+					_, cksumValue := copyLOM.Cksum().Get()
+					Expect(cksumValue).To(Equal(expectedHash))
+					Expect(copyLOM.Version()).To(Equal(desiredVersion))
+					Expect(copyLOM.Size()).To(BeEquivalentTo(testFileSize))
+
+					Expect(copyLOM.IsCopy()).To(Equal(copyFQN != lom.FQN))
+					Expect(copyLOM.HasCopies()).To(BeTrue())
+					Expect(copyLOM.NumCopies()).To(Equal(2))
+					// NOTE: there is no mirrorFQNs[1]
+					Expect(copyLOM.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[2])))
+
+					// Check that the content of the copy is correct.
+					copyObjHash := getTestFileHash(copyFQN)
+					Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
+				}
+			})
 		})
 
 		Describe("DelCopy", func() {

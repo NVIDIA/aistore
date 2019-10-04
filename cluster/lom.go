@@ -214,13 +214,11 @@ func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
 	lom.addCopyMD(copyFQN, mpi)
 	if err := lom.syncMetaWithCopies(); err != nil {
 		lom.delCopyMD(copyFQN) // revert addition, there was some error
-		glog.Error(err)
 		return err
 	}
 	return nil
 }
 
-// TODO: rollback
 func (lom *LOM) DelCopy(copiesFQN ...string) (err error) {
 	if !lom.HasCopies() {
 		return
@@ -297,26 +295,103 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		return nil
 	}
 
+	var (
+		errored, failed []string
+		prevLMetas      = make(map[*LOM]lmeta)
+	)
+
 	bck := lom.Bck()
 	for copyFQN := range lom.md.copies {
-		copyLom := lom.Clone(copyFQN)
-		if err := copyLom.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
+		copyLOM := lom.Clone(copyFQN)
+		if err := copyLOM.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
+			errored = append(errored, copyFQN)
 			continue
 		}
-		if err := copyLom.Load(false); err != nil {
+		if err := copyLOM.Load(false); err != nil {
+			errored = append(errored, copyFQN)
 			continue
 		}
-		if !copyLom.Exists() {
+		if !copyLOM.Exists() {
+			errored = append(errored, copyFQN)
 			continue
 		}
 
-		copyLom.CopyMetadata(lom)
-		if err = copyLom.Persist(); err != nil {
-			// TODO: do proper rollback
-			glog.Error(err)
+		prevLMetas[copyLOM] = copyLOM.md // before copy we need to save prev lmeta
+		copyLOM.CopyMetadata(lom)
+		if err = copyLOM.Persist(); err != nil {
+			failed = append(failed, copyFQN)
+			delete(prevLMetas, copyLOM)
 		}
 	}
+
+	if len(errored) > 0 || len(failed) > 0 {
+		lom.rollbackCopyMD(errored, failed, prevLMetas)
+	}
 	return err
+}
+
+// rollbackCopyMD tries to restore the previous state of the copies due to some
+// error or failure. The idea is to get rid of the copies that failed to persist
+// as it indicates a very serious problem (most probably a hardware problem).
+// But since we remove them the from filesystem we need also to delete them from
+// metadata of copies that still are healthy and present in the cluster(target).
+//
+// errored - FQNs of the copies that do not exist.
+// failed - FQNs of the copies that failed to persist.
+// prevLMetas - previous metadata of the copies - this is used to recover the previous state.
+func (lom *LOM) rollbackCopyMD(errored, failed []string, prevLMetas map[*LOM]lmeta) {
+	if len(errored) > 0 {
+		// Update md.copies of default object.
+		for _, copyFQN := range errored {
+			lom.delCopyMD(copyFQN)
+		}
+
+		// Case when len(failed) > 0 is handled later separately.
+		if len(failed) == 0 {
+			// Update md.copies of other copies.
+			for copyLOM := range prevLMetas {
+				for _, erroredCopyFQN := range errored {
+					copyLOM.delCopyMD(erroredCopyFQN)
+				}
+				if err := copyLOM.Persist(); err != nil {
+					failed = append(failed, copyLOM.FQN)
+					delete(prevLMetas, copyLOM)
+				}
+			}
+		}
+	}
+
+	if len(failed) > 0 {
+		ok := false
+		// Invariant: loop finally ends since we remove at least one copy from prevLMetas.
+		for !ok {
+			ok = true
+
+			// Remove copies that are not reachable.
+			for _, copyFQN := range failed {
+				lom.delCopyMD(copyFQN)
+				if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
+					lom.T.FSHC(err1, copyFQN)
+				}
+			}
+
+			// Rollback
+			for copyLOM, prevLMeta := range prevLMetas {
+				copyLOM.md = prevLMeta
+				// Remove from current copy the other copies that failed.
+				for _, fqns := range [][]string{errored, failed} {
+					for _, failedCopyFQN := range fqns {
+						copyLOM.delCopyMD(failedCopyFQN)
+					}
+				}
+				if err := copyLOM.Persist(); err != nil {
+					failed = append(failed, copyLOM.FQN)
+					delete(prevLMetas, copyLOM)
+					ok = false
+				}
+			}
+		}
+	}
 }
 
 // RestoreObjectFromAny tries to restore the object at its default location.
@@ -396,16 +471,18 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 
 	dst.CopyMetadata(lom)
 	dst.SetCksum(dstCksum)
+	dst.SetAtimeUnix(time.Now().UnixNano())
+	if err = dst.Persist(); err != nil {
+		if errRemove := os.Remove(dst.FQN); errRemove != nil {
+			glog.Errorf("nested err: %v", errRemove)
+		}
+		return
+	}
+
 	if lom.MirrorConf().Enabled {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			os.Remove(dst.FQN)
 			return
-		}
-	}
-	dst.SetAtimeUnix(time.Now().UnixNano())
-	if err = dst.Persist(); err != nil {
-		if errRemove := os.Remove(dstFQN); errRemove != nil {
-			glog.Errorf(fmtNestedErr, errRemove)
 		}
 	}
 	return

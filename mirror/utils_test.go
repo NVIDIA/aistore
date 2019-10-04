@@ -18,9 +18,12 @@ import (
 
 var _ = Describe("Mirror", func() {
 	const (
-		TestBucketName = "TEST_LOCAL_MIRROR_BUCKET"
-		mpath          = "/tmp/mirrortest_mpath/1"
-		mpath2         = "/tmp/mirrortest_mpath/2"
+		testDir = "/tmp/mirror-test/"
+
+		testBucketName = "TEST_LOCAL_MIRROR_BUCKET"
+		mpath          = testDir + "mirrortest_mpath/1"
+		mpath2         = testDir + "mirrortest_mpath/2"
+
 		testObjectName = "mirrortestobj.ext"
 		testObjectSize = 1234
 	)
@@ -42,7 +45,7 @@ var _ = Describe("Mirror", func() {
 	var (
 		tMock = cluster.NewTargetMock(cluster.BownerMock{BMD: cluster.BMD{
 			LBmap: map[string]*cmn.BucketProps{
-				TestBucketName: {
+				testBucketName: {
 					Cksum:  cmn.CksumConf{Type: cmn.ChecksumXXHash},
 					LRU:    cmn.LRUConf{Enabled: true},
 					Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
@@ -50,82 +53,73 @@ var _ = Describe("Mirror", func() {
 			},
 		}})
 
-		mi         = fs.MountpathInfo{Path: mpath}
-		testDir    = mi.MakePathBucket(fs.ObjectType, TestBucketName, cmn.AIS)
-		testFQN    = mi.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
-		copyBuf    = make([]byte, testObjectSize)
-		mpathInfo2 *fs.MountpathInfo
+		mi              = fs.MountpathInfo{Path: mpath}
+		mi2             = fs.MountpathInfo{Path: mpath2}
+		bucketPath      = mi.MakePathBucket(fs.ObjectType, testBucketName, cmn.AIS)
+		defaultObjFQN   = mi.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.AIS, testObjectName)
+		expectedCopyFQN = mi2.MakePathBucketObject(fs.ObjectType, testBucketName, cmn.AIS, testObjectName)
 	)
 
-	av, _ := fs.Mountpaths.Get()
-	mpathInfo2 = av[mpath2]
-
 	BeforeEach(func() {
-		_ = os.RemoveAll(mpath)
-		_ = os.RemoveAll(mpath2)
 		_ = cmn.CreateDir(mpath)
 		_ = cmn.CreateDir(mpath2)
-		_ = cmn.CreateDir(testDir)
 	})
+
 	AfterEach(func() {
-		_ = os.RemoveAll(mpath)
-		_ = os.RemoveAll(mpath2)
+		_ = os.RemoveAll(testDir)
 	})
 
 	Describe("copyTo", func() {
-		It("should copy correctly file and set Xattributes", func() {
-			mi2 := fs.MountpathInfo{Path: mpath2}
-			expectedCopyFQN := mi2.MakePathBucketObject(fs.ObjectType, TestBucketName, cmn.AIS, testObjectName)
-
-			createTestFile(testDir, testObjectName, testObjectSize)
-			lom := newBasicLom(testFQN, tMock)
+		It("should copy correctly object and set xattrs", func() {
+			createTestFile(bucketPath, testObjectName, testObjectSize)
+			lom := newBasicLom(defaultObjFQN, tMock)
 			lom.SetSize(testObjectSize)
 			Expect(lom.Persist()).NotTo(HaveOccurred())
-
 			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
-			clone, err := copyTo(lom, mpathInfo2, copyBuf)
-			Expect(clone.IsCopy()).To(BeTrue())
+
+			// Make copy
+			clone, err := copyTo(lom, &mi2, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			stat, err := os.Stat(expectedCopyFQN)
 			Expect(err).ShouldNot(HaveOccurred())
+			Expect(clone.Size()).To(BeEquivalentTo(testObjectSize))
 			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
-			Expect(clone.GetCopies()).To(HaveLen(2))
-			_, ok := clone.GetCopies()[testFQN]
-			Expect(ok).To(BeTrue())
+			Expect(clone.IsCopy()).To(BeTrue())
+			Expect(clone.NumCopies()).To(Equal(2))
+			Expect(clone.GetCopies()).To(And(HaveKey(defaultObjFQN), HaveKey(expectedCopyFQN)))
 
-			newLom := newBasicLom(testFQN, tMock)
-			err = newLom.Load(false)
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(newLom.GetCopies()).To(HaveLen(2))
-			_, ok = newLom.GetCopies()[expectedCopyFQN]
-			Expect(ok).To(BeTrue())
+			/*
+			 * Reload default LOM and copyLOM
+			 */
 
-			// Check msic copy data
-			lomCopy := &cluster.LOM{T: tMock, FQN: expectedCopyFQN}
-			err = lomCopy.Init("", "")
-			Expect(err).ShouldNot(HaveOccurred())
+			// Check reloaded default LOM
+			newLOM := newBasicLom(defaultObjFQN, tMock)
+			Expect(newLOM.Load(false)).ShouldNot(HaveOccurred())
+			Expect(newLOM.IsCopy()).To(BeFalse())
+			Expect(newLOM.HasCopies()).To(BeTrue())
+			Expect(newLOM.NumCopies()).To(Equal(2))
+			Expect(newLOM.GetCopies()).To(And(HaveKey(defaultObjFQN), HaveKey(expectedCopyFQN)))
 
-			err = lomCopy.Load(false)
+			// Check reloaded copyLOM
+			copyLOM := newBasicLom(expectedCopyFQN, tMock)
+			Expect(copyLOM.Load(false)).ShouldNot(HaveOccurred())
+			copyCksum, err := copyLOM.CksumComputeIfMissing()
 			Expect(err).ShouldNot(HaveOccurred())
-			copyCksm, err := lomCopy.CksumComputeIfMissing()
-			Expect(err).ShouldNot(HaveOccurred())
-			_, copyCksmVal := copyCksm.Get()
-			_, orgCksmVal := lom.Cksum().Get()
-			Expect(copyCksmVal).To(BeEquivalentTo(orgCksmVal))
-
-			Expect(lomCopy.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
-			Expect(lom.IsCopy()).To(BeFalse())
-			Expect(lom.HasCopies()).To(BeTrue())
-			Expect(lomCopy.IsCopy()).To(BeTrue())
-			Expect(lomCopy.HasCopies()).To(BeTrue())
+			Expect(copyCksum.Value()).To(Equal(newLOM.Cksum().Value()))
+			Expect(copyLOM.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
+			Expect(copyLOM.IsCopy()).To(BeTrue())
+			Expect(copyLOM.HasCopies()).To(BeTrue())
 		})
 	})
 })
 
-func createTestFile(filepath, objname string, size int64) {
-	_, err := tutils.NewFileReader(filepath, objname, size, false)
+func createTestFile(filePath, objName string, size int64) {
+	err := cmn.CreateDir(filePath)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	_, err = tutils.NewFileReader(filePath, objName, size, false)
 	Expect(err).ShouldNot(HaveOccurred())
 }
 
