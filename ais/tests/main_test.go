@@ -421,9 +421,9 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.SelectMsg, bucket strin
 		} else {
 			for _, m := range reslist.Entries {
 				if len(m.Checksum) > 8 {
-					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.IsCached, m.Atime)
+					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum[:8]+"...", m.CheckExists, m.Atime)
 				} else {
-					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.IsCached, m.Atime)
+					tutils.Logf("%s %d [%s] %s [%v - %s]\n", m.Name, m.Size, m.Version, m.Checksum, m.CheckExists, m.Atime)
 				}
 			}
 			totalObjs += len(reslist.Entries)
@@ -505,19 +505,19 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	queryCloud.Add(cmn.URLParamProvider, cmn.Cloud)
 
 	putArgsLocal := api.PutObjectArgs{
-		BaseParams:     baseParams,
-		Bucket:         bucketName,
-		BucketProvider: cmn.AIS,
-		Object:         fileName1,
-		Reader:         tutils.NewBytesReader(dataLocal),
+		BaseParams: baseParams,
+		Bucket:     bucketName,
+		Provider:   cmn.AIS,
+		Object:     fileName1,
+		Reader:     tutils.NewBytesReader(dataLocal),
 	}
 
 	putArgsCloud := api.PutObjectArgs{
-		BaseParams:     baseParams,
-		Bucket:         bucketName,
-		BucketProvider: cmn.Cloud,
-		Object:         fileName1,
-		Reader:         tutils.NewBytesReader(dataCloud),
+		BaseParams: baseParams,
+		Bucket:     bucketName,
+		Provider:   cmn.Cloud,
+		Object:     fileName1,
+		Reader:     tutils.NewBytesReader(dataCloud),
 	}
 
 	//PUT/GET/DEL Without ais bucket
@@ -664,11 +664,11 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 	// Put
 	tutils.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bucketName)
 	putArgs := api.PutObjectArgs{
-		BaseParams:     baseParams,
-		Bucket:         bucketName,
-		BucketProvider: cmn.AIS,
-		Object:         fileName,
-		Reader:         tutils.NewBytesReader(dataLocal),
+		BaseParams: baseParams,
+		Bucket:     bucketName,
+		Provider:   cmn.AIS,
+		Object:     fileName,
+		Reader:     tutils.NewBytesReader(dataLocal),
 	}
 	err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
@@ -678,11 +678,11 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 
 	tutils.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bucketName)
 	putArgs = api.PutObjectArgs{
-		BaseParams:     baseParams,
-		Bucket:         bucketName,
-		BucketProvider: cmn.Cloud,
-		Object:         fileName,
-		Reader:         tutils.NewBytesReader(dataCloud),
+		BaseParams: baseParams,
+		Bucket:     bucketName,
+		Provider:   cmn.Cloud,
+		Object:     fileName,
+		Reader:     tutils.NewBytesReader(dataCloud),
 	}
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
@@ -1014,19 +1014,19 @@ func TestHeadObjectCheckExists(t *testing.T) {
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	b, err := tutils.IsCached(proxyURL, clibucket, fileName)
+	b, err := tutils.CheckExists(proxyURL, clibucket, fileName)
 	tassert.CheckFatal(t, err)
 	if !b {
-		t.Error("Expected object to be cached, got false from tutils.IsCached")
+		t.Error("Expected object to be cached, got false from tutils.CheckExists")
 	}
 
 	err = tutils.Del(proxyURL, clibucket, fileName, "", nil, nil, true)
 	tassert.CheckFatal(t, err)
 
-	b, err = tutils.IsCached(proxyURL, clibucket, fileName)
+	b, err = tutils.CheckExists(proxyURL, clibucket, fileName)
 	tassert.CheckFatal(t, err)
 	if b {
-		t.Error("Expected object to NOT be cached after deleting object, got true from tutils.IsCached")
+		t.Error("Expected object to NOT be cached after deleting object, got true from tutils.CheckExists")
 	}
 }
 
@@ -1357,7 +1357,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	}
 	getFromObjList(proxyURL, bucket, errCh, filesList, false)
 	for _, fname := range filesList {
-		if b, _ := tutils.IsCached(proxyURL, bucket, fname); !b {
+		if b, _ := tutils.CheckExists(proxyURL, bucket, fname); !b {
 			t.Fatalf("Object not cached: %s", fname)
 		}
 	}
@@ -1375,7 +1375,7 @@ func Test_evictCloudBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	for _, fname := range filesList {
-		if b, _ := tutils.IsCached(proxyURL, bucket, fname); b {
+		if b, _ := tutils.CheckExists(proxyURL, bucket, fname); b {
 			t.Errorf("%s remains cached", fname)
 		}
 	}

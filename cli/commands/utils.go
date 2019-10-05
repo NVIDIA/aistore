@@ -589,7 +589,7 @@ func bucketProvider(c *cli.Context, provider ...string) (string, error) {
 		prov = parseStrFlag(c, providerFlag)
 	}
 	if prov == "" {
-		prov = os.Getenv(aisBucketProviderEnvVar)
+		prov = os.Getenv(aisProviderEnvVar)
 	}
 	return cmn.ProviderFromStr(prov)
 }

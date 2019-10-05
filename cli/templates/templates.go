@@ -464,7 +464,7 @@ var (
 )
 
 func fmtObjIsCached(obj *cmn.BucketEntry) string {
-	if obj.IsCached() {
+	if obj.CheckExists() {
 		return "true"
 	}
 	return "false"

@@ -757,7 +757,7 @@ func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached i
 		} else if entry.Copies == 3 {
 			copies3++
 		}
-		if entry.IsCached() {
+		if entry.CheckExists() {
 			cached++
 		}
 	}

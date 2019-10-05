@@ -113,11 +113,11 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 		}
 
 		putArgs := api.PutObjectArgs{
-			BaseParams:     baseParams,
-			Bucket:         bucket,
-			BucketProvider: provider,
-			Object:         objName,
-			Reader:         fh,
+			BaseParams: baseParams,
+			Bucket:     bucket,
+			Provider:   provider,
+			Object:     objName,
+			Reader:     fh,
 		}
 		err = api.PutObject(putArgs)
 		if err != nil {
@@ -242,7 +242,7 @@ func uploadFiles(c *cli.Context, baseParams *api.BaseParams, p uploadParams) err
 			return
 		}
 
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: p.bucket, BucketProvider: p.provider, Object: f.name, Reader: reader}
+		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: p.bucket, Provider: p.provider, Object: f.name, Reader: reader}
 		if err := api.PutObject(putArgs); err != nil {
 			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %s: %v\n", f.name, err)
 			errCount.Inc()

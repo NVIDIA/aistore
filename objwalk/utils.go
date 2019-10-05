@@ -79,7 +79,7 @@ func MergeObjLists(lists []*cmn.BucketList, maxSize int) (objs *cmn.BucketList, 
 				continue
 			}
 			// detect which list contains real information about the object
-			if !entry.IsCached() && e.IsCached() {
+			if !entry.CheckExists() && e.CheckExists() {
 				e.Version = cmn.Either(e.Version, entry.Version)
 				objSet[e.Name] = e
 			} else {

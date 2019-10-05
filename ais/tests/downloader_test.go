@@ -414,11 +414,11 @@ func TestDownloadCloud(t *testing.T) {
 
 		objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
 		err = api.PutObject(api.PutObjectArgs{
-			BaseParams:     baseParams,
-			Bucket:         bucket,
-			BucketProvider: cmn.Cloud,
-			Object:         objName,
-			Reader:         reader,
+			BaseParams: baseParams,
+			Bucket:     bucket,
+			Provider:   cmn.Cloud,
+			Object:     objName,
+			Reader:     reader,
 		})
 		tassert.CheckFatal(t, err)
 

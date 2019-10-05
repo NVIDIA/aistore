@@ -911,8 +911,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			objmeta[cmn.HeaderObjAtime] = lom.Atime().Format(time.RFC822)
 		}
 		objmeta[cmn.HeaderObjNumCopies] = strconv.Itoa(lom.NumCopies())
-		_, ckSum := lom.Cksum().Get()
-		objmeta[cmn.HeaderObjCksumVal] = ckSum
+		if cksum := lom.Cksum(); cksum != nil {
+			objmeta[cmn.HeaderObjCksumVal] = cksum.Value()
+		}
 	}
 	objmeta[cmn.HeaderObjBckIsAIS] = strconv.FormatBool(lom.IsAIS())
 	objmeta[cmn.HeaderObjPresent] = strconv.FormatBool(exists)

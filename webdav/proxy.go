@@ -97,12 +97,12 @@ func (p *proxyServer) putObject(localPath, bucket, provider, prefix string) erro
 	}
 	baseParams := tutils.BaseAPIParams(p.url)
 	putArgs := api.PutObjectArgs{
-		BaseParams:     baseParams,
-		Bucket:         bucket,
-		BucketProvider: provider,
-		Object:         prefix,
-		Hash:           r.XXHash(),
-		Reader:         r,
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Provider:   provider,
+		Object:     prefix,
+		Hash:       r.XXHash(),
+		Reader:     r,
 	}
 	return api.PutObject(putArgs)
 }

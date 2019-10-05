@@ -62,20 +62,20 @@ func TestCloudBucketObject(t *testing.T) {
 			switch test.ty {
 			case putOP:
 				err = api.PutObject(api.PutObjectArgs{
-					BaseParams:     baseParams,
-					Bucket:         bucket,
-					BucketProvider: cmn.Cloud,
-					Object:         object,
-					Reader:         reader,
+					BaseParams: baseParams,
+					Bucket:     bucket,
+					Provider:   cmn.Cloud,
+					Object:     object,
+					Reader:     reader,
 				})
 			case getOP:
 				if test.exists {
 					err = api.PutObject(api.PutObjectArgs{
-						BaseParams:     baseParams,
-						Bucket:         bucket,
-						BucketProvider: cmn.Cloud,
-						Object:         object,
-						Reader:         reader,
+						BaseParams: baseParams,
+						Bucket:     bucket,
+						Provider:   cmn.Cloud,
+						Object:     object,
+						Reader:     reader,
 					})
 					tassert.CheckFatal(t, err)
 				}

@@ -70,7 +70,7 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		tutils.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
-		if !m.IsCached() && !bckIsAIS {
+		if !m.CheckExists() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 		if !versionEnabled {
@@ -150,7 +150,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 		if !ok {
 			continue
 		}
-		tutils.Logf("%s/%s [%d] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Flags, m.IsCached, m.Atime)
+		tutils.Logf("%s/%s [%d] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Flags, m.CheckExists, m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if !m.IsStatusOK() {
@@ -162,7 +162,7 @@ func propsEvict(t *testing.T, proxyURL, bucket, provider string, objMap map[stri
 				t.Errorf("Evicted object %s/%s still has atime '%s'", bucket, m.Name, m.Atime)
 				t.Fail()
 			}
-			if m.IsCached() {
+			if m.CheckExists() {
 				t.Errorf("Evicted object %s/%s is still marked as cached one", bucket, m.Name)
 				t.Fail()
 			}
@@ -200,7 +200,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 			continue
 		}
 
-		if !m.IsCached() {
+		if !m.CheckExists() {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 		if m.Atime == "" {
@@ -285,7 +285,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 
 		objFound++
 
-		if !m.IsCached() && !bckIsAIS {
+		if !m.CheckExists() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 		if m.Atime == "" {
@@ -369,7 +369,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, bckIsAIS bool) {
 		}
 		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
-		if !m.IsCached() && !bckIsAIS {
+		if !m.CheckExists() && !bckIsAIS {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
 		}
 

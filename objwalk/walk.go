@@ -225,7 +225,7 @@ func (w *Walk) CloudObjPage(cached bool) (*cmn.BucketList, error) {
 			continue
 		}
 
-		e.SetCached()
+		e.SetExists()
 		if needAtime {
 			e.Atime = cmn.FormatTime(lom.Atime(), w.msg.TimeFormat)
 		}

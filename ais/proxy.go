@@ -1073,7 +1073,11 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	bck := &cluster.Bck{Name: bucket, Provider: cmn.AIS /*must be ais*/}
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	if provider == "" {
+		provider = cmn.AIS /*must be ais*/
+	}
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(p.bmdowner); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return

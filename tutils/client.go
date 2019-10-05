@@ -361,7 +361,7 @@ func Del(proxyURL, bucket, object, provider string, wg *sync.WaitGroup, errCh ch
 	return err
 }
 
-func IsCached(proxyURL, bucket, objname string) (bool, error) {
+func CheckExists(proxyURL, bucket, objname string) (bool, error) {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckExists + "=true"
 	r, err := HTTPClient.Head(url)
 	if err != nil {
@@ -379,7 +379,7 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 			err = fmt.Errorf("failed to read response body, err: %v", ioErr)
 			return false, err
 		}
-		err = fmt.Errorf("IsCached failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
+		err = fmt.Errorf("CheckExists failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
 			bucket, objname, r.StatusCode, string(b))
 		return false, err
 	}

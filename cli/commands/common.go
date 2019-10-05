@@ -104,8 +104,8 @@ const (
 	subcmdRegisterTarget = subcmdTarget
 
 	// Env. var. related constants
-	aisBucketEnvVar         = "AIS_BUCKET"
-	aisBucketProviderEnvVar = "AIS_BUCKET_PROVIDER"
+	aisBucketEnvVar   = "AIS_BUCKET"
+	aisProviderEnvVar = "AIS_BUCKET_PROVIDER"
 
 	// Default values for long running operations
 	refreshRateDefault = time.Second
@@ -223,7 +223,7 @@ var (
 	// Common
 	providerFlag = cli.StringFlag{Name: "provider",
 		Usage:  "determines which type bucket ('ais' or 'cloud') should be used. Other supported values include '' (empty), 'gcp', and 'aws'. By default (i.e., when unspecified), provider of the bucket is determined automatically",
-		EnvVar: aisBucketProviderEnvVar,
+		EnvVar: aisProviderEnvVar,
 	}
 	objPropsFlag    = cli.StringFlag{Name: "props", Usage: "properties to return with object names, comma separated", Value: "size,version"}
 	prefixFlag      = cli.StringFlag{Name: "prefix", Usage: "prefix for string matching"}

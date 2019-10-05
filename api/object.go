@@ -37,13 +37,13 @@ type ReplicateObjectInput struct {
 }
 
 type PutObjectArgs struct {
-	BaseParams     *BaseParams
-	Bucket         string
-	BucketProvider string
-	Object         string
-	Hash           string
-	Reader         cmn.ReadOpenCloser
-	Size           uint64 // optional
+	BaseParams *BaseParams
+	Bucket     string
+	Provider   string
+	Object     string
+	Hash       string
+	Reader     cmn.ReadOpenCloser
+	Size       uint64 // optional
 }
 
 // HeadObject API
@@ -245,7 +245,7 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 	defer handle.Close()
 
 	query := url.Values{}
-	query.Add(cmn.URLParamProvider, args.BucketProvider)
+	query.Add(cmn.URLParamProvider, args.Provider)
 	reqArgs := cmn.ReqArgs{
 		Method: http.MethodPut,
 		Base:   args.BaseParams.URL,

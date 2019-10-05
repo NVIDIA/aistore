@@ -152,7 +152,7 @@ func (msg *SelectMsg) WantProp(propName string) bool {
 // Flags is a bit field:
 // 0-2: objects status, all statuses are mutually exclusive, so it can hold up
 //      to 8 different statuses. Now only OK=0, Moved=1, Deleted=2 are supported
-// 3:   IsCached (for cloud bucket it shows if the object in local cache)
+// 3:   CheckExists (for cloud bucket it shows if the object in local cache)
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
 	Size      int64  `json:"size,omitempty"`      // size in bytes
@@ -161,13 +161,13 @@ type BucketEntry struct {
 	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 	Copies    int16  `json:"copies,omitempty"`    // ## copies (non-replicated = 1)
-	Flags     uint16 `json:"flags,omitempty"`     // object flags, like IsCached, IsMoved etc
+	Flags     uint16 `json:"flags,omitempty"`     // object flags, like CheckExists, IsMoved etc
 }
 
-func (be *BucketEntry) IsCached() bool {
+func (be *BucketEntry) CheckExists() bool {
 	return be.Flags&EntryIsCached != 0
 }
-func (be *BucketEntry) SetCached() {
+func (be *BucketEntry) SetExists() {
 	be.Flags |= EntryIsCached
 }
 

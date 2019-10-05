@@ -111,7 +111,7 @@ var (
 	}
 )
 
-// Note: This handler ignores aisBucketEnvVar and aisBucketProviderEnvVar
+// Note: This handler ignores aisBucketEnvVar and aisProviderEnvVar
 // because the intention is to list all buckets or auto-detect bucket provider
 // for a given bucket.
 func defaultListHandler(c *cli.Context) (err error) {
