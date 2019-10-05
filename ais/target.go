@@ -191,6 +191,7 @@ func (t *targetrunner) Run() error {
 		{r: cmn.Health, h: t.healthHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Vote, h: t.voteHandler, net: []string{cmn.NetworkIntraControl}},
 		{r: cmn.Sort, h: dsort.SortHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		{r: cmn.Rebalance, h: t.rebalanceHandler, net: []string{cmn.NetworkIntraData}},
 
 		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
@@ -217,7 +218,7 @@ func (t *targetrunner) Run() error {
 }
 
 func (t *targetrunner) initRebManager(config *cmn.Config) {
-	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter(), ecReb: newECRebalancer(t)}
 	// Rx endpoints
 	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
@@ -226,10 +227,18 @@ func (t *targetrunner) initRebManager(config *cmn.Config) {
 	if config.Net.UseIntraControl {
 		reb.netc = cmn.NetworkIntraControl
 	}
+	reb.ecReb.netd = reb.netd
+	reb.ecReb.netc = reb.netc
 	if _, err := transport.Register(reb.netd, rebalanceStreamName, reb.recvObj); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	if _, err := transport.Register(reb.netc, rebalanceAcksName, reb.recvAck); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	if _, err := transport.Register(reb.netc, ackECRebStreamName, reb.ecReb.OnAck); err != nil {
+		cmn.ExitLogf("%v", err)
+	}
+	if _, err := transport.Register(reb.netc, dataECRebStreamName, reb.ecReb.OnData); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	// serialization: one at a time
@@ -980,6 +989,47 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	hdr := w.Header()
 	for k, v := range objmeta {
 		hdr.Set(k, v)
+	}
+}
+
+// GET /v1/rebalance (cmn.Rebalance)
+// Handles internal data requests while rebalance is running (pull notifications):
+//   - request collected slice list for a given target
+//     Returns: StatusAccepted if this target has not finished collecting local
+//     data yet; StatusNoContent if this target finished collecting local data but
+//     it found no slices that belong to a given target. Response body is empty.
+//     In case of StatusOK it returns a JSON with all found slices for a given target.
+func (t *targetrunner) rebalanceHandler(w http.ResponseWriter, r *http.Request) {
+	var (
+		callerID = r.Header.Get(cmn.HeaderCallerID)
+		query    = r.URL.Query()
+	)
+
+	getRebData, _ := cmn.ParseBool(query.Get(cmn.URLParamRebData))
+	if !getRebData {
+		t.invalmsghdlr(w, r, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	status := &rebStatus{}
+	t.rebManager.getGlobStatus(status)
+
+	// the target is still collecting the data, reply that the result is not ready
+	if status.Stage < rebStageECExchange {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	slices := t.rebManager.ecReb.targetSlices(callerID)
+	// no slices for callerID is found. It is possible if the number of object is small
+	if slices == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	body := cmn.MustMarshal(slices)
+	if ok := t.writeJSON(w, r, body, "rebalance-data"); !ok {
+		glog.Errorf("Failed to send data to %s", callerID)
 	}
 }
 

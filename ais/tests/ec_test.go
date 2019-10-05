@@ -2080,54 +2080,69 @@ func globalRebCounters(baseParams *api.BaseParams) (int, int) {
 		// no xaction - all zeroes
 		return 0, 0
 	}
-	objCount := 0
-	sliceCount := 0
+	txCount := 0
+	rxCount := 0
 	for _, daemonStats := range rebStats {
 		for _, st := range daemonStats {
 			extStats := st.Ext.(map[string]interface{})
-			sliceCount += int(extStats[stats.TxRebCount].(float64))
-			objCount += int(extStats[stats.RxRebCount].(float64))
+			txCount += int(extStats[stats.TxRebCount].(float64))
+			rxCount += int(extStats[stats.RxRebCount].(float64))
 		}
 	}
-	return objCount, sliceCount
+	return txCount, rxCount
 }
 
-// Simple test to check if EC correctly finds all the objects and its slices
-// that will be used by rebalance
+// Until EC rebalance is done and gets ability to move and restore files, it is hard
+// to check if algorithm works as expected. So, the current test is a rough checking
+// that EC rebalance can do something, and it can detect how to fix broken objects.
+// The test is simple: two full mountpaths are gone, and the third is renamed. Kind
+// of simulation of two cases: mpath dead, and mpath dead + new mpath added. Since
+// required parity is 2 or greater, EC rebalance must be able to fix all objects
+// without failing any object. And since we delete 2 mpaths only, the number of
+// fixed should be fairly big(now it is assumed one 15th of total slice count), and
+// not too high(more than third of slices fixed is considered bad).
+// Now the number of fixes and failures is returned as stats: TxRebCount & RxRebCount
 func TestECRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
+	if containers.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires direct access to filesystem, doesn't work with docker", t.Name()))
+	}
 
+	const aisDir = "local" // TODO: hardcode
+	const objDir = "obj"   // TODO: hardcode
+	const metaDir = "meta" // TODO: hardcode
 	var (
 		bucket   = TestBucketName
 		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	o := ecOptions{
-		objCount: 50,
-		concurr:  8,
-		pattern:  "obj-reb-chk-%04d",
-		isAIS:    true,
+		objCount:  200,
+		concurr:   8,
+		pattern:   "obj-reb-chk-%04d",
+		isAIS:     true,
+		dataCnt:   1,
+		parityCnt: 2,
 	}.init()
 
 	smap := getClusterMap(t, proxyURL)
 	err := ecSliceNumInit(t, smap, o)
 	tassert.CheckFatal(t, err)
+	if len(smap.Tmap) < 4 {
+		t.Skip(fmt.Sprintf("%q requires at least 4 targets to have parity>=2, found %d", t.Name(), len(smap.Tmap)))
+	}
 
-	sgl := tutils.Mem2.NewSGL(0)
-	defer sgl.Free()
-
-	fullPath := fmt.Sprintf("local/%s/%s", bucket, ecTestDir)
-
+	fullPath := fmt.Sprintf("%s/%s/%s", aisDir, bucket, ecTestDir)
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
 	newLocalBckWithProps(t, bucket, defaultECBckProps(o), baseParams, o)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 
+	var sliceTotal atomic.Int32
 	wg := sync.WaitGroup{}
 
-	var sliceTotal atomic.Int32
 	wg.Add(o.objCount)
 	for i := 0; i < o.objCount; i++ {
 		objName := fmt.Sprintf(o.pattern, i)
@@ -2140,14 +2155,58 @@ func TestECRebalance(t *testing.T) {
 	}
 	wg.Wait()
 
-	defer clearAllECObjects(t, bucket, true, o)
-
 	if t.Failed() {
 		t.FailNow()
 	}
 
-	oldObjCount, oldSliceCount := globalRebCounters(baseParams)
+	oldFixed, oldFailed := globalRebCounters(baseParams)
 	tutils.Logf("%d objects created, starting global rebalance\n", o.objCount)
+
+	// select a target that loses its mpath(simulate drive death),
+	// and that has mpaths changed (simulate mpath added)
+	tgtList := tutils.ExtractTargetNodes(smap)
+	tgtLost, tgtSwap := tgtList[0], tgtList[1]
+
+	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
+	tassert.CheckFatal(t, err)
+	if len(lostFSList.Available) < 2 {
+		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.DaemonID, len(lostFSList.Available))
+	}
+	swapFSList, err := api.GetMountpaths(baseParams, tgtSwap)
+	tassert.CheckFatal(t, err)
+	if len(swapFSList.Available) < 2 {
+		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtSwap.DaemonID, len(swapFSList.Available))
+	}
+
+	// make troubles in mpaths
+	// 1. Remove an mpath
+	lostPath := filepath.Join(lostFSList.Available[0], objDir, aisDir, bucket)
+	tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
+	_, err = os.Stat(lostPath)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.RemoveAll(lostPath))
+	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
+	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
+	swapPathObj1 := filepath.Join(swapFSList.Available[0], objDir, aisDir, bucket)
+	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.DaemonID)
+	_, err = os.Stat(swapPathObj1)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.RemoveAll(swapPathObj1))
+	swapPathMeta1 := filepath.Join(swapFSList.Available[0], metaDir, aisDir, bucket)
+	tutils.Logf("Removing mpath %q of target %s\n", swapPathMeta1, tgtSwap.DaemonID)
+	_, err = os.Stat(swapPathMeta1)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.RemoveAll(swapPathMeta1))
+	swapPathObj2 := filepath.Join(swapFSList.Available[1], objDir, aisDir, bucket)
+	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.DaemonID)
+	_, err = os.Stat(swapPathObj2)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.Rename(swapPathObj2, swapPathObj1))
+	swapPathMeta2 := filepath.Join(swapFSList.Available[1], metaDir, aisDir, bucket)
+	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathMeta2, swapPathMeta1, tgtSwap.DaemonID)
+	_, err = os.Stat(swapPathMeta2)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.Rename(swapPathMeta2, swapPathMeta1))
 
 	// Kill a random target
 	var removedTarget *cluster.Snode
@@ -2156,14 +2215,17 @@ func TestECRebalance(t *testing.T) {
 	tutils.RestoreTarget(t, proxyURL, smap, removedTarget)
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	newObjCount, newSliceCount := globalRebCounters(baseParams)
-	objCount, sliceCount := newObjCount-oldObjCount, newSliceCount-oldSliceCount
-	tutils.Logf("Rebalance found %d objects and %d slices\n", objCount, sliceCount)
-	if objCount != o.objCount {
-		t.Errorf("Invalid number of objects: found %d, expected %d", objCount, o.objCount)
+	newFixed, newFailed := globalRebCounters(baseParams)
+	objFixed, objFailed := newFixed-oldFixed, newFailed-oldFailed
+	tutils.Logf("Total number of replicas/slices is %d\n", sliceTotal.Load())
+	tutils.Logf("Rebalance fixed %d objects/slices and failed to resore %d objects\n", objFixed, objFailed)
+	if int32(objFixed) < sliceTotal.Load()/15 {
+		t.Errorf("The number of fixed objects is too low: %d", objFixed)
+	} else if int32(objFixed) > sliceTotal.Load()/3 {
+		t.Errorf("The number of fixed objects is too high: %d", objFixed)
 	}
-	if objCount+sliceCount != int(sliceTotal.Load()) {
-		t.Errorf("Invalid number of slices: found %d, expected %d", objCount+sliceCount, sliceTotal.Load())
+	if objFailed > 0 {
+		t.Errorf("Failed to fix %d objects", objFailed)
 	}
 }
 

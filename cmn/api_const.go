@@ -188,6 +188,7 @@ const (
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
+	URLParamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	URLParamTaskID           = "tsk" // ID of a task to return its state/result
 	URLParamTaskAction       = "tac" // "start", "status", "result"
 
@@ -284,6 +285,7 @@ const (
 	Vote      = "vote"
 	Transport = "transport"
 	Reverse   = "reverse"
+	Rebalance = "rebalance"
 	// l2 AuthN
 	Users = "users"
 

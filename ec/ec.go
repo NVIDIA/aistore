@@ -6,7 +6,9 @@ package ec
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
@@ -359,4 +361,20 @@ func freeSlices(slices []*slice) {
 			s.free()
 		}
 	}
+}
+
+// LoadMetadata loads and parses EC metadata from a file
+func LoadMetadata(fqn string) (*Metadata, error) {
+	b, err := ioutil.ReadFile(fqn)
+	if err != nil {
+		err = fmt.Errorf("Failed to read metafile %q: %v", fqn, err)
+		return nil, err
+	}
+	md := &Metadata{}
+	if err := jsoniter.Unmarshal(b, md); err != nil {
+		err := fmt.Errorf("Damaged metafile %q: %v", fqn, err)
+		return nil, err
+	}
+
+	return md, nil
 }

@@ -537,6 +537,7 @@ var (
 	_ ReadSizer      = &SizedReader{}
 	_ ReadOpenCloser = &FileSectionHandle{}
 	_ ReadOpenCloser = &nopOpener{}
+	_ ReadOpenCloser = &ByteHandle{}
 )
 
 type (
@@ -564,6 +565,12 @@ type (
 		padOffset int64 // offset iniside padding when reading a file
 	}
 
+	// ByteHandle is a byte buffer(made from []byte) that implements
+	// ReadOpenCloser interface
+	ByteHandle struct {
+		*bytes.Reader
+	}
+
 	// SizedReader is simple struct which implements ReadSizer interface.
 	SizedReader struct {
 		io.Reader
@@ -574,6 +581,20 @@ type (
 		io.ReadCloser
 	}
 )
+
+func NewByteHandle(bt []byte) *ByteHandle {
+	return &ByteHandle{
+		bytes.NewReader(bt),
+	}
+}
+
+func (b *ByteHandle) Close() error {
+	return nil
+}
+func (b *ByteHandle) Open() (io.ReadCloser, error) {
+	b.Seek(0, io.SeekStart)
+	return b, nil
+}
 
 func NopOpener(r io.ReadCloser) ReadOpenCloser {
 	return &nopOpener{r}

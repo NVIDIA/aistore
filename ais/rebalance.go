@@ -37,7 +37,9 @@ const (
 	rebStageInactive = iota
 	rebStageInit
 	rebStageTraverse
-	rebStageECNameSpace
+	rebStageECNameSpace // local slice list built
+	rebStageECExchange  // local lists are sent, target awaits exchange requests
+	rebStageECDetect    // all lists are received, and objects to fix detected
 	rebStageWaitAck
 	rebStageFin
 	rebStageFinStreams
@@ -65,6 +67,7 @@ type (
 		laterx     atomic.Bool
 		globRebID  atomic.Int64
 		stage      atomic.Uint32 // rebStage* enum
+		ecReb      *ecRebalancer
 	}
 	rebJoggerBase struct {
 		m     *rebManager
@@ -96,6 +99,7 @@ type (
 		paths     fs.MPI
 		pmarker   string
 		globRebID int64
+		dryRun    bool
 	}
 )
 
@@ -183,42 +187,80 @@ func (reb *rebManager) globalRebInit(md *globalRebArgs, buckets ...string) bool 
 	return true
 }
 
+// generic stage wait method that does not require any special check
+func (reb *rebManager) waitStage(md *globalRebArgs, stage uint32) error {
+	cb := func(si *cluster.Snode) bool {
+		status, ok := reb.checkGlobStatus(
+			si, md.smap, md.globRebID, md.config,
+			md.smap.Version, md.xreb, stage)
+		return ok && status.Stage >= stage
+	}
+	return reb.ecReb.waitAllStage(stage, cb)
+}
+
+// look for local slices/replicas
+func (reb *rebManager) buildECNamespace(md *globalRebArgs) error {
+	if err := reb.ecReb.run(); err != nil {
+		return err
+	}
+	reb.stage.Store(rebStageECNameSpace)
+	return reb.waitStage(md, rebStageECNameSpace)
+}
+
+// send all collected slices to a correct target(that must have "main" object).
+// It is a two-step process:
+//   1. The target sends all colected data to correct targets
+//   2. If the target is too fast, it may send too early(or in case of network
+//      troubles) that results in data loss. But the target does not know if
+//		the destination received the data. So, the targets enters
+//		`rebStageECExchange` state that means "I'm ready to receive data
+//		exchange requests"
+//   3. In a perfect case, all push requests are successful and
+//		`rebStageECExchange` stage will be finished in no time without any
+//		data transfer
+func (reb *rebManager) distributeECNamespace() error {
+	if err := reb.ecReb.exchange(); err != nil {
+		reb.ecReb.stop()
+		return err
+	}
+	reb.stage.Store(rebStageECExchange)
+	err := reb.ecReb.waitAllStage(rebStageECExchange, reb.ecReb.requestRebData)
+	return err
+}
+
+// find out which objects are broken and how to fix them
+func (reb *rebManager) generateECFixList(md *globalRebArgs) error {
+	reb.ecReb.checkSlices()
+	reb.stage.Store(rebStageECDetect)
+	return reb.waitStage(md, rebStageECDetect)
+}
+
 // when at least one bucket has EC enabled
 func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
-	ecScrub := newECScrubber(reb.t, md.xreb, md.globRebID)
-	if err := ecScrub.run(); err != nil {
+	if err := reb.ecReb.init(md); err != nil {
+		glog.Errorf("Failed to start EC rebalance: %v", err)
 		return err
 	}
 
-	reb.stage.Store(rebStageECNameSpace)
-	err := ecScrub.waiter.waitAllStage(reb, md.xreb, rebStageECNameSpace)
-
-	// stub to test if it found all items correctly:
-	//   -  sum of all RxRebCount must equal the number of objects
-	//   -  sum of all TxRebCount must equal the total number of slices/replicas
-	//		minus the number of objects
-	// TODO: remove after implementing the next step
-	locSlices := int64(0)
-	remSlices := int64(0)
-	for sid, slices := range ecScrub.slices {
-		if sid == reb.t.si.DaemonID {
-			locSlices += int64(len(slices))
-		} else {
-			remSlices += int64(len(slices))
-		}
+	if err := reb.buildECNamespace(md); err != nil {
+		return err
 	}
-	reb.t.statsif.AddMany(
-		stats.NamedVal64{stats.TxRebCount, remSlices},
-		stats.NamedVal64{stats.RxRebCount, locSlices})
+	if err := reb.distributeECNamespace(); err != nil {
+		return err
+	}
+	if err := reb.generateECFixList(md); err != nil {
+		return err
+	}
 
-	/* TODO:
-			- send all collected info to other targets
-			- wait for all to send
-	        - merge, sort, and change state to ecScrubStageCompleted
-	*/
+	// TODO: move all slices between targets
+	//   0. Check that we should do anything (obj list has objects with actions)
+	//   1. move local slices
+	//   2. move remote slices/restore local full objects
+	//   3. wait until all remote operations finishes
 
-	ecScrub.stop()
-	return err
+	reb.ecReb.stop()
+	glog.Infof("[%s] RebalanceEC done", reb.t.si.DaemonID)
+	return nil
 }
 
 // when no bucket has EC enabled
@@ -269,7 +311,20 @@ func (reb *rebManager) globalRebSyncAndRun(md *globalRebArgs) error {
 	reb.stage.Store(rebStageTraverse)
 	glog.Infof("%s: poll targets for: stage=%s", reb.loghdr(md.globRebID, md.smap), rebStage[rebStageTraverse])
 
-	if reb.t.bmdowner.get().ecUsed() {
+	ecUsed := false
+	if md.xreb.bucket != "" {
+		// single bucket rebalance is AIS case only
+		bck := cluster.Bck{Name: md.xreb.bucket, Provider: cmn.AIS}
+		props, ok := reb.t.bmdowner.Get().Get(&bck)
+		if !ok {
+			return fmt.Errorf("Bucket %q not found", bck.Name)
+		}
+		ecUsed = props.EC.Enabled
+	} else {
+		ecUsed = reb.t.bmdowner.get().ecUsed()
+	}
+
+	if ecUsed {
 		return reb.globalRebRunEC(md)
 	}
 
@@ -398,6 +453,10 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 		config:    cmn.GCO.Get(),
 		globRebID: globRebID,
 	}
+	// TODO: remove after everything is done (it is for debugging EC rebalance)
+	if reb.t.bmdowner.get().ecUsed() {
+		md.dryRun = true
+	}
 	if !reb.globalRebPrecheck(md) {
 		return
 	}
@@ -416,6 +475,10 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 		errCnt = reb.bcast(md.smap, md.globRebID, md.config, reb.waitFinExtended, md.xreb)
 	}
 	reb.globalRebFini(md)
+	// clean up all collected data
+	if reb.t.bmdowner.get().ecUsed() {
+		reb.ecReb.cleanup()
+	}
 }
 
 func (reb *rebManager) serialize(smap *smapX, config *cmn.Config, globRebID int64) (newerSmap, alreadyRunning bool) {
