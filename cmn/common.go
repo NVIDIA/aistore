@@ -675,7 +675,8 @@ func Rename(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
-func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum string, err error) {
+// computes xxhash if requested
+func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum *Cksum, err error) {
 	var (
 		hasher *xxhash.XXHash64
 
@@ -705,9 +706,8 @@ func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum
 	srcFile.Close()
 
 	if needCksum {
-		cksum = HashToStr(hasher)
+		cksum = &Cksum{ChecksumXXHash, HashToStr(hasher)}
 	}
-
 	return
 }
 

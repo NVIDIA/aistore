@@ -213,7 +213,7 @@ func TestCopyFileCksum(t *testing.T) {
 	}
 	if _, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), true); err != nil {
 		t.Error(err)
-	} else if expectedCksum != cksum {
+	} else if expectedCksum != cksum.Value() {
 		t.Errorf("expectedCksum: %s, got: %s", expectedCksum, cksum)
 	}
 	srcData, err := ioutil.ReadFile(srcFilename)

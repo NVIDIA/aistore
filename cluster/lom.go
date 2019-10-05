@@ -363,14 +363,13 @@ func (lom *LOM) RestoreObjectFromAny() (exists bool) {
 // NOTE: caller is responsible for locking
 func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	var (
-		dstCksumValue string
-
+		dstCksum *cmn.Cksum
 		workFQN  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 		srcCksum = lom.Cksum()
 	)
 
 	needCksum := srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone
-	_, dstCksumValue, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
+	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
 	if err != nil {
 		return
 	}
@@ -384,7 +383,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	if srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone {
-		dstCksum := cmn.NewCksum(cmn.ChecksumXXHash, dstCksumValue)
 		if !cmn.EqCksum(dstCksum, lom.Cksum()) {
 			return nil, errors.New(cmn.BadCksum(dstCksum, lom.Cksum()))
 		}
