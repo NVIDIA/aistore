@@ -12,7 +12,7 @@ LDFLAGS=-ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'"
 # To help with working with a non-github remote
 # It replaces existing github.com AIStore remote with the one specified by REMOTE
 devinit:
-ifeq ($(REMOTE),)
+ifeq (${REMOTE},)
 	$(error missing environment variable: REMOTE="http://path/to/remote")
 endif
 	@if [ -z "$$(which git)" ]; then \
@@ -47,9 +47,9 @@ rmcache:
 clean:
 	rm -rf ~/.ais*
 	rm -rf /tmp/ais
-	rm -f $(GOPATH)/bin/aisnode
-	rm -f $(GOPATH)/bin/ais
-	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
+	rm -f ${GOPATH}/bin/aisnode
+	rm -f ${GOPATH}/bin/ais
+	rm -f ${GOPATH}/pkg/linux_amd64/github.com/NVIDIA/aistore/aisnode.a
 
 #
 # go modules
@@ -98,10 +98,10 @@ deploy_docker:
 	@cd ../deploy/dev/docker && ./deploy_docker.sh -d=2
 
 stop_docker:
-ifeq ($(FLAGS),)
+ifeq (${FLAGS},)
 	$(warning missing environment variable: FLAGS="stop docker flags")
 endif
-	@./../deploy/dev/docker/stop_docker.sh $(FLAGS)
+	@./../deploy/dev/docker/stop_docker.sh ${FLAGS}
 
 #
 # tests
@@ -110,32 +110,32 @@ endif
 
 # Target for soak test
 test-soak:
-ifeq ($(FLAGS),)
+ifeq (${FLAGS},)
 	$(warning FLAGS="soak test flags" not passed, using defaults)
 endif
-	-@./../bench/soaktest/soaktest.sh $(FLAGS)
+	-@./../bench/soaktest/soaktest.sh ${FLAGS}
 
 
 test-envcheck:
-ifeq ($(BUCKET),)
+ifeq (${BUCKET},)
 	$(error missing environment variable: BUCKET="bucketname")
 endif
-	@CHECK="test-env" $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-env" ${SHELL} ./setup/preflight_check.sh
 
 test-short: test-envcheck
-	@CHECK="test-short" BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-short" BUCKET=${BUCKET} AISURL=${AISURL} ${SHELL} ./setup/preflight_check.sh
 
 test-long: test-envcheck
-	@CHECK="test-long" BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-long" BUCKET=${BUCKET} AISURL=${AISURL} ${SHELL} ./setup/preflight_check.sh
 
 test-run: test-envcheck #runs tests matching a specific regex
-ifeq ($(RE),)
+ifeq (${RE},)
 	$(error missing environment variable: RE="testnameregex")
 endif
-	@CHECK="test-run" RE=$(RE) BUCKET=$(BUCKET) AISURL=$(AISURL) $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-run" RE=${RE} BUCKET=${BUCKET} AISURL=${AISURL} ${SHELL} ./setup/preflight_check.sh
 
 test-docker:
-	@CHECK="test-docker" $(SHELL) ./setup/preflight_check.sh
+	@CHECK="test-docker" ${SHELL} ./setup/preflight_check.sh
 
 test: test-envcheck spell-check fmt-check lint test-short #main preflight test
 
@@ -144,32 +144,35 @@ test: test-envcheck spell-check fmt-check lint test-short #main preflight test
 LINT_DIRS := $(shell go list -f '{{.Dir}}' ../... | grep -v -e '3rdparty' -e 'vendor')
 MISSPELL_DIRS := $(shell find ../ -maxdepth 1 | grep -v -e '3rdparty' -e 'vendor' -e ".git" -e '__pycache__' -e '^../$$')
 
-.PHONY: lint fmt-check fmt-fix spell-check spell-fix cyclo
+.PHONY: lint-update lint fmt-check fmt-fix spell-check spell-fix cyclo
+
+lint-update:
+	@rm -f ${GOPATH}/bin/golangci-lint
+	@curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b ${GOPATH}/bin latest
 
 lint:
-# golangci installs the linters it supports
-	@GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
-	@CHECK="lint" LINT_DIRS="$(LINT_DIRS)" bash ./setup/preflight_check.sh
+	@([[ ! -f ${GOPATH}/bin/golangci-lint ]] && curl -sfL "https://install.goreleaser.com/github.com/golangci/golangci-lint.sh" | sh -s -- -b ${GOPATH}/bin latest) || true
+	@CHECK="lint" LINT_DIRS="${LINT_DIRS}" bash ./setup/preflight_check.sh
 
 fmt-check:
 	@GO111MODULE=off go get -u golang.org/x/tools/cmd/goimports
-	@CHECK="fmt" LINT_DIRS="$(LINT_DIRS)" $(SHELL) ./setup/preflight_check.sh
+	@CHECK="fmt" LINT_DIRS="${LINT_DIRS}" ${SHELL} ./setup/preflight_check.sh
 
 fmt-fix:
 	@GO111MODULE=off go get -u golang.org/x/tools/cmd/goimports
-	@$(GOPATH)/bin/goimports -w $(LINT_DIRS)
+	@${GOPATH}/bin/goimports -w ${LINT_DIRS}
 
 spell-check:
 	@GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
-	@CHECK="spell" MISSPELL_DIRS="$(MISSPELL_DIRS)" $(SHELL) ./setup/preflight_check.sh
+	@CHECK="spell" MISSPELL_DIRS="${MISSPELL_DIRS}" ${SHELL} ./setup/preflight_check.sh
 
 spell-fix:
 	@GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell
-	@$(foreach dir,$(MISSPELL_DIRS) ,$(GOPATH)/bin/misspell -w $(dir);)
+	@$(foreach dir,${MISSPELL_DIRS} ,${GOPATH}/bin/misspell -w ${dir};)
 
 cyclo:
 	@GO111MODULE=off go get -u github.com/fzipp/gocyclo
-	@$(GOPATH)/bin/gocyclo -over 25 $(LINT_DIRS)
+	@${GOPATH}/bin/gocyclo -over 25 ${LINT_DIRS}
 
 
 # Misc Targets
