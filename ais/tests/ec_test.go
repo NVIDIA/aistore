@@ -55,6 +55,7 @@ type ecSliceMD struct {
 
 type ecOptions struct {
 	seed      int64
+	objSize   int64
 	concurr   int
 	objCount  int
 	dataCnt   int
@@ -290,6 +291,19 @@ func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doE
 // - whether to encode(true) or to replicate(false) the object
 func randObjectSize(n, every int, o *ecOptions) (
 	totalCnt int, objSize, sliceSize int64, doEC bool) {
+	if o.objSize != 0 {
+		doEC = o.objSize >= ecObjLimit
+		objSize = o.objSize
+		if doEC {
+			totalCnt = 2 + (o.sliceTotal())*2
+			sliceSize = ec.SliceSize(objSize, o.dataCnt)
+		} else {
+			totalCnt = 2 + o.parityCnt*2
+			sliceSize = objSize
+		}
+		return
+	}
+
 	// Big object case
 	// full object copy+meta: 1+1
 	// number of metafiles: parity+slices
@@ -2150,6 +2164,73 @@ func TestECRebalance(t *testing.T) {
 	}
 	if objCount+sliceCount != int(sliceTotal.Load()) {
 		t.Errorf("Invalid number of slices: found %d, expected %d", objCount+sliceCount, sliceTotal.Load())
+	}
+}
+
+// Simple test to check if EC correctly finds all the objects and its slices
+// that will be used by rebalance
+func TestECBucketEncode(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	const parityCnt = 2
+	var (
+		bucket   = TestBucketName
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+	)
+
+	m := ioContext{
+		t:               t,
+		num:             50,
+		numGetsEachFile: 1,
+		bucket:          bucket,
+		proxyURL:        proxyURL,
+	}
+	m.saveClusterState()
+	baseParams := tutils.BaseAPIParams(proxyURL)
+
+	tutils.CreateFreshBucket(t, proxyURL, bucket)
+	defer tutils.DestroyBucket(t, proxyURL, bucket)
+
+	m.puts()
+
+	if t.Failed() {
+		t.FailNow()
+	}
+
+	reslist, err := api.ListBucketFast(baseParams, bucket, nil)
+	if err != nil {
+		t.Fatalf("List bucket %s failed, err = %v", bucket, err)
+	}
+	tutils.Logf("Object count: %d\n", len(reslist.Entries))
+	if len(reslist.Entries) != m.num {
+		t.Fatalf("List bucket %s invalid number of files %d, expected %d", bucket, len(reslist.Entries), m.num)
+	}
+
+	var bucketProps cmn.BucketProps
+	tutils.Logf("Enabling EC\n")
+	bucketProps.Cksum.Type = "inherit"
+	bucketProps.EC = cmn.ECConf{
+		Enabled:      true,
+		ObjSizeLimit: ecObjLimit,
+		DataSlices:   1,
+		ParitySlices: parityCnt,
+	}
+	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps)
+	tassert.CheckFatal(t, err)
+
+	tutils.Logf("Starting making EC\n")
+	api.ECEncodeBucket(baseParams, bucket)
+	waitForBucketXactionToComplete(t, cmn.ActECEncode, bucket, baseParams, rebalanceTimeout)
+	reslist, err = api.ListBucketFast(baseParams, bucket, nil)
+	if err != nil {
+		t.Fatalf("List bucket %s failed, err = %v", bucket, err)
+	}
+	tutils.Logf("Object count after EC finishes: %d\n", len(reslist.Entries))
+	expect := (parityCnt + 1) * m.num
+	if len(reslist.Entries) != expect {
+		t.Fatalf("List bucket after EC %s invalid number of files %d, expected %d", bucket, len(reslist.Entries), expect)
 	}
 }
 

@@ -68,9 +68,10 @@ const (
 	ActPutCopies     = "putcopies"
 	ActMakeNCopies   = "makencopies"
 	ActLoadLomCache  = "loadlomcache"
-	ActECGet         = "ecget"  // erasure decode objects
-	ActECPut         = "ecput"  // erasure encode objects
-	ActECRespond     = "ecresp" // respond to other targets' EC requests
+	ActECGet         = "ecget"    // erasure decode objects
+	ActECPut         = "ecput"    // erasure encode objects
+	ActECRespond     = "ecresp"   // respond to other targets' EC requests
+	ActECEncode      = "ecencode" // erasure code a bucket
 	ActStartGFN      = "metasync-start-gfn"
 	ActRecoverBck    = "recoverbck"
 	ActAsyncTask     = "task"

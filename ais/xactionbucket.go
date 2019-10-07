@@ -195,6 +195,46 @@ func (r *xactionsRegistry) renewRespondEC(bck *cluster.Bck) *ec.XactRespond {
 }
 
 //
+// ecEncodeEntry
+//
+type ecEncodeEntry struct {
+	baseBckEntry
+	t     *targetrunner
+	xact  *xactECEncode
+	phase string
+}
+
+func (e *ecEncodeEntry) Start(id int64) error {
+	xec := newXactECEncode(id, e.bck, e.t)
+	e.xact = xec
+	return nil
+}
+
+func (*ecEncodeEntry) Kind() string    { return cmn.ActECEncode }
+func (e *ecEncodeEntry) Get() cmn.Xact { return e.xact }
+func (r *xactionsRegistry) renewECEncodeXact(t *targetrunner, bck *cluster.Bck, phase string) (*xactECEncode, error) {
+	b := r.bucketsXacts(bck)
+	e := &ecEncodeEntry{baseBckEntry: baseBckEntry{bck: bck}, t: t, phase: phase}
+	ee, err := b.renewBucketXaction(e)
+	if err == nil {
+		return ee.Get().(*xactECEncode), nil
+	}
+	return nil, err
+}
+
+func (e *ecEncodeEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, err error) {
+	// TODO: add more checks?
+	prev := previousEntry.(*ecEncodeEntry)
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit {
+		prev.phase = cmn.ActCommit // transition
+		keep = true
+		return
+	}
+	err = fmt.Errorf("%s(%s, phase %s): cannot %s", e.Kind(), prev.bck.Name, prev.phase, e.phase)
+	return
+}
+
+//
 // mncEntry
 //
 type mncEntry struct {

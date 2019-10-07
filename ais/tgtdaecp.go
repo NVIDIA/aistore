@@ -433,7 +433,7 @@ func (t *targetrunner) xactsStartRequest(kind, bucket string) error {
 		t.ecmanager.restoreBckGetXact(bck)
 	case cmn.ActECRespond:
 		t.ecmanager.restoreBckRespXact(bck)
-	case cmn.ActMakeNCopies:
+	case cmn.ActMakeNCopies, cmn.ActECEncode:
 		return fmt.Errorf("%s supported by /buckets/bucket-name endpoint", kind)
 	case cmn.ActPutCopies:
 		return fmt.Errorf("%s currently not supported", kind)
@@ -1356,6 +1356,23 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 		go xact.Run()
 	}
 	return
+}
+
+func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
+	// TODO: add checks. E.g, do not run when rebalance/rename/copy is active
+	_, err = t.xactions.renewECEncodeXact(t, bck, cmn.ActBegin)
+	return err
+}
+
+func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
+	var xact *xactECEncode
+	xact, err = t.xactions.renewECEncodeXact(t, bckFrom, cmn.ActCommit)
+	if err != nil {
+		glog.Error(err) // must not happen at commit time
+		return err
+	}
+	go xact.Run()
+	return nil
 }
 
 func (t *targetrunner) lookupRemote(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {

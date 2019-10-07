@@ -52,6 +52,10 @@ func (c *putJogger) run() {
 			req.tm = time.Now()
 			c.ec(req)
 			c.parent.DecPending()
+			if req.Wg != nil {
+				// notify a caller
+				req.Wg.Done()
+			}
 		case <-c.stopCh:
 			c.slab.Free(c.buffer)
 			c.buffer = nil

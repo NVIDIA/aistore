@@ -733,6 +733,24 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
 		t.xactions.renewBckMakeNCopies(bck, t, copies)
+	case cmn.ActECEncode:
+		phase := apiItems[1]
+		switch phase {
+		case cmn.ActBegin:
+			err = t.beginECEncode(bck)
+		case cmn.ActAbort:
+			// TODO: at this moment there is nothing to rollback
+			break
+		case cmn.ActCommit:
+			err = t.commitECEncode(bck)
+		default:
+			err = fmt.Errorf("invalid phase %s: %s %s", phase, msgInt.Action, bck)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		glog.Infof("%s %s bucket %s", phase, msgInt.Action, bck)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)

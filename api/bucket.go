@@ -700,3 +700,14 @@ func doListRangeRequest(baseParams *BaseParams, bucket, provider, action, method
 	_, err = DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
+
+func ECEncodeBucket(baseParams *BaseParams, bucket string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActECEncode})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
+}

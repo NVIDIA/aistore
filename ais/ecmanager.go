@@ -2,9 +2,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-//
-// extended action aka xaction
-//
 package ais
 
 import (
@@ -258,7 +255,9 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 	}
 }
 
-func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
+// Encode the object. `wg` is optional - a caller passes WaitGroup when it
+// wants to be notified after the object is done
+func (mgr *ecManager) EncodeObject(lom *cluster.LOM, wg ...*sync.WaitGroup) error {
 	if !lom.Bprops().EC.Enabled {
 		return ec.ErrorECDisabled
 	}
@@ -289,6 +288,9 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 		Action: ec.ActSplit,
 		IsCopy: ec.IsECCopy(lom.Size(), &lom.Bprops().EC),
 		LOM:    lom,
+	}
+	if len(wg) != 0 {
+		req.Wg = wg[0]
 	}
 
 	mgr.restoreBckPutXact(lom.Bck()).Encode(req)

@@ -861,6 +861,15 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
 		p.makeNCopies(w, r, bck, &msg, config)
+	case cmn.ActECEncode:
+		if !bck.Props.EC.Enabled {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %q has EC disabled", bck.Name))
+			return
+		}
+		if err := p.ecEncode(bck, &msg, config); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
@@ -1659,6 +1668,46 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 	if err := p.updateBucketProps(bck, nvs); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 	}
+}
+
+func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
+	smap := p.smapowner.get()
+	tout := config.Timeout.Default
+
+	msgInt := p.newActionMsgInternal(msg, smap, p.bmdowner.get())
+	body := cmn.MustMarshal(msgInt)
+	results := p.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActBegin),
+		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+	nr := 0
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bck, res.err, res.status)
+			glog.Error(err)
+			nr++
+		}
+	}
+	if err != nil {
+		// abort
+		if nr < len(results) {
+			_ = p.broadcastTo(
+				cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActAbort),
+				nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+		}
+		return
+	}
+
+	results = p.broadcastTo(cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActCommit),
+		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
+
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bck, res.err, res.status)
+			glog.Error(err)
+			break
+		}
+	}
+	return err
 }
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {
