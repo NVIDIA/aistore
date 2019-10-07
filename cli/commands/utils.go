@@ -571,6 +571,11 @@ func cliAPIParams(proxyURL string) *api.BaseParams {
 func canReachBucket(baseParams *api.BaseParams, bckName, provider string) error {
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {
+		if httpErr, ok := err.(*cmn.HTTPError); ok {
+			if httpErr.Status == http.StatusNotFound {
+				return fmt.Errorf("bucket with name %q does not exist", bckName)
+			}
+		}
 		return fmt.Errorf("could not reach %q bucket: %v", bckName, err)
 	}
 	return nil

@@ -1103,14 +1103,19 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket := apiItems[0]
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(p.bmdowner); err != nil {
+		if _, ok := err.(*cmn.ErrorBucketDoesNotExist); ok {
+			p.invalmsghdlr(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
+
 		if _, err = p.syncCBmeta(w, r, bucket, err); err != nil {
 			return
 		}
@@ -1749,7 +1754,7 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 	bck = &cluster.Bck{Name: bucket, Provider: cmn.Cloud}
 	if err = p.createBucket(msg, bck, cfg); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
-			p.invalmsghdlr(w, r, err.Error())
+			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)
 			return
 		}
 	}

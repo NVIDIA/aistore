@@ -258,7 +258,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "download job %s has been stopped successfully\n", id)
+	fmt.Fprintf(c.App.Writer, "download job %s has been stopped successfully.\n", id)
 	return
 }
 
@@ -300,7 +300,7 @@ func stopDsortHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s job %s has been stopped successfully\n", cmn.DSortName, id)
+	fmt.Fprintf(c.App.Writer, "%s job %s has been stopped successfully.\n", cmn.DSortName, id)
 	return
 }
 

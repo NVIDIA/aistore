@@ -285,7 +285,25 @@ func proxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	managerUUID := query.Get(cmn.URLParamID)
 	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-	broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap)
+	responses := broadcast(http.MethodDelete, path, nil, nil, ctx.smap.Get().Tmap)
+
+	allNotFound := true
+	for _, resp := range responses {
+		if resp.statusCode == http.StatusNotFound {
+			continue
+		}
+		allNotFound = false
+
+		if resp.err != nil {
+			cmn.InvalidHandlerDetailed(w, r, resp.err.Error(), resp.statusCode)
+			return
+		}
+	}
+	if allNotFound {
+		msg := fmt.Sprintf("%s job with id %q has not been found", cmn.DSortName, managerUUID)
+		cmn.InvalidHandlerDetailed(w, r, msg, http.StatusNotFound)
+		return
+	}
 }
 
 // DELETE /v1/sort

@@ -61,7 +61,7 @@ func (is *infoStore) getJob(id string) (*DownloadJobInfo, error) {
 		return ji, nil
 	}
 
-	return nil, fmt.Errorf("job %s not found", id)
+	return nil, fmt.Errorf("download job with id %q has not been found", id)
 }
 
 func (is *infoStore) getList(descRegex *regexp.Regexp) []*DownloadJobInfo {

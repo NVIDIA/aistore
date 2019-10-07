@@ -102,7 +102,6 @@ func checkBadStatus(req *http.Request, resp *http.Response) (*http.Response, err
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response, err: %v", err)
 		}
-
 		err, _ = cmn.NewHTTPError(req, string(b), resp.StatusCode)
 		return nil, err
 	}
