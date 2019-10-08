@@ -613,7 +613,6 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 }
 
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
 	enabled, err := t.fsprg.enableMountpath(mountpath)
 	if err != nil {
 		if _, ok := err.(cmn.NoMountpathError); ok {
@@ -622,16 +621,12 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 			// cmn.InvalidMountpathError
 			t.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		}
-		t.gfn.local.deactivate()
 		return
 	}
 	if !enabled {
 		w.WriteHeader(http.StatusNoContent)
-		t.gfn.local.deactivate()
 		return
 	}
-
-	t.xactions.stopMountpathXactions()
 
 	// TODO: Currently we must abort on enabling mountpath. In some places we open
 	// files directly and put them directly on mountpaths. This can lead to
@@ -641,7 +636,6 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
 	disabled, err := t.fsprg.disableMountpath(mountpath)
 	if err != nil {
 		if _, ok := err.(*cmn.NoMountpathError); ok {
@@ -658,19 +652,14 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		return
 	}
 
-	t.xactions.stopMountpathXactions()
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been disabled and is unusable", mountpath))
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
 	if err := t.fsprg.addMountpath(mountpath); err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %s", err.Error()))
-		t.gfn.local.deactivate()
 		return
 	}
-
-	t.xactions.stopMountpathXactions()
 
 	// TODO: Currently we must abort on adding mountpath. In some places we open
 	// files directly and put them directly on mountpaths. This can lead to
@@ -680,13 +669,11 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	t.gfn.local.activate()
 	if err := t.fsprg.removeMountpath(mountpath); err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %s", err.Error()))
 		return
 	}
 
-	t.xactions.stopMountpathXactions()
 	dsort.Managers.AbortAll(fmt.Errorf("mountpath %q has been removed and is unusable", mountpath))
 }
 

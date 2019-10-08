@@ -221,6 +221,5 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 
 func (t *targetrunner) DisableMountpath(mountpath string, reason string) (disabled bool, err error) {
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, reason)
-	t.xactions.stopMountpathXactions()
 	return t.fsprg.disableMountpath(mountpath)
 }

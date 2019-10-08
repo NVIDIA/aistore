@@ -540,21 +540,11 @@ func TestLocalMirror(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.numCopies), func(t *testing.T) {
-			total, copiesToNumObjects := testLocalMirror(t, test.numCopies)
-			if len(copiesToNumObjects) != 1 {
-				t.Fatalf("some objects do not have expected number of copies: %v", copiesToNumObjects)
-			}
-
-			expectedCopies := test.numCopies[len(test.numCopies)-1]
-			for copies := range copiesToNumObjects {
-				if copies != expectedCopies {
-					t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
-				}
-			}
+			testLocalMirror(t, test.numCopies)
 		})
 	}
 }
-func testLocalMirror(t *testing.T, numCopies []int) (total int, copiesToNumObjects map[int]int) {
+func testLocalMirror(t *testing.T, numCopies []int) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
@@ -623,26 +613,9 @@ func testLocalMirror(t *testing.T, numCopies []int) (total int, copiesToNumObjec
 		}
 	}
 
-	// List Bucket - primarily for the copies
-	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
-	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
-	tassert.CheckFatal(t, err)
-
 	m.wg.Wait()
 
-	copiesToNumObjects = make(map[int]int)
-	for _, entry := range objectList.Entries {
-		if entry.Atime == "" {
-			t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
-		}
-		total++
-		copiesToNumObjects[int(entry.Copies)]++
-	}
-	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
-	if total != m.num {
-		t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
-	}
-	return
+	m.ensureNumCopies(numCopies[len(numCopies)-1])
 }
 
 func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseParams) {

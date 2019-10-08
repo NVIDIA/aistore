@@ -245,6 +245,44 @@ func (m *ioContext) stopGets() {
 	m.stopCh <- struct{}{}
 }
 
+func (m *ioContext) ensureNumCopies(expectedCopies int) {
+	var (
+		total      int
+		baseParams = tutils.DefaultBaseAPIParams(m.t)
+	)
+
+	waitForBucketXactionToComplete(m.t, cmn.ActMakeNCopies /* = kind */, m.bucket, baseParams, rebalanceTimeout)
+
+	// List Bucket - primarily for the copies
+	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	tassert.CheckFatal(m.t, err)
+
+	copiesToNumObjects := make(map[int]int)
+	for _, entry := range objectList.Entries {
+		if entry.Atime == "" {
+			m.t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
+		}
+		total++
+		copiesToNumObjects[int(entry.Copies)]++
+	}
+	tutils.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
+	if total != m.num {
+		m.t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
+	}
+
+	if len(copiesToNumObjects) != 1 {
+		m.t.Fatalf("some objects do not have expected number of copies: %v", copiesToNumObjects)
+	}
+
+	for copies := range copiesToNumObjects {
+		if copies != expectedCopies {
+			m.t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
+		}
+	}
+
+}
+
 func (m *ioContext) ensureNoErrors() {
 	if m.numGetErrs.Load() > 0 {
 		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
@@ -2232,7 +2270,7 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	m.gets()
 	m.wg.Wait()
 
-	// TODO: ensure that all objects have been recovered and have still 2 copies.
+	m.ensureNumCopies(2)
 
 	// Step 6: Enable previously disabled mountpath
 	err = api.EnableMountpath(baseParams, target, mpath)
@@ -2240,7 +2278,6 @@ func TestGetFromMirroredBucket(t *testing.T) {
 
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	// TODO: ensure that all objects have still 2 copies.
-
+	m.ensureNumCopies(2)
 	m.ensureNoErrors()
 }

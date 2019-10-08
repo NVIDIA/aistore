@@ -215,6 +215,25 @@ func (e *mncEntry) Start(id int64) error {
 func (*mncEntry) Kind() string    { return cmn.ActMakeNCopies }
 func (e *mncEntry) Get() cmn.Xact { return e.xact }
 
+func (r *xactionsRegistry) renewObjsRedundancy(t *targetrunner) {
+	renewBckRedundacy := func(bcks map[string]*cmn.BucketProps, provider string) {
+		for bckName, bckProps := range bcks {
+			bck := &cluster.Bck{Name: bckName, Provider: provider}
+			if bckProps.Mirror.Enabled {
+				r.renewBckMakeNCopies(bck, t, int(bckProps.Mirror.Copies))
+			}
+
+			// TODO: restart the EC (#531) in case mountpath event
+			// if bckProps.EC.Enabled {
+			// r.renewRespondEC(bck)
+			// }
+		}
+	}
+
+	renewBckRedundacy(t.bmdowner.Get().LBmap, cmn.AIS)
+	renewBckRedundacy(t.bmdowner.Get().CBmap, cmn.Cloud)
+}
+
 func (r *xactionsRegistry) renewBckMakeNCopies(bck *cluster.Bck, t *targetrunner, copies int) {
 	b := r.bucketsXacts(bck)
 	e := &mncEntry{t: t, copies: copies, baseBckEntry: baseBckEntry{bck: bck}}

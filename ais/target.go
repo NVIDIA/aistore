@@ -86,8 +86,12 @@ type (
 )
 
 func (gfn *baseGFN) active() bool { return gfn.lookup.Load() }
-func (gfn *baseGFN) activate()    { gfn.lookup.Store(true); glog.Infoln(gfn.tag, "activated") }
-func (gfn *baseGFN) deactivate()  { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
+func (gfn *baseGFN) activate() bool {
+	previous := gfn.lookup.Swap(true)
+	glog.Infoln(gfn.tag, "activated")
+	return previous
+}
+func (gfn *baseGFN) deactivate() { gfn.lookup.Store(false); glog.Infoln(gfn.tag, "deactivated") }
 
 //
 // target runner

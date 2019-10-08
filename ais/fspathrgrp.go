@@ -14,6 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
+const (
+	addMpathAct     = "Added"
+	enableMpathAct  = "Enabled"
+	removeMpathAct  = "Removed"
+	disableMpathAct = "Disabled"
+)
+
 type (
 	// implements fs.PathRunGroup interface
 	fsprungroup struct {
@@ -52,74 +59,111 @@ func (g *fsprungroup) Unreg(r fs.PathRunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabled bool, err error) {
-	enabled, err = fs.Mountpaths.Enable(mpath)
-	if err != nil || !enabled {
+	gfnActive := g.t.gfn.local.activate()
+	if enabled, err = fs.Mountpaths.Enable(mpath); err != nil || !enabled {
+		if !gfnActive {
+			g.t.gfn.local.deactivate()
+		}
 		return
 	}
 
-	for _, r := range g.runners {
-		r.ReqEnableMountpath(mpath)
-	}
-	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
-	g.checkEnable("Enabled", mpath)
+	g.newMountpathEvent(enableMpathAct, mpath)
 	return
 }
 
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabled bool, err error) {
-	disabled, err = fs.Mountpaths.Disable(mpath)
-	if !disabled || err != nil {
+	gfnActive := g.t.gfn.local.activate()
+	if disabled, err = fs.Mountpaths.Disable(mpath); err != nil || !disabled {
+		if !gfnActive {
+			g.t.gfn.local.deactivate()
+		}
 		return disabled, err
 	}
 
-	for _, r := range g.runners {
-		r.ReqDisableMountpath(mpath)
-	}
-	if !g.checkDisable("Disabled") {
-		go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
-	}
+	g.lostMountpathEvent(disableMpathAct, mpath)
 	return true, nil
 }
 
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (err error) {
+	gfnActive := g.t.gfn.local.activate()
 	if err = fs.Mountpaths.Add(mpath); err != nil {
+		if !gfnActive {
+			g.t.gfn.local.deactivate()
+		}
 		return
 	}
-	if err = fs.Mountpaths.CreateBucketDir(cmn.AIS); err != nil {
-		return
-	}
-	if err = fs.Mountpaths.CreateBucketDir(cmn.Cloud); err != nil {
-		return
+	for _, provider := range []string{cmn.AIS, cmn.Cloud} {
+		if err = fs.Mountpaths.CreateBucketDir(provider); err != nil {
+			if !gfnActive {
+				g.t.gfn.local.deactivate()
+			}
+			return
+		}
 	}
 
-	for _, r := range g.runners {
-		r.ReqAddMountpath(mpath)
-	}
-	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
-	g.checkEnable("Added", mpath)
+	g.newMountpathEvent(addMpathAct, mpath)
 	return
 }
 
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (err error) {
+	gfnActive := g.t.gfn.local.activate()
 	if err = fs.Mountpaths.Remove(mpath); err != nil {
+		if !gfnActive {
+			g.t.gfn.local.deactivate()
+		}
 		return
 	}
-	for _, r := range g.runners {
-		r.ReqRemoveMountpath(mpath)
-	}
-	if !g.checkDisable("Removed") {
-		go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
-	}
+
+	g.lostMountpathEvent(removeMpathAct, mpath)
 	return
 }
 
-// check for no-mounpaths and UNREGISTER
-func (g *fsprungroup) checkDisable(action string) (disabled bool) {
+func (g *fsprungroup) newMountpathEvent(action, mpath string) {
+	g.t.xactions.stopMountpathXactions()
+	for _, r := range g.runners {
+		switch action {
+		case enableMpathAct:
+			r.ReqEnableMountpath(mpath)
+		case addMpathAct:
+			r.ReqAddMountpath(mpath)
+		default:
+			cmn.AssertMsg(false, action)
+		}
+	}
+	go g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+	g.checkEnable(action, mpath)
+}
+
+func (g *fsprungroup) lostMountpathEvent(action, mpath string) {
+	g.t.xactions.stopMountpathXactions()
+	for _, r := range g.runners {
+		switch action {
+		case disableMpathAct:
+			r.ReqDisableMountpath(mpath)
+		case removeMpathAct:
+			r.ReqRemoveMountpath(mpath)
+		default:
+			cmn.AssertMsg(false, action)
+		}
+	}
+	if g.checkZeroMountpaths(action) {
+		return
+	}
+
+	go func() {
+		g.t.rebManager.runLocalReb(false /*skipGlobMisplaced*/)
+		g.t.xactions.renewObjsRedundancy(g.t)
+	}()
+}
+
+// Check for no mountpaths and unregister(disable) the target if detected.
+func (g *fsprungroup) checkZeroMountpaths(action string) (disabled bool) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) > 0 {
 		return false
