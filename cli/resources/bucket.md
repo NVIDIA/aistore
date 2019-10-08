@@ -95,11 +95,12 @@ Copies an existing ais bucket to a new ais bucket.
 `ais show bucket [BUCKET_NAME]`
 
 Shows aggregated information about objects in the bucket `BUCKET_NAME`.
-If `BUCKET_NAME` is omitted, shows informations about all buckets.
+If `BUCKET_NAME` is omitted, shows information about all buckets.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
+| `--fast` | `bool` | Enforce using faster methods to find out the buckets' details. The output may not be accurate. | `false`
 
 ### Make N copies
 
@@ -109,7 +110,7 @@ Starts an extended action to bring a given bucket to a certain redundancy level 
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--copies` | `int` | number of copies | `1` |
+| `--copies` | `int` | Number of copies | `1` |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
 ### List bucket props
@@ -134,7 +135,7 @@ If `--jsonspec` option is used, **all** properties of the bucket are set based o
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider)|
-| `--jsonspec` | `string` | bucket properties in a JSON format | `` |
+| `--jsonspec` | `string` | Bucket properties in a JSON format | `` |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
 When `--jsonspec` is not used, some properties support user-friendly aliases:

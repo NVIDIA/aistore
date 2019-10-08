@@ -22,6 +22,7 @@ var (
 	showCmdsFlags = map[string][]cli.Flag{
 		subcmdShowBucket: {
 			providerFlag,
+			fastDetailsFlag,
 		},
 		subcmdShowDisk: append(
 			longRunFlags,
@@ -151,7 +152,7 @@ func showBucketHandler(c *cli.Context) (err error) {
 		bucket, _ = os.LookupEnv(aisBucketEnvVar)
 	}
 
-	return bucketDetails(c, baseParams, bucket, provider)
+	return bucketDetails(c, baseParams, bucket, provider, flagIsSet(c, fastDetailsFlag))
 }
 
 func showDisksHandler(c *cli.Context) (err error) {

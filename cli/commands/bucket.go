@@ -233,17 +233,18 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, pr
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
+func bucketDetails(c *cli.Context, baseParams *api.BaseParams, bucket, provider string, fast bool) error {
 	fDetails := func() error {
-		return bucketDetailsSync(c, baseParams, bucket, provider)
+		return bucketDetailsSync(c, baseParams, bucket, provider, fast)
 	}
 	return cmn.WaitForFunc(fDetails, longCommandTime)
 }
 
 // The function shows bucket details
-func bucketDetailsSync(c *cli.Context, baseParams *api.BaseParams, bucket, provider string) error {
+func bucketDetailsSync(c *cli.Context, baseParams *api.BaseParams, bucket, provider string, fast bool) error {
 	// Request bucket summaries
-	summaries, err := api.GetBucketsSummaries(baseParams, bucket, provider, nil)
+	msg := &cmn.SelectMsg{Fast: fast}
+	summaries, err := api.GetBucketsSummaries(baseParams, bucket, provider, msg)
 	if err != nil {
 		return err
 	}

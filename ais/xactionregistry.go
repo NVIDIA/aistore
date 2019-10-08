@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/NVIDIA/aistore/housekeep/lru"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/objwalk"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -837,9 +838,10 @@ func (r *xactBckSummaryTask) Run() {
 	}
 
 	var (
-		wg        = &sync.WaitGroup{}
-		errCh     = make(chan error, len(buckets))
-		summaries = make(cmn.BucketsSummaries)
+		wg                = &sync.WaitGroup{}
+		availablePaths, _ = fs.Mountpaths.Get()
+		errCh             = make(chan error, len(buckets))
+		summaries         = make(cmn.BucketsSummaries)
 	)
 	wg.Add(len(buckets))
 
@@ -853,9 +855,10 @@ func (r *xactBckSummaryTask) Run() {
 		go func(bck *cluster.Bck) {
 			defer wg.Done()
 
-			var (
-				msg = &cmn.SelectMsg{Fast: false}
-			)
+			if err := bck.Init(r.t.bmdowner); err != nil {
+				errCh <- err
+				return
+			}
 
 			summary := cmn.BucketSummary{
 				Name:           bck.Name,
@@ -863,25 +866,49 @@ func (r *xactBckSummaryTask) Run() {
 				TotalDisksSize: totalDisksSize,
 			}
 
-			for {
-				walk := objwalk.NewWalk(context.Background(), r.t, bck, msg)
-				list, err := walk.LocalObjPage()
-				if err != nil {
-					errCh <- err
-					return
-				}
+			if r.msg.Fast {
+				for _, mpathInfo := range availablePaths {
+					path := mpathInfo.MakePathBucket(fs.ObjectType, bck.Name, bck.Provider)
+					size, err := ios.GetDirSize(path)
+					if err != nil {
+						errCh <- err
+						return
+					}
+					fileCount, err := ios.GetFileCount(path)
+					if err != nil {
+						errCh <- err
+						return
+					}
 
-				for _, v := range list.Entries {
-					summary.Size += uint64(v.Size)
-					summary.ObjCount++
+					if bck.Props.Mirror.Enabled {
+						copies := int(bck.Props.Mirror.Copies)
+						size /= uint64(copies)
+						fileCount = fileCount/copies + fileCount%copies
+					}
+					summary.Size += size
+					summary.ObjCount += uint64(fileCount)
 				}
+			} else { // slow path
+				for {
+					walk := objwalk.NewWalk(context.Background(), r.t, bck, r.msg)
+					list, err := walk.LocalObjPage()
+					if err != nil {
+						errCh <- err
+						return
+					}
 
-				if list.PageMarker == "" {
-					break
+					for _, v := range list.Entries {
+						summary.Size += uint64(v.Size)
+						summary.ObjCount++
+					}
+
+					if list.PageMarker == "" {
+						break
+					}
+
+					list.Entries = nil
+					r.msg.PageMarker = list.PageMarker
 				}
-
-				list.Entries = nil
-				msg.PageMarker = list.PageMarker
 			}
 
 			summaries[bck.Name] = summary
