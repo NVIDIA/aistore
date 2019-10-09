@@ -606,10 +606,15 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, exists := Managers.Get(managerUUID)
+	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
 		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
+		return
+	}
+	if dsortManager.Metrics.Archived {
+		s := fmt.Sprintf("invalid request: %s job with uuid %s has already finished", cmn.DSortName, managerUUID)
+		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusGone)
 		return
 	}
 
