@@ -34,6 +34,7 @@ func (t *targetrunner) GetSmap() *cluster.Smap       { return t.smapowner.Get() 
 func (t *targetrunner) Snode() *cluster.Snode        { return t.si }
 func (t *targetrunner) Cloud() cluster.CloudProvider { return t.cloud }
 func (t *targetrunner) PrefetchQueueLen() int        { return len(t.prefetchQueue) }
+func (t *targetrunner) ECM() cluster.ECManager       { return ECM }
 
 func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
 	_, running := t.xactions.isRebalancing(cmn.ActGlobalReb)

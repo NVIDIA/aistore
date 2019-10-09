@@ -200,24 +200,24 @@ func (r *xactionsRegistry) renewRespondEC(bck *cluster.Bck) *ec.XactRespond {
 type ecEncodeEntry struct {
 	baseBckEntry
 	t     *targetrunner
-	xact  *xactECEncode
+	xact  *ec.XactBckEncode
 	phase string
 }
 
 func (e *ecEncodeEntry) Start(id int64) error {
-	xec := newXactECEncode(id, e.bck, e.t)
+	xec := ec.NewXactBckEncode(id, e.bck, e.t)
 	e.xact = xec
 	return nil
 }
 
 func (*ecEncodeEntry) Kind() string    { return cmn.ActECEncode }
 func (e *ecEncodeEntry) Get() cmn.Xact { return e.xact }
-func (r *xactionsRegistry) renewECEncodeXact(t *targetrunner, bck *cluster.Bck, phase string) (*xactECEncode, error) {
+func (r *xactionsRegistry) renewECEncodeXact(t *targetrunner, bck *cluster.Bck, phase string) (*ec.XactBckEncode, error) {
 	b := r.bucketsXacts(bck)
 	e := &ecEncodeEntry{baseBckEntry: baseBckEntry{bck: bck}, t: t, phase: phase}
 	ee, err := b.renewBucketXaction(e)
 	if err == nil {
-		return ee.Get().(*xactECEncode), nil
+		return ee.Get().(*ec.XactBckEncode), nil
 	}
 	return nil, err
 }

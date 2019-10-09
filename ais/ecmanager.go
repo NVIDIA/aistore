@@ -257,7 +257,7 @@ func (mgr *ecManager) recvResponse(w http.ResponseWriter, hdr transport.Header, 
 
 // Encode the object. `wg` is optional - a caller passes WaitGroup when it
 // wants to be notified after the object is done
-func (mgr *ecManager) EncodeObject(lom *cluster.LOM, wg ...*sync.WaitGroup) error {
+func (mgr *ecManager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error {
 	if !lom.Bprops().EC.Enabled {
 		return ec.ErrorECDisabled
 	}
@@ -289,8 +289,8 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM, wg ...*sync.WaitGroup) erro
 		IsCopy: ec.IsECCopy(lom.Size(), &lom.Bprops().EC),
 		LOM:    lom,
 	}
-	if len(wg) != 0 {
-		req.Wg = wg[0]
+	if len(cb) != 0 {
+		req.Callback = cb[0]
 	}
 
 	mgr.restoreBckPutXact(lom.Bck()).Encode(req)

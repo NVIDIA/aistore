@@ -1,8 +1,8 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package ec
 
 import (
 	"fmt"
@@ -13,22 +13,21 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
-	xactECEncode struct {
+	XactBckEncode struct {
 		cmn.XactBase
 		cmn.MountpathXact
 		doneCh   chan struct{}
-		mpathers map[string]*joggerECEncode
+		mpathers map[string]*joggerBckEncode
 		t        cluster.Target
 		bck      *cluster.Bck
 		wg       *sync.WaitGroup // to wait for EC finishes all objects
 	}
-	joggerECEncode struct { // per mountpath
-		parent    *xactECEncode
+	joggerBckEncode struct { // per mountpath
+		parent    *XactBckEncode
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
 		stopCh    cmn.StopCh
@@ -37,11 +36,12 @@ type (
 		provider string
 		smap     *cluster.Smap
 		daemonID string
+		ecm      cluster.ECManager
 	}
 )
 
-func newXactECEncode(id int64, bck *cluster.Bck, t cluster.Target) *xactECEncode {
-	return &xactECEncode{
+func NewXactBckEncode(id int64, bck *cluster.Bck, t cluster.Target) *XactBckEncode {
+	return &XactBckEncode{
 		XactBase: *cmn.NewXactBaseWithBucket(id, cmn.ActECEncode, bck.Name, bck.IsAIS()),
 		t:        t,
 		bck:      bck,
@@ -49,12 +49,23 @@ func newXactECEncode(id int64, bck *cluster.Bck, t cluster.Target) *xactECEncode
 	}
 }
 
-func (r *xactECEncode) done()                      { r.doneCh <- struct{}{} }
-func (r *xactECEncode) waitGroup() *sync.WaitGroup { return r.wg }
-func (r *xactECEncode) target() cluster.Target     { return r.t }
-func (r *xactECEncode) Description() string        { return "erasure code all objects in a bucket" }
+func (r *XactBckEncode) done()                  { r.doneCh <- struct{}{} }
+func (r *XactBckEncode) target() cluster.Target { return r.t }
+func (r *XactBckEncode) Description() string    { return "erasure code all objects in a bucket" }
 
-func (r *xactECEncode) Run() (err error) {
+func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }
+func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
+	if err == nil {
+		r.ObjectsInc()
+		r.BytesAdd(lom.Size())
+	} else {
+		glog.Errorf("Failed to EC object %s/%s: %v", lom.Bck().Name, lom.Objname, err)
+	}
+
+	r.wg.Done()
+}
+
+func (r *XactBckEncode) Run() (err error) {
 	var numjs int
 	if !r.bck.Props.EC.Enabled {
 		return fmt.Errorf("Bucket %q does not have EC enabled", r.bck.Name)
@@ -65,20 +76,21 @@ func (r *xactECEncode) Run() (err error) {
 	return r.run(numjs)
 }
 
-func (r *xactECEncode) init() (int, error) {
+func (r *XactBckEncode) init() (int, error) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	numjs := len(availablePaths)
 	r.doneCh = make(chan struct{}, numjs)
-	r.mpathers = make(map[string]*joggerECEncode, numjs)
+	r.mpathers = make(map[string]*joggerBckEncode, numjs)
 	config := cmn.GCO.Get()
 	for _, mpathInfo := range availablePaths {
-		jogger := &joggerECEncode{
+		jogger := &joggerBckEncode{
 			parent:    r,
 			mpathInfo: mpathInfo,
 			config:    config,
 			smap:      r.t.GetSmap(),
 			daemonID:  r.t.Snode().DaemonID,
 			stopCh:    cmn.NewStopCh(),
+			ecm:       r.t.ECM(),
 		}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = jogger
@@ -89,9 +101,9 @@ func (r *xactECEncode) init() (int, error) {
 	return numjs, nil
 }
 
-func (r *xactECEncode) Stop(error) { r.Abort() }
+func (r *XactBckEncode) Stop(error) { r.Abort() }
 
-func (r *xactECEncode) run(numjs int) error {
+func (r *XactBckEncode) run(numjs int) error {
 	for {
 		select {
 		case <-r.ChanAbort():
@@ -110,7 +122,7 @@ func (r *xactECEncode) run(numjs int) error {
 	}
 }
 
-func (r *xactECEncode) stop() {
+func (r *XactBckEncode) stop() {
 	if r.Finished() {
 		glog.Warningf("%s is (already) not running", r)
 		return
@@ -121,9 +133,9 @@ func (r *xactECEncode) stop() {
 	r.EndTime(time.Now())
 }
 
-func (j *joggerECEncode) stop() { j.stopCh.Close() }
+func (j *joggerBckEncode) stop() { j.stopCh.Close() }
 
-func (j *joggerECEncode) jog() {
+func (j *joggerBckEncode) jog() {
 	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider())
 	j.provider = j.parent.Provider()
 	opts := &fs.Options{
@@ -139,7 +151,7 @@ func (j *joggerECEncode) jog() {
 // Walks through all files in 'obj' directory, and calls EC.Encode for every
 // file whose HRW points to this file and the file does not have corresponding
 // metadata file in 'meta' directory
-func (j *joggerECEncode) walk(fqn string, de fs.DirEntry) error {
+func (j *joggerBckEncode) walk(fqn string, de fs.DirEntry) error {
 	select {
 	case <-j.stopCh.Listen():
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
@@ -173,7 +185,7 @@ func (j *joggerECEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	mdFQN, _, err := cluster.HrwFQN(ec.MetaType, lom.Bck(), lom.Objname)
+	mdFQN, _, err := cluster.HrwFQN(MetaType, lom.Bck(), lom.Objname)
 	if err != nil {
 		glog.Warningf("Metadata FQN generation failed %q: %v", fqn, err)
 		return nil
@@ -188,9 +200,11 @@ func (j *joggerECEncode) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	// EC PUT jogger decreases 'waitGroup' after EC has processed the object
-	j.parent.waitGroup().Add(1)
-	if err = ECM.EncodeObject(lom, j.parent.waitGroup()); err != nil {
+	// beforeECObj increases a counter, and callback afterECObj decreases it.
+	// After Walk finishes, the xaction waits until counter drops to zero.
+	// That means all objects have been processed and xaction can finalize.
+	j.parent.beforeECObj()
+	if err = j.ecm.EncodeObject(lom, j.parent.afterECObj); err != nil {
 		// something wrong with EC, interrupt file walk - it is critical
 		return fmt.Errorf("Failed to EC object %q: %v", fqn, err)
 	}

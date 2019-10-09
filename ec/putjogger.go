@@ -50,11 +50,10 @@ func (c *putJogger) run() {
 			memRequired := req.LOM.Size() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
 			c.toDisk = useDisk(memRequired)
 			req.tm = time.Now()
-			c.ec(req)
+			err := c.ec(req)
 			c.parent.DecPending()
-			if req.Wg != nil {
-				// notify a caller
-				req.Wg.Done()
+			if req.Callback != nil {
+				req.Callback(req.LOM, err)
 			}
 		case <-c.stopCh:
 			c.slab.Free(c.buffer)
@@ -72,7 +71,7 @@ func (c *putJogger) stop() {
 }
 
 // starts EC process
-func (c *putJogger) ec(req *Request) {
+func (c *putJogger) ec(req *Request) error {
 	var (
 		err error
 		act = "encoding"
@@ -102,6 +101,7 @@ func (c *putJogger) ec(req *Request) {
 	if err == nil {
 		c.parent.stats.updateObjTime(time.Since(req.putTime))
 	}
+	return err
 }
 
 // removes all temporary slices in case of erasure coding fails in the middle

@@ -2190,6 +2190,10 @@ func TestECBucketEncode(t *testing.T) {
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
+	if m.smap.CountTargets() < parityCnt+1 {
+		t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
+	}
+
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 

@@ -25,6 +25,13 @@ type CloudProvider interface {
 	ListBucket(ctx context.Context, bucket string, msg *cmn.SelectMsg) (bckList *cmn.BucketList, err error, errCode int)
 }
 
+// a callback called by EC PUT jogger after the object is processed and
+// all its slices/replicas are sent to other targets
+type OnFinishObj = func(lom *LOM, err error)
+type ECManager interface {
+	EncodeObject(lom *LOM, cb ...OnFinishObj) error
+}
+
 // NOTE: For implementations, please refer to ais/tgtifimpl.go
 type Target interface {
 	GetBowner() Bowner
@@ -34,6 +41,7 @@ type Target interface {
 	GetSmap() *Smap
 	Snode() *Snode
 	Cloud() CloudProvider
+	ECM() ECManager
 	PrefetchQueueLen() int
 	RebalanceInfo() RebalanceInfo
 	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)

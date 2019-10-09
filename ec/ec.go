@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -162,11 +161,11 @@ type (
 
 	// request - structure to request an object to be EC'ed or restored
 	Request struct {
-		LOM    *cluster.LOM    // object info
-		Action string          // what to do with the object (see Act* consts)
-		ErrCh  chan error      // for final EC result
-		IsCopy bool            // replicate or use erasure coding
-		Wg     *sync.WaitGroup // notify a caller that EC has done with its object
+		LOM      *cluster.LOM // object info
+		Action   string       // what to do with the object (see Act* consts)
+		ErrCh    chan error   // for final EC result
+		IsCopy   bool         // replicate or use erasure coding
+		Callback cluster.OnFinishObj
 
 		// private properties
 		putTime time.Time // time when the object is put into main queue

@@ -40,6 +40,7 @@ func (*TargetMock) Prefetch()                   {}
 func (t *TargetMock) GetBowner() Bowner         { return t.BO }
 func (*TargetMock) FSHC(err error, path string) {}
 func (*TargetMock) GetMem2() *memsys.Mem2       { return memsys.GMM() }
+func (*TargetMock) ECM() ECManager              { return nil }
 
 func (*TargetMock) RebalanceInfo() RebalanceInfo {
 	return RebalanceInfo{

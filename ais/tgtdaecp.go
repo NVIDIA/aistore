@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/stats"
@@ -1359,13 +1360,24 @@ func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string,
 }
 
 func (t *targetrunner) beginECEncode(bck *cluster.Bck) (err error) {
-	// TODO: add checks. E.g, do not run when rebalance/rename/copy is active
+	// Do not start the xaction if there is no enough drive space (OOS or High)
+	capInfo := t.AvgCapUsed(cmn.GCO.Get())
+	if capInfo.Err != nil {
+		return capInfo.Err
+	}
+
+	// Do not start the xaction if any rebalance is running
+	rbInfo := t.RebalanceInfo()
+	if rbInfo.IsRebalancing {
+		return fmt.Errorf("Cannot start bucket %q encoding while rebalance is running", bck.Name)
+	}
+
 	_, err = t.xactions.renewECEncodeXact(t, bck, cmn.ActBegin)
 	return err
 }
 
 func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
-	var xact *xactECEncode
+	var xact *ec.XactBckEncode
 	xact, err = t.xactions.renewECEncodeXact(t, bckFrom, cmn.ActCommit)
 	if err != nil {
 		glog.Error(err) // must not happen at commit time
