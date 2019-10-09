@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/containers"
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/NVIDIA/aistore/tutils/tassert"
 
@@ -272,7 +273,8 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	}
 
 	if len(copiesToNumObjects) != 1 {
-		m.t.Fatalf("some objects do not have expected number of copies: %v", copiesToNumObjects)
+		s, _ := jsoniter.MarshalIndent(copiesToNumObjects, "", " ")
+		m.t.Fatalf("some objects do not have expected number of copies: %s", s)
 	}
 
 	for copies := range copiesToNumObjects {
@@ -2226,7 +2228,7 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
-
+	var copies = 2
 	m := ioContext{
 		t:               t,
 		num:             5000,
@@ -2239,8 +2241,8 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	target := tutils.ExtractTargetNodes(m.smap)[0]
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
-	if len(mpList.Available) < 2 {
-		t.Fatalf("%s requires at least 2 mountpaths per target", t.Name())
+	if len(mpList.Available) < copies {
+		t.Fatalf("%s requires at least %d mountpaths per target", t.Name(), copies)
 	}
 
 	// Step 1: Create a local bucket
@@ -2250,7 +2252,7 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	// Step 2: Make the bucket redundant
 	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{
 		cmn.HeaderBucketMirrorEnabled: "true",
-		cmn.HeaderBucketCopies:        "2",
+		cmn.HeaderBucketCopies:        fmt.Sprintf("%d", copies),
 	})
 	if err != nil {
 		t.Fatalf("Failed to make the bucket redundant: %v", err)
@@ -2258,6 +2260,7 @@ func TestGetFromMirroredBucket(t *testing.T) {
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
+	time.Sleep(time.Second * 3) // TODO -- FIXME: wait for async copying xaction `renewPutLocReplicas`
 
 	// Step 4: Disable a mountpath (simulates disk loss)
 	mpath := mpList.Available[0]
@@ -2270,7 +2273,7 @@ func TestGetFromMirroredBucket(t *testing.T) {
 	m.gets()
 	m.wg.Wait()
 
-	m.ensureNumCopies(2)
+	m.ensureNumCopies(copies)
 
 	// Step 6: Enable previously disabled mountpath
 	err = api.EnableMountpath(baseParams, target, mpath)
@@ -2278,6 +2281,6 @@ func TestGetFromMirroredBucket(t *testing.T) {
 
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
-	m.ensureNumCopies(2)
+	m.ensureNumCopies(copies)
 	m.ensureNoErrors()
 }
