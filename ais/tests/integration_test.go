@@ -252,7 +252,8 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 		baseParams = tutils.DefaultBaseAPIParams(m.t)
 	)
 
-	waitForBucketXactionToComplete(m.t, cmn.ActMakeNCopies /* = kind */, m.bucket, baseParams, rebalanceTimeout)
+	time.Sleep(3 * time.Second)
+	waitForBucketXactionToComplete(m.t, cmn.ActMakeNCopies /*kind*/, m.bucket, baseParams, rebalanceTimeout)
 
 	// List Bucket - primarily for the copies
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
@@ -2224,16 +2225,18 @@ func TestRenewRebalance(t *testing.T) {
 	m.assertClusterState()
 }
 
-func TestGetFromMirroredBucket(t *testing.T) {
+func TestGetFromMirroredBucketWithLostMountpath(t *testing.T) {
 	if testing.Short() {
 		t.Skip(tutils.SkipMsg)
 	}
-	var copies = 2
-	m := ioContext{
-		t:               t,
-		num:             5000,
-		numGetsEachFile: 4,
-	}
+	var (
+		copies = 2
+		m      = ioContext{
+			t:               t,
+			num:             5000,
+			numGetsEachFile: 4,
+		}
+	)
 	m.saveClusterState()
 	baseParams := tutils.BaseAPIParams(m.proxyURL)
 
@@ -2260,12 +2263,12 @@ func TestGetFromMirroredBucket(t *testing.T) {
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
-	time.Sleep(time.Second * 3) // TODO -- FIXME: wait for async copying xaction `renewPutLocReplicas`
+	m.ensureNumCopies(copies)
 
-	// Step 4: Disable a mountpath (simulates disk loss)
+	// Step 4: Remove a mountpath (simulates disk loss)
 	mpath := mpList.Available[0]
-	tutils.Logf("Disabling mountpath %s on target %s\n", mpath, target.ID())
-	err = api.DisableMountpath(baseParams, target.ID(), mpath)
+	tutils.Logf("Remove mountpath %s on target %s\n", mpath, target.ID())
+	err = api.RemoveMountpath(baseParams, target.ID(), mpath)
 	tassert.CheckFatal(t, err)
 
 	// Step 5: GET objects from the bucket
@@ -2275,12 +2278,77 @@ func TestGetFromMirroredBucket(t *testing.T) {
 
 	m.ensureNumCopies(copies)
 
-	// Step 6: Enable previously disabled mountpath
-	err = api.EnableMountpath(baseParams, target, mpath)
+	// Step 6: Add previously removed mountpath
+	tutils.Logf("Add mountpath %s on target %s\n", mpath, target.ID())
+	err = api.AddMountpath(baseParams, target, mpath)
 	tassert.CheckFatal(t, err)
 
 	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
 
 	m.ensureNumCopies(copies)
+	m.ensureNoErrors()
+}
+
+func TestGetFromMirroredBucketWithLostAllMountpath(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+
+	m := ioContext{
+		t:               t,
+		num:             10000,
+		numGetsEachFile: 4,
+	}
+	m.saveClusterState()
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	// Select one target at random
+	target := tutils.ExtractTargetNodes(m.smap)[0]
+	mpList, err := api.GetMountpaths(baseParams, target)
+	mpathCount := len(mpList.Available)
+	tassert.CheckFatal(t, err)
+	if mpathCount < 3 {
+		t.Fatalf("%s requires at least 3 mountpaths per target", t.Name())
+	}
+
+	// Step 1: Create a local bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+
+	// Step 2: Make the bucket redundant
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{
+		cmn.HeaderBucketMirrorEnabled: "true",
+		cmn.HeaderBucketCopies:        fmt.Sprintf("%d", mpathCount),
+	})
+	if err != nil {
+		t.Fatalf("Failed to make the bucket redundant: %v", err)
+	}
+
+	// Step 3: PUT objects in the bucket
+	m.puts()
+	m.ensureNumCopies(mpathCount)
+
+	// Step 4: Remove almost all mountpaths
+	tutils.Logf("Remove mountpaths on target %s\n", target.ID())
+	for _, mpath := range mpList.Available[1:] {
+		err = api.RemoveMountpath(baseParams, target.ID(), mpath)
+		tassert.CheckFatal(t, err)
+	}
+
+	// Step 5: GET objects from the bucket
+	m.wg.Add(m.num * m.numGetsEachFile)
+	m.gets()
+	m.wg.Wait()
+
+	// Step 6: Add previously removed mountpath
+	tutils.Logf("Add mountpaths on target %s\n", target.ID())
+	for _, mpath := range mpList.Available[1:] {
+		err = api.AddMountpath(baseParams, target, mpath)
+		tassert.CheckFatal(t, err)
+	}
+
+	waitForRebalanceToComplete(t, baseParams, rebalanceTimeout)
+
+	m.ensureNumCopies(mpathCount)
 	m.ensureNoErrors()
 }

@@ -68,8 +68,10 @@ func (r *XactBckLoadLomCache) Description() string {
 //
 
 func newXwarmJogger(parent *XactBckLoadLomCache, mpathInfo *fs.MountpathInfo, config *cmn.Config) *xwarmJogger {
-	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config}
-	j := &xwarmJogger{joggerBckBase: jbase, parent: parent}
+	j := &xwarmJogger{
+		joggerBckBase: joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config},
+		parent:        parent,
+	}
 	j.joggerBckBase.callback = j.noop
 	return j
 }

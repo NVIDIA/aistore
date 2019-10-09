@@ -80,8 +80,10 @@ func (r *XactBckCopy) init() (mpathCount int, err error) {
 //
 
 func newBCCJogger(parent *XactBckCopy, mpathInfo *fs.MountpathInfo, config *cmn.Config) *bccJogger {
-	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config, skipLoad: true}
-	j := &bccJogger{joggerBckBase: jbase, parent: parent}
+	j := &bccJogger{
+		joggerBckBase: joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config, skipLoad: true},
+		parent:        parent,
+	}
 	j.joggerBckBase.callback = j.copyObject
 	return j
 }

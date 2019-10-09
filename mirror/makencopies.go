@@ -120,8 +120,10 @@ func (r *XactBckMakeNCopies) Description() string {
 //
 
 func newMNCJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
-	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config}
-	j := &mncJogger{joggerBckBase: jbase, parent: parent}
+	j := &mncJogger{
+		joggerBckBase: joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config},
+		parent:        parent,
+	}
 	j.joggerBckBase.callback = j.delAddCopies
 	return j
 }
@@ -203,25 +205,6 @@ func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 }
 
 func (j *mncJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
-	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
-		mpather := findLeastUtilized(lom, j.parent.Mpathers())
-		if mpather == nil {
-			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
-			return
-		}
-
-		lom.Lock(false)
-		var clone *cluster.LOM
-		if clone, err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
-			glog.Errorln(err)
-			lom.Unlock(false)
-			return
-		}
-		size += lom.Size()
-		if glog.FastV(4, glog.SmoduleMirror) {
-			glog.Infof("copied %s=>%s", lom, clone)
-		}
-		lom.Unlock(false)
-	}
+	size, err = addCopies(lom, j.parent.copies, j.parent.Mpathers(), j.buf)
 	return
 }

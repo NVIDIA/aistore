@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -17,6 +18,29 @@ type mpather interface {
 	mountpathInfo() *fs.MountpathInfo
 	stop()
 	post(lom *cluster.LOM)
+}
+
+func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []byte) (size int64, err error) {
+	lom.Lock(false)
+	defer lom.Unlock(false)
+
+	for i := lom.NumCopies() + 1; i <= copies; i++ {
+		if mpather := findLeastUtilized(lom, mpathers); mpather != nil {
+			var clone *cluster.LOM
+			if clone, err = copyTo(lom, mpather.mountpathInfo(), buf); err != nil {
+				glog.Errorln(err)
+				return
+			}
+			size += lom.Size()
+			if glog.FastV(4, glog.SmoduleMirror) {
+				glog.Infof("copied %s=>%s", lom, clone)
+			}
+		} else {
+			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
+			return
+		}
+	}
+	return
 }
 
 func findLeastUtilized(lom *cluster.LOM, mpathers map[string]mpather) (out mpather) {

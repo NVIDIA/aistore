@@ -81,11 +81,11 @@ func (r *XactPutLRepl) Run() error {
 				glog.Error(err)
 				break
 			}
-			cmn.Assert(r.BckIsAIS() == lom.IsAIS())
-			if mpather := findLeastUtilized(lom, r.mpathers); mpather != nil {
+			path := lom.ParsedFQN.MpathInfo.MakePath(fs.ObjectType, r.Provider())
+			if mpather, ok := r.mpathers[path]; ok {
 				mpather.post(lom)
 			} else {
-				glog.Errorf("%s: cannot find destination mountpath", lom)
+				glog.Errorf("failed to get mpather with path: %s", path)
 			}
 		case <-r.ChanCheckTimeout():
 			if r.Timeout() {
@@ -194,7 +194,15 @@ func (j *xputJogger) jog() {
 	for {
 		select {
 		case lom := <-j.workCh:
-			j.addCopy(lom, buf)
+			copies := int(lom.Bprops().Mirror.Copies)
+			if _, err := addCopies(lom, copies, j.parent.mpathers, buf); err != nil {
+				glog.Error(err)
+			} else {
+				if v := j.parent.ObjectsAdd(int64(copies)); (v % logNumProcessed) == 0 {
+					glog.Infof("%s: total=%d, copied=%d", j.parent.String(), j.parent.total.Load(), v)
+				}
+				j.parent.BytesAdd(lom.Size() * int64(copies))
+			}
 			j.parent.DecPending() // to support action renewal on-demand
 		case <-j.stopCh.Listen():
 			j.parent.slab.Free(buf)
@@ -202,22 +210,6 @@ func (j *xputJogger) jog() {
 		}
 	}
 
-}
-
-func (j *xputJogger) addCopy(lom *cluster.LOM, buf []byte) {
-	lom.Lock(false)
-	if clone, err := copyTo(lom, j.mpathInfo, buf); err != nil {
-		glog.Errorln(err)
-	} else {
-		if glog.FastV(4, glog.SmoduleMirror) {
-			glog.Infof("copied %s=>%s", lom, clone)
-		}
-		if v := j.parent.ObjectsInc(); (v % logNumProcessed) == 0 {
-			glog.Infof("%s: total=%d, copied=%d", j.parent.String(), j.parent.total.Load(), v)
-		}
-		j.parent.BytesAdd(lom.Size())
-	}
-	lom.Unlock(false)
 }
 
 //
