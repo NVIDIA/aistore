@@ -19,8 +19,9 @@ type replicInfo struct {
 	smap      *smapX
 	bckTo     *cluster.Bck
 	buf       []byte
-	localCopy bool
-	uncache   bool
+	localOnly bool // copy locally with no HRW=>target
+	uncache   bool // uncache the source
+	finalize  bool // copies and EC (as in poi.finalize())
 }
 
 //
@@ -28,18 +29,14 @@ type replicInfo struct {
 //
 
 func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied bool, err error) {
-	var (
-		file                  *cmn.FileHandle
-		cksumType, cksumValue string
-		si                    = ri.t.si
-	)
+	si := ri.t.si
 	if ri.smap != nil {
-		cmn.Assert(!ri.localCopy)
+		cmn.Assert(!ri.localOnly)
 		if si, err = cluster.HrwTarget(ri.bckTo, objnameTo, &ri.smap.Smap); err != nil {
 			return
 		}
 	} else {
-		cmn.Assert(ri.localCopy)
+		cmn.Assert(ri.localOnly)
 	}
 	lom.Lock(false)
 	defer lom.Unlock(false)
@@ -55,44 +52,56 @@ func (ri *replicInfo) copyObject(lom *cluster.LOM, objnameTo string) (copied boo
 		defer lom.Uncache()
 	}
 
+	if si.DaemonID != ri.t.si.DaemonID {
+		return ri.putRemote(lom, objnameTo, si)
+	}
+
 	// local op
-	if si.DaemonID == ri.t.si.DaemonID {
-		dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
-		err = dst.Init(ri.bckTo.Name, ri.bckTo.Provider)
-		if err != nil {
-			return
-		}
-
-		// lock for writing; check if already exists and is identical
-		if lom.Uname() != dst.Uname() {
-			dst.Lock(true)
-			defer dst.Unlock(true)
-		}
-		if err = dst.Load(false); err == nil && dst.Exists() {
-			if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
-				copied = true
-				return
-			}
-		} else if cmn.IsErrBucketDoesNotExist(err) {
-			return
-		}
-
-		// do
-		_, err = lom.CopyObject(dst.FQN, ri.buf)
-		if err == nil {
-			copied = true
-			dst.SetBID(dst.Bprops().BID)
-			dst.ReCache()
-			ri.t.putMirror(dst)
-		}
-		// TODO: EC via ecmanager.EncodeObject
+	dst := &cluster.LOM{T: ri.t, Objname: objnameTo}
+	err = dst.Init(ri.bckTo.Name, ri.bckTo.Provider)
+	if err != nil {
 		return
 	}
 
-	// another target
-	//
-	// TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
-	//
+	// lock for writing; check if already exists and is identical
+	if lom.Uname() != dst.Uname() {
+		dst.Lock(true)
+		defer dst.Unlock(true)
+	}
+	if err = dst.Load(false); err == nil && dst.Exists() {
+		if dst.Size() == lom.Size() && cmn.EqCksum(lom.Cksum(), dst.Cksum()) {
+			copied = true
+			return
+		}
+	} else if cmn.IsErrBucketDoesNotExist(err) {
+		return
+	}
+
+	// do
+	_, err = lom.CopyObject(dst.FQN, ri.buf)
+	if err == nil {
+		copied = true
+		dst.SetBID(dst.Bprops().BID)
+		dst.ReCache()
+
+		if ri.finalize {
+			//
+			// TODO -- FIXME: reuse poi.finalize()
+			//
+			ri.t.putMirror(dst)
+		}
+	}
+	return
+}
+
+//
+// TODO: introduce namespace refs and then reuse rebalancing logic and streams instead of PUT
+//
+func (ri *replicInfo) putRemote(lom *cluster.LOM, objnameTo string, si *cluster.Snode) (copied bool, err error) {
+	var (
+		file                  *cmn.FileHandle
+		cksumType, cksumValue string
+	)
 	if file, err = cmn.NewFileHandle(lom.FQN); err != nil {
 		err = fmt.Errorf("failed to open %s, err: %v", lom.FQN, err)
 		return

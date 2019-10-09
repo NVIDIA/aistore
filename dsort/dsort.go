@@ -169,9 +169,12 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction, cfg *cmn.D
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
 			return newAbortError(m.ManagerUUID)
 		}
-		if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
+		//
+		// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
+		//
+		if capInfo := m.ctx.t.AvgCapUsed(nil); capInfo.OOS { // TODO -- FIXME: too late & not enough
 			phaseInfo.adjuster.releaseSema(lom.ParsedFQN.MpathInfo)
-			return errors.New("out of space")
+			return capInfo.Err
 		}
 
 		lom.Lock(false)
@@ -328,8 +331,9 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	}
 	defer m.dsorter.postShardCreation(lom.ParsedFQN.MpathInfo)
 
-	if _, oos := m.ctx.t.AvgCapUsed(nil); oos {
-		return errors.New("out of space")
+	// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
+	if capInfo := m.ctx.t.AvgCapUsed(nil); capInfo.OOS {
+		return capInfo.Err
 	}
 
 	beforeCreation := time.Now()

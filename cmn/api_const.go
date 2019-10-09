@@ -52,6 +52,7 @@ const (
 	ActListObjects   = "listobjects"
 	ActSummaryBucket = "summarybck"
 	ActRename        = "rename"
+	ActPromote       = "promote"
 	ActReplicate     = "replicate"
 	ActEvictObjects  = "evictobjects"
 	ActDelete        = "delete"

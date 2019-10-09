@@ -91,6 +91,29 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 	return
 }
 
+//////
+// NOTE: advanced usage only
+// Promote target-local files and directories to objects (NOTE: advanced usage only)
+//////
+func promoteFile(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
+	target := parseStrFlag(c, targetFlag)
+	promoteArgs := &api.PromoteArgs{
+		BaseParams: baseParams,
+		Bucket:     bucket,
+		Provider:   provider,
+		Object:     objName,
+		Target:     target,
+		FQN:        fileName,
+	}
+	err = api.PromoteFile(promoteArgs)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(c.App.Writer, "PROMOTE %s => bucket %s\n", objName, bucket)
+	return nil
+}
+
 func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
 	path := cmn.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {

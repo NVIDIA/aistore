@@ -8,7 +8,6 @@
 package ais
 
 import (
-	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -277,8 +276,9 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 	cmn.Assert(lom.FQN != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
-	if _, oos := lom.T.AvgCapUsed(nil); oos {
-		return errors.New("OOS") // out of space
+	// TODO -- FIXME: all targets must check t.AvgCapUsed() for high watermark *prior* to starting
+	if capInfo := lom.T.AvgCapUsed(nil); capInfo.OOS {
+		return capInfo.Err
 	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {

@@ -30,8 +30,8 @@ func NewTargetMock(bo Bowner) *TargetMock {
 	}
 }
 
-func (*TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
-	return 0, false
+func (*TargetMock) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo) {
+	return
 }
 func (*TargetMock) Snode() *Snode               { return nil }
 func (*TargetMock) RunLRU()                     {}
@@ -54,8 +54,8 @@ func (*TargetMock) GetCold(ctx context.Context, lom *LOM, prefetch bool) (error,
 func (*TargetMock) PutObject(_ string, _ io.ReadCloser, _ *LOM, _ RecvType, _ *cmn.Cksum, _ time.Time) error {
 	return nil
 }
-func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error  { return nil }
-func (t *TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte, _ bool) error { return nil }
+func (t *TargetMock) GetObject(_ io.Writer, _ *LOM, _ time.Time) error { return nil }
+func (t *TargetMock) CopyObject(_ *LOM, _ *Bck, _ []byte) error        { return nil }
 
 func (*TargetMock) GetFSPRG() fs.PathRunGroup { return nil }
 func (*TargetMock) Cloud() CloudProvider      { return nil }

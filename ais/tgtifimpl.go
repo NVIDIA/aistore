@@ -44,7 +44,10 @@ func (t *targetrunner) RebalanceInfo() cluster.RebalanceInfo {
 	}
 }
 
-func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed int32, oos bool) {
+func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo) {
+	if config == nil {
+		config = cmn.GCO.Get()
+	}
 	if len(used) > 0 {
 		t.capUsed.Lock()
 		t.capUsed.used = used[0]
@@ -53,12 +56,16 @@ func (t *targetrunner) AvgCapUsed(config *cmn.Config, used ...int32) (avgCapUsed
 		} else if !t.capUsed.oos && t.capUsed.used > int32(config.LRU.OOS) {
 			t.capUsed.oos = true
 		}
-		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
+		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
 		t.capUsed.Unlock()
 	} else {
 		t.capUsed.RLock()
-		avgCapUsed, oos = t.capUsed.used, t.capUsed.oos
+		capInfo.UsedPct, capInfo.OOS = t.capUsed.used, t.capUsed.oos
 		t.capUsed.RUnlock()
+	}
+	capInfo.High = capInfo.UsedPct > int32(config.LRU.HighWM)
+	if capInfo.OOS || capInfo.High {
+		capInfo.Err = cmn.NewErrorCapacityExceeded(t.si.Name(), config.LRU.HighWM, capInfo.UsedPct, capInfo.OOS)
 	}
 	return
 }
@@ -154,8 +161,15 @@ func (t *targetrunner) PutObject(workFQN string, reader io.ReadCloser, lom *clus
 	return err
 }
 
-func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte, uncache bool) (err error) {
-	ri := &replicInfo{smap: t.smapowner.get(), bckTo: bckTo, t: t, buf: buf, uncache: uncache}
+func (t *targetrunner) CopyObject(lom *cluster.LOM, bckTo *cluster.Bck, buf []byte) (err error) {
+	ri := &replicInfo{smap: t.smapowner.get(),
+		bckTo:     bckTo,
+		t:         t,
+		buf:       buf,
+		localOnly: false,
+		uncache:   false,
+		finalize:  false,
+	}
 	_, err = ri.copyObject(lom, lom.Objname)
 	return
 }

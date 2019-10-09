@@ -32,6 +32,7 @@ import (
 //
 
 const pkgName = "cluster"
+const fmtNestedErr = "nested err: %v"
 
 type (
 	// NOTE: sizeof(lmeta) = 72 as of 4/16
@@ -371,9 +372,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		workFQN  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 		srcCksum = lom.Cksum()
 	)
-
-	needCksum := srcCksum != nil && srcCksum.Type() != cmn.ChecksumNone
-	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, needCksum)
+	_, dstCksum, err = cmn.CopyFile(lom.FQN, workFQN, buf, true /* always checksum */)
 	if err != nil {
 		return
 	}
@@ -384,7 +383,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 	if err = cmn.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cmn.RemoveFile(workFQN); errRemove != nil {
-			glog.Errorf("nested err: %v", errRemove)
+			glog.Errorf(fmtNestedErr, errRemove)
 		}
 		return
 	}
@@ -396,6 +395,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	}
 
 	dst.CopyMetadata(lom)
+	dst.SetCksum(dstCksum)
 	if lom.MirrorConf().Enabled {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			os.Remove(dst.FQN)
@@ -405,7 +405,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 	dst.SetAtimeUnix(time.Now().UnixNano())
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dstFQN); errRemove != nil {
-			glog.Errorf("nested err: %v", errRemove)
+			glog.Errorf(fmtNestedErr, errRemove)
 		}
 	}
 	return

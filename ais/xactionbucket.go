@@ -401,7 +401,7 @@ func (r *xactFastRen) run(globRebID int64) {
 	r.t.rebManager.runGlobalReb(r.t.smapowner.get(), globRebID, gbucket)
 	wg.Wait()
 
-	r.t.bmdVersionFixup(r.Bucket()) // piggyback bucket renaming (last step) on getting updated BMD
+	r.t.bmdVersionFixup(r.Bucket(), false) // piggyback bucket renaming (last step) on getting updated BMD
 	r.EndTime(time.Now())
 }
 

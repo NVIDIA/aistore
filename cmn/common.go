@@ -117,6 +117,12 @@ type (
 		Proxy  JSONRawMsgs `json:"proxy"`
 		Target JSONRawMsgs `json:"target"`
 	}
+	CapacityInfo struct {
+		Err     error
+		UsedPct int32
+		High    bool
+		OOS     bool
+	}
 )
 
 var (

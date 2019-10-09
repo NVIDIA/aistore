@@ -46,6 +46,15 @@ type PutObjectArgs struct {
 	Size       uint64 // optional
 }
 
+type PromoteArgs struct {
+	BaseParams *BaseParams
+	Bucket     string
+	Provider   string
+	Object     string
+	Target     string
+	FQN        string
+}
+
 // HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
@@ -300,6 +309,8 @@ func PutObject(args PutObjectArgs, replicateOpts ...ReplicateObjectInput) error 
 //
 // Creates a cmn.ActionMsg with the new name of the object
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
+//
+// FIXME: handle cloud provider - here and elsewhere
 func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
 	if err != nil {
@@ -308,6 +319,24 @@ func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldName)
 	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
+// PromoteFile API
+//
+// promote target-local files and directories to objects (NOTE: advanced usage only)
+func PromoteFile(args *PromoteArgs) error {
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN})
+	if err != nil {
+		return err
+	}
+	query := url.Values{}
+	query.Add(cmn.URLParamProvider, args.Provider)
+	params := OptionalParams{Query: query}
+
+	args.BaseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object, args.Target)
+	_, err = DoHTTPRequest(args.BaseParams, path, msg, params)
 	return err
 }
 

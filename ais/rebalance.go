@@ -993,7 +993,7 @@ func (rj *localRebJogger) walk(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	ri := &replicInfo{t: t, bckTo: lom.Bck(), buf: rj.buf, localCopy: true}
+	ri := &replicInfo{t: t, bckTo: lom.Bck(), buf: rj.buf, localOnly: true, finalize: false}
 	copied, err := ri.copyObject(lom, lom.Objname)
 	if err != nil {
 		glog.Warningf("%s: %v", lom, err)

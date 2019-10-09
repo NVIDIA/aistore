@@ -9,10 +9,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-
-	"github.com/NVIDIA/aistore/cmn"
 )
 
 type RecvType int
@@ -37,13 +36,13 @@ type Target interface {
 	Cloud() CloudProvider
 	PrefetchQueueLen() int
 	RebalanceInfo() RebalanceInfo
-	AvgCapUsed(config *cmn.Config, used ...int32) (int32, bool)
+	AvgCapUsed(config *cmn.Config, used ...int32) (capInfo cmn.CapacityInfo)
 	RunLRU()
 	Prefetch()
 
 	GetObject(w io.Writer, lom *LOM, started time.Time) error
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
-	CopyObject(lom *LOM, bckTo *Bck, buf []byte, uncache bool) error
+	CopyObject(lom *LOM, bckTo *Bck, buf []byte) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
 }
 

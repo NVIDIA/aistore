@@ -94,5 +94,5 @@ func (j *bccJogger) jog() {
 }
 
 func (j *bccJogger) copyObject(lom *cluster.LOM) error {
-	return j.parent.Target().CopyObject(lom, j.parent.bckTo, j.buf, false /*uncache=false*/)
+	return j.parent.Target().CopyObject(lom, j.parent.bckTo, j.buf)
 }

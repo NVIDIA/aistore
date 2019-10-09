@@ -136,6 +136,7 @@ func (poi *putObjInfo) finalize() (err error, errCode int) {
 	return
 }
 
+// poi.workFQN => LOM
 func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 	var (
 		ver string

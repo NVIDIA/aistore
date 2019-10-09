@@ -76,3 +76,21 @@ func IsErrBucketDoesNotExist(err error) bool {
 	_, ok := err.(*ErrorCloudBucketDoesNotExist)
 	return ok
 }
+
+type ErrorCapacityExceeded struct {
+	prefix string
+	high   int64
+	used   int32
+	oos    bool
+}
+
+func NewErrorCapacityExceeded(prefix string, high int64, used int32, oos bool) *ErrorCapacityExceeded {
+	return &ErrorCapacityExceeded{prefix: prefix, high: high, used: used, oos: oos}
+}
+
+func (e *ErrorCapacityExceeded) Error() string {
+	if e.oos {
+		return fmt.Sprintf("%s: OUT OF SPACE (used %d%% of total available capacity)", e.prefix, e.used)
+	}
+	return fmt.Sprintf("%s: used capacity %d%% exceeded high watermark %d%%", e.prefix, e.used, e.high)
+}

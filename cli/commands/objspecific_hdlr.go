@@ -35,6 +35,8 @@ var (
 			providerFlag,
 			recursiveFlag,
 			baseFlag,
+			targetFlag,
+			promoteFlag,
 			concurrencyFlag,
 			refreshFlag,
 			verboseFlag,
@@ -200,7 +202,7 @@ func putHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "file to upload", "object name in format bucket/[object]")
 	}
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "object name in format bucket/[object]")
+		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	if provider, err = bucketProvider(c); err != nil {
 		return
@@ -214,6 +216,10 @@ func putHandler(c *cli.Context) (err error) {
 	}
 	if err = canReachBucket(baseParams, bucket, provider); err != nil {
 		return
+	}
+
+	if flagIsSet(c, promoteFlag) {
+		return promoteFile(c, baseParams, bucket, provider, objName, fileName)
 	}
 
 	return putObject(c, baseParams, bucket, provider, objName, fileName)

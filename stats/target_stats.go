@@ -200,10 +200,10 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 		availableMountpaths, _ = fs.Mountpaths.Get()
 	}
 	var (
-		config    = cmn.GCO.Get()
-		usedNow   int32
-		l         = len(availableMountpaths)
-		_, oosPrv = r.T.AvgCapUsed(config)
+		config     = cmn.GCO.Get()
+		usedNow    int32
+		l          = len(availableMountpaths)
+		capInfoPrv = r.T.AvgCapUsed(config)
 	)
 	if l == 0 {
 		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
@@ -228,16 +228,16 @@ func (r *Trunner) UpdateCapacityOOS(availableMountpaths fs.MPI) (runlru bool) {
 
 	// handle out-of-space
 	usedNow /= int32(l)
-	_, oosNow := r.T.AvgCapUsed(config, usedNow)
+	capInfoNow := r.T.AvgCapUsed(config, usedNow)
 
-	if oosPrv && !oosNow {
+	if capInfoPrv.OOS && !capInfoNow.OOS {
 		lim := cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 		r.timecounts.capLimit.Store(lim)
 		glog.Infof("OOS resolved: avg used = %d%% < (hwm %d%%) across %d mountpath(s)",
 			usedNow, config.LRU.HighWM, l)
 		t := time.Duration(lim) * config.Periodic.StatsTime
 		glog.Infof("PUTs are allowed to proceed, next capacity check in %v", t)
-	} else if !oosPrv && oosNow {
+	} else if !capInfoPrv.OOS && capInfoNow.OOS {
 		lim := cmn.MinI64(r.timecounts.capLimit.Load(), 2)
 		r.timecounts.capLimit.Store(lim)
 		glog.Warningf("OOS: avg used = %d%% > (oos %d%%) across %d mountpath(s)", usedNow, config.LRU.OOS, l)

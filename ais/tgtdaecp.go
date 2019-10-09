@@ -818,7 +818,7 @@ func (t *targetrunner) ensureLatestMD(msgInt *actionMsgInternal) {
 	if bucketmd.Version < bmdVersion {
 		glog.Errorf("own bucket-metadata version %d < %d - fetching latest for %v", bucketmd.Version, bmdVersion, msgInt.Action)
 		t.statsif.Add(stats.ErrMetadataCount, 1)
-		t.bmdVersionFixup()
+		t.bmdVersionFixup("", false)
 	} else if bucketmd.Version > bmdVersion {
 		//if metasync outraces the request, we end up here, just log it and continue
 		glog.Errorf("own bucket-metadata version %d > %d - encountered during %v", bucketmd.Version, bmdVersion, msgInt.Action)
@@ -902,7 +902,7 @@ func (t *targetrunner) detectMpathChanges() {
 	}
 }
 
-func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed ...string) (err error) {
+func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, renamed string) (err error) {
 	smap := t.smapowner.get()
 	if smap == nil || !smap.isValid() {
 		return errors.New("smap nil or missing")
@@ -910,8 +910,8 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 	psi := smap.ProxySI
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, what)
-	if len(renamed) > 0 {
-		q.Add(whatRenamedLB, renamed[0])
+	if renamed != "" {
+		q.Add(whatRenamedLB, renamed)
 	}
 	args := callArgs{
 		si: psi,
@@ -939,7 +939,7 @@ func (t *targetrunner) fetchPrimaryMD(what string, outStruct interface{}, rename
 
 func (t *targetrunner) smapVersionFixup() {
 	newSmap := &smapX{}
-	err := t.fetchPrimaryMD(cmn.GetWhatSmap, newSmap)
+	err := t.fetchPrimaryMD(cmn.GetWhatSmap, newSmap, "")
 	if err != nil {
 		glog.Error(err)
 		return
@@ -948,9 +948,12 @@ func (t *targetrunner) smapVersionFixup() {
 	t.receiveSmap(newSmap, msgInt, "")
 }
 
-func (t *targetrunner) bmdVersionFixup(renamed ...string) {
+func (t *targetrunner) bmdVersionFixup(renamed string, sleep bool) {
+	if sleep {
+		time.Sleep(200 * time.Millisecond) // FIXME: request proxy to execute syncCBmeta()
+	}
 	newBucketMD := &bucketMD{}
-	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD, renamed...)
+	err := t.fetchPrimaryMD(cmn.GetWhatBucketMeta, newBucketMD, renamed)
 	if err != nil {
 		glog.Error(err)
 		return
@@ -1238,9 +1241,18 @@ func (t *targetrunner) enable() error {
 // copy-rename bucket: 2-phase commit
 //
 func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) (err error) {
-	if action == cmn.ActRenameLB && !cmn.GCO.Get().Rebalance.Enabled {
+	config := cmn.GCO.Get()
+	if action == cmn.ActRenameLB && !config.Rebalance.Enabled {
 		return fmt.Errorf("cannot %s %s bucket: global rebalancing disabled", action, bckFrom)
 	}
+	capInfo := t.AvgCapUsed(config)
+	if capInfo.OOS {
+		return capInfo.Err
+	}
+	if action == cmn.ActCopyBucket && capInfo.Err != nil {
+		return capInfo.Err
+	}
+
 	t.bmdowner.Lock()
 	defer t.bmdowner.Unlock()
 	bmd := t.bmdowner.get()

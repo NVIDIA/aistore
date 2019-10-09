@@ -397,8 +397,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	lom := &cluster.LOM{T: t, Objname: objName}
 	if err = lom.Init(bucket, provider, config); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
-			time.Sleep(100 * time.Millisecond)
-			t.bmdVersionFixup()
+			t.bmdVersionFixup("", true /* sleep */)
 			err = lom.Init(bucket, provider, config)
 		}
 		if err != nil {
@@ -493,12 +492,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if !t.verifyProxyRedirection(w, r, r.Method) {
 		return
 	}
-	if _, oos := t.AvgCapUsed(nil); oos {
-		t.invalmsghdlr(w, r, "OOS")
+	config := cmn.GCO.Get()
+	if capInfo := t.AvgCapUsed(config); capInfo.OOS {
+		t.invalmsghdlr(w, r, capInfo.Err.Error())
 		return
 	}
 	lom := &cluster.LOM{T: t, Objname: objname}
-	if err = lom.Init(bucket, provider); err != nil {
+	if err = lom.Init(bucket, provider, config); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -529,7 +529,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -660,7 +660,11 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	bucket = apiItems[0]
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			t.bmdVersionFixup("", true /* sleep */)
+			err = bck.Init(t.bmdowner)
+		}
+		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -712,6 +716,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActMakeNCopies:
+		// TODO -- FIXME: rework as (begin, commit) to check fs.Mountpaths.NumAvail()
 		copies, err := t.parseValidateNCopies(msgInt.Value)
 		if err == nil {
 			err = mirror.ValidateNCopies(copies)
@@ -719,6 +724,12 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return
+		}
+		if bck.Props.Mirror.Copies < int64(copies) {
+			if capInfo := t.AvgCapUsed(nil); capInfo.Err != nil {
+				t.invalmsghdlr(w, r, capInfo.Err.Error())
+				return
+			}
 		}
 		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
 		t.xactions.renewBckMakeNCopies(bck, t, copies)
@@ -737,6 +748,8 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case cmn.ActRename:
 		t.renameObject(w, r, msg)
+	case cmn.ActPromote:
+		t.promoteFile(w, r, msg)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
@@ -758,7 +771,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
-		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok { // is ais
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -1020,25 +1033,16 @@ func (t *targetrunner) doPut(r *http.Request, lom *cluster.LOM, started time.Tim
 }
 
 func (t *targetrunner) putMirror(lom *cluster.LOM) {
-	const (
-		retries = 2
-	)
+	const retries = 2
+	var err error
 
 	mirrConf := lom.MirrorConf()
 	if !mirrConf.Enabled {
 		return
 	}
 	if nmp := fs.Mountpaths.NumAvail(); nmp < int(mirrConf.Copies) {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)",
-				nmp, lom.Bucket(), mirrConf.Copies)
-		}
-		return
+		glog.Warningf("insufficient ## mountpaths %d (bucket %s, ## copies %d)", nmp, lom.Bucket(), mirrConf.Copies)
 	}
-
-	var (
-		err error
-	)
 	for i := 0; i < retries; i++ {
 		xputlrep := t.xactions.renewPutLocReplicas(lom)
 		if xputlrep == nil {
@@ -1051,9 +1055,8 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 
 		// retry upon race vs (just finished/timedout)
 	}
-
 	if err != nil {
-		glog.Errorf("%s: unexpected failure to post for copying, err: %v", lom.StringEx(), err)
+		glog.Errorf("%s: unexpected failure to initiate local mirroring, err: %v", lom.StringEx(), err)
 	}
 }
 
@@ -1129,18 +1132,123 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 	}
 
 	buf, slab := nodeCtx.mm.AllocDefault()
-	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf}
-	if copied, err := ri.copyObject(lom, msg.Name /* new objname */); err != nil {
+	ri := &replicInfo{smap: t.smapowner.get(), t: t, bckTo: lom.Bck(), buf: buf, localOnly: false, finalize: true}
+	copied, err := ri.copyObject(lom, msg.Name /* new objname */)
+	slab.Free(buf)
+	if err != nil {
 		t.invalmsghdlr(w, r, err.Error())
-	} else if copied {
+		return
+	}
+	if copied {
 		lom.Lock(true)
-		// TODO: additional copies and ec cleanups
 		if err = lom.Remove(); err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 		}
 		lom.Unlock(true)
 	}
+}
+
+///////////////////////////////////////
+// PROMOTE local file(s) => objects  //
+///////////////////////////////////////
+
+func (t *targetrunner) promoteFile(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+	const fmtErr = "%s: %s failed: "
+	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.Objects)
+	if err != nil {
+		return
+	}
+	bucket, objName, tid := apiItems[0], apiItems[1], apiItems[2]
+	if tid != t.si.DaemonID {
+		glog.Errorf("%s: unexpected target ID %s mismatch", t.si.Name(), tid)
+	}
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
+
+	srcFQN := msg.Name
+	if srcFQN == "" {
+		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		t.invalmsghdlr(w, r, loghdr+"missing source filename")
+		return
+	}
+	finfo, err := os.Stat(srcFQN)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if finfo.IsDir() { // TODO -- FIXME: support src directory
+		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s%s is a directory", loghdr, srcFQN))
+		return
+	}
+
+	bck := &cluster.Bck{Name: bucket, Provider: provider}
+	if err = bck.Init(t.bmdowner); err != nil {
+		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
+			t.bmdVersionFixup("", true /* sleep */)
+			err = bck.Init(t.bmdowner)
+		}
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+	}
+	if err = bck.AllowPUT(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	lom := &cluster.LOM{T: t, Objname: objName}
+	err = lom.Init(bck.Name, bck.Provider)
+	if err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if lom.Exists() { // TODO -- FIXME: CLI option
+		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		t.invalmsghdlr(w, r, fmt.Sprintf("%sdestination %s already exists", loghdr, lom))
+		return
+	}
+
+	var (
+		si   *cluster.Snode
+		smap = t.smapowner.get()
+	)
+	if si, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	// remote
+	if si.DaemonID != t.si.DaemonID {
+		buf, slab := nodeCtx.mm.AllocDefault()
+		lom.FQN = srcFQN
+		ri := &replicInfo{smap: smap, t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
+		_, err := ri.putRemote(lom, lom.Objname, si)
+		slab.Free(buf)
+		if err != nil {
+			t.invalmsghdlr(w, r, err.Error())
+		}
+		return
+	}
+
+	// local
+	var (
+		cksum     *cmn.Cksum
+		written   int64
+		buf, slab = nodeCtx.mm.AllocDefault()
+		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		poi       = &putObjInfo{t: t, lom: lom, workFQN: workFQN}
+	)
+	written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
 	slab.Free(buf)
+	if err != nil {
+		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		t.invalmsghdlr(w, r, loghdr+err.Error())
+		return
+	}
+	lom.SetCksum(cksum)
+	lom.SetSize(written)
+	lom.SetBID(lom.Bprops().BID)
+	poi.finalize()
 }
 
 //====================== common for both cold GET and PUT ======================================

@@ -1094,6 +1094,9 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.objRename(w, r, bck)
 		return
+	case cmn.ActPromote:
+		p.promoteFile(w, r, bck)
+		return
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)
@@ -1219,6 +1222,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (er
 			}
 		case cmn.HeaderBucketCopies:
 			if v, err := cmn.ParseI64Range(value, 10, 32, 1, mirror.MaxNCopies); err == nil {
+				// TODO -- FIXME: ensure fs.Mountpaths.NumAvail() >= v for all targets
 				bprops.Mirror.Copies = v
 				if v == 1 {
 					bprops.Mirror.Enabled = false
@@ -2126,6 +2130,33 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsif.Add(stats.RenameCount, 1)
+}
+
+func (p *proxyrunner) promoteFile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
+	started := time.Now()
+	apiItems, err := p.checkRESTItems(w, r, 3, false, cmn.Version, cmn.Objects)
+	if err != nil {
+		return
+	}
+	objName, tid := apiItems[1], apiItems[2]
+	smap := p.smapowner.get()
+	tsi := smap.GetTarget(tid)
+	if tsi == nil {
+		// TODO -- FIXME: cluster-wide PROMOTE
+		p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", tid))
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("PROMOTE %s %s/%s @ %s", r.Method, bck.Name, objName, tsi)
+	}
+
+	// NOTE:
+	//       code 307 is the only way to http-redirect with the
+	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+
+	p.statsif.Add(stats.PutCount, 1)
 }
 
 func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {
