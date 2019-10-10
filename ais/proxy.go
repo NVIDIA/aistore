@@ -1548,10 +1548,10 @@ func (p *proxyrunner) reverseRequest(w http.ResponseWriter, r *http.Request, nod
 
 func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
 	var (
-		smap = p.smapowner.get()
-		tout = config.Timeout.Default
+		smap  = p.smapowner.get()
+		tout  = config.Timeout.Default
+		bckTo = &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
 	)
-	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
 	if err := bckTo.Init(p.bmdowner); err == nil {
 		if msg.Action == cmn.ActRenameLB {
 			return cmn.NewErrorBucketAlreadyExists(bckTo.Name)
@@ -1560,28 +1560,15 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bckFrom, msg.Action, bckFrom, bckTo)
 	}
 
-	// begin
-	msgInt := p.newActionMsgInternal(msg, smap, p.bmdowner.get())
-	body := cmn.MustMarshal(msgInt)
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActBegin),
-		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-
-	nr := 0
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bckFrom, res.err, res.status)
-			glog.Errorln(err.Error())
-			nr++
-		}
-	}
-	if err != nil {
-		// abort
-		if nr < len(results) {
-			_ = p.broadcastTo(
-				cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActAbort),
-				nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-		}
+	// begin -- abort
+	var (
+		msgInt = p.newActionMsgInternal(msg, smap, p.bmdowner.get())
+		body   = cmn.MustMarshal(msgInt)
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name)
+		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bckFrom)
+	)
+	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, false /*commit*/)
+	if err != nil { // aborted
 		return
 	}
 
@@ -1592,7 +1579,7 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		p.smapowner.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
-	results = p.broadcastTo(cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name, cmn.ActCommit),
+	results := p.broadcastTo(cmn.URLPath(path, cmn.ActCommit),
 		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
 
 	for res := range results {
@@ -1634,22 +1621,20 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	smap := p.smapowner.get()
-	msgInt := p.newActionMsgInternal(msg, smap, nil)
-	body := cmn.MustMarshal(msgInt)
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
-		nil, http.MethodPost, body, smap, cfg.Timeout.CplaneOperation, cmn.NetworkIntraControl, cluster.Targets)
-	for res := range results {
-		if res.err != nil {
-			msg := fmt.Sprintf("Failed to make num-copies: %s, bucket %s, err: %v(%d)", res.si.Name(), bck, res.err, res.status)
-			if res.details != "" {
-				glog.Errorln(res.details)
-			}
-			p.invalmsghdlr(w, r, msg)
-			return
-		}
+	var (
+		smap   = p.smapowner.get()
+		msgInt = p.newActionMsgInternal(msg, smap, nil)
+		body   = cmn.MustMarshal(msgInt)
+		tout   = cfg.Timeout.CplaneOperation
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		errmsg = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
+	)
+	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
 	}
+
 	// enable/disable accordingly and
 	// finalize via updating the bucket's mirror configuration (compare with httpbckput)
 	var (
@@ -1671,43 +1656,17 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 }
 
 func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
-	smap := p.smapowner.get()
-	tout := config.Timeout.Default
-
-	msgInt := p.newActionMsgInternal(msg, smap, p.bmdowner.get())
-	body := cmn.MustMarshal(msgInt)
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActBegin),
-		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-	nr := 0
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: cannot %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bck, res.err, res.status)
-			glog.Error(err)
-			nr++
-		}
-	}
-	if err != nil {
-		// abort
-		if nr < len(results) {
-			_ = p.broadcastTo(
-				cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActAbort),
-				nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-		}
-		return
-	}
-
-	results = p.broadcastTo(cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActCommit),
-		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-
-	for res := range results {
-		if res.err != nil {
-			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bck, res.err, res.status)
-			glog.Error(err)
-			break
-		}
-	}
-	return err
+	var (
+		smap   = p.smapowner.get()
+		tout   = config.Timeout.CplaneOperation
+		msgInt = p.newActionMsgInternal(msg, smap, p.bmdowner.get())
+		body   = cmn.MustMarshal(msgInt)
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
+	)
+	// execute 2-phase
+	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
+	return
 }
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, provider string) {

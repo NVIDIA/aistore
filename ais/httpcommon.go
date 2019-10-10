@@ -661,6 +661,47 @@ func (h *httprunner) broadcastTo(path string, query url.Values, method string, b
 	return h.broadcast(bcastArgs)
 }
 
+// execute 2-phase transaction vis-à-vis all targets with an optional commit if all good
+func (h *httprunner) broadcast2Phase(path string, query url.Values, method string, body []byte,
+	smap *smapX, tout time.Duration, network, errmsg string, commit bool) (err error) {
+	var (
+		results   chan callResult
+		beginPath = cmn.URLPath(path, cmn.ActBegin)
+		nr        = 0
+	)
+	// begin
+	results = h.broadcastTo(beginPath, query, method, body, smap, tout, network, cluster.Targets)
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
+			glog.Errorln(err.Error())
+			nr++
+		}
+	}
+	// abort
+	if err != nil {
+		abortPath := cmn.URLPath(path, cmn.ActAbort)
+		if nr < len(results) {
+			_ = h.broadcastTo(abortPath, nil, method, body, smap, tout, network, cluster.Targets)
+		}
+		return
+	}
+	if !commit {
+		return
+	}
+	// commit
+	commitPath := cmn.URLPath(path, cmn.ActCommit)
+	results = h.broadcastTo(commitPath, query, method, body, smap, tout, network, cluster.Targets)
+	for res := range results {
+		if res.err != nil {
+			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
+			glog.Error(err)
+			break
+		}
+	}
+	return err
+}
+
 // NOTE: 'u' has only the path and query part, host portion will be set by this method.
 func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 	nodeCount := 0

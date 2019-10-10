@@ -67,15 +67,18 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 	return r.xactBckBase.run(numjs)
 }
 
-func ValidateNCopies(copies int) error {
-	const s = "number of local copies"
+func ValidateNCopies(prefix string, copies int) error {
+	const s = "number of copies"
 	if _, err := cmn.CheckI64Range(int64(copies), 1, MaxNCopies); err != nil {
 		return fmt.Errorf("%s (%d) %s", s, copies, err.Error())
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
 	nmp := len(availablePaths)
+	if nmp == 0 {
+		return fmt.Errorf("%s: no mountpaths", prefix)
+	}
 	if copies > nmp {
-		return fmt.Errorf("%s (%d) exceeds the number of mountpaths (%d)", s, copies, nmp)
+		return fmt.Errorf("%s: %s (%d) exceeds the number of mountpaths (%d)", prefix, s, copies, nmp)
 	}
 	return nil
 }
@@ -85,7 +88,8 @@ func ValidateNCopies(copies int) error {
 //
 
 func (r *XactBckMakeNCopies) init() (numjs int, err error) {
-	if err = ValidateNCopies(r.copies); err != nil {
+	tname := r.Target().Snode().Name()
+	if err = ValidateNCopies(tname, r.copies); err != nil {
 		return
 	}
 	availablePaths, _ := fs.Mountpaths.Get()

@@ -716,35 +716,34 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case cmn.ActMakeNCopies:
-		// TODO -- FIXME: rework as (begin, commit) to check fs.Mountpaths.NumAvail()
-		copies, err := t.parseValidateNCopies(msgInt.Value)
-		if err == nil {
-			err = mirror.ValidateNCopies(copies)
-		}
-		if err != nil {
-			t.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		if bck.Props.Mirror.Copies < int64(copies) {
-			if capInfo := t.AvgCapUsed(nil); capInfo.Err != nil {
-				t.invalmsghdlr(w, r, capInfo.Err.Error())
+		phase := apiItems[1]
+		switch phase {
+		case cmn.ActBegin:
+			err = t.beginMakeNCopies(bck, msgInt)
+			if err != nil {
+				t.invalmsghdlr(w, r, err.Error())
 				return
 			}
+		case cmn.ActAbort:
+			break // nothing to do
+		case cmn.ActCommit:
+			copies, _ := t.parseValidateNCopies(msgInt.Value)
+			t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
+			t.xactions.renewBckMakeNCopies(bck, t, copies)
+		default:
+			cmn.Assert(false)
 		}
-		t.xactions.abortBucketXact(cmn.ActPutCopies, bucket)
-		t.xactions.renewBckMakeNCopies(bck, t, copies)
 	case cmn.ActECEncode:
 		phase := apiItems[1]
 		switch phase {
 		case cmn.ActBegin:
 			err = t.beginECEncode(bck)
 		case cmn.ActAbort:
-			// TODO: at this moment there is nothing to rollback
-			break
+			break // nothing to do
 		case cmn.ActCommit:
 			err = t.commitECEncode(bck)
 		default:
-			err = fmt.Errorf("invalid phase %s: %s %s", phase, msgInt.Action, bck)
+			cmn.Assert(false)
 		}
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
@@ -755,6 +754,21 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)
 	}
+}
+
+func (t *targetrunner) beginMakeNCopies(bck *cluster.Bck, msgInt *actionMsgInternal) (err error) {
+	copies, err := t.parseValidateNCopies(msgInt.Value)
+	if err == nil {
+		err = mirror.ValidateNCopies(t.si.Name(), copies)
+	}
+	if err != nil {
+		return
+	}
+	if bck.Props.Mirror.Copies < int64(copies) {
+		capInfo := t.AvgCapUsed(nil)
+		err = capInfo.Err
+	}
+	return
 }
 
 // POST /v1/objects/bucket-name/object-name
