@@ -826,7 +826,7 @@ func (h *httprunner) parseValidateNCopies(value interface{}) (copies int, err er
 }
 
 //////////////////////////////
-// common HTTP req handlers //
+// Common HTTP req handlers //
 //////////////////////////////
 
 func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

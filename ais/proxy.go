@@ -860,7 +860,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActSummaryBucket:
 		p.bucketSummary(w, r, bck, msg)
 	case cmn.ActMakeNCopies:
-		p.makeNCopies(w, r, bck, &msg, config)
+		p.makeNCopies(w, r, bck, &msg, true /*updateBckProps*/)
 	case cmn.ActECEncode:
 		if !bck.Props.EC.Enabled {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Could not start: bucket %q has EC disabled", bck.Name))
@@ -1365,6 +1365,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		prevMirrorConf := bck.Props.Mirror
+
 		query := r.URL.Query()
 		query.Del(cmn.URLParamProvider)
 		kvs := cmn.NewSimpleKVsFromQuery(query)
@@ -1376,7 +1378,23 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			p.invalmsghdlr(w, r, err.Error())
+			return
 		}
+
+		if err := bck.Init(p.bmdowner); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		newMirrorConf := bck.Props.Mirror
+		if requiresRemirroring(prevMirrorConf, newMirrorConf) {
+			msg := &cmn.ActionMsg{
+				Action: cmn.ActMakeNCopies,
+				Value:  fmt.Sprintf("%d", newMirrorConf.Copies),
+			}
+			p.makeNCopies(w, r, bck, msg, false /*updateBckProps*/)
+		}
+
 		return
 	}
 
@@ -1615,43 +1633,40 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	return
 }
 
-func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg, cfg *cmn.Config) {
+func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg, updateBckProps bool) {
 	copies, err := p.parseValidateNCopies(msg.Value)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	var (
-		smap   = p.smapowner.get()
-		msgInt = p.newActionMsgInternal(msg, smap, nil)
-		body   = cmn.MustMarshal(msgInt)
-		tout   = cfg.Timeout.CplaneOperation
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		errmsg = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
+		smap    = p.smapowner.get()
+		msgInt  = p.newActionMsgInternal(msg, smap, nil)
+		body    = cmn.MustMarshal(msgInt)
+		timeout = cmn.GCO.Get().Timeout.CplaneOperation
+		path    = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		errmsg  = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
 	)
-	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
+	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, timeout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 
-	// enable/disable accordingly and
-	// finalize via updating the bucket's mirror configuration (compare with httpbckput)
-	var (
-		nvs       cmn.SimpleKVs
-		copiesStr = strconv.FormatInt(int64(copies), 10)
-	)
-	if copies > 1 {
-		nvs = cmn.SimpleKVs{cmn.HeaderBucketCopies: copiesStr, cmn.HeaderBucketMirrorEnabled: "true"}
-	} else {
-		cmn.Assert(copies == 1)
-		nvs = cmn.SimpleKVs{cmn.HeaderBucketCopies: copiesStr, cmn.HeaderBucketMirrorEnabled: "false"}
-	}
-	//
-	// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf
-	//
-	if err := p.updateBucketProps(bck, nvs); err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+	if updateBckProps {
+		// Enable/disable accordingly and finalize via updating the bucket's
+		// mirror configuration (compare with httpbckput)
+		nvs := cmn.SimpleKVs{
+			cmn.HeaderBucketCopies:        fmt.Sprintf("%d", copies),
+			cmn.HeaderBucketMirrorEnabled: strconv.FormatBool(copies > 1),
+		}
+		cmn.Assert(copies >= 1)
+		//
+		// NOTE: cmn.ActMakeNCopies automatically does (copies > 1) ? enable : disable on the bucket's MirrorConf
+		//
+		if err := p.updateBucketProps(bck, nvs); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	}
 }
 
@@ -3565,4 +3580,14 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 
 	msgInt := p.newActionMsgInternal(msg, nil, clone)
 	p.metasyncer.sync(true, revspair{clone, msgInt})
+}
+
+func requiresRemirroring(prevm, newm cmn.MirrorConf) bool {
+	if !prevm.Enabled && newm.Enabled {
+		return true
+	}
+	if prevm.Enabled && newm.Enabled {
+		return prevm.Copies != newm.Copies
+	}
+	return false
 }
