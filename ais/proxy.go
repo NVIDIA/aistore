@@ -863,7 +863,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.makeNCopies(w, r, bck, &msg, config)
 	case cmn.ActECEncode:
 		if !bck.Props.EC.Enabled {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %q has EC disabled", bck.Name))
+			p.invalmsghdlr(w, r, fmt.Sprintf("Could not start: bucket %q has EC disabled", bck.Name))
 			return
 		}
 		if err := p.ecEncode(bck, &msg, config); err != nil {
@@ -3444,9 +3444,15 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		p.metasyncer.sync(false, revspair{smap, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
-		_ = p.broadcastTo(
+		results := p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
 			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
+		for res := range results {
+			if res.err != nil {
+				p.invalmsghdlr(w, r, res.err.Error())
+				return
+			}
+		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		p.invalmsghdlr(w, r, s)

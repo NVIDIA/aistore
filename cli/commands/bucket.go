@@ -442,6 +442,23 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 	return
 }
 
+// Makes every object in a bucket erasure coded
+func ecEncode(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+	provider, err := bucketProvider(c)
+	if err != nil {
+		return
+	}
+	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+		return
+	}
+	if err = api.ECEncodeBucket(baseParams, bucket); err != nil {
+		return
+	}
+	fmt.Fprintf(c.App.Writer, "Encoding %s objects is running, use '%s %s %s %s %s' to see the progress\n",
+		bucket, cliName, commandShow, subcmdXaction, cmn.ActECEncode, bucket)
+	return
+}
+
 // Rename bucket expects 2 arguments - bucket name and new bucket name.
 // This function returns bucket name and new bucket name based on arguments provided to the command
 // and AIS_BUCKET env variable. In case something is missing it also generates a meaningful error message.

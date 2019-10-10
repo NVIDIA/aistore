@@ -15,6 +15,9 @@ var (
 			providerFlag,
 			copiesFlag,
 		},
+		commandECEncode: {
+			providerFlag,
+		},
 	}
 
 	bucketSpecificCmds = []cli.Command{
@@ -24,6 +27,14 @@ var (
 			ArgsUsage:    bucketArgument,
 			Flags:        bucketSpecificCmdsFlags[commandSetCopies],
 			Action:       setCopiesHandler,
+			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
+		},
+		{
+			Name:         commandECEncode,
+			Usage:        "makes all objects in a bucket erasure coded",
+			ArgsUsage:    bucketArgument,
+			Flags:        bucketSpecificCmdsFlags[commandECEncode],
+			Action:       ecEncodeHandler,
 			BashComplete: bucketCompletions([]cli.BashCompleteFunc{}, false /* multiple */, false /* separator */),
 		},
 	}
@@ -40,4 +51,17 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	}
 
 	return configureNCopies(c, baseParams, bucket)
+}
+
+func ecEncodeHandler(c *cli.Context) (err error) {
+	var (
+		baseParams = cliAPIParams(ClusterURL)
+		bucket     string
+	)
+
+	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
+		return
+	}
+
+	return ecEncode(c, baseParams, bucket)
 }

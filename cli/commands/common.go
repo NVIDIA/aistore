@@ -33,6 +33,7 @@ const (
 	commandRegister  = "register"
 	commandGet       = "get"
 	commandPut       = "put"
+	commandECEncode  = "ec-encode"
 
 	// Subcommands - preferably nouns
 	subcmdDsort     = cmn.DSortNameLowercase

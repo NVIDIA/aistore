@@ -113,6 +113,16 @@ Starts an extended action to bring a given bucket to a certain redundancy level 
 | `--copies` | `int` | Number of copies | `1` |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
 
+### Make all objects erasure coded
+
+`ais ec-encode BUCKET_NAME`
+
+Starts an extended action that enables data protection for all objects of a given bucket. Erasure coding must be set up for the bucket prior to running `ec-encode` extended action. Read more about this feature [here](../../docs/storage_svcs.md#erasure-coding).
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider) |
+
 ### List bucket props
 
 `ais ls props BUCKET_NAME`
@@ -135,7 +145,7 @@ If `--jsonspec` option is used, **all** properties of the bucket are set based o
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
 | `--provider` | [Provider](../README.md#enums) | Provider of the bucket | `""` or [default](../README.md#bucket-provider)|
-| `--jsonspec` | `string` | Bucket properties in a JSON format | `` |
+| `--jsonspec` | `string` | Bucket properties in a JSON format | `""` |
 | `--reset` | `bool` | Reset bucket properties to original state | `false` |
 
 When `--jsonspec` is not used, some properties support user-friendly aliases:
