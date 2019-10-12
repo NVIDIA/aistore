@@ -138,20 +138,13 @@ var (
 
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		provider   string
-		bucket     string
+		bucket, provider string
+		baseParams       = cliAPIParams(ClusterURL)
 	)
-
-	if provider, err = bucketProvider(c); err != nil {
+	bucket = c.Args().First()
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
-
-	bucket = c.Args().First()
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-	}
-
 	return bucketDetails(c, baseParams, bucket, provider, flagIsSet(c, fastDetailsFlag))
 }
 
@@ -223,11 +216,9 @@ func showXactionHandler(c *cli.Context) (err error) {
 		xaction    = c.Args().Get(0) // empty string if no arg given
 		bucket     = c.Args().Get(1) // empty string if no arg given
 	)
-
 	if bucket == "" {
 		bucket, _ = os.LookupEnv(aisBucketEnvVar)
 	}
-
 	if xaction != "" {
 		if _, ok := cmn.ValidXact(xaction); !ok {
 			return fmt.Errorf("%q is not a valid xaction", xaction)
@@ -273,33 +264,21 @@ func showXactionHandler(c *cli.Context) (err error) {
 
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		fullObjName = c.Args().Get(0) // empty string if no arg given
-		provider    string
-		bucket      string
-		object      string
+		provider, bucket, object string
+		baseParams               = cliAPIParams(ClusterURL)
+		fullObjName              = c.Args().Get(0) // empty string if no arg given
 	)
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
 	bucket, object = splitBucketObject(fullObjName)
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+		return
 	}
 	if object == "" {
 		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
 	}
-	if bucket == "" {
-		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
-	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
-		return
-	}
-
 	return objectStats(c, baseParams, bucket, provider, object)
 }
 

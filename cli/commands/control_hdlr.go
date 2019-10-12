@@ -122,11 +122,8 @@ func startXactionHandler(c *cli.Context) (err error) {
 		}
 	} else { // bucket related xaction
 		bucket = c.Args().Get(1)
-		if bucket == "" {
-			bucket, _ = os.LookupEnv(aisBucketEnvVar)
-			if bucket == "" {
-				return missingArgumentsError(c, "bucket name")
-			}
+		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+			return
 		}
 	}
 
@@ -159,11 +156,8 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
 			bucket = c.Args().Get(1)
-			if bucket == "" {
-				bucket, _ = os.LookupEnv(aisBucketEnvVar)
-				if bucket == "" {
-					return missingArgumentsError(c, "bucket name")
-				}
+			if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+				return
 			}
 		} else if c.NArg() > 1 {
 			fmt.Fprintf(c.App.ErrWriter, "Warning: %s is a global xaction, ignoring bucket name\n", xaction)

@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -35,12 +34,16 @@ var (
 			providerFlag,
 			recursiveFlag,
 			baseFlag,
-			targetFlag,
-			promoteFlag,
 			concurrencyFlag,
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
+		},
+		commandPromote: {
+			providerFlag,
+			recursiveFlag,
+			baseFlag,
+			targetFlag,
 		},
 	}
 
@@ -72,9 +75,17 @@ var (
 		{
 			Name:         commandPut,
 			Usage:        "puts objects to the specified bucket",
-			ArgsUsage:    putObjectArgument,
+			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPut],
 			Action:       putHandler,
+			BashComplete: flagCompletions, // FIXME
+		},
+		{
+			Name:         commandPromote,
+			Usage:        "promotes AIStore-resident files and directories to objects",
+			ArgsUsage:    putPromoteObjectArgument,
+			Flags:        objectSpecificCmdsFlags[commandPromote],
+			Action:       promoteHandler,
 			BashComplete: flagCompletions, // FIXME
 		},
 	}
@@ -82,28 +93,15 @@ var (
 
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
-		provider   string
+		bucket, provider string
+		baseParams       = cliAPIParams(ClusterURL)
 	)
-
-	if provider, err = bucketProvider(c); err != nil {
-		return
-	}
-
-	// bucket name given by the user
-	if c.NArg() == 1 {
+	if c.NArg() > 0 {
 		bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 	}
-
-	// default, if no bucket was given
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-		if bucket == "" {
-			return missingArgumentsError(c, "bucket name")
-		}
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+		return
 	}
-
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 		return listOrRangeOp(c, baseParams, commandPrefetch, bucket, provider)
 	}
@@ -113,11 +111,9 @@ func prefetchHandler(c *cli.Context) (err error) {
 
 func evictHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
-		provider   string
+		bucket, provider string
+		baseParams       = cliAPIParams(ClusterURL)
 	)
-
 	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
@@ -127,11 +123,8 @@ func evictHandler(c *cli.Context) (err error) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket == "" {
-			bucket, _ = os.LookupEnv(aisBucketEnvVar)
-			if bucket == "" {
-				return missingArgumentsError(c, "bucket or object name")
-			}
+		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
@@ -154,73 +147,63 @@ func evictHandler(c *cli.Context) (err error) {
 
 func getHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		fullObjName = c.Args().Get(0) // empty string if arg not given
-		outFile     = c.Args().Get(1) // empty string if arg not given
-		provider    string
-		bucket      string
-		object      string
+		provider, bucket, objName string
+		baseParams                = cliAPIParams(ClusterURL)
+		fullObjName               = c.Args().Get(0) // empty string if arg not given
+		outFile                   = c.Args().Get(1) // empty string if arg not given
 	)
-
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in format bucket/object", "output file")
+		return missingArgumentsError(c, "object name in the form bucket/object", "output file")
 	}
 	if c.NArg() < 2 && !flagIsSet(c, isCachedFlag) {
 		return missingArgumentsError(c, "output file")
 	}
-	if provider, err = bucketProvider(c); err != nil {
+	bucket, objName = splitBucketObject(fullObjName)
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
 		return
 	}
-	bucket, object = splitBucketObject(fullObjName)
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
+	if objName == "" {
+		return incorrectUsageError(c, fmt.Errorf("'%s': missing object name", fullObjName))
 	}
-	if object == "" {
-		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
-	}
-	if bucket == "" {
-		return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
-	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
-		return
-	}
-
-	return getObject(c, baseParams, bucket, provider, object, outFile)
+	return getObject(c, baseParams, bucket, provider, objName, outFile)
 }
 
 func putHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
-		fileName    = c.Args().Get(0)
-		fullObjName = c.Args().Get(1)
-		provider    string
-		bucket      string
-		objName     string
+		provider, bucket, objName string
+		baseParams                = cliAPIParams(ClusterURL)
+		fileName                  = c.Args().Get(0)
+		fullObjName               = c.Args().Get(1)
 	)
-
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "file to upload", "object name in format bucket/[object]")
+		return missingArgumentsError(c, "file to upload", "object name in the form bucket/[object]")
 	}
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
-	if provider, err = bucketProvider(c); err != nil {
+	bucket, objName = splitBucketObject(fullObjName)
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
 		return
+	}
+	return putObject(c, baseParams, bucket, provider, objName, fileName)
+}
+
+func promoteHandler(c *cli.Context) (err error) {
+	var (
+		provider, bucket, objName string
+		baseParams                = cliAPIParams(ClusterURL)
+		fileName                  = c.Args().Get(0)
+		fullObjName               = c.Args().Get(1)
+	)
+	if c.NArg() < 1 {
+		return missingArgumentsError(c, "file|directory to promote")
+	}
+	if c.NArg() < 2 {
+		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
-		if bucket == "" {
-			return incorrectUsageError(c, fmt.Errorf("no bucket specified in '%s'", fullObjName))
-		}
-	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
 		return
 	}
-
-	if flagIsSet(c, promoteFlag) {
-		return promoteFile(c, baseParams, bucket, provider, objName, fileName)
-	}
-
-	return putObject(c, baseParams, bucket, provider, objName, fileName)
+	return promoteFile(c, baseParams, bucket, provider, objName, fileName)
 }

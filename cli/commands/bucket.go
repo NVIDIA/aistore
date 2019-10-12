@@ -7,6 +7,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,6 +31,26 @@ const (
 	// max wait time for a function finishes before printing "Please wait"
 	longCommandTime = 10 * time.Second
 )
+
+func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string) (bucket, provider string, err error) {
+	if provider, err = bucketProvider(c); err != nil {
+		return
+	}
+	bucket = b
+	if bucket == "" {
+		bucket, _ = os.LookupEnv(aisBucketEnvVar)
+		if bucket == "" {
+			if tag != "" {
+				err = incorrectUsageError(c, fmt.Errorf("'%s': missing bucket name", tag))
+			} else {
+				err = incorrectUsageError(c, errors.New("missing bucket name"))
+			}
+			return
+		}
+	}
+	err = canReachBucket(baseParams, bucket, provider)
+	return
+}
 
 // Creates new ais buckets
 func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
@@ -280,35 +301,25 @@ func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Va
 
 // Sets bucket properties
 func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	var (
+		provider  string
+		propsArgs = c.Args().Tail()
+		bucket    = c.Args().First()
+	)
+
 	// For setting bucket props via action message
 	if flagIsSet(c, jsonspecFlag) {
 		return setBucketPropsJSON(c, baseParams)
 	}
-
-	var (
-		propsArgs = c.Args().Tail()
-		bucket    = c.Args().First()
-	)
-	provider, err := bucketProvider(c)
-	if err != nil {
-		return
-	}
-
 	if strings.Contains(bucket, keyAndValueSeparator) {
 		// First argument is a key-value pair -> bucket should be read from env variable
-		bucketEnv, ok := os.LookupEnv(aisBucketEnvVar)
-		if !ok {
-			return missingArgumentsError(c, "bucket name")
-		}
-		bucket = bucketEnv
+		bucket = ""
 		propsArgs = c.Args()
 	}
-
 	if len(propsArgs) == 0 {
 		return missingArgumentsError(c, "property key-value pairs")
 	}
-
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
 
@@ -329,22 +340,19 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	return
 }
 
-func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
-	bucket, err := bucketFromArgsOrEnv(c)
-	if err != nil {
-		return err
+func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) (err error) {
+	var (
+		provider   string
+		props      cmn.BucketProps
+		bucket     = c.Args().First()
+		inputProps = parseStrFlag(c, jsonspecFlag)
+	)
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+		return
 	}
-	provider, err := bucketProvider(c)
-	if err != nil {
-		return err
-	}
-	inputProps := parseStrFlag(c, jsonspecFlag)
-
-	var props cmn.BucketProps
 	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
 		return err
 	}
-
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
 	if err := api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
 		return err
@@ -356,13 +364,11 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) error {
 
 // Resets bucket props
 func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bucket, err := bucketFromArgsOrEnv(c)
-	if err != nil {
-		return err
-	}
-
-	provider, err := bucketProvider(c)
-	if err != nil {
+	var (
+		provider string
+		bucket   = c.Args().First()
+	)
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
@@ -380,13 +386,11 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 
 // Get bucket props
 func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
-	bucket, err := bucketFromArgsOrEnv(c)
-	if err != nil {
-		return err
-	}
-
-	provider, err := bucketProvider(c)
-	if err != nil {
+	var (
+		provider string
+		bucket   = c.Args().First()
+	)
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}

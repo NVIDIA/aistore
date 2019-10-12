@@ -92,8 +92,7 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 }
 
 //////
-// NOTE: advanced usage only
-// Promote target-local files and directories to objects (NOTE: advanced usage only)
+// Promote AIS-resident files and directories to objects (NOTE: advanced usage only)
 //////
 func promoteFile(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
 	target := parseStrFlag(c, targetFlag)
@@ -109,8 +108,7 @@ func promoteFile(c *cli.Context, baseParams *api.BaseParams, bucket, provider, o
 	if err != nil {
 		return err
 	}
-
-	fmt.Fprintf(c.App.Writer, "PROMOTE %s => bucket %s\n", objName, bucket)
+	fmt.Fprintf(c.App.Writer, "promoted %s as %s/%s\n", fileName, bucket, objName)
 	return nil
 }
 
@@ -147,7 +145,7 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 			return err
 		}
 
-		fmt.Fprintf(c.App.Writer, "%s put into %s bucket\n", objName, bucket)
+		fmt.Fprintf(c.App.Writer, "PUT %s into bucket %s\n", objName, bucket)
 		return nil
 	}
 
@@ -452,19 +450,12 @@ func multiObjOp(c *cli.Context, baseParams *api.BaseParams, command string, prov
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		bucket, object := splitBucketObject(fullObjName)
-		if bucket == "" {
-			bucket, _ = os.LookupEnv(aisBucketEnvVar) // try env bucket var
-		}
-		if object == "" {
-			return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
-		}
-		if bucket == "" {
-			return incorrectUsageError(c, fmt.Errorf("no bucket specified for object '%s'", object))
-		}
-		if err = canReachBucket(baseParams, bucket, provider); err != nil {
+		if bucket, _, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
 			return
 		}
-
+		if object == "" {
+			return incorrectUsageError(c, fmt.Errorf("'%s: missing object name", fullObjName))
+		}
 		switch command {
 		case commandRemove:
 			if err = api.DeleteObject(baseParams, bucket, object, provider); err != nil {

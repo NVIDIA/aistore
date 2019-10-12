@@ -33,6 +33,7 @@ const (
 	commandRegister  = "register"
 	commandGet       = "get"
 	commandPut       = "put"
+	commandPromote   = "promote"
 	commandECEncode  = "ec-encode"
 
 	// Subcommands - preferably nouns
@@ -135,7 +136,7 @@ const (
 
 	// Objects
 	getObjectArgument            = "BUCKET_NAME/OBJECT_NAME OUT_FILE"
-	putObjectArgument            = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
+	putPromoteObjectArgument     = "FILE|DIRECTORY BUCKET_NAME/[OBJECT_NAME]"
 	objectArgument               = "BUCKET_NAME/OBJECT_NAME"
 	optionalObjectsArgument      = "BUCKET_NAME/[OBJECT_NAME]..."
 	prefetchObjectBucketArgument = "BUCKET_NAME/"
@@ -281,7 +282,6 @@ var (
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
 	baseFlag      = cli.StringFlag{Name: "base", Usage: "part of pathname that is omitted i.e., not used to generate object names"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
-	promoteFlag   = cli.BoolFlag{Name: "promote", Usage: "promote to objects target-local files and directories (advanced usage only)"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}

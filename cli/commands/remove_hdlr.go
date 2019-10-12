@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -106,11 +105,8 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket == "" {
-			bucket, _ = os.LookupEnv(aisBucketEnvVar)
-			if bucket == "" {
-				return missingArgumentsError(c, "bucket or object name")
-			}
+		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket

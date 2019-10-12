@@ -43,25 +43,21 @@ var (
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
+		bucket     = c.Args().First()
 	)
-
-	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
+	if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
-
 	return configureNCopies(c, baseParams, bucket)
 }
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
 		baseParams = cliAPIParams(ClusterURL)
-		bucket     string
+		bucket     = c.Args().First()
 	)
-
-	if bucket, err = bucketFromArgsOrEnv(c); err != nil {
+	if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
 		return
 	}
-
 	return ecEncode(c, baseParams, bucket)
 }

@@ -523,18 +523,6 @@ func splitBucketObject(objname string) (bucket string, object string) {
 	return "", s[0]
 }
 
-func bucketFromArgsOrEnv(c *cli.Context) (string, error) {
-	bucket := c.Args().First()
-	if bucket == "" {
-		var ok bool
-		if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
-			return "", missingArgumentsError(c, "bucket name")
-		}
-	}
-
-	return bucket, nil
-}
-
 func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 	buckets := c.Args()
 
