@@ -38,7 +38,7 @@ type (
 		mpathInfo *fs.MountpathInfo
 		config    *cmn.Config
 		num, size int64
-		stopCh    chan struct{}
+		stopCh    cmn.StopCh
 		callback  func(lom *cluster.LOM) error
 		provider  string
 		skipLoad  bool // true: skip lom.Load() and further checks (e.g. done in callback under lock)
@@ -60,22 +60,21 @@ func (r *xactBckBase) Description() string          { return "base bucket xactio
 // init and stop
 func (r *xactBckBase) Stop(error) { r.Abort() } // call base method
 
-func (r *xactBckBase) init(availablePaths fs.MPI) {
-	numjs := len(availablePaths)
-	r.doneCh = make(chan struct{}, numjs)
-	r.mpathers = make(map[string]mpather, numjs)
+func (r *xactBckBase) init(mpathCount int) {
+	r.doneCh = make(chan struct{}, 1)
+	r.mpathers = make(map[string]mpather, mpathCount)
 }
 
 // control loop
-func (r *xactBckBase) run(numjs int) error {
+func (r *xactBckBase) run(mpathersCount int) error {
 	for {
 		select {
 		case <-r.ChanAbort():
 			r.stop()
 			return fmt.Errorf("%s aborted, exiting", r)
 		case <-r.doneCh:
-			numjs--
-			if numjs == 0 {
+			mpathersCount--
+			if mpathersCount == 0 {
 				glog.Infof("%s: all done", r)
 				r.mpathers = nil
 				r.stop()
@@ -97,20 +96,14 @@ func (r *xactBckBase) stop() {
 }
 
 //
-// mpath jogger - as mpather
-//
-
-func (j *joggerBckBase) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
-func (j *joggerBckBase) post(*cluster.LOM)                { cmn.Assert(false) }
-func (j *joggerBckBase) stop()                            { j.stopCh <- struct{}{}; close(j.stopCh) }
-
-//
 // mpath joggerBckBase - main
 //
+
 func (j *joggerBckBase) jog() {
-	j.stopCh = make(chan struct{}, 1)
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider())
+	j.stopCh = cmn.NewStopCh()
 	j.provider = j.parent.Provider()
+
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Provider())
 	opts := &fs.Options{
 		Callback: j.walk,
 		Sorted:   false,
@@ -150,7 +143,7 @@ func (j *joggerBckBase) walk(fqn string, de fs.DirEntry) error {
 func (j *joggerBckBase) yieldTerm() error {
 	diskConf := &j.config.Disk
 	select {
-	case <-j.stopCh:
+	case <-j.stopCh.Listen():
 		return fmt.Errorf("jogger[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
 	default:
 		curr := fs.Mountpaths.GetMpathUtil(j.mpathInfo.Path, time.Now())
@@ -161,3 +154,11 @@ func (j *joggerBckBase) yieldTerm() error {
 	}
 	return nil
 }
+
+//
+// mpath jogger - as mpather
+//
+
+func (j *joggerBckBase) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
+func (j *joggerBckBase) post(*cluster.LOM)                { cmn.Assert(false) }
+func (j *joggerBckBase) stop()                            { j.stopCh.Close() }

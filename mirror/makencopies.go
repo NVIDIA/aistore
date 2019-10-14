@@ -68,17 +68,16 @@ func (r *XactBckMakeNCopies) Run() (err error) {
 }
 
 func ValidateNCopies(prefix string, copies int) error {
-	const s = "number of copies"
 	if _, err := cmn.CheckI64Range(int64(copies), 1, MaxNCopies); err != nil {
-		return fmt.Errorf("%s (%d) %s", s, copies, err.Error())
+		return fmt.Errorf("number of copies (%d) %s", copies, err.Error())
 	}
 	availablePaths, _ := fs.Mountpaths.Get()
-	nmp := len(availablePaths)
-	if nmp == 0 {
+	mpathCount := len(availablePaths)
+	if mpathCount == 0 {
 		return fmt.Errorf("%s: no mountpaths", prefix)
 	}
-	if copies > nmp {
-		return fmt.Errorf("%s: %s (%d) exceeds the number of mountpaths (%d)", prefix, s, copies, nmp)
+	if copies > mpathCount {
+		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)", prefix, copies, mpathCount)
 	}
 	return nil
 }
@@ -87,17 +86,21 @@ func ValidateNCopies(prefix string, copies int) error {
 // private methods
 //
 
-func (r *XactBckMakeNCopies) init() (numjs int, err error) {
+func (r *XactBckMakeNCopies) init() (mpathCount int, err error) {
 	tname := r.Target().Snode().Name()
 	if err = ValidateNCopies(tname, r.copies); err != nil {
 		return
 	}
-	availablePaths, _ := fs.Mountpaths.Get()
-	r.xactBckBase.init(availablePaths)
-	numjs = len(availablePaths)
-	config := cmn.GCO.Get()
+
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		config            = cmn.GCO.Get()
+	)
+	mpathCount = len(availablePaths)
+
+	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
-		mncJogger := newMncJogger(r, mpathInfo, config)
+		mncJogger := newMNCJogger(r, mpathInfo, config)
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
 		r.mpathers[mpathLC] = mncJogger
 	}
@@ -113,19 +116,16 @@ func (r *XactBckMakeNCopies) Description() string {
 }
 
 //
-// mpath mncJogger - as mpather
+// mpath mncJogger - main
 //
 
-func newMncJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
+func newMNCJogger(parent *XactBckMakeNCopies, mpathInfo *fs.MountpathInfo, config *cmn.Config) *mncJogger {
 	jbase := joggerBckBase{parent: &parent.xactBckBase, mpathInfo: mpathInfo, config: config}
 	j := &mncJogger{joggerBckBase: jbase, parent: parent}
 	j.joggerBckBase.callback = j.delAddCopies
 	return j
 }
 
-//
-// mpath mncJogger - main
-//
 func (j *mncJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.buf = j.parent.slab.Alloc()
@@ -204,31 +204,24 @@ func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
 
 func (j *mncJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
 	for i := lom.NumCopies() + 1; i <= j.parent.copies; i++ {
-		if mpather := findLeastUtilized(lom, j.parent.Mpathers()); mpather != nil {
-			lom.Lock(false)
-			var clone *cluster.LOM
-			if clone, err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
-				glog.Errorln(err)
-				lom.Unlock(false)
-				return
-			}
-			size += lom.Size()
-			if glog.FastV(4, glog.SmoduleMirror) {
-				glog.Infof("copied %s=>%s", lom, clone)
-			}
-			lom.Unlock(false)
-		} else {
+		mpather := findLeastUtilized(lom, j.parent.Mpathers())
+		if mpather == nil {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return
 		}
+
+		lom.Lock(false)
+		var clone *cluster.LOM
+		if clone, err = copyTo(lom, mpather.mountpathInfo(), j.buf); err != nil {
+			glog.Errorln(err)
+			lom.Unlock(false)
+			return
+		}
+		size += lom.Size()
+		if glog.FastV(4, glog.SmoduleMirror) {
+			glog.Infof("copied %s=>%s", lom, clone)
+		}
+		lom.Unlock(false)
 	}
 	return
-}
-
-// static helper
-func checkErrNumMp(xx cmn.Xact, l int) error {
-	if l < 2 {
-		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xx, l)
-	}
-	return nil
 }

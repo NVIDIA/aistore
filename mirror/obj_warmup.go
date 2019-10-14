@@ -30,23 +30,26 @@ func NewXactLLC(t cluster.Target, id int64, bck *cluster.Bck) *XactBckLoadLomCac
 }
 
 func (r *XactBckLoadLomCache) Run() (err error) {
-	var numjs int
-	if numjs, err = r.init(); err != nil {
+	var mpathCount int
+	if mpathCount, err = r.init(); err != nil {
 		return
 	}
 	glog.Infoln(r.String())
-	return r.xactBckBase.run(numjs)
+	return r.xactBckBase.run(mpathCount)
 }
 
 //
 // private methods
 //
 
-func (r *XactBckLoadLomCache) init() (numjs int, err error) {
-	availablePaths, _ := fs.Mountpaths.Get()
-	r.xactBckBase.init(availablePaths)
-	numjs = len(availablePaths)
-	config := cmn.GCO.Get()
+func (r *XactBckLoadLomCache) init() (mpathCount int, err error) {
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		config            = cmn.GCO.Get()
+	)
+	mpathCount = len(availablePaths)
+
+	r.xactBckBase.init(mpathCount)
 	for _, mpathInfo := range availablePaths {
 		xwarmJogger := newXwarmJogger(r, mpathInfo, config)
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
@@ -61,7 +64,7 @@ func (r *XactBckLoadLomCache) Description() string {
 }
 
 //
-// mpath xwarmJogger - as mpather
+// mpath xwarmJogger - main
 //
 
 func newXwarmJogger(parent *XactBckLoadLomCache, mpathInfo *fs.MountpathInfo, config *cmn.Config) *xwarmJogger {
@@ -71,9 +74,6 @@ func newXwarmJogger(parent *XactBckLoadLomCache, mpathInfo *fs.MountpathInfo, co
 	return j
 }
 
-//
-// mpath xwarmJogger - main
-//
 func (j *xwarmJogger) jog() {
 	glog.Infof("jogger[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.joggerBckBase.jog()

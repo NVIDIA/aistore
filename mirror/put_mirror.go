@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -28,7 +27,6 @@ type (
 		// init
 		mirror  cmn.MirrorConf
 		slab    *memsys.Slab2
-		wg      *sync.WaitGroup
 		total   atomic.Int64
 		dropped int64
 	}
@@ -36,8 +34,7 @@ type (
 		parent    *XactPutLRepl
 		mpathInfo *fs.MountpathInfo
 		workCh    chan *cluster.LOM
-		stopCh    chan struct{}
-		buf       []byte
+		stopCh    cmn.StopCh
 	}
 )
 
@@ -46,42 +43,37 @@ type (
 //
 
 func RunXactPutLRepl(id int64, lom *cluster.LOM, slab *memsys.Slab2) (r *XactPutLRepl, err error) {
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		mpathCount        = len(availablePaths)
+	)
 	r = &XactPutLRepl{
 		XactDemandBase: *cmn.NewXactDemandBase(id, cmn.ActPutCopies, lom.Bucket(), lom.IsAIS()),
 		slab:           slab,
 		mirror:         *lom.MirrorConf(),
 	}
-	availablePaths, _ := fs.Mountpaths.Get()
-	l := len(availablePaths)
-	if err = checkErrNumMp(r, l); err != nil {
+	if err = checkInsufficientMpaths(r, mpathCount); err != nil {
 		r = nil
 		return
 	}
 	r.workCh = make(chan *cluster.LOM, r.mirror.Burst)
-	r.mpathers = make(map[string]mpather, l)
-	//
-	// RUN
-	//
-	r.wg = &sync.WaitGroup{}
-	r.wg.Add(1)
+	r.mpathers = make(map[string]mpather, mpathCount)
+
+	// Run
 	for _, mpathInfo := range availablePaths {
-		xputJogger := &xputJogger{parent: r, mpathInfo: mpathInfo}
 		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Provider())
-		r.mpathers[mpathLC] = xputJogger
+		r.mpathers[mpathLC] = newXputJogger(r, mpathInfo)
 	}
 	go r.Run()
 	for _, mpather := range r.mpathers {
 		xputJogger := mpather.(*xputJogger)
-		r.wg.Add(1)
 		go xputJogger.jog()
 	}
-	r.wg.Wait() // wait for all to start
 	return
 }
 
 func (r *XactPutLRepl) Run() error {
 	glog.Infoln(r.String())
-	r.wg.Done()
 	for {
 		select {
 		case lom := <-r.workCh:
@@ -107,15 +99,10 @@ func (r *XactPutLRepl) Run() error {
 	}
 }
 
-// TODO: move elsewhere and use bucket ID
-func (r *XactPutLRepl) SameBucket(lom *cluster.LOM) bool {
-	return r.BckIsAIS() == lom.IsAIS() && r.Bucket() == lom.Bucket()
-}
-
 // main method: replicate a given locally stored object
 func (r *XactPutLRepl) Repl(lom *cluster.LOM) (err error) {
 	if r.Finished() {
-		err = cmn.NewErrXpired("Cannot replicate: " + r.String())
+		err = cmn.NewErrXactExpired("Cannot replicate: " + r.String())
 		return
 	}
 	r.total.Inc()
@@ -188,46 +175,38 @@ func (r *XactPutLRepl) Description() string {
 }
 
 //
-// xputJogger - as mpather
-//
-
-func (j *xputJogger) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
-func (j *xputJogger) post(lom *cluster.LOM)            { j.workCh <- lom }
-
-func (j *xputJogger) stop() {
-	for lom := range j.workCh {
-		glog.Infof("Stopping, not copying %s", lom)
-		j.parent.DecPending()
-	}
-	j.stopCh <- struct{}{}
-	close(j.stopCh)
-}
-
-//
 // xputJogger - main
 //
+
+func newXputJogger(parent *XactPutLRepl, mpathInfo *fs.MountpathInfo) *xputJogger {
+	return &xputJogger{
+		parent:    parent,
+		mpathInfo: mpathInfo,
+		workCh:    make(chan *cluster.LOM, parent.mirror.Burst),
+		stopCh:    cmn.NewStopCh(),
+	}
+}
+
 func (j *xputJogger) jog() {
-	j.workCh = make(chan *cluster.LOM, j.parent.mirror.Burst)
-	j.stopCh = make(chan struct{}, 1)
-	j.buf = j.parent.slab.Alloc()
-	j.parent.wg.Done()
+	buf := j.parent.slab.Alloc()
 	glog.Infof("xputJogger[%s] started", j.mpathInfo)
-loop:
+
 	for {
 		select {
 		case lom := <-j.workCh:
-			j.addCopy(lom)
+			j.addCopy(lom, buf)
 			j.parent.DecPending() // to support action renewal on-demand
-		case <-j.stopCh:
-			break loop
+		case <-j.stopCh.Listen():
+			j.parent.slab.Free(buf)
+			return
 		}
 	}
-	j.parent.slab.Free(j.buf)
+
 }
 
-func (j *xputJogger) addCopy(lom *cluster.LOM) {
+func (j *xputJogger) addCopy(lom *cluster.LOM, buf []byte) {
 	lom.Lock(false)
-	if clone, err := copyTo(lom, j.mpathInfo, j.buf); err != nil {
+	if clone, err := copyTo(lom, j.mpathInfo, buf); err != nil {
 		glog.Errorln(err)
 	} else {
 		if glog.FastV(4, glog.SmoduleMirror) {
@@ -239,4 +218,19 @@ func (j *xputJogger) addCopy(lom *cluster.LOM) {
 		j.parent.BytesAdd(lom.Size())
 	}
 	lom.Unlock(false)
+}
+
+//
+// xputJogger - as mpather
+//
+
+func (j *xputJogger) mountpathInfo() *fs.MountpathInfo { return j.mpathInfo }
+func (j *xputJogger) post(lom *cluster.LOM)            { j.workCh <- lom }
+
+func (j *xputJogger) stop() {
+	for lom := range j.workCh {
+		glog.Infof("Stopping, not copying %s", lom)
+		j.parent.DecPending()
+	}
+	j.stopCh.Close()
 }

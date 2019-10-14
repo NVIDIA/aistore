@@ -1081,11 +1081,11 @@ func (t *targetrunner) putMirror(lom *cluster.LOM) {
 			return
 		}
 		err = xputlrep.Repl(lom)
-		if _, ok := err.(*cmn.ErrXpired); !ok {
+		if cmn.IsErrXactExpired(err) {
 			break
 		}
 
-		// retry upon race vs (just finished/timedout)
+		// retry upon race vs (just finished/timed_out)
 	}
 	if err != nil {
 		glog.Errorf("%s: unexpected failure to initiate local mirroring, err: %v", lom.StringEx(), err)

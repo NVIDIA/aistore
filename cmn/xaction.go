@@ -64,7 +64,7 @@ type (
 		renew   atomic.Int64
 		pending atomic.Int64
 	}
-	ErrXpired struct { // return it if called (right) after self-termination
+	errXactExpired struct { // return it if called (right) after self-termination
 		msg string
 	}
 
@@ -72,8 +72,9 @@ type (
 	NonmountpathXact struct{}
 )
 
-func (e *ErrXpired) Error() string       { return e.msg }
-func NewErrXpired(msg string) *ErrXpired { return &ErrXpired{msg: msg} }
+func (e *errXactExpired) Error() string            { return e.msg }
+func NewErrXactExpired(msg string) *errXactExpired { return &errXactExpired{msg: msg} }
+func IsErrXactExpired(err error) bool              { _, ok := err.(*errXactExpired); return ok }
 
 //
 // XactBase - partially implements Xact interface

@@ -5,6 +5,7 @@
 package mirror
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -76,4 +77,12 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 
 	lom.ReCache()
 	return
+}
+
+// static helper
+func checkInsufficientMpaths(xact cmn.Xact, mpathCount int) error {
+	if mpathCount < 2 {
+		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xact, mpathCount)
+	}
+	return nil
 }
