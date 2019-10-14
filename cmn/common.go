@@ -675,10 +675,18 @@ func CreateFile(fname string) (*os.File, error) {
 // destination directory when it does not exist.
 // NOTE: Rename should not be used to move objects across different disks, see: fs.MvFile.
 func Rename(src, dst string) error {
-	if err := CreateDir(filepath.Dir(dst)); err != nil {
-		return err
+	if err := os.Rename(src, dst); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+
+		// Retry with created directory - slow path.
+		if err := CreateDir(filepath.Dir(dst)); err != nil {
+			return err
+		}
+		return os.Rename(src, dst)
 	}
-	return os.Rename(src, dst)
+	return nil
 }
 
 // RemoveFile removes object from path and ignores if the path no longer exists.
