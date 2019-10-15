@@ -83,9 +83,10 @@ type (
 		maxheader []byte // max header buffer
 		header    []byte // object header - slice of the maxheader with bucket/objname, etc. fields
 		term      struct {
-			barr   atomic.Int64
-			err    error
-			reason *string
+			mu         sync.Mutex
+			terminated bool
+			err        error
+			reason     *string
 		}
 		lz4s lz4Stream
 	}
@@ -358,17 +359,25 @@ func (s *Stream) Stop()               { s.stopCh.Close() }
 func (s *Stream) URL() string         { return s.toURL }
 func (s *Stream) ID() (string, int64) { return s.trname, s.sessID }
 func (s *Stream) String() string      { return s.lid }
-func (s *Stream) Terminated() bool    { return s.term.barr.Load() != 0 }
+func (s *Stream) Terminated() (terminated bool) {
+	s.term.mu.Lock()
+	terminated = s.term.terminated
+	s.term.mu.Unlock()
+	return
+}
 func (s *Stream) terminate() {
-	if s.term.barr.Swap(0xDEADBEEF) == 0xDEADBEEF {
-		glog.Warningf("%s: already terminated (%s, %v)", s, *s.term.reason, s.term.err)
-	} else {
-		gc.remove(s)
-		s.Stop()
-		hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
-		obj := obj{hdr: hdr}
-		s.cmplCh <- cmpl{obj, s.term.err}
-	}
+	s.term.mu.Lock()
+	cmn.Assert(!s.term.terminated)
+	s.term.terminated = true
+
+	s.Stop()
+	gc.remove(s)
+
+	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
+	obj := obj{hdr: hdr}
+	s.cmplCh <- cmpl{obj, s.term.err}
+	s.term.mu.Unlock()
+
 	if s.compressed() {
 		s.lz4s.sgl.Free()
 		if s.lz4s.zw != nil {
@@ -671,7 +680,6 @@ exit:
 
 	// next completion => SCQ
 	s.cmplCh <- cmpl{s.sendoff.obj, err}
-
 	s.sendoff = sendoff{}
 }
 

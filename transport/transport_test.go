@@ -425,7 +425,6 @@ func Test_OnSendCallback(t *testing.T) {
 	}
 	stream.Fin()
 
-	// mu.Lock()  - no need to crit-sect as the Fin is done
 	for idx := range posted {
 		if posted[idx] != nil {
 			t.Errorf("sent-callback %d never fired", idx)
