@@ -140,9 +140,9 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	if n := lom.NumCopies(); n == j.parent.copies {
 		return nil
 	} else if n > j.parent.copies {
-		size, err = j.delCopies(lom)
+		size, err = delCopies(lom, j.parent.copies)
 	} else {
-		size, err = j.addCopies(lom)
+		size, err = addCopies(lom, j.parent.copies, j.parent.Mpathers(), j.buf)
 	}
 
 	if os.IsNotExist(err) {
@@ -169,42 +169,5 @@ func (j *mncJogger) delAddCopies(lom *cluster.LOM) (err error) {
 	} else {
 		runtime.Gosched()
 	}
-	return
-}
-
-func (j *mncJogger) delCopies(lom *cluster.LOM) (size int64, err error) {
-	cmn.Assert(j.parent.copies > 0)
-
-	lom.Lock(true)
-	ndel := lom.NumCopies() - j.parent.copies
-	if ndel <= 0 {
-		lom.Unlock(true)
-		return
-	}
-
-	copiesFQN := make([]string, 0, ndel)
-	for copyFQN := range lom.GetCopies() {
-		if copyFQN == lom.FQN {
-			continue
-		}
-		copiesFQN = append(copiesFQN, copyFQN)
-		ndel--
-		if ndel == 0 {
-			break
-		}
-	}
-
-	size = int64(len(copiesFQN)) * lom.Size()
-	if err = lom.DelCopy(copiesFQN...); err == nil {
-		err = lom.Persist()
-	}
-
-	lom.ReCache()
-	lom.Unlock(true)
-	return
-}
-
-func (j *mncJogger) addCopies(lom *cluster.LOM) (size int64, err error) {
-	size, err = addCopies(lom, j.parent.copies, j.parent.Mpathers(), j.buf)
 	return
 }

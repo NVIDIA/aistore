@@ -20,9 +20,57 @@ type mpather interface {
 	post(lom *cluster.LOM)
 }
 
+func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
+	lom.Lock(true)
+
+	// Reload metadata, it is necessary to have it fresh.
+	lom.Uncache()
+	if err := lom.Load(false); err != nil {
+		return 0, err
+	}
+
+	ndel := lom.NumCopies() - copies
+	if ndel <= 0 {
+		lom.Unlock(true)
+		return
+	}
+
+	copiesFQN := make([]string, 0, ndel)
+	for copyFQN := range lom.GetCopies() {
+		if copyFQN == lom.FQN {
+			continue
+		}
+		copiesFQN = append(copiesFQN, copyFQN)
+		ndel--
+		if ndel == 0 {
+			break
+		}
+	}
+
+	size = int64(len(copiesFQN)) * lom.Size()
+	if err = lom.DelCopies(copiesFQN...); err == nil {
+		err = lom.Persist()
+	}
+
+	lom.ReCache()
+	lom.Unlock(true)
+	return
+}
+
 func addCopies(lom *cluster.LOM, copies int, mpathers map[string]mpather, buf []byte) (size int64, err error) {
 	lom.Lock(false)
 	defer lom.Unlock(false)
+
+	// Reload metadata, it is necessary to have it fresh.
+	lom.Uncache()
+	if err := lom.Load(false); err != nil {
+		return 0, err
+	}
+
+	// Recheck if we still need to create the copy.
+	if lom.NumCopies() >= copies {
+		return 0, nil
+	}
 
 	for i := lom.NumCopies() + 1; i <= copies; i++ {
 		if mpather := findLeastUtilized(lom, mpathers); mpather != nil {
@@ -83,19 +131,13 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 		bck = lom.Bck()
 	)
 
-	// Reload metadata, it is necessary to have it fresh
-	lom.Uncache()
-	if err := lom.Load(false); err != nil {
-		return nil, err
-	}
-
 	copyFQN := fs.CSM.FQN(mpathInfo, lom.ParsedFQN.ContentType, bck.Name, bck.Provider, lom.Objname)
 	clone, err = lom.CopyObject(copyFQN, buf)
 	if err != nil {
 		return
 	}
 	if err = lom.Persist(); err != nil {
-		_ = lom.DelCopy(copyFQN)
+		_ = lom.DelCopies(copyFQN)
 		return
 	}
 

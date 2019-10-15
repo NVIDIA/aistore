@@ -755,7 +755,7 @@ var _ = Describe("LOM", func() {
 			})
 		})
 
-		Describe("DelCopy", func() {
+		Describe("DelCopies", func() {
 			It("should delete mirrored copy", func() {
 				lom := prepareLOM(mirrorFQNs[0])
 				_ = prepareCopy(lom, mirrorFQNs[1])
@@ -767,7 +767,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
 
 				// Delete copy and check if it's gone.
-				Expect(lom.DelCopy(mirrorFQNs[1])).ToNot(HaveOccurred())
+				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				_, err := os.Stat(mirrorFQNs[1])
 				Expect(os.IsNotExist(err)).To(BeTrue())
@@ -794,7 +794,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1]), HaveKey(mirrorFQNs[2])))
 
 				// Delete copy and check if it's gone.
-				Expect(lom.DelCopy(mirrorFQNs[1])).ToNot(HaveOccurred())
+				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
 				_, err := os.Stat(mirrorFQNs[1])
 				Expect(os.IsNotExist(err)).To(BeTrue())

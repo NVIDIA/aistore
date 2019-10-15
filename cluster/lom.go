@@ -219,7 +219,7 @@ func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
 	return nil
 }
 
-func (lom *LOM) DelCopy(copiesFQN ...string) (err error) {
+func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 	if !lom.HasCopies() {
 		return
 	}
@@ -265,7 +265,7 @@ func (lom *LOM) DelAllCopies() (err error) {
 		}
 		copiesFQN = append(copiesFQN, copyFQN)
 	}
-	return lom.DelCopy(copiesFQN...)
+	return lom.DelCopies(copiesFQN...)
 }
 
 // DelExtraCopies deletes objects which are not part of lom.md.copies metadata (leftovers).
