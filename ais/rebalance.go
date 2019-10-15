@@ -680,7 +680,7 @@ func (reb *rebManager) retransmit(xreb *xactGlobalReb, globRebID int64) (cnt int
 				continue
 			}
 			tsi, _ := cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap)
-			if reb.t.lookupRemote(lom, tsi) {
+			if reb.t.lookupRemoteSingle(lom, tsi) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s: HEAD ok %s at %s", reb.loghdr(globRebID, smap), lom, tsi.Name())
 				}

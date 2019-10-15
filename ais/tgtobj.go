@@ -328,7 +328,7 @@ do:
 	if coldGet && goi.lom.IsAIS() {
 		// try lookup and restore
 		goi.lom.Unlock(false)
-		doubleCheck, err, errCode = goi.getFromAny(goi.lom)
+		doubleCheck, err, errCode = goi.tryRestoreObject(goi.lom)
 		if doubleCheck && err != nil {
 			lom2 := &cluster.LOM{T: goi.t, Objname: goi.lom.Objname}
 			er2 := lom2.Init(goi.lom.Bucket(), goi.lom.Bck().Provider)
@@ -413,9 +413,9 @@ get:
 // an attempt to restore an object that is missing in the ais bucket - from:
 //     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
 //		targets using erasure coding (if enabled)
-func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error, errCode int) {
+func (goi *getObjInfo) tryRestoreObject(lom *cluster.LOM) (doubleCheck bool, err error, errCode int) {
 	var (
-		tsi              *cluster.Snode
+		tsi, gfnNode     *cluster.Snode
 		smap             = goi.t.smapowner.get()
 		tname            = goi.t.si.Name()
 		aborted, running = goi.t.xactions.isRebalancing(cmn.ActLocalReb)
@@ -426,7 +426,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		return
 	}
 	if aborted || running || gfnActive {
-		if lom.RestoreObjectFromAny() { // get-from-neighbor local variety
+		if lom.RestoreObjectFromAny() { // get-from-neighbor local (mountpaths) variety
 			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("%s restored", lom)
 			}
@@ -435,9 +435,10 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		doubleCheck = running
 	}
 
-	// FIXME: if there're not enough EC targets to restore an sliced object, we might be able to restore it
-	// if it was replicated. In this case even just one additional target might be sufficient
-	// This won't succeed if an object was sliced, neither will ecmanager.RestoreObject(lom)
+	// FIXME: if there're not enough EC targets to restore an sliced object,
+	// we might be able to restore it if it was replicated. In this case even
+	// just one additional target might be sufficient. This won't succeed if
+	// an object was sliced, neither will ecmanager.RestoreObject(lom)
 	enoughECRestoreTargets := lom.Bprops().EC.RequiredRestoreTargets() <= goi.t.smapowner.Get().CountTargets()
 
 	// cluster-wide lookup ("get from neighbor")
@@ -446,27 +447,26 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 		doubleCheck = true
 	}
 	gfnActive = goi.t.gfn.global.active()
-	if running && tsi.DaemonID != goi.t.si.DaemonID { // TODO -- FIXME: needed?
-		if goi.t.lookupRemote(lom, tsi) {
-			if goi.getFromNeighbor(lom, tsi) {
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("%s: GFN %s <= %s", tname, lom, tsi.Name())
-				}
-				return
-			}
+	if running && tsi.DaemonID != goi.t.si.DaemonID {
+		if goi.t.lookupRemoteSingle(lom, tsi) {
+			gfnNode = tsi
+			goto gfn
 		}
 	}
 	if running || aborted || gfnActive || !enoughECRestoreTargets {
-		tsi = goi.t.locateObject(lom, smap)
-		if tsi != nil {
-			if goi.getFromNeighbor(lom, tsi) {
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("%s: GFN %s <= %s", tname, lom, tsi.Name())
-				}
-				return
+		gfnNode = goi.t.lookupRemoteAll(lom, smap)
+	}
+
+gfn:
+	if gfnNode != nil {
+		if goi.getFromNeighbor(lom, gfnNode) {
+			if glog.FastV(4, glog.SmoduleAIS) {
+				glog.Infof("%s: GFN %s <= %s", tname, lom, gfnNode.Name())
 			}
+			return
 		}
 	}
+
 	// restore from existing EC slices if possible
 	if ecErr := goi.t.ecmanager.RestoreObject(lom); ecErr == nil {
 		if glog.FastV(4, glog.SmoduleAIS) {
@@ -484,9 +484,7 @@ func (goi *getObjInfo) getFromAny(lom *cluster.LOM) (doubleCheck bool, err error
 	} else {
 		err = errors.New(s)
 	}
-	if errCode == 0 {
-		errCode = http.StatusNotFound
-	}
+	errCode = http.StatusNotFound
 	return
 }
 

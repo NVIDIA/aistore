@@ -1387,7 +1387,8 @@ func (t *targetrunner) commitECEncode(bckFrom *cluster.Bck) (err error) {
 	return nil
 }
 
-func (t *targetrunner) lookupRemote(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+// lookupRemoteSingle sends the message to the given target to see if it has the specific object.
+func (t *targetrunner) lookupRemoteSingle(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 	query := make(url.Values)
 	query.Add(cmn.URLParamSilent, "true")
 	args := callArgs{
@@ -1405,7 +1406,9 @@ func (t *targetrunner) lookupRemote(lom *cluster.LOM, tsi *cluster.Snode) (ok bo
 	return
 }
 
-func (t *targetrunner) locateObject(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+// lookupRemoteAll sends the broadcast message to all targets to see if they
+// have the specific object.
+func (t *targetrunner) lookupRemoteAll(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	query := make(url.Values)
 	query.Add(cmn.URLParamSilent, "true")
 	query.Add(cmn.URLParamCheckExistsAny, "true") // lookup all mountpaths _and_ copy if misplaced
