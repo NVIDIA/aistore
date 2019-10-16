@@ -126,6 +126,62 @@ func TestResetBucketProps(t *testing.T) {
 	}
 }
 
+func TestSetInvalidBucketProps(t *testing.T) {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	tests := []struct {
+		name string
+		nvs  cmn.SimpleKVs
+	}{
+		{
+			name: "humongous number of copies",
+			nvs: cmn.SimpleKVs{
+				"mirror.enabled": "true",
+				"mirror.copies":  "120",
+			},
+		},
+		{
+			name: "too many copies",
+			nvs: cmn.SimpleKVs{
+				"mirror.enabled": "true",
+				"mirror.copies":  "12",
+			},
+		},
+		{
+			name: "humongous number of slices",
+			nvs: cmn.SimpleKVs{
+				"ec.enabled":       "true",
+				"ec.parity_slices": "120",
+			},
+		},
+		{
+			name: "too many slices",
+			nvs: cmn.SimpleKVs{
+				"ec.enabled":       "true",
+				"ec.parity_slices": "12",
+			},
+		},
+		{
+			name: "enable both ec and mirroring",
+			nvs: cmn.SimpleKVs{
+				"mirror.enabled": "true",
+				"ec.enabled":     "true",
+			},
+		},
+	}
+
+	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
+	defer tutils.DestroyBucket(t, proxyURL, TestBucketName)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := api.SetBucketProps(baseParams, TestBucketName, test.nvs)
+			if err == nil {
+				t.Error("expected error when setting bad input")
+			}
+		})
+	}
+}
+
 func TestCloudListObjectVersions(t *testing.T) {
 	var (
 		workerCount = 10
@@ -342,8 +398,8 @@ func TestListObjectFast(t *testing.T) {
 
 func TestBucketSingleProp(t *testing.T) {
 	const (
-		dataSlices      = 3
-		paritySlices    = 4
+		dataSlices      = 1
+		paritySlices    = 1
 		objLimit        = 300 * cmn.KiB
 		mirrorThreshold = 15
 	)
@@ -374,6 +430,11 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
+	// Need to disable EC first
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
+		t.Error(err)
+	}
+
 	// Enabling mirroring should set default value for number of copies if it is 0
 	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"}); err != nil {
 		t.Error(err)
@@ -388,17 +449,17 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
-	// Need to disable EC first
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
+	// Need to disable mirroring first
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"}); err != nil {
 		t.Error(err)
 	}
 
 	// Change a few more bucket properties
 	if err := api.SetBucketProps(baseParams, bucket,
 		cmn.SimpleKVs{
-			cmn.HeaderBucketECData:    strconv.Itoa(dataSlices),
-			cmn.HeaderBucketECParity:  strconv.Itoa(paritySlices),
-			cmn.HeaderBucketECMinSize: strconv.Itoa(objLimit),
+			cmn.HeaderBucketECData:         strconv.Itoa(dataSlices),
+			cmn.HeaderBucketECParity:       strconv.Itoa(paritySlices),
+			cmn.HeaderBucketECObjSizeLimit: strconv.Itoa(objLimit),
 		}); err != nil {
 		t.Error(err)
 	}
@@ -420,6 +481,11 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
+	// Need to disable EC first
+	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
+		t.Error(err)
+	}
+
 	if err := api.SetBucketProps(baseParams, bucket,
 		cmn.SimpleKVs{cmn.HeaderBucketMirrorThresh: strconv.Itoa(mirrorThreshold)}); err != nil {
 		t.Error(err)
@@ -431,26 +497,9 @@ func TestBucketSingleProp(t *testing.T) {
 		}
 	}
 
-	// Disable EC
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
-		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if p.EC.Enabled {
-			t.Error("EC was not disabled")
-		}
-	}
-
 	// Disable Mirroring
 	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"}); err != nil {
 		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if p.Mirror.Enabled {
-			t.Error("Mirroring was not disabled")
-		}
 	}
 }
 

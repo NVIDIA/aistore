@@ -192,7 +192,7 @@ func HeadBucket(baseParams *BaseParams, bucket string, query ...url.Values) (p *
 	} else {
 		return
 	}
-	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECMinSize), 10, 64); err == nil {
+	if n, err = strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECObjSizeLimit), 10, 64); err == nil {
 		ecProps.ObjSizeLimit = n
 	} else {
 		return

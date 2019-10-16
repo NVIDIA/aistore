@@ -82,7 +82,7 @@ var BucketPropList = map[string]bool{
 	HeaderBucketECEnabled:       false,
 	HeaderBucketECData:          false,
 	HeaderBucketECParity:        false,
-	HeaderBucketECMinSize:       false,
+	HeaderBucketECObjSizeLimit:  false,
 	HeaderBucketAccessAttrs:     false,
 }
 
@@ -253,7 +253,7 @@ type BucketProps struct {
 	EC ECConf `json:"ec"`
 
 	// Bucket access attributes - see Allow* above
-	AccessAttrs uint64 `json:"aattrs"`
+	AccessAttrs uint64 `json:"aattrs,string"`
 
 	// unique bucket ID
 	BID uint64
@@ -390,7 +390,7 @@ func (c *ECConf) String() string {
 func (c *ECConf) Updatable(field string) bool {
 	return (c.Enabled && !(field == HeaderBucketECData ||
 		field == HeaderBucketECParity ||
-		field == HeaderBucketECMinSize)) || !c.Enabled
+		field == HeaderBucketECObjSizeLimit)) || !c.Enabled
 }
 
 func (c *ECConf) RequiredEncodeTargets() int {
@@ -515,6 +515,11 @@ func (bp *BucketProps) Validate(bckIsAIS bool, targetCnt int, urlOutsideCluster 
 			return err
 		}
 	}
+
+	if bp.Mirror.Enabled && bp.EC.Enabled {
+		return fmt.Errorf("cannot enable mirroring and ec at the same time for the same bucket")
+	}
+
 	return nil
 }
 

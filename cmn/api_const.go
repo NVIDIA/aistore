@@ -129,7 +129,7 @@ const (
 	HeaderBucketCopies          = "mirror.copies"           // # local copies
 	HeaderBucketMirrorThresh    = "mirror.util_thresh"      // same util when below this threshold
 	HeaderBucketECEnabled       = "ec.enabled"              // EC is on for a bucket
-	HeaderBucketECMinSize       = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
+	HeaderBucketECObjSizeLimit  = "ec.objsize_limit"        // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData          = "ec.data_slices"          // number of data chunks for EC
 	HeaderBucketECParity        = "ec.parity_slices"        // number of parity chunks for EC/copies for small files
 	HeaderBucketECCompression   = "ec.compression"          // EC stream compression settings

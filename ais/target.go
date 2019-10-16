@@ -749,6 +749,17 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("%s %s bucket %s", phase, msgInt.Action, bck)
+	case cmn.ActSetProps:
+		phase := apiItems[1]
+		switch phase {
+		case cmn.ActBegin:
+			if err := t.validateBckProps(bck, msgInt); err != nil {
+				t.invalmsghdlr(w, r, err.Error())
+				return
+			}
+		case cmn.ActCommit, cmn.ActAbort:
+			// not required
+		}
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msgInt)
 		t.invalmsghdlr(w, r, s)
@@ -870,7 +881,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		hdr.Set(cmn.HeaderBucketCopies, "0")
 	}
 	hdr.Set(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.EC.Enabled))
-	hdr.Set(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
+	hdr.Set(cmn.HeaderBucketECObjSizeLimit, strconv.FormatUint(uint64(props.EC.ObjSizeLimit), 10))
 	hdr.Set(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.EC.DataSlices), 10))
 	hdr.Set(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.EC.ParitySlices), 10))
 	hdr.Set(cmn.HeaderBucketAccessAttrs, strconv.FormatUint(props.AccessAttrs, 10))

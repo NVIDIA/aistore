@@ -772,8 +772,8 @@ func (c *MirrorConf) Validate(_ *Config) error {
 	if c.Burst < 0 {
 		return fmt.Errorf("bad mirror.burst: %v (expected >0)", c.UtilThresh)
 	}
-	if c.Enabled && c.Copies != 2 {
-		return fmt.Errorf("bad mirror.copies: %d (expected 2)", c.Copies)
+	if c.Copies < 2 || c.Copies > 32 {
+		return fmt.Errorf("bad mirror.copies: %d (expected value in range [2, 32])", c.Copies)
 	}
 	return nil
 }
@@ -1159,7 +1159,7 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.EC, updateValue(&conf.EC.DataSlices)
 	case "ec_parity_slices", HeaderBucketECParity:
 		return &conf.EC, updateValue(&conf.EC.ParitySlices)
-	case "ec_objsize_limit", HeaderBucketECMinSize:
+	case "ec_objsize_limit", HeaderBucketECObjSizeLimit:
 		return &conf.EC, updateValue(&conf.EC.ObjSizeLimit)
 	case "ec_compression", HeaderBucketECCompression:
 		return &conf.EC, updateValue(&conf.EC.Compression)
@@ -1305,7 +1305,7 @@ var ConfigPropList = map[string]bool{
 	HeaderBucketECEnabled:                    false,
 	HeaderBucketECData:                       false,
 	HeaderBucketECParity:                     false,
-	HeaderBucketECMinSize:                    false,
+	HeaderBucketECObjSizeLimit:               false,
 	HeaderBucketECCompression:                false,
 }
 
