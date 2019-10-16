@@ -28,9 +28,9 @@ func Init() *StreamCollector {
 	// real stream collector
 	gc = &collector{
 		stopCh:  cmn.NewStopCh(),
-		ctrlCh:  make(chan ctrl, 16),
-		streams: make(map[string]*Stream, 16),
-		heap:    make([]*Stream, 0, 16), // min-heap sorted by stream.time.ticks
+		ctrlCh:  make(chan ctrl, 64),
+		streams: make(map[string]*Stream, 64),
+		heap:    make([]*Stream, 0, 64), // min-heap sorted by stream.time.ticks
 	}
 	heap.Init(gc)
 
