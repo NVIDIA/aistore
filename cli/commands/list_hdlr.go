@@ -6,7 +6,6 @@
 package commands
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -124,12 +123,8 @@ func defaultListHandler(c *cli.Context) (err error) {
 		return listBucketNames(c, baseParams, "" /* any provider */)
 	}
 
-	if strings.HasSuffix(bucket, "/") {
-		bucket = strings.TrimSuffix(bucket, "/")
-		return listBucketObj(c, baseParams, bucket, "" /* auto-detect provider */)
-	}
-
-	return commandNotFoundError(c, c.Args().First())
+	bucket = strings.TrimSuffix(bucket, "/")
+	return listBucketObj(c, baseParams, bucket, "" /* auto-detect provider */)
 }
 
 // Note: This handler ignores aisBucketEnvVar because the intention
@@ -144,12 +139,8 @@ func listAISBucketsHandler(c *cli.Context) (err error) {
 		return listBucketNames(c, baseParams, cmn.AIS)
 	}
 
-	if strings.HasSuffix(bucket, "/") {
-		bucket = strings.TrimSuffix(bucket, "/")
-		return listBucketObj(c, baseParams, bucket, cmn.AIS)
-	}
-
-	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))
+	bucket = strings.TrimSuffix(bucket, "/")
+	return listBucketObj(c, baseParams, bucket, cmn.AIS)
 }
 
 // Note: This handler ignores aisBucketEnvVar because the intention
@@ -164,12 +155,8 @@ func listCloudBucketsHandler(c *cli.Context) (err error) {
 		return listBucketNames(c, baseParams, cmn.Cloud)
 	}
 
-	if strings.HasSuffix(bucket, "/") {
-		bucket = strings.TrimSuffix(bucket, "/")
-		return listBucketObj(c, baseParams, bucket, cmn.Cloud)
-	}
-
-	return incorrectUsageError(c, errors.New("bucket name should end with '/'"))
+	bucket = strings.TrimSuffix(bucket, "/")
+	return listBucketObj(c, baseParams, bucket, cmn.Cloud)
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {

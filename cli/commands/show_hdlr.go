@@ -141,8 +141,9 @@ func showBucketHandler(c *cli.Context) (err error) {
 		bucket, provider string
 		baseParams       = cliAPIParams(ClusterURL)
 	)
+
 	bucket = c.Args().First()
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", true /* optional */); err != nil {
 		return
 	}
 	return bucketDetails(c, baseParams, bucket, provider, flagIsSet(c, fastDetailsFlag))
@@ -273,7 +274,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
 	bucket, object = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if object == "" {

@@ -32,7 +32,7 @@ const (
 	longCommandTime = 10 * time.Second
 )
 
-func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string) (bucket, provider string, err error) {
+func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string, optional bool) (bucket, provider string, err error) {
 	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
@@ -40,6 +40,9 @@ func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string) (
 	if bucket == "" {
 		bucket, _ = os.LookupEnv(aisBucketEnvVar)
 		if bucket == "" {
+			if optional {
+				return
+			}
 			if tag != "" {
 				err = incorrectUsageError(c, fmt.Errorf("'%s': missing bucket name", tag))
 			} else {
@@ -319,7 +322,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if len(propsArgs) == 0 {
 		return missingArgumentsError(c, "property key-value pairs")
 	}
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 
@@ -347,7 +350,7 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) (err error) 
 		bucket     = c.Args().First()
 		inputProps = parseStrFlag(c, jsonspecFlag)
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
@@ -368,7 +371,7 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		provider string
 		bucket   = c.Args().First()
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
@@ -390,7 +393,7 @@ func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 		provider string
 		bucket   = c.Args().First()
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}

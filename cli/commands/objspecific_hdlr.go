@@ -78,7 +78,7 @@ var (
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPut],
 			Action:       putHandler,
-			BashComplete: flagCompletions, // FIXME
+			BashComplete: putPromoteObjectCompletions,
 		},
 		{
 			Name:         commandPromote,
@@ -86,7 +86,7 @@ var (
 			ArgsUsage:    putPromoteObjectArgument,
 			Flags:        objectSpecificCmdsFlags[commandPromote],
 			Action:       promoteHandler,
-			BashComplete: flagCompletions, // FIXME
+			BashComplete: putPromoteObjectCompletions,
 		},
 	}
 )
@@ -99,7 +99,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 	if c.NArg() > 0 {
 		bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 	}
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
@@ -114,6 +114,7 @@ func evictHandler(c *cli.Context) (err error) {
 		bucket, provider string
 		baseParams       = cliAPIParams(ClusterURL)
 	)
+
 	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
@@ -123,7 +124,7 @@ func evictHandler(c *cli.Context) (err error) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+		if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
@@ -159,7 +160,7 @@ func getHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "output file")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if objName == "" {
@@ -182,7 +183,7 @@ func putHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	return putObject(c, baseParams, bucket, provider, objName, fileName)
@@ -202,7 +203,7 @@ func promoteHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form bucket/[object]")
 	}
 	bucket, objName = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	return promoteFile(c, baseParams, bucket, provider, objName, fileName)

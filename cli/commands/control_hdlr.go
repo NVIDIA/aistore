@@ -122,7 +122,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 		}
 	} else { // bucket related xaction
 		bucket = c.Args().Get(1)
-		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+		if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 			return
 		}
 	}
@@ -156,7 +156,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
 			bucket = c.Args().Get(1)
-			if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+			if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 				return
 			}
 		} else if c.NArg() > 1 {

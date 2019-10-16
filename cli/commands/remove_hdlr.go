@@ -105,7 +105,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+		if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {

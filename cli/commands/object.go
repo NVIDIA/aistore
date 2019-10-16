@@ -450,7 +450,7 @@ func multiObjOp(c *cli.Context, baseParams *api.BaseParams, command string, prov
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		bucket, object := splitBucketObject(fullObjName)
-		if bucket, _, err = validateBucket(c, baseParams, bucket, fullObjName); err != nil {
+		if bucket, _, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 			return
 		}
 		if object == "" {

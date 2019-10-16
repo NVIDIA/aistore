@@ -45,7 +45,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 		baseParams = cliAPIParams(ClusterURL)
 		bucket     = c.Args().First()
 	)
-	if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	return configureNCopies(c, baseParams, bucket)
@@ -56,7 +56,7 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 		baseParams = cliAPIParams(ClusterURL)
 		bucket     = c.Args().First()
 	)
-	if bucket, _, err = validateBucket(c, baseParams, bucket, ""); err != nil {
+	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	return ecEncode(c, baseParams, bucket)

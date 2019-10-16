@@ -249,6 +249,22 @@ func suggestBucket(c *cli.Context, separator bool, provider ...string) {
 	}
 }
 
+////////////
+// Object //
+////////////
+
+func putPromoteObjectCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		// waiting for file|directory as first arg
+		return
+	}
+	if c.NArg() == 1 {
+		suggestBucket(c, true /* separator */)
+		return
+	}
+	flagCompletions(c)
+}
+
 //////////
 // List //
 //////////
