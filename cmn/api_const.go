@@ -210,6 +210,21 @@ const (
 	URLParamDescription = "description"
 )
 
+// ActionMsg.Value, ListMsg, RangeMsg fields that get json-marshaled as map[string]interface{}
+const (
+	JsmapDeadline  = "deadline"
+	JsmapObjname   = "objname"
+	JsmapPrefix    = "prefix"
+	JsmapRegex     = "regex"
+	JsmapRange     = "range"
+	JsmapWait      = "wait"
+	JsmapTarget    = "target"
+	JsmapOmitBase  = "omit_base"
+	JsmapRecurs    = "recurs"
+	JsmapOverwrite = "overwrite"
+	JsmapVerbose   = "verbose"
+)
+
 // enum: start and abort global (cluster) rebalancing
 const (
 	RebStart = "start"

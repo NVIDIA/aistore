@@ -779,9 +779,9 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		t.renameObject(w, r, msg)
+		t.renameObject(w, r, &msg)
 	case cmn.ActPromote:
-		t.promoteFile(w, r, msg)
+		t.promoteFQN(w, r, &msg)
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
 		t.invalmsghdlr(w, r, s)
@@ -1140,7 +1140,7 @@ func (t *targetrunner) objDelete(ctx context.Context, lom *cluster.LOM, evict bo
 // RENAME OBJECT //
 ///////////////////
 
-func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
@@ -1184,22 +1184,42 @@ func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg 
 // PROMOTE local file(s) => objects  //
 ///////////////////////////////////////
 
-func (t *targetrunner) promoteFile(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	const fmtErr = "%s: %s failed: "
-	apiItems, err := t.checkRESTItems(w, r, 3, false, cmn.Version, cmn.Objects)
+	apiItems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objName, tid := apiItems[0], apiItems[1], apiItems[2]
-	if tid != t.si.DaemonID {
-		glog.Errorf("%s: unexpected target ID %s mismatch", t.si.Name(), tid)
-	}
-	provider := r.URL.Query().Get(cmn.URLParamProvider)
+	bucket := apiItems[0]
 
+	// 1. parse msg.Value => cmn.ActValPromote
+	jsmap, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		t.invalmsghdlr(w, r, fmt.Sprintf("invalid action message value [%v, %T]", msg.Value, msg.Value))
+		return
+	}
+	params := &cmn.ActValPromote{}
+	params.Target, _ = jsmap[cmn.JsmapTarget].(string) // TODO -- FIXME: add constants here and elsewhere
+	if params.Target != "" && params.Target != t.si.DaemonID {
+		glog.Errorf("%s: unexpected target ID %s mismatch", t.si.Name(), params.Target)
+	}
+	params.Objname, _ = jsmap[cmn.JsmapObjname].(string)
+	params.OmitBase, _ = jsmap[cmn.JsmapOmitBase].(string)
+	params.Recurs, _ = jsmap[cmn.JsmapRecurs].(bool)
+	params.Overwrite, _ = jsmap[cmn.JsmapOverwrite].(bool)
+	params.Verbose, _ = jsmap[cmn.JsmapVerbose].(bool)
+
+	// 2. init & validate
+	provider := r.URL.Query().Get(cmn.URLParamProvider)
 	srcFQN := msg.Name
 	if srcFQN == "" {
 		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
 		t.invalmsghdlr(w, r, loghdr+"missing source filename")
+		return
+	}
+	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
+		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
+		t.invalmsghdlr(w, r, loghdr+err.Error())
 		return
 	}
 	finfo, err := os.Stat(srcFQN)
@@ -1207,12 +1227,6 @@ func (t *targetrunner) promoteFile(w http.ResponseWriter, r *http.Request, msg c
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	if finfo.IsDir() { // TODO -- FIXME: support src directory
-		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
-		t.invalmsghdlr(w, r, fmt.Sprintf("%s%s is a directory", loghdr, srcFQN))
-		return
-	}
-
 	bck := &cluster.Bck{Name: bucket, Provider: provider}
 	if err = bck.Init(t.bmdowner); err != nil {
 		if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); ok {
@@ -1224,63 +1238,26 @@ func (t *targetrunner) promoteFile(w http.ResponseWriter, r *http.Request, msg c
 			return
 		}
 	}
-	if err = bck.AllowPUT(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
 
-	lom := &cluster.LOM{T: t, Objname: objName}
-	err = lom.Init(bck.Name, bck.Provider)
-	if err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if lom.Exists() { // TODO -- FIXME: CLI option
-		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
-		t.invalmsghdlr(w, r, fmt.Sprintf("%sdestination %s already exists", loghdr, lom))
-		return
-	}
-
-	var (
-		si   *cluster.Snode
-		smap = t.smapowner.get()
-	)
-	if si, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	// remote
-	if si.DaemonID != t.si.DaemonID {
-		buf, slab := nodeCtx.mm.AllocDefault()
-		lom.FQN = srcFQN
-		ri := &replicInfo{smap: smap, t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
-		_, err := ri.putRemote(lom, lom.Objname, si)
-		slab.Free(buf)
+	// 3a. promote dir
+	if finfo.IsDir() {
+		if params.Verbose {
+			glog.Infof("%s: promote %+v", t.si.Name(), *params)
+		}
+		var xact *mirror.XactDirPromote
+		xact, err = t.xactions.renewDirPromote(srcFQN, bck, t, params)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
+			return
 		}
+		go xact.Run()
 		return
 	}
-
-	// local
-	var (
-		cksum     *cmn.Cksum
-		written   int64
-		buf, slab = nodeCtx.mm.AllocDefault()
-		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
-		poi       = &putObjInfo{t: t, lom: lom, workFQN: workFQN}
-	)
-	written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
-	slab.Free(buf)
-	if err != nil {
+	// 3b. promote file
+	if err = t.PromoteFile(srcFQN, bck, params.Objname, params.Overwrite, params.Verbose); err != nil {
 		loghdr := fmt.Sprintf(fmtErr, t.si.Name(), msg.Action)
 		t.invalmsghdlr(w, r, loghdr+err.Error())
-		return
 	}
-	lom.SetCksum(cksum)
-	lom.SetSize(written)
-	lom.SetBID(lom.Bprops().BID)
-	poi.finalize()
 }
 
 //====================== common for both cold GET and PUT ======================================

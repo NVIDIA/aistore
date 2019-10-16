@@ -52,6 +52,7 @@ type Target interface {
 	PutObject(workFQN string, reader io.ReadCloser, lom *LOM, recvType RecvType, cksum *cmn.Cksum, started time.Time) error
 	CopyObject(lom *LOM, bckTo *Bck, buf []byte) error
 	GetCold(ctx context.Context, lom *LOM, prefetch bool) (error, int)
+	PromoteFile(srcFQN string, bck *Bck, objName string, overwrite, verbose bool) (err error)
 }
 
 type RebalanceInfo struct {

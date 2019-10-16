@@ -1290,3 +1290,20 @@ func ValidateBucketName(bucket string) (err error) {
 	}
 	return
 }
+
+//
+// miscellaneous
+//
+func ValidateOmitBase(fqn, omitBase string) (err error) {
+	const a = "does not represent an absolute path"
+	if omitBase != "" && !filepath.IsAbs(omitBase) {
+		return fmt.Errorf("pathname prefix '%s' %s", omitBase, a)
+	}
+	if !filepath.IsAbs(fqn) {
+		return fmt.Errorf("pathname '%s' %s", fqn, a)
+	}
+	if omitBase != "" && !strings.HasPrefix(fqn, omitBase) {
+		return fmt.Errorf("pathname '%s' does not begin with '%s'", fqn, omitBase)
+	}
+	return
+}

@@ -281,6 +281,36 @@ func (r *xactionsRegistry) renewBckMakeNCopies(bck *cluster.Bck, t *targetrunner
 }
 
 //
+// dpromoteEntry
+//
+type dpromoteEntry struct {
+	baseBckEntry
+	t      *targetrunner
+	xact   *mirror.XactDirPromote
+	dir    string
+	params *cmn.ActValPromote
+}
+
+func (e *dpromoteEntry) Start(id int64) error {
+	xact := mirror.NewXactDirPromote(id, e.dir, e.bck, e.t, e.params)
+	go xact.Run()
+	e.xact = xact
+	return nil
+}
+func (*dpromoteEntry) Kind() string    { return cmn.ActPromote }
+func (e *dpromoteEntry) Get() cmn.Xact { return e.xact }
+
+func (r *xactionsRegistry) renewDirPromote(dir string, bck *cluster.Bck, t *targetrunner, params *cmn.ActValPromote) (*mirror.XactDirPromote, error) {
+	b := r.bucketsXacts(bck)
+	e := &dpromoteEntry{t: t, dir: dir, baseBckEntry: baseBckEntry{bck: bck}, params: params}
+	ee, err := b.renewBucketXaction(e)
+	if err == nil {
+		return ee.Get().(*mirror.XactDirPromote), nil
+	}
+	return nil, err
+}
+
+//
 // loadLomCacheEntry
 //
 type loadLomCacheEntry struct {

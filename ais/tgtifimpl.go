@@ -230,6 +230,68 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	return
 }
 
+func (t *targetrunner) PromoteFile(srcFQN string, bck *cluster.Bck, objName string, overwrite, verbose bool) (err error) {
+	if err = bck.AllowPUT(); err != nil {
+		return
+	}
+	lom := &cluster.LOM{T: t, Objname: objName}
+	if err = lom.Init(bck.Name, bck.Provider); err != nil {
+		return
+	}
+	// local or remote?
+	var (
+		si   *cluster.Snode
+		smap = t.smapowner.get()
+	)
+	if si, err = cluster.HrwTarget(lom.Bck(), lom.Objname, &smap.Smap); err != nil {
+		return
+	}
+	// remote
+	if si.DaemonID != t.si.DaemonID {
+		if verbose {
+			glog.Infof("promote/PUT %s => %s @ %s", srcFQN, lom, si.DaemonID)
+		}
+		buf, slab := nodeCtx.mm.AllocDefault()
+		lom.FQN = srcFQN
+		ri := &replicInfo{smap: smap, t: t, bckTo: lom.Bck(), buf: buf, localOnly: false}
+
+		// TODO -- FIXME: handle overwrite (lookup first)
+		_, err = ri.putRemote(lom, lom.Objname, si)
+		slab.Free(buf)
+		return
+	}
+
+	// local
+	if lom.Exists() && !overwrite {
+		err = fmt.Errorf("%s already exists", lom)
+		return
+	}
+	if verbose {
+		s := ""
+		if overwrite {
+			s = "+"
+		}
+		glog.Infof("promote%s %s => %s", s, srcFQN, lom)
+	}
+	var (
+		cksum     *cmn.Cksum
+		written   int64
+		buf, slab = nodeCtx.mm.AllocDefault()
+		workFQN   = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+		poi       = &putObjInfo{t: t, lom: lom, workFQN: workFQN}
+	)
+	written, cksum, err = cmn.CopyFile(srcFQN, workFQN, buf, true)
+	slab.Free(buf)
+	if err != nil {
+		return
+	}
+	lom.SetCksum(cksum)
+	lom.SetSize(written)
+	lom.SetBID(lom.Bprops().BID)
+	err, _ = poi.finalize()
+	return
+}
+
 //
 // implements health.fspathDispatcher interface
 //

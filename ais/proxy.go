@@ -1104,7 +1104,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		p.objRename(w, r, bck)
 		return
 	case cmn.ActPromote:
-		p.promoteFile(w, r, bck)
+		p.promoteFQN(w, r, bck, &msg)
 		return
 	default:
 		s := fmt.Sprintf(fmtUnknownAct, msg)
@@ -2155,31 +2155,63 @@ func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *clu
 	p.statsif.Add(stats.RenameCount, 1)
 }
 
-func (p *proxyrunner) promoteFile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
-	started := time.Now()
-	apiItems, err := p.checkRESTItems(w, r, 3, false, cmn.Version, cmn.Objects)
+func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, msg *cmn.ActionMsg) {
+	apiItems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	objName, tid := apiItems[1], apiItems[2]
-	smap := p.smapowner.get()
-	tsi := smap.GetTarget(tid)
-	if tsi == nil {
-		// TODO -- FIXME: cluster-wide PROMOTE
-		p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", tid))
+	// parse msg.Value
+	jsmap, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		p.invalmsghdlr(w, r, fmt.Sprintf("invalid action message value [%v, %T]", msg.Value, msg.Value))
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PROMOTE %s %s/%s @ %s", r.Method, bck.Name, objName, tsi)
+	var (
+		started     = time.Now()
+		smap        = p.smapowner.get()
+		bucket      = apiItems[0]
+		tid, _      = jsmap[cmn.JsmapTarget].(string)
+		omitBase, _ = jsmap[cmn.JsmapOmitBase].(string)
+		srcFQN      = msg.Name
+	)
+	if err = cmn.ValidateOmitBase(srcFQN, omitBase); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	// designated target ID
+	if tid != "" {
+		tsi := smap.GetTarget(tid)
+		if tsi == nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", tid))
+			return
+		}
+		// NOTE:
+		//       code 307 is the only way to http-redirect with the
+		//       original JSON payload (SelectMsg - see pkg/api/constant.go)
+		redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
+		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+		return
 	}
 
-	// NOTE:
-	//       code 307 is the only way to http-redirect with the
-	//       original JSON payload (SelectMsg - see pkg/api/constant.go)
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetworkIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-
-	p.statsif.Add(stats.PutCount, 1)
+	// all targets
+	//
+	// TODO -- FIXME: 2phase begin to check space, validate params, and check vs running xactions
+	//
+	var (
+		body  = cmn.MustMarshal(msg)
+		path  = cmn.URLPath(cmn.Version, cmn.Objects, bucket)
+		query = url.Values{}
+	)
+	query.Add(cmn.URLParamProvider, bck.Provider)
+	results := p.broadcastTo(
+		path,
+		query, http.MethodPost, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
+	for res := range results {
+		if res.err != nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, res.err))
+			return
+		}
+	}
 }
 
 func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query url.Values) error {

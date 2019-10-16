@@ -52,7 +52,11 @@ type PromoteArgs struct {
 	Provider   string
 	Object     string
 	Target     string
+	OmitBase   string
 	FQN        string
+	Recurs     bool
+	Overwrite  bool
+	Verbose    bool
 }
 
 // HeadObject API
@@ -322,11 +326,20 @@ func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error
 	return err
 }
 
-// PromoteFile API
+// PromoteFileOrDir API
 //
-// promote target-local files and directories to objects (NOTE: advanced usage only)
-func PromoteFile(args *PromoteArgs) error {
-	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN})
+// promote AIS-resident files and directories to objects (NOTE: advanced usage only)
+func PromoteFileOrDir(args *PromoteArgs) error {
+	msg := cmn.ActionMsg{Action: cmn.ActPromote, Name: args.FQN}
+	msg.Value = &cmn.ActValPromote{
+		Target:    args.Target,
+		Objname:   args.Object,
+		OmitBase:  args.OmitBase,
+		Recurs:    args.Recurs,
+		Overwrite: args.Overwrite,
+		Verbose:   args.Verbose,
+	}
+	msgbody, err := jsoniter.Marshal(&msg)
 	if err != nil {
 		return err
 	}
@@ -335,8 +348,8 @@ func PromoteFile(args *PromoteArgs) error {
 	params := OptionalParams{Query: query}
 
 	args.BaseParams.Method = http.MethodPost
-	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket, args.Object, args.Target)
-	_, err = DoHTTPRequest(args.BaseParams, path, msg, params)
+	path := cmn.URLPath(cmn.Version, cmn.Objects, args.Bucket)
+	_, err = DoHTTPRequest(args.BaseParams, path, msgbody, params)
 	return err
 }
 

@@ -49,7 +49,6 @@ func (r *XactBckCopy) Run() (err error) {
 }
 
 func (r *XactBckCopy) Description() string {
-	cmn.Assert(r.Kind() == cmn.ActCopyBucket)
 	return "copy ais bucket"
 }
 

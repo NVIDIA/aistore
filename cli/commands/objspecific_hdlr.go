@@ -42,8 +42,10 @@ var (
 		commandPromote: {
 			providerFlag,
 			recursiveFlag,
+			overwriteFlag,
 			baseFlag,
 			targetFlag,
+			verboseFlag,
 		},
 	}
 
@@ -193,7 +195,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, objName string
 		baseParams                = cliAPIParams(ClusterURL)
-		fileName                  = c.Args().Get(0)
+		fqn                       = c.Args().Get(0)
 		fullObjName               = c.Args().Get(1)
 	)
 	if c.NArg() < 1 {
@@ -206,5 +208,5 @@ func promoteHandler(c *cli.Context) (err error) {
 	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
-	return promoteFile(c, baseParams, bucket, provider, objName, fileName)
+	return promoteFileOrDir(c, baseParams, bucket, provider, objName, fqn)
 }

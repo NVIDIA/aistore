@@ -280,7 +280,8 @@ var (
 	checksumFlag  = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
 	waitFlag      = cli.BoolTFlag{Name: "wait", Usage: "wait for operation to finish before returning response"}
 	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	baseFlag      = cli.StringFlag{Name: "base", Usage: "part of pathname that is omitted i.e., not used to generate object names"}
+	overwriteFlag = cli.BoolFlag{Name: "overwrite,o", Usage: "overwrite destination if exists"}
+	baseFlag      = cli.StringFlag{Name: "base", Usage: "pathname prefix that is omitted i.e., not used to generate object names"}
 	targetFlag    = cli.StringFlag{Name: "target", Usage: "ais target ID"}
 	yesFlag       = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 

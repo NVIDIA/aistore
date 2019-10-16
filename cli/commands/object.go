@@ -94,22 +94,29 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 //////
 // Promote AIS-resident files and directories to objects (NOTE: advanced usage only)
 //////
-func promoteFile(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
+func promoteFileOrDir(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)
+	omitBase := parseStrFlag(c, baseFlag)
+	if err = cmn.ValidateOmitBase(fqn, omitBase); err != nil {
+		return
+	}
 	promoteArgs := &api.PromoteArgs{
 		BaseParams: baseParams,
 		Bucket:     bucket,
 		Provider:   provider,
 		Object:     objName,
 		Target:     target,
-		FQN:        fileName,
+		OmitBase:   omitBase,
+		FQN:        fqn,
+		Recurs:     flagIsSet(c, recursiveFlag),
+		Overwrite:  flagIsSet(c, overwriteFlag),
+		Verbose:    flagIsSet(c, verboseFlag),
 	}
-	err = api.PromoteFile(promoteArgs)
-	if err != nil {
-		return err
+	if err = api.PromoteFileOrDir(promoteArgs); err != nil {
+		return
 	}
-	fmt.Fprintf(c.App.Writer, "promoted %s as %s/%s\n", fileName, bucket, objName)
-	return nil
+	fmt.Fprintf(c.App.Writer, "promoted %s => bucket %s\n", fqn, bucket)
+	return
 }
 
 func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
@@ -118,16 +125,19 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 		return
 	}
 
-	commonBase := parseStrFlag(c, baseFlag)
-	if commonBase != "" {
-		commonBase = cmn.ExpandPath(commonBase)
-		if commonBase, err = filepath.Abs(commonBase); err != nil {
+	omitBase := parseStrFlag(c, baseFlag)
+	if omitBase != "" {
+		omitBase = cmn.ExpandPath(omitBase)
+		if omitBase, err = filepath.Abs(omitBase); err != nil {
 			return
 		}
 	}
 
+	// upload single file
 	if objName != "" {
-		// corner case - user gave the object name, upload one file
+		if omitBase != "" {
+			return fmt.Errorf("pathname prefix '%s' cannot be used to upload a single file", omitBase)
+		}
 		fh, err := cmn.NewFileHandle(path)
 		if err != nil {
 			return err
@@ -149,24 +159,17 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 		return nil
 	}
 
-	// enumerate files
+	// upload many
 	fmt.Fprintf(c.App.Writer, "Enumerating files\n")
-	files, err := generateFileList(path, commonBase, flagIsSet(c, recursiveFlag))
+	files, err := generateFileList(path, omitBase, flagIsSet(c, recursiveFlag))
 	if err != nil {
 		return
 	}
 	if len(files) == 0 {
 		return fmt.Errorf("no files found")
 	}
-
-	// check if the bucket is empty
-	msg := cmn.SelectMsg{PageSize: 1}
-	bckList, err := api.ListBucket(baseParams, bucket, &msg, 1)
-	if err != nil {
-		return
-	}
-	if len(bckList.Entries) != 0 {
-		fmt.Fprintf(c.App.Writer, "\nWARNING: destination bucket %q is not empty\n\n", bucket)
+	if objName != "" {
+		return fmt.Errorf("object name '%s' cannot be used to upload multiple files", objName)
 	}
 
 	// calculate total size, group by extension

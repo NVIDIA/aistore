@@ -278,11 +278,12 @@ func parseDest(rawURL string) (bucket, pathSuffix string, err error) {
 		return
 	}
 	if destScheme != aisScheme {
-		err = fmt.Errorf("destination should be %q scheme, eg. %s://bucket/objname, got: %s", aisScheme, aisScheme, destScheme)
+		err = fmt.Errorf("destination must look as %q, for instance: %s://bucket/objname (got %s)",
+			aisScheme, aisScheme, destScheme)
 		return
 	}
 	if destBucket == "" {
-		err = fmt.Errorf("destination bucket cannot be empty")
+		err = fmt.Errorf("destination bucket name cannot be omitted")
 		return
 	}
 	destPathSuffix = strings.Trim(destPathSuffix, "/")
@@ -325,7 +326,7 @@ func cleanFlag(flag string) string {
 }
 
 func flagIsSet(c *cli.Context, flag cli.Flag) bool {
-	// If the flag name has multiple values, take first one
+	// If the flag name has multiple values, take the first one
 	flagName := cleanFlag(flag.GetName())
 	return c.GlobalIsSet(flagName) || c.IsSet(flagName)
 }

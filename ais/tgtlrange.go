@@ -25,11 +25,6 @@ const (
 	prefetchChanSize = 200
 	defaultDeadline  = 0
 	defaultWait      = false
-
-	//list range message keys
-	rangePrefix = "prefix"
-	rangeRegex  = "regex"
-	rangeKey    = "range"
 )
 
 type filesWithDeadline struct {
@@ -228,7 +223,7 @@ func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, err 
 		deadline time.Duration
 	)
 	pbm = &cmn.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
-	if v, ok := jsmap["deadline"]; ok {
+	if v, ok := jsmap[cmn.JsmapDeadline]; ok {
 		// When unmarshalling map[string]interface{},
 		// Go will convert int to float64 (https://play.golang.org/p/kHroZ1rHVQ)
 		if f, ok := v.(float64); ok {
@@ -242,7 +237,7 @@ func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, err 
 		}
 		pbm.Deadline = deadline
 	}
-	if v, ok := jsmap["wait"]; ok {
+	if v, ok := jsmap[cmn.JsmapWait]; ok {
 		wait, ok := v.(bool)
 		if !ok {
 			return pbm, fmt.Errorf("error parsing BaseMsg: (Wait: %v, %T)", v, v)
@@ -258,7 +253,7 @@ func parseListMsg(jsmap map[string]interface{}) (pm *cmn.ListMsg, err error) {
 		return
 	}
 	pm = &cmn.ListMsg{ListRangeMsgBase: *pbm}
-	v, ok := jsmap["objnames"]
+	v, ok := jsmap[cmn.JsmapObjname]
 	if !ok {
 		return pm, errors.New("error parsing ListMsg: no 'objnames' field")
 	}
@@ -284,19 +279,19 @@ func parseRangeMsg(jsmap map[string]interface{}) (pm *cmn.RangeMsg, err error) {
 	}
 	pm = &cmn.RangeMsg{ListRangeMsgBase: *pbm}
 
-	prefix, err := unmarshalMsgValue(jsmap, rangePrefix)
+	prefix, err := unmarshalMsgValue(jsmap, cmn.JsmapPrefix)
 	if err != nil {
 		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
 	pm.Prefix = prefix
 
-	regex, err := unmarshalMsgValue(jsmap, rangeRegex)
+	regex, err := unmarshalMsgValue(jsmap, cmn.JsmapRegex)
 	if err != nil {
 		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
 	pm.Regex = regex
 
-	r, err := unmarshalMsgValue(jsmap, rangeKey)
+	r, err := unmarshalMsgValue(jsmap, cmn.JsmapRange)
 	if err != nil {
 		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
 	}
@@ -351,7 +346,7 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, pro
 	if !ok {
 		return fmt.Errorf("invalid cmn.ActionMsg.Value format %s", details)
 	}
-	if _, ok := jsmap["objnames"]; !ok {
+	if _, ok := jsmap[cmn.JsmapObjname]; !ok {
 		// Parse map into RangeMsg, convert to and process ListMsg page-by-page
 		rangeMsg, err := parseRangeMsg(jsmap)
 		if err != nil {
