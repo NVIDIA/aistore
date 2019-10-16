@@ -371,12 +371,16 @@ func (s *Stream) terminate() {
 	s.term.terminated = true
 
 	s.Stop()
-	gc.remove(s)
 
 	hdr := Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}
 	obj := obj{hdr: hdr}
 	s.cmplCh <- cmpl{obj, s.term.err}
 	s.term.mu.Unlock()
+
+	// Remove stream after lock because we could deadlock between `do()`
+	// (which checks for `Terminated` status) and this function which
+	// would be under lock.
+	gc.remove(s)
 
 	if s.compressed() {
 		s.lz4s.sgl.Free()
