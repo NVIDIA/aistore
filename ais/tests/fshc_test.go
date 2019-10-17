@@ -142,7 +142,6 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, false, fshcDetectTimeDisabled); detected {
 		md.t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 	}
-
 }
 
 func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool, timeout ...time.Duration) bool {

@@ -37,7 +37,6 @@ type Ship struct {
 	Drive     DriveType    `xml:"drive"`
 	Age       uint         `xml:"age"`
 	Passenger []*Passenger `xml:"passenger"`
-	secret    string
 }
 
 type NamedType string

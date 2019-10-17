@@ -47,5 +47,4 @@ func recBasicTargetDown(rctx *soakprim.RecipeContext) {
 	rctx.Destroy("d2")
 	rctx.RemoveTarget(postConds, 0)
 	rctx.Post(postConds)
-
 }

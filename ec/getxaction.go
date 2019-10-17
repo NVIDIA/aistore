@@ -282,7 +282,6 @@ func (r *XactGet) dispatchRequest(req *Request) {
 		cmn.AssertMsg(ok, "Invalid mountpath given in EC request")
 		r.stats.updateQueue(len(jogger.workCh))
 		jogger.workCh <- req
-
 	}
 }
 

@@ -53,7 +53,6 @@ func InitReportFiles() {
 		if !info.IsDir() {
 			cmn.AssertNoErr(errors.New("%v is not a folder"))
 		}
-
 	}
 
 	t := time.Now()

@@ -184,8 +184,6 @@ const nonStrictInput = `
 <tag>&0a;</tag>
 `
 
-var nonStringEntity = map[string]string{"": "oops!", "0a": "oops!"}
-
 var nonStrictTokens = []Token{
 	CharData("\n"),
 	StartElement{Name{"", "tag"}, []Attr{}},

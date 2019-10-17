@@ -5,7 +5,7 @@
 case $CHECK in
 lint)
     echo "Running lint check..." >&2
-    ${GOPATH}/bin/golangci-lint run ${LINT_DIRS} 2>&1
+    ${GOPATH}/bin/golangci-lint run -v ${LINT_DIRS} 2>&1
     exit $?
   ;;
 fmt)

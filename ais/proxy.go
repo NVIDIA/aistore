@@ -154,21 +154,21 @@ func (p *proxyrunner) Run() error {
 	}
 
 	networkHandlers := []networkHandler{
-		networkHandler{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Reverse, h: p.reverseHandler, net: []string{cmn.NetworkPublic}},
 
-		networkHandler{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Download, h: downloadHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
-		networkHandler{r: cmn.Sort, h: dsortHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Buckets, h: bucketHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Objects, h: objectHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Download, h: downloadHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Daemon, h: p.daemonHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Cluster, h: p.clusterHandler, net: []string{cmn.NetworkPublic, cmn.NetworkIntraControl}},
+		{r: cmn.Tokens, h: p.tokenHandler, net: []string{cmn.NetworkPublic}},
+		{r: cmn.Sort, h: dsortHandler, net: []string{cmn.NetworkPublic}},
 
-		networkHandler{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
-		networkHandler{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Metasync, h: p.metasyncHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Health, h: p.healthHandler, net: []string{cmn.NetworkIntraControl}},
+		{r: cmn.Vote, h: p.voteHandler, net: []string{cmn.NetworkIntraControl}},
 
-		networkHandler{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
+		{r: "/", h: cmn.InvalidHandler, net: []string{cmn.NetworkIntraControl, cmn.NetworkIntraData}},
 	}
 	p.registerNetworkHandlers(networkHandlers)
 

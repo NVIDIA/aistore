@@ -128,7 +128,6 @@ func decryptToken(tokenStr string) (*authRec, error) {
 		}
 	} else if glog.V(4) {
 		glog.Infof("Token for %s does not contain credentials", rec.userID)
-
 	}
 
 	return rec, nil

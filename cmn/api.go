@@ -154,7 +154,6 @@ func (msg *SelectMsg) NeedLocalData() bool {
 // WantProp returns true if msg request requires to return propName property
 func (msg *SelectMsg) WantProp(propName string) bool {
 	return strings.Contains(msg.Props, propName)
-
 }
 
 // BucketEntry corresponds to a single entry in the BucketList and

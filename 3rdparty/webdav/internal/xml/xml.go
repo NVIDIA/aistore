@@ -1050,7 +1050,6 @@ Input:
 					if d.err != nil {
 						return nil
 					}
-					ok = false
 				}
 				if b, ok = d.mustgetc(); !ok {
 					return nil

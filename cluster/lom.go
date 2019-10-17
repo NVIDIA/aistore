@@ -997,7 +997,6 @@ func lomCacheCleanup(t Target, d time.Duration) (evictedCnt, totalCnt int) {
 	}
 	wg.Wait()
 	return int(evicted.Load()), int(total.Load())
-
 }
 
 func LomCacheHousekeep(mem *memsys.Mem2, t Target) (housekeep hk.CleanupFunc, initialInterval time.Duration) {

@@ -300,14 +300,14 @@ var errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of 
 
 // Syntax: -vmodule=recordio=2,file=1,gfs*=3
 func (m *moduleSpec) Set(value string) error {
-	var filter []modulePat
+	filter := make([]modulePat, 0, 2)
 	for _, pat := range strings.Split(value, ",") {
-		if len(pat) == 0 {
+		if pat == "" {
 			// Empty strings such as from a trailing comma can be ignored.
 			continue
 		}
 		patLev := strings.Split(pat, "=")
-		if len(patLev) != 2 || len(patLev[0]) == 0 || len(patLev[1]) == 0 {
+		if len(patLev) != 2 || patLev[0] == "" || patLev[1] == "" {
 			return errVmoduleSyntax
 		}
 		pattern := patLev[0]

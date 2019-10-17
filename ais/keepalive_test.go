@@ -81,7 +81,6 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func TestKeepaliveTrackerHeartBeat(t *testing.T) {

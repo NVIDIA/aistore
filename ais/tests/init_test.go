@@ -93,7 +93,6 @@ func TestMain(m *testing.M) {
 	proxyURLReadOnly = proxyURL
 	if containers.DockerRunning() && proxyURLReadOnly == proxyURL {
 		proxyURLReadOnly = "http://" + primaryHostIP + ":" + port
-
 	}
 	if containers.DockerRunning() && proxyNextTierURLReadOnly == proxyURLNext {
 		proxyNextTierURLReadOnly = "http://" + nextTierHostIP + ":" + port

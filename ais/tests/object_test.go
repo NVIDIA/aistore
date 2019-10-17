@@ -98,7 +98,6 @@ func TestCloudBucketObject(t *testing.T) {
 					t.Errorf("expected no error when doing %s on existing %q bucket", test.ty, bucket)
 				}
 			}
-
 		})
 	}
 }

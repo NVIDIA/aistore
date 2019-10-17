@@ -59,7 +59,6 @@ func TestAddValidMountpaths(t *testing.T) {
 		if err := mfs.Add(mpath); err != nil {
 			t.Errorf("adding valid mountpath %q failed", mpath)
 		}
-
 	}
 	assertMountpathCount(t, mfs, 3, 0)
 

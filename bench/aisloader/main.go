@@ -823,7 +823,6 @@ Done:
 	if runParams.cleanUp.Val {
 		cleanUp()
 	}
-
 }
 
 func sendStatsdStats(s *sts) {

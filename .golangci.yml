@@ -18,6 +18,9 @@ linters:
     - unconvert
     - unparam
     - gocritic
+    - goimports
+    - whitespace
+    - unparam
     # following linters produce a lot false positives, enable only when needed:
     # - gosec
     # - scopelint
@@ -79,6 +82,10 @@ issues:
         - govet
       text: "composite literal uses unkeyed fields" # FIXME: disable this check using govet settings instead when supported
 
+    - linters:
+        - unused
+      text: "`noCopy` is unused"
+
   # Set to 0 to disable limit
   max-same-issues: 0
   max-per-linter: 0
@@ -90,9 +97,8 @@ run:
     - hrw # build hrw so that staticcheck doesn't complain about unused export functions
 
   skip-dirs:
-    - vendor
-    - 3rdparty
     - openapi
+    - 3rdparty/webdav
 
   concurrency: 4
   deadline: 5m

@@ -660,7 +660,6 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 		// double header write.
 		return
 	}
-
 }
 
 // metricsHandler is the handler called for the HTTP endpoint /v1/sort/metrics.

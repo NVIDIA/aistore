@@ -1819,7 +1819,6 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 					df.checkReactionResult(reaction, df.tarballCntToSkip)
 					df.checkDSortList()
-
 				})
 			}
 		})

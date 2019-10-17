@@ -356,7 +356,7 @@ type Time struct {
 
 // NewTime creates a Time.
 func NewTime(d time.Time) *Time {
-	return &Time{v: *NewInt64(int64(d.UnixNano()))}
+	return &Time{v: *NewInt64(d.UnixNano())}
 }
 
 // Load atomically loads the wrapped value.
@@ -366,7 +366,7 @@ func (d *Time) Load() time.Time {
 
 // Store atomically stores the passed value.
 func (d *Time) Store(n time.Time) {
-	d.v.Store(int64(n.UnixNano()))
+	d.v.Store(n.UnixNano())
 }
 
 // Value shadows the type of the same name from sync/atomic

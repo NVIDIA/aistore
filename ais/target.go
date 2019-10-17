@@ -574,7 +574,6 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	default:
 		t.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msgInt.Action))
 	}
-
 }
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name

@@ -420,7 +420,6 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 			}
 			return http.StatusInternalServerError, err
 		}
-
 	} else {
 		// Section 9.10.3 says that "If no Depth header is submitted on a LOCK request,
 		// then the request MUST act as if a "Depth:infinity" had been submitted."

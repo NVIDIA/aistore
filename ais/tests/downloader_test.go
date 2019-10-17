@@ -150,7 +150,6 @@ func waitForDownloaderToFinish(t *testing.T, baseParams *api.BaseParams, targetI
 			return
 		}
 	}
-
 }
 
 func TestDownloadSingle(t *testing.T) {

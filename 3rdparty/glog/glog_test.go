@@ -76,7 +76,7 @@ func contents(s severity) string {
 }
 
 // contains reports whether the string is contained in the log.
-func contains(s severity, str string, t *testing.T) bool {
+func contains(s severity, str string) bool {
 	return strings.Contains(contents(s), str)
 }
 
@@ -90,10 +90,10 @@ func TestInfo(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
 	Info("test")
-	if !contains(infoLog, "I", t) {
+	if !contains(infoLog, "I") {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
 	}
-	if !contains(infoLog, "test", t) {
+	if !contains(infoLog, "test") {
 		t.Error("Info failed")
 	}
 }
@@ -161,10 +161,10 @@ func TestStandardLog(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
 	stdLog.Print("test")
-	if !contains(infoLog, "I", t) {
+	if !contains(infoLog, "I") {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
 	}
-	if !contains(infoLog, "test", t) {
+	if !contains(infoLog, "test") {
 		t.Error("Info failed")
 	}
 }
@@ -200,17 +200,17 @@ func TestError(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
 	Error("test")
-	if !contains(errorLog, "E", t) {
+	if !contains(errorLog, "E") {
 		t.Errorf("Error has wrong character: %q", contents(errorLog))
 	}
-	if !contains(errorLog, "test", t) {
+	if !contains(errorLog, "test") {
 		t.Error("Error failed")
 	}
 	str := contents(errorLog)
-	if !contains(warningLog, str, t) {
+	if !contains(warningLog, str) {
 		t.Error("Warning failed")
 	}
-	if !contains(infoLog, str, t) {
+	if !contains(infoLog, str) {
 		t.Error("Info failed")
 	}
 }
@@ -222,14 +222,14 @@ func TestWarning(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
 	Warning("test")
-	if !contains(warningLog, "W", t) {
+	if !contains(warningLog, "W") {
 		t.Errorf("Warning has wrong character: %q", contents(warningLog))
 	}
-	if !contains(warningLog, "test", t) {
+	if !contains(warningLog, "test") {
 		t.Error("Warning failed")
 	}
 	str := contents(warningLog)
-	if !contains(infoLog, str, t) {
+	if !contains(infoLog, str) {
 		t.Error("Info failed")
 	}
 }
@@ -241,10 +241,10 @@ func TestV(t *testing.T) {
 	logging.verbosity.Set("2")
 	defer logging.verbosity.Set("0")
 	V(2).Info("test")
-	if !contains(infoLog, "I", t) {
+	if !contains(infoLog, "I") {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
 	}
-	if !contains(infoLog, "test", t) {
+	if !contains(infoLog, "test") {
 		t.Error("Info failed")
 	}
 }
@@ -270,10 +270,10 @@ func TestFastV(t *testing.T) {
 		t.Error("V enabled for 3")
 	}
 	FastV(2, SmoduleTransport).Info("test")
-	if !contains(infoLog, "I", t) {
+	if !contains(infoLog, "I") {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
 	}
-	if !contains(infoLog, "test", t) {
+	if !contains(infoLog, "test") {
 		t.Error("Info failed")
 	}
 
@@ -303,10 +303,10 @@ func TestVmoduleOn(t *testing.T) {
 		t.Error("V enabled for 3")
 	}
 	V(2).Info("test")
-	if !contains(infoLog, "I", t) {
+	if !contains(infoLog, "I") {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
 	}
-	if !contains(infoLog, "test", t) {
+	if !contains(infoLog, "test") {
 		t.Error("Info failed")
 	}
 }

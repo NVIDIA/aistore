@@ -283,7 +283,6 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 			m.t.Fatalf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
 		}
 	}
-
 }
 
 func (m *ioContext) ensureNoErrors() {

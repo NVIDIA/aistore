@@ -167,7 +167,6 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 		if ci.t.Snode().DaemonID != si.DaemonID {
 			objStatus = cmn.ObjStatusMoved
 		}
-
 	}
 	return ci.lsObject(lom, objStatus)
 }

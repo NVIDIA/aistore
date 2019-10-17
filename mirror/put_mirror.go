@@ -209,7 +209,6 @@ func (j *xputJogger) jog() {
 			return
 		}
 	}
-
 }
 
 //

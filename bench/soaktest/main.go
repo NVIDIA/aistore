@@ -87,7 +87,6 @@ func printUsage(f *flag.FlagSet) {
 }
 
 func parseCmdLine() {
-
 	// Command line options
 	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError) //Discard flags of imported packages
 
@@ -170,7 +169,6 @@ func main() {
 	// Sanity check for recipe list
 	recipeList := make([]int, 0)
 	if recipeListStr != "" {
-
 		valid := recipes.GetValidRecipeIDs()
 		for _, x := range strings.Split(recipeListStr, ",") {
 			if x != "" {

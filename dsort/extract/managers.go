@@ -226,7 +226,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		Key:      key,
 		Name:     recordUniqueName,
 		DaemonID: rm.daemonID,
-		Objects: []*RecordObj{&RecordObj{
+		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
 			StoreType:      storeType,

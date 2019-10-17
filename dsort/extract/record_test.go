@@ -18,7 +18,7 @@ var _ = Describe("Records", func() {
 				Key:  "some_key",
 				Name: "some_key",
 				Objects: []*RecordObj{
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".cls",
@@ -29,7 +29,7 @@ var _ = Describe("Records", func() {
 				Key:  "some_key1",
 				Name: "some_key1",
 				Objects: []*RecordObj{
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".cls",
@@ -46,17 +46,17 @@ var _ = Describe("Records", func() {
 				Key:  "some_key",
 				Name: "some_key",
 				Objects: []*RecordObj{
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".cls",
 					},
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".txt",
 					},
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".jpg",
@@ -73,17 +73,17 @@ var _ = Describe("Records", func() {
 				Key:  "some_key",
 				Name: "some_key",
 				Objects: []*RecordObj{
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".xml",
 					},
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".png",
 					},
-					&RecordObj{
+					{
 						MetadataSize: 10,
 						Size:         objectSize,
 						Extension:    ".tar",

@@ -280,7 +280,6 @@ func TestSGReader(t *testing.T) {
 		testReaderBasic(t, r, size)
 		r.Close()
 	}
-
 }
 
 func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {

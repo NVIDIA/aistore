@@ -290,7 +290,6 @@ func TestRegressionBuckets(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucket)
 	defer tutils.DestroyBucket(t, proxyURL, bucket)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
-
 }
 
 func TestRenameBucket(t *testing.T) {
@@ -1005,7 +1004,6 @@ func TestDeleteList(t *testing.T) {
 		wg.Add(1)
 		go tutils.PutAsync(wg, proxyURL, clibucket, keyname, r, errCh)
 		files = append(files, keyname)
-
 	}
 	wg.Wait()
 	selectErr(errCh, "put", t, true)

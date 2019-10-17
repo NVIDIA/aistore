@@ -473,7 +473,6 @@ func CopyStruct(dst interface{}, src interface{}) {
 	starY := y.Elem()
 	starY.Set(starX)
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
-
 }
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.

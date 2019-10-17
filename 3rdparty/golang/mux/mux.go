@@ -65,7 +65,7 @@ var defaultServeMux ServeMux
 
 // Does path match pattern?
 func pathMatch(pattern, path string) bool {
-	if len(pattern) == 0 {
+	if pattern == "" {
 		// should not happen
 		return false
 	}
@@ -146,7 +146,7 @@ func (mux *ServeMux) redirectToPathSlash(host, path string, u *url.URL) (*url.UR
 	if !shouldRedirect {
 		return u, false
 	}
-	path = path + "/"
+	path += "/"
 	u = &url.URL{Path: path, RawQuery: u.RawQuery}
 	return u, true
 }
@@ -192,7 +192,6 @@ func (mux *ServeMux) shouldRedirectRLocked(host, path string) bool {
 // If there is no registered handler that applies to the request,
 // Handler returns a ``page not found'' handler and an empty pattern.
 func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
-
 	// CONNECT requests are not canonicalized.
 	if r.Method == "CONNECT" {
 		// If r.URL.Path is /tree and its handler is not registered,

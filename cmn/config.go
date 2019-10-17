@@ -817,7 +817,6 @@ func (c *ECConf) ValidateAsProps(args *ValidationArgs) error {
 			"erasure coding requires %d targets to use %d data and %d parity slices "+
 				"(the cluster has only %d targets)",
 			required, c.DataSlices, c.ParitySlices, args.TargetCnt)
-
 	}
 	return nil
 }
@@ -1345,7 +1344,6 @@ func SetConfigMany(nvmap SimpleKVs) (err error) {
 			if validator != nil {
 				validators[validator] = struct{}{}
 			}
-
 		}
 
 		glog.Infof("%s: %s=%s", ActSetConfig, name, value)

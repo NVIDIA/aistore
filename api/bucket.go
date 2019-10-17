@@ -296,7 +296,6 @@ func GetBucketsSummaries(baseParams *BaseParams, bucket, provider string, msg *c
 	}
 
 	return summaries, nil
-
 }
 
 // CreateBucket API

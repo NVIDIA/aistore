@@ -613,7 +613,6 @@ func Test_SameLocalAndCloudBckNameValidate(t *testing.T) {
 	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Cloud file %s not deleted", fileName2)
 	}
-
 }
 
 func Test_sameAISandCloudBucketName(t *testing.T) {
@@ -643,7 +642,7 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 	tutils.CreateFreshBucket(t, proxyURL, bucketName)
 	defer tutils.DestroyBucket(t, proxyURL, bucketName)
 
-	//Common
+	// Common
 	defCloudProps.Cksum = globalConfig.Cksum
 	defCloudProps.LRU = testBucketProps(t).LRU
 	defLocalProps.Cksum = globalConfig.Cksum

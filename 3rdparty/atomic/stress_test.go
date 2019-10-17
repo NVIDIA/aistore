@@ -36,7 +36,7 @@ const (
 var _stressTests = map[string]func() func(){
 	"i32/std":  stressStdInt32,
 	"i32":      stressInt32,
-	"i64/std":  stressStdInt32,
+	"i64/std":  stressStdInt64,
 	"i64":      stressInt64,
 	"u32/std":  stressStdUint32,
 	"u32":      stressUint32,

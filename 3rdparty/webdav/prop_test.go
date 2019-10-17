@@ -519,7 +519,10 @@ func TestMemPS(t *testing.T) {
 			}
 
 			// Call property system.
-			var propstats []Propstat
+			var (
+				fi        os.FileInfo
+				propstats []Propstat
+			)
 			switch op.op {
 			case "propname":
 				pnames, err := propnames(ctx, fs, ls, op.name)
@@ -534,14 +537,14 @@ func TestMemPS(t *testing.T) {
 				}
 				continue
 			case "allprop":
-				fi, err := fs.Stat(ctx, op.name)
+				fi, err = fs.Stat(ctx, op.name)
 				if err != nil {
 					t.Errorf("stat %s: got error %v, want nil", op.name, err)
 					continue
 				}
 				propstats, err = allprop(ctx, fs, ls, op.name, fi, op.pnames)
 			case "propfind":
-				fi, err := fs.Stat(ctx, op.name)
+				fi, err = fs.Stat(ctx, op.name)
 				if err != nil {
 					t.Errorf("stat %s: got error %v, want nil", op.name, err)
 					continue
