@@ -121,7 +121,7 @@ ais_k8s:
     # Needed for debug if you wish to run delve within a pod (or look into kubesquash etc)
     #- SYS_PTRACE
   sysctls:
-    somaxconn: 1024
+    somaxconn: 100000
 
 proxy:
   name: proxy        # A component label for selector
@@ -143,6 +143,8 @@ proxy:
         port_intra_data:    ""
         sndrcv_buf_size:    131072
       http:
+        write_buffer_size: 0
+        read_buffer_size:  0
         use_https:        false
         chunked_transfer: true
   service:
@@ -184,6 +186,8 @@ ne_proxy:
         port_intra_data:    ""
         sndrcv_buf_size:    131072
       http:
+        write_buffer_size: 0
+        read_buffer_size:  0
         use_https:        false
         chunked_transfer: true
   service:

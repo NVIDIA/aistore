@@ -39,7 +39,6 @@ data:
     declare -A uniquegets=( [_default]="{{ .Values.aisloaderArg.uniquegets.default }}" )
     declare -A putshards=( [_default]="{{ .Values.aisloaderArg.putshards.default }}" )
     declare -A maxputs=( [_default]={{ .Values.aisloaderArg.maxputs.default | quote }} )
-    declare -A no_detailed_stats=( [_default]={{ .Values.aisloaderArg.no_detailed_stats.default | quote }} )
     declare -A readlen=( [_default]={{ .Values.aisloaderArg.readlen.default | quote }} )
     declare -A readoff=( [_default]={{ .Values.aisloaderArg.readoff.default | quote }} )
 
@@ -119,11 +118,6 @@ data:
     maxputs[{{ .node }}]={{ .value | quote }}
     {{ end }}
 
-    # Node-specific values for no_detailed_stats, if any
-    {{ range .Values.aisloaderArg.no_detailed_stats.specific }}
-    no_detailed_stats=[{{ .node }}]={{ .value | quote }}
-    {{ end }}
-
     # Node-specific values for readlen, if any
     {{ range .Values.aisloaderArg.readlen.specific }}
     readlen=[{{ .node }}]={{ .value | quote }}
@@ -132,6 +126,11 @@ data:
     # Node-specific values for readoff, if any
     {{ range .Values.aisloaderArg.readoff.specific }}
     readoff=[{{ .node }}]={{ .value | quote }}
+    {{ end }}
+
+    # Export environment variables
+    {{ range .Values.aisloaderEnv }}
+    export {{ .name }}={{ .value | quote }}
     {{ end }}
 
     #
@@ -180,7 +179,6 @@ data:
         -uniquegets=${uniquegets[$n]:-${uniquegets['_default']}} \
         -putshards=${putshards[$n]:-${putshards['_default']}} \
         -maxputs=${maxputs[$n]:-${maxputs['_default']}} \
-        -no-detailed-stats=${no_detailed_stats[$n]:-${no_detailed_stats['_default']}} \
         -readlen=${readlen[$n]:-${readlen['_default']}} \
         -readoff=${readoff[$n]:-${readoff['_default']}}
 

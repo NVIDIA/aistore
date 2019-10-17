@@ -72,9 +72,6 @@ aisloaderArg:
   maxputs:
     default: "0"
     specific: []
-  no_detailed_stats:
-    default: "true"
-    specific: []
   readlen:
     default: "0"
     specific: []
@@ -82,7 +79,9 @@ aisloaderArg:
     default: "0"
     specific: []
 
-
+aisloaderEnv:
+#  - name: FOO
+#    value: bar 
 
 resources: {}
 

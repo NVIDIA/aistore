@@ -53,8 +53,9 @@ if [[ -n "$JENKINS_URL" ]]; then
 
     echo 'Go get AIStore source from $AIS_SRC'
     /usr/local/go/bin/go get -v $AIS_SRC
+    cd $GOPATH/src/$AIS_SRC && make mod-init
 else
-    # Use go in existing PATH
+    # Use go in existing PATH, assume AIS source already present, mod-init run
     check_go_version
     GOPATH=${GOPATH:=$HOME/go}
     GOBIN=${GOBIN:=$GOPATH/bin}
