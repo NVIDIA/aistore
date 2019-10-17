@@ -212,21 +212,14 @@ func (lom *LOM) delCopyMd(copyFQN string) {
 func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
 	lom.addCopyMd(copyFQN, mpi)
 	if err := lom.syncMetaWithCopies(); err != nil {
-		lom.delCopyMd(copyFQN) // revert addition, there was some error
-		return err
+		return err // Hard error which probably removed the main object
 	}
-	return nil
+	return lom.Persist()
 }
 
 func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
-	if !lom.HasCopies() {
-		return
-	}
-	if lom._whingeCopy() {
-		return
-	}
-	if !lom.IsHRW() {
-		return
+	if lom._whingeCopy() || !lom.IsHRW() || !lom.HasCopies() {
+		return lom.Persist()
 	}
 
 	numCopies := lom.NumCopies()
@@ -240,7 +233,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 
 	// 2. Try to update metadata on left copies
 	if err := lom.syncMetaWithCopies(); err != nil {
-		return err
+		return err // Hard error which probably removed default object.
 	}
 
 	// 3. If everything succeeded, finally remove the requested copies.
@@ -253,13 +246,14 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 			continue
 		}
 	}
-	return
+
+	return lom.Persist()
 }
 
 func (lom *LOM) DelAllCopies() (err error) {
 	copiesFQN := make([]string, 0, len(lom.md.copies))
 	for copyFQN := range lom.md.copies {
-		if lom.FQN == copyFQN {
+		if copyFQN == lom.FQN {
 			continue
 		}
 		copiesFQN = append(copiesFQN, copyFQN)
@@ -309,6 +303,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 			}
 		}
 	}
+
 	slab.Free(buf)
 	return err
 }
@@ -816,12 +811,11 @@ func (lom *LOM) FromFS() error {
 
 func (lom *LOM) Remove() (err error) {
 	lom.Uncache()
-	if err = lom.DelAllCopies(); err != nil {
-		glog.Errorf("%s: %s", lom, err)
-	}
-	err = os.Remove(lom.FQN)
-	if err != nil && os.IsNotExist(err) {
-		err = nil
+	err = cmn.RemoveFile(lom.FQN)
+	for copyFQN := range lom.md.copies {
+		if err := cmn.RemoveFile(copyFQN); err != nil {
+			glog.Error(err)
+		}
 	}
 	return
 }

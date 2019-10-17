@@ -176,17 +176,13 @@ func (poi *putObjInfo) tryFinalize() (err error, errCode int) {
 		}
 		lom.SetVersion(ver)
 	}
-	// Don't persist meta, it will be persisted after move
-	if err = lom.DelAllCopies(); err != nil {
-		return
-	}
 
 	if err := cmn.Rename(poi.workFQN, lom.FQN); err != nil {
-		return fmt.Errorf("Rename failed => %s: %v", lom, err), 0
+		return fmt.Errorf("rename failed => %s: %v", lom, err), 0
 	}
-	if err1 := lom.Persist(); err1 != nil {
-		err = err1
-		glog.Errorf("failed to persist %s: %s", lom, err1)
+
+	if err = lom.DelAllCopies(); err != nil {
+		return
 	}
 	lom.ReCache()
 	return

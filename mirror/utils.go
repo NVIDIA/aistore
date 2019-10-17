@@ -49,10 +49,9 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 
 	size = int64(len(copiesFQN)) * lom.Size()
 	if err = lom.DelCopies(copiesFQN...); err == nil {
-		err = lom.Persist()
+		lom.ReCache()
 	}
 
-	lom.ReCache()
 	lom.Unlock(true)
 	return
 }
