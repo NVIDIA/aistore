@@ -131,7 +131,8 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 }
 
 func (lom *LOM) CopyMetadata(from *LOM) {
-	if lom.MirrorConf().Enabled {
+	lom.md.copies = nil
+	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck()) {
 		lom.setCopyMD(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
 			lom.addCopyMD(fqn, mpathInfo)
@@ -479,7 +480,7 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 
-	if lom.MirrorConf().Enabled {
+	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck()) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
 			os.Remove(dst.FQN)
 			return

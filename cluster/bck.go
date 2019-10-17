@@ -31,6 +31,11 @@ func (b *Bck) Equal(other *Bck) bool {
 	if b.Name != other.Name {
 		return false
 	}
+	if b.Props != nil && other.Props != nil {
+		if b.Props.BID != other.Props.BID {
+			return false
+		}
+	}
 	if b.IsAIS() && other.IsAIS() {
 		return true
 	}

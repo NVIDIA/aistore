@@ -753,6 +753,42 @@ var _ = Describe("LOM", func() {
 					Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
 				}
 			})
+
+			It("should copy object without adding it to copies if dst bucket does not support mirroring", func() {
+				lom := prepareLOM(mirrorFQNs[0])
+				_ = prepareCopy(lom, mirrorFQNs[1])
+				expectedHash := getTestFileHash(lom.FQN)
+
+				// Check that copies were added to metadata.
+				Expect(lom.IsCopy()).To(BeFalse())
+				Expect(lom.HasCopies()).To(BeTrue())
+				Expect(lom.NumCopies()).To(Equal(2))
+				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
+
+				nonMirroredLOM := prepareCopy(lom, copyFQNs[0])
+
+				// Check that nothing has changed in the src.
+				Expect(lom.IsCopy()).To(BeFalse())
+				Expect(lom.HasCopies()).To(BeTrue())
+				Expect(lom.NumCopies()).To(Equal(2))
+				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[1])))
+
+				// Check destination lom.
+				Expect(nonMirroredLOM.FQN).NotTo(Equal(lom.FQN))
+				_, cksumValue := nonMirroredLOM.Cksum().Get()
+				Expect(cksumValue).To(Equal(expectedHash))
+				Expect(nonMirroredLOM.Version()).To(Equal(desiredVersion))
+				Expect(nonMirroredLOM.Size()).To(BeEquivalentTo(testFileSize))
+
+				Expect(nonMirroredLOM.IsCopy()).To(BeFalse())
+				Expect(nonMirroredLOM.HasCopies()).To(BeFalse())
+				Expect(nonMirroredLOM.NumCopies()).To(Equal(1))
+				Expect(nonMirroredLOM.GetCopies()).To(BeNil())
+
+				// Check that the content of the copy is correct.
+				copyObjHash := getTestFileHash(nonMirroredLOM.FQN)
+				Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
+			})
 		})
 
 		Describe("DelCopies", func() {
