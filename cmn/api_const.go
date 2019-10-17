@@ -183,10 +183,8 @@ const (
 	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary and the entire cluster)
 	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
-	URLParamSmapVersion      = "vsm" // Smap version
 	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
-	URLParamReadahead        = "rah" // Proxy to target: readeahed
 	URLParamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
 	URLParamSilent           = "sln" // true: destination should not log errors (HEAD request)
 	URLParamRebStatus        = "rbs" // true: get detailed rebalancing status
@@ -208,27 +206,6 @@ const (
 	URLParamSubdir      = "subdir"
 	URLParamTimeout     = "timeout"
 	URLParamDescription = "description"
-)
-
-// ActionMsg.Value, ListMsg, RangeMsg fields that get json-marshaled as map[string]interface{}
-const (
-	JsmapDeadline  = "deadline"
-	JsmapObjname   = "objname"
-	JsmapPrefix    = "prefix"
-	JsmapRegex     = "regex"
-	JsmapRange     = "range"
-	JsmapWait      = "wait"
-	JsmapTarget    = "target"
-	JsmapOmitBase  = "omit_base"
-	JsmapRecurs    = "recurs"
-	JsmapOverwrite = "overwrite"
-	JsmapVerbose   = "verbose"
-)
-
-// enum: start and abort global (cluster) rebalancing
-const (
-	RebStart = "start"
-	RebAbort = "abort"
 )
 
 // enum: task action (cmn.URLParamTaskAction)
@@ -256,14 +233,7 @@ const (
 
 // SelectMsg.TimeFormat enum
 const (
-	RFC822     = time.RFC822
-	Stamp      = time.Stamp      // e.g. "Jan _2 15:04:05"
-	StampMilli = time.StampMilli // e.g. "Jan 12 15:04:05.000"
-	StampMicro = time.StampMicro // e.g. "Jan _2 15:04:05.000000"
-	RFC822Z    = time.RFC822Z
-	RFC1123    = time.RFC1123
-	RFC1123Z   = time.RFC1123Z
-	RFC3339    = time.RFC3339
+	RFC822 = time.RFC822
 )
 
 // SelectMsg.Props enum
@@ -282,7 +252,7 @@ const (
 const (
 	ObjStatusOK = iota
 	ObjStatusMoved
-	ObjStatusDeleted
+	ObjStatusDeleted // TODO: reserved for future when we introduce delayed delete of the object/bucket
 )
 
 // BucketEntry Flags constants

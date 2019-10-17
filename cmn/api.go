@@ -21,12 +21,12 @@ type ActionMsg struct {
 }
 
 type ActValPromote struct {
-	Target    string `json:"target"`    // JsmapTarget
-	Objname   string `json:"objname"`   // JsmapObjname
-	OmitBase  string `json:"omit_base"` // JsmapOmitBase
-	Recurs    bool   `json:"recurs"`    // JsmapRecurs
-	Overwrite bool   `json:"overwrite"` // JsmapOverwrite
-	Verbose   bool   `json:"verbose"`   // JsmapVerbose
+	Target    string `json:"target"`
+	Objname   string `json:"objname"`
+	OmitBase  string `json:"omit_base"`
+	Recurs    bool   `json:"recurs"`
+	Overwrite bool   `json:"overwrite"`
+	Verbose   bool   `json:"verbose"`
 }
 
 type XactKindMeta struct {
@@ -102,22 +102,22 @@ type SelectMsg struct {
 
 // ListRangeMsgBase contains fields common to Range and List operations
 type ListRangeMsgBase struct {
-	Deadline time.Duration `json:"deadline,omitempty"` // JsmapDeadline
-	Wait     bool          `json:"wait,omitempty"`     // JsmapWait
+	Deadline time.Duration `json:"deadline,omitempty"`
+	Wait     bool          `json:"wait,omitempty"`
 }
 
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {
 	ListRangeMsgBase
-	Objnames []string `json:"objname"` // JsmapObjname
+	Objnames []string `json:"objname"`
 }
 
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
 	ListRangeMsgBase
-	Prefix string `json:"prefix"` // JsmapPrefix
-	Regex  string `json:"regex"`  // JsmapRegex
-	Range  string `json:"range"`  // JsmapRange
+	Prefix string `json:"prefix"`
+	Regex  string `json:"regex"`
+	Range  string `json:"range"`
 }
 
 // MountpathList contains two lists:

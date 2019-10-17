@@ -142,12 +142,6 @@ var (
 	GCO = &globalConfigOwner{}
 )
 
-func init() {
-	config := &Config{}
-	GCO.c.Store(unsafe.Pointer(config))
-	loadDebugMap()
-}
-
 func (gco *globalConfigOwner) Get() *Config {
 	return (*Config)(gco.c.Load())
 }

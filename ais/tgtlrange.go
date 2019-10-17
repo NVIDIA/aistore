@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -23,8 +22,6 @@ import (
 
 const (
 	prefetchChanSize = 200
-	defaultDeadline  = 0
-	defaultWait      = false
 )
 
 type filesWithDeadline struct {
@@ -206,100 +203,6 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bck *c
 //
 //================
 
-func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, err error) {
-	v, ok := jsmap[key]
-	if !ok {
-		err = fmt.Errorf("no %s field in map", key)
-		return
-	}
-	if val, ok = v.(string); !ok {
-		err = fmt.Errorf("value ((%+v, %T) corresponding to key (%s) in map is not of string type", v, v, key)
-	}
-	return
-}
-
-func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, err error) {
-	var (
-		deadline time.Duration
-	)
-	pbm = &cmn.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
-	if v, ok := jsmap[cmn.JsmapDeadline]; ok {
-		// When unmarshalling map[string]interface{},
-		// Go will convert int to float64 (https://play.golang.org/p/kHroZ1rHVQ)
-		if f, ok := v.(float64); ok {
-			deadline = time.Duration(int64(f))
-		} else {
-			deadline, err = time.ParseDuration(v.(string))
-		}
-
-		if err != nil {
-			return pbm, fmt.Errorf("error parsing BaseMsg: (Deadline: %v, %T, %v)", v, v, err)
-		}
-		pbm.Deadline = deadline
-	}
-	if v, ok := jsmap[cmn.JsmapWait]; ok {
-		wait, ok := v.(bool)
-		if !ok {
-			return pbm, fmt.Errorf("error parsing BaseMsg: (Wait: %v, %T)", v, v)
-		}
-		pbm.Wait = wait
-	}
-	return
-}
-
-func parseListMsg(jsmap map[string]interface{}) (pm *cmn.ListMsg, err error) {
-	pbm, err := parseBaseMsg(jsmap)
-	if err != nil {
-		return
-	}
-	pm = &cmn.ListMsg{ListRangeMsgBase: *pbm}
-	v, ok := jsmap[cmn.JsmapObjname]
-	if !ok {
-		return pm, errors.New("error parsing ListMsg: no 'objnames' field")
-	}
-	if objNames, ok := v.([]interface{}); ok {
-		pm.Objnames = make([]string, 0, len(objNames))
-		for _, obj := range objNames {
-			objName, ok := obj.(string)
-			if !ok {
-				return pm, errors.New("error parsing ListMsg: non-string 'objnames' field")
-			}
-			pm.Objnames = append(pm.Objnames, objName)
-		}
-	} else {
-		return pm, errors.New("error parsing ListMsg: couldn't parse 'objnames' field")
-	}
-	return
-}
-
-func parseRangeMsg(jsmap map[string]interface{}) (pm *cmn.RangeMsg, err error) {
-	pbm, err := parseBaseMsg(jsmap)
-	if err != nil {
-		return
-	}
-	pm = &cmn.RangeMsg{ListRangeMsgBase: *pbm}
-
-	prefix, err := unmarshalMsgValue(jsmap, cmn.JsmapPrefix)
-	if err != nil {
-		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
-	}
-	pm.Prefix = prefix
-
-	regex, err := unmarshalMsgValue(jsmap, cmn.JsmapRegex)
-	if err != nil {
-		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
-	}
-	pm.Regex = regex
-
-	r, err := unmarshalMsgValue(jsmap, cmn.JsmapRange)
-	if err != nil {
-		return pm, fmt.Errorf("error parsing RangeMsg: %s", err)
-	}
-	pm.Range = r
-
-	return
-}
-
 func parseRange(rangestr string) (min, max int64, err error) {
 	if rangestr != "" {
 		ranges := strings.Split(rangestr, ":")
@@ -335,34 +238,29 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, provider string, msgInt *actionMsgInternal) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, apiItems []string, provider string, msgInt *actionMsgInternal) error {
 	operation := t.getOpFromActionMsg(msgInt.Action)
 	if operation == nil {
 		return fmt.Errorf("invalid operation")
 	}
 
-	details := fmt.Sprintf(" (%s, %s, %T)", msgInt.Action, msgInt.Name, msgInt.Value)
-	jsmap, ok := msgInt.Value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid cmn.ActionMsg.Value format %s", details)
-	}
-	if _, ok := jsmap[cmn.JsmapObjname]; !ok {
-		// Parse map into RangeMsg, convert to and process ListMsg page-by-page
-		rangeMsg, err := parseRangeMsg(jsmap)
-		if err != nil {
-			return fmt.Errorf("%v: %s", err, details)
+	var (
+		rangeMsg = &cmn.RangeMsg{}
+		listMsg  = &cmn.ListMsg{}
+	)
+
+	if err := cmn.TryUnmarshal(msgInt.Value, &rangeMsg); err == nil {
+		return t.iterateBucketListPages(r, apiItems, provider, rangeMsg, operation)
+	} else if err := cmn.TryUnmarshal(msgInt.Value, &listMsg); err == nil {
+		bck := &cluster.Bck{Name: apiItems[0], Provider: provider}
+		if err := bck.Init(t.bmdowner); err != nil {
+			return err
 		}
-		return t.iterateBucketListPages(r, apitems, provider, rangeMsg, operation)
-	}
-	// Parse map into ListMsg
-	listMsg, err := parseListMsg(jsmap)
-	if err != nil {
+		return t.listOperation(r, bck, listMsg, operation)
+	} else {
+		details := fmt.Sprintf(" (%s, %s, %T)", msgInt.Action, msgInt.Name, msgInt.Value)
 		return fmt.Errorf("%v: %s", err, details)
 	}
-	bucket := apitems[0]
-	bck := &cluster.Bck{Name: bucket, Provider: provider}
-	// TODO -- FIXME: init and handle errors, here or in the caller
-	return t.listOperation(r, bck, listMsg, operation)
 }
 
 func (t *targetrunner) listOperation(r *http.Request, bck *cluster.Bck, listMsg *cmn.ListMsg, f listf) error {

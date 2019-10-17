@@ -136,6 +136,7 @@ const (
 )
 
 func init() {
+	// General
 	rand.Seed(time.Now().UnixNano())
 
 	sid := shortid.MustNew(uuidWorker /* worker */, uuidABC, uuidSeed /* seed */)
@@ -146,6 +147,19 @@ func init() {
 	rtie.Store(1013)
 
 	bucketReg = regexp.MustCompile(`^[.a-zA-Z0-9_-]*$`)
+
+	// Config related
+	config := &Config{}
+	GCO.c.Store(unsafe.Pointer(config))
+	loadDebugMap()
+
+	// API related
+	jsonAPI = jsoniter.Config{
+		EscapeHTML:             true,
+		ValidateJsonRawMessage: true,
+		// Need to be sure that we have exactly the same struct as user requested.
+		DisallowUnknownFields: true,
+	}.Froze()
 }
 
 func GenTie() string {
@@ -1262,14 +1276,6 @@ func FormatTime(t time.Time, format string) string {
 
 func S2TimeUnix(timeStr string) (tunix int64, err error) {
 	tunix, err = strconv.ParseInt(timeStr, 10, 64)
-	return
-}
-func S2Time(timeStr string) (t time.Time, err error) {
-	var tunix int64
-	if tunix, err = strconv.ParseInt(timeStr, 10, 64); err != nil {
-		return
-	}
-	t = time.Unix(0, tunix)
 	return
 }
 

@@ -1191,22 +1191,14 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	}
 	bucket := apiItems[0]
 
-	// 1. parse msg.Value => cmn.ActValPromote
-	jsmap, ok := msg.Value.(map[string]interface{})
-	if !ok {
-		t.invalmsghdlr(w, r, fmt.Sprintf("invalid action message value [%v, %T]", msg.Value, msg.Value))
+	params := cmn.ActValPromote{}
+	if err := cmn.TryUnmarshal(msg.Value, &params); err != nil {
 		return
 	}
-	params := &cmn.ActValPromote{}
-	params.Target, _ = jsmap[cmn.JsmapTarget].(string) // TODO -- FIXME: add constants here and elsewhere
+
 	if params.Target != "" && params.Target != t.si.DaemonID {
 		glog.Errorf("%s: unexpected target ID %s mismatch", t.si.Name(), params.Target)
 	}
-	params.Objname, _ = jsmap[cmn.JsmapObjname].(string)
-	params.OmitBase, _ = jsmap[cmn.JsmapOmitBase].(string)
-	params.Recurs, _ = jsmap[cmn.JsmapRecurs].(bool)
-	params.Overwrite, _ = jsmap[cmn.JsmapOverwrite].(bool)
-	params.Verbose, _ = jsmap[cmn.JsmapVerbose].(bool)
 
 	// 2. init & validate
 	provider := r.URL.Query().Get(cmn.URLParamProvider)
@@ -1241,10 +1233,10 @@ func (t *targetrunner) promoteFQN(w http.ResponseWriter, r *http.Request, msg *c
 	// 3a. promote dir
 	if finfo.IsDir() {
 		if params.Verbose {
-			glog.Infof("%s: promote %+v", t.si.Name(), *params)
+			glog.Infof("%s: promote %+v", t.si.Name(), params)
 		}
 		var xact *mirror.XactDirPromote
-		xact, err = t.xactions.renewDirPromote(srcFQN, bck, t, params)
+		xact, err = t.xactions.renewDirPromote(srcFQN, bck, t, &params)
 		if err != nil {
 			t.invalmsghdlr(w, r, err.Error())
 			return

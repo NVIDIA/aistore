@@ -2160,29 +2160,28 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	if err != nil {
 		return
 	}
-	// parse msg.Value
-	jsmap, ok := msg.Value.(map[string]interface{})
-	if !ok {
-		p.invalmsghdlr(w, r, fmt.Sprintf("invalid action message value [%v, %T]", msg.Value, msg.Value))
+
+	params := cmn.ActValPromote{}
+	if err := cmn.TryUnmarshal(msg.Value, &params); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
+
 	var (
-		started     = time.Now()
-		smap        = p.smapowner.get()
-		bucket      = apiItems[0]
-		tid, _      = jsmap[cmn.JsmapTarget].(string)
-		omitBase, _ = jsmap[cmn.JsmapOmitBase].(string)
-		srcFQN      = msg.Name
+		started = time.Now()
+		smap    = p.smapowner.get()
+		bucket  = apiItems[0]
+		srcFQN  = msg.Name
 	)
-	if err = cmn.ValidateOmitBase(srcFQN, omitBase); err != nil {
+	if err = cmn.ValidateOmitBase(srcFQN, params.OmitBase); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
 	// designated target ID
-	if tid != "" {
-		tsi := smap.GetTarget(tid)
+	if params.Target != "" {
+		tsi := smap.GetTarget(params.Target)
 		if tsi == nil {
-			p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", tid))
+			p.invalmsghdlr(w, r, fmt.Sprintf("target %q does not exist", params.Target))
 			return
 		}
 		// NOTE:

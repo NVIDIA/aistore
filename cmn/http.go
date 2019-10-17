@@ -16,12 +16,18 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	jsoniter "github.com/json-iterator/go"
+)
+
+var (
+	// It is used to Marshal/Unmarshal API json messages and is initialized in init function.
+	jsonAPI jsoniter.API
 )
 
 type (
@@ -261,9 +267,20 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v interface{}) []byte {
-	b, err := jsoniter.Marshal(v)
+	b, err := jsonAPI.Marshal(v)
 	AssertNoErr(err)
 	return b
+}
+
+func TryUnmarshal(data, v interface{}) error {
+	x := reflect.ValueOf(v)
+	Assert(x.Kind() == reflect.Ptr)
+
+	// `data` can be of type `map[string]interface{}` or just same type as `v`.
+	// Therefore, the easiest way is to marshal the `data` again and unmarshal it
+	// with hope that every field will be set correctly.
+	b := MustMarshal(data)
+	return jsonAPI.Unmarshal(b, v)
 }
 
 func (u *ReqArgs) URL() string {
