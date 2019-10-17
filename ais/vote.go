@@ -361,35 +361,32 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord, xact *xactElection) (win
 }
 
 func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
-	smap := p.smapowner.get()
-	chansize := smap.CountTargets() + smap.CountProxies() - 1
-	resch := make(chan voteResult, chansize)
-
-	msg := VoteMessage{Record: *vr}
-	body := cmn.MustMarshal(&msg)
-
-	q := url.Values{}
-	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
-	res := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy),
-		q,
-		http.MethodGet,
-		body,
-		smap,
-		cmn.GCO.Get().Timeout.CplaneOperation,
-		cmn.NetworkIntraControl,
-		cluster.AllNodes,
+	var (
+		msg  = VoteMessage{Record: *vr}
+		body = cmn.MustMarshal(&msg)
+		q    = url.Values{}
 	)
+	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
 
-	for r := range res {
+	results := p.bcastGet(bcastArgs{
+		req: cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy),
+			Query: q,
+			Body:  body,
+		},
+		to: cluster.AllNodes,
+	})
+
+	resCh := make(chan voteResult, len(results))
+	for r := range results {
 		if r.err != nil {
-			resch <- voteResult{
+			resCh <- voteResult{
 				yes:      false,
 				daemonID: r.si.DaemonID,
 				err:      r.err,
 			}
 		} else {
-			resch <- voteResult{
+			resCh <- voteResult{
 				yes:      (VoteYes == Vote(r.outjson)),
 				daemonID: r.si.DaemonID,
 				err:      nil,
@@ -397,8 +394,8 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		}
 	}
 
-	close(resch)
-	return resch
+	close(resCh)
+	return resCh
 }
 
 func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
@@ -412,17 +409,13 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		},
 	})
 
-	smap := p.smapowner.get()
-	res := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Voteres),
-		nil, // query
-		http.MethodPut,
-		body,
-		smap,
-		cmn.GCO.Get().Timeout.CplaneOperation,
-		cmn.NetworkIntraControl,
-		cluster.AllNodes,
-	)
+	res := p.bcastPut(bcastArgs{
+		req: cmn.ReqArgs{
+			Path: cmn.URLPath(cmn.Version, cmn.Vote, cmn.Voteres),
+			Body: body,
+		},
+		to: cluster.AllNodes,
+	})
 
 	errors := make(map[string]bool)
 	for r := range res {

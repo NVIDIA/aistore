@@ -542,11 +542,15 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		msgInt := p.newActionMsgInternal(&msg, nil, bmd)
-		body := cmn.MustMarshal(msgInt)
-		smap := p.smapowner.get()
-		results := p.broadcastTo( // del on targets
-			cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-			nil, http.MethodDelete, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
+
+		// Delete on all targets
+		results := p.bcastTo(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodDelete,
+				Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+				Body:   cmn.MustMarshal(msgInt),
+			},
+		})
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, res.err))
@@ -867,7 +871,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Could not start: bucket %q has EC disabled", bck.Name))
 			return
 		}
-		if err := p.ecEncode(bck, &msg, config); err != nil {
+		if err := p.ecEncode(bck, &msg); err != nil {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
@@ -911,7 +915,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.R
 	}
 	headerID := r.URL.Query().Get(cmn.URLParamTaskID)
 	if bck.IsAIS() {
-		bckList, taskID, err = p.listAisBucket(bck, smsg, headerID)
+		bckList, taskID, err = p.listAISBucket(bck, smsg, headerID)
 	} else {
 		bckList, taskID, err = p.listCloudBucket(r, bck, headerID, smsg)
 	}
@@ -995,12 +999,6 @@ func (p *proxyrunner) bucketSummary(w http.ResponseWriter, r *http.Request, bck 
 }
 
 func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, headerID string) (summaries cmn.BucketsSummaries, code int64, err error) {
-	var (
-		cfg        = cmn.GCO.Get()
-		smap       = p.smapowner.get()
-		reqTimeout = cfg.Timeout.ListBucket
-	)
-
 	// if a client does not provide taskID(neither in Headers nor in SelectMsg),
 	// it is a request to start a new async task
 	isNew, q, err := p.initAsyncQuery(headerID, &msg)
@@ -1010,20 +1008,20 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, h
 
 	q.Add(cmn.URLParamProvider, bck.Provider)
 
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, nil, nil)
-	msgBytes := cmn.MustMarshal(msgInt)
-	results := p.broadcastTo(
-		urlPath,
-		q,
-		http.MethodPost,
-		msgBytes,
-		smap,
-		reqTimeout,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
+	var (
+		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActSummaryBucket, Value: &msg}, nil, nil)
+		body   = cmn.MustMarshal(msgInt)
 
+		args = bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Query: q,
+				Body:  body,
+			},
+			timeout: cmn.GCO.Get().Timeout.ListBucket,
+		}
+	)
+	results := p.bcastPost(args)
 	allOK, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
 		return nil, 0, err
@@ -1037,21 +1035,13 @@ func (p *proxyrunner) gatherBucketSummary(bck *cluster.Bck, msg cmn.SelectMsg, h
 
 	// all targets are ready, prepare the final result
 	q = url.Values{}
+	summaries = make(cmn.BucketsSummaries)
+
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Add(cmn.URLParamProvider, bck.Provider)
 	q.Set(cmn.URLParamSilent, "true")
-	results = p.broadcastTo(
-		urlPath,
-		q,
-		http.MethodPost,
-		msgBytes,
-		smap,
-		reqTimeout,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
-
-	summaries = make(cmn.BucketsSummaries)
+	args.req.Query = q
+	results = p.bcastPost(args)
 	for result := range results {
 		if result.err != nil {
 			return nil, 0, result.err
@@ -1335,10 +1325,13 @@ func (p *proxyrunner) beginUpdateBckProps(bck *cluster.Bck, nprops *cmn.BucketPr
 		msgInt = p.newActionMsgInternal(msg, smap, nil)
 		body   = cmn.MustMarshal(msgInt)
 	)
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActBegin),
-		nil, http.MethodPost, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets,
-	)
+	results := p.bcastPost(bcastArgs{
+		req: cmn.ReqArgs{
+			Path: cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name, cmn.ActBegin),
+			Body: body,
+		},
+		smap: smap,
+	})
 	for result := range results {
 		if result.err != nil {
 			return result.err
@@ -1593,7 +1586,8 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name)
 		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bckFrom)
 	)
-	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, false /*commit*/)
+	args := bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}, smap: smap, timeout: tout}
+	err = p.bcast2Phase(args, errmsg, false /*commit*/)
 	if err != nil { // aborted
 		return
 	}
@@ -1605,9 +1599,9 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		p.smapowner.Unlock()
 		body = cmn.MustMarshal(msgInt)
 	}
-	results := p.broadcastTo(cmn.URLPath(path, cmn.ActCommit),
-		nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, cluster.Targets)
-
+	args.req.Body = body
+	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
+	results := p.bcastPost(args)
 	for res := range results {
 		if res.err != nil {
 			err = fmt.Errorf("%s: failed to %s bucket %s: %v(%d)", res.si.Name(), msg.Action, bckFrom, res.err, res.status)
@@ -1648,15 +1642,13 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 		return
 	}
 	var (
-		smap    = p.smapowner.get()
-		msgInt  = p.newActionMsgInternal(msg, smap, nil)
-		body    = cmn.MustMarshal(msgInt)
-		timeout = cmn.GCO.Get().Timeout.CplaneOperation
-		path    = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		errmsg  = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
+		smap   = p.smapowner.get()
+		msgInt = p.newActionMsgInternal(msg, smap, nil)
+		body   = cmn.MustMarshal(msgInt)
+		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		errmsg = fmt.Sprintf("failed to execute '%s' on bucket %s", msg.Action, bck)
 	)
-
-	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, timeout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
+	err = p.bcast2Phase(bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}}, errmsg, true /*commit*/)
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
@@ -1679,17 +1671,15 @@ func (p *proxyrunner) makeNCopies(w http.ResponseWriter, r *http.Request, bck *c
 	}
 }
 
-func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg, config *cmn.Config) (err error) {
+func (p *proxyrunner) ecEncode(bck *cluster.Bck, msg *cmn.ActionMsg) (err error) {
 	var (
-		smap   = p.smapowner.get()
-		tout   = config.Timeout.CplaneOperation
-		msgInt = p.newActionMsgInternal(msg, smap, p.bmdowner.get())
-		body   = cmn.MustMarshal(msgInt)
-		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
+		msgInt  = p.newActionMsgInternal(msg, nil, p.bmdowner.get())
+		body    = cmn.MustMarshal(msgInt)
+		urlPath = cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
+		errmsg  = fmt.Sprintf("cannot %s bucket %s", msg.Action, bck)
 	)
 	// execute 2-phase
-	err = p.broadcast2Phase(path, nil, http.MethodPost, body, smap, tout, cmn.NetworkIntraControl, errmsg, true /*commit*/)
+	err = p.bcast2Phase(bcastArgs{req: cmn.ReqArgs{Path: urlPath, Body: body}}, errmsg, true /*commit*/)
 	return
 }
 
@@ -1881,7 +1871,7 @@ func (p *proxyrunner) checkBckTaskResp(taskID int64, results chan callResult) (a
 //      * the list of objects if the aync task finished (taskID is 0 in this case)
 //      * non-zero taskID if the task is still running
 //      * error
-func (p *proxyrunner) listAisBucket(bck *cluster.Bck, msg cmn.SelectMsg,
+func (p *proxyrunner) listAISBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	headerID string) (allEntries *cmn.BucketList, code int64, err error) {
 	pageSize := cmn.DefaultPageSize
 	if msg.PageSize != 0 {
@@ -1894,16 +1884,21 @@ func (p *proxyrunner) listAisBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 		return nil, 0, err
 	}
 
-	smap := p.smapowner.get()
-	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	method := http.MethodPost
-	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
-	msgBytes := cmn.MustMarshal(msgInt)
-	results := p.broadcastTo(
-		urlPath,
-		q, method, msgBytes, smap, reqTimeout, cmn.NetworkPublic, cluster.Targets)
+	var (
+		msgInt = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
+		body   = cmn.MustMarshal(msgInt)
 
+		args = bcastArgs{
+			req: cmn.ReqArgs{
+				Path:  cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+				Query: q,
+				Body:  body,
+			},
+			timeout: cmn.GCO.Get().Timeout.ListBucket,
+		}
+	)
+
+	results := p.bcastPost(args)
 	allOK, err := p.checkBckTaskResp(msg.TaskID, results)
 	if err != nil {
 		return nil, 0, err
@@ -1919,9 +1914,8 @@ func (p *proxyrunner) listAisBucket(bck *cluster.Bck, msg cmn.SelectMsg,
 	q = url.Values{}
 	q.Set(cmn.URLParamTaskAction, cmn.TaskResult)
 	q.Set(cmn.URLParamSilent, "true")
-	results = p.broadcastTo(
-		urlPath,
-		q, method, msgBytes, smap, reqTimeout, cmn.NetworkPublic, cluster.Targets)
+	args.req.Query = q
+	results = p.bcastPost(args)
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
@@ -2010,42 +2004,37 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 	}
 	q.Set(cmn.URLParamProvider, cmn.Cloud)
 
-	smap := p.smapowner.get()
-	reqTimeout := cmn.GCO.Get().Timeout.ListBucket
-	urlPath := cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name)
-	method := http.MethodPost
-	msgInt := p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, nil, nil)
-	msgBytes := cmn.MustMarshal(msgInt)
-	needLocalData := msg.NeedLocalData()
+	var (
+		smap          = p.smapowner.get()
+		reqTimeout    = cmn.GCO.Get().Timeout.ListBucket
+		msgInt        = p.newActionMsgInternal(&cmn.ActionMsg{Action: cmn.ActListObjects, Value: &msg}, smap, nil)
+		body          = cmn.MustMarshal(msgInt)
+		needLocalData = msg.NeedLocalData()
+	)
+
+	args := bcastArgs{
+		req: cmn.ReqArgs{
+			Method: http.MethodPost,
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bck.Name),
+			Query:  q,
+			Body:   body,
+		},
+		timeout: reqTimeout,
+	}
 
 	var results chan callResult
 	if needLocalData || !isNew {
 		q.Set(cmn.URLParamSilent, "true")
-		results = p.broadcastTo(
-			urlPath,
-			q,
-			method,
-			msgBytes,
-			smap,
-			reqTimeout,
-			cmn.NetworkPublic,
-			cluster.Targets,
-		)
+		results = p.bcastTo(args)
 	} else {
 		// only cloud options are requested - call one random target for data
 		for _, si := range smap.Tmap {
-			bcastArgs := bcastCallArgs{
-				req: cmn.ReqArgs{
-					Method: method,
-					Path:   urlPath,
-					Query:  q,
-					Body:   msgBytes,
-				},
-				network: cmn.NetworkPublic,
+			results = p.bcast(bcastArgs{
+				req:     args.req,
+				network: cmn.NetworkIntraControl,
 				timeout: reqTimeout,
 				nodes:   []cluster.NodeMap{{si.DaemonID: si}},
-			}
-			results = p.broadcast(bcastArgs)
+			})
 			break
 		}
 	}
@@ -2069,16 +2058,8 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 	if useCache {
 		q.Set(cmn.URLParamCached, "true")
 	}
-	results = p.broadcastTo(
-		urlPath,
-		q,
-		method,
-		msgBytes,
-		smap,
-		reqTimeout,
-		cmn.NetworkPublic,
-		cluster.Targets,
-	)
+	args.req.Query = q
+	results = p.bcastTo(args)
 
 	// combine results
 	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
@@ -2207,13 +2188,18 @@ func (p *proxyrunner) promoteFQN(w http.ResponseWriter, r *http.Request, bck *cl
 	//
 	var (
 		body  = cmn.MustMarshal(msg)
-		path  = cmn.URLPath(cmn.Version, cmn.Objects, bucket)
 		query = url.Values{}
 	)
 	query.Add(cmn.URLParamProvider, bck.Provider)
-	results := p.broadcastTo(
-		path,
-		query, http.MethodPost, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
+	results := p.bcastPost(bcastArgs{
+		req: cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Objects, bucket),
+			Query: query,
+			Body:  body,
+		},
+		timeout: defaultTimeout,
+	})
+
 	for res := range results {
 		if res.err != nil {
 			p.invalmsghdlr(w, r, fmt.Sprintf("%s failed, err: %s", msg.Action, res.err))
@@ -2247,16 +2233,16 @@ func (p *proxyrunner) listRange(method, bucket string, msg *cmn.ActionMsg, query
 		timeout = defaultTimeout
 	}
 
-	results = p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
-		query,
-		method,
-		body,
-		smap,
-		timeout,
-		cmn.NetworkIntraData,
-		cluster.Targets,
-	)
+	results = p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+			Query:  query,
+			Body:   body,
+		},
+		smap:    smap,
+		timeout: timeout,
+	})
 	for res := range results {
 		if res.err != nil {
 			return fmt.Errorf("failed to List/Range: %v (%d: %s)", res.err, res.status, res.details)
@@ -2775,16 +2761,16 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	method := http.MethodPut
-	results := p.broadcastTo(
-		urlPath,
-		q,
-		method,
-		nil, // body
-		smap,
-		cmn.GCO.Get().Timeout.CplaneOperation,
-		cmn.NetworkIntraControl,
-		cluster.AllNodes,
-	)
+	results := p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   urlPath,
+			Query:  q,
+		},
+		smap: smap,
+		to:   cluster.AllNodes,
+	})
+
 	for res := range results {
 		if res.err != nil {
 			s := fmt.Sprintf("Failed to set primary %s: err %v from %s in the prepare phase", proxyid, res.err, res.si)
@@ -2806,16 +2792,14 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (II) commit phase
 	q.Set(cmn.URLParamPrepare, "false")
-	results = p.broadcastTo(
-		urlPath,
-		q,
-		method,
-		nil, // body
-		p.smapowner.get(),
-		cmn.GCO.Get().Timeout.CplaneOperation,
-		cmn.NetworkIntraControl,
-		cluster.AllNodes,
-	)
+	results = p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   urlPath,
+			Query:  q,
+		},
+		to: cluster.AllNodes,
+	})
 
 	// FIXME: retry
 	for res := range results {
@@ -2950,7 +2934,6 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 	var (
 		err  error
 		body []byte
-		smap = p.smapowner.get()
 	)
 	if r.Body != nil {
 		body, err = cmn.ReadBytes(r)
@@ -2959,17 +2942,16 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 			return nil, false
 		}
 	}
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Daemon),
-		r.URL.Query(),
-		r.Method,
-		body, // message
-		smap,
-		cmn.GCO.Get().Timeout.Default,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
-	targetResults := make(cmn.JSONRawMsgs, smap.CountTargets())
+	results := p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: r.Method,
+			Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+			Query:  r.URL.Query(),
+			Body:   body,
+		},
+		timeout: cmn.GCO.Get().Timeout.Default,
+	})
+	targetResults := make(cmn.JSONRawMsgs, len(results))
 	for res := range results {
 		if res.err != nil {
 			if silent {
@@ -2985,19 +2967,17 @@ func (p *proxyrunner) invokeHTTPSelectMsgOnTargets(w http.ResponseWriter, r *htt
 }
 
 func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http.Request) bool {
-	smap := p.smapowner.get()
-	fetchResults := func(broadcastType int, expectedNodes int) (cmn.JSONRawMsgs, string) {
-		results := p.broadcastTo(
-			cmn.URLPath(cmn.Version, cmn.Daemon),
-			r.URL.Query(),
-			r.Method,
-			nil, // message
-			smap,
-			cmn.GCO.Get().Timeout.Default,
-			cmn.NetworkIntraControl,
-			broadcastType,
-		)
-		sysInfoMap := make(cmn.JSONRawMsgs, expectedNodes)
+	fetchResults := func(broadcastType int) (cmn.JSONRawMsgs, string) {
+		results := p.bcastTo(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: r.Method,
+				Path:   cmn.URLPath(cmn.Version, cmn.Daemon),
+				Query:  r.URL.Query(),
+			},
+			timeout: cmn.GCO.Get().Timeout.Default,
+			to:      broadcastType,
+		})
+		sysInfoMap := make(cmn.JSONRawMsgs, len(results))
 		for res := range results {
 			if res.err != nil {
 				return nil, res.details
@@ -3009,7 +2989,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 	out := &cmn.ClusterSysInfoRaw{}
 
-	proxyResults, err := fetchResults(cluster.Proxies, smap.CountProxies())
+	proxyResults, err := fetchResults(cluster.Proxies)
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
 		return false
@@ -3017,7 +2997,7 @@ func (p *proxyrunner) invokeHTTPGetClusterSysinfo(w http.ResponseWriter, r *http
 
 	out.Proxy = proxyResults
 
-	targetResults, err := fetchResults(cluster.Targets, smap.CountTargets())
+	targetResults, err := fetchResults(cluster.Targets)
 	if err != "" {
 		p.invalmsghdlr(w, r, err)
 		return false
@@ -3370,8 +3350,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	var (
-		msg  = &cmn.ActionMsg{}
-		smap = p.smapowner.get()
+		msg = &cmn.ActionMsg{}
 	)
 	apitems, err := p.checkRESTItems(w, r, 0, true, cmn.Version, cmn.Cluster)
 	if err != nil {
@@ -3390,9 +3369,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, err.Error())
 				return
 			}
-			results := p.broadcastTo(
-				cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
-				query, http.MethodPut, nil, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
+			results := p.bcastPut(bcastArgs{
+				req: cmn.ReqArgs{
+					Path:  cmn.URLPath(cmn.Version, cmn.Daemon, cmn.ActSetConfig),
+					Query: query,
+				},
+				to: cluster.AllNodes,
+			})
 			for res := range results {
 				if res.err != nil {
 					p.invalmsghdlr(w, r, res.err.Error())
@@ -3430,9 +3413,11 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		}
 
 		body := cmn.MustMarshal(msg) // same message -> all targets and proxies
-		results := p.broadcastTo(
-			cmn.URLPath(cmn.Version, cmn.Daemon),
-			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
+		results := p.bcastTo(bcastArgs{
+			req: cmn.ReqArgs{
+				Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body},
+			to: cluster.AllNodes,
+		})
 		for res := range results {
 			if res.err != nil {
 				s := fmt.Sprintf("%s: (%s = %s) failed, err: %s", msg.Action, msg.Name, value, res.details)
@@ -3444,23 +3429,23 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		body := cmn.MustMarshal(msg)
-		p.broadcastTo(
-			cmn.URLPath(cmn.Version, cmn.Daemon),
-			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.AllNodes)
+		args := bcastArgs{
+			req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body},
+			to:  cluster.AllNodes,
+		}
+		p.bcastTo(args)
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	case cmn.ActGlobalReb:
 		p.smapowner.Lock()
-		smap = p.smapowner.get()
+		smap := p.smapowner.get()
 		msgInt := p.newActionMsgInternal(msg, smap, nil)
 		p.setGlobRebID(smap, msgInt, true)
 		p.smapowner.Unlock()
 		p.metasyncer.sync(false, revspair{smap, msgInt})
 	case cmn.ActXactStart, cmn.ActXactStop:
 		body := cmn.MustMarshal(msg)
-		results := p.broadcastTo(
-			cmn.URLPath(cmn.Version, cmn.Daemon),
-			nil, http.MethodPut, body, smap, defaultTimeout, cmn.NetworkIntraControl, cluster.Targets)
+		results := p.bcastTo(bcastArgs{req: cmn.ReqArgs{Method: http.MethodPut, Path: cmn.URLPath(cmn.Version, cmn.Daemon), Body: body}})
 		for res := range results {
 			if res.err != nil {
 				p.invalmsghdlr(w, r, res.err.Error())
@@ -3560,19 +3545,15 @@ func (p *proxyrunner) recoverBuckets(w http.ResponseWriter, r *http.Request, msg
 	force, _ := cmn.ParseBool(r.URL.Query().Get(cmn.URLParamForce))
 	query := url.Values{}
 	query.Add(cmn.URLParamWhat, cmn.GetWhatBucketMetaX)
-	smap := p.smapowner.get()
 
 	// request all targets for their BMD saved to xattrs
-	results := p.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
-		query,
-		http.MethodGet,
-		nil, // message
-		smap,
-		cmn.GCO.Get().Timeout.Default,
-		cmn.NetworkIntraControl,
-		cluster.Targets,
-	)
+	results := p.bcastGet(bcastArgs{
+		req: cmn.ReqArgs{
+			Path:  cmn.URLPath(cmn.Version, cmn.Buckets, cmn.AllBuckets),
+			Query: query,
+		},
+		timeout: cmn.GCO.Get().Timeout.Default,
+	})
 
 	bmdList := make([]*bucketMD, 0, len(results))
 	for res := range results {

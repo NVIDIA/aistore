@@ -59,12 +59,15 @@ type (
 		si      *cluster.Snode
 	}
 
-	// bcastCallArgs contains arguments for an intra-cluster broadcast call
-	bcastCallArgs struct {
+	// bcastArgs contains arguments for an intra-cluster broadcast call
+	bcastArgs struct {
 		req     cmn.ReqArgs
 		network string // on of the cmn.KnownNetworks
 		timeout time.Duration
-		nodes   []cluster.NodeMap
+
+		nodes []cluster.NodeMap
+		smap  *smapX
+		to    int
 	}
 
 	networkHandler struct {
@@ -630,47 +633,60 @@ func (h *httprunner) call(args callArgs) callResult {
 // broadcast //
 ///////////////
 
-func (h *httprunner) broadcastTo(path string, query url.Values, method string, body []byte,
-	smap *smapX, timeout time.Duration, network string, to int) chan callResult {
-	var nodes []cluster.NodeMap
+func (h *httprunner) bcastGet(args bcastArgs) chan callResult {
+	cmn.Assert(args.req.Method == "")
+	args.req.Method = http.MethodGet
+	return h.bcastTo(args)
+}
+func (h *httprunner) bcastPost(args bcastArgs) chan callResult {
+	cmn.Assert(args.req.Method == "")
+	args.req.Method = http.MethodPost
+	return h.bcastTo(args)
+}
+func (h *httprunner) bcastPut(args bcastArgs) chan callResult {
+	cmn.Assert(args.req.Method == "")
+	args.req.Method = http.MethodPut
+	return h.bcastTo(args)
+}
 
-	switch to {
+func (h *httprunner) bcastTo(args bcastArgs) chan callResult {
+	if args.smap == nil {
+		args.smap = h.smapowner.get()
+	}
+	if args.network == "" {
+		args.network = cmn.NetworkIntraControl
+	}
+	if args.timeout == 0 {
+		args.timeout = cmn.GCO.Get().Timeout.CplaneOperation
+	}
+
+	switch args.to {
 	case cluster.Targets:
-		nodes = []cluster.NodeMap{smap.Tmap}
+		args.nodes = []cluster.NodeMap{args.smap.Tmap}
 	case cluster.Proxies:
-		nodes = []cluster.NodeMap{smap.Pmap}
+		args.nodes = []cluster.NodeMap{args.smap.Pmap}
 	case cluster.AllNodes:
-		nodes = []cluster.NodeMap{smap.Pmap, smap.Tmap}
+		args.nodes = []cluster.NodeMap{args.smap.Pmap, args.smap.Tmap}
 	default:
 		cmn.Assert(false)
 	}
-	if !cmn.NetworkIsKnown(network) {
-		cmn.AssertMsg(false, "unknown network '"+network+"'")
+	if !cmn.NetworkIsKnown(args.network) {
+		cmn.AssertMsg(false, "unknown network '"+args.network+"'")
 	}
-	bcastArgs := bcastCallArgs{
-		req: cmn.ReqArgs{
-			Method: method,
-			Path:   path,
-			Query:  query,
-			Body:   body,
-		},
-		network: network,
-		timeout: timeout,
-		nodes:   nodes,
-	}
-	return h.broadcast(bcastArgs)
+	return h.bcast(args)
 }
 
 // execute 2-phase transaction vis-à-vis all targets with an optional commit if all good
-func (h *httprunner) broadcast2Phase(path string, query url.Values, method string, body []byte,
-	smap *smapX, tout time.Duration, network, errmsg string, commit bool) (err error) {
+func (h *httprunner) bcast2Phase(args bcastArgs, errmsg string, commit bool) (err error) {
 	var (
-		results   chan callResult
-		beginPath = cmn.URLPath(path, cmn.ActBegin)
-		nr        = 0
+		results chan callResult
+		nr      int
+		path    = args.req.Path
 	)
 	// begin
-	results = h.broadcastTo(beginPath, query, method, body, smap, tout, network, cluster.Targets)
+	args.req.Method = http.MethodPost
+	args.req.Path = cmn.URLPath(path, cmn.ActBegin)
+	results = h.bcastTo(args)
 	for res := range results {
 		if res.err != nil {
 			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
@@ -680,9 +696,9 @@ func (h *httprunner) broadcast2Phase(path string, query url.Values, method strin
 	}
 	// abort
 	if err != nil {
-		abortPath := cmn.URLPath(path, cmn.ActAbort)
+		args.req.Path = cmn.URLPath(path, cmn.ActAbort)
 		if nr < len(results) {
-			_ = h.broadcastTo(abortPath, nil, method, body, smap, tout, network, cluster.Targets)
+			_ = h.bcastTo(args)
 		}
 		return
 	}
@@ -690,8 +706,8 @@ func (h *httprunner) broadcast2Phase(path string, query url.Values, method strin
 		return
 	}
 	// commit
-	commitPath := cmn.URLPath(path, cmn.ActCommit)
-	results = h.broadcastTo(commitPath, query, method, body, smap, tout, network, cluster.Targets)
+	args.req.Path = cmn.URLPath(path, cmn.ActCommit)
+	results = h.bcastTo(args)
 	for res := range results {
 		if res.err != nil {
 			err = fmt.Errorf("%s: %s: %v(%d)", res.si.Name(), errmsg, res.err, res.status)
@@ -703,35 +719,35 @@ func (h *httprunner) broadcast2Phase(path string, query url.Values, method strin
 }
 
 // NOTE: 'u' has only the path and query part, host portion will be set by this method.
-func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
+func (h *httprunner) bcast(bargs bcastArgs) chan callResult {
 	nodeCount := 0
-	for _, nodeMap := range bcastArgs.nodes {
+	for _, nodeMap := range bargs.nodes {
 		nodeCount += len(nodeMap)
 	}
 	if nodeCount == 0 {
 		ch := make(chan callResult)
 		close(ch)
-		glog.Warningf("node count zero in [%+v] bcast", bcastArgs.req)
+		glog.Warningf("node count zero in [%+v] bcast", bargs.req)
 		return ch
 	}
 	ch := make(chan callResult, nodeCount)
 	wg := &sync.WaitGroup{}
 
-	for _, nodeMap := range bcastArgs.nodes {
+	for _, nodeMap := range bargs.nodes {
 		for sid, serverInfo := range nodeMap {
 			if sid == h.si.DaemonID {
 				continue
 			}
 			wg.Add(1)
 			go func(di *cluster.Snode) {
-				args := callArgs{
+				cargs := callArgs{
 					si:      di,
-					req:     bcastArgs.req,
-					timeout: bcastArgs.timeout,
+					req:     bargs.req,
+					timeout: bargs.timeout,
 				}
-				args.req.Base = di.URL(bcastArgs.network)
+				cargs.req.Base = di.URL(bargs.network)
 
-				res := h.call(args)
+				res := h.call(cargs)
 				ch <- res
 				wg.Done()
 			}(serverInfo)

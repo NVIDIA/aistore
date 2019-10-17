@@ -335,18 +335,20 @@ outer:
 	}
 
 	// step 3: b-cast
-	body := cmn.MustMarshal(payload)
-	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
-	res := y.p.broadcastTo(
-		urlPath,
-		nil, // query
-		method,
-		body,
-		smap,
-		config.Timeout.CplaneOperation*2, // making exception for this critical op
-		cmn.NetworkIntraControl,
-		cluster.AllNodes,
+	var (
+		urlPath = cmn.URLPath(cmn.Version, cmn.Metasync)
+		body    = cmn.MustMarshal(payload)
 	)
+	res := y.p.bcastTo(bcastArgs{
+		req: cmn.ReqArgs{
+			Method: method,
+			Path:   urlPath,
+			Body:   body,
+		},
+		smap:    smap,
+		timeout: config.Timeout.CplaneOperation * 2, // making exception for this critical op
+		to:      cluster.AllNodes,
+	})
 
 	// step 4: count failures and fill-in refused
 	for r := range res {
@@ -407,7 +409,7 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 
 func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair,
 	config *cmn.Config, smap *smapX) {
-	bcastArgs := bcastCallArgs{
+	res := y.p.bcast(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: method,
 			Path:   urlPath,
@@ -416,8 +418,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body []byte, refused 
 		network: cmn.NetworkIntraControl,
 		timeout: config.Timeout.MaxKeepalive, // JSON config "max_keepalive"
 		nodes:   []cluster.NodeMap{refused},
-	}
-	res := y.p.broadcast(bcastArgs)
+	})
 
 	for r := range res {
 		if r.err == nil {
@@ -494,7 +495,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	}
 
 	body := cmn.MustMarshal(payload)
-	bcastArgs := bcastCallArgs{
+	res := y.p.bcast(bcastArgs{
 		req: cmn.ReqArgs{
 			Method: http.MethodPut,
 			Path:   cmn.URLPath(cmn.Version, cmn.Metasync),
@@ -503,8 +504,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 		network: cmn.NetworkIntraControl,
 		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		nodes:   []cluster.NodeMap{pending},
-	}
-	res := y.p.broadcast(bcastArgs)
+	})
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.DaemonID, pairs)

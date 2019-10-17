@@ -32,7 +32,6 @@ func (p *proxyrunner) bootstrap() {
 		guessAmPrimary bool
 		config         = cmn.GCO.Get()
 		getSmapURL     = config.Proxy.PrimaryURL // NOTE: PublicNet, not IntraControlNet
-		tout           = config.Timeout.CplaneOperation
 		q              = url.Values{}
 	)
 	// step 1: load a local copy of the cluster map and
@@ -43,7 +42,7 @@ func (p *proxyrunner) bootstrap() {
 			glog.Infof("%s: fast discovery based on %s", p.si.Name(), smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 			url := cmn.URLPath(cmn.Version, cmn.Daemon)
-			res := p.broadcastTo(url, q, http.MethodGet, nil, smap, tout, cmn.NetworkIntraControl, cluster.AllNodes)
+			res := p.bcastGet(bcastArgs{req: cmn.ReqArgs{Path: url, Query: q}, smap: smap, to: cluster.AllNodes})
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -354,13 +353,16 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 		bcastSmap      = p.smapowner.get().clone()
 		q              = url.Values{}
 		config         = cmn.GCO.Get()
-		tout           = config.Timeout.CplaneOperation
 		keeptrying     = true
 	)
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
 		url := cmn.URLPath(cmn.Version, cmn.Daemon)
-		res := p.broadcastTo(url, q, http.MethodGet, nil, bcastSmap, tout, cmn.NetworkIntraControl, cluster.AllNodes)
+		res := p.bcastTo(bcastArgs{
+			req:  cmn.ReqArgs{Path: url, Query: q},
+			smap: bcastSmap,
+			to:   cluster.AllNodes,
+		})
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {
