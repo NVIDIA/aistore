@@ -293,5 +293,5 @@ func showRebalanceHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return monitorGlobalRebalance(c, baseParams, refreshRate)
+	return showGlobalRebalance(c, baseParams, flagIsSet(c, refreshFlag), refreshRate)
 }

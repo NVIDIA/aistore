@@ -274,7 +274,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	return daemonID, nvs, nil
 }
 
-func monitorGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, refreshRate time.Duration) error {
+func showGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, keepMonitoring bool, refreshRate time.Duration) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
@@ -343,7 +343,12 @@ func monitorGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, refreshR
 			break
 		}
 
+		if !keepMonitoring {
+			break
+		}
+
 		time.Sleep(refreshRate)
 	}
+
 	return nil
 }
