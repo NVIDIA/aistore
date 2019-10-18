@@ -23,8 +23,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742 // indirect
 	github.com/nanobox-io/golang-scribble v0.0.0-20180621225840-336beac0a992
-	github.com/onsi/ginkgo v1.6.0
-	github.com/onsi/gomega v1.4.2
+	github.com/onsi/ginkgo v1.10.2
+	github.com/onsi/gomega v1.7.0
 	github.com/pierrec/lz4 v2.3.0+incompatible
 	github.com/pkg/errors v0.8.1
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
