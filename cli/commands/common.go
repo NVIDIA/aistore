@@ -106,7 +106,6 @@ const (
 	subcmdRegisterTarget = subcmdTarget
 
 	// Env. var. related constants
-	aisBucketEnvVar   = "AIS_BUCKET"
 	aisProviderEnvVar = "AIS_BUCKET_PROVIDER"
 
 	// Default values for long running operations

@@ -8,7 +8,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -148,9 +147,6 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	if xaction == allArgument {
 		xaction = ""
 		bucket = c.Args().Get(1)
-		if bucket == "" {
-			bucket, _ = os.LookupEnv(aisBucketEnvVar)
-		}
 	} else if _, ok := cmn.ValidXact(xaction); !ok {
 		return fmt.Errorf("%q is not a valid xaction", xaction)
 	} else { // valid xaction

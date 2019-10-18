@@ -246,13 +246,3 @@ Tiering         Disabled
 ```
 
 To see how setting zero values affect properties, run:  `ais set props mybucket --jsonspec '{}'`
-
-### Default `BUCKET_NAME` argument value
-If `AIS_BUCKET` environment variable is set, its value is used as the default value for `BUCKET_NAME` arguments
-in above-mentioned commands if `BUCKET_NAME` argument is not given by the user. For example, the following pairs of commands have the same effect:
-
-| With `AIS_BUCKET` | Without `AIS_BUCKET` |
-| --- | --- |
-| `AIS_BUCKET=mybucket ais create bucket` | `ais create bucket mybucket` |
-| `AIS_BUCKET=mybucket ais rename bucket mybucket1` | `ais rename bucket mybucket mybucket1` |
-| `AIS_BUCKET=mybucket ais set props 'aattrs=ro'` | `ais set props mybucket 'aattrs=ro'` |

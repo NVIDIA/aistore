@@ -7,7 +7,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -217,9 +216,6 @@ func showXactionHandler(c *cli.Context) (err error) {
 		xaction    = c.Args().Get(0) // empty string if no arg given
 		bucket     = c.Args().Get(1) // empty string if no arg given
 	)
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-	}
 	if xaction != "" {
 		if _, ok := cmn.ValidXact(xaction); !ok {
 			return fmt.Errorf("%q is not a valid xaction", xaction)

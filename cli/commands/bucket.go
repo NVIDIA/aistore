@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -38,18 +37,15 @@ func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string, o
 	}
 	bucket = b
 	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-		if bucket == "" {
-			if optional {
-				return
-			}
-			if tag != "" {
-				err = incorrectUsageError(c, fmt.Errorf("'%s': missing bucket name", tag))
-			} else {
-				err = incorrectUsageError(c, errors.New("missing bucket name"))
-			}
+		if optional {
 			return
 		}
+		if tag != "" {
+			err = incorrectUsageError(c, fmt.Errorf("'%s': missing bucket name", tag))
+		} else {
+			err = incorrectUsageError(c, errors.New("missing bucket name"))
+		}
+		return
 	}
 	err = canReachBucket(baseParams, bucket, provider)
 	return
@@ -104,7 +100,7 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket 
 		return
 	}
 
-	msgFmt := "Renaming bucket %s to %s in progress.\nTo check the status, run: ais stats xaction %s %s\n"
+	msgFmt := "Renaming bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
 	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActRenameLB, bucket)
 	return
 }
@@ -115,7 +111,7 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket st
 		return
 	}
 
-	msgFmt := "Copying bucket %s to %s in progress.\nTo check the status, run: ais stats xaction %s %s\n"
+	msgFmt := "Copying bucket %s to %s in progress.\nTo check the status, run: ais show xaction %s %s\n"
 	fmt.Fprintf(c.App.Writer, msgFmt, bucket, newBucket, cmn.ActCopyBucket, bucket)
 	return
 }
@@ -466,32 +462,18 @@ func ecEncode(c *cli.Context, baseParams *api.BaseParams, bucket string) (err er
 	return
 }
 
-// Rename bucket expects 2 arguments - bucket name and new bucket name.
-// This function returns bucket name and new bucket name based on arguments provided to the command
-// and AIS_BUCKET env variable. In case something is missing it also generates a meaningful error message.
+// This function returns bucket name and new bucket name based on arguments provided to the command.
+// In case something is missing it also generates a meaningful error message.
 func getOldNewBucketName(c *cli.Context) (bucket, newBucket string, err error) {
-	var (
-		args     = c.Args()
-		argCount = c.NArg()
-
-		bucketEnv, envVarSet = os.LookupEnv(aisBucketEnvVar)
-	)
-
-	if argCount == 0 && envVarSet || (argCount == 1 && !envVarSet) {
-		return "", "", missingArgumentsError(c, "new bucket name")
-	} else if argCount == 0 {
+	if c.NArg() == 0 {
 		return "", "", missingArgumentsError(c, "bucket name", "new bucket name")
 	}
-
-	if argCount == 1 {
-		bucket = bucketEnv      // AIS_BUCKET was set - treat it as the value of the first argument
-		newBucket = args.Get(0) // Treat the only argument as name of new bucket
-	} else {
-		bucket = args.Get(0)
-		newBucket = args.Get(1)
+	if c.NArg() == 1 {
+		return "", "", missingArgumentsError(c, "new bucket name")
 	}
 
-	return bucket, newBucket, nil
+	bucket, newBucket = c.Args().Get(0), c.Args().Get(1)
+	return
 }
 
 func printBucketNames(c *cli.Context, bucketNames *cmn.BucketNames, regex, provider string, showHeaders bool) {

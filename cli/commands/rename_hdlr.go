@@ -8,7 +8,6 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
@@ -69,9 +68,6 @@ func renameObjectHandler(c *cli.Context) (err error) {
 	)
 
 	bucket, oldObj = splitBucketObject(oldObjFull)
-	if bucket == "" {
-		bucket, _ = os.LookupEnv(aisBucketEnvVar)
-	}
 	if oldObj == "" {
 		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", oldObjFull))
 	}

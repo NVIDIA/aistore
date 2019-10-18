@@ -21,7 +21,6 @@ Gets the object from the bucket.
 | Command | Explanation |
 | --- | --- |
 | `ais get mybucket/myobj.txt '~/obj.txt'` | Gets object `myobj.txt` from bucket `mybucket` and writes it to the file `~/obj.txt` |
-| `AIS_BUCKET=mybucket ais get myobj.txt '~/obj.txt'` | Same as above, except that default bucket name is used |
 | `ais get mybucket/myobj.txt -` | Gets object `myobj.txt` from bucket `mybucket` and writes it to the standard output |
 | `ais get --is-cached mybucket/myobj.txt` | Checks if object `myobj.txt` from bucket `mybucket` is cached locally |
 | `ais get mybucket/myobj.txt '~/obj.txt' --offset 1024 --length 1024` | Gets contents of object `myobj.txt` starting from offset `1024` and having length `1024B` |
@@ -158,4 +157,3 @@ Renames object from an ais bucket.
 | Command | Explanation |
 | --- | --- |
 | `ais rename object mybucket/obj obj1` | Renames object `obj` from bucket `mybucket` to `obj1` |
-| `AIS_BUCKET=mybucket ais rename object obj obj1` | Same as above, except that default bucket name is used |

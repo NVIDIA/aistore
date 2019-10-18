@@ -246,7 +246,7 @@ For many more examples, please refer to the [test sources](/ais/tests/) in the r
 1. List bucket properties:
 
 ```shell
-$ AIS_BUCKET=mybucket ais ls props
+$ ais ls props mybucket
 ```
 
 or, same via command argument (and without the environment variable):
@@ -264,14 +264,14 @@ $ ais ls props mybucket --json
 2. Enable erasure coding on a bucket:
 
 ```shell
-$ AIS_BUCKET=mybucket ais set props ec.enabled=true
+$ ais set props mybucket ec.enabled=true
 ```
 
 3. Enable object versioning and then list updated bucket properties:
 
 ```shell
-$ AIS_BUCKET=mybucket ais set props ver.enabled=true
-$ AIS_BUCKET=mybucket ais ls props
+$ ais set props mybucket ver.enabled=true
+$ ais ls props mybucket
 ```
 
 ## Recover Buckets

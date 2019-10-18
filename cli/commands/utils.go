@@ -538,15 +538,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 		return nonEmptyBuckets, nil
 	}
 
-	var (
-		bucket string
-		ok     bool
-	)
-	if bucket, ok = os.LookupEnv(aisBucketEnvVar); !ok {
-		return nil, missingArgumentsError(c, "bucket name")
-	}
-
-	return []string{bucket}, nil
+	return nil, missingArgumentsError(c, "bucket name")
 }
 
 func cliAPIParams(proxyURL string) *api.BaseParams {

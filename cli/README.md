@@ -81,10 +81,6 @@ To add a new resource to a new command,
 
 ## Default flag and argument values via environment variables
 
-#### Bucket
-If `AIS_BUCKET` environment variable is set, its value is used as the default
-bucket name if no other name is provided by the user. Otherwise, the given bucket name is used.
-
 #### Bucket Provider
 If `AIS_BUCKET_PROVIDER` environment variable is set, the `--provider` flag is set to the value of this variable.
 Setting `--provider` flag overwrites the default value.
