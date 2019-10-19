@@ -8,17 +8,20 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/tutils/tassert"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tutils"
+	"github.com/NVIDIA/aistore/tutils/tassert"
 )
 
 func testBucketProps(t *testing.T) *cmn.BucketProps {
@@ -698,30 +701,28 @@ func TestCloudMirror(t *testing.T) {
 	)
 
 	m.saveClusterState()
-
-	if !isCloudBucket(t, baseParams.URL, clibucket) {
+	if !isCloudBucket(t, m.proxyURL, m.bucket) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
 
 	// evict
 	query := make(url.Values)
 	query.Add(cmn.URLParamProvider, cmn.Cloud)
-	err := api.EvictCloudBucket(baseParams, clibucket, query)
+	err := api.EvictCloudBucket(baseParams, m.bucket, query)
 	tassert.CheckFatal(t, err)
 
 	// enable mirror
-	err = api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
 	tassert.CheckFatal(t, err)
-	defer api.SetBucketProps(baseParams, clibucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	defer api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
 
 	// list
-	msg := &cmn.SelectMsg{}
-	objectList, err := api.ListBucket(baseParams, clibucket, msg, 0)
+	objectList, err := api.ListBucket(baseParams, m.bucket, nil, 0)
 	tassert.CheckFatal(t, err)
 
 	l := len(objectList.Entries)
 	if l < m.num {
-		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), clibucket, m.num)
+		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), m.bucket, m.num)
 	}
 	smap := getClusterMap(t, baseParams.URL)
 	{
@@ -740,14 +741,13 @@ func TestCloudMirror(t *testing.T) {
 	j := int(time.Now().UnixNano() % int64(l))
 	for i := 0; i < m.num; i++ {
 		e := objectList.Entries[(j+i)%l]
-		_, err := api.GetObject(baseParams, clibucket, e.Name)
+		_, err := api.GetObject(baseParams, m.bucket, e.Name)
 		tassert.CheckFatal(t, err)
 	}
-
 	m.ensureNumCopies(2)
 
 	// Increase number of copies
-	makeNCopies(t, 3, clibucket, baseParams)
+	makeNCopies(t, 3, m.bucket, baseParams)
 	m.ensureNumCopies(3)
 }
 
@@ -795,4 +795,452 @@ func TestBucketReadOnly(t *testing.T) {
 	if nerr != 0 {
 		t.Fatalf("num failed PUTs %d, expecting 0 (zero)", nerr)
 	}
+}
+
+func TestRenameEmptyBucket(t *testing.T) {
+	const (
+		dstBckName = TestBucketName + "_new"
+	)
+	var (
+		m = ioContext{
+			t:  t,
+			wg: &sync.WaitGroup{},
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyBucket(t, m.proxyURL, dstBckName)
+
+	m.setRandBucketProps()
+	srcProps, err := api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	// Rename it
+	tutils.Logf("rename %s => %s\n", m.bucket, dstBckName)
+	err = api.RenameBucket(baseParams, m.bucket, dstBckName)
+	tassert.CheckFatal(t, err)
+
+	// Check if the new bucket appears in the list
+	names, err := api.GetBucketNames(baseParams, cmn.AIS)
+	tassert.CheckFatal(t, err)
+
+	exists := cmn.StringInSlice(dstBckName, names.AIS)
+	if !exists {
+		t.Error("new bucket not found in buckets list")
+	}
+
+	tutils.Logln("checking bucket props...")
+	dstProps, err := api.HeadBucket(baseParams, dstBckName)
+	tassert.CheckFatal(t, err)
+	if !reflect.DeepEqual(srcProps, dstProps) {
+		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
+	}
+
+	// Destroy renamed ais bucket
+	tutils.DestroyBucket(t, m.proxyURL, dstBckName)
+}
+
+func TestRenameNonEmptyBucket(t *testing.T) {
+	if testing.Short() {
+		t.Skip(tutils.SkipMsg)
+	}
+	const (
+		dstBckName = TestBucketName + "_new"
+	)
+	var (
+		m = ioContext{
+			t:               t,
+			num:             1000,
+			numGetsEachFile: 2,
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create ais bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyBucket(t, m.proxyURL, dstBckName)
+
+	m.setRandBucketProps()
+	srcProps, err := api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	// Put some files
+	m.puts()
+
+	// Rename it
+	tutils.Logf("rename %s => %s\n", m.bucket, dstBckName)
+	srcBckName := m.bucket
+	m.bucket = dstBckName
+	err = api.RenameBucket(baseParams, srcBckName, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /*kind*/, srcBckName, baseParams, rebalanceTimeout)
+
+	// Gets on renamed ais bucket
+	m.wg.Add(m.num * m.numGetsEachFile)
+	m.gets()
+	m.wg.Wait()
+	m.ensureNoErrors()
+
+	tutils.Logln("checking bucket props...")
+	dstProps, err := api.HeadBucket(baseParams, dstBckName)
+	tassert.CheckFatal(t, err)
+	if !reflect.DeepEqual(srcProps, dstProps) {
+		t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
+	}
+}
+
+func TestRenameAlreadyExistingBucket(t *testing.T) {
+	const (
+		tmpBckName = "tmp_bck_name"
+	)
+	var (
+		m = ioContext{
+			t:  t,
+			wg: &sync.WaitGroup{},
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create bucket
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+
+	m.setRandBucketProps()
+
+	tutils.CreateFreshBucket(t, m.proxyURL, tmpBckName)
+	defer tutils.DestroyBucket(t, m.proxyURL, tmpBckName)
+
+	// Rename it
+	tutils.Logf("try rename %s => %s\n", m.bucket, tmpBckName)
+	err := api.RenameBucket(baseParams, m.bucket, tmpBckName)
+	if err == nil {
+		t.Fatal("expected error on renaming already existing bucket")
+	}
+
+	// Check if the old bucket still appears in the list
+	names, err := api.GetBucketNames(baseParams, cmn.AIS)
+	tassert.CheckFatal(t, err)
+
+	if !cmn.StringInSlice(m.bucket, names.AIS) || !cmn.StringInSlice(tmpBckName, names.AIS) {
+		t.Error("one of the buckets was not found in buckets list")
+	}
+
+	srcProps, err := api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+
+	dstProps, err := api.HeadBucket(baseParams, tmpBckName)
+	tassert.CheckFatal(t, err)
+
+	if reflect.DeepEqual(srcProps, dstProps) {
+		t.Fatalf("source and destination bucket props match, even though they should not: %v - %v", srcProps, dstProps)
+	}
+}
+
+func TestCopyBucket(t *testing.T) {
+	tests := []struct {
+		provider         string
+		dstBckExist      bool // determines if destination bucket exists before copy or not
+		dstBckHasObjects bool // determines if destination bucket contains any objects before copy or not
+		multipleDests    bool // determines if there are multiple destinations to which objects are copied
+	}{
+		// ais
+		{provider: cmn.ProviderAIS, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
+		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: false, multipleDests: false},
+		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: true, multipleDests: false},
+		{provider: cmn.ProviderAIS, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{provider: cmn.ProviderAIS, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+
+		// cloud
+		{provider: cmn.Cloud, dstBckExist: false, dstBckHasObjects: false},
+		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: false},
+		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: true},
+		{provider: cmn.Cloud, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
+		{provider: cmn.Cloud, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
+	}
+
+	for _, test := range tests {
+		// Bucket must exist when we require it to have objects.
+		cmn.Assert(test.dstBckExist || !test.dstBckHasObjects)
+
+		testName := test.provider + "/"
+		if test.dstBckExist {
+			testName += "present/"
+			if test.dstBckHasObjects {
+				testName += "with_objs"
+			} else {
+				testName += "without_objs"
+			}
+		} else {
+			testName += "absent"
+		}
+		if test.multipleDests {
+			testName += "/multiple_dests"
+		}
+
+		t.Run(testName, func(t *testing.T) {
+			if test.multipleDests {
+				// TODO: it should work
+				t.Skip("copying a bucket to multiple destinations is not yet supported")
+			}
+
+			var (
+				srcBckList *cmn.BucketList
+
+				srcm = &ioContext{
+					t:               t,
+					num:             1000,
+					bucket:          "src_copy_bck",
+					numGetsEachFile: 1,
+				}
+				dstms = []*ioContext{
+					&ioContext{
+						t:               t,
+						num:             1000,
+						bucket:          "dst_copy_bck_1",
+						numGetsEachFile: 1,
+					},
+				}
+				baseParams = tutils.DefaultBaseAPIParams(t)
+			)
+
+			if test.multipleDests {
+				dstms = append(dstms, &ioContext{
+					t:               t,
+					num:             1000,
+					bucket:          "dst_copy_bck_2",
+					numGetsEachFile: 1,
+				})
+			}
+
+			if test.provider == cmn.Cloud {
+				srcm.bucket = clibucket
+
+				if !isCloudBucket(t, proxyURL, srcm.bucket) {
+					t.Skip("test requires a cloud bucket")
+				}
+			}
+
+			// Initialize ioContext
+			srcm.saveClusterState()
+			for _, dstm := range dstms {
+				dstm.saveClusterState()
+			}
+			if srcm.originalTargetCount < 1 {
+				t.Fatalf("Must have 1 or more targets in the cluster, have only %d", srcm.originalTargetCount)
+			}
+
+			if test.provider == cmn.ProviderAIS {
+				tutils.CreateFreshBucket(t, srcm.proxyURL, srcm.bucket)
+				defer tutils.DestroyBucket(t, srcm.proxyURL, srcm.bucket)
+				srcm.setRandBucketProps()
+			}
+
+			if test.dstBckExist {
+				for _, dstm := range dstms {
+					tutils.CreateFreshBucket(t, dstm.proxyURL, dstm.bucket)
+					defer tutils.DestroyBucket(t, dstm.proxyURL, dstm.bucket)
+					dstm.setRandBucketProps()
+				}
+			}
+
+			srcProps, err := api.HeadBucket(baseParams, srcm.bucket)
+			tassert.CheckFatal(t, err)
+
+			if test.dstBckHasObjects {
+				for _, dstm := range dstms {
+					dstm.puts()
+				}
+			}
+
+			if test.provider == cmn.ProviderAIS {
+				srcm.puts()
+
+				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, nil, 0)
+				tassert.CheckFatal(t, err)
+			} else if test.provider == cmn.Cloud {
+				msg := &cmn.SelectMsg{Props: cmn.GetPropsIsCached}
+				query := make(url.Values)
+				query.Set(cmn.URLParamCached, "true")
+				srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0, query)
+				tassert.CheckFatal(t, err)
+				srcm.num = len(srcBckList.Entries)
+
+				// none cached - PUT some and cache them as well
+				if srcm.num == 0 {
+					objs := cloudPUT(t)
+					srcBckList, err = api.ListBucket(baseParams, srcm.bucket, msg, 0, query)
+					tassert.CheckFatal(t, err)
+					srcm.num = len(srcBckList.Entries)
+					if srcm.num != len(objs) {
+						t.Errorf("list-bucket err: %d != %d", srcm.num, len(objs))
+					}
+					// cleanup
+					defer func(objs []string) {
+						err := api.DeleteList(baseParams, srcm.bucket, test.provider, objs, true, 0)
+						if err != nil {
+							t.Errorf("Failed to delete objects from bucket %s, err: %v", srcm.bucket, err)
+						} else {
+							tutils.Logf("DELETE done.\n")
+						}
+					}(objs)
+				}
+				tutils.Logf("cloud bucket %s: %d cached objects\n", srcm.bucket, srcm.num)
+			}
+
+			for _, dstm := range dstms {
+				tutils.Logf("copying %s => %s\n", srcm.bucket, dstm.bucket)
+				err = api.CopyBucket(baseParams, srcm.bucket, dstm.bucket)
+				tassert.CheckFatal(t, err)
+			}
+
+			waitForBucketXactionToComplete(t, cmn.ActCopyBucket /*kind*/, srcm.bucket, baseParams, rebalanceTimeout)
+
+			tutils.Logln("checking and comparing bucket props")
+			for _, dstm := range dstms {
+				dstProps, err := api.HeadBucket(baseParams, dstm.bucket)
+				tassert.CheckFatal(t, err)
+
+				if dstProps.CloudProvider != cmn.ProviderAIS {
+					t.Fatalf("destination bucket does not seem to be 'ais': %s", dstProps.CloudProvider)
+				}
+				// Clear providers to make sure that they will fail on different providers.
+				srcProps.CloudProvider = ""
+				dstProps.CloudProvider = ""
+
+				// If bucket existed before, we need to ensure that the bucket
+				// props were **not** copied over.
+				if test.dstBckExist && reflect.DeepEqual(srcProps, dstProps) {
+					t.Fatalf("source and destination bucket props match, even though they should not: %v - %v", srcProps, dstProps)
+				}
+
+				// If bucket did not exist before, we need to ensure that
+				// the bucket props match the source bucket props (except provider).
+				if !test.dstBckExist && !reflect.DeepEqual(srcProps, dstProps) {
+					t.Fatalf("source and destination bucket props do not match: %v - %v", srcProps, dstProps)
+				}
+			}
+
+			tutils.Logln("checking and comparing objects")
+
+			for _, dstm := range dstms {
+				expectedObjCount := srcm.num
+				if test.dstBckHasObjects {
+					expectedObjCount += dstm.num
+				}
+
+				dstBckList, err := api.ListBucketFast(baseParams, dstm.bucket, nil)
+				tassert.CheckFatal(t, err)
+				if len(dstBckList.Entries) != expectedObjCount {
+					t.Fatalf("list-bucket: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
+				}
+				for _, a := range srcBckList.Entries {
+					var found bool
+					for _, b := range dstBckList.Entries {
+						if a.Name == b.Name {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Fatalf("%s/%s is missing in the copied objects", srcm.bucket, a.Name)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
+	const (
+		newTestBucketName = TestBucketName + "_new"
+	)
+	var (
+		m = ioContext{
+			t:  t,
+			wg: &sync.WaitGroup{},
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
+	)
+
+	// Initialize ioContext
+	m.saveClusterState()
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	localBucketDir := ""
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if localBucketDir != "" {
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(path, "/local") && strings.Contains(path, fs.ObjectType) {
+			localBucketDir = path
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	filepath.Walk(rootDir, fsWalkFunc)
+	tutils.Logf("ais bucket's dir: %s\n", localBucketDir)
+
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
+
+	bucketFQN := filepath.Join(localBucketDir, m.bucket)
+	tutils.CheckPathExists(t, bucketFQN, true /*dir*/)
+
+	err := api.RenameBucket(baseParams, m.bucket, newTestBucketName)
+	tassert.CheckFatal(t, err)
+
+	waitForBucketXactionToComplete(t, cmn.ActRenameLB /*kind*/, m.bucket, baseParams, rebalanceTimeout)
+
+	tutils.CheckPathNotExists(t, bucketFQN)
+
+	newBucketFQN := filepath.Join(localBucketDir, newTestBucketName)
+	tutils.CheckPathExists(t, newBucketFQN, true /*dir*/)
+
+	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
+}
+
+func cloudPUT(t *testing.T) (objs []string) {
+	var (
+		prefix   = "copy/cloud_"
+		wg       = &sync.WaitGroup{}
+		errCh    = make(chan error, numfiles)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
+	)
+	for i := 0; i < numfiles; i++ {
+		r, err := tutils.NewRandReader(1024 /*size */, true /* withHash */)
+		tassert.CheckFatal(t, err)
+		objname := fmt.Sprintf("%s%d", prefix, i)
+		wg.Add(1)
+		go tutils.PutAsync(wg, proxyURL, clibucket, objname, r, errCh)
+		objs = append(objs, objname)
+	}
+	wg.Wait()
+	selectErr(errCh, "put", t, true)
+	tutils.Logf("PUT done.\n")
+	return
 }

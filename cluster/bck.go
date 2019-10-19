@@ -17,11 +17,15 @@ type Bck struct {
 }
 
 func (b *Bck) String() string {
-	var bid uint64
+	var (
+		bid        uint64
+		inProgress bool
+	)
 	if b.Props != nil {
 		bid = b.Props.BID
+		inProgress = b.Props.InProgress
 	}
-	return fmt.Sprintf("%s(%x, %s)", b.Name, bid, b.Provider)
+	return fmt.Sprintf("%s(%x, %s, %v)", b.Name, bid, b.Provider, inProgress)
 }
 func (b *Bck) IsAIS() bool { return b.Provider == cmn.AIS || b.Provider == cmn.ProviderAIS }
 func (b *Bck) IsCloud() bool {
@@ -33,6 +37,9 @@ func (b *Bck) Equal(other *Bck) bool {
 	}
 	if b.Props != nil && other.Props != nil {
 		if b.Props.BID != other.Props.BID {
+			return false
+		}
+		if b.Props.InProgress != other.Props.InProgress {
 			return false
 		}
 	}

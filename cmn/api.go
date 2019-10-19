@@ -260,6 +260,10 @@ type BucketProps struct {
 
 	// non-empty when the bucket has been renamed (TODO: delayed deletion likewise)
 	Renamed string
+
+	// Determines if the bucket has been binded to some action and currently
+	// cannot be updated or changed in anyway until the action finishes.
+	InProgress bool `json:"in_progress"`
 }
 
 type TierConf struct {

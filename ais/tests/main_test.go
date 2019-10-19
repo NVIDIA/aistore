@@ -1268,7 +1268,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.CheckPathExists(t, fqn, false /*dir*/)
-	oldFileInfo, err = os.Stat(fqn)
+	oldFileInfo, _ = os.Stat(fqn)
 
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)

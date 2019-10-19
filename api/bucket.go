@@ -532,6 +532,10 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.SelectMsg, numOb
 		q = query[0]
 	}
 
+	if msg == nil {
+		msg = &cmn.SelectMsg{}
+	}
+
 	// An optimization to read as few objects from bucket as possible.
 	// toRead is the current number of objects ListBucket must read before
 	// returning the list. Every cycle the loop reads objects by pages and

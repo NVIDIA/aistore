@@ -1254,18 +1254,18 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 		return capInfo.Err
 	}
 
-	t.bmdowner.Lock()
-	defer t.bmdowner.Unlock()
-	bmd := t.bmdowner.get()
+	if err = bckFrom.Init(t.bmdowner); err != nil {
+		return
+	}
 
 	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
-	if err := bckTo.Init(t.bmdowner); err == nil {
-		if action == cmn.ActRenameLB {
-			return cmn.NewErrorBucketAlreadyExists(bckTo.Name)
-		}
-		// allow to copy into existing bucket
-		s := fmt.Sprintf(fmtBckExists, bucketTo)
-		glog.Warningf("%s, proceeding to %s %s => %s", s, action, bckFrom, bckTo)
+	if err = bckTo.Init(t.bmdowner); err != nil {
+		return
+	}
+
+	if !bckFrom.Props.InProgress || !bckTo.Props.InProgress {
+		err = fmt.Errorf("either source or destination bucket has not been updated correctly")
+		return
 	}
 
 	switch action {
@@ -1279,21 +1279,12 @@ func (t *targetrunner) beginCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	default:
 		cmn.Assert(false)
 	}
-	if err == nil {
-		// add bucketTo to this target's BMD wo/ increasing the version
-		clone := bmd.clone()
-		clone.LBmap[bucketTo] = bckFrom.Props
-		t.bmdowner.put(clone)
-	}
 	return
 }
 
-func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) (err error) {
-	t.bmdowner.Lock()
-	defer t.bmdowner.Unlock()
-
-	bmd := t.bmdowner.get()
-	_, ok := bmd.Get(&cluster.Bck{Name: bucketTo, Provider: cmn.AIS})
+func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action string) {
+	bckTo := &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
+	_, ok := t.bmdowner.get().Get(bckTo)
 	if !ok {
 		return
 	}
@@ -1309,18 +1300,7 @@ func (t *targetrunner) abortCopyRenameLB(bckFrom *cluster.Bck, bucketTo, action 
 	if ee.bck.Name != bckFrom.Name {
 		return
 	}
-	switch action {
-	case cmn.ActRenameLB:
-		tag := cmn.ActAbort + ":" + action
-		fs.Mountpaths.CreateDestroyBuckets(tag, false /*false=destroy*/, bucketTo)
-	default:
-		cmn.Assert(action == cmn.ActCopyBucket)
-	}
-	// rm bucketTo to this target's BMD wo/ increasing the version
-	clone := bmd.clone()
-	delete(clone.LBmap, bucketTo)
-	t.bmdowner.put(clone)
-	return
+	e.Get().Abort()
 }
 
 func (t *targetrunner) commitCopyRenameLB(bckFrom *cluster.Bck, bucketTo string, msgInt *actionMsgInternal) (err error) {

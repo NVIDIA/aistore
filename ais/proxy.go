@@ -40,7 +40,6 @@ const (
 	whatRenamedLB = "renamedlb"
 	fmtNotCloud   = "%q appears to be ais bucket (expecting cloud)"
 	fmtUnknownAct = "Unexpected action message <- JSON [%v]"
-	fmtBckExists  = "bucket %s already exists"
 	guestError    = "guest account does not have permissions for the operation"
 )
 
@@ -1571,28 +1570,70 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		tout  = config.Timeout.Default
 		bckTo = &cluster.Bck{Name: bucketTo, Provider: cmn.AIS}
 	)
+
+	p.bmdowner.Lock()
+	clone := p.bmdowner.get().clone()
+
+	// Re-init under a lock
+	if err = bckFrom.Init(p.bmdowner); err != nil {
+		p.bmdowner.Unlock()
+		return
+	}
 	if err := bckTo.Init(p.bmdowner); err == nil {
 		if msg.Action == cmn.ActRenameLB {
+			p.bmdowner.Unlock()
 			return cmn.NewErrorBucketAlreadyExists(bckTo.Name)
 		}
-		// allow to copy into existing bucket
+		// Allow to copy into existing bucket
 		glog.Warningf("destination bucket %s already exists, proceeding to %s %s => %s anyway", bckFrom, msg.Action, bckFrom, bckTo)
+	} else {
+		bckToProps := bckFrom.Props.Clone()
+		clone.add(bckTo, bckToProps)
+	}
+	clone.downgrade(bckFrom)
+	clone.downgrade(bckTo)
+	p.bmdowner.put(clone)
+	if err := p.savebmdconf(clone, config); err != nil {
+		glog.Error(err)
+	}
+	p.bmdowner.Unlock()
+
+	// Distribute temporary bucket
+	msgInt := p.newActionMsgInternal(msg, smap, clone)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
+	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bckTo, bmdTermName, clone.version())
+
+	errHandler := func() {
+		p.bmdowner.Lock()
+		clone := p.bmdowner.get().clone()
+		clone.upgrade(bckFrom)
+		clone.upgrade(bckTo)
+		clone.del(bckTo)
+		p.bmdowner.put(clone)
+		if err = p.savebmdconf(clone, config); err != nil {
+			glog.Error(err)
+		}
+		p.bmdowner.Unlock()
+
+		msgInt := p.newActionMsgInternal(msg, smap, clone)
+		p.metasyncer.sync(true, revspair{clone, msgInt})
 	}
 
-	// begin -- abort
+	// Begin
 	var (
-		msgInt = p.newActionMsgInternal(msg, smap, p.bmdowner.get())
 		body   = cmn.MustMarshal(msgInt)
 		path   = cmn.URLPath(cmn.Version, cmn.Buckets, bckFrom.Name)
 		errmsg = fmt.Sprintf("cannot %s bucket %s", msg.Action, bckFrom)
 	)
 	args := bcastArgs{req: cmn.ReqArgs{Path: path, Body: body}, smap: smap, timeout: tout}
 	err = p.bcast2Phase(args, errmsg, false /*commit*/)
-	if err != nil { // aborted
+	if err != nil {
+		// Abort
+		errHandler()
 		return
 	}
 
-	// commit
+	// Commit
 	if msg.Action == cmn.ActRenameLB {
 		p.smapowner.Lock()
 		p.setGlobRebID(smap, msgInt, true) // FIXME: race vs change in membership
@@ -1610,28 +1651,29 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		}
 	}
 	if err != nil {
+		errHandler()
 		return
 	}
 
 	p.bmdowner.Lock()
-	nbmd := p.bmdowner.get().clone()
+	clone = p.bmdowner.get().clone()
+	clone.upgrade(bckFrom)
+	clone.upgrade(bckTo)
 	if msg.Action == cmn.ActRenameLB {
-		bpropsFrom := bckFrom.Props.Clone()
-		bpropsFrom.Renamed = cmn.ActRenameLB
-		nbmd.set(bckFrom, bpropsFrom)
+		bckFromProps := bckFrom.Props.Clone()
+		bckFromProps.Renamed = cmn.ActRenameLB
+		clone.set(bckFrom, bckFromProps)
 	}
-	bpropsTo := bckFrom.Props.Clone()
-	nbmd.add(bckTo, bpropsTo)
-	p.bmdowner.put(nbmd)
-	p.bmdowner.Unlock()
-
-	// finalize
-	if err = p.savebmdconf(nbmd, config); err != nil {
+	p.bmdowner.put(clone)
+	if err := p.savebmdconf(clone, config); err != nil {
 		glog.Error(err)
 	}
-	msgInt = p.newActionMsgInternal(msg, nil, nbmd)
-	p.metasyncer.sync(true, revspair{nbmd, msgInt})
-	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bckTo, bmdTermName, nbmd.version())
+	p.bmdowner.Unlock()
+
+	// Finalize
+	msgInt = p.newActionMsgInternal(msg, nil, clone)
+	p.metasyncer.sync(true, revspair{clone, msgInt})
+	glog.Infof("%s ais bucket %s => %s, %s v%d", msg.Action, bckFrom, bckTo, bmdTermName, clone.version())
 	return
 }
 

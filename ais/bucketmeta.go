@@ -57,9 +57,10 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	if !bck.IsAIS() {
 		mm = m.CBmap
 	}
-	if _, ok := mm[bck.Name]; ok {
+	if _, exists := mm[bck.Name]; exists {
 		return false
 	}
+
 	m.Version++
 	p.BID = m.GenBucketID(bck.IsAIS())
 	mm[bck.Name] = p
@@ -74,8 +75,8 @@ func (m *bucketMD) del(bck *cluster.Bck) bool {
 	if _, ok := mm[bck.Name]; !ok {
 		return false
 	}
-	delete(mm, bck.Name)
 	m.Version++
+	delete(mm, bck.Name)
 	return true
 }
 
@@ -87,9 +88,35 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	if _, ok := mm[bck.Name]; !ok {
 		cmn.Assert(false)
 	}
+	cmn.Assert(!p.InProgress)
 
 	m.Version++
+	p.BID = m.GenBucketID(bck.IsAIS())
 	mm[bck.Name] = p
+}
+
+func (m *bucketMD) toggleInProgress(bck *cluster.Bck, toggle bool) {
+	mm := m.LBmap
+	if !bck.IsAIS() {
+		mm = m.CBmap
+	}
+	p, ok := mm[bck.Name]
+	cmn.Assert(ok)
+	if !toggle {
+		cmn.Assert(p.InProgress)
+	}
+
+	p.InProgress = toggle
+	m.Version++
+	mm[bck.Name] = p
+}
+
+func (m *bucketMD) downgrade(bck *cluster.Bck) {
+	m.toggleInProgress(bck, true)
+}
+
+func (m *bucketMD) upgrade(bck *cluster.Bck) {
+	m.toggleInProgress(bck, false)
 }
 
 func (m *bucketMD) ecUsed() bool {

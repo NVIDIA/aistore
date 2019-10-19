@@ -697,7 +697,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		case cmn.ActBegin:
 			err = t.beginCopyRenameLB(bckFrom, bucketTo, msgInt.Action)
 		case cmn.ActAbort:
-			err = t.abortCopyRenameLB(bckFrom, bucketTo, msgInt.Action)
+			t.abortCopyRenameLB(bckFrom, bucketTo, msgInt.Action)
 		case cmn.ActCommit:
 			err = t.commitCopyRenameLB(bckFrom, bucketTo, msgInt)
 		default:

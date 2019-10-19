@@ -324,3 +324,9 @@ func CheckPathExists(t *testing.T, path string, dir bool) {
 		}
 	}
 }
+
+func CheckPathNotExists(t *testing.T, path string) {
+	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+}
