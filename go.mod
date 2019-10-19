@@ -15,13 +15,12 @@ require (
 	github.com/google/martian v2.1.0+incompatible // indirect
 	github.com/googleapis/gax-go v2.0.0+incompatible // indirect
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
-	github.com/json-iterator/go v1.1.5
+	github.com/json-iterator/go v1.1.7
 	github.com/karrick/godirwalk v1.8.0
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/reedsolomon v1.8.0
 	github.com/mattn/go-isatty v0.0.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742 // indirect
 	github.com/nanobox-io/golang-scribble v0.0.0-20180621225840-336beac0a992
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
