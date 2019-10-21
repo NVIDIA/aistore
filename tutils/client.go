@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -221,24 +222,77 @@ func emitError(r *http.Response, err error, errCh chan error) {
 	}
 }
 
-// Get sends a GET request to url and discards returned data
-func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, length int64) (int64, HTTPLatencies, error) {
+//
+// GetDiscard sends a GET request and discards returned data
+//
+func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool, offset, length int64) (int64, error) {
 	var (
 		hash, hdhash, hdhashtype string
 	)
-
-	tctx := newTraceCtx()
-
-	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
+	query := url.Values{}
+	query.Add(cmn.URLParamProvider, provider)
 	if length > 0 {
-		url += fmt.Sprintf("?%s=%d&%s=%d",
-			cmn.URLParamOffset, offset,
-			cmn.URLParamLength, length)
+		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
+		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
 	}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   proxyURL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, objName),
+		Query:  query,
+	}
+	req, err := reqArgs.Req()
+	if err != nil {
+		return 0, err
+	}
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if validate {
+		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
+		hdhashtype = resp.Header.Get(cmn.HeaderObjCksumType)
+	}
+	v := hdhashtype == cmn.ChecksumXXHash
+	n, hash, err := readResponse(resp, ioutil.Discard,
+		fmt.Sprintf("GET (object %s from bucket %s)", objName, bucket), v)
+	if err != nil {
+		return 0, err
+	}
+	if v {
+		if hdhash != hash {
+			err = cmn.NewInvalidCksumError(hdhash, hash)
+		}
+	}
+	return n, err
+}
+
+// same as above with HTTP trace
+func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate bool,
+	offset, length int64) (int64, HTTPLatencies, error) {
+	var (
+		hash, hdhash, hdhashtype string
+	)
+	query := url.Values{}
+	query.Add(cmn.URLParamProvider, provider)
+	if length > 0 {
+		query.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
+		query.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
+	}
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodGet,
+		Base:   proxyURL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, objName),
+		Query:  query,
+	}
+	req, err := reqArgs.Req()
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
+
+	tctx := newTraceCtx()
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
@@ -254,7 +308,8 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	}
 
 	v := hdhashtype == cmn.ChecksumXXHash
-	n, hash, err := readResponse(resp, ioutil.Discard, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
+	n, hash, err := readResponse(resp, ioutil.Discard,
+		fmt.Sprintf("GET (object %s from bucket %s)", objName, bucket), v)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
@@ -280,16 +335,46 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	return n, latencies, err
 }
 
-// Put sends a PUT request to url
-func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
+//
+// Put executes PUT
+//
+func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) error {
+	var (
+		baseParams = &api.BaseParams{
+			Client: HTTPClient,
+			URL:    proxyURL,
+			Method: http.MethodPut,
+		}
+		args = api.PutObjectArgs{
+			BaseParams: baseParams,
+			Bucket:     bucket,
+			Provider:   provider,
+			Object:     object,
+			Hash:       hash,
+			Reader:     reader,
+		}
+	)
+	return api.PutObject(args)
+}
+
+// PUT with HTTP trace FIXME: copy-paste
+func PutWithTrace(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
 	handle, err := reader.Open()
 	if err != nil {
 		return HTTPLatencies{}, fmt.Errorf("failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
-	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	req, err := http.NewRequest(http.MethodPut, url, handle)
+	query := url.Values{}
+	query.Add(cmn.URLParamProvider, provider)
+	reqArgs := cmn.ReqArgs{
+		Method: http.MethodPut,
+		Base:   proxyURL,
+		Path:   cmn.URLPath(cmn.Version, cmn.Objects, bucket, object),
+		Query:  query,
+		BodyR:  handle,
+	}
+	req, err := reqArgs.Req()
 	if err != nil {
 		return HTTPLatencies{}, err
 	}

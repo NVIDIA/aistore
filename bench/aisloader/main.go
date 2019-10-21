@@ -142,6 +142,7 @@ type (
 		stoppable      bool // true: terminate by Ctrl-C
 		statsdRequired bool
 		dryRun         bool // true: print configuration and parameters that aisloader will use at runtime
+		traceHTTP      bool // true: trace http latencies as per tutils.HTTPLatencies & https://golang.org/pkg/net/http/httptrace
 	}
 
 	// sts records accumulated puts/gets information.
@@ -177,11 +178,10 @@ var (
 	statsdC          statsd.Client
 	getPending       int64
 	putPending       int64
-	skipLatSend      atomic.Bool
+	traceHTTPSig     atomic.Bool
 
 	flagUsage   bool
 	flagVersion bool
-	noLatDetail bool
 
 	ip   string
 	port string
@@ -290,7 +290,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
 	f.BoolVar(&p.stoppable, "stoppable", false, "true: stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "true: show the configuration and parameters that aisloader will use for benchmark")
-	f.BoolVar(&noLatDetail, "no-detailed-stats", false, "true: do not collect detailed HTTP latencies for PUT and GET")
+	f.BoolVar(&p.traceHTTP, "trace-http", false, "true: trace HTTP latencies") // see tutils.HTTPLatencies
 
 	f.Parse(os.Args[1:])
 
@@ -489,7 +489,7 @@ func parseCmdLine() (params, error) {
 		port = dockerPort
 	}
 
-	skipLatSend.Store(noLatDetail)
+	traceHTTPSig.Store(p.traceHTTP)
 
 	p.proxyURL = "http://" + ip + ":" + port
 
@@ -516,7 +516,7 @@ func printArguments(set *flag.FlagSet) {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
-	fmt.Fprintf(w, "HTTP latency detalization:\t%v\n", !noLatDetail)
+	fmt.Fprintf(w, "HTTP trace:\t%v\n", runParams.traceHTTP)
 	_, _ = fmt.Fprintf(w, "=================================\n\n")
 	_ = w.Flush()
 }
@@ -792,7 +792,7 @@ MainLoop:
 			switch sig {
 			case syscall.SIGHUP:
 				msg := "Collecting detailed latency info is "
-				if !skipLatSend.Toggle() {
+				if traceHTTPSig.Toggle() {
 					msg += "disabled"
 				} else {
 					msg += "enabled"
@@ -943,7 +943,7 @@ func validateWorkOrder(wo *workOrder, delta time.Duration) error {
 func completeWorkOrder(wo *workOrder) {
 	delta := cmn.TimeDelta(wo.end, wo.start)
 
-	if wo.err == nil && !skipLatSend.Load() {
+	if wo.err == nil && traceHTTPSig.Load() {
 		var lat *statsd.MetricLatsAgg
 		switch wo.op {
 		case opGet:

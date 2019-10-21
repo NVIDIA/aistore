@@ -238,7 +238,8 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 			return 0, cmn.NewInvalidCksumError(hdrHash, cksumVal)
 		}
 	} else {
-		return 0, fmt.Errorf("can't validate hash types other than %s, object's hash type: %s", cmn.ChecksumXXHash, hdrHashType)
+		return 0, fmt.Errorf("can't validate hash types other than %s, object's hash type: %s",
+			cmn.ChecksumXXHash, hdrHashType)
 	}
 	return n, nil
 }
