@@ -137,7 +137,7 @@ func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) erro
 
 func genShardsHandler(c *cli.Context) error {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		ext        = parseStrFlag(c, extFlag)
 		bucket     = parseStrFlag(c, dsortBucketFlag)
 		template   = parseStrFlag(c, dsortTemplateFlag)

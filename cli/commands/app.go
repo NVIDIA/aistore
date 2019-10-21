@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
@@ -21,6 +22,8 @@ const (
 	cliName  = "ais"
 	metadata = "md"
 )
+
+var cfg *config.Config
 
 // AISCLI represents an instance of an AIS command line interface
 type AISCLI struct {
@@ -33,7 +36,7 @@ type AISCLI struct {
 }
 
 // New returns a new, initialized AISCLI instance
-func New(build, version string) *AISCLI {
+func New(build string, version string) *AISCLI {
 	aisCLI := AISCLI{
 		app:           cli.NewApp(),
 		outWriter:     os.Stdout,
@@ -208,11 +211,11 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 
 // Checks if URL is valid by trying to get Smap
 func testAISURL() (err error) {
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	_, err = api.GetClusterMap(baseParams)
 
 	if cmn.IsErrConnectionRefused(err) {
-		return fmt.Errorf("could not connect to AIS cluser at %s - verify that cluster is running", ClusterURL)
+		return fmt.Errorf("could not connect to AIS cluser at %s - verify that cluster is running", clusterURL)
 	}
 
 	return err

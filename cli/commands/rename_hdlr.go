@@ -47,7 +47,7 @@ var (
 )
 
 func renameBucketHandler(c *cli.Context) (err error) {
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	bucket, newBucket, err := getOldNewBucketName(c)
 	if err != nil {
 		return
@@ -60,7 +60,7 @@ func renameObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageError(c, errors.New("invalid number of arguments"))
 	}
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		oldObjFull = c.Args().Get(0)
 		newObj     = c.Args().Get(1)
 		bucket     string

@@ -102,7 +102,7 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		xaction    = c.Args().First() // empty string if no args given
 		bucket     string
 	)
@@ -135,7 +135,7 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		xaction    = c.Args().First() // empty string if no args given
 		bucket     string
 	)
@@ -174,7 +174,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
+		baseParams  = cliAPIParams(clusterURL)
 		description = parseStrFlag(c, descriptionFlag)
 		timeout     = parseStrFlag(c, timeoutFlag)
 		id          string
@@ -236,7 +236,7 @@ func startDownloadHandler(c *cli.Context) error {
 
 func stopDownloadHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 
@@ -254,7 +254,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 
 func startDsortHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         string
 	)
 
@@ -278,7 +278,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 func stopDsortHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 

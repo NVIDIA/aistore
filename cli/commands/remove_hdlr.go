@@ -78,7 +78,7 @@ var (
 
 func removeBucketHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		buckets    []string
 	)
 
@@ -91,7 +91,7 @@ func removeBucketHandler(c *cli.Context) (err error) {
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     string
 		provider   string
 	)
@@ -134,7 +134,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 func removeNodeHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		daemonID   = c.Args().First()
 	)
 
@@ -143,7 +143,7 @@ func removeNodeHandler(c *cli.Context) (err error) {
 
 func removeDownloadHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 
@@ -161,7 +161,7 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 
 func removeDsortHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 

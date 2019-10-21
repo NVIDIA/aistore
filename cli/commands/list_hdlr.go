@@ -115,7 +115,7 @@ var (
 // for a given bucket.
 func defaultListHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     = c.Args().First()
 	)
 
@@ -131,7 +131,7 @@ func defaultListHandler(c *cli.Context) (err error) {
 // is to list ais bucket names if bucket name isn't given.
 func listAISBucketsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     = c.Args().First()
 	)
 
@@ -147,7 +147,7 @@ func listAISBucketsHandler(c *cli.Context) (err error) {
 // is to list cloud bucket names if bucket name isn't given.
 func listCloudBucketsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     = c.Args().First()
 	)
 
@@ -160,25 +160,25 @@ func listCloudBucketsHandler(c *cli.Context) (err error) {
 }
 
 func listBckPropsHandler(c *cli.Context) (err error) {
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	return listBucketProps(c, baseParams)
 }
 
 func listConfigHandler(c *cli.Context) (err error) {
-	if _, err = fillMap(ClusterURL); err != nil {
+	if _, err = fillMap(clusterURL); err != nil {
 		return
 	}
-	return getConfig(c, cliAPIParams(ClusterURL))
+	return getDaemonConfig(c, cliAPIParams(clusterURL))
 }
 
 func listSmapHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
+		baseParams  = cliAPIParams(clusterURL)
 		daemonID    = c.Args().First()
 		primarySmap *cluster.Smap
 	)
 
-	if primarySmap, err = fillMap(ClusterURL); err != nil {
+	if primarySmap, err = fillMap(clusterURL); err != nil {
 		return
 	}
 

@@ -48,15 +48,15 @@ var (
 )
 
 func setConfigHandler(c *cli.Context) (err error) {
-	if _, err = fillMap(ClusterURL); err != nil {
+	if _, err = fillMap(clusterURL); err != nil {
 		return
 	}
-	return setConfig(c, cliAPIParams(ClusterURL))
+	return setConfig(c, cliAPIParams(clusterURL))
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 	)
 
 	if flagIsSet(c, resetFlag) { // ignores any arguments, resets bucket props

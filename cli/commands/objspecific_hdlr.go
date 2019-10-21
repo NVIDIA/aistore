@@ -96,7 +96,7 @@ var (
 func prefetchHandler(c *cli.Context) (err error) {
 	var (
 		bucket, provider string
-		baseParams       = cliAPIParams(ClusterURL)
+		baseParams       = cliAPIParams(clusterURL)
 	)
 	if c.NArg() > 0 {
 		bucket = strings.TrimSuffix(c.Args().Get(0), "/")
@@ -114,7 +114,7 @@ func prefetchHandler(c *cli.Context) (err error) {
 func evictHandler(c *cli.Context) (err error) {
 	var (
 		bucket, provider string
-		baseParams       = cliAPIParams(ClusterURL)
+		baseParams       = cliAPIParams(clusterURL)
 	)
 
 	if provider, err = bucketProvider(c); err != nil {
@@ -151,7 +151,7 @@ func evictHandler(c *cli.Context) (err error) {
 func getHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, objName string
-		baseParams                = cliAPIParams(ClusterURL)
+		baseParams                = cliAPIParams(clusterURL)
 		fullObjName               = c.Args().Get(0) // empty string if arg not given
 		outFile                   = c.Args().Get(1) // empty string if arg not given
 	)
@@ -174,7 +174,7 @@ func getHandler(c *cli.Context) (err error) {
 func putHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, objName string
-		baseParams                = cliAPIParams(ClusterURL)
+		baseParams                = cliAPIParams(clusterURL)
 		fileName                  = c.Args().Get(0)
 		fullObjName               = c.Args().Get(1)
 	)
@@ -194,7 +194,7 @@ func putHandler(c *cli.Context) (err error) {
 func promoteHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, objName string
-		baseParams                = cliAPIParams(ClusterURL)
+		baseParams                = cliAPIParams(clusterURL)
 		fqn                       = c.Args().Get(0)
 		fullObjName               = c.Args().Get(1)
 	)

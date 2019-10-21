@@ -18,8 +18,6 @@ var (
 )
 
 func main() {
-	commands.ClusterURL = commands.GetClusterURL()
-
 	aisCLI := commands.New(build, version)
 
 	stopCh := make(chan os.Signal, 1)

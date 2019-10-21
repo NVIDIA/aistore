@@ -101,7 +101,7 @@ func setConfigCompletions(c *cli.Context) {
 }
 
 func suggestDaemon(omitProxies bool) {
-	smap, err := api.GetClusterMap(cliAPIParams(ClusterURL))
+	smap, err := api.GetClusterMap(cliAPIParams(clusterURL))
 	if err != nil {
 		return
 	}
@@ -153,7 +153,7 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 		if err != nil {
 			return
 		}
-		baseParams := cliAPIParams(ClusterURL)
+		baseParams := cliAPIParams(clusterURL)
 		bucketNames, err := api.GetBucketNames(baseParams, provider)
 		if err != nil {
 			return
@@ -224,7 +224,7 @@ func suggestBucket(c *cli.Context, separator bool, provider ...string) {
 		return
 	}
 
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	bucketNames, err := api.GetBucketNames(baseParams, prov)
 	if err != nil {
 		return
@@ -321,7 +321,7 @@ func suggestDownloadID(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
 		return
 	}
 
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 
 	list, _ := api.DownloadGetList(baseParams, "")
 
@@ -350,7 +350,7 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		return
 	}
 
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 
 	list, _ := api.ListDSort(baseParams, "")
 

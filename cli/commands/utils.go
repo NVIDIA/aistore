@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cli/config"
 	"github.com/NVIDIA/aistore/containers"
 
 	"github.com/urfave/cli"
@@ -36,24 +37,23 @@ const (
 	outFileStdout        = "-"
 
 	// Error messages
+	dockerErrMsgFmt       = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
 	durationParseErrorFmt = "error converting refresh flag value %q to time duration: %v"
 	invalidDaemonMsg      = "%s is not a valid DAEMON_ID"
 	invalidCmdMsg         = "invalid command name '%s'"
 	invalidFlagsMsgFmt    = "flags %s are invalid when arguments have been provided"
 
 	// Scheme parsing
-	defaultScheme        = "https"
-	gsScheme             = "gs"
-	s3Scheme             = "s3"
-	aisScheme            = "ais"
-	gsHost               = "storage.googleapis.com"
-	s3Host               = "s3.amazonaws.com"
-	defaultAISHost       = "http://127.0.0.1:8080"
-	defaultAISDockerHost = "http://172.50.0.2:8080"
+	defaultScheme = "https"
+	gsScheme      = "gs"
+	s3Scheme      = "s3"
+	aisScheme     = "ais"
+	gsHost        = "storage.googleapis.com"
+	s3Host        = "s3.amazonaws.com"
 )
 
 var (
-	ClusterURL string
+	clusterURL string
 
 	transport = &http.Transport{
 		DialContext: (&net.Dialer{
@@ -584,47 +584,41 @@ func bucketProvider(c *cli.Context, provider ...string) (string, error) {
 // AIS cluster discovery
 //
 
-// GetClusterURL resolving order
+// determineClusterURL resolving order
 // 1. AIS_URL; if not present:
 // 2. If kubernetes detected, tries to find a primary proxy in k8s cluster
 // 3. Proxy docker containter IP address; if not successful:
 // 4. Docker default; if not present:
-// 5. Default = localhost:8080
-func GetClusterURL() string {
-	const (
-		envVarURL       = "AIS_URL"
-		envVarNamespace = "AIS_NAMESPACE"
-	)
-
-	if envURL := os.Getenv(envVarURL); envURL != "" {
-		return envURL
+// 5. Default as cfg.Cluster.DefaultAISHost
+func determineClusterURL(cfg *config.Config) string {
+	if cfg.Cluster.URL != "" {
+		return cfg.Cluster.URL
 	}
 
-	namespace := os.Getenv(envVarNamespace)
-	k8sURL, err := containers.K8sPrimaryURL(namespace)
+	k8sURL, err := containers.K8sPrimaryURL(cfg.Cluster.K8SNamespace)
 	if err == nil && k8sURL != "" {
 		return k8sURL
 	} else if containers.DockerRunning() {
 		clustersIDs, err := containers.ClusterIDs()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Couldn't automatically discover docker proxy URL (%s), using the default: %q. To change: export AIS_URL=`url`\n", err.Error(), defaultAISDockerHost)
-			return defaultAISDockerHost
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
+			return cfg.Cluster.DefaultDockerHost
 		}
 
 		cmn.AssertMsg(len(clustersIDs) > 0, "there should be at least one cluster running, when docker running detected")
-		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
 
+		proxyGateway, err := containers.ClusterProxyURL(clustersIDs[0])
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Couldn't automatically discover docker proxy URL (%s), using the default: %q. To change: export AIS_URL=`url`\n", err.Error(), defaultAISDockerHost)
-			return defaultAISDockerHost
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
+			return cfg.Cluster.DefaultDockerHost
 		}
 
 		if len(clustersIDs) > 1 {
-			_, _ = fmt.Fprintf(os.Stderr, "Multiple docker clusters running. Connected to %d via %s. To change: export AIS_URL=`url`\n", clustersIDs[0], proxyGateway)
+			fmt.Fprintf(os.Stderr, "Multiple docker clusters running. Connected to %d via %s.\n", clustersIDs[0], proxyGateway)
 		}
 
 		return "http://" + proxyGateway + ":8080"
 	}
 
-	return defaultAISHost
+	return cfg.Cluster.DefaultAISHost
 }

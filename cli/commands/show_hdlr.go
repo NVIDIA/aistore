@@ -138,7 +138,7 @@ var (
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
 		bucket, provider string
-		baseParams       = cliAPIParams(ClusterURL)
+		baseParams       = cliAPIParams(clusterURL)
 	)
 
 	bucket = c.Args().First()
@@ -150,11 +150,11 @@ func showBucketHandler(c *cli.Context) (err error) {
 
 func showDisksHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		daemonID   = c.Args().First()
 	)
 
-	if _, err = fillMap(ClusterURL); err != nil {
+	if _, err = fillMap(clusterURL); err != nil {
 		return
 	}
 
@@ -167,7 +167,7 @@ func showDisksHandler(c *cli.Context) (err error) {
 
 func showDownloadsHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 
@@ -181,7 +181,7 @@ func showDownloadsHandler(c *cli.Context) (err error) {
 
 func showDsortHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		id         = c.Args().First()
 	)
 
@@ -195,11 +195,11 @@ func showDsortHandler(c *cli.Context) (err error) {
 
 func showNodeHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		daemonID   = c.Args().First()
 	)
 
-	if _, err = fillMap(ClusterURL); err != nil {
+	if _, err = fillMap(clusterURL); err != nil {
 		return
 	}
 
@@ -212,7 +212,7 @@ func showNodeHandler(c *cli.Context) (err error) {
 
 func showXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		xaction    = c.Args().Get(0) // empty string if no arg given
 		bucket     = c.Args().Get(1) // empty string if no arg given
 	)
@@ -262,7 +262,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, object string
-		baseParams               = cliAPIParams(ClusterURL)
+		baseParams               = cliAPIParams(clusterURL)
 		fullObjName              = c.Args().Get(0) // empty string if no arg given
 	)
 
@@ -281,7 +281,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 
 func showRebalanceHandler(c *cli.Context) (err error) {
 	var (
-		baseParams  = cliAPIParams(ClusterURL)
+		baseParams  = cliAPIParams(clusterURL)
 		refreshRate time.Duration
 	)
 

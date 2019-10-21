@@ -33,7 +33,7 @@ var (
 )
 
 func createBucketHandler(c *cli.Context) (err error) {
-	baseParams := cliAPIParams(ClusterURL)
+	baseParams := cliAPIParams(clusterURL)
 	buckets, err := bucketsFromArgsOrEnv(c)
 	if err != nil {
 		return err

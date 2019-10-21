@@ -42,7 +42,7 @@ var (
 
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     = c.Args().First()
 	)
 	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
@@ -53,7 +53,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(ClusterURL)
+		baseParams = cliAPIParams(clusterURL)
 		bucket     = c.Args().First()
 	)
 	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {

@@ -191,7 +191,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 }
 
 // Displays the config of a daemon
-func getConfig(c *cli.Context, baseParams *api.BaseParams) error {
+func getDaemonConfig(c *cli.Context, baseParams *api.BaseParams) error {
 	var (
 		daemonID = c.Args().Get(0)
 		section  = c.Args().Get(1)

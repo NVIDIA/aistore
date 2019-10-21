@@ -59,7 +59,7 @@ var (
 
 func registerNodeHandler(c *cli.Context) (err error) {
 	var (
-		baseParams      = cliAPIParams(ClusterURL)
+		baseParams      = cliAPIParams(clusterURL)
 		daemonType      = c.Command.Name // proxy|target
 		prefix          string
 		daemonID        string
@@ -109,7 +109,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 func statusHandler(c *cli.Context) (err error) {
 	daemonID := c.Args().First() // empty string if no arg given
 
-	primarySmap, err := fillMap(ClusterURL)
+	primarySmap, err := fillMap(clusterURL)
 	if err != nil {
 		return
 	}
