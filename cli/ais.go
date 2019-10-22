@@ -17,18 +17,19 @@ var (
 	version string
 )
 
-func main() {
-	aisCLI := commands.New(build, version)
-
+func dispatchInterruptHandler() {
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt)
-
-	// Handle exit
 	go func() {
 		<-stopCh
 		os.Exit(0)
 	}()
+}
 
+func main() {
+	dispatchInterruptHandler()
+
+	aisCLI := commands.New(build, version)
 	if err := aisCLI.Run(os.Args); err != nil {
 		cmn.ExitInfof("%s", err.Error())
 	}

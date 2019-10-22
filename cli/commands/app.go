@@ -23,6 +23,7 @@ const (
 	metadata = "md"
 )
 
+// Global config object
 var cfg *config.Config
 
 // AISCLI represents an instance of an AIS command line interface
@@ -211,8 +212,7 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 
 // Checks if URL is valid by trying to get Smap
 func testAISURL() (err error) {
-	baseParams := cliAPIParams(clusterURL)
-	_, err = api.GetClusterMap(baseParams)
+	_, err = api.GetClusterMap(defaultAPIParams)
 
 	if cmn.IsErrConnectionRefused(err) {
 		return fmt.Errorf("could not connect to AIS cluser at %s - verify that cluster is running", clusterURL)

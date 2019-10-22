@@ -102,9 +102,8 @@ var (
 
 func startXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(clusterURL)
-		xaction    = c.Args().First() // empty string if no args given
-		bucket     string
+		xaction = c.Args().First() // empty string if no args given
+		bucket  string
 	)
 
 	if c.NArg() == 0 {
@@ -121,12 +120,12 @@ func startXactionHandler(c *cli.Context) (err error) {
 		}
 	} else { // bucket related xaction
 		bucket = c.Args().Get(1)
-		if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 	}
 
-	if err = api.ExecXaction(baseParams, xaction, commandStart, bucket); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, xaction, commandStart, bucket); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "started %q xaction\n", xaction)
@@ -135,9 +134,8 @@ func startXactionHandler(c *cli.Context) (err error) {
 
 func stopXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(clusterURL)
-		xaction    = c.Args().First() // empty string if no args given
-		bucket     string
+		xaction = c.Args().First() // empty string if no args given
+		bucket  string
 	)
 
 	if c.NArg() == 0 {
@@ -152,7 +150,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 	} else { // valid xaction
 		if bucketXactions.Contains(xaction) {
 			bucket = c.Args().Get(1)
-			if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+			if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 				return
 			}
 		} else if c.NArg() > 1 {
@@ -160,7 +158,7 @@ func stopXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if err = api.ExecXaction(baseParams, xaction, commandStop, bucket); err != nil {
+	if err = api.ExecXaction(defaultAPIParams, xaction, commandStop, bucket); err != nil {
 		return
 	}
 
@@ -174,7 +172,6 @@ func stopXactionHandler(c *cli.Context) (err error) {
 
 func startDownloadHandler(c *cli.Context) error {
 	var (
-		baseParams  = cliAPIParams(clusterURL)
 		description = parseStrFlag(c, descriptionFlag)
 		timeout     = parseStrFlag(c, timeoutFlag)
 		id          string
@@ -211,7 +208,7 @@ func startDownloadHandler(c *cli.Context) error {
 			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
 			Template: link,
 		}
-		id, err = api.DownloadRangeWithParam(baseParams, payload)
+		id, err = api.DownloadRangeWithParam(defaultAPIParams, payload)
 		if err != nil {
 			return err
 		}
@@ -224,7 +221,7 @@ func startDownloadHandler(c *cli.Context) error {
 				Objname: pathSuffix, // in this case pathSuffix is a full name of the object
 			},
 		}
-		id, err = api.DownloadSingleWithParam(baseParams, payload)
+		id, err = api.DownloadSingleWithParam(defaultAPIParams, payload)
 		if err != nil {
 			return err
 		}
@@ -235,16 +232,13 @@ func startDownloadHandler(c *cli.Context) error {
 }
 
 func stopDownloadHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "download job ID")
 	}
 
-	if err = api.DownloadAbort(baseParams, id); err != nil {
+	if err = api.DownloadAbort(defaultAPIParams, id); err != nil {
 		return
 	}
 
@@ -253,10 +247,7 @@ func stopDownloadHandler(c *cli.Context) (err error) {
 }
 
 func startDsortHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         string
-	)
+	var id string
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "job specification")
@@ -268,7 +259,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if id, err = api.StartDSort(baseParams, rs); err != nil {
+	if id, err = api.StartDSort(defaultAPIParams, rs); err != nil {
 		return
 	}
 
@@ -277,16 +268,13 @@ func startDsortHandler(c *cli.Context) (err error) {
 }
 
 func stopDsortHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, cmn.DSortName+" job ID")
 	}
 
-	if err = api.AbortDSort(baseParams, id); err != nil {
+	if err = api.AbortDSort(defaultAPIParams, id); err != nil {
 		return
 	}
 

@@ -31,7 +31,7 @@ const (
 	longCommandTime = 10 * time.Second
 )
 
-func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string, optional bool) (bucket, provider string, err error) {
+func validateBucket(c *cli.Context, b string, tag string, optional bool) (bucket, provider string, err error) {
 	if provider, err = bucketProvider(c); err != nil {
 		return
 	}
@@ -47,17 +47,17 @@ func validateBucket(c *cli.Context, baseParams *api.BaseParams, b, tag string, o
 		}
 		return
 	}
-	err = canReachBucket(baseParams, bucket, provider)
+	err = canReachBucket(bucket, provider)
 	return
 }
 
 // Creates new ais buckets
-func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
+func createBuckets(c *cli.Context, buckets []string) (err error) {
 	// TODO: on "soft" error (bucket already exists) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		if err := api.CreateBucket(baseParams, bucket); err != nil {
+		if err := api.CreateBucket(defaultAPIParams, bucket); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusConflict {
 					fmt.Fprintf(c.App.Writer, "Bucket %q already exists\n", bucket)
@@ -72,12 +72,12 @@ func createBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string)
 }
 
 // Destroy ais buckets
-func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string) (err error) {
+func destroyBuckets(c *cli.Context, buckets []string) (err error) {
 	// TODO: on "soft" error (bucket does not exist) we will
 	// emit zero exit code - this may be problematic when using
 	// in scripts.
 	for _, bucket := range buckets {
-		if err := api.DestroyBucket(baseParams, bucket); err != nil {
+		if err := api.DestroyBucket(defaultAPIParams, bucket); err != nil {
 			if herr, ok := err.(*cmn.HTTPError); ok {
 				if herr.Status == http.StatusNotFound {
 					fmt.Fprintf(c.App.Writer, "Bucket %q does not exist\n", bucket)
@@ -92,11 +92,11 @@ func destroyBuckets(c *cli.Context, baseParams *api.BaseParams, buckets []string
 }
 
 // Rename ais bucket
-func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket string) (err error) {
-	if err = canReachBucket(baseParams, bucket, cmn.AIS); err != nil {
+func renameBucket(c *cli.Context, bucket, newBucket string) (err error) {
+	if err = canReachBucket(bucket, cmn.AIS); err != nil {
 		return
 	}
-	if err = api.RenameBucket(baseParams, bucket, newBucket); err != nil {
+	if err = api.RenameBucket(defaultAPIParams, bucket, newBucket); err != nil {
 		return
 	}
 
@@ -106,8 +106,8 @@ func renameBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket 
 }
 
 // Copy ais bucket
-func copyBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket string) (err error) {
-	if err = api.CopyBucket(baseParams, bucket, newBucket); err != nil {
+func copyBucket(c *cli.Context, bucket, newBucket string) (err error) {
+	if err = api.CopyBucket(defaultAPIParams, bucket, newBucket); err != nil {
 		return
 	}
 
@@ -117,9 +117,9 @@ func copyBucket(c *cli.Context, baseParams *api.BaseParams, bucket, newBucket st
 }
 
 // Evict a cloud bucket
-func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func evictBucket(c *cli.Context, bucket string) (err error) {
 	query := url.Values{cmn.URLParamProvider: []string{cmn.Cloud}}
-	if err = api.EvictCloudBucket(baseParams, bucket, query); err != nil {
+	if err = api.EvictCloudBucket(defaultAPIParams, bucket, query); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "%s bucket evicted\n", bucket)
@@ -127,8 +127,8 @@ func evictBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) (err
 }
 
 // List bucket names
-func listBucketNames(c *cli.Context, baseParams *api.BaseParams, provider string) (err error) {
-	bucketNames, err := api.GetBucketNames(baseParams, provider)
+func listBucketNames(c *cli.Context, provider string) (err error) {
+	bucketNames, err := api.GetBucketNames(defaultAPIParams, provider)
 	if err != nil {
 		return
 	}
@@ -137,8 +137,8 @@ func listBucketNames(c *cli.Context, baseParams *api.BaseParams, provider string
 }
 
 // Lists objects in bucket
-func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, provider string) error {
-	err := canReachBucket(baseParams, bucket, provider)
+func listBucketObj(c *cli.Context, bucket string, provider string) error {
+	err := canReachBucket(bucket, provider)
 	if err != nil {
 		return err
 	}
@@ -176,7 +176,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, pr
 	msg := &cmn.SelectMsg{Props: props, Prefix: prefix}
 	if flagIsSet(c, fastFlag) {
 		msg.Fast = true
-		objList, err := api.ListBucketFast(baseParams, bucket, msg, query)
+		objList, err := api.ListBucketFast(defaultAPIParams, bucket, msg, query)
 		if err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, pr
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
-			objList, err := api.ListBucketPage(baseParams, bucket, msg, query)
+			objList, err := api.ListBucketPage(defaultAPIParams, bucket, msg, query)
 			if err != nil {
 				return err
 			}
@@ -245,7 +245,7 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, pr
 	}
 
 	// retrieve the entire bucket list and print it
-	objList, err := api.ListBucket(baseParams, bucket, msg, limit, query)
+	objList, err := api.ListBucket(defaultAPIParams, bucket, msg, limit, query)
 	if err != nil {
 		return err
 	}
@@ -253,18 +253,18 @@ func listBucketObj(c *cli.Context, baseParams *api.BaseParams, bucket string, pr
 	return printObjectProps(c, objList.Entries, objectListFilter, props, showUnmatched, !flagIsSet(c, noHeaderFlag))
 }
 
-func bucketDetails(c *cli.Context, baseParams *api.BaseParams, bucket, provider string, fast bool) error {
+func bucketDetails(c *cli.Context, bucket, provider string, fast bool) error {
 	fDetails := func() error {
-		return bucketDetailsSync(c, baseParams, bucket, provider, fast)
+		return bucketDetailsSync(c, bucket, provider, fast)
 	}
 	return cmn.WaitForFunc(fDetails, longCommandTime)
 }
 
 // The function shows bucket details
-func bucketDetailsSync(c *cli.Context, baseParams *api.BaseParams, bucket, provider string, fast bool) error {
+func bucketDetailsSync(c *cli.Context, bucket, provider string, fast bool) error {
 	// Request bucket summaries
 	msg := &cmn.SelectMsg{Fast: fast}
-	summaries, err := api.GetBucketsSummaries(baseParams, bucket, provider, msg)
+	summaries, err := api.GetBucketsSummaries(defaultAPIParams, bucket, provider, msg)
 	if err != nil {
 		return err
 	}
@@ -273,9 +273,9 @@ func bucketDetailsSync(c *cli.Context, baseParams *api.BaseParams, bucket, provi
 
 // replace user-friendly properties like `access=ro` with real values
 // like `aattrs = GET | HEAD`. All numbers are passed to API as is
-func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Values, nvs cmn.SimpleKVs) error {
+func reformatBucketProps(bucket string, query url.Values, nvs cmn.SimpleKVs) error {
 	if v, ok := nvs[cmn.HeaderBucketAccessAttrs]; ok {
-		props, err := api.HeadBucket(baseParams, bucket, query)
+		props, err := api.HeadBucket(defaultAPIParams, bucket, query)
 		if err != nil {
 			return err
 		}
@@ -299,7 +299,7 @@ func reformatBucketProps(baseParams *api.BaseParams, bucket string, query url.Va
 }
 
 // Sets bucket properties
-func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+func setBucketProps(c *cli.Context) (err error) {
 	var (
 		provider  string
 		propsArgs = c.Args().Tail()
@@ -308,7 +308,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 
 	// For setting bucket props via action message
 	if flagIsSet(c, jsonspecFlag) {
-		return setBucketPropsJSON(c, baseParams)
+		return setBucketPropsJSON(c)
 	}
 	if strings.Contains(bucket, keyAndValueSeparator) {
 		// First argument is a key-value pair -> bucket should be read from env variable
@@ -318,7 +318,7 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	if len(propsArgs) == 0 {
 		return missingArgumentsError(c, "property key-value pairs")
 	}
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
 
@@ -329,31 +329,31 @@ func setBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 	}
 
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	if err = reformatBucketProps(baseParams, bucket, query, nvs); err != nil {
+	if err = reformatBucketProps(bucket, query, nvs); err != nil {
 		return
 	}
-	if err = api.SetBucketProps(baseParams, bucket, nvs, query); err != nil {
+	if err = api.SetBucketProps(defaultAPIParams, bucket, nvs, query); err != nil {
 		return
 	}
 	fmt.Fprintln(c.App.Writer, "Bucket props have been successfully updated.")
 	return
 }
 
-func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) (err error) {
+func setBucketPropsJSON(c *cli.Context) (err error) {
 	var (
 		provider   string
 		props      cmn.BucketProps
 		bucket     = c.Args().First()
 		inputProps = parseStrFlag(c, jsonspecFlag)
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	if err := json.Unmarshal([]byte(inputProps), &props); err != nil {
 		return err
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	if err := api.SetBucketPropsMsg(baseParams, bucket, props, query); err != nil {
+	if err := api.SetBucketPropsMsg(defaultAPIParams, bucket, props, query); err != nil {
 		return err
 	}
 
@@ -362,20 +362,20 @@ func setBucketPropsJSON(c *cli.Context, baseParams *api.BaseParams) (err error) 
 }
 
 // Resets bucket props
-func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+func resetBucketProps(c *cli.Context) (err error) {
 	var (
 		provider string
 		bucket   = c.Args().First()
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+	if err = canReachBucket(bucket, provider); err != nil {
 		return
 	}
 
-	if err = api.ResetBucketProps(baseParams, bucket, query); err != nil {
+	if err = api.ResetBucketProps(defaultAPIParams, bucket, query); err != nil {
 		return
 	}
 
@@ -384,16 +384,16 @@ func resetBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
 }
 
 // Get bucket props
-func listBucketProps(c *cli.Context, baseParams *api.BaseParams) (err error) {
+func listBucketProps(c *cli.Context) (err error) {
 	var (
 		provider string
 		bucket   = c.Args().First()
 	)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	bckProps, err := api.HeadBucket(baseParams, bucket, query)
+	bckProps, err := api.HeadBucket(defaultAPIParams, bucket, query)
 	if err != nil {
 		return
 	}
@@ -426,7 +426,7 @@ func printBckHeadTable(c *cli.Context, props *cmn.BucketProps) error {
 }
 
 // Configure bucket as n-way mirror
-func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func configureNCopies(c *cli.Context, bucket string) (err error) {
 	provider, err := bucketProvider(c)
 	if err != nil {
 		return
@@ -434,11 +434,11 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 	if err = checkFlags(c, []cli.Flag{copiesFlag}); err != nil {
 		return
 	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+	if err = canReachBucket(bucket, provider); err != nil {
 		return
 	}
 	copies := c.Int(copiesFlag.Name)
-	if err = api.MakeNCopies(baseParams, bucket, copies); err != nil {
+	if err = api.MakeNCopies(defaultAPIParams, bucket, copies); err != nil {
 		return
 	}
 	_, _ = fmt.Fprintf(c.App.Writer, "Configured %s to replicate %d copies of its objects\n", bucket, copies)
@@ -446,15 +446,15 @@ func configureNCopies(c *cli.Context, baseParams *api.BaseParams, bucket string)
 }
 
 // Makes every object in a bucket erasure coded
-func ecEncode(c *cli.Context, baseParams *api.BaseParams, bucket string) (err error) {
+func ecEncode(c *cli.Context, bucket string) (err error) {
 	provider, err := bucketProvider(c)
 	if err != nil {
 		return
 	}
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+	if err = canReachBucket(bucket, provider); err != nil {
 		return
 	}
-	if err = api.ECEncodeBucket(baseParams, bucket); err != nil {
+	if err = api.ECEncodeBucket(defaultAPIParams, bucket); err != nil {
 		return
 	}
 	fmt.Fprintf(c.App.Writer, "Encoding %s objects is running, use '%s %s %s %s %s' to see the progress\n",

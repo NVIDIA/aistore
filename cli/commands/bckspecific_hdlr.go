@@ -41,23 +41,17 @@ var (
 )
 
 func setCopiesHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		bucket     = c.Args().First()
-	)
-	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	bucket := c.Args().First()
+	if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
-	return configureNCopies(c, baseParams, bucket)
+	return configureNCopies(c, bucket)
 }
 
 func ecEncodeHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		bucket     = c.Args().First()
-	)
-	if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+	bucket := c.Args().First()
+	if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 		return
 	}
-	return ecEncode(c, baseParams, bucket)
+	return ecEncode(c, bucket)
 }

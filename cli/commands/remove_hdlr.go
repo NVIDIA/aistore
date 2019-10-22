@@ -77,23 +77,19 @@ var (
 )
 
 func removeBucketHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		buckets    []string
-	)
+	var buckets []string
 
 	if buckets, err = bucketsFromArgsOrEnv(c); err != nil {
 		return
 	}
 
-	return destroyBuckets(c, baseParams, buckets)
+	return destroyBuckets(c, buckets)
 }
 
 func removeObjectHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(clusterURL)
-		bucket     string
-		provider   string
+		bucket   string
+		provider string
 	)
 
 	if provider, err = bucketProvider(c); err != nil {
@@ -105,12 +101,12 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		if c.NArg() == 1 {
 			bucket = strings.TrimSuffix(c.Args().Get(0), "/")
 		}
-		if bucket, _, err = validateBucket(c, baseParams, bucket, "", false /* optional */); err != nil {
+		if bucket, _, err = validateBucket(c, bucket, "", false /* optional */); err != nil {
 			return
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, rangeFlag) {
 			// list or range operation on a given bucket
-			return listOrRangeOp(c, baseParams, commandRemove, bucket, provider)
+			return listOrRangeOp(c, commandRemove, bucket, provider)
 		}
 
 		err = fmt.Errorf("%s or %s flag not set with a single bucket argument", listFlag.Name, rangeFlag.Name)
@@ -129,29 +125,22 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	}
 
 	// object argument(s) given by the user; operation on given object(s)
-	return multiObjOp(c, baseParams, commandRemove, provider)
+	return multiObjOp(c, commandRemove, provider)
 }
 
 func removeNodeHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		daemonID   = c.Args().First()
-	)
-
-	return clusterRemoveNode(c, baseParams, daemonID)
+	daemonID := c.Args().First()
+	return clusterRemoveNode(c, daemonID)
 }
 
 func removeDownloadHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "download job ID")
 	}
 
-	if err = api.DownloadRemove(baseParams, id); err != nil {
+	if err = api.DownloadRemove(defaultAPIParams, id); err != nil {
 		return
 	}
 
@@ -160,16 +149,13 @@ func removeDownloadHandler(c *cli.Context) (err error) {
 }
 
 func removeDsortHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, cmn.DSortName+" job ID")
 	}
 
-	if err = api.RemoveDSort(baseParams, id); err != nil {
+	if err = api.RemoveDSort(defaultAPIParams, id); err != nil {
 		return
 	}
 

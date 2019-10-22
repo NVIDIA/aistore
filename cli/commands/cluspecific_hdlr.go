@@ -59,7 +59,6 @@ var (
 
 func registerNodeHandler(c *cli.Context) (err error) {
 	var (
-		baseParams      = cliAPIParams(clusterURL)
 		daemonType      = c.Command.Name // proxy|target
 		prefix          string
 		daemonID        string
@@ -82,7 +81,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 		daemonID = cmn.RandString(8)
 	}
 
-	if prefix, err = getPrefixFromPrimary(baseParams); err != nil {
+	if prefix, err = getPrefixFromPrimary(); err != nil {
 		return
 	}
 
@@ -98,7 +97,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 		IntraControlNet: netInfo,
 		IntraDataNet:    netInfo,
 	}
-	if err = api.RegisterNode(baseParams, nodeInfo); err != nil {
+	if err = api.RegisterNode(defaultAPIParams, nodeInfo); err != nil {
 		return
 	}
 
@@ -109,7 +108,7 @@ func registerNodeHandler(c *cli.Context) (err error) {
 func statusHandler(c *cli.Context) (err error) {
 	daemonID := c.Args().First() // empty string if no arg given
 
-	primarySmap, err := fillMap(clusterURL)
+	primarySmap, err := fillMap()
 	if err != nil {
 		return
 	}

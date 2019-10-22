@@ -153,8 +153,7 @@ func bucketCompletions(additionalCompletions []cli.BashCompleteFunc, multiple bo
 		if err != nil {
 			return
 		}
-		baseParams := cliAPIParams(clusterURL)
-		bucketNames, err := api.GetBucketNames(baseParams, provider)
+		bucketNames, err := api.GetBucketNames(defaultAPIParams, provider)
 		if err != nil {
 			return
 		}
@@ -224,8 +223,7 @@ func suggestBucket(c *cli.Context, separator bool, provider ...string) {
 		return
 	}
 
-	baseParams := cliAPIParams(clusterURL)
-	bucketNames, err := api.GetBucketNames(baseParams, prov)
+	bucketNames, err := api.GetBucketNames(defaultAPIParams, prov)
 	if err != nil {
 		return
 	}
@@ -321,9 +319,7 @@ func suggestDownloadID(c *cli.Context, filter func(*cmn.DlJobInfo) bool) {
 		return
 	}
 
-	baseParams := cliAPIParams(clusterURL)
-
-	list, _ := api.DownloadGetList(baseParams, "")
+	list, _ := api.DownloadGetList(defaultAPIParams, "")
 
 	for _, job := range list {
 		if filter(&job) {
@@ -350,9 +346,7 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool) {
 		return
 	}
 
-	baseParams := cliAPIParams(clusterURL)
-
-	list, _ := api.ListDSort(baseParams, "")
+	list, _ := api.ListDSort(defaultAPIParams, "")
 
 	for _, job := range list {
 		if filter(job) {

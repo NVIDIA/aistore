@@ -137,24 +137,20 @@ var (
 
 func showBucketHandler(c *cli.Context) (err error) {
 	var (
-		bucket, provider string
-		baseParams       = cliAPIParams(clusterURL)
+		bucket   string
+		provider string
 	)
 
 	bucket = c.Args().First()
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, "", true /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, "", true /* optional */); err != nil {
 		return
 	}
-	return bucketDetails(c, baseParams, bucket, provider, flagIsSet(c, fastDetailsFlag))
+	return bucketDetails(c, bucket, provider, flagIsSet(c, fastDetailsFlag))
 }
 
 func showDisksHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		daemonID   = c.Args().First()
-	)
-
-	if _, err = fillMap(clusterURL); err != nil {
+	daemonID := c.Args().First()
+	if _, err = fillMap(); err != nil {
 		return
 	}
 
@@ -162,44 +158,34 @@ func showDisksHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	return daemonDiskStats(c, baseParams, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
+	return daemonDiskStats(c, daemonID, flagIsSet(c, jsonFlag), flagIsSet(c, noHeaderFlag))
 }
 
 func showDownloadsHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() < 1 { // list all download jobs
-		return downloadJobsList(c, baseParams, parseStrFlag(c, regexFlag))
+		return downloadJobsList(c, parseStrFlag(c, regexFlag))
 	}
 
 	// display status of a download job with given id
-	return downloadJobStatus(c, baseParams, id)
+	return downloadJobStatus(c, id)
 }
 
 func showDsortHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		id         = c.Args().First()
-	)
+	id := c.Args().First()
 
 	if c.NArg() < 1 { // list all dsort jobs
-		return dsortJobsList(c, baseParams, parseStrFlag(c, regexFlag))
+		return dsortJobsList(c, parseStrFlag(c, regexFlag))
 	}
 
 	// display status of a dsort job with given id
-	return dsortJobStatus(c, baseParams, id)
+	return dsortJobStatus(c, id)
 }
 
 func showNodeHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-		daemonID   = c.Args().First()
-	)
-
-	if _, err = fillMap(clusterURL); err != nil {
+	daemonID := c.Args().First()
+	if _, err = fillMap(); err != nil {
 		return
 	}
 
@@ -207,14 +193,13 @@ func showNodeHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	return daemonStats(c, baseParams, daemonID, flagIsSet(c, jsonFlag))
+	return daemonStats(c, daemonID, flagIsSet(c, jsonFlag))
 }
 
 func showXactionHandler(c *cli.Context) (err error) {
 	var (
-		baseParams = cliAPIParams(clusterURL)
-		xaction    = c.Args().Get(0) // empty string if no arg given
-		bucket     = c.Args().Get(1) // empty string if no arg given
+		xaction = c.Args().Get(0) // empty string if no arg given
+		bucket  = c.Args().Get(1) // empty string if no arg given
 	)
 	if xaction != "" {
 		if _, ok := cmn.ValidXact(xaction); !ok {
@@ -231,7 +216,7 @@ func showXactionHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	xactStatsMap, err := api.MakeXactGetRequest(baseParams, xaction, commandStats, bucket, flagIsSet(c, allItemsFlag))
+	xactStatsMap, err := api.MakeXactGetRequest(defaultAPIParams, xaction, commandStats, bucket, flagIsSet(c, allItemsFlag))
 	if err != nil {
 		return
 	}
@@ -262,7 +247,6 @@ func showXactionHandler(c *cli.Context) (err error) {
 func showObjectHandler(c *cli.Context) (err error) {
 	var (
 		provider, bucket, object string
-		baseParams               = cliAPIParams(clusterURL)
 		fullObjName              = c.Args().Get(0) // empty string if no arg given
 	)
 
@@ -270,24 +254,21 @@ func showObjectHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in format bucket/object")
 	}
 	bucket, object = splitBucketObject(fullObjName)
-	if bucket, provider, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
+	if bucket, provider, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 		return
 	}
 	if object == "" {
 		return incorrectUsageError(c, fmt.Errorf("no object specified in '%s'", fullObjName))
 	}
-	return objectStats(c, baseParams, bucket, provider, object)
+	return objectStats(c, bucket, provider, object)
 }
 
 func showRebalanceHandler(c *cli.Context) (err error) {
-	var (
-		baseParams  = cliAPIParams(clusterURL)
-		refreshRate time.Duration
-	)
+	var refreshRate time.Duration
 
 	if refreshRate, err = calcRefreshRate(c); err != nil {
 		return err
 	}
 
-	return showGlobalRebalance(c, baseParams, flagIsSet(c, refreshFlag), refreshRate)
+	return showGlobalRebalance(c, flagIsSet(c, refreshFlag), refreshRate)
 }

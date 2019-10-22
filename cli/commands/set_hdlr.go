@@ -48,21 +48,17 @@ var (
 )
 
 func setConfigHandler(c *cli.Context) (err error) {
-	if _, err = fillMap(clusterURL); err != nil {
+	if _, err = fillMap(); err != nil {
 		return
 	}
-	return setConfig(c, cliAPIParams(clusterURL))
+	return setConfig(c)
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
-	var (
-		baseParams = cliAPIParams(clusterURL)
-	)
-
-	if flagIsSet(c, resetFlag) { // ignores any arguments, resets bucket props
-		return resetBucketProps(c, baseParams)
+	if flagIsSet(c, resetFlag) { // ignores all arguments, just resets bucket props
+		return resetBucketProps(c)
 	}
-	if err = setBucketProps(c, baseParams); err != nil {
+	if err = setBucketProps(c); err != nil {
 		helpMsg := fmt.Sprintf("To list bucket properties, run: %s %s %s BUCKET_NAME", cliName, commandList, subcmdListBckProps)
 		return newAdditionalInfoError(err, helpMsg)
 	}

@@ -5,8 +5,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -18,8 +20,18 @@ const (
 	configDirMode    os.FileMode = 0755 | os.ModeDir
 )
 
+func init() {
+	if dir := os.Getenv(configHomeEnvVar); dir != "" {
+		configDirPath = filepath.Join(dir, configDirName)
+	} else {
+		configDirPath = filepath.Join(os.Getenv("HOME"), ".config", configDirName)
+	}
+	configFilePath = filepath.Join(configDirPath, configFileName)
+}
+
 type Config struct {
 	Cluster ClusterConfig `json:"cluster"`
+	Timeout TimeoutConfig `json:"timeout"`
 }
 
 type ClusterConfig struct {
@@ -27,6 +39,13 @@ type ClusterConfig struct {
 	DefaultAISHost    string `json:"default_ais_host"`
 	K8SNamespace      string `json:"k8s_namespace"`
 	DefaultDockerHost string `json:"default_docker_host"`
+}
+
+type TimeoutConfig struct {
+	TCPTimeoutStr  string        `json:"tcp_timeout"`
+	TCPTimeout     time.Duration `json:"-"`
+	HTTPTimeoutStr string        `json:"http_timeout"`
+	HTTPTimeout    time.Duration `json:"-"`
 }
 
 var (
@@ -37,19 +56,26 @@ var (
 			K8SNamespace:      "",
 			DefaultDockerHost: "http://172.50.0.2:8080",
 		},
+		Timeout: TimeoutConfig{
+			TCPTimeoutStr:  "60s",
+			TCPTimeout:     60 * time.Second,
+			HTTPTimeoutStr: "300s",
+			HTTPTimeout:    300 * time.Second,
+		},
 	}
 
 	configDirPath  string
 	configFilePath string
 )
 
-func init() {
-	if dir := os.Getenv(configHomeEnvVar); dir != "" {
-		configDirPath = filepath.Join(dir, configDirName)
-	} else {
-		configDirPath = filepath.Join(os.Getenv("HOME"), ".config", configDirName)
+func (c *Config) validate() (err error) {
+	if c.Timeout.TCPTimeout, err = time.ParseDuration(c.Timeout.TCPTimeoutStr); err != nil {
+		return fmt.Errorf("bad timeout.tcp_timeout format %q: %v", c.Timeout.TCPTimeoutStr, err)
 	}
-	configFilePath = filepath.Join(configDirPath, configFileName)
+	if c.Timeout.HTTPTimeout, err = time.ParseDuration(c.Timeout.HTTPTimeoutStr); err != nil {
+		return fmt.Errorf("bad timeout.http_timeout format %q: %v", c.Timeout.HTTPTimeoutStr, err)
+	}
+	return nil
 }
 
 func saveDefault() error {
@@ -79,6 +105,11 @@ func Load() (cfg *Config, err error) {
 	// Load config from file.
 	cfg = &Config{}
 	err = cmn.LocalLoad(configFilePath, &cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	err = cfg.validate()
 	if err != nil {
 		return nil, err
 	}

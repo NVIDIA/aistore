@@ -285,8 +285,8 @@ func (b *progressBar) totalFilesCnt() int {
 	return b.totalFiles
 }
 
-func downloadJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) error {
-	list, err := api.DownloadGetList(baseParams, regex)
+func downloadJobsList(c *cli.Context, regex string) error {
+	list, err := api.DownloadGetList(defaultAPIParams, regex)
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func downloadJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) 
 	return templates.DisplayOutput(list, c.App.Writer, templates.DownloadListTmpl)
 }
 
-func downloadJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error {
+func downloadJobStatus(c *cli.Context, id string) error {
 	showProgressBar := flagIsSet(c, progressBarFlag)
 
 	// with progress bar
@@ -304,7 +304,7 @@ func downloadJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) er
 			return err
 		}
 
-		downloadingResult, err := newProgressBar(baseParams, id, refreshRate).run()
+		downloadingResult, err := newProgressBar(defaultAPIParams, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -314,7 +314,7 @@ func downloadJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) er
 	}
 
 	// without progress bar
-	resp, err := api.DownloadStatus(baseParams, id)
+	resp, err := api.DownloadStatus(defaultAPIParams, id)
 	if err != nil {
 		return err
 	}

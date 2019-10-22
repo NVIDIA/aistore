@@ -33,10 +33,10 @@ type uploadParams struct {
 	totalSize int64
 }
 
-func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object, outFile string) (err error) {
+func getObject(c *cli.Context, bucket, provider, object, outFile string) (err error) {
 	// just check if object is cached, don't get object
 	if flagIsSet(c, isCachedFlag) {
-		return objectCheckExists(c, baseParams, bucket, provider, object)
+		return objectCheckExists(c, bucket, provider, object)
 	}
 
 	var (
@@ -74,9 +74,9 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 	}
 
 	if flagIsSet(c, checksumFlag) {
-		objLen, err = api.GetObjectWithValidation(baseParams, bucket, object, objArgs)
+		objLen, err = api.GetObjectWithValidation(defaultAPIParams, bucket, object, objArgs)
 	} else {
-		objLen, err = api.GetObject(baseParams, bucket, object, objArgs)
+		objLen, err = api.GetObject(defaultAPIParams, bucket, object, objArgs)
 	}
 	if err != nil {
 		return
@@ -94,14 +94,14 @@ func getObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 //////
 // Promote AIS-resident files and directories to objects (NOTE: advanced usage only)
 //////
-func promoteFileOrDir(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fqn string) (err error) {
+func promoteFileOrDir(c *cli.Context, bucket, provider, objName, fqn string) (err error) {
 	target := parseStrFlag(c, targetFlag)
 	omitBase := parseStrFlag(c, baseFlag)
 	if err = cmn.ValidateOmitBase(fqn, omitBase); err != nil {
 		return
 	}
 	promoteArgs := &api.PromoteArgs{
-		BaseParams: baseParams,
+		BaseParams: defaultAPIParams,
 		Bucket:     bucket,
 		Provider:   provider,
 		Object:     objName,
@@ -119,7 +119,7 @@ func promoteFileOrDir(c *cli.Context, baseParams *api.BaseParams, bucket, provid
 	return
 }
 
-func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, objName, fileName string) (err error) {
+func putObject(c *cli.Context, bucket, provider, objName, fileName string) (err error) {
 	path := cmn.ExpandPath(fileName)
 	if path, err = filepath.Abs(path); err != nil {
 		return
@@ -144,7 +144,7 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 		}
 
 		putArgs := api.PutObjectArgs{
-			BaseParams: baseParams,
+			BaseParams: defaultAPIParams,
 			Bucket:     bucket,
 			Provider:   provider,
 			Object:     objName,
@@ -204,11 +204,11 @@ func putObject(c *cli.Context, baseParams *api.BaseParams, bucket, provider, obj
 		refresh:   refresh,
 		totalSize: totalSize,
 	}
-	return uploadFiles(c, baseParams, params)
+	return uploadFiles(c, params)
 }
 
-func objectCheckExists(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
-	_, err := api.HeadObject(baseParams, bucket, provider, object, true)
+func objectCheckExists(c *cli.Context, bucket, provider, object string) error {
+	_, err := api.HeadObject(defaultAPIParams, bucket, provider, object, true)
 	if err != nil {
 		if err.(*cmn.HTTPError).Status == http.StatusNotFound {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
@@ -221,7 +221,7 @@ func objectCheckExists(c *cli.Context, baseParams *api.BaseParams, bucket, provi
 	return nil
 }
 
-func uploadFiles(c *cli.Context, baseParams *api.BaseParams, p uploadParams) error {
+func uploadFiles(c *cli.Context, p uploadParams) error {
 	var (
 		errCount      atomic.Int32 // uploads failed so far
 		processedCnt  atomic.Int32 // files processed so far
@@ -266,7 +266,7 @@ func uploadFiles(c *cli.Context, baseParams *api.BaseParams, p uploadParams) err
 			return
 		}
 
-		putArgs := api.PutObjectArgs{BaseParams: baseParams, Bucket: p.bucket, Provider: p.provider, Object: f.name, Reader: reader}
+		putArgs := api.PutObjectArgs{BaseParams: defaultAPIParams, Bucket: p.bucket, Provider: p.provider, Object: f.name, Reader: reader}
 		if err := api.PutObject(putArgs); err != nil {
 			_, _ = fmt.Fprintf(c.App.Writer, "Failed to put object %s: %v\n", f.name, err)
 			errCount.Inc()
@@ -334,7 +334,7 @@ func buildObjStatTemplate(props string, showHeaders bool) string {
 }
 
 // Displays object properties
-func objectStats(c *cli.Context, baseParams *api.BaseParams, bucket, provider, object string) error {
+func objectStats(c *cli.Context, bucket, provider, object string) error {
 	props, propsFlag := "local,", ""
 	if flagIsSet(c, objPropsFlag) {
 		propsFlag = parseStrFlag(c, objPropsFlag)
@@ -346,7 +346,7 @@ func objectStats(c *cli.Context, baseParams *api.BaseParams, bucket, provider, o
 	}
 
 	tmpl := buildObjStatTemplate(props, !flagIsSet(c, noHeaderFlag))
-	objProps, err := api.HeadObject(baseParams, bucket, provider, object)
+	objProps, err := api.HeadObject(defaultAPIParams, bucket, provider, object)
 	if err != nil {
 		return handleObjHeadError(err, bucket, object)
 	}
@@ -367,8 +367,8 @@ func handleObjHeadError(err error, bucket, object string) error {
 	return err
 }
 
-func listOrRangeOp(c *cli.Context, baseParams *api.BaseParams, command string, bucket string, provider string) (err error) {
-	if err = canReachBucket(baseParams, bucket, provider); err != nil {
+func listOrRangeOp(c *cli.Context, command string, bucket string, provider string) (err error) {
+	if err = canReachBucket(bucket, provider); err != nil {
 		return
 	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, rangeFlag) {
@@ -376,16 +376,16 @@ func listOrRangeOp(c *cli.Context, baseParams *api.BaseParams, command string, b
 	}
 
 	if flagIsSet(c, listFlag) {
-		return listOp(c, baseParams, command, bucket, provider)
+		return listOp(c, command, bucket, provider)
 	}
 	if flagIsSet(c, rangeFlag) {
-		return rangeOp(c, baseParams, command, bucket, provider)
+		return rangeOp(c, command, bucket, provider)
 	}
 	return
 }
 
 // List handler
-func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provider string) (err error) {
+func listOp(c *cli.Context, command, bucket, provider string) (err error) {
 	fileList := makeList(parseStrFlag(c, listFlag), ",")
 	wait := flagIsSet(c, waitFlag)
 	deadline, err := time.ParseDuration(parseStrFlag(c, deadlineFlag))
@@ -395,13 +395,13 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provide
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteList(baseParams, bucket, provider, fileList, wait, deadline)
+		err = api.DeleteList(defaultAPIParams, bucket, provider, fileList, wait, deadline)
 		command = "removed"
 	case commandPrefetch:
-		err = api.PrefetchList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
+		err = api.PrefetchList(defaultAPIParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
 	case commandEvict:
-		err = api.EvictList(baseParams, bucket, cmn.Cloud, fileList, wait, deadline)
+		err = api.EvictList(defaultAPIParams, bucket, cmn.Cloud, fileList, wait, deadline)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -414,7 +414,7 @@ func listOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provide
 }
 
 // Range handler
-func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provider string) (err error) {
+func rangeOp(c *cli.Context, command, bucket, provider string) (err error) {
 	var (
 		wait     = flagIsSet(c, waitFlag)
 		prefix   = parseStrFlag(c, prefixFlag)
@@ -429,13 +429,13 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provid
 
 	switch command {
 	case commandRemove:
-		err = api.DeleteRange(baseParams, bucket, provider, prefix, regex, rangeStr, wait, deadline)
+		err = api.DeleteRange(defaultAPIParams, bucket, provider, prefix, regex, rangeStr, wait, deadline)
 		command = "removed"
 	case commandPrefetch:
-		err = api.PrefetchRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
+		err = api.PrefetchRange(defaultAPIParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
 	case commandEvict:
-		err = api.EvictRange(baseParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
+		err = api.EvictRange(defaultAPIParams, bucket, cmn.Cloud, prefix, regex, rangeStr, wait, deadline)
 		command += "ed"
 	default:
 		return fmt.Errorf(invalidCmdMsg, command)
@@ -449,11 +449,11 @@ func rangeOp(c *cli.Context, baseParams *api.BaseParams, command, bucket, provid
 }
 
 // Multiple object arguments handler
-func multiObjOp(c *cli.Context, baseParams *api.BaseParams, command string, provider string) (err error) {
+func multiObjOp(c *cli.Context, command string, provider string) (err error) {
 	// stops iterating if it encounters an error
 	for _, fullObjName := range c.Args() {
 		bucket, object := splitBucketObject(fullObjName)
-		if bucket, _, err = validateBucket(c, baseParams, bucket, fullObjName, false /* optional */); err != nil {
+		if bucket, _, err = validateBucket(c, bucket, fullObjName, false /* optional */); err != nil {
 			return
 		}
 		if object == "" {
@@ -461,12 +461,12 @@ func multiObjOp(c *cli.Context, baseParams *api.BaseParams, command string, prov
 		}
 		switch command {
 		case commandRemove:
-			if err = api.DeleteObject(baseParams, bucket, object, provider); err != nil {
+			if err = api.DeleteObject(defaultAPIParams, bucket, object, provider); err != nil {
 				return
 			}
 			fmt.Fprintf(c.App.Writer, "%s deleted from %s bucket\n", object, bucket)
 		case commandEvict:
-			if err = api.EvictObject(baseParams, bucket, object); err != nil {
+			if err = api.EvictObject(defaultAPIParams, bucket, object); err != nil {
 				return
 			}
 			fmt.Fprintf(c.App.Writer, "%s evicted from %s bucket\n", object, bucket)

@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,20 +52,10 @@ const (
 )
 
 var (
-	clusterURL string
-
-	transport = &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 60 * time.Second,
-		}).DialContext,
-	}
-
-	httpClient = &http.Client{
-		Timeout:   300 * time.Second,
-		Transport: transport,
-	}
-
-	mu sync.Mutex
+	clusterURL        string
+	defaultHTTPClient *http.Client
+	defaultAPIParams  *api.BaseParams
+	mu                sync.Mutex
 )
 
 //
@@ -166,17 +155,16 @@ func newAdditionalInfoError(err error, info string) error {
 //
 
 // Populates the proxy and target maps
-func fillMap(url string) (*cluster.Smap, error) {
+func fillMap() (*cluster.Smap, error) {
 	var (
-		baseParams = cliAPIParams(url)
-		wg         = &sync.WaitGroup{}
+		wg = &sync.WaitGroup{}
 	)
-	smap, err := api.GetClusterMap(baseParams)
+	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return nil, err
 	}
 	// Get the primary proxy's smap
-	smapPrimary, err := api.GetNodeClusterMap(baseParams, smap.ProxySI.DaemonID)
+	smapPrimary, err := api.GetNodeClusterMap(defaultAPIParams, smap.ProxySI.DaemonID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +174,8 @@ func fillMap(url string) (*cluster.Smap, error) {
 	errCh := make(chan error, proxyCount+targetCount)
 
 	wg.Add(proxyCount + targetCount)
-	retrieveStatus(baseParams, smapPrimary.Pmap, proxy, wg, errCh)
-	retrieveStatus(baseParams, smapPrimary.Tmap, target, wg, errCh)
+	retrieveStatus(smapPrimary.Pmap, proxy, wg, errCh)
+	retrieveStatus(smapPrimary.Tmap, target, wg, errCh)
 	wg.Wait()
 	close(errCh)
 
@@ -200,9 +188,9 @@ func fillMap(url string) (*cluster.Smap, error) {
 	return smapPrimary, nil
 }
 
-func retrieveStatus(baseParams *api.BaseParams, nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
+func retrieveStatus(nodeMap cluster.NodeMap, daeMap map[string]*stats.DaemonStatus, wg *sync.WaitGroup, errCh chan error) {
 	fill := func(dae *cluster.Snode) error {
-		obj, err := api.GetDaemonStatus(baseParams, dae.ID())
+		obj, err := api.GetDaemonStatus(defaultAPIParams, dae.ID())
 		if err != nil {
 			return err
 		}
@@ -302,13 +290,13 @@ func parseURI(rawURL string) (scheme, bucket, objName string, err error) {
 	return
 }
 
-func getPrefixFromPrimary(baseParams *api.BaseParams) (string, error) {
-	smap, err := api.GetClusterMap(baseParams)
+func getPrefixFromPrimary() (string, error) {
+	smap, err := api.GetClusterMap(defaultAPIParams)
 	if err != nil {
 		return "", err
 	}
 
-	cfg, err := api.GetDaemonConfig(baseParams, smap.ProxySI.DaemonID)
+	cfg, err := api.GetDaemonConfig(defaultAPIParams, smap.ProxySI.DaemonID)
 	if err != nil {
 		return "", err
 	}
@@ -543,15 +531,15 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]string, error) {
 
 func cliAPIParams(proxyURL string) *api.BaseParams {
 	return &api.BaseParams{
-		Client: httpClient,
+		Client: defaultHTTPClient,
 		URL:    proxyURL,
 		Token:  loggedUserToken.Token,
 	}
 }
 
-func canReachBucket(baseParams *api.BaseParams, bckName, provider string) error {
+func canReachBucket(bckName, provider string) error {
 	query := url.Values{cmn.URLParamProvider: []string{provider}}
-	if _, err := api.HeadBucket(baseParams, bckName, query); err != nil {
+	if _, err := api.HeadBucket(defaultAPIParams, bckName, query); err != nil {
 		if httpErr, ok := err.(*cmn.HTTPError); ok {
 			if httpErr.Status == http.StatusNotFound {
 				return fmt.Errorf("bucket with name %q does not exist", bckName)

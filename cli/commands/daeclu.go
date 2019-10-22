@@ -39,14 +39,14 @@ var (
 )
 
 // Displays smap of single daemon
-func clusterSmap(c *cli.Context, baseParams *api.BaseParams, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
+func clusterSmap(c *cli.Context, primarySmap *cluster.Smap, daemonID string, useJSON bool) error {
 	var (
 		smap = primarySmap
 		err  error
 	)
 
 	if daemonID != "" {
-		smap, err = api.GetNodeClusterMap(baseParams, daemonID)
+		smap, err = api.GetNodeClusterMap(defaultAPIParams, daemonID)
 		if err != nil {
 			return err
 		}
@@ -101,8 +101,8 @@ func clusterDaemonStatus(c *cli.Context, smap *cluster.Smap, daemonID string, us
 }
 
 // Removes existing node from the cluster.
-func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID string) (err error) {
-	if err := api.UnregisterNode(baseParams, daemonID); err != nil {
+func clusterRemoveNode(c *cli.Context, daemonID string) (err error) {
+	if err := api.UnregisterNode(defaultAPIParams, daemonID); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.App.Writer, "Node with ID %s has been successfully removed from the cluster\n", daemonID)
@@ -110,13 +110,13 @@ func clusterRemoveNode(c *cli.Context, baseParams *api.BaseParams, daemonID stri
 }
 
 // Displays the stats of a daemon
-func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON bool) error {
+func daemonStats(c *cli.Context, daemonID string, useJSON bool) error {
 	if res, ok := proxy[daemonID]; ok {
 		return templates.DisplayOutput(res, c.App.Writer, templates.ProxyStatsTmpl, useJSON)
 	} else if res, ok := target[daemonID]; ok {
 		return templates.DisplayOutput(res, c.App.Writer, templates.TargetStatsTmpl, useJSON)
 	} else if daemonID == "" {
-		body, err := api.GetClusterStats(baseParams)
+		body, err := api.GetClusterStats(defaultAPIParams)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func daemonStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, us
 }
 
 // Displays the disk stats of a target
-func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string, useJSON, hideHeader bool) error {
+func daemonDiskStats(c *cli.Context, daemonID string, useJSON, hideHeader bool) error {
 	if _, ok := proxy[daemonID]; ok {
 		return fmt.Errorf("daemon with provided ID (%s) is a proxy, but %s %s works only for targets", daemonID, commandShow, subcmdShowDisk)
 	}
@@ -139,7 +139,7 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 		targets = target
 	}
 
-	diskStats, err := getDiskStats(targets, baseParams)
+	diskStats, err := getDiskStats(targets)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func daemonDiskStats(c *cli.Context, baseParams *api.BaseParams, daemonID string
 	return nil
 }
 
-func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BaseParams) ([]templates.DiskStatsTemplateHelper, error) {
+func getDiskStats(targets map[string]*stats.DaemonStatus) ([]templates.DiskStatsTemplateHelper, error) {
 	var (
 		allStats = make([]templates.DiskStatsTemplateHelper, 0, len(targets))
 		wg, _    = errgroup.WithContext(context.Background())
@@ -163,7 +163,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 	for targetID := range targets {
 		wg.Go(func(targetID string) func() error {
 			return func() (err error) {
-				diskStats, err := api.GetTargetDiskStats(baseParams, targetID)
+				diskStats, err := api.GetTargetDiskStats(defaultAPIParams, targetID)
 				if err != nil {
 					return err
 				}
@@ -191,7 +191,7 @@ func getDiskStats(targets map[string]*stats.DaemonStatus, baseParams *api.BasePa
 }
 
 // Displays the config of a daemon
-func getDaemonConfig(c *cli.Context, baseParams *api.BaseParams) error {
+func getDaemonConfig(c *cli.Context) error {
 	var (
 		daemonID = c.Args().Get(0)
 		section  = c.Args().Get(1)
@@ -202,7 +202,7 @@ func getDaemonConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return missingArgumentsError(c, "daemon ID")
 	}
 
-	body, err := api.GetDaemonConfig(baseParams, daemonID)
+	body, err := api.GetDaemonConfig(defaultAPIParams, daemonID)
 	if err != nil {
 		return err
 	}
@@ -220,14 +220,14 @@ func getDaemonConfig(c *cli.Context, baseParams *api.BaseParams) error {
 }
 
 // Sets config of specific daemon or cluster
-func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
+func setConfig(c *cli.Context) error {
 	daemonID, nvs, err := daemonKeyValueArgs(c)
 	if err != nil {
 		return err
 	}
 
 	if daemonID == "" {
-		if err := api.SetClusterConfig(baseParams, nvs); err != nil {
+		if err := api.SetClusterConfig(defaultAPIParams, nvs); err != nil {
 			return err
 		}
 
@@ -235,7 +235,7 @@ func setConfig(c *cli.Context, baseParams *api.BaseParams) error {
 		return nil
 	}
 
-	if err := api.SetDaemonConfig(baseParams, daemonID, nvs); err != nil {
+	if err := api.SetDaemonConfig(defaultAPIParams, daemonID, nvs); err != nil {
 		return err
 	}
 
@@ -274,7 +274,7 @@ func daemonKeyValueArgs(c *cli.Context) (daemonID string, nvs cmn.SimpleKVs, err
 	return daemonID, nvs, nil
 }
 
-func showGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, keepMonitoring bool, refreshRate time.Duration) error {
+func showGlobalRebalance(c *cli.Context, keepMonitoring bool, refreshRate time.Duration) error {
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
@@ -282,7 +282,7 @@ func showGlobalRebalance(c *cli.Context, baseParams *api.BaseParams, keepMonitor
 	for {
 		allFinished := true
 
-		rebStats, err := api.MakeXactGetRequest(baseParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
+		rebStats, err := api.MakeXactGetRequest(defaultAPIParams, cmn.ActGlobalReb, cmn.GetWhatStats, "" /* bucket */, false /* all */)
 		if err != nil {
 			switch err := err.(type) {
 			case *cmn.HTTPError:

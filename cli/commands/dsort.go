@@ -111,23 +111,23 @@ func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64)
 
 // Creates bucket if not exists. If exists uses it or deletes and creates new
 // one if cleanup flag was set.
-func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) error {
+func setupBucket(c *cli.Context, bucket string) error {
 	cleanup := flagIsSet(c, cleanupFlag)
 
-	exists, err := api.DoesBucketExist(baseParams, bucket)
+	exists, err := api.DoesBucketExist(defaultAPIParams, bucket)
 	if err != nil {
 		return err
 	}
 
 	if exists && cleanup {
-		err := api.DestroyBucket(baseParams, bucket)
+		err := api.DestroyBucket(defaultAPIParams, bucket)
 		if err != nil {
 			return err
 		}
 	}
 
 	if !exists || cleanup {
-		if err := api.CreateBucket(baseParams, bucket); err != nil {
+		if err := api.CreateBucket(defaultAPIParams, bucket); err != nil {
 			return err
 		}
 	}
@@ -137,12 +137,11 @@ func setupBucket(c *cli.Context, baseParams *api.BaseParams, bucket string) erro
 
 func genShardsHandler(c *cli.Context) error {
 	var (
-		baseParams = cliAPIParams(clusterURL)
-		ext        = parseStrFlag(c, extFlag)
-		bucket     = parseStrFlag(c, dsortBucketFlag)
-		template   = parseStrFlag(c, dsortTemplateFlag)
-		fileCnt    = parseIntFlag(c, fileCountFlag)
-		concLimit  = parseIntFlag(c, concurrencyFlag)
+		ext       = parseStrFlag(c, extFlag)
+		bucket    = parseStrFlag(c, dsortBucketFlag)
+		template  = parseStrFlag(c, dsortTemplateFlag)
+		fileCnt   = parseIntFlag(c, fileCountFlag)
+		concLimit = parseIntFlag(c, concurrencyFlag)
 
 		fileSize int64
 	)
@@ -166,7 +165,7 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
-	if err := setupBucket(c, baseParams, bucket); err != nil {
+	if err := setupBucket(c, bucket); err != nil {
 		return err
 	}
 
@@ -210,7 +209,7 @@ CreateShards:
 				}
 
 				putArgs := api.PutObjectArgs{
-					BaseParams: baseParams,
+					BaseParams: defaultAPIParams,
 					Bucket:     bucket,
 					Object:     name,
 					Reader:     sgl,
@@ -435,8 +434,8 @@ func (b *dsortProgressBar) result() dsortResult {
 	}
 }
 
-func printMetrics(w io.Writer, baseParams *api.BaseParams, id string) (aborted, finished bool, err error) {
-	resp, err := api.MetricsDSort(baseParams, id)
+func printMetrics(w io.Writer, id string) (aborted, finished bool, err error) {
+	resp, err := api.MetricsDSort(defaultAPIParams, id)
 	if err != nil {
 		return false, false, err
 	}
@@ -457,8 +456,8 @@ func printMetrics(w io.Writer, baseParams *api.BaseParams, id string) (aborted, 
 	return
 }
 
-func printCondensedStats(w io.Writer, baseParams *api.BaseParams, id string) error {
-	resp, err := api.MetricsDSort(baseParams, id)
+func printCondensedStats(w io.Writer, id string) error {
+	resp, err := api.MetricsDSort(defaultAPIParams, id)
 	if err != nil {
 		return err
 	}
@@ -521,8 +520,8 @@ func printCondensedStats(w io.Writer, baseParams *api.BaseParams, id string) err
 	return nil
 }
 
-func dsortJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) error {
-	list, err := api.ListDSort(baseParams, regex)
+func dsortJobsList(c *cli.Context, regex string) error {
+	list, err := api.ListDSort(defaultAPIParams, regex)
 	if err != nil {
 		return err
 	}
@@ -547,7 +546,7 @@ func dsortJobsList(c *cli.Context, baseParams *api.BaseParams, regex string) err
 	return templates.DisplayOutput(list, c.App.Writer, templates.DSortListTmpl)
 }
 
-func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error {
+func dsortJobStatus(c *cli.Context, id string) error {
 	var (
 		verbose = flagIsSet(c, verboseFlag)
 		refresh = flagIsSet(c, refreshFlag)
@@ -560,7 +559,7 @@ func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error
 		if err != nil {
 			return err
 		}
-		dsortResult, err := newDSortProgressBar(baseParams, id, refreshRate).run()
+		dsortResult, err := newDSortProgressBar(defaultAPIParams, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -572,14 +571,14 @@ func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error
 	// Show metrics just once.
 	if !refresh && !logging {
 		if verbose {
-			if _, _, err := printMetrics(c.App.Writer, baseParams, id); err != nil {
+			if _, _, err := printMetrics(c.App.Writer, id); err != nil {
 				return err
 			}
 
 			fmt.Fprintf(c.App.Writer, "\n")
 		}
 
-		return printCondensedStats(c.App.Writer, baseParams, id)
+		return printCondensedStats(c.App.Writer, id)
 	}
 
 	// Show metrics once in a while.
@@ -607,7 +606,7 @@ func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error
 	)
 
 	for {
-		aborted, finished, err = printMetrics(w, baseParams, id)
+		aborted, finished, err = printMetrics(w, id)
 		if err != nil {
 			return err
 		}
@@ -619,5 +618,5 @@ func dsortJobStatus(c *cli.Context, baseParams *api.BaseParams, id string) error
 	}
 
 	fmt.Fprintf(c.App.Writer, "\n")
-	return printCondensedStats(c.App.Writer, baseParams, id)
+	return printCondensedStats(c.App.Writer, id)
 }

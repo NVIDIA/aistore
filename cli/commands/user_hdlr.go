@@ -65,16 +65,6 @@ var (
 	loggedUserToken api.AuthCreds
 )
 
-func init() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-
-	tokenPath := filepath.Join(home, credDir, credFile)
-	_ = cmn.LocalLoad(tokenPath, &loggedUserToken)
-}
-
 func readValue(c *cli.Context, prompt string) string {
 	fmt.Fprintf(c.App.Writer, prompt+": ")
 	reader := bufio.NewReader(os.Stdin)
