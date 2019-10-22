@@ -17,7 +17,6 @@ require (
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/json-iterator/go v1.1.7
 	github.com/karrick/godirwalk v1.12.0
-	github.com/karrick/godirwalk v1.8.0
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/mattn/go-isatty v0.0.7 // indirect
