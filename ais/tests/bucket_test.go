@@ -43,8 +43,9 @@ func TestDefaultBucketProps(t *testing.T) {
 		"ec_data_slices": strconv.FormatUint(dataSlices, 10),
 	})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"ec_enabled":     "false",
-		"ec_data_slices": "2",
+		"ec_enabled":       "false",
+		"ec_data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
+		"ec_parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
@@ -70,13 +71,11 @@ func TestResetBucketProps(t *testing.T) {
 		globalConfig = getClusterConfig(t, proxyURL)
 	)
 
-	setClusterConfig(t, proxyURL, cmn.SimpleKVs{
-		"ec_enabled":       "true",
-		"ec_parity_slices": "1",
-	})
+	setClusterConfig(t, proxyURL, cmn.SimpleKVs{"ec_enabled": "true"})
 	defer setClusterConfig(t, proxyURL, cmn.SimpleKVs{
 		"ec_enabled":       "false",
-		"ec_parity_slices": "2",
+		"ec_data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
+		"ec_parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
 	})
 
 	tutils.CreateFreshBucket(t, proxyURL, TestBucketName)
@@ -208,8 +207,7 @@ func TestCloudListObjectVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer api.SetBucketProps(baseParams, bucket,
-		cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "false"})
+	defer api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketVerEnabled: "false"})
 
 	// Enabling local versioning may not work if the cloud bucket has
 	// versioning disabled. So, request props and do double check
@@ -404,103 +402,99 @@ func TestBucketSingleProp(t *testing.T) {
 		mirrorThreshold = 15
 	)
 	var (
-		bucket     = t.Name() + "Bucket"
-		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
+		m = ioContext{
+			t: t,
+		}
 		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
 
-	tutils.CreateFreshBucket(t, proxyURL, bucket)
-	defer tutils.DestroyBucket(t, proxyURL, bucket)
+	m.saveClusterState()
+	if m.originalTargetCount < 3 {
+		t.Fatalf("must have at least 3 target in the cluster")
+	}
 
-	tutils.Logf("Changing bucket %q properties...\n", bucket)
+	tutils.CreateFreshBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyBucket(t, m.proxyURL, m.bucket)
+
+	tutils.Logf("Changing bucket %q properties...\n", m.bucket)
+
 	// Enabling EC should set default value for number of slices if it is 0
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}); err != nil {
-		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if !p.EC.Enabled {
-			t.Error("EC was not enabled")
-		}
-		if p.EC.DataSlices != 2 {
-			t.Errorf("Number of data slices is incorrect: %d (expected 2)", p.EC.DataSlices)
-		}
-		if p.EC.ParitySlices != 2 {
-			t.Errorf("Number of parity slices is incorrect: %d (expected 2)", p.EC.DataSlices)
-		}
+	err := api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+	tassert.CheckError(t, err)
+	p, err := api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+	if !p.EC.Enabled {
+		t.Error("EC was not enabled")
+	}
+	if p.EC.DataSlices != 1 {
+		t.Errorf("Number of data slices is incorrect: %d (expected 1)", p.EC.DataSlices)
+	}
+	if p.EC.ParitySlices != 1 {
+		t.Errorf("Number of parity slices is incorrect: %d (expected 1)", p.EC.ParitySlices)
 	}
 
 	// Need to disable EC first
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
-		t.Error(err)
-	}
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+	tassert.CheckError(t, err)
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"}); err != nil {
-		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if !p.Mirror.Enabled {
-			t.Error("Mirroring was not enabled")
-		}
-		if p.Mirror.Copies != 2 {
-			t.Errorf("Number of copies is incorrect: %d (expected 2)", p.Mirror.Copies)
-		}
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "true"})
+	tassert.CheckError(t, err)
+	p, err = api.HeadBucket(baseParams, m.bucket)
+	tassert.CheckFatal(t, err)
+	if !p.Mirror.Enabled {
+		t.Error("Mirroring was not enabled")
+	}
+	if p.Mirror.Copies != 2 {
+		t.Errorf("Number of copies is incorrect: %d (expected 2)", p.Mirror.Copies)
 	}
 
 	// Need to disable mirroring first
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"}); err != nil {
-		t.Error(err)
-	}
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	tassert.CheckError(t, err)
 
 	// Change a few more bucket properties
-	if err := api.SetBucketProps(baseParams, bucket,
+	err = api.SetBucketProps(
+		baseParams, m.bucket,
 		cmn.SimpleKVs{
 			cmn.HeaderBucketECData:         strconv.Itoa(dataSlices),
 			cmn.HeaderBucketECParity:       strconv.Itoa(paritySlices),
 			cmn.HeaderBucketECObjSizeLimit: strconv.Itoa(objLimit),
-		}); err != nil {
-		t.Error(err)
-	}
+		},
+	)
+	tassert.CheckError(t, err)
 
 	// Enable EC again
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}); err != nil {
-		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if p.EC.DataSlices != dataSlices {
-			t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
-		}
-		if p.EC.ParitySlices != paritySlices {
-			t.Errorf("Number of parity slices was not changed to %d. Current value %d", paritySlices, p.EC.ParitySlices)
-		}
-		if p.EC.ObjSizeLimit != objLimit {
-			t.Errorf("Minimal EC object size was not changed to %d. Current value %d", objLimit, p.EC.ObjSizeLimit)
-		}
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"})
+	tassert.CheckError(t, err)
+	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
+	tassert.CheckFatal(t, err)
+	if p.EC.DataSlices != dataSlices {
+		t.Errorf("Number of data slices was not changed to %d. Current value %d", dataSlices, p.EC.DataSlices)
+	}
+	if p.EC.ParitySlices != paritySlices {
+		t.Errorf("Number of parity slices was not changed to %d. Current value %d", paritySlices, p.EC.ParitySlices)
+	}
+	if p.EC.ObjSizeLimit != objLimit {
+		t.Errorf("Minimal EC object size was not changed to %d. Current value %d", objLimit, p.EC.ObjSizeLimit)
 	}
 
 	// Need to disable EC first
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"}); err != nil {
-		t.Error(err)
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "false"})
+	tassert.CheckError(t, err)
+
+	// Change mirroring threshold
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorThresh: strconv.Itoa(mirrorThreshold)})
+	tassert.CheckError(t, err)
+	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
+	tassert.CheckFatal(t, err)
+	if p.Mirror.UtilThresh != mirrorThreshold {
+		t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
 	}
 
-	if err := api.SetBucketProps(baseParams, bucket,
-		cmn.SimpleKVs{cmn.HeaderBucketMirrorThresh: strconv.Itoa(mirrorThreshold)}); err != nil {
-		t.Error(err)
-	} else {
-		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), bucket)
-		tassert.CheckFatal(t, err)
-		if p.Mirror.UtilThresh != mirrorThreshold {
-			t.Errorf("Mirror utilization threshold was not changed to %d. Current value %d", mirrorThreshold, p.Mirror.UtilThresh)
-		}
-	}
-
-	// Disable Mirroring
-	if err := api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"}); err != nil {
-		t.Error(err)
-	}
+	// Disable mirroring
+	err = api.SetBucketProps(baseParams, m.bucket, cmn.SimpleKVs{cmn.HeaderBucketMirrorEnabled: "false"})
+	tassert.CheckError(t, err)
 }
 
 func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
@@ -516,7 +510,6 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	err = api.SetBucketProps(baseParams, bucket, cmn.SimpleKVs{cmn.HeaderBucketECEnabled: "true"}, query)
-
 	if err == nil {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
 	}
@@ -544,7 +537,6 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	err = api.SetBucketPropsMsg(baseParams, bucket, bucketProps, query)
-
 	if err == nil {
 		t.Fatalf("Expected SetBucketPropsMsg error, but got none.")
 	}
@@ -698,9 +690,15 @@ func makeNCopies(t *testing.T, ncopies int, bucket string, baseParams *api.BaseP
 
 func TestCloudMirror(t *testing.T) {
 	var (
-		num = 64
+		m = &ioContext{
+			num:    64,
+			bucket: clibucket,
+		}
+		baseParams = tutils.DefaultBaseAPIParams(t)
 	)
-	baseParams := tutils.DefaultBaseAPIParams(t)
+
+	m.saveClusterState()
+
 	if !isCloudBucket(t, baseParams.URL, clibucket) {
 		t.Skipf("%s requires a cloud bucket", t.Name())
 	}
@@ -722,8 +720,8 @@ func TestCloudMirror(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	l := len(objectList.Entries)
-	if l < num {
-		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), clibucket, num)
+	if l < m.num {
+		t.Skipf("%s: insufficient number of objects in the Cloud bucket %s, required %d", t.Name(), clibucket, m.num)
 	}
 	smap := getClusterMap(t, baseParams.URL)
 	{
@@ -738,52 +736,19 @@ func TestCloudMirror(t *testing.T) {
 	}
 
 	// cold GET - causes local mirroring
-	tutils.Logf("cold GET %d object into a 2-way mirror...\n", num)
+	tutils.Logf("cold GET %d object into a 2-way mirror...\n", m.num)
 	j := int(time.Now().UnixNano() % int64(l))
-	for i := 0; i < num; i++ {
+	for i := 0; i < m.num; i++ {
 		e := objectList.Entries[(j+i)%l]
 		_, err := api.GetObject(baseParams, clibucket, e.Name)
 		tassert.CheckFatal(t, err)
 	}
 
-	time.Sleep(time.Second * 10) // FIXME: better handle on when copying is done
+	m.ensureNumCopies(2)
 
-	msg = &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime}
-	query = make(url.Values)
-	query.Set(cmn.URLParamCached, "true")
-	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
-	tassert.CheckFatal(t, err)
-
-	total, copies2, copies3, cached := countObjects(objectList)
-	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
-	if copies2 < num {
-		t.Fatalf("listbucket: expecting %d 2-copies, got %d", num, copies2)
-	}
-
+	// Increase number of copies
 	makeNCopies(t, 3, clibucket, baseParams)
-	objectList, err = api.ListBucket(baseParams, clibucket, msg, 0, query)
-	tassert.CheckFatal(t, err)
-
-	total, copies2, copies3, cached = countObjects(objectList)
-	tutils.Logf("objects (total, 2-copies, 3-copies, cached) = (%d, %d, %d, %d)\n", total, copies2, copies3, cached)
-	if copies3 < num {
-		t.Fatalf("listbucket: expecting %d 3-copies, got %d", num, copies3)
-	}
-}
-
-func countObjects(objectList *cmn.BucketList) (total, copies2, copies3, cached int) {
-	for _, entry := range objectList.Entries {
-		total++
-		if entry.Copies == 2 {
-			copies2++
-		} else if entry.Copies == 3 {
-			copies3++
-		}
-		if entry.CheckExists() {
-			cached++
-		}
-	}
-	return
+	m.ensureNumCopies(3)
 }
 
 func TestBucketReadOnly(t *testing.T) {

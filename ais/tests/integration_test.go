@@ -256,8 +256,10 @@ func (m *ioContext) ensureNumCopies(expectedCopies int) {
 	waitForBucketXactionToComplete(m.t, cmn.ActMakeNCopies /*kind*/, m.bucket, baseParams, rebalanceTimeout)
 
 	// List Bucket - primarily for the copies
+	query := make(url.Values)
+	query.Set(cmn.URLParamCached, "true")
 	msg := &cmn.SelectMsg{Props: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
-	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0, query)
 	tassert.CheckFatal(m.t, err)
 
 	copiesToNumObjects := make(map[int]int)

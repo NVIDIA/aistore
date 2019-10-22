@@ -23,8 +23,8 @@ import (
 // data protection is off. To enable it, set the bucket EC configuration:
 //	ECConf:
 //		Enable: true|false    # enables or disables protection
-//		DataSlices: [2-32]    # the number of data slices
-//		ParitySlices: [2-32]  # the number of parity slices
+//		DataSlices: [1-32]    # the number of data slices
+//		ParitySlices: [1-32]  # the number of parity slices
 //		ObjSizeLimit: 0       # replication versus erasure coding
 //
 // NOTE: replicating small object is cheaper than erasure encoding.

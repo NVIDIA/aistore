@@ -1200,10 +1200,10 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops
 					break
 				}
 				if nprops.EC.DataSlices == 0 {
-					nprops.EC.DataSlices = 2
+					nprops.EC.DataSlices = 1
 				}
 				if nprops.EC.ParitySlices == 0 {
-					nprops.EC.ParitySlices = 2
+					nprops.EC.ParitySlices = 1
 				}
 			}
 		case cmn.HeaderBucketECData:

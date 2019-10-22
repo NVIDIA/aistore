@@ -442,10 +442,10 @@ func parseCmdLine() (params, error) {
 		if p.bProps.EC.Enabled {
 			// fill EC defaults
 			if p.bProps.EC.ParitySlices == 0 {
-				p.bProps.EC.ParitySlices = 2
+				p.bProps.EC.ParitySlices = 1
 			}
 			if p.bProps.EC.DataSlices == 0 {
-				p.bProps.EC.DataSlices = 2
+				p.bProps.EC.DataSlices = 1
 			}
 
 			if p.bProps.EC.ParitySlices < 1 || p.bProps.EC.ParitySlices > 32 {

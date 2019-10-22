@@ -11,8 +11,8 @@ cat > $CONFFILE <<EOL
 	},
 	"ec": {
 		"objsize_limit":	${OBJSIZE_LIMIT:-262144},
-		"data_slices":		${DATA_SLICES:-2},
-		"parity_slices":	${PARITY_SLICES:-2},
+		"data_slices":		${DATA_SLICES:-1},
+		"parity_slices":	${PARITY_SLICES:-1},
 		"compression":		"${COMPRESSION:-never}",
 		"enabled":		${EC_ENABLED:-false}
 	},
