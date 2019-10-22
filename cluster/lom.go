@@ -133,9 +133,9 @@ func (lom *LOM) VerConf() *cmn.VersionConf {
 func (lom *LOM) CopyMetadata(from *LOM) {
 	lom.md.copies = nil
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(from.Bck()) {
-		lom.setCopyMD(from.FQN, from.ParsedFQN.MpathInfo)
+		lom.setCopyMd(from.FQN, from.ParsedFQN.MpathInfo)
 		for fqn, mpathInfo := range from.GetCopies() {
-			lom.addCopyMD(fqn, mpathInfo)
+			lom.addCopyMd(fqn, mpathInfo)
 		}
 		// TODO: in future we should have invariant: cmn.Assert(lom.NumCopies() == from.NumCopies())
 	}
@@ -192,19 +192,19 @@ func (lom *LOM) IsCopy() bool {
 	return !lom.IsHRW()
 }
 
-func (lom *LOM) setCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
+func (lom *LOM) setCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
 	lom.md.copies = make(fs.MPI, 2)
 	lom.md.copies[copyFQN] = mpi
 	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 }
-func (lom *LOM) addCopyMD(copyFQN string, mpi *fs.MountpathInfo) {
+func (lom *LOM) addCopyMd(copyFQN string, mpi *fs.MountpathInfo) {
 	if lom.md.copies == nil {
 		lom.md.copies = make(fs.MPI, 2)
 	}
 	lom.md.copies[copyFQN] = mpi
 	lom.md.copies[lom.FQN] = lom.ParsedFQN.MpathInfo
 }
-func (lom *LOM) delCopyMD(copyFQN string) {
+func (lom *LOM) delCopyMd(copyFQN string) {
 	delete(lom.md.copies, copyFQN)
 	if len(lom.md.copies) <= 1 {
 		lom.md.copies = nil
@@ -212,9 +212,9 @@ func (lom *LOM) delCopyMD(copyFQN string) {
 }
 
 func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
-	lom.addCopyMD(copyFQN, mpi)
+	lom.addCopyMd(copyFQN, mpi)
 	if err := lom.syncMetaWithCopies(); err != nil {
-		lom.delCopyMD(copyFQN) // revert addition, there was some error
+		lom.delCopyMd(copyFQN) // revert addition, there was some error
 		return err
 	}
 	return nil
@@ -237,7 +237,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 		if _, ok := lom.md.copies[copyFQN]; !ok {
 			return fmt.Errorf("lom %s(num: %d): copy %s %s", lom, numCopies, copyFQN, cmn.DoesNotExist)
 		}
-		lom.delCopyMD(copyFQN)
+		lom.delCopyMd(copyFQN)
 	}
 
 	// 2. Try to update metadata on left copies
@@ -288,111 +288,31 @@ func (lom *LOM) DelExtraCopies() (err error) {
 	return
 }
 
-// syncMetaWithCopies tries to match metadata with all existing copies.
+// syncMetaWithCopies tries to make sure that all copies have identical metadata.
 // NOTE: uname for LOM must be already locked.
 func (lom *LOM) syncMetaWithCopies() (err error) {
-	// Only object on default location with copies can sync meta.
-	if !lom.IsHRW() || !lom.HasCopies() {
+	if !lom.IsHRW() || !lom.HasCopies() { // must have copies and be at the default location
 		return nil
 	}
 
-	var (
-		errored, failed []string
-		prevLMetas      = make(map[*LOM]lmeta)
-	)
+	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
+	cmn.AssertNoErr(err)
+	buf := slab.Alloc()
 
-	bck := lom.Bck()
-	for copyFQN := range lom.md.copies {
-		copyLOM := lom.Clone(copyFQN)
-		if err := copyLOM.Init(bck.Name, bck.Provider, lom.Config()); err != nil {
-			errored = append(errored, copyFQN)
-			continue
-		}
-		if err := copyLOM.Load(false); err != nil {
-			errored = append(errored, copyFQN)
-			continue
-		}
-		if !copyLOM.Exists() {
-			errored = append(errored, copyFQN)
-			continue
-		}
-
-		prevLMetas[copyLOM] = copyLOM.md // before copy we need to save prev lmeta
-		copyLOM.CopyMetadata(lom)
-		if err = copyLOM.Persist(); err != nil {
-			failed = append(failed, copyFQN)
-			delete(prevLMetas, copyLOM)
+	var ok bool
+	for !ok {
+		ok = true
+		if copyFQN, err := lom.persistMdOnCopies(buf); err != nil {
+			ok = false
+			lom.delCopyMd(copyFQN)
+			if _, err1 := os.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+				lom.T.FSHC(err, copyFQN) // NOTE: forward the error from SetXattr not os.Stat
+				// TODO: inform the scruber about the copy the failed to persist
+			}
 		}
 	}
-
-	if len(errored) > 0 || len(failed) > 0 {
-		lom.rollbackCopyMD(errored, failed, prevLMetas)
-	}
+	slab.Free(buf)
 	return err
-}
-
-// rollbackCopyMD tries to restore the previous state of the copies due to some
-// error or failure. The idea is to get rid of the copies that failed to persist
-// as it indicates a very serious problem (most probably a hardware problem).
-// But since we remove them the from filesystem we need also to delete them from
-// metadata of copies that still are healthy and present in the cluster(target).
-//
-// errored - FQNs of the copies that do not exist.
-// failed - FQNs of the copies that failed to persist.
-// prevLMetas - previous metadata of the copies - this is used to recover the previous state.
-func (lom *LOM) rollbackCopyMD(errored, failed []string, prevLMetas map[*LOM]lmeta) {
-	if len(errored) > 0 {
-		// Update md.copies of default object.
-		for _, copyFQN := range errored {
-			lom.delCopyMD(copyFQN)
-		}
-
-		// Case when len(failed) > 0 is handled later separately.
-		if len(failed) == 0 {
-			// Update md.copies of other copies.
-			for copyLOM := range prevLMetas {
-				for _, erroredCopyFQN := range errored {
-					copyLOM.delCopyMD(erroredCopyFQN)
-				}
-				if err := copyLOM.Persist(); err != nil {
-					failed = append(failed, copyLOM.FQN)
-					delete(prevLMetas, copyLOM)
-				}
-			}
-		}
-	}
-
-	if len(failed) > 0 {
-		ok := false
-		// Invariant: loop finally ends since we remove at least one copy from prevLMetas.
-		for !ok {
-			ok = true
-
-			// Remove copies that are not reachable.
-			for _, copyFQN := range failed {
-				lom.delCopyMD(copyFQN)
-				if err1 := cmn.RemoveFile(copyFQN); err1 != nil {
-					lom.T.FSHC(err1, copyFQN)
-				}
-			}
-
-			// Rollback
-			for copyLOM, prevLMeta := range prevLMetas {
-				copyLOM.md = prevLMeta
-				// Remove from current copy the other copies that failed.
-				for _, fqns := range [][]string{errored, failed} {
-					for _, failedCopyFQN := range fqns {
-						copyLOM.delCopyMD(failedCopyFQN)
-					}
-				}
-				if err := copyLOM.Persist(); err != nil {
-					failed = append(failed, copyLOM.FQN)
-					delete(prevLMetas, copyLOM)
-					ok = false
-				}
-			}
-		}
-	}
 }
 
 // RestoreObjectFromAny tries to restore the object at its default location.
@@ -472,7 +392,6 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 
 	dst.CopyMetadata(lom)
 	dst.SetCksum(dstCksum)
-	dst.SetAtimeUnix(time.Now().UnixNano())
 	if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dst.FQN); errRemove != nil {
 			glog.Errorf("nested err: %v", errRemove)
@@ -482,7 +401,9 @@ func (lom *LOM) CopyObject(dstFQN string, buf []byte) (dst *LOM, err error) {
 
 	if lom.MirrorConf().Enabled && lom.Bck().Equal(dst.Bck()) {
 		if err = lom.AddCopy(dst.FQN, dst.ParsedFQN.MpathInfo); err != nil {
-			os.Remove(dst.FQN)
+			return
+		}
+		if err = lom.Persist(); err != nil {
 			return
 		}
 	}

@@ -136,11 +136,6 @@ func copyTo(lom *cluster.LOM, mpathInfo *fs.MountpathInfo, buf []byte) (clone *c
 	if err != nil {
 		return
 	}
-	if err = lom.Persist(); err != nil {
-		_ = lom.DelCopies(copyFQN)
-		return
-	}
-
 	lom.ReCache()
 	return
 }

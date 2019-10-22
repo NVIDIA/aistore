@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	BadCksumPrefix = "BAD CHECKSUM:"
-	MLCG32         = 1103515245 // xxhash seed
+	BadCksumPrefix     = "BAD CHECKSUM:"
+	BadMetaCksumPrefix = "BAD METADATA CHECKSUM:"
+	MLCG32             = 1103515245 // xxhash seed
 )
 
 func NewCRC32C() hash.Hash {

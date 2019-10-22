@@ -681,7 +681,7 @@ var _ = Describe("LOM", func() {
 				Expect(copyObjHash).To(BeEquivalentTo(expectedHash))
 			})
 
-			It("should successfully copy the object and update metdata of other copies", func() {
+			It("should successfully copy the object and update metadata for other copies", func() {
 				lom := prepareLOM(mirrorFQNs[0])
 				_ = prepareCopy(lom, mirrorFQNs[1])
 				_ = prepareCopy(lom, mirrorFQNs[2])

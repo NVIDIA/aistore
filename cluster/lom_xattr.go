@@ -12,9 +12,9 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -65,15 +65,39 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 // TODO: in case of error previous metadata should be restored.
 func (lom *LOM) Persist() (err error) {
-	slab, err := lom.T.GetMem2().GetSlab2(xattrBufSize)
+	var (
+		slab *memsys.Slab2
+		buf  []byte
+	)
+	slab, err = lom.T.GetMem2().GetSlab2(xattrBufSize)
 	cmn.AssertNoErr(err)
-	buf := slab.Alloc()
+	buf = slab.Alloc()
+	_, err = lom.persistMd(buf)
+	slab.Free(buf)
+	return
+}
 
-	off := lom.md.marshal(buf)
+func (lom *LOM) persistMd(buf []byte) (metaCksum uint64, err error) {
+	var off int
+	metaCksum, off = lom.md.marshal(buf)
 	if err = fs.SetXattr(lom.FQN, cmn.XattrLOM, buf[:off]); err != nil {
 		lom.T.FSHC(err, lom.FQN)
 	}
-	slab.Free(buf)
+	return
+}
+
+func (lom *LOM) persistMdOnCopies(buf []byte) (copyFQN string, err error) {
+	_, off := lom.md.marshal(buf)
+
+	// Try to set the xattr for all the copies
+	for copyFQN = range lom.md.copies {
+		if copyFQN == lom.FQN {
+			continue
+		}
+		if err = fs.SetXattr(copyFQN, cmn.XattrLOM, buf[:off]); err != nil {
+			break
+		}
+	}
 	return
 }
 
@@ -96,7 +120,7 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 	actualCksum = xxhash.ChecksumString64S(payload, cmn.MLCG32)
 
 	if expectedCksum != actualCksum {
-		return fmt.Errorf("%s (%x != %x)", cmn.BadCksumPrefix, expectedCksum, actualCksum)
+		return fmt.Errorf("%s (%x != %x)", cmn.BadMetaCksumPrefix, expectedCksum, actualCksum)
 	}
 	for off := 0; !last; {
 		var (
@@ -167,8 +191,8 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 }
 
 func _writeCopies(copies fs.MPI, buf []byte, off, ll int) int {
-	for c := range copies {
-		off += copy(buf[off:], c)
+	for copyFQN := range copies {
+		off += copy(buf[off:], copyFQN)
 		off += copy(buf[off:], copyFQNSepa)
 		cmn.Assert(off < ll-1) // bounds check
 	}
@@ -178,7 +202,7 @@ func _writeCopies(copies fs.MPI, buf []byte, off, ll int) int {
 	return off
 }
 
-func (md *lmeta) marshal(buf []byte) (off int) {
+func (md *lmeta) marshal(buf []byte) (metaCksum uint64, off int) {
 	var (
 		cksumType, cksumValue string
 		b8                    [cmn.SizeofI64]byte
@@ -216,7 +240,7 @@ func (md *lmeta) marshal(buf []byte) (off int) {
 	//
 	// checksum, prepend, and return
 	//
-	metaCksum := xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
+	metaCksum = xxhash.ChecksumString64S(string(buf[cmn.SizeofI64:off]), cmn.MLCG32)
 	binary.BigEndian.PutUint64(buf[0:], metaCksum)
 	return
 }
