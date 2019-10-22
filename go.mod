@@ -30,10 +30,9 @@ require (
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/testify v1.4.0 // indirect
-	github.com/teris-io/shortid v0.0.0-20160104014424-6c56cef5189c
+	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/urfave/cli v1.20.0
 	github.com/vbauerster/mpb v3.4.0+incompatible
-	github.com/ventu-io/go-shortid v0.0.0-20171029131806-771a37caa5cf // indirect
 	go.opencensus.io v0.17.0 // indirect
 	golang.org/x/crypto v0.0.0-20190320223903-b7391e95e576 // indirect
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a
