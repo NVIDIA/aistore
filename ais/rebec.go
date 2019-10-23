@@ -703,9 +703,11 @@ func (s *ecRebalancer) findSolutions(slices *ecRebResult) {
 				rmd.locID, rmd.mainDaemon = obj.objLocation(localDaemon)
 
 				// 1. check if we can restore missing object
-				sliceDiff := rmd.sliceReq - rmd.sliceFound
+				//    subtract '1' as 'sliceReq' includes the full object
+				sliceDiff := rmd.sliceReq - rmd.sliceFound - 1
 				if rmd.mainDaemon == "" && !obj.replicated && sliceDiff > int(obj.paritySlices()) {
-					glog.Errorf("[%s] %s/%s unrepairable - too few slices", localDaemon, obj.bucket(), obj.objName())
+					glog.Errorf("[%s] %s/%s unrepairable - too few slices(missing %d of max %d)",
+						localDaemon, obj.bucket(), obj.objName(), sliceDiff, obj.paritySlices())
 					s.updateTxStats(obj.objSize(), false)
 					delete(objs.objs, objName)
 					// TODO: for cloud we can reget the object. For ais - delete?

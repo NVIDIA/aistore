@@ -198,7 +198,7 @@ func appMain(c *cli.Context) (err error) {
 		return missingArgumentsError("MOUNTPOINT")
 	}
 	if c.NArg() > 2 {
-		return incorrectUsageError(errors.New("too many arguments."))
+		return incorrectUsageError(errors.New("too many arguments"))
 	}
 
 	flags = parseFlags(c)
