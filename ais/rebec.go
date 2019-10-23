@@ -328,7 +328,7 @@ func (s *ecScrubber) init() error {
 		Network: s.netc,
 		Trname:  ackECScrubStreamName,
 	}
-	client := transport.NewDefaultClient()
+	client := transport.NewIntraDataClient()
 	s.ack = transport.NewStreamBundle(s.t.smapowner, s.t.Snode(), client, ackArgs)
 	if _, err := transport.Register(s.netc, ackECScrubStreamName, s.OnAck); err != nil {
 		err := fmt.Errorf("Failed to register ack stream for %s: %v", ackECScrubStreamName, err)

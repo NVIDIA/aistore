@@ -100,19 +100,19 @@ type (
 	}
 	httprunner struct {
 		cmn.Named
-		publicServer          *netServer
-		intraControlServer    *netServer
-		intraDataServer       *netServer
-		logger                *log.Logger
-		si                    *cluster.Snode
-		httpclient            *http.Client // http client for intra-cluster comm
-		httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
-		keepalive             keepaliver
-		smapowner             *smapowner
-		bmdowner              *bmdowner
-		xactions              *xactionsRegistry
-		statsif               stats.Tracker
-		statsdC               statsd.Client
+		publicServer       *netServer
+		intraControlServer *netServer
+		intraDataServer    *netServer
+		logger             *log.Logger
+		si                 *cluster.Snode
+		httpclient         *http.Client // http client for intra-cluster comm
+		httpclientGetPut   *http.Client // http client to execute target <=> target GET & PUT (object)
+		keepalive          keepaliver
+		smapowner          *smapowner
+		bmdowner           *bmdowner
+		xactions           *xactionsRegistry
+		statsif            stats.Tracker
+		statsdC            statsd.Client
 	}
 
 	// AWS and GCP provider interface
@@ -327,9 +327,11 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 		Timeout:  config.Timeout.Default,
 		UseHTTPS: config.Net.HTTP.UseHTTPS,
 	})
-	h.httpclientLongTimeout = cmn.NewClient(cmn.TransportArgs{
-		Timeout:  config.Timeout.DefaultLong,
-		UseHTTPS: config.Net.HTTP.UseHTTPS,
+	h.httpclientGetPut = cmn.NewClient(cmn.TransportArgs{
+		Timeout:         config.Timeout.DefaultLong,
+		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+		UseHTTPS:        false, // always plain intra-cluster http for data
 	})
 
 	bufsize := config.Net.L4.SndRcvBufSize
@@ -562,7 +564,7 @@ func (h *httprunner) call(args callArgs) callResult {
 			break
 		}
 
-		client = h.httpclientLongTimeout
+		client = h.httpclientGetPut
 	default:
 		var cancel context.CancelFunc
 		req, _, cancel, err = args.req.ReqWithTimeout(args.timeout)
@@ -572,7 +574,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		defer cancel() // timeout => context.deadlineExceededError
 
 		if args.timeout > h.httpclient.Timeout {
-			client = h.httpclientLongTimeout
+			client = h.httpclientGetPut
 		} else {
 			client = h.httpclient
 		}

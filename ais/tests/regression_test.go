@@ -1485,7 +1485,7 @@ func getNamedTargetStats(trunner *stats.Trunner, name string) int64 {
 func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	q := tutils.GetWhatRawQuery(cmn.GetWhatStats, "")
 	url = fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
-	resp, err := tutils.BaseHTTPClient.Get(url)
+	resp, err := tutils.DefaultHTTPClient.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to perform get, err = %v", err)
 	}

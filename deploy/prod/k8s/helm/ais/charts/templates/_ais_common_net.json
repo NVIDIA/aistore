@@ -16,6 +16,8 @@
                 "rproxy_cache":         true,
                 "server_certificate":   "server.crt",
                 "server_key":           "server.key",
+                "write_buffer_size":    {{ .net.http.write_buffer_size }},
+                "read_buffer_size":     {{ .net.http.read_buffer_size }},
                 "use_https":            {{ .net.http.use_https }},
                 "chunked_transfer":     {{ .net.http.chunked_transfer }}
         }

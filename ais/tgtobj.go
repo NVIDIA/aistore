@@ -505,7 +505,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) (ok
 	}
 	defer cancel()
 
-	resp, err := goi.t.httpclientLongTimeout.Do(req)
+	resp, err := goi.t.httpclientGetPut.Do(req)
 	if err != nil {
 		glog.Errorf("GFN failure, URL %q, err: %v", reqArgs.URL(), err)
 		return

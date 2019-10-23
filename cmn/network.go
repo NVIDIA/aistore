@@ -30,7 +30,10 @@ type (
 		Timeout          time.Duration
 		SndRcvBufSize    int
 		IdleConnsPerHost int
+		WriteBufferSize  int
+		ReadBufferSize   int
 		UseHTTPS         bool
+		UseHTTPProxyEnv  bool
 	}
 )
 
@@ -54,7 +57,6 @@ func ParsePort(p string) (int, error) {
 func NewTransport(args TransportArgs) *http.Transport {
 	var (
 		dialTimeout      = args.DialTimeout
-		idleConnsPerHost = args.IdleConnsPerHost
 		defaultTransport = http.DefaultTransport.(*http.Transport)
 	)
 
@@ -70,16 +72,20 @@ func NewTransport(args TransportArgs) *http.Transport {
 		dialer.Control = args.setSockOpt
 	}
 	transport := &http.Transport{
-		Proxy:                 defaultTransport.Proxy,
 		DialContext:           dialer.DialContext,
 		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
 		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		MaxIdleConnsPerHost:   idleConnsPerHost,
+		MaxIdleConnsPerHost:   args.IdleConnsPerHost,
+		WriteBufferSize:       args.WriteBufferSize,
+		ReadBufferSize:        args.ReadBufferSize,
 		MaxIdleConns:          0, // no limit
 	}
 	if args.UseHTTPS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	if args.UseHTTPProxyEnv {
+		transport.Proxy = defaultTransport.Proxy
 	}
 	return transport
 }

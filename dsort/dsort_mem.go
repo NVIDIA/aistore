@@ -205,7 +205,7 @@ func (ds *dsorterMem) start() error {
 		respNetwork = cmn.NetworkPublic
 	}
 
-	client := transport.NewDefaultClient()
+	client := transport.NewIntraDataClient()
 
 	streamMultiplier := transport.IntraBundleMultiplier
 	if ds.m.rs.StreamMultiplier != 0 {

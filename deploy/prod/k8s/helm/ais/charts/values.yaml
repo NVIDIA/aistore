@@ -22,9 +22,9 @@ image:
 #
 ais_config_common:
   auth:
-    secret        : aBitLongSecretKey
-    enabled       : false
-    creddir       : ""
+    secret:  aBitLongSecretKey
+    enabled: false
+    creddir: ""
   cksum:
     type: xxhash
     validate_cold_get: true
@@ -37,87 +37,87 @@ ais_config_common:
     checksum: false
   confdir: /etc/ais
   disk:
-    disk_util_low_wm: 20
+    disk_util_low_wm:  20
     disk_util_high_wm: 80
-    disk_util_max_wm: 95
-    iostat_time_long: 2s
+    disk_util_max_wm:  95
+    iostat_time_long:  2s
     iostat_time_short: 100ms
   distributed_sort:
-    compression: never
-    duplicated_records: ignore
-    missing_shards: abort
-    ekm_malformed_line: abort
-    ekm_missing_key: abort
+    compression:           never
+    duplicated_records:    ignore
+    missing_shards:        abort
+    ekm_malformed_line:    abort
+    ekm_missing_key:       abort
     default_max_mem_usage: 80%
     dsorter_mem_threshold: 100GB
-    call_timeout: 10m
+    call_timeout:          10m
   downloader:
     timeout: 1h
   ec:
-    compression: never
+    compression:   never
     objsize_limit: 262144
-    data_slices: 2
+    data_slices:   2
     parity_slices: 2
-    compression: never
-    enabled: false
+    compression:   never
+    enabled:       false
   fshc:
-    enabled: true
-    test_files: 4
-    error_limit: 2
+    enabled:       true
+    test_files:    4
+    error_limit:   2
   keepalivetracker:
     proxy:
       interval: 10s
-      name: heartbeat
-      factor: 3
+      name:     heartbeat
+      factor:   3
     target:
       interval: 10s
-      name: heartbeat
-      factor: 3
+      name:     heartbeat
+      factor:   3
     retry_factor: 5
     timeout_factor: 3
   log:
-    dir: /var/log/ais
-    level : 3
-    max_size: 4194304
+    dir:       /var/log/ais
+    level:     3
+    max_size:  4194304
     max_total: 67108864
   lru:
-    lowwm: 75
-    highwm: 90
-    out_of_space: 95
-    dont_evict_time: 120m
+    lowwm:             75
+    highwm:            90
+    out_of_space:      95
+    dont_evict_time:   120m
     capacity_upd_time: 10m
-    ais_buckets: false
-    enabled: true
+    ais_buckets:       false
+    enabled:           true
   mirror:
-    copies: 2
-    burst_buffer: 512
-    util_thresh: 0
-    optimize_put: false
-    enabled: false
+    copies:            2
+    burst_buffer:      512
+    util_thresh:       0
+    optimize_put:      false
+    enabled:           false
   periodic:
-    stats_time: 10s
+    stats_time:      10s
     retry_sync_time: 2s
   rebalance:
-    compression: never
+    compression:     never
     dest_retry_time: 2m
-    enabled: true
-    multiplier: 4
+    enabled:         true
+    multiplier:      4
   timeout:
-    default_timeout: 10s
+    default_timeout:      10s
     default_long_timeout: 30m
-    list_timeout: 10m
-    max_keepalive: 4s
-    proxy_ping: 100ms
-    cplane_operation: 2s
-    send_file_time: 5m
-    startup_time: 1m
+    list_timeout:         10m
+    max_keepalive:        4s
+    proxy_ping:           100ms
+    cplane_operation:     2s
+    send_file_time:       5m
+    startup_time:         1m
   versioning:
-    enabled: true
+    enabled:           true
     validate_warm_get: false
 
 ais_k8s:
-  cluster_cidr: ""
-  clusterIP_gw_label: shared
+  cluster_cidr:           ""
+  clusterIP_gw_label:     shared
   container_capabilities:
     # Needed for debug if you wish to run delve within a pod (or look into kubesquash etc)
     #- SYS_PTRACE
@@ -125,37 +125,37 @@ ais_k8s:
     somaxconn: 1024
 
 proxy:
-  name : proxy        # A component label for selector
+  name: proxy        # A component label for selector
   gw_label: "shared"  # shared means in proxy clusterIP service
   config:
     proxy:
-      non_electable : false
-      discovery_url : ""
+      non_electable: false
+      discovery_url: ""
     test_fspaths:
-      count         : 0
-      instance      : 0
+      count:    0
+      instance: 0
     net:
-      ipv4          : ""
+      ipv4:               ""
       ipv4_intra_control: ""
-      ipv4_intra_data: ""
+      ipv4_intra_data:    ""
       l4:
-        port       : 51080
+        port:               51080
         port_intra_control: ""
-        port_intra_data: ""
-        sndrcv_buf_size: 131072
+        port_intra_data:    ""
+        sndrcv_buf_size:    131072
       http:
-        use_https   : false
+        use_https:        false
         chunked_transfer: true
   service:
     type: ClusterIP
     port: 51080
   nodeSelector:
-    key: ais-proxy-type 
+    key: ais-proxy-type
     value: "electable"
   resources: {}
   # Apply the below node label on any node (just 1), the proxy runs on that node will become a primary at launch
   initialPrimaryProxyNodeLabel:
-    name: "initial_primary_proxy"
+    name:  "initial_primary_proxy"
     value: "yes"
   # The path of the environment file to be passed into the ais container
   envMountPath:
@@ -166,32 +166,32 @@ proxy:
     # No pod path as it should be the same as config.dir
 
 ne_proxy:
-  name : "ne_proxy"    # A component label for selector
+  name: "ne_proxy"    # A component label for selector
   gw_label: "shared"   # shared means in proxy clusterIP service
   config:
     proxy:
-      non_electable : true
-      discovery_url : ""
+      non_electable: true
+      discovery_url: ""
     test_fspaths:
-      count         : 0
-      instance      : 0
+      count:    0
+      instance: 0
     net:
-      ipv4          : ""
+      ipv4:               ""
       ipv4_intra_control: ""
-      ipv4_intra_data: ""
+      ipv4_intra_data:    ""
       l4:
-        port       : 51080
+        port:               51080
         port_intra_control: ""
-        port_intra_data: ""
-        sndrcv_buf_size: 131072
+        port_intra_data:    ""
+        sndrcv_buf_size:    131072
       http:
-        use_https   : false
+        use_https:        false
         chunked_transfer: true
   service:
     type: ClusterIP
     port: 51080      # must match that of proxy since they go behind same clusterIP service
   nodeSelector:
-    key: ais-proxy-type 
+    key:   ais-proxy-type
     value: "nonelectable"
   resources: {}
   # The path of the environment file to be passed into the ais container
@@ -204,32 +204,34 @@ ne_proxy:
 target:
   name : "target"   # A component label for selector
   config:
-    proxy:  
-      non_electable : false
-      discovery_url : ""
+    proxy:
+      non_electable: false
+      discovery_url: ""
     test_fspaths:
-      count         : 0
-      instance      : 0
+      count:    0
+      instance: 0
     nodiskio:
-      enabled: false
+      enabled:    false
       dryobjsize: "8M"
     net:
-      ipv4          : ""
+      ipv4:               ""
       ipv4_intra_control: ""
-      ipv4_intra_data: ""
+      ipv4_intra_data:    ""
       l4:
-        port       : 51081
+        port:               51081
         port_intra_control: ""
-        port_intra_data: ""
-        sndrcv_buf_size: 0
+        port_intra_data:    ""
+        sndrcv_buf_size:    0
       http:
-        use_https   : false
-        chunked_transfer: true
+        write_buffer_size: 65536
+        read_buffer_size:  65536
+        use_https:         false
+        chunked_transfer:  true
   service:
-    port: 51081
+    port:     51081
     hostport: 0
   nodeSelector:
-    key: ais-target-node 
+    key:   ais-target-node
     value: "yes"
   resources: {}
   etcMountPath:
@@ -249,14 +251,14 @@ target:
     - /ais/sdh
     - /ais/sdi
     - /ais/sdj
-    
+
 #
 # Ingress to the proxy/gateway service
 #
 ingress:
   gateway:
     externalIP:
-    port: 51080
+    port:       51080
     targetPort: 51080
 
 #
@@ -272,10 +274,10 @@ resources: {}
 # we don't want them running on any GPU nodes).
 #
 tolerations:
-- key: "dedicated"
+- key:      "dedicated"
   operator: "Equal"
-  value: "ais"
-  effect: "PreferNoSchedule"
+  value:    "ais"
+  effect:   "PreferNoSchedule"
 
 # Make sure the DFC target only deploy to the node that are marked with a label that signify a hi-perf
 # storage
@@ -300,7 +302,7 @@ affinity: {}
 #
 tags:
   builtin_monitoring: true
-  prometheus: true
+  prometheus:         true
 
 #
 # Alternatively, leave the builtin-monitoring tag true (the default) and
@@ -323,18 +325,18 @@ tags:
 #
 graphite:
   persistence:
-    enabled: true
+    enabled:       true
     existingClaim: graphite-pvc
   ais:
     pv:
       capacity: "250Gi"
-      path: ""
-      node: ""
+      path:     ""
+      node:     ""
   tolerations:
-  - key: "dedicated"
+  - key:      "dedicated"
     operator: "Equal"
-    value: "ais"
-    effect: "PreferNoSchedule"
+    value:    "ais"
+    effect:   "PreferNoSchedule"
 
 #
 # Key paths here that match those of https://github.com/helm/charts/tree/master/stable/grafana
@@ -342,27 +344,27 @@ graphite:
 #
 grafana:
   persistence:
-    enabled: true
+    enabled:       true
     existingClaim: grafana-pvc
   ais:
     pv:
       capacity: "250Gi"
-      path: ""
-      node: ""
+      path:     ""
+      node:     ""
   service:
     type: NodePort
   sidecar:
     datasources:
       enabled: true
-      label: ais_grafana_datasource
+      label:   ais_grafana_datasource
     dashboards:
       enabled: false
-      label: ais_grafana_dashboard
+      label:   ais_grafana_dashboard
   tolerations:
-  - key: "dedicated"
+  - key:      "dedicated"
     operator: "Equal"
-    value: "ais"
-    effect: "PreferNoSchedule"
+    value:    "ais"
+    effect:   "PreferNoSchedule"
 
 #
 # Key paths here that match those of https://github.com/helm/charts/tree/master/stable/prometheus
@@ -375,36 +377,36 @@ prometheus:
     persistentVolume:
       enabled: false
     tolerations:
-    - key: "dedicated"
+    - key:      "dedicated"
       operator: "Equal"
-      value: "ais"
-      effect: "PreferNoSchedule"
+      value:    "ais"
+      effect:   "PreferNoSchedule"
   server:
     persistentVolume:
       enabled: false
     tolerations:
-    - key: "dedicated"
+    - key:      "dedicated"
       operator: "Equal"
-      value: "ais"
-      effect: "PreferNoSchedule"
+      value:    "ais"
+      effect:   "PreferNoSchedule"
   kubeStateMetrics:
     tolerations:
-    - key: "dedicated"
+    - key:      "dedicated"
       operator: "Equal"
-      value: "ais"
-      effect: "PreferNoSchedule"
+      value:    "ais"
+      effect:   "PreferNoSchedule"
   nodeExporter:
     tolerations:
-    - key: "dedicated"
+    - key:      "dedicated"
       operator: "Equal"
-      value: "ais"
-      effect: "PreferNoSchedule"
+      value:    "ais"
+      effect:   "PreferNoSchedule"
   pushgateway:
     tolerations:
-    - key: "dedicated"
+    - key:      "dedicated"
       operator: "Equal"
-      value: "ais"
-      effect: "PreferNoSchedule"
+      value:    "ais"
+      effect:   "PreferNoSchedule"
 
 
 #

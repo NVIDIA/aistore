@@ -101,9 +101,11 @@ cat > $CONFFILE <<EOL
 		"http": {
 			"proto":		"http",
 			"rproxy":		"",
-			"rproxy_cache":		true,
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",
+			"write_buffer_size":	${HTTP_WRITE_BUFFER_SIZE:-0},
+			"read_buffer_size":	${HTTP_READ_BUFFER_SIZE:-0},
+			"rproxy_cache":		true,
 			"use_https":		${USE_HTTPS:-false},
 			"chunked_transfer":	${CHUNKED_TRANSFER:-true}
 		}

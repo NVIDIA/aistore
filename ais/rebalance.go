@@ -499,7 +499,7 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 	//
 	// objects
 	//
-	client := transport.NewDefaultClient()
+	client := transport.NewIntraDataClient()
 	sbArgs := transport.SBArgs{
 		Network: reb.netd,
 		Trname:  rebalanceStreamName,

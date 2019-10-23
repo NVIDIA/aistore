@@ -5,38 +5,18 @@
 package tutils
 
 import (
-	"net"
 	"net/http"
 	"net/http/httptrace"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (
 	registerTimeout = time.Minute * 2
-	bucketTimeout   = time.Minute // wait for bucket is available on all targets
+	bucketTimeout   = time.Minute
 )
-
-var (
-	transport = &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 60 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout: 600 * time.Second,
-		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
-	}
-	BaseHTTPClient = &http.Client{}
-	HTTPClient     = &http.Client{
-		Timeout:   600 * time.Second,
-		Transport: transport,
-	}
-	Mem2 *memsys.Mem2
-)
-
-func init() {
-	Mem2 = memsys.GMM()
-}
 
 type (
 	tracectx struct {
@@ -45,6 +25,28 @@ type (
 		tracedClient *http.Client
 	}
 )
+
+var (
+	transportArgs = cmn.TransportArgs{
+		Timeout:          600 * time.Second,
+		IdleConnsPerHost: 100,
+		UseHTTPProxyEnv:  true,
+	}
+	transport         = cmn.NewTransport(transportArgs)
+	DefaultHTTPClient = &http.Client{}
+	HTTPClient        *http.Client
+	HTTPClientGetPut  *http.Client
+
+	Mem2 *memsys.Mem2
+)
+
+func init() {
+	Mem2 = memsys.GMM()
+	HTTPClient = cmn.NewClient(transportArgs)
+
+	transportArgs.WriteBufferSize, transportArgs.ReadBufferSize = 65536, 65536
+	HTTPClientGetPut = cmn.NewClient(transportArgs)
+}
 
 func newTraceCtx() *tracectx {
 	tctx := &tracectx{}

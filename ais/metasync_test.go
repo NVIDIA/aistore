@@ -90,7 +90,7 @@ func newPrimary() *proxyrunner {
 	config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	cmn.GCO.CommitUpdate(config)
 
-	p.httpclientLongTimeout = &http.Client{}
+	p.httpclientGetPut = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
 
 	p.bmdowner = newBmdowner()

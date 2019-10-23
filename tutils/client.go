@@ -245,7 +245,7 @@ func GetDiscard(proxyURL, bucket, provider string, objName string, validate bool
 	if err != nil {
 		return 0, err
 	}
-	resp, err := HTTPClient.Do(req)
+	resp, err := HTTPClientGetPut.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -341,7 +341,7 @@ func GetTraceDiscard(proxyURL, bucket, provider string, objName string, validate
 func Put(proxyURL, bucket, provider, object, hash string, reader cmn.ReadOpenCloser) error {
 	var (
 		baseParams = &api.BaseParams{
-			Client: HTTPClient,
+			Client: HTTPClientGetPut,
 			URL:    proxyURL,
 			Method: http.MethodPut,
 		}
@@ -887,7 +887,7 @@ func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
 
 func BaseAPIParams(url string) *api.BaseParams {
 	return &api.BaseParams{
-		Client: HTTPClient,
+		Client: HTTPClient, // TODO -- FIXME: make use of HTTPClientGetPut as well
 		URL:    url,
 	}
 }
@@ -916,7 +916,7 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 	return m
 }
 
-// waitForBucket wait until all targets have ais bucket created or deleted
+// waitForBucket waits until all targets ack having ais bucket created or deleted
 func WaitForBucket(proxyURL, name string, exists bool) error {
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)

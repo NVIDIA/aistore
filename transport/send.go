@@ -187,11 +187,15 @@ var (
 	gc         *collector // real collector
 )
 
-// default HTTP client to be used with streams
-// resulting transport will have all defaults, dial timeout=30s, timeout=no-timeout
-func NewDefaultClient() *http.Client {
+// default HTTP client used with streams (intra-data network)
+// resulting transport will dial timeout=30s, timeout=no-timeout
+func NewIntraDataClient() *http.Client {
 	config := cmn.GCO.Get()
-	return cmn.NewClient(cmn.TransportArgs{SndRcvBufSize: config.Net.L4.SndRcvBufSize})
+	return cmn.NewClient(cmn.TransportArgs{
+		SndRcvBufSize:   config.Net.L4.SndRcvBufSize,
+		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+	})
 }
 
 func (extra *Extra) compressed() bool {

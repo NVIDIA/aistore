@@ -94,7 +94,7 @@ func (mgr *ecManager) initECBundles() {
 		}
 	}
 
-	client := transport.NewDefaultClient()
+	client := transport.NewIntraDataClient()
 	compression := cmn.GCO.Get().EC.Compression
 	extraReq := transport.Extra{
 		Callback:    cbReq,

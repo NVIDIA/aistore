@@ -34,7 +34,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.si = newSnode("primary", httpProto, cmn.Proxy, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.smapowner = &smapowner{}
-	p.httpclientLongTimeout = &http.Client{}
+	p.httpclientGetPut = &http.Client{}
 	config := cmn.GCO.BeginUpdate()
 	config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	cmn.GCO.CommitUpdate(config)

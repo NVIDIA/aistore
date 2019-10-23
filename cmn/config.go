@@ -458,13 +458,15 @@ type L4Conf struct {
 }
 
 type HTTPConf struct {
-	Proto         string `json:"proto"`              // http or https
-	RevProxy      string `json:"rproxy"`             // RevProxy* enum
-	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
-	Key           string `json:"server_key"`         // HTTPS: openssl key
-	RevProxyCache bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
-	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
-	Chunked       bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
+	Proto           string `json:"proto"`              // http or https
+	RevProxy        string `json:"rproxy"`             // RevProxy* enum
+	Certificate     string `json:"server_certificate"` // HTTPS: openssl certificate
+	Key             string `json:"server_key"`         // HTTPS: openssl key
+	WriteBufferSize int    `json:"write_buffer_size"`  // http.Transport.WriteBufferSize; if zero, a default (currently 4KB) is used
+	ReadBufferSize  int    `json:"read_buffer_size"`   // http.Transport.ReadBufferSize; if zero, a default (currently 4KB) is used
+	RevProxyCache   bool   `json:"rproxy_cache"`       // RevProxy caches or work as transparent proxy
+	UseHTTPS        bool   `json:"use_https"`          // use HTTPS instead of HTTP
+	Chunked         bool   `json:"chunked_transfer"`   // https://tools.ietf.org/html/rfc7230#page-36
 }
 
 type FSHCConf struct {
