@@ -26,8 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -226,7 +226,7 @@ CreateShards:
 	}
 
 	if err := group.Wait(); err != nil {
-		progress.Abort(bar, true)
+		bar.Abort(true)
 		return err
 	}
 
