@@ -4,10 +4,9 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.30.0
-	github.com/OneOfOne/xxhash v1.2.2
+	github.com/OneOfOne/xxhash v1.2.5
 	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/aws/aws-sdk-go v1.15.57
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-metro v0.0.0-20180109044635-280f6062b5bc // indirect
 	github.com/frankban/quicktest v1.5.0 // indirect
