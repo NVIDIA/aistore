@@ -6,6 +6,7 @@ package webdav
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -14,8 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-
-	"golang.org/x/net/context"
 )
 
 // Proppatch describes a property update instruction as defined in RFC 4918.
