@@ -23,7 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
-	"github.com/pierrec/lz4"
+	"github.com/pierrec/lz4/v3"
 )
 
 //
