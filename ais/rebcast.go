@@ -22,16 +22,25 @@ import (
 // global rebalance: cluster-wide synchronization at certain stages
 //
 
-type rebStatus struct {
-	Tmap        cluster.NodeMap         `json:"tmap"`         // targets I'm waiting for ACKs from
-	SmapVersion int64                   `json:"smap_version"` // current Smap version (via smapowner)
-	RebVersion  int64                   `json:"reb_version"`  // Smap version of *this* rebalancing operation (m.b. invariant)
-	GlobRebID   int64                   `json:"glob_reb_id"`  // global rebalance ID
-	StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`  // objects and sizes transmitted/received by this reb oper
-	Stage       uint32                  `json:"stage"`        // the current stage - see enum above
-	Aborted     bool                    `json:"aborted"`      // aborted?
-	Running     bool                    `json:"running"`      // running?
-}
+type (
+	rebStatus struct {
+		Tmap        cluster.NodeMap         `json:"tmap"`         // targets I'm waiting for ACKs from
+		SmapVersion int64                   `json:"smap_version"` // current Smap version (via smapowner)
+		RebVersion  int64                   `json:"reb_version"`  // Smap version of *this* rebalancing operation (m.b. invariant)
+		GlobRebID   int64                   `json:"glob_reb_id"`  // global rebalance ID
+		StatsDelta  stats.ExtRebalanceStats `json:"stats_delta"`  // objects and sizes transmitted/received by this reb oper
+		Stage       uint32                  `json:"stage"`        // the current stage - see enum above
+		Aborted     bool                    `json:"aborted"`      // aborted?
+		Running     bool                    `json:"running"`      // running?
+	}
+
+	// push notification struct - a target sends it when it enters `stage`
+	pushReq struct {
+		DaemonID string `json:"sid"`   // sender's ID
+		RebID    int64  `json:"rebid"` // sender's global rebalance ID
+		Stage    uint32 `json:"stage"` // stage the sender has just reached
+	}
+)
 
 // via GET /v1/health (cmn.Health)
 func (reb *rebManager) getGlobStatus(status *rebStatus) {
@@ -102,20 +111,42 @@ ret:
 	status.Stage = reb.stage.Load()
 }
 
+// returns the number of targets that have not reached `stage` yet. It is
+// assumed that this target checks other nodes only after it has reached
+// the `stage`, that is why it is skipped inside the loop
+func (reb *rebManager) nodesNotInStage(stage uint32) int {
+	smap := reb.t.smapowner.get()
+	count := 0
+	reb.stageMtx.Lock()
+	for _, si := range smap.Tmap {
+		if si.DaemonID == reb.t.si.DaemonID {
+			continue
+		}
+		if stage == rebStageECExchange && !reb.ecReb.hasNodeData(si) {
+			count++
+			continue
+		}
+		if _, ok := reb.nodeStages[si.DaemonID]; !ok {
+			count++
+		}
+	}
+	reb.stageMtx.Unlock()
+	return count
+}
+
 // main method
-func (reb *rebManager) bcast(smap *smapX, globRebID int64, config *cmn.Config, cb rebSyncCallback, xreb *xactGlobalReb) (errCnt int) {
+func (reb *rebManager) bcast(md *globalRebArgs, cb rebSyncCallback) (errCnt int) {
 	var (
-		ver = smap.version()
 		wg  = &sync.WaitGroup{}
 		cnt atomic.Int32
 	)
-	for _, tsi := range smap.Tmap {
+	for _, tsi := range md.smap.Tmap {
 		if tsi.DaemonID == reb.t.si.DaemonID {
 			continue
 		}
 		wg.Add(1)
 		go func(tsi *cluster.Snode) {
-			if !cb(tsi, smap, globRebID, config, ver, xreb) {
+			if !cb(tsi, md) {
 				cnt.Inc()
 			}
 			wg.Done()
@@ -128,9 +159,10 @@ func (reb *rebManager) bcast(smap *smapX, globRebID int64, config *cmn.Config, c
 
 // pingTarget checks if target is running (type rebSyncCallback)
 // TODO: reuse keepalive
-func (reb *rebManager) pingTarget(tsi *cluster.Snode, smap *smapX, globRebID int64, config *cmn.Config, ver int64, _ *xactGlobalReb) (ok bool) {
+func (reb *rebManager) pingTarget(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		sleep = config.Timeout.CplaneOperation
+		ver   = md.smap.version()
+		sleep = md.config.Timeout.CplaneOperation
 		args  = callArgs{
 			si: tsi,
 			req: cmn.ReqArgs{
@@ -138,75 +170,88 @@ func (reb *rebManager) pingTarget(tsi *cluster.Snode, smap *smapX, globRebID int
 				Base:   tsi.IntraControlNet.DirectURL,
 				Path:   cmn.URLPath(cmn.Version, cmn.Health),
 			},
-			timeout: config.Timeout.MaxKeepalive,
+			timeout: md.config.Timeout.MaxKeepalive,
 		}
+		loghdr = reb.loghdr(reb.globRebID.Load(), md.smap)
 	)
 	for i := 0; i < 3; i++ {
 		res := reb.t.call(args)
 		if res.err == nil {
 			if i > 0 {
-				glog.Infof("%s: %s is online", reb.loghdr(globRebID, smap), tsi.Name())
+				glog.Infof("%s: %s is online", loghdr, tsi.Name())
 			}
 			return true
 		}
-		glog.Warningf("%s: waiting for %s, err %v", reb.loghdr(globRebID, smap), tsi.Name(), res.err)
+		glog.Warningf("%s: waiting for %s, err %v", loghdr, tsi.Name(), res.err)
 		time.Sleep(sleep)
 		nver := reb.t.smapowner.get().version()
 		if nver > ver {
 			return
 		}
 	}
-	glog.Errorf("%s: timed-out waiting for %s", reb.loghdr(globRebID, smap), tsi.Name())
+	glog.Errorf("%s: timed-out waiting for %s", loghdr, tsi.Name())
 	return
 }
 
 // wait for target to get ready to receive objects (type rebSyncCallback)
-func (reb *rebManager) rxReady(tsi *cluster.Snode, smap *smapX, globRebID int64, config *cmn.Config, ver int64, xreb *xactGlobalReb) (ok bool) {
+func (reb *rebManager) rxReady(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		sleep = config.Timeout.CplaneOperation * 2
-		maxwt = config.Rebalance.DestRetryTime + config.Rebalance.DestRetryTime/2
-		curwt time.Duration
+		ver    = md.smap.version()
+		sleep  = md.config.Timeout.CplaneOperation * 2
+		maxwt  = md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+		curwt  time.Duration
+		loghdr = reb.loghdr(reb.globRebID.Load(), md.smap)
 	)
 	for curwt < maxwt {
-		if _, ok = reb.checkGlobStatus(tsi, smap, globRebID, config, ver, xreb, rebStageTraverse); ok {
+		if reb.isNodeInStage(tsi, rebStageTraverse) {
+			// do not request the node stage if it has sent push notification
+			return true
+		}
+		if _, ok = reb.checkGlobStatus(tsi, ver, rebStageTraverse, md); ok {
 			return
 		}
-		if xreb.Aborted() || xreb.abortedAfter(sleep) {
-			glog.Infof("%s: abrt rx-ready", reb.loghdr(globRebID, smap))
+		if md.xreb.Aborted() || md.xreb.abortedAfter(sleep) {
+			glog.Infof("%s: abrt rx-ready", loghdr)
 			return
 		}
 		curwt += sleep
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s state", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[rebStageTraverse])
+	glog.Errorf("%s: timed out waiting for %s to reach %s state", loghdr, tsi.Name(), rebStage[rebStageTraverse])
 	return
 }
 
 // wait for the target to reach strage = rebStageFin (i.e., finish traversing and sending)
 // if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
 // separately check whether it is waiting for my ACKs
-func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, smap *smapX, globRebID int64, config *cmn.Config, ver int64, xreb *xactGlobalReb) (ok bool) {
+func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, md *globalRebArgs) (ok bool) {
 	var (
-		sleep      = config.Timeout.CplaneOperation
-		maxwt      = config.Rebalance.DestRetryTime
-		sleepRetry = keepaliveRetryDuration(config)
+		ver        = md.smap.version()
+		sleep      = md.config.Timeout.CplaneOperation
+		maxwt      = md.config.Rebalance.DestRetryTime
+		sleepRetry = keepaliveRetryDuration(md.config)
+		loghdr     = reb.loghdr(reb.globRebID.Load(), md.smap)
 		curwt      time.Duration
 		status     *rebStatus
 	)
 	for curwt < maxwt {
-		if xreb.abortedAfter(sleep) {
-			glog.Infof("%s: abrt wack", reb.loghdr(globRebID, smap))
+		if md.xreb.abortedAfter(sleep) {
+			glog.Infof("%s: abrt wack", loghdr)
 			return
+		}
+		if reb.isNodeInStage(tsi, rebStageFin) {
+			// do not request the node stage if it has sent push notification
+			return true
 		}
 		curwt += sleep
-		if status, ok = reb.checkGlobStatus(tsi, smap, globRebID, config, ver, xreb, rebStageFin); ok {
+		if status, ok = reb.checkGlobStatus(tsi, ver, rebStageFin, md); ok {
 			return
 		}
-		if xreb.Aborted() {
-			glog.Infof("%s: abrt wack", reb.loghdr(globRebID, smap))
+		if md.xreb.Aborted() {
+			glog.Infof("%s: abrt wack", loghdr)
 			return
 		}
 		if status.Stage <= rebStageECNameSpace {
-			glog.Infof("%s: keep waiting for %s[%s]", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[status.Stage])
+			glog.Infof("%s: keep waiting for %s[%s]", loghdr, tsi.Name(), rebStage[status.Stage])
 			time.Sleep(sleepRetry)
 			curwt += sleepRetry
 			if status.Stage != rebStageInactive {
@@ -220,31 +265,31 @@ func (reb *rebManager) waitFinExtended(tsi *cluster.Snode, smap *smapX, globRebI
 		var w4me bool // true: this target is waiting for ACKs from me
 		for tid := range status.Tmap {
 			if tid == reb.t.si.DaemonID {
-				glog.Infof("%s: keep wack <= %s[%s]", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[status.Stage])
+				glog.Infof("%s: keep wack <= %s[%s]", loghdr, tsi.Name(), rebStage[status.Stage])
 				w4me = true
 				break
 			}
 		}
 		if !w4me {
-			glog.Infof("%s: %s[%s] ok (not waiting for me)", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[status.Stage])
+			glog.Infof("%s: %s[%s] ok (not waiting for me)", loghdr, tsi.Name(), rebStage[status.Stage])
 			ok = true
 			return
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s", reb.loghdr(globRebID, smap), tsi.Name(), rebStage[rebStageFin])
+	glog.Errorf("%s: timed out waiting for %s to reach %s", loghdr, tsi.Name(), rebStage[rebStageFin])
 	return
 }
 
 // calls tsi.reb.getGlobStatus() and handles conditions; may abort the current xreb
 // returns OK if the desiredStage has been reached
-func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, smap *smapX, globRebID int64, config *cmn.Config, ver int64,
-	xreb *xactGlobalReb, desiredStage uint32) (status *rebStatus, ok bool) {
+func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, ver int64,
+	desiredStage uint32, md *globalRebArgs) (status *rebStatus, ok bool) {
 	var (
 		query      = url.Values{}
-		sleepRetry = keepaliveRetryDuration(config)
-		loghdr     = reb.loghdr(globRebID, smap)
+		sleepRetry = keepaliveRetryDuration(md.config)
+		loghdr     = reb.loghdr(reb.globRebID.Load(), md.smap)
 	)
 	query.Add(cmn.URLParamRebStatus, "true")
 	args := callArgs{
@@ -259,7 +304,7 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, smap *smapX, globRebI
 	}
 	res := reb.t.call(args)
 	if res.err != nil {
-		if xreb.abortedAfter(sleepRetry) {
+		if md.xreb.abortedAfter(sleepRetry) {
 			glog.Infof("%s: abrt", loghdr)
 			return
 		}
@@ -267,27 +312,27 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, smap *smapX, globRebI
 	}
 	if res.err != nil {
 		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi.Name(), res.err)
-		xreb.Abort()
+		md.xreb.Abort()
 		return
 	}
 	status = &rebStatus{}
 	err := jsoniter.Unmarshal(res.outjson, status)
 	if err != nil {
 		glog.Errorf("%s: unexpected: failed to unmarshal %s response, err: %v", loghdr, tsi.Name(), err)
-		xreb.Abort()
+		md.xreb.Abort()
 		return
 	}
 	// enforce Smap consistency across this xreb
 	tver, rver := status.SmapVersion, status.RebVersion
 	if tver > ver || rver > ver {
 		glog.Errorf("%s: %s has newer Smap (v%d, v%d) - aborting...", loghdr, tsi.Name(), tver, rver)
-		xreb.Abort()
+		md.xreb.Abort()
 		return
 	}
 	// enforce same global transaction ID
-	if status.GlobRebID > globRebID {
+	if status.GlobRebID > reb.globRebID.Load() {
 		glog.Errorf("%s: %s runs newer (g%d) transaction - aborting...", loghdr, tsi.Name(), status.GlobRebID)
-		xreb.Abort()
+		md.xreb.Abort()
 		return
 	}
 	// let the target to catch-up
@@ -295,7 +340,7 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, smap *smapX, globRebI
 		glog.Warningf("%s: %s has older Smap (v%d, v%d) - keep waiting...", loghdr, tsi.Name(), tver, rver)
 		return
 	}
-	if status.GlobRebID < globRebID {
+	if status.GlobRebID < reb.globRebID.Load() {
 		glog.Warningf("%s: %s runs older (g%d) transaction - keep waiting...", loghdr, tsi.Name(), status.GlobRebID)
 		return
 	}
@@ -305,4 +350,120 @@ func (reb *rebManager) checkGlobStatus(tsi *cluster.Snode, smap *smapX, globRebI
 	}
 	glog.Infof("%s: %s[%s] not yet at the right stage, wait more...", loghdr, tsi.Name(), rebStage[status.Stage])
 	return
+}
+
+// a generic wait loop for a stage when the target should just wait without extra actions
+func (reb *rebManager) waitStage(si *cluster.Snode, md *globalRebArgs, stage uint32) bool {
+	sleep := md.config.Timeout.CplaneOperation * 2
+	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+	curwt := time.Duration(0)
+	for curwt < maxwt {
+		if reb.isNodeInStage(si, stage) {
+			return true
+		}
+
+		status, ok := reb.checkGlobStatus(si, md.smap.Version, stage, md)
+		if ok && status.Stage >= stage {
+			return true
+		}
+
+		curwt += sleep
+		time.Sleep(sleep)
+	}
+	return false
+}
+
+// Wait until all nodes finishes namespace building (just wait)
+func (reb *rebManager) waitNamespace(si *cluster.Snode, md *globalRebArgs) bool {
+	return reb.waitStage(si, md, rebStageECNameSpace)
+}
+
+// Wait until all nodes finishes generating fix lists (just wait)
+func (reb *rebManager) waitFixLists(si *cluster.Snode, md *globalRebArgs) bool {
+	return reb.waitStage(si, md, rebStageECDetect)
+}
+
+// Wait until all nodes finishes exchanging slice lists (do pull request if
+// the remote target's data is still missing)
+func (reb *rebManager) waitECData(si *cluster.Snode, md *globalRebArgs) bool {
+	sleep := md.config.Timeout.CplaneOperation * 2
+	locStage := uint32(rebStageECExchange)
+	maxwt := md.config.Rebalance.DestRetryTime + md.config.Rebalance.DestRetryTime/2
+	curwt := time.Duration(0)
+
+	// pull the data
+	query := url.Values{}
+	header := make(http.Header)
+	header.Set(cmn.HeaderCallerID, reb.t.si.DaemonID)
+	query.Add(cmn.URLParamRebData, "true")
+	args := callArgs{
+		si: si,
+		req: cmn.ReqArgs{
+			Method: http.MethodGet,
+			Header: header,
+			Base:   si.URL(cmn.NetworkIntraData),
+			Path:   cmn.URLPath(cmn.Version, cmn.Rebalance),
+			Query:  query,
+		},
+		timeout: defaultTimeout,
+	}
+	for curwt < maxwt {
+		if reb.isNodeInStage(si, locStage) && reb.ecReb.hasNodeData(si) {
+			return true
+		}
+
+		res := reb.t.call(args)
+		if res.err == nil {
+			slices := make([]*ecRebSlice, 0)
+			if res.status != http.StatusNoContent {
+				// TODO: send the number of items in push request and preallocate `slices`
+				if err := jsoniter.Unmarshal(res.outjson, &slices); err != nil {
+					// not a severe error: return false so next wait loop re-requests the data
+					glog.Warningf("Invalid JSON received from %s: %v", si.Name(), err)
+					curwt += sleep
+					time.Sleep(sleep)
+					continue
+				}
+			}
+			reb.ecReb.setNodeData(si.DaemonID, slices)
+			reb.setStage(si.DaemonID, rebStageECExchange)
+			return true
+		}
+
+		if res.err != nil {
+			// something bad happened, aborting
+			glog.Errorf("[g%d]: failed to call %s, err: %v", reb.globRebID.Load(), si.Name(), res.err)
+			md.xreb.Abort()
+			return false
+		}
+
+		curwt += sleep
+		time.Sleep(sleep)
+	}
+	return false
+}
+
+// The loop waits until the minimal number of targets have sent push notifications.
+// If this targets has received notifications from all other targets the function
+// returns true, indicating that there is no need to do extra pull requests.
+// First stages are very short and fast targets may send their notifications too
+// quickly. So, for the first notifications there is no wait loop - just a single check
+func (reb *rebManager) waitForPushReqs(md *globalRebArgs, stage uint32, timeout ...time.Duration) bool {
+	const defaultWaitTime = time.Minute
+	maxMissing := len(md.smap.Tmap) / 2 // TODO: is it OK to wait for half of them?
+	curWait := time.Duration(0)
+	sleep := md.config.Timeout.CplaneOperation * 2
+	maxWait := defaultWaitTime
+	if len(timeout) != 0 {
+		maxWait = timeout[0]
+	}
+	for curWait < maxWait {
+		cnt := reb.nodesNotInStage(stage)
+		if cnt < maxMissing || stage <= rebStageECNameSpace {
+			return cnt == 0
+		}
+		time.Sleep(sleep)
+		curWait += sleep
+	}
+	return false
 }

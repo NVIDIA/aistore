@@ -6,15 +6,11 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -26,8 +22,7 @@ import (
 )
 
 const (
-	// transport name for push notifications
-	ackECRebStreamName  = "reb-ec-ack"
+	// transport name for slice list exchange
 	dataECRebStreamName = "reb-ec-data"
 )
 
@@ -93,13 +88,6 @@ type (
 		locID       int16            // ID of local slice if any exists (-1 otherwise)
 	}
 
-	// push notification struct - a target sends it when it enters `stage`
-	pushNotify struct {
-		DaemonID string `json:"sid"`
-		RebID    int64  `json:"rebid"`
-		Stage    uint32 `json:"stage"`
-	}
-
 	// Callback is called if a target did not report that it is in `stage` or
 	// its notification was lost. Callback either request the current state
 	// directly or makes the target to resend.
@@ -113,23 +101,21 @@ type (
 		slices   ecSliceList // maps daemonID by HRW <-> Slice
 		received ecSliceList // maps daemonID-sender <-> Slice
 		md       *globalRebArgs
-		ack      *transport.StreamBundle
 		data     *transport.StreamBundle
-		netc     string
-		netd     string
 		mtx      sync.Mutex
+		mgr      *rebManager
 
 		// list of slices/replicas that should be moved between local mpaths
 		localActions []*ecRebSlice
-		// a map of nodes and stages they have reached by the current moment
-		nodes map[string]uint32
 	}
 )
 
 //
 // Rebalance object methods
 // All methods should be called only after it is clear that the object exists
-// or we have one or few slices. That is why `Assert` is used
+// or we have one or few slices. That is why `Assert` is used.
+// And since a new slice is added to the list only if it matches previously
+// added one, it is OK to read all info from the very first slice always
 //
 
 func (so *ecRebObject) bucket() string {
@@ -215,6 +201,12 @@ func (so *ecRebObject) objLocation(daemonID string) (locID int16, objDaemon stri
 	return locID, objDaemon
 }
 
+// Checks if the new `slice` matches previously found slices for the same
+// object. At this moment the implementation is very straightforward:
+// the first found slice is declared a good one and all the next slices
+// must match.
+// TODO: Maybe the better way is to collect all slices and then choose the
+// bigger group of slices with the same attributes
 func (so *ecRebObject) sliceMatches(slice *ecRebSlice) bool {
 	// the first slice - it always matches
 	if len(so.slices) == 0 {
@@ -283,170 +275,29 @@ func newECRebList() ecSliceList {
 	return make(map[string][]*ecRebSlice)
 }
 
-func newECRebalancer(t *targetrunner) *ecRebalancer {
+func newECRebalancer(t *targetrunner, mgr *rebManager) *ecRebalancer {
 	return &ecRebalancer{
 		t:            t,
+		mgr:          mgr,
 		slices:       newECRebList(),
 		received:     newECRebList(),
-		nodes:        make(map[string]uint32),
 		localActions: make([]*ecRebSlice, 0),
 	}
 }
 
-// Mark a 'node' that it has passed the 'stage'. If the node has
-// already higher stage, the function does nothing
-func (s *ecRebalancer) setStage(node string, stage uint32) {
+// returns true if this target has slice list collected by `si`
+func (s *ecRebalancer) hasNodeData(si *cluster.Snode) bool {
 	s.mtx.Lock()
-	if currStage, ok := s.nodes[node]; !ok || currStage < stage {
-		s.nodes[node] = stage
-	}
+	_, received := s.received[si.DaemonID]
 	s.mtx.Unlock()
+	return received
 }
 
-// Return the list of targets that has not sent push notifications.
-// For ECExchange stage there is extra condition: the local target
-// must have received the data. It ensures that the data was not lost.
-// Used by pull notification to minimize the number of network request.
-func (s *ecRebalancer) nodesNotInStage(stage uint32) []*cluster.Snode {
-	smap := s.t.smapowner.get()
-	nodes := make([]*cluster.Snode, 0, len(smap.Tmap))
+// store a slice list received from `daemonID` target
+func (s *ecRebalancer) setNodeData(daemonID string, slices []*ecRebSlice) {
 	s.mtx.Lock()
-	for _, si := range smap.Tmap {
-		// first check that this target has received the remote node slices
-		if si.DaemonID != s.t.si.DaemonID && stage == rebStageECExchange {
-			if _, ok := s.received[si.DaemonID]; !ok {
-				nodes = append(nodes, si)
-				continue
-			}
-		}
-		if currStage, ok := s.nodes[si.DaemonID]; !ok || currStage < stage {
-			nodes = append(nodes, si)
-			continue
-		}
-	}
+	s.received[daemonID] = slices
 	s.mtx.Unlock()
-	return nodes
-}
-
-// Waits until all nodes are in 'stage'.
-// Checks push notifications, and request stage from all nodes that have not
-// sent any notification yet
-func (s *ecRebalancer) waitAllStage(stage uint32, cb StageCallback) error {
-	const (
-		// time between pull requests
-		loopSleep = 5 * time.Second
-	)
-
-	smap := s.t.smapowner.get()
-	nodeCount := len(smap.Tmap)
-	// by default, start pulling only after at least half of targets has sent push
-	// notification. It makes possible to avoid too many useless pull requests
-	// if filepath.Walk takes much time
-	minDiff := nodeCount / 2
-	wg := &sync.WaitGroup{}
-	// TODO: timed wait loop
-	for {
-		// First, check push notifications: get list of targets that did not notify
-		nodes := s.nodesNotInStage(stage)
-		if len(nodes) == 0 {
-			return nil
-		}
-		if s.md.xreb.Aborted() {
-			return errors.New("Aborted")
-		}
-
-		// Second, give a little time for targets to finish their work if the
-		// number of target reached the stage is low
-		if cb == nil || nodeCount-len(nodes) < minDiff {
-			glog.Infof("Stage %d: %d targets of %d are not in %d stage",
-				stage, nodeCount-len(nodes), nodeCount, stage)
-			time.Sleep(loopSleep)
-			continue
-		}
-
-		// Third, pull target states
-		// NOTE: callback must pull all the required info. It is possible to
-		// implement a wait loop without pull requests: the callback should
-		// just return false always and, maybe, it should send to a remote
-		// target a request to repeat its push notification
-		anyFailed := atomic.NewBool(false)
-		for _, si := range nodes {
-			wg.Add(1)
-			go func(si *cluster.Snode) {
-				defer wg.Done()
-				if ok := cb(si); !ok {
-					anyFailed.Store(true)
-				} else {
-					s.setStage(si.DaemonID, stage)
-				}
-			}(si)
-		}
-		wg.Wait()
-
-		// All targets responded and all are in the desired stage: break the loop
-		if !anyFailed.Load() {
-			return nil
-		}
-		time.Sleep(loopSleep)
-	}
-}
-
-// Rebalancer moves to the next stage:
-// - update internal stage
-// - send notification to all other targets that this one is in a new stage
-func (s *ecRebalancer) changeStage(newStage uint32) {
-	// first, set its own stage
-	s.setStage(s.t.si.DaemonID, newStage)
-
-	smap := s.t.smapowner.Get()
-	nodes := make([]*cluster.Snode, 0, len(smap.Tmap))
-	for _, node := range smap.Tmap {
-		if node.DaemonID == s.t.si.DaemonID {
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-
-	req := pushNotify{DaemonID: s.t.si.DaemonID, Stage: newStage, RebID: s.md.globRebID}
-	hdr := transport.Header{
-		ObjAttrs: transport.ObjectAttrs{Size: 0},
-		Opaque:   cmn.MustMarshal(req),
-	}
-	// second, notify all other targets
-	if err := s.ack.SendV(hdr, nil, nil, nil, nodes...); err != nil {
-		var sb strings.Builder
-		for idx, n := range nodes {
-			sb.WriteString(n.DaemonID)
-			if idx < len(nodes)-1 {
-				sb.WriteString(",")
-			}
-		}
-		// in case of error only log a warning - other targets should be able
-		// to pull the new stage and continue later
-		glog.Warningf("Failed to send ack %d to %s nodes: %v", newStage, sb.String(), err)
-		return
-	}
-}
-
-// On receiving a stage-change notification from another target
-func (s *ecRebalancer) OnAck(w http.ResponseWriter, hdr transport.Header, reader io.Reader, err error) {
-	if err != nil {
-		glog.Errorf("Failed to get ack %s from %s: %v", hdr.Objname, hdr.Bucket, err)
-		return
-	}
-
-	var req pushNotify
-	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-		glog.Errorf("Invalid push notification: %v", err)
-		return
-	}
-	// a target was too late in sending(rebID is obsolete) its data or too early (md == nil)
-	if s.md == nil || req.RebID != s.md.globRebID {
-		glog.Warningf("Local node has not started or already has finished rebalancing")
-		return
-	}
-
-	s.setStage(req.DaemonID, req.Stage)
 }
 
 // On receiving a list of collected slices from another target
@@ -456,7 +307,7 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 		return
 	}
 
-	var req pushNotify
+	var req pushReq
 	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 		glog.Errorf("Invalid push notification: %v", err)
 		return
@@ -464,12 +315,12 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 
 	// only rebStageECExchange is supported for now
 	if req.Stage != rebStageECExchange {
-		glog.Errorf("Invalid stage : %d (must be %d)", req.Stage, rebStageECExchange)
+		glog.Errorf("Invalid stage : %s (must be %s)", rebStage[req.Stage], rebStage[rebStageECExchange])
 		cmn.DrainReader(reader)
 		return
 	}
 	// a target was too late in sending(rebID is obsolete) its data or too early (md == nil)
-	if s.md == nil || req.RebID != s.md.globRebID {
+	if s.md == nil || req.RebID != s.mgr.globRebID.Load() {
 		glog.Warningf("Local node has not started or already has finished rebalancing")
 		cmn.DrainReader(reader)
 		return
@@ -487,10 +338,8 @@ func (s *ecRebalancer) OnData(w http.ResponseWriter, hdr transport.Header, reade
 		return
 	}
 
-	s.mtx.Lock()
-	s.received[req.DaemonID] = slices
-	s.mtx.Unlock()
-	s.setStage(req.DaemonID, req.Stage)
+	s.setNodeData(req.DaemonID, slices)
+	s.mgr.setStage(req.DaemonID, req.Stage)
 }
 
 // build a list buckets with their objects from a flat list of all slices
@@ -757,7 +606,7 @@ func (s *ecRebalancer) checkSlices() *ecRebResult {
 	slices := s.mergeSlices()
 	s.detectBroken(slices)
 	s.findSolutions(slices)
-	s.changeStage(rebStageECDetect)
+	s.mgr.changeStage(rebStageECDetect)
 	return slices
 }
 
@@ -865,51 +714,34 @@ func (s *ecRebalancer) walk(fqn string, de fs.DirEntry) (err error) {
 // is not recreated every rebalance run
 func (s *ecRebalancer) cleanup() {
 	s.mtx.Lock()
-	s.nodes = make(map[string]uint32)
 	s.received = make(ecSliceList)
 	s.slices = make(ecSliceList)
 	s.localActions = make([]*ecRebSlice, 0)
 	s.mtx.Unlock()
 }
 
-func (s *ecRebalancer) stop() {
-	s.ack.Close(true)
-	s.data.Close(true)
+func (s *ecRebalancer) endStreams() {
+	if s.data != nil {
+		s.data.Close(true)
+		s.data = nil
+	}
 }
 
-// establishes transport stream bundles
-func (s *ecRebalancer) init(md *globalRebArgs) error {
+func (s *ecRebalancer) init(md *globalRebArgs, netd string) {
 	s.md = md
-	cbReq := func(hdr transport.Header, reader io.ReadCloser, _ unsafe.Pointer, err error) {
-		if err != nil {
-			glog.Errorf("Failed to request %s/%s: %v", hdr.Bucket, hdr.Objname, err)
-		}
-	}
-	extraReq := transport.Extra{
-		Callback: cbReq,
-	}
-	ackArgs := transport.SBArgs{
-		Extra:      &extraReq,
-		Network:    s.netc,
-		Trname:     ackECRebStreamName,
-		Multiplier: 1,
-	}
 	client := transport.NewIntraDataClient()
-	s.ack = transport.NewStreamBundle(s.t.smapowner, s.t.Snode(), client, ackArgs)
 	dataArgs := transport.SBArgs{
-		Extra:      &extraReq,
-		Network:    s.netd,
+		Network:    netd,
 		Trname:     dataECRebStreamName,
-		Multiplier: 1,
+		Multiplier: int(md.config.Rebalance.Multiplier),
 	}
 	s.data = transport.NewStreamBundle(s.t.smapowner, s.t.Snode(), client, dataArgs)
-	return nil
 }
 
 // Main method - starts all mountpaths walkers, waits for them to finish, and
 // changes internal stage after that to 'traverse done', so the caller may continue
 // rebalancing: send collected data to other targets, rebuild slices etc
-func (s *ecRebalancer) run() error {
+func (s *ecRebalancer) run() {
 	var mpath string
 	wg := sync.WaitGroup{}
 	availablePaths, _ := fs.Mountpaths.Get()
@@ -932,8 +764,7 @@ func (s *ecRebalancer) run() error {
 		go s.jog(mpath, &wg)
 	}
 	wg.Wait()
-	s.changeStage(rebStageECNameSpace)
-	return nil
+	s.mgr.changeStage(rebStageECNameSpace)
 }
 
 // send collected slices to correct targets with retry
@@ -945,6 +776,7 @@ func (s *ecRebalancer) exchange() error {
 		sleep = 5 * time.Second
 	)
 
+	globRebID := s.mgr.globRebID.Load()
 	smap := s.t.smapowner.Get()
 	sendTo := make([]*cluster.Snode, 0, len(smap.Tmap))
 	failed := make([]*cluster.Snode, 0, len(smap.Tmap))
@@ -960,7 +792,7 @@ func (s *ecRebalancer) exchange() error {
 		failed = failed[:0]
 		for _, node := range sendTo {
 			if s.md.xreb.Aborted() {
-				return fmt.Errorf("%d: aborted", s.md.globRebID)
+				return fmt.Errorf("%d: aborted", globRebID)
 			}
 
 			slices, ok := s.slices[node.DaemonID]
@@ -969,10 +801,10 @@ func (s *ecRebalancer) exchange() error {
 				slices = emptySlice
 			}
 
-			req := pushNotify{
+			req := pushReq{
 				DaemonID: s.t.si.DaemonID,
 				Stage:    rebStageECExchange,
-				RebID:    s.md.globRebID,
+				RebID:    globRebID,
 			}
 			body := cmn.MustMarshal(slices)
 			hdr := transport.Header{
@@ -988,7 +820,7 @@ func (s *ecRebalancer) exchange() error {
 		}
 
 		if len(failed) == 0 {
-			s.setStage(s.t.si.DaemonID, rebStageECExchange)
+			s.mgr.setStage(s.t.si.DaemonID, rebStageECExchange)
 			return nil
 		}
 
@@ -997,56 +829,6 @@ func (s *ecRebalancer) exchange() error {
 	}
 
 	return fmt.Errorf("Could not sent data to %d nodes", len(failed))
-}
-
-// re-request EC slice/objects data prepared by the remote node for this node
-// If the remote has not prepared the data(e.g, it is still sorting and
-// calculating), it responds with StatusNoContent
-func (s *ecRebalancer) requestRebData(tsi *cluster.Snode) bool {
-	var (
-		query  = url.Values{}
-		header = make(http.Header)
-		loghdr = fmt.Sprintf("[%d]", s.md.globRebID)
-	)
-
-	header.Set(cmn.HeaderCallerID, s.t.si.DaemonID)
-	query.Add(cmn.URLParamRebData, "true")
-	args := callArgs{
-		si: tsi,
-		req: cmn.ReqArgs{
-			Method: http.MethodGet,
-			Header: header,
-			Base:   tsi.URL(cmn.NetworkIntraData),
-			Path:   cmn.URLPath(cmn.Version, cmn.Rebalance),
-			Query:  query,
-		},
-		timeout: defaultTimeout,
-	}
-	res := s.t.call(args)
-	// the callee is still processing the data, wait for more
-	if res.status == http.StatusAccepted {
-		return false
-	}
-	if res.err != nil {
-		// something bad happened, aborting
-		glog.Errorf("%s: failed to call %s, err: %v", loghdr, tsi.Name(), res.err)
-		s.md.xreb.Abort()
-		return false
-	}
-	slices := make([]*ecRebSlice, 0)
-	// the callee has processed the data but has no information for this target
-	if res.status != http.StatusNoContent {
-		// TODO: send the number of items in push request and preallocate `slices`
-		if err := jsoniter.Unmarshal(res.outjson, &slices); err != nil {
-			// not a severe error: return false so next wait loop re-requests the data
-			glog.Errorf("Invalid JSON received from %s: %v", tsi.Name(), err)
-			return false
-		}
-	}
-	s.mtx.Lock()
-	s.received[tsi.DaemonID] = slices
-	s.mtx.Unlock()
-	return true
 }
 
 // return list of slices collected by local target for a given one

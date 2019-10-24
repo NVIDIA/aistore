@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -30,6 +31,7 @@ import (
 const (
 	rebalanceStreamName = "rebalance"
 	rebalanceAcksName   = "remwack" // NOTE: can become generic remote-write-acknowledgment
+	rebalancePushName   = "rebpush" // push notifications stream
 )
 
 // rebalance stage enum
@@ -47,7 +49,7 @@ const (
 )
 
 type (
-	rebSyncCallback func(tsi *cluster.Snode, smap *smapX, globRebID int64, config *cmn.Config, ver int64, xreb *xactGlobalReb) (ok bool)
+	rebSyncCallback func(tsi *cluster.Snode, md *globalRebArgs) (ok bool)
 
 	rebManager struct {
 		t          *targetrunner
@@ -56,6 +58,7 @@ type (
 		smap       atomic.Pointer // new smap which will be soon live
 		streams    *transport.StreamBundle
 		acks       *transport.StreamBundle
+		pushes     *transport.StreamBundle
 		lomacks    [fs.LomCacheMask + 1]*LomAcks
 		tcache     struct { // not to recompute very often
 			tmap cluster.NodeMap
@@ -64,10 +67,12 @@ type (
 		}
 		semaCh     chan struct{}
 		beginStats atomic.Pointer // *stats.ExtRebalanceStats
-		laterx     atomic.Bool
+		ecReb      *ecRebalancer
+		stageMtx   sync.Mutex
+		nodeStages map[string]uint32
 		globRebID  atomic.Int64
 		stage      atomic.Uint32 // rebStage* enum
-		ecReb      *ecRebalancer
+		laterx     atomic.Bool
 	}
 	rebJoggerBase struct {
 		m     *rebManager
@@ -93,24 +98,27 @@ type (
 		q  map[string]*cluster.LOM // on the wire, waiting for ACK
 	}
 	globalRebArgs struct {
-		smap      *smapX
-		config    *cmn.Config
-		xreb      *xactGlobalReb
-		paths     fs.MPI
-		pmarker   string
-		globRebID int64
-		dryRun    bool
+		smap    *smapX
+		config  *cmn.Config
+		xreb    *xactGlobalReb
+		paths   fs.MPI
+		pmarker string
+		ecUsed  bool
+		dryRun  bool
 	}
 )
 
 var rebStage = map[uint32]string{
-	rebStageInactive:   "<inactive>",
-	rebStageInit:       "<init>",
-	rebStageTraverse:   "<traverse>",
-	rebStageWaitAck:    "<wack>",
-	rebStageFin:        "<fin>",
-	rebStageFinStreams: "<fin-streams>",
-	rebStageDone:       "<done>",
+	rebStageInactive:    "<inactive>",
+	rebStageInit:        "<init>",
+	rebStageTraverse:    "<traverse>",
+	rebStageWaitAck:     "<wack>",
+	rebStageFin:         "<fin>",
+	rebStageFinStreams:  "<fin-streams>",
+	rebStageDone:        "<done>",
+	rebStageECNameSpace: "<namespace>",
+	rebStageECExchange:  "<namespace-distribute>",
+	rebStageECDetect:    "<build-fix-list>",
 }
 
 //
@@ -126,9 +134,13 @@ func (reb *rebManager) loghdr(globRebID int64, smap *smapX) string {
 	return fmt.Sprintf("%s[g%d,v%d,%s]", tname, globRebID, smap.version(), stage)
 }
 
-func (reb *rebManager) globalRebPrecheck(md *globalRebArgs) bool {
+func (reb *rebManager) globalRebPrecheck(md *globalRebArgs, globRebID int64) bool {
 	// 1. check whether other targets are up and running
-	if errCnt := reb.bcast(md.smap, md.globRebID, md.config, reb.pingTarget, nil /*xreb*/); errCnt > 0 {
+	reb.nodeStages = make(map[string]uint32) // cleanup before run
+	if md.ecUsed {
+		reb.ecReb.cleanup()
+	}
+	if errCnt := reb.bcast(md, reb.pingTarget); errCnt > 0 {
 		return false
 	}
 	if md.smap.version() == 0 {
@@ -137,7 +149,7 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs) bool {
 
 	// 2. serialize (rebalancing operations - one at a time post this point)
 	//    start new xaction unless the one for the current version is already in progress
-	if newerSmap, alreadyRunning := reb.serialize(md.smap, md.config, md.globRebID); newerSmap || alreadyRunning {
+	if newerSmap, alreadyRunning := reb.serialize(md.smap, md.config, globRebID); newerSmap || alreadyRunning {
 		return false
 	}
 	if md.smap.version() == 0 {
@@ -148,10 +160,10 @@ func (reb *rebManager) globalRebPrecheck(md *globalRebArgs) bool {
 	return true
 }
 
-func (reb *rebManager) globalRebInit(md *globalRebArgs, buckets ...string) bool {
+func (reb *rebManager) globalRebInit(md *globalRebArgs, globRebID int64, buckets ...string) bool {
 	/* ================== rebStageInit ================== */
 	reb.stage.Store(rebStageInit)
-	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.version(), md.globRebID, len(md.paths)*2)
+	md.xreb = reb.t.xactions.renewGlobalReb(md.smap.version(), globRebID, len(md.paths)*2)
 	cmn.Assert(md.xreb != nil) // must renew given the CAS and checks above
 
 	if len(buckets) > 0 {
@@ -160,7 +172,7 @@ func (reb *rebManager) globalRebInit(md *globalRebArgs, buckets ...string) bool 
 
 	// 3. init streams and data structures
 	reb.beginStats.Store(unsafe.Pointer(reb.getStats()))
-	reb.beginStreams(md.config)
+	reb.beginStreams(md)
 	reb.filterGFN.Reset() // start with empty filters
 	reb.tcache.tmap = make(cluster.NodeMap, md.smap.CountTargets()-1)
 	reb.tcache.mu = &sync.Mutex{}
@@ -181,30 +193,20 @@ func (reb *rebManager) globalRebInit(md *globalRebArgs, buckets ...string) bool 
 
 	// 5. ready - can receive objects
 	reb.smap.Store(unsafe.Pointer(md.smap))
-	reb.globRebID.Store(md.globRebID)
-	glog.Infof("%s: %s", reb.loghdr(md.globRebID, md.smap), md.xreb.String())
+	reb.globRebID.Store(globRebID)
+	glog.Infof("%s: %s", reb.loghdr(globRebID, md.smap), md.xreb.String())
 
 	return true
 }
 
-// generic stage wait method that does not require any special check
-func (reb *rebManager) waitStage(md *globalRebArgs, stage uint32) error {
-	cb := func(si *cluster.Snode) bool {
-		status, ok := reb.checkGlobStatus(
-			si, md.smap, md.globRebID, md.config,
-			md.smap.Version, md.xreb, stage)
-		return ok && status.Stage >= stage
-	}
-	return reb.ecReb.waitAllStage(stage, cb)
-}
-
 // look for local slices/replicas
-func (reb *rebManager) buildECNamespace(md *globalRebArgs) error {
-	if err := reb.ecReb.run(); err != nil {
-		return err
-	}
+func (reb *rebManager) buildECNamespace(md *globalRebArgs) int {
+	reb.ecReb.run()
 	reb.stage.Store(rebStageECNameSpace)
-	return reb.waitStage(md, rebStageECNameSpace)
+	if reb.waitForPushReqs(md, rebStageECNameSpace) {
+		return 0
+	}
+	return reb.bcast(md, reb.waitNamespace)
 }
 
 // send all collected slices to a correct target(that must have "main" object).
@@ -218,38 +220,42 @@ func (reb *rebManager) buildECNamespace(md *globalRebArgs) error {
 //   3. In a perfect case, all push requests are successful and
 //		`rebStageECExchange` stage will be finished in no time without any
 //		data transfer
-func (reb *rebManager) distributeECNamespace() error {
+func (reb *rebManager) distributeECNamespace(md *globalRebArgs) error {
+	const distributeTimeout = 5 * time.Minute
 	if err := reb.ecReb.exchange(); err != nil {
-		reb.ecReb.stop()
 		return err
 	}
 	reb.stage.Store(rebStageECExchange)
-	err := reb.ecReb.waitAllStage(rebStageECExchange, reb.ecReb.requestRebData)
-	return err
+	if reb.waitForPushReqs(md, rebStageECExchange, distributeTimeout) {
+		return nil
+	}
+	cnt := reb.bcast(md, reb.waitECData)
+	if cnt != 0 {
+		return fmt.Errorf("%d node failed to send their data", cnt)
+	}
+	return nil
 }
 
 // find out which objects are broken and how to fix them
-func (reb *rebManager) generateECFixList(md *globalRebArgs) error {
+func (reb *rebManager) generateECFixList(md *globalRebArgs) int {
 	reb.ecReb.checkSlices()
 	reb.stage.Store(rebStageECDetect)
-	return reb.waitStage(md, rebStageECDetect)
+	if reb.waitForPushReqs(md, rebStageECDetect) {
+		return 0
+	}
+	return reb.bcast(md, reb.waitFixLists)
 }
 
 // when at least one bucket has EC enabled
 func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
-	if err := reb.ecReb.init(md); err != nil {
-		glog.Errorf("Failed to start EC rebalance: %v", err)
+	if cnt := reb.buildECNamespace(md); cnt != 0 {
+		return fmt.Errorf("%d targets failed to build namespace", cnt)
+	}
+	if err := reb.distributeECNamespace(md); err != nil {
 		return err
 	}
-
-	if err := reb.buildECNamespace(md); err != nil {
-		return err
-	}
-	if err := reb.distributeECNamespace(); err != nil {
-		return err
-	}
-	if err := reb.generateECFixList(md); err != nil {
-		return err
+	if cnt := reb.generateECFixList(md); cnt != 0 {
+		return fmt.Errorf("%d targets failed to generate action lists", cnt)
 	}
 
 	// TODO: move all slices between targets
@@ -258,7 +264,6 @@ func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
 	//   2. move remote slices/restore local full objects
 	//   3. wait until all remote operations finishes
 
-	reb.ecReb.stop()
 	glog.Infof("[%s] RebalanceEC done", reb.t.si.DaemonID)
 	return nil
 }
@@ -267,10 +272,11 @@ func (reb *rebManager) globalRebRunEC(md *globalRebArgs) error {
 func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 	wg := &sync.WaitGroup{}
 	ver := md.smap.version()
+	globRebID := reb.globRebID.Load()
 	multiplier := md.config.Rebalance.Multiplier
-	_ = reb.bcast(md.smap, md.globRebID, md.config, reb.rxReady, md.xreb) // NOTE: ignore timeout
+	_ = reb.bcast(md, reb.rxReady) // NOTE: ignore timeout
 	if md.xreb.Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.loghdr(md.globRebID, md.smap))
+		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
 		return err
 	}
 	for _, mpathInfo := range md.paths {
@@ -300,7 +306,7 @@ func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 	}
 	wg.Wait()
 	if md.xreb.Aborted() {
-		err := fmt.Errorf("%s: aborted", reb.loghdr(md.globRebID, md.smap))
+		err := fmt.Errorf("%s: aborted", reb.loghdr(globRebID, md.smap))
 		return err
 	}
 	return nil
@@ -309,22 +315,8 @@ func (reb *rebManager) globalRebRun(md *globalRebArgs) error {
 func (reb *rebManager) globalRebSyncAndRun(md *globalRebArgs) error {
 	// 6. capture stats, start mpath joggers TODO: currently supporting only fs.ObjectType (content-type)
 	reb.stage.Store(rebStageTraverse)
-	glog.Infof("%s: poll targets for: stage=%s", reb.loghdr(md.globRebID, md.smap), rebStage[rebStageTraverse])
-
-	ecUsed := false
-	if md.xreb.bucket != "" {
-		// single bucket rebalance is AIS case only
-		bck := cluster.Bck{Name: md.xreb.bucket, Provider: cmn.AIS}
-		props, ok := reb.t.bmdowner.Get().Get(&bck)
-		if !ok {
-			return fmt.Errorf("Bucket %q not found", bck.Name)
-		}
-		ecUsed = props.EC.Enabled
-	} else {
-		ecUsed = reb.t.bmdowner.get().ecUsed()
-	}
-
-	if ecUsed {
+	if md.ecUsed {
+		glog.Infof("EC detected - starting EC-friendly rebalance")
 		return reb.globalRebRunEC(md)
 	}
 
@@ -333,6 +325,8 @@ func (reb *rebManager) globalRebSyncAndRun(md *globalRebArgs) error {
 
 func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 	reb.stage.Store(rebStageWaitAck)
+	globRebID := reb.globRebID.Load()
+	loghdr := reb.loghdr(globRebID, md.smap)
 	sleep := md.config.Timeout.CplaneOperation // NOTE: TODO: used throughout; must be separately assigned and calibrated
 	maxwt := md.config.Rebalance.DestRetryTime
 	cnt := 0
@@ -363,23 +357,23 @@ func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 				}
 				lomack.mu.Unlock()
 				if md.xreb.Aborted() {
-					glog.Infof("%s: abrt", reb.loghdr(md.globRebID, md.smap))
+					glog.Infof("%s: abrt", loghdr)
 					return
 				}
 			}
 			if cnt == 0 {
-				glog.Infof("%s: received all ACKs", reb.loghdr(md.globRebID, md.smap))
+				glog.Infof("%s: received all ACKs", loghdr)
 				break
 			}
-			glog.Warningf("%s: waiting for %d ACKs", reb.loghdr(md.globRebID, md.smap), cnt)
+			glog.Warningf("%s: waiting for %d ACKs", loghdr, cnt)
 			if md.xreb.abortedAfter(sleep) {
-				glog.Infof("%s: abrt", reb.loghdr(md.globRebID, md.smap))
+				glog.Infof("%s: abrt", loghdr)
 				return
 			}
 			curwt += sleep
 		}
 		if cnt > 0 {
-			glog.Warningf("%s: timed-out waiting for %d ACK(s)", reb.loghdr(md.globRebID, md.smap), cnt)
+			glog.Warningf("%s: timed-out waiting for %d ACK(s)", loghdr, cnt)
 		}
 		if md.xreb.Aborted() {
 			return
@@ -388,22 +382,25 @@ func (reb *rebManager) globalRebWaitAck(md *globalRebArgs) (errCnt int) {
 		// NOTE: requires locally migrated objects *not* to be removed at the src
 		aPaths, _ := fs.Mountpaths.Get()
 		if len(aPaths) > len(md.paths) {
-			glog.Warningf("%s: mountpath changes detected (%d, %d)", reb.loghdr(md.globRebID, md.smap), len(aPaths), len(md.paths))
+			glog.Warningf("%s: mountpath changes detected (%d, %d)", loghdr, len(aPaths), len(md.paths))
 		}
 
 		// 8. synchronize
-		glog.Infof("%s: poll targets for: stage=(%s or %s***)", reb.loghdr(md.globRebID, md.smap), rebStage[rebStageFin], rebStage[rebStageWaitAck])
-		errCnt = reb.bcast(md.smap, md.globRebID, md.config, reb.waitFinExtended, md.xreb)
+		glog.Infof("%s: poll targets for: stage=(%s or %s***)", loghdr, rebStage[rebStageFin], rebStage[rebStageWaitAck])
+		if !reb.waitForPushReqs(md, rebStageFin) {
+			// no need to broadcast if all targets have sent notifications
+			errCnt = reb.bcast(md, reb.waitFinExtended)
+		}
 		if md.xreb.Aborted() {
 			return
 		}
 
 		// 9. retransmit if needed
-		cnt = reb.retransmit(md.xreb, md.globRebID)
+		cnt = reb.retransmit(md.xreb, globRebID)
 		if cnt == 0 || md.xreb.Aborted() {
 			break
 		}
-		glog.Warningf("%s: retransmitted %d, more wack...", reb.loghdr(md.globRebID, md.smap), cnt)
+		glog.Warningf("%s: retransmitted %d, more wack...", loghdr, cnt)
 	}
 
 	return
@@ -424,7 +421,7 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 	}
 	if !aborted {
 		if err := cmn.RemoveFile(md.pmarker); err != nil {
-			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(md.globRebID, md.smap), md.pmarker, err)
+			glog.Errorf("%s: failed to remove in-progress mark %s, err: %v", reb.loghdr(reb.globRebID.Load(), md.smap), md.pmarker, err)
 		}
 	}
 	reb.endStreams()
@@ -449,18 +446,30 @@ func (reb *rebManager) globalRebFini(md *globalRebArgs) {
 // main method: 10 stages
 func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...string) {
 	md := &globalRebArgs{
-		smap:      smap,
-		config:    cmn.GCO.Get(),
-		globRebID: globRebID,
+		smap:   smap,
+		config: cmn.GCO.Get(),
 	}
+	if len(buckets) == 0 || buckets[0] == "" {
+		md.ecUsed = reb.t.bmdowner.get().ecUsed()
+	} else {
+		// single bucket rebalance is AIS case only
+		bck := cluster.Bck{Name: buckets[0], Provider: cmn.AIS}
+		props, ok := reb.t.bmdowner.Get().Get(&bck)
+		if !ok {
+			glog.Errorf("Bucket %q not found", bck.Name)
+			return
+		}
+		md.ecUsed = props.EC.Enabled
+	}
+
 	// TODO: remove after everything is done (it is for debugging EC rebalance)
-	if reb.t.bmdowner.get().ecUsed() {
+	if md.ecUsed {
 		md.dryRun = true
 	}
-	if !reb.globalRebPrecheck(md) {
+	if !reb.globalRebPrecheck(md, globRebID) {
 		return
 	}
-	if !reb.globalRebInit(md, buckets...) {
+	if !reb.globalRebInit(md, globRebID, buckets...) {
 		return
 	}
 
@@ -472,7 +481,7 @@ func (reb *rebManager) runGlobalReb(smap *smapX, globRebID int64, buckets ...str
 	}
 	reb.stage.Store(rebStageFin)
 	for errCnt != 0 && !md.xreb.Aborted() {
-		errCnt = reb.bcast(md.smap, md.globRebID, md.config, reb.waitFinExtended, md.xreb)
+		errCnt = reb.bcast(md, reb.waitFinExtended)
 	}
 	reb.globalRebFini(md)
 	// clean up all collected data
@@ -551,13 +560,13 @@ func (reb *rebManager) getStats() (s *stats.ExtRebalanceStats) {
 	return
 }
 
-func (reb *rebManager) beginStreams(config *cmn.Config) {
+func (reb *rebManager) beginStreams(md *globalRebArgs) {
 	cmn.Assert(reb.stage.Load() == rebStageInit)
-	if config.Rebalance.Multiplier == 0 {
-		config.Rebalance.Multiplier = 1
-	} else if config.Rebalance.Multiplier > 8 {
+	if md.config.Rebalance.Multiplier == 0 {
+		md.config.Rebalance.Multiplier = 1
+	} else if md.config.Rebalance.Multiplier > 8 {
 		glog.Errorf("%s: stream-and-mp-jogger multiplier=%d - misconfigured?",
-			reb.t.si.Name(), config.Rebalance.Multiplier)
+			reb.t.si.Name(), md.config.Rebalance.Multiplier)
 	}
 	//
 	// objects
@@ -567,10 +576,10 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 		Network: reb.netd,
 		Trname:  rebalanceStreamName,
 		Extra: &transport.Extra{
-			Compression: config.Rebalance.Compression,
-			Config:      config,
+			Compression: md.config.Rebalance.Compression,
+			Config:      md.config,
 			Mem2:        nodeCtx.mm},
-		Multiplier:   int(config.Rebalance.Multiplier),
+		Multiplier:   int(md.config.Rebalance.Multiplier),
 		ManualResync: true,
 	}
 	reb.streams = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, client, sbArgs)
@@ -585,6 +594,17 @@ func (reb *rebManager) beginStreams(config *cmn.Config) {
 		Trname:       rebalanceAcksName,
 	}
 	reb.acks = transport.NewStreamBundle(reb.t.smapowner, reb.t.si, clientAcks, sbArgs)
+
+	pushArgs := transport.SBArgs{
+		Network: reb.netc,
+		Trname:  rebalancePushName,
+	}
+	reb.pushes = transport.NewStreamBundle(reb.t.smapowner, reb.t.Snode(), client, pushArgs)
+
+	// Init ecRebalancer streams
+	if md.ecUsed {
+		reb.ecReb.init(md, reb.netd)
+	}
 	reb.laterx.Store(false)
 }
 
@@ -593,6 +613,8 @@ func (reb *rebManager) endStreams() {
 		reb.streams.Close(true /* graceful */)
 		reb.streams = nil
 		reb.acks.Close(true)
+		reb.pushes.Close(true)
+		reb.ecReb.endStreams()
 	}
 }
 
@@ -683,6 +705,79 @@ func (reb *rebManager) recvObj(w http.ResponseWriter, hdr transport.Header, objR
 			glog.Error(err) // TODO: collapse same-type errors e.g. "src-id=>network: destination mismatch"
 		}
 	}
+}
+
+// Mark a 'node' that it has passed the 'stage'
+func (reb *rebManager) setStage(node string, stage uint32) {
+	reb.stageMtx.Lock()
+	reb.nodeStages[node] = stage
+	reb.stageMtx.Unlock()
+}
+
+// Rebalance moves to the next stage:
+// - update internal stage
+// - send notification to all other targets that this one is in a new stage
+func (reb *rebManager) changeStage(newStage uint32) {
+	// first, set its own stage
+	reb.setStage(reb.t.si.DaemonID, newStage)
+
+	smap := reb.t.smapowner.Get()
+	nodes := make([]*cluster.Snode, 0, len(smap.Tmap))
+	for _, node := range smap.Tmap {
+		if node.DaemonID == reb.t.si.DaemonID {
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+
+	req := pushReq{DaemonID: reb.t.si.DaemonID, Stage: newStage, RebID: reb.globRebID.Load()}
+	hdr := transport.Header{
+		ObjAttrs: transport.ObjectAttrs{Size: 0},
+		Opaque:   cmn.MustMarshal(req),
+	}
+	// second, notify all other targets
+	if err := reb.pushes.SendV(hdr, nil, nil, nil, nodes...); err != nil {
+		var sb strings.Builder
+		for idx, n := range nodes {
+			sb.WriteString(n.DaemonID)
+			if idx < len(nodes)-1 {
+				sb.WriteString(",")
+			}
+		}
+		// in case of error only log a warning - other targets should be able
+		// to pull the new stage and continue later
+		glog.Warningf("Failed to send ack %s to %s nodes: %v", rebStage[newStage], sb.String(), err)
+		return
+	}
+}
+
+// returns true if the node is in or passed `stage`
+func (reb *rebManager) isNodeInStage(si *cluster.Snode, stage uint32) bool {
+	reb.stageMtx.Lock()
+	nodeStage, ok := reb.nodeStages[si.DaemonID]
+	reb.stageMtx.Unlock()
+	return ok && nodeStage >= stage
+}
+
+func (reb *rebManager) recvPush(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Errorf("Failed to get notification %s from %s: %v", hdr.Objname, hdr.Bucket, err)
+		return
+	}
+
+	var req pushReq
+	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+		glog.Errorf("Invalid push notification: %v", err)
+		return
+	}
+	// a target was too late in sending(rebID is obsolete) its data or too early (md == nil)
+	if req.RebID < reb.globRebID.Load() {
+		// TODO: warning
+		glog.Errorf("Rebalance IDs mismatch: %d vs %d. %s is late(%s)?", reb.globRebID.Load(), req.RebID, req.DaemonID, rebStage[req.Stage])
+		return
+	}
+
+	reb.setStage(req.DaemonID, req.Stage)
 }
 
 func (reb *rebManager) recvAck(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {

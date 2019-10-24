@@ -63,6 +63,7 @@ type ecOptions struct {
 	pattern   string
 	sema      chan struct{}
 	isAIS     bool
+	silent    bool
 	rnd       *rand.Rand
 }
 
@@ -678,7 +679,9 @@ func createECObject(t *testing.T, baseParams *api.BaseParams, bucket, objName st
 	if doEC {
 		ecStr = "EC"
 	}
-	tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
+	if !o.silent {
+		tutils.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
+	}
 	r, err := tutils.NewRandReader(objSize, false)
 	tassert.CheckFatal(t, err)
 	defer r.Close()
@@ -687,7 +690,9 @@ func createECObject(t *testing.T, baseParams *api.BaseParams, bucket, objName st
 	err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	tutils.Logf("waiting for %s\n", objPath)
+	if !o.silent {
+		tutils.Logf("waiting for %s\n", objPath)
+	}
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, objName, bucket, o)
 
 	ecCheckSlices(t, foundParts, fullPath+objName, objSize, sliceSize, totalCnt)
@@ -2125,6 +2130,7 @@ func TestECRebalance(t *testing.T) {
 		isAIS:     true,
 		dataCnt:   1,
 		parityCnt: 2,
+		silent:    true,
 	}.init()
 
 	smap := getClusterMap(t, proxyURL)

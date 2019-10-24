@@ -217,7 +217,8 @@ func (t *targetrunner) Run() error {
 }
 
 func (t *targetrunner) initRebManager(config *cmn.Config) {
-	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter(), ecReb: newECRebalancer(t)}
+	reb := &rebManager{t: t, filterGFN: filter.NewDefaultFilter()}
+	reb.ecReb = newECRebalancer(t, reb)
 	// Rx endpoints
 	reb.netd, reb.netc = cmn.NetworkPublic, cmn.NetworkPublic
 	if config.Net.UseIntraData {
@@ -226,15 +227,13 @@ func (t *targetrunner) initRebManager(config *cmn.Config) {
 	if config.Net.UseIntraControl {
 		reb.netc = cmn.NetworkIntraControl
 	}
-	reb.ecReb.netd = reb.netd
-	reb.ecReb.netc = reb.netc
 	if _, err := transport.Register(reb.netd, rebalanceStreamName, reb.recvObj); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	if _, err := transport.Register(reb.netc, rebalanceAcksName, reb.recvAck); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
-	if _, err := transport.Register(reb.netc, ackECRebStreamName, reb.ecReb.OnAck); err != nil {
+	if _, err := transport.Register(reb.netc, rebalancePushName, reb.recvPush); err != nil {
 		cmn.ExitLogf("%v", err)
 	}
 	if _, err := transport.Register(reb.netc, dataECRebStreamName, reb.ecReb.OnData); err != nil {
