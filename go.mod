@@ -21,11 +21,11 @@ require (
 	github.com/klauspost/reedsolomon v1.9.3
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/nanobox-io/golang-scribble v0.0.0-20180621225840-336beac0a992
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
 	github.com/pierrec/lz4/v3 v3.1.0
 	github.com/pkg/errors v0.8.1
+	github.com/sdomino/scribble v0.0.0-20190805145214-552710ac067a
 	github.com/seiflotfy/cuckoofilter v0.0.0-20190302225222-764cb5258d9b
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/testify v1.4.0 // indirect

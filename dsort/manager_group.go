@@ -12,12 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/housekeep/hk"
-
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
-	scribble "github.com/nanobox-io/golang-scribble"
+	"github.com/NVIDIA/aistore/housekeep/hk"
 	"github.com/pkg/errors"
+	"github.com/sdomino/scribble"
 )
 
 const (
