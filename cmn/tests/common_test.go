@@ -11,314 +11,252 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
-const (
-	tmpDir = "/tmp/cmn-tests"
-)
-
-func TestCopyStruct(t *testing.T) {
-	type (
-		Tree struct {
-			left, right *Tree
-			value       int
-		}
-
-		NonPrimitiveStruct struct {
-			m map[string]int
-			s []int
-		}
+var _ = Describe("Common file", func() {
+	const (
+		tmpDir = "/tmp/cmn-tests"
 	)
 
-	var emptySructResult struct{}
-	cmn.CopyStruct(&emptySructResult, &struct{}{})
+	var (
+		nonExistingFile        = filepath.Join(tmpDir, "file.txt")
+		nonExistingRenamedFile = filepath.Join(tmpDir, "some/path/fi.txt")
 
-	if !reflect.DeepEqual(struct{}{}, emptySructResult) {
-		t.Error("CopyStruct should correctly copy empty struct")
+		nonExistingPath = filepath.Join(tmpDir, "non/existing/directory")
+	)
+
+	createFile := func(fqn string) {
+		file, err := cmn.CreateFile(fqn)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(file.Close()).NotTo(HaveOccurred())
+		Expect(fqn).To(BeARegularFile())
 	}
 
-	loopNode := Tree{}
-	loopNode.left, loopNode.right, loopNode.value = &loopNode, &loopNode, 0
-	var copyLoopNode Tree
-	cmn.CopyStruct(&copyLoopNode, &loopNode)
+	validateSaveReaderOutput := func(fqn string, sourceData []byte) {
+		Expect(fqn).To(BeARegularFile())
 
-	if !reflect.DeepEqual(loopNode, copyLoopNode) {
-		t.Error("CopyStruct should correctly copy self referencing struct")
+		data, err := ioutil.ReadFile(fqn)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(reflect.DeepEqual(data, sourceData)).To(BeTrue())
 	}
 
-	loopNode.value += 100
+	AfterEach(func() {
+		os.RemoveAll(tmpDir)
+	})
 
-	if reflect.DeepEqual(loopNode, copyLoopNode) {
-		t.Error("Changing value of source struct should not affect resulting struct")
-	}
+	Context("CopyStruct", func() {
+		type (
+			Tree struct {
+				left, right *Tree
+				value       int
+			}
 
-	left := Tree{nil, nil, 0}
-	right := Tree{nil, nil, 1}
-	root := Tree{&left, &right, 2}
-	var rootCopy Tree
-	cmn.CopyStruct(&rootCopy, &root)
+			NonPrimitiveStruct struct {
+				m map[string]int
+				s []int
+			}
+		)
 
-	if !reflect.DeepEqual(root, rootCopy) {
-		t.Error("CopyStruct should correctly copy nested structs")
-	}
+		It("should correctly copy empty struct", func() {
+			var emptySructResult struct{}
+			cmn.CopyStruct(&emptySructResult, &struct{}{})
 
-	left.value += 100
+			Expect(reflect.DeepEqual(struct{}{}, emptySructResult)).To(BeTrue())
+		})
 
-	if !reflect.DeepEqual(root, rootCopy) {
-		t.Error("CopyStruct should perform shallow copy, perisiting references")
-	}
+		It("should correctly copy self-referencing struct", func() {
+			loopNode := Tree{}
+			loopNode.left, loopNode.right, loopNode.value = &loopNode, &loopNode, 0
+			var copyLoopNode Tree
+			cmn.CopyStruct(&copyLoopNode, &loopNode)
 
-	nonPrimitive := NonPrimitiveStruct{}
-	nonPrimitive.m = make(map[string]int)
-	nonPrimitive.m["one"] = 1
-	nonPrimitive.m["two"] = 2
-	nonPrimitive.s = []int{1, 2}
-	var nonPrimitiveCopy NonPrimitiveStruct
-	cmn.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
+			Expect(loopNode).To(Equal(copyLoopNode))
 
-	if !reflect.DeepEqual(nonPrimitive, nonPrimitiveCopy) {
-		t.Error("CopyStruct should correctly copy structs with nonprimitive types")
-	}
+			loopNode.value += 100
 
-	nonPrimitive.m["one"] = 0
-	nonPrimitive.s[0] = 0
+			Expect(loopNode).NotTo(Equal(copyLoopNode))
+		})
 
-	if !reflect.DeepEqual(nonPrimitive, nonPrimitiveCopy) {
-		t.Error("CopyStruct should not make a deep copy of nonprimitive types")
-	}
-}
+		It("should correctly copy nested structs, perisiting references", func() {
+			left := Tree{nil, nil, 0}
+			right := Tree{nil, nil, 1}
+			root := Tree{&left, &right, 2}
+			var rootCopy Tree
+			cmn.CopyStruct(&rootCopy, &root)
 
-func TestSaveReader(t *testing.T) {
-	const bytesToRead = 1000
-	filename := filepath.Join(tmpDir, "savereadertest.txt")
-	byteBuffer := make([]byte, bytesToRead)
+			Expect(root).To(Equal(rootCopy))
 
-	if _, err := cmn.SaveReader(filename, rand.Reader, byteBuffer, false, bytesToRead); err != nil {
-		t.Errorf("SaveReader failed to read %d bytes", bytesToRead)
-	}
+			left.value += 100
 
-	validateSaveReaderOutput(t, filename, byteBuffer)
-	os.Remove(filename)
-}
+			Expect(root).To(Equal(rootCopy))
+		})
 
-func TestSaveReaderWithNoSize(t *testing.T) {
-	const bytesLimit = 500
-	filename := filepath.Join(tmpDir, "savereadertest.txt")
-	byteBuffer := make([]byte, bytesLimit*2)
-	reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
+		It("should correctly copy structs with nonprimitive types", func() {
+			nonPrimitive := NonPrimitiveStruct{}
+			nonPrimitive.m = make(map[string]int)
+			nonPrimitive.m["one"] = 1
+			nonPrimitive.m["two"] = 2
+			nonPrimitive.s = []int{1, 2}
+			var nonPrimitiveCopy NonPrimitiveStruct
+			cmn.CopyStruct(&nonPrimitiveCopy, &nonPrimitive)
 
-	if _, err := cmn.SaveReader(filename, reader, byteBuffer, false); err != nil {
-		t.Errorf("SaveReader failed to read %d bytes", bytesLimit)
-	}
+			Expect(nonPrimitive).To(Equal(nonPrimitive))
 
-	validateSaveReaderOutput(t, filename, byteBuffer[:bytesLimit])
-	os.Remove(filename)
-}
+			nonPrimitive.m["one"] = 0
+			nonPrimitive.s[0] = 0
 
-func validateSaveReaderOutput(t *testing.T, filename string, sourceData []byte) {
-	ensurePathExists(t, filename, false)
+			Expect(nonPrimitive).To(Equal(nonPrimitive))
+		})
+	})
 
-	dat, err := ioutil.ReadFile(filename)
-	if err != nil {
-		t.Error(err)
-	}
+	Context("SaveReader", func() {
+		It("should save the reader content into a file", func() {
+			const bytesToRead = 1000
+			byteBuffer := make([]byte, bytesToRead)
 
-	if !reflect.DeepEqual(dat, sourceData) {
-		t.Error("SaveReader saved different data than it was fed with")
-	}
-}
+			_, err := cmn.SaveReader(nonExistingFile, rand.Reader, byteBuffer, false, bytesToRead)
+			Expect(err).NotTo(HaveOccurred())
 
-func TestCreateDir(t *testing.T) {
-	nonExistingPath := filepath.Join(tmpDir, "non/existing/directory")
-	if err := cmn.CreateDir(nonExistingPath); err != nil {
-		t.Error(err)
-	}
+			validateSaveReaderOutput(nonExistingFile, byteBuffer)
+		})
 
-	ensurePathExists(t, nonExistingPath, true)
+		It("should save the reader without specified size", func() {
+			const bytesLimit = 500
+			byteBuffer := make([]byte, bytesLimit*2)
+			reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-	// Should not error when creating directory which already exists
-	if err := cmn.CreateDir(nonExistingPath); err != nil {
-		t.Error(err)
-	}
+			_, err := cmn.SaveReader(nonExistingFile, reader, byteBuffer, false)
+			Expect(err).NotTo(HaveOccurred())
 
-	ensurePathExists(t, nonExistingPath, true)
+			validateSaveReaderOutput(nonExistingFile, byteBuffer[:bytesLimit])
+		})
+	})
 
-	// Should error when directory is not valid
-	if err := cmn.CreateDir(""); err == nil {
-		t.Error("CreateDir should fail when given directory is empty")
-	}
+	Context("CreateFile", func() {
+		It("should create a file when it does not exist", func() {
+			createFile(nonExistingFile)
+		})
 
-	os.RemoveAll(tmpDir)
-}
+		It("should not complain when creating a file which already exists", func() {
+			createFile(nonExistingFile)
+			createFile(nonExistingFile)
+		})
+	})
 
-func TestCreateFile(t *testing.T) {
-	nonExistingFile := filepath.Join(tmpDir, "file.txt")
-	if file, err := cmn.CreateFile(nonExistingFile); err != nil {
-		t.Error(err)
-	} else {
-		file.Close()
-	}
+	Context("CreateDir", func() {
+		It("should successfully create directory", func() {
+			err := cmn.CreateDir(nonExistingPath)
+			Expect(err).NotTo(HaveOccurred())
 
-	ensurePathExists(t, nonExistingFile, false)
+			Expect(nonExistingPath).To(BeADirectory())
+		})
 
-	// Should not return error when creating file which already exists
-	if file, err := cmn.CreateFile(nonExistingFile); err != nil {
-		t.Error(err)
-	} else {
-		file.Close()
-	}
+		It("should not error when creating directory which already exists", func() {
+			err := cmn.CreateDir(nonExistingPath)
+			Expect(err).NotTo(HaveOccurred())
+			err = cmn.CreateDir(nonExistingPath)
+			Expect(err).NotTo(HaveOccurred())
 
-	os.RemoveAll(tmpDir)
-}
+			Expect(nonExistingPath).To(BeADirectory())
+		})
 
-func TestCopyFile(t *testing.T) {
-	srcFilename := filepath.Join(tmpDir, "copyfilesrc.txt")
-	dstFilename := filepath.Join(tmpDir, "copyfiledst.txt")
+		It("should error when directory is not valid", func() {
+			err := cmn.CreateDir("")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-	// creates a file of random bytes
-	cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
-	if _, _, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), false); err != nil {
-		t.Error(err)
-	}
-	srcData, err := ioutil.ReadFile(srcFilename)
-	if err != nil {
-		t.Error(err)
-	}
-	dstData, err := ioutil.ReadFile(dstFilename)
-	if err != nil {
-		t.Error(err)
-	}
-	if !reflect.DeepEqual(srcData, dstData) {
-		t.Error("copied and source files are different")
-	}
-	os.Remove(srcFilename)
-	os.Remove(dstFilename)
-}
+	Context("CopyFile", func() {
+		var (
+			srcFilename = filepath.Join(tmpDir, "copyfilesrc.txt")
+			dstFilename = filepath.Join(tmpDir, "copyfiledst.txt")
+		)
 
-func TestCopyFileCksum(t *testing.T) {
-	srcFilename := filepath.Join(tmpDir, "copyfilesrc.txt")
-	dstFilename := filepath.Join(tmpDir, "copyfiledst.txt")
+		It("should copy file and preserve the content", func() {
+			_, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), false, 1000)
+			Expect(err).NotTo(HaveOccurred())
+			_, _, err = cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), false)
+			Expect(err).NotTo(HaveOccurred())
 
-	// creates a file of random bytes
-	expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), true, 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), true); err != nil {
-		t.Error(err)
-	} else if expectedCksum != cksum.Value() {
-		t.Errorf("expectedCksum: %s, got: %s", expectedCksum, cksum)
-	}
-	srcData, err := ioutil.ReadFile(srcFilename)
-	if err != nil {
-		t.Error(err)
-	}
-	dstData, err := ioutil.ReadFile(dstFilename)
-	if err != nil {
-		t.Error(err)
-	}
-	if !reflect.DeepEqual(srcData, dstData) {
-		t.Error("copied and source files are different")
-	}
-	os.Remove(srcFilename)
-	os.Remove(dstFilename)
-}
+			srcData, err := ioutil.ReadFile(srcFilename)
+			Expect(err).NotTo(HaveOccurred())
 
-func TestRename(t *testing.T) {
-	// Should error when src does not exist
-	if err := cmn.Rename("/some/non/existing/file.txt", "/tmp/file.txt"); !os.IsNotExist(err) {
-		t.Error("Rename should fail when src file does not exist")
-	}
+			dstData, err := ioutil.ReadFile(dstFilename)
+			Expect(err).NotTo(HaveOccurred())
 
-	nonExistingFile := filepath.Join(tmpDir, "file.txt")
-	nonExistingRenamedFile := filepath.Join(tmpDir, "some/path/fi.txt")
+			Expect(srcData).To(Equal(dstData))
+		})
 
-	// Should not error when dst file does not exist
-	{
-		file, _ := cmn.CreateFile(nonExistingFile)
-		file.Close()
-		if err := cmn.Rename(nonExistingFile, nonExistingRenamedFile); err != nil {
-			t.Error(err)
-		}
+		It("should copy a file, preserver the content and compute the cksum", func() {
+			expectedCksum, err := cmn.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), true, 1000)
+			Expect(err).NotTo(HaveOccurred())
 
-		ensurePathExists(t, nonExistingRenamedFile, false)
-		ensurePathNotExists(t, nonExistingFile)
-	}
+			_, cksum, err := cmn.CopyFile(srcFilename, dstFilename, make([]byte, 1000), true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cksum).To(Equal(expectedCksum))
 
-	// Should not error when dst file already exists
-	{
-		file, _ := cmn.CreateFile(nonExistingFile)
-		file.Close()
-		if err := cmn.Rename(nonExistingFile, nonExistingRenamedFile); err != nil {
-			t.Error(err)
-		}
+			srcData, err := ioutil.ReadFile(srcFilename)
+			Expect(err).NotTo(HaveOccurred())
 
-		ensurePathExists(t, nonExistingRenamedFile, false)
-		ensurePathNotExists(t, nonExistingFile)
-	}
+			dstData, err := ioutil.ReadFile(dstFilename)
+			Expect(err).NotTo(HaveOccurred())
 
-	os.RemoveAll(tmpDir)
-}
+			Expect(srcData).To(Equal(dstData))
+		})
+	})
 
-func TestRemoveFile(t *testing.T) {
-	// Should not error when src does not exist
-	if err := cmn.RemoveFile("/some/non/existing/file.txt"); err != nil {
-		t.Error("Remove should not fail when file does not exist")
-	}
+	Context("Rename", func() {
+		It("should not error when dst file does not exist", func() {
+			createFile(nonExistingFile)
 
-	// Should not error when file does exist
-	{
-		nonExistingFile := filepath.Join(tmpDir, "file.txt")
-		file, _ := cmn.CreateFile(nonExistingFile)
-		file.Close()
-		if err := cmn.RemoveFile(nonExistingFile); err != nil {
-			t.Error("Remove should not fail when file does exist")
-		}
-		ensurePathNotExists(t, nonExistingFile)
-	}
+			err := cmn.Rename(nonExistingFile, nonExistingRenamedFile)
+			Expect(err).NotTo(HaveOccurred())
 
-	os.RemoveAll(tmpDir)
-}
+			Expect(nonExistingRenamedFile).To(BeARegularFile())
+			Expect(nonExistingFile).NotTo(BeAnExistingFile())
+		})
 
-func TestParseBool(t *testing.T) {
-	trues := []string{"1", "ON", "yes", "Y", "trUe"}
-	falses := []string{"0", "off", "No", "n", "falsE", ""}
-	errs := []string{"2", "enable", "nothing"}
+		It("should not error when dst file already exists", func() {
+			createFile(nonExistingFile)
+			createFile(nonExistingRenamedFile)
 
-	for _, s := range trues {
-		v, err := cmn.ParseBool(s)
-		if err != nil {
-			t.Errorf("Failed to parse %s: %v", s, err)
-		} else if !v {
-			t.Errorf("Failed to parse %s as `true`", s)
-		}
-	}
+			err := cmn.Rename(nonExistingFile, nonExistingRenamedFile)
+			Expect(err).NotTo(HaveOccurred())
 
-	for _, s := range falses {
-		v, err := cmn.ParseBool(s)
-		if err != nil {
-			t.Errorf("Failed to parse %s: %v", s, err)
-		} else if v {
-			t.Errorf("Failed to parse %s as `false`", s)
-		}
-	}
+			Expect(nonExistingRenamedFile).To(BeARegularFile())
+			Expect(nonExistingFile).NotTo(BeAnExistingFile())
+		})
 
-	for _, s := range errs {
-		_, err := cmn.ParseBool(s)
-		if err == nil {
-			t.Errorf("Parsing %s must return as error", s)
-		}
-	}
-}
+		It("should error when src does not exist", func() {
+			err := cmn.Rename("/some/non/existing/file.txt", "/tmp/file.txt")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-var _ = Describe("Common file", func() {
+	Context("RemoveFile", func() {
+		AfterEach(func() {
+			os.RemoveAll(tmpDir)
+		})
+
+		It("should remove regular file", func() {
+			createFile(nonExistingFile)
+
+			err := cmn.RemoveFile(nonExistingFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nonExistingFile).NotTo(BeAnExistingFile())
+		})
+
+		It("should not complain when regular file does not exist", func() {
+			err := cmn.RemoveFile("/some/non/existing/file.txt")
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Context("ParseBashTemplate", func() {
 		DescribeTable("parse bash template without error",
 			func(template string, expectedPt cmn.ParsedTemplate) {
@@ -568,45 +506,46 @@ var _ = Describe("Common file", func() {
 			Entry("-1 percent", "-1%"),
 		)
 	})
+
+	Context("ParseBool", func() {
+		It("should correctly parse different values into bools", func() {
+			trues := []string{"1", "ON", "yes", "Y", "trUe"}
+			falses := []string{"0", "off", "No", "n", "falsE", ""}
+			errs := []string{"2", "enable", "nothing"}
+
+			for _, s := range trues {
+				v, err := cmn.ParseBool(s)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(BeTrue())
+			}
+
+			for _, s := range falses {
+				v, err := cmn.ParseBool(s)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(BeFalse())
+			}
+
+			for _, s := range errs {
+				_, err := cmn.ParseBool(s)
+				Expect(err).To(HaveOccurred())
+			}
+		})
+	})
+
+	Context("StrSlicesEqual", func() {
+		DescribeTable("parse quantity with error",
+			func(lhs, rhs []string, expected bool) {
+				Expect(cmn.StrSlicesEqual(lhs, rhs)).To(Equal(expected))
+			},
+			Entry("empty slices", []string{}, []string{}, true),
+			Entry("single item", []string{"one"}, []string{"one"}, true),
+			Entry("multiple items", []string{"one", "two", "three"}, []string{"one", "two", "three"}, true),
+			Entry("multiple items in different order", []string{"two", "three", "one"}, []string{"one", "two", "three"}, true),
+
+			Entry("empty and single item", []string{"one"}, []string{}, false),
+			Entry("empty and single item (swapped)", []string{}, []string{"one"}, false),
+			Entry("same number of elements but different content", []string{"two", "three", "four"}, []string{"one", "two", "three"}, false),
+			Entry("same number of elements but different content (swapped)", []string{"two", "three", "one"}, []string{"four", "two", "three"}, false),
+		)
+	})
 })
-
-func TestSlicesEqual(t *testing.T) {
-	tests := []struct {
-		lhs []string
-		rhs []string
-		res bool
-	}{
-		{[]string{}, []string{}, true},
-		{[]string{"one"}, []string{}, false},
-		{[]string{}, []string{"one"}, false},
-		{[]string{"one"}, []string{"one"}, true},
-		{[]string{"one", "two", "three"}, []string{"one", "two", "three"}, true},
-		{[]string{"one", "three", "two"}, []string{"one", "two", "three"}, true},
-		{[]string{"two", "three", "one"}, []string{"one", "two", "three"}, true},
-		{[]string{"two", "three", "four"}, []string{"one", "two", "three"}, false},
-		{[]string{"two", "three", "one"}, []string{"four", "two", "three"}, false},
-	}
-	for _, c := range tests {
-		if cmn.StrSlicesEqual(c.lhs, c.rhs) != c.res {
-			t.Errorf("%v == %v != %v", c.lhs, c.rhs, c.res)
-		}
-	}
-}
-
-func ensurePathExists(t *testing.T, path string, dir bool) {
-	if fi, err := os.Stat(path); err != nil {
-		t.Error(err)
-	} else {
-		if dir && !fi.IsDir() {
-			t.Errorf("expected path %q to be directory", path)
-		} else if !dir && fi.IsDir() {
-			t.Errorf("expected path %q to not be directory", path)
-		}
-	}
-}
-
-func ensurePathNotExists(t *testing.T, path string) {
-	if _, err := os.Stat(path); err != nil && !os.IsNotExist(err) {
-		t.Error(err)
-	}
-}

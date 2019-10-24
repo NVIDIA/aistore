@@ -587,13 +587,13 @@ func (c *getJogger) restoreMainObj(req *Request, meta *Metadata, slices []*slice
 	tmpFQN := fs.CSM.GenContentFQN(mainFQN, fs.WorkfileType, "ec")
 	// recalculate hash for the main object before saving the object's xattrs
 	// otherwise the main object gets hash from one of slices
-	hash, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size)
+	cksum, err := cmn.SaveReaderSafe(tmpFQN, mainFQN, src, buffer, true, meta.Size)
 	if err != nil {
 		<-c.diskCh
 		return restored, err
 	}
 	<-c.diskCh
-	req.LOM.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, hash))
+	req.LOM.SetCksum(cksum)
 	// Persist called without a lock. It's not a problem, as the LOM should not be used as the object is missing
 	if err := req.LOM.Persist(); err != nil {
 		return restored, err

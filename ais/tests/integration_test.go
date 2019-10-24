@@ -1490,9 +1490,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	tutils.DestroyBucket(t, m.proxyURL, newTestBucketName)
 
 	bucketFQN := filepath.Join(localBucketDir, m.bucket)
-	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
-		t.Fatalf("ais bucket dir was not created")
-	}
+	tutils.CheckPathExists(t, bucketFQN, true /*dir*/)
 
 	err := api.RenameBucket(baseParams, m.bucket, newTestBucketName)
 	tassert.CheckFatal(t, err)

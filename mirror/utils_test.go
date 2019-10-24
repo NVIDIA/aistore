@@ -80,10 +80,8 @@ var _ = Describe("Mirror", func() {
 			// Make copy
 			clone, err := copyTo(lom, &mi2, nil)
 			Expect(err).ShouldNot(HaveOccurred())
-			stat, err := os.Stat(expectedCopyFQN)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(expectedCopyFQN).To(BeARegularFile())
 			Expect(clone.Size()).To(BeEquivalentTo(testObjectSize))
-			Expect(stat.Size()).To(BeEquivalentTo(testObjectSize))
 
 			// Check copy set
 			Expect(clone.IsCopy()).To(BeTrue())

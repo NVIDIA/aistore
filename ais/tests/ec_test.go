@@ -2182,30 +2182,29 @@ func TestECRebalance(t *testing.T) {
 	// 1. Remove an mpath
 	lostPath := filepath.Join(lostFSList.Available[0], objDir, aisDir, bucket)
 	tutils.Logf("Removing mpath %q of target %s\n", lostPath, tgtLost.DaemonID)
-	_, err = os.Stat(lostPath)
-	tassert.CheckFatal(t, err)
+	tutils.CheckPathExists(t, lostPath, true /*dir*/)
 	tassert.CheckFatal(t, os.RemoveAll(lostPath))
+
 	// 2. Delete one, and rename the second: simulate mpath dead + new mpath attached
 	// delete obj1 & delete meta1; rename obj2 -> ob1, and meta2 -> meta1
 	swapPathObj1 := filepath.Join(swapFSList.Available[0], objDir, aisDir, bucket)
 	tutils.Logf("Removing mpath %q of target %s\n", swapPathObj1, tgtSwap.DaemonID)
-	_, err = os.Stat(swapPathObj1)
-	tassert.CheckFatal(t, err)
+	tutils.CheckPathExists(t, swapPathObj1, true /*dir*/)
 	tassert.CheckFatal(t, os.RemoveAll(swapPathObj1))
+
 	swapPathMeta1 := filepath.Join(swapFSList.Available[0], metaDir, aisDir, bucket)
 	tutils.Logf("Removing mpath %q of target %s\n", swapPathMeta1, tgtSwap.DaemonID)
-	_, err = os.Stat(swapPathMeta1)
-	tassert.CheckFatal(t, err)
+	tutils.CheckPathExists(t, swapPathMeta1, true /*dir*/)
 	tassert.CheckFatal(t, os.RemoveAll(swapPathMeta1))
+
 	swapPathObj2 := filepath.Join(swapFSList.Available[1], objDir, aisDir, bucket)
 	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathObj2, swapPathObj1, tgtSwap.DaemonID)
-	_, err = os.Stat(swapPathObj2)
-	tassert.CheckFatal(t, err)
+	tutils.CheckPathExists(t, swapPathObj2, true /*dir*/)
 	tassert.CheckFatal(t, os.Rename(swapPathObj2, swapPathObj1))
+
 	swapPathMeta2 := filepath.Join(swapFSList.Available[1], metaDir, aisDir, bucket)
 	tutils.Logf("Renaming mpath %q -> %q of target %s\n", swapPathMeta2, swapPathMeta1, tgtSwap.DaemonID)
-	_, err = os.Stat(swapPathMeta2)
-	tassert.CheckFatal(t, err)
+	tutils.CheckPathExists(t, swapPathMeta2, true /*dir*/)
 	tassert.CheckFatal(t, os.Rename(swapPathMeta2, swapPathMeta1))
 
 	// Kill a random target

@@ -1254,10 +1254,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	filepath.Walk(rootDir, fsWalkFunc)
-	oldFileInfo, err = os.Stat(fqn)
-	if err != nil {
-		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
-	}
+	tutils.CheckPathExists(t, fqn, false /*dir*/)
 
 	// Test when the contents of the file are changed
 	tutils.Logf("\nChanging contents of the file [%s]: %s\n", fileName, fqn)
@@ -1269,8 +1266,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
-	oldFileInfo, err = os.Stat(fqn)
-	tassert.Errorf(t, err == nil, "Failed while reading the bucket from the local file system. Error: [%v]", err)
+	tutils.CheckPathExists(t, fqn, false /*dir*/)
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
 	err = tutils.SetXattrCksum(fqn, cmn.NewCksum(cmn.ChecksumXXHash, "01234"), tMock)
 	tassert.CheckError(t, err)
@@ -1392,10 +1388,8 @@ func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, file
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
-	newFileInfo, err := os.Stat(fqn)
-	if err != nil {
-		t.Errorf("Failed while reading the file %s rom the local file system. Error: %v", fqn, err)
-	}
+	tutils.CheckPathExists(t, fqn, false /*dir*/)
+	newFileInfo, _ := os.Stat(fqn)
 	if newFileInfo.Size() != oldFileInfo.Size() {
 		t.Errorf("Both files should match in size since a cold get"+"should have been executed. Expected size: %d, Actual Size: %d", oldFileInfo.Size(), newFileInfo.Size())
 	}

@@ -613,8 +613,7 @@ var _ = Describe("LOM", func() {
 			var err error
 			dst, err = lom.CopyObject(fqn, make([]byte, testFileSize))
 			Expect(err).ShouldNot(HaveOccurred())
-			_, err = os.Stat(dst.FQN)
-			Expect(os.IsNotExist(err)).To(BeFalse())
+			Expect(dst.FQN).To(BeARegularFile())
 			lom.Uncache()
 
 			// Reload copy, to make sure it is fresh
@@ -805,8 +804,7 @@ var _ = Describe("LOM", func() {
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err := os.Stat(mirrorFQNs[1])
-				Expect(os.IsNotExist(err)).To(BeTrue())
+				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0], tMock)
@@ -832,8 +830,7 @@ var _ = Describe("LOM", func() {
 				// Delete copy and check if it's gone.
 				Expect(lom.DelCopies(mirrorFQNs[1])).ToNot(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err := os.Stat(mirrorFQNs[1])
-				Expect(os.IsNotExist(err)).To(BeTrue())
+				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0], tMock)
@@ -873,10 +870,8 @@ var _ = Describe("LOM", func() {
 				// Delete all copies and check if they are gone.
 				Expect(lom.DelAllCopies()).NotTo(HaveOccurred())
 				Expect(lom.Persist()).NotTo(HaveOccurred())
-				_, err := os.Stat(mirrorFQNs[1])
-				Expect(os.IsNotExist(err)).To(BeTrue())
-				_, err = os.Stat(mirrorFQNs[2])
-				Expect(os.IsNotExist(err)).To(BeTrue())
+				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
+				Expect(mirrorFQNs[2]).NotTo(BeAnExistingFile())
 
 				// Reload default object and see if the lom was correctly updated.
 				lom = NewBasicLom(mirrorFQNs[0], tMock)

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -310,4 +311,16 @@ func SetXattrCksum(fqn string, cksum *cmn.Cksum, t cluster.Target) error {
 
 	lom.SetCksum(cksum)
 	return lom.Persist()
+}
+
+func CheckPathExists(t *testing.T, path string, dir bool) {
+	if fi, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	} else {
+		if dir && !fi.IsDir() {
+			t.Fatalf("expected path %q to be directory", path)
+		} else if !dir && fi.IsDir() {
+			t.Fatalf("expected path %q to not be directory", path)
+		}
+	}
 }

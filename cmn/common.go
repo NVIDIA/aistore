@@ -770,10 +770,10 @@ func CopyFile(src, dst string, buf []byte, needCksum bool) (written int64, cksum
 // Saves the reader directly to a local file
 // `size` is an optional argument, if it is set only first `size` bytes
 // are saved to the file
-func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum string, err error) {
+func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum *Cksum, err error) {
 	file, err := CreateFile(fqn)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var (
@@ -793,11 +793,11 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size .
 
 	file.Close()
 	if err != nil {
-		return "", fmt.Errorf("failed to save to %q: %v", fqn, err)
+		return nil, fmt.Errorf("failed to save to %q: %v", fqn, err)
 	}
 
 	if needCksum {
-		cksum = HashToStr(hasher)
+		cksum = NewCksum(ChecksumXXHash, HashToStr(hasher))
 	}
 
 	return cksum, nil
@@ -807,17 +807,17 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, needCksum bool, size .
 // it moves the temporary file to a given `fqn`
 // `size` is an optional argument, if it is set only first `size` bytes
 // are saved to the file
-func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum string, err error) {
+func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, needCksum bool, size ...int64) (cksum *Cksum, err error) {
 	if fqn == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	if cksum, err = SaveReader(tmpfqn, reader, buf, needCksum, size...); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if err := Rename(tmpfqn, fqn); err != nil {
-		return "", err
+		return nil, err
 	}
 	return cksum, nil
 }
