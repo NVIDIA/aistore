@@ -265,7 +265,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 		saveHash = xxhash.New64()
 		hashes = []hash.Hash{saveHash}
 
-		// if validate-cold-get and the cksum is provied we should also check md5 hash (aws, gcp)
+		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
 		if poiCkConf.ValidateColdGet && poi.cksumToCheck != nil {
 			expectedCksum = poi.cksumToCheck
 			checkCksumType, _ = expectedCksum.Get()
@@ -287,8 +287,7 @@ func (poi *putObjInfo) writeToFile() (err error) {
 	if checkHash != nil {
 		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
 		if !cmn.EqCksum(expectedCksum, computedCksum) {
-			s := cmn.BadCksum(expectedCksum, computedCksum) + ", " + poi.lom.StringEx() + "[" + poi.workFQN + "]"
-			err = fmt.Errorf(s)
+			err = cmn.NewBadDataCksumError(expectedCksum, computedCksum, poi.lom.StringEx())
 			poi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
@@ -364,10 +363,11 @@ do:
 			err = goi.lom.ValidateContentChecksum()
 		}
 		if err != nil {
-			if goi.lom.BadCksum {
-				glog.Error(err)
+			glog.Error(err)
+			if _, ok := err.(*cmn.BadCksumError); ok {
 				if goi.lom.IsAIS() {
-					// TODO: recover from copies if available
+					// TODO: recover from copies or EC if available (scruber).
+					// Removing object and copies at this point seems too harsh.
 					if err := goi.lom.Remove(); err != nil {
 						glog.Warningf("%s - failed to remove, err: %v", err, err)
 					}

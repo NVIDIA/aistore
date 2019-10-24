@@ -393,7 +393,7 @@ func PutWithTrace(proxyURL, bucket, provider, object, hash string, reader cmn.Re
 	resp, err := tctx.tracedClient.Do(req)
 	if err != nil {
 		sleep := httpRetrySleep
-		if cmn.IsErrBrokenPipe(err) || cmn.IsErrConnectionRefused(err) {
+		if cmn.IsErrConnectionReset(err) || cmn.IsErrConnectionRefused(err) {
 			for i := 0; i < httpMaxRetries && err != nil; i++ {
 				time.Sleep(sleep)
 				resp, err = tctx.tracedClient.Do(req)

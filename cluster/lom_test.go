@@ -367,7 +367,6 @@ var _ = Describe("LOM", func() {
 					err := lom.ValidateMetaChecksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Cksum()).To(BeNil())
-					Expect(lom.BadCksum).To(BeFalse())
 				})
 
 				It("should fill object with checksum if was not present", func() {
@@ -408,7 +407,6 @@ var _ = Describe("LOM", func() {
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
-					Expect(lom.BadCksum).To(BeTrue())
 				})
 
 				It("should not accept when object content has changed", func() {
@@ -418,7 +416,6 @@ var _ = Describe("LOM", func() {
 					Expect(ioutil.WriteFile(localFQN, []byte("wrong file"), 0644)).To(BeNil())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
-					Expect(lom.BadCksum).To(BeTrue())
 				})
 
 				It("should not check object content when recompute false", func() {
@@ -435,7 +432,6 @@ var _ = Describe("LOM", func() {
 
 					lom.SetCksum(cmn.NewCksum(cmn.ChecksumXXHash, "wrong checksum"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
-					Expect(lom.BadCksum).To(BeTrue())
 				})
 			})
 
@@ -450,7 +446,6 @@ var _ = Describe("LOM", func() {
 					err := lom.ValidateContentChecksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Cksum()).To(BeNil())
-					Expect(lom.BadCksum).To(BeFalse())
 				})
 
 				It("should fill object with checksum if was not present", func() {
@@ -499,7 +494,6 @@ var _ = Describe("LOM", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
-					Expect(lom.BadCksum).To(BeTrue())
 				})
 			})
 

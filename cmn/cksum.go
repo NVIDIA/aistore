@@ -12,10 +12,59 @@ import (
 )
 
 const (
-	BadCksumPrefix     = "BAD CHECKSUM:"
-	BadMetaCksumPrefix = "BAD METADATA CHECKSUM:"
+	badDataCksumPrefix = "BAD DATA CHECKSUM:"
+	badMetaCksumPrefix = "BAD META CHECKSUM:"
 	MLCG32             = 1103515245 // xxhash seed
 )
+
+type (
+	BadCksumError struct {
+		prefix  string
+		a, b    interface{}
+		context string
+	}
+)
+
+func NewBadDataCksumError(a, b *Cksum, context ...string) error {
+	ctx := ""
+	if len(context) > 0 {
+		ctx = context[0]
+	}
+	return &BadCksumError{prefix: badDataCksumPrefix, a: a, b: b, context: ctx}
+}
+func NewBadMetaCksumError(a, b uint64, context ...string) error {
+	ctx := ""
+	if len(context) > 0 {
+		ctx = context[0]
+	}
+	return &BadCksumError{prefix: badMetaCksumPrefix, a: a, b: b, context: ctx}
+}
+
+func (e *BadCksumError) Error() string {
+	context := ""
+	if e.context != "" {
+		context = fmt.Sprintf(" (context: %s)", e.context)
+	}
+
+	_, ok1 := e.a.(*Cksum)
+	_, ok2 := e.b.(*Cksum)
+	if ok1 && ok2 {
+		if e.a != nil && e.b == nil {
+			return fmt.Sprintf("%s (%s != %v)%s", e.prefix, e.a, e.b, context)
+		} else if e.a == nil && e.b != nil {
+			return fmt.Sprintf("%s (%v != %s)%s", e.prefix, e.a, e.b, context)
+		} else if e.a == nil && e.b == nil {
+			return fmt.Sprintf("%s (nil != nil)%s", e.prefix, context)
+		}
+		t1, v1 := e.a.(*Cksum).Get()
+		t2, v2 := e.b.(*Cksum).Get()
+		if t1 == t2 {
+			return fmt.Sprintf("%s %s(%s != %s)%s", e.prefix, t1, v1, v2, context)
+		}
+	}
+
+	return fmt.Sprintf("%s (%s != %s)%s", e.prefix, e.a, e.b, context)
+}
 
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
@@ -49,22 +98,6 @@ func EqCksum(a, b *Cksum) bool {
 	t1, v1 := a.Get()
 	t2, v2 := b.Get()
 	return t1 == t2 && v1 == v2
-}
-
-func BadCksum(a, b *Cksum) string {
-	if a != nil && b == nil {
-		return fmt.Sprintf("%s (%s != %v)", BadCksumPrefix, a, b)
-	} else if a == nil && b != nil {
-		return fmt.Sprintf("%s (%v != %s)", BadCksumPrefix, a, b)
-	} else if a == nil && b == nil {
-		return fmt.Sprintf("%s (nil != nil)", BadCksumPrefix)
-	}
-	t1, v1 := a.Get()
-	t2, v2 := b.Get()
-	if t1 == t2 {
-		return fmt.Sprintf("%s %s(%s != %s)", BadCksumPrefix, t1, v1, v2)
-	}
-	return fmt.Sprintf("%s %s != %s", BadCksumPrefix, a, b)
 }
 
 func (v *Cksum) Get() (string, string) { return v.ty, v.value }

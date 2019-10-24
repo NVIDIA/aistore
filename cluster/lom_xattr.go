@@ -120,7 +120,8 @@ func (md *lmeta) unmarshal(mdstr string) (err error) {
 	actualCksum = xxhash.ChecksumString64S(payload, cmn.MLCG32)
 
 	if expectedCksum != actualCksum {
-		return fmt.Errorf("%s (%x != %x)", cmn.BadMetaCksumPrefix, expectedCksum, actualCksum)
+		s := fmt.Sprintf("%v", md)
+		return cmn.NewBadMetaCksumError(expectedCksum, actualCksum, s)
 	}
 	for off := 0; !last; {
 		var (

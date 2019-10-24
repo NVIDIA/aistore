@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -606,7 +607,7 @@ func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) 
 		return true, nil
 	}
 
-	if res.err == context.DeadlineExceeded || cmn.IsErrConnectionRefused(res.err) {
+	if errors.Is(res.err, context.DeadlineExceeded) || cmn.IsErrConnectionRefused(res.err) {
 		return false, nil
 	}
 

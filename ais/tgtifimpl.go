@@ -177,7 +177,7 @@ func (t *targetrunner) GetCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	if prefetch {
 		if !lom.TryLock(true) {
 			glog.Infof("prefetch: cold GET race: %s - skipping", lom)
-			return cmn.NewSkipError(), 0
+			return cmn.ErrSkip, 0
 		}
 	} else {
 		lom.Lock(true) // one cold-GET at a time

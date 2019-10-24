@@ -6,6 +6,7 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -168,7 +169,7 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 		return
 	}
 	if err, _ = t.GetCold(ctx, lom, true); err != nil {
-		if _, ok := err.(*cmn.SkipError); !ok {
+		if !errors.Is(err, cmn.ErrSkip) {
 			glog.Error(err)
 		}
 		return
@@ -187,13 +188,13 @@ func (t *targetrunner) prefetchMissing(ctx context.Context, objName string, bck 
 
 func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bck *cluster.Bck,
 	deadline time.Duration, done chan struct{}) error {
-	//Validation is checked in target.go
-	var absdeadline time.Time
+	// Validation is checked in target.go
+	var absDeadline time.Time
 	if deadline != 0 {
 		// 0 is no deadline - if deadline == 0, the absolute deadline is 0 time.
-		absdeadline = time.Now().Add(deadline)
+		absDeadline = time.Now().Add(deadline)
 	}
-	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bck: bck, deadline: absdeadline, done: done}
+	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bck: bck, deadline: absDeadline, done: done}
 	return nil
 }
 
