@@ -1,6 +1,6 @@
 // Command-line mounting utility for aisfs.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -297,7 +297,7 @@ func appMain(c *cli.Context) (err error) {
 }
 
 func main() {
-	// Create and run a new CLI app
+	// Create and run a new CLI app.
 	app := newApp()
 	err := app.Run(os.Args)
 	if err != nil {

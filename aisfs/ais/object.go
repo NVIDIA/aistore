@@ -1,6 +1,6 @@
 // Package ais implements an AIStore client.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -37,8 +37,27 @@ func (obj *Object) DownloadPart(offset int64, length int) (io.Reader, int64, err
 	}
 	n, err := api.GetObject(obj.apiParams, obj.bucket, obj.Name, objArgs)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, newObjectIOError(err, "DownloadPart", obj.Name)
 	}
 
 	return buffer, n, nil
+}
+
+func (obj *Object) Put(data []byte, size uint64) (err error) {
+	putArgs := api.PutObjectArgs{
+		BaseParams: obj.apiParams,
+		Bucket:     obj.bucket,
+		Object:     obj.Name,
+		Reader:     cmn.NewByteHandle(data),
+		Size:       size,
+	}
+
+	err = api.PutObject(putArgs)
+	if err != nil {
+		return newObjectIOError(err, "Put", obj.Name)
+	}
+
+	obj.Size = int64(size)
+	obj.Atime = time.Now()
+	return nil
 }

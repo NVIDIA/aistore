@@ -1,41 +1,13 @@
 // Package ais implements an AIStore client.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
 import (
-	"net"
-	"net/http"
-	"time"
-
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmn"
 )
-
-const (
-	httpTransportTimeout = 60 * time.Second  // FIXME: Too long?
-	httpClientTimeout    = 300 * time.Second // FIXME: Too long?
-	requestObjectProps   = cmn.GetPropsSize + "," + cmn.GetPropsAtime
-)
-
-func apiParams(clusterURL string) *api.BaseParams {
-	httpTransport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: httpTransportTimeout,
-		}).DialContext,
-	}
-
-	httpClient := &http.Client{
-		Timeout:   httpClientTimeout,
-		Transport: httpTransport,
-	}
-
-	return &api.BaseParams{
-		Client: httpClient,
-		URL:    clusterURL,
-	}
-}
 
 type Bucket struct {
 	apiParams *api.BaseParams
@@ -49,52 +21,45 @@ func OpenBucket(clusterURL string, name string) *Bucket {
 	}
 }
 
-func (bck *Bucket) HeadObject(name string) (object *Object, err error) {
-	obj, err := api.HeadObject(bck.apiParams, bck.name, "", name)
+func (bck *Bucket) NewEmptyObject(objName string) (object *Object, err error) {
+	putArgs := api.PutObjectArgs{
+		BaseParams: bck.apiParams,
+		Bucket:     bck.name,
+		Object:     objName,
+		Reader:     emptyBuffer(),
+	}
+
+	err = api.PutObject(putArgs)
 	if err != nil {
-		return
+		return nil, newBucketIOError(err, "NewEmptyObject", objName)
+	}
+
+	return bck.HeadObject(objName)
+}
+
+func (bck *Bucket) HeadObject(objName string) (object *Object, err error) {
+	obj, err := api.HeadObject(bck.apiParams, bck.name, "", objName)
+	if err != nil {
+		return nil, newBucketIOError(err, "HeadObject", objName)
 	}
 
 	object = &Object{
 		apiParams: apiParams(bck.apiParams.URL),
 		bucket:    bck.name,
-		Name:      name,
+		Name:      objName,
 		Size:      obj.Size,
 		Atime:     obj.Atime,
 	}
-
 	return
 }
 
-func (bck *Bucket) ListObjects(prefix string, limit int) (objlist []*Object, err error) {
-	selectMsg := &cmn.SelectMsg{
-		Props:  requestObjectProps,
-		Prefix: prefix,
-	}
-
-	listResult, err := api.ListBucket(bck.apiParams, bck.name, selectMsg, limit)
+// HasObjectWithPrefix checks if object with given prefix exists in a bucket.
+func (bck *Bucket) HasObjectWithPrefix(prefix string) (exists bool, err error) {
+	list, err := api.ListBucket(bck.apiParams, bck.name, &cmn.SelectMsg{Prefix: prefix}, 1)
 	if err != nil {
-		return
+		return false, newBucketIOError(err, "HasObjectWithPrefix")
 	}
-
-	objlist = make([]*Object, 0, len(listResult.Entries))
-	for _, entry := range listResult.Entries {
-		var (
-			atime  time.Time
-			object *Object
-		)
-		atime, _ = time.Parse(time.RFC822, entry.Atime) // FIXME: Handle possible error
-		object = &Object{
-			apiParams: apiParams(bck.apiParams.URL),
-			bucket:    bck.name,
-			Name:      entry.Name,
-			Size:      entry.Size,
-			Atime:     atime,
-		}
-		objlist = append(objlist, object)
-	}
-
-	return
+	return len(list.Entries) > 0, nil
 }
 
 func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
@@ -105,7 +70,7 @@ func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
 
 	listResult, err := api.ListBucketFast(bck.apiParams, bck.name, selectMsg)
 	if err != nil {
-		return
+		return nil, newBucketIOError(err, "ListObjectNames")
 	}
 
 	names = make([]string, 0, len(listResult.Entries))
@@ -116,6 +81,10 @@ func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
 	return
 }
 
-func (bck *Bucket) DeleteObject(objName string) error {
-	return api.DeleteObject(bck.apiParams, bck.name, objName, "")
+func (bck *Bucket) DeleteObject(objName string) (err error) {
+	err = api.DeleteObject(bck.apiParams, bck.name, objName, "")
+	if err != nil {
+		err = newBucketIOError(err, "DeleteObject", objName)
+	}
+	return
 }

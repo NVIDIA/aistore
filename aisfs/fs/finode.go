@@ -1,6 +1,6 @@
 // Package fs implements an AIStore file system.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -11,14 +11,15 @@ import (
 	"github.com/jacobsa/fuse/fuseops"
 )
 
+// Ensure interface satisfaction.
+var _ Inode = &FileInode{}
+
 type FileInode struct {
 	baseInode
+
 	parent *DirectoryInode
 	object *ais.Object
 }
-
-// Ensure interface satisfaction.
-var _ Inode = &FileInode{}
 
 func NewFileInode(id fuseops.InodeID, attrs fuseops.InodeAttributes, parent *DirectoryInode, object *ais.Object) Inode {
 	return &FileInode{
@@ -49,8 +50,14 @@ func (file *FileInode) Read(dst []byte, offset int64, length int) (n int, err er
 	}
 
 	n, err = chunk.Read(dst[:chunkLen])
-	if err == io.EOF { // FIXME
+	if err == io.EOF {
 		err = nil
 	}
+
 	return
+}
+
+// REQUIRES_LOCK(file)
+func (file *FileInode) Write(data []byte, size uint64) (err error) {
+	return file.object.Put(data, size)
 }

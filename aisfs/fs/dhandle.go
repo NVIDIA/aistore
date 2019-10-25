@@ -1,21 +1,16 @@
 // Package fs implements an AIStore file system.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/aisfs/ais"
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
 )
-
-// TODO
-type fileHandle struct {
-}
 
 type dirHandle struct {
 	// Handle ID
@@ -27,14 +22,13 @@ type dirHandle struct {
 	// Directory entries
 	mu      sync.Mutex
 	entries []fuseutil.Dirent
-
-	// Bucket
-	bucket *ais.Bucket
 }
 
 // REQUIRES_LOCK(dh.mu)
 func (dh *dirHandle) fillEntries() error {
+	dh.dir.Lock()
 	entries, err := dh.dir.ReadEntries()
+	dh.dir.Unlock()
 	if err != nil {
 		return err
 	}
