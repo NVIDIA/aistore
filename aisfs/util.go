@@ -57,7 +57,6 @@ func determineClusterURL(c *cli.Context, flags *flags, bucket string) (clusterUR
 func discoverClusterURL(c *cli.Context) string {
 	const (
 		urlEnvVar           = "AIS_URL"
-		namespaceEnvVar     = "AIS_NAMESPACE"
 		defaultAISURL       = "http://127.0.0.1:8080"
 		defaultAISDockerURL = "http://172.50.0.2:8080"
 		dockerErrMsgFmt     = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
@@ -68,11 +67,7 @@ func discoverClusterURL(c *cli.Context) string {
 		return envURL
 	}
 
-	namespace := os.Getenv(namespaceEnvVar)
-	k8sURL, err := containers.K8sPrimaryURL(namespace)
-	if err == nil && k8sURL != "" {
-		return k8sURL
-	} else if containers.DockerRunning() {
+	if containers.DockerRunning() {
 		clustersIDs, err := containers.ClusterIDs()
 		if err != nil {
 			fmt.Fprintf(c.App.ErrWriter, dockerErrMsgFmt, err, defaultAISDockerURL)

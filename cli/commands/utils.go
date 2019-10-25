@@ -573,20 +573,16 @@ func bucketProvider(c *cli.Context, provider ...string) (string, error) {
 //
 
 // determineClusterURL resolving order
-// 1. AIS_URL; if not present:
-// 2. If kubernetes detected, tries to find a primary proxy in k8s cluster
-// 3. Proxy docker containter IP address; if not successful:
-// 4. Docker default; if not present:
-// 5. Default as cfg.Cluster.DefaultAISHost
+// 1. cfg.Cluster.URL; if empty:
+// 2. Proxy docker containter IP address; if not successful:
+// 3. Docker default; if not present:
+// 4. Default as cfg.Cluster.DefaultAISHost
 func determineClusterURL(cfg *config.Config) string {
 	if cfg.Cluster.URL != "" {
 		return cfg.Cluster.URL
 	}
 
-	k8sURL, err := containers.K8sPrimaryURL(cfg.Cluster.K8SNamespace)
-	if err == nil && k8sURL != "" {
-		return k8sURL
-	} else if containers.DockerRunning() {
+	if containers.DockerRunning() {
 		clustersIDs, err := containers.ClusterIDs()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
@@ -608,5 +604,6 @@ func determineClusterURL(cfg *config.Config) string {
 		return "http://" + proxyGateway + ":8080"
 	}
 
+	fmt.Fprintf(os.Stderr, "Warning! AIStore URL not configured, using default: %s\n", cfg.Cluster.DefaultAISHost)
 	return cfg.Cluster.DefaultAISHost
 }

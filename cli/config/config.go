@@ -27,6 +27,20 @@ func init() {
 		configDirPath = filepath.Join(os.Getenv("HOME"), ".config", configDirName)
 	}
 	configFilePath = filepath.Join(configDirPath, configFileName)
+
+	defaultConfig = Config{
+		Cluster: ClusterConfig{
+			URL:               "",
+			DefaultAISHost:    "http://127.0.0.1:8080",
+			DefaultDockerHost: "http://172.50.0.2:8080",
+		},
+		Timeout: TimeoutConfig{
+			TCPTimeoutStr:  "60s",
+			TCPTimeout:     60 * time.Second,
+			HTTPTimeoutStr: "300s",
+			HTTPTimeout:    300 * time.Second,
+		},
+	}
 }
 
 type Config struct {
@@ -37,7 +51,6 @@ type Config struct {
 type ClusterConfig struct {
 	URL               string `json:"url"`
 	DefaultAISHost    string `json:"default_ais_host"`
-	K8SNamespace      string `json:"k8s_namespace"`
 	DefaultDockerHost string `json:"default_docker_host"`
 }
 
@@ -49,23 +62,9 @@ type TimeoutConfig struct {
 }
 
 var (
-	defaultConfig = Config{
-		Cluster: ClusterConfig{
-			URL:               "",
-			DefaultAISHost:    "http://127.0.0.1:8080",
-			K8SNamespace:      "",
-			DefaultDockerHost: "http://172.50.0.2:8080",
-		},
-		Timeout: TimeoutConfig{
-			TCPTimeoutStr:  "60s",
-			TCPTimeout:     60 * time.Second,
-			HTTPTimeoutStr: "300s",
-			HTTPTimeout:    300 * time.Second,
-		},
-	}
-
 	configDirPath  string
 	configFilePath string
+	defaultConfig  Config
 )
 
 func (c *Config) validate() (err error) {
@@ -88,6 +87,11 @@ func createDirAndSaveDefault() (err error) {
 		return
 	}
 	return saveDefault()
+}
+
+// Location returns an absolute path to the config file.
+func Location() string {
+	return configFilePath
 }
 
 // Default returns the default config object.

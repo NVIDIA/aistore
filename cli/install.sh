@@ -6,6 +6,15 @@ if [[ -x "$FILE" ]]; then
     rm ${FILE}
 fi
 
+# Remove the config file before each installation
+CONFIG_FILE="$XDG_CONFIG_HOME/ais/config.json"
+if [[ -z "$XDG_CONFIG_HOME" ]]; then
+    CONFIG_FILE="$HOME/.config/ais/config.json"
+fi
+if [[ -x "$CONFIG_FILE" ]]; then
+    rm ${CONFIG_FILE}
+fi
+
 VERSION="0.4"
 BUILD=`git rev-parse --short HEAD`
 BINARY_NAME="ais"

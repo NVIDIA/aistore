@@ -50,11 +50,11 @@ func New(build string, version string) *AISCLI {
 
 // Run runs the CLI
 func (aisCLI *AISCLI) Run(input []string) error {
+	if err := testAISURL(); err != nil {
+		return err
+	}
+
 	if err := aisCLI.runOnce(input); err != nil {
-		// If the command failed, check if it failed because AIS is unreachable
-		if err := testAISURL(); err != nil {
-			return err
-		}
 		return aisCLI.handleCLIError(err)
 	}
 
@@ -213,10 +213,9 @@ func incorrectUsageHandler(c *cli.Context, err error, _ bool) error {
 // Checks if URL is valid by trying to get Smap
 func testAISURL() (err error) {
 	_, err = api.GetClusterMap(defaultAPIParams)
-
-	if cmn.IsErrConnectionRefused(err) {
-		return fmt.Errorf("could not connect to AIS cluser at %s - verify that cluster is running", clusterURL)
+	if err != nil {
+		return fmt.Errorf("AIStore proxy unreachable at %s. You may need to update URL in %s",
+			clusterURL, config.Location())
 	}
-
-	return err
+	return
 }
