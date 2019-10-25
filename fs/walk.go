@@ -1,12 +1,21 @@
 package fs
 
 import (
-	"os"
-
+	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/karrick/godirwalk"
 )
 
-type WalkFunc func(fqn string, de DirEntry) error
+const (
+	// Determines the threshold of error count which will result in halting
+	// the walking operation.
+	errThreshold = 1000
+)
+
+type (
+	errFunc  func(string, error) godirwalk.ErrorAction
+	WalkFunc func(fqn string, de DirEntry) error
+)
 
 type (
 	DirEntry interface {
@@ -14,15 +23,32 @@ type (
 	}
 
 	Options struct {
-		Callback WalkFunc
-		Sorted   bool
+		ErrCallback errFunc
+		Callback    WalkFunc
+		Sorted      bool
+	}
+
+	errCallbackWrapper struct {
+		counter atomic.Int64
 	}
 )
 
 // PathErrToAction is a default error callback for fast godirwalk.Walk.
-// It silently skips deleted files and directories.
-func PathErrToAction(_ string, err error) godirwalk.ErrorAction {
-	if os.IsNotExist(err) {
+// The idea is that on any error that was produced during the walk we dispatch
+// this handler and act upon the error.
+//
+// By default it halts on bucket level errors because there is no option to
+// continue walking if there is a problem with a bucket. Also we count "soft"
+// errors and abort if we reach certain amount of them.
+func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.ErrorAction {
+	if cmn.IsErrBucketLevel(err) {
+		return godirwalk.Halt
+	}
+	if ew.counter.Load() > errThreshold {
+		return godirwalk.Halt
+	}
+	if cmn.IsErrLOMLevel(err) {
+		ew.counter.Add(1)
 		return godirwalk.SkipNode
 	}
 	return godirwalk.Halt
@@ -51,8 +77,17 @@ func (opts *Options) callback(fqn string, de *godirwalk.Dirent) error {
 }
 
 func Walk(fqn string, opts *Options) error {
+	// For now `ErrCallback` is not used. Remove if something changes and ensure
+	// that we have
+	cmn.Assert(opts.ErrCallback == nil)
+
+	ew := &errCallbackWrapper{}
+	// Using default error callback which halts on bucket errors and halts
+	// on `errThreshold` lom errors.
+	opts.ErrCallback = ew.PathErrToAction
+
 	gOpts := &godirwalk.Options{
-		ErrorCallback: PathErrToAction,
+		ErrorCallback: opts.ErrCallback,
 		Callback:      opts.callback,
 		Unsorted:      !opts.Sorted,
 	}

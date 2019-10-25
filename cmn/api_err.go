@@ -6,6 +6,7 @@ package cmn
 
 import (
 	"fmt"
+	"os"
 )
 
 type (
@@ -78,9 +79,6 @@ func (e *ObjectAccessDenied) Error() string { return "object " + e.String() }
 func NewBucketAccessDenied(bucket, oper string, aattrs uint64) *BucketAccessDenied {
 	return &BucketAccessDenied{errAccessDenied{bucket, oper, aattrs}}
 }
-func NewObjectAccessDenied(name, oper string, aattrs uint64) *ObjectAccessDenied {
-	return &ObjectAccessDenied{errAccessDenied{name, oper, aattrs}}
-}
 
 func NewErrorCapacityExceeded(prefix string, high int64, used int32, oos bool) *ErrorCapacityExceeded {
 	return &ErrorCapacityExceeded{prefix: prefix, high: high, used: used, oos: oos}
@@ -91,4 +89,16 @@ func (e *ErrorCapacityExceeded) Error() string {
 		return fmt.Sprintf("%s: OUT OF SPACE (used %d%% of total available capacity)", e.prefix, e.used)
 	}
 	return fmt.Sprintf("%s: used capacity %d%% exceeded high watermark %d%%", e.prefix, e.used, e.high)
+}
+
+// This function aggregates all bucket errors which can ever occur.
+// Extend if necessary.
+func IsErrBucketLevel(err error) bool {
+	return IsErrBucketUnreachable(err)
+}
+
+// This function aggregates all lom errors which can ever occur.
+// Extend if necessary.
+func IsErrLOMLevel(err error) bool {
+	return os.IsNotExist(err)
 }

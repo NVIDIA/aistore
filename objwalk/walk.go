@@ -60,7 +60,7 @@ func (w *Walk) newFileWalk(bucket string, msg *cmn.SelectMsg) *allfinfos {
 
 		needSize:    msg.WantProp(cmn.GetPropsSize),
 		needAtime:   msg.WantProp(cmn.GetPropsAtime),
-		needChkSum:  msg.WantProp(cmn.GetPropsChecksum),
+		needCksum:   msg.WantProp(cmn.GetPropsChecksum),
 		needVersion: msg.WantProp(cmn.GetPropsVersion),
 		needStatus:  msg.WantProp(cmn.GetPropsStatus),
 		needCopies:  msg.WantProp(cmn.GetPropsCopies),
@@ -190,17 +190,20 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var (
+		config   = cmn.GCO.Get()
+		localURL = w.t.Snode().URL(cmn.NetworkPublic)
+		localID  = w.t.Snode().DaemonID
+		smap     = w.t.GetSmap()
+
 		needURL     = w.msg.WantProp(cmn.GetTargetURL)
 		needAtime   = w.msg.WantProp(cmn.GetPropsAtime)
-		needChkSum  = w.msg.WantProp(cmn.GetPropsChecksum)
+		needCksum   = w.msg.WantProp(cmn.GetPropsChecksum)
 		needVersion = w.msg.WantProp(cmn.GetPropsVersion)
 		needCopies  = w.msg.WantProp(cmn.GetPropsCopies)
-		config      = cmn.GCO.Get()
-		localURL    = w.t.Snode().URL(cmn.NetworkPublic)
-		localID     = w.t.Snode().DaemonID
-		smap        = w.t.GetSmap()
 	)
+
 	for _, e := range bucketList.Entries {
 		si, _ := cluster.HrwTarget(w.bck, e.Name, smap)
 		if si.DaemonID != localID {
@@ -226,7 +229,7 @@ func (w *Walk) CloudObjPage() (*cmn.BucketList, error) {
 		if needAtime {
 			e.Atime = cmn.FormatTime(lom.Atime(), w.msg.TimeFormat)
 		}
-		if needChkSum && lom.Cksum() != nil {
+		if needCksum && lom.Cksum() != nil {
 			_, storedCksum := lom.Cksum().Get()
 			e.Checksum = storedCksum
 		}

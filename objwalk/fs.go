@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
@@ -33,7 +32,7 @@ type (
 
 		needSize    bool
 		needAtime   bool
-		needChkSum  bool
+		needCksum   bool
 		needVersion bool
 		needStatus  bool
 		needCopies  bool
@@ -96,7 +95,7 @@ func (ci *allfinfos) lsObject(lom *cluster.LOM, objStatus uint16) error {
 	if ci.needAtime {
 		fileInfo.Atime = cmn.FormatTime(lom.Atime(), ci.msg.TimeFormat)
 	}
-	if ci.needChkSum && lom.Cksum() != nil {
+	if ci.needCksum && lom.Cksum() != nil {
 		_, storedCksum := lom.Cksum().Get()
 		fileInfo.Checksum = storedCksum
 	}
@@ -153,16 +152,17 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return ci.processDir(fqn)
 	}
-	// FIXME: check the logic vs local/global rebalance
+
 	var (
 		objStatus uint16 = cmn.ObjStatusOK
 	)
 	lom := &cluster.LOM{T: ci.t, FQN: fqn}
-	err := lom.Init("", "")
-	if err != nil {
-		glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
+	if err := lom.Init("", ""); err != nil {
+		return err
 	}
-	err = lom.Load()
+	if err := lom.Load(); err != nil {
+		return err
+	}
 	if !lom.Exists() {
 		return nil
 	}
@@ -172,12 +172,9 @@ func (ci *allfinfos) listwalkf(fqn string, de fs.DirEntry) error {
 	if !lom.IsHRW() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
-		if err != nil {
-			glog.Errorf("%s: %s", lom, err) // proceed to list this object anyway
-		}
 		si, err := cluster.HrwTarget(lom.Bck(), lom.Objname, ci.smap)
 		if err != nil {
-			glog.Errorf("%s: %s", lom, err)
+			return err
 		}
 		if ci.t.Snode().DaemonID != si.DaemonID {
 			objStatus = cmn.ObjStatusMoved
