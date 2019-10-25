@@ -107,8 +107,7 @@ func (t *targetrunner) Run() error {
 	dryinit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
-	bmd := newBucketMD()
-	t.bmdowner.put(bmd)
+	t.bmdowner.init(cmn.Target)
 
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si

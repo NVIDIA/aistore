@@ -7,6 +7,7 @@ package ais
 import (
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"unsafe"
@@ -272,9 +273,39 @@ func newBmdowner() *bmdowner {
 	return &bmdowner{}
 }
 
-func (r *bmdowner) put(bucketmd *bucketMD) {
+func (r *bmdowner) _put(bucketmd *bucketMD) {
 	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
 	r.bucketmd.Store(unsafe.Pointer(bucketmd))
+}
+
+func (r *bmdowner) init(node string) {
+	bmd := newBucketMD()
+	switch node {
+	case cmn.Target:
+		break
+	case cmn.Proxy:
+		bmdFullPath := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
+		if err := cmn.LocalLoad(bmdFullPath, bmd); err != nil {
+			// Create empty
+			bmd.Version = 1
+			if err := cmn.LocalSave(bmdFullPath, bmd); err != nil {
+				glog.Fatalf("FATAL: cannot store %s, err: %v", bmdTermName, err)
+			}
+		}
+	default:
+		cmn.AssertMsg(false, node)
+	}
+
+	r._put(bmd)
+}
+
+func (r *bmdowner) put(bucketmd *bucketMD) {
+	r._put(bucketmd)
+
+	bmdFullPath := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
+	if err := cmn.LocalSave(bmdFullPath, bucketmd); err != nil {
+		glog.Errorf("failed to store %s at %s, err: %v", bmdTermName, bmdFullPath, err)
+	}
 }
 
 // implements cluster.Bowner.Get

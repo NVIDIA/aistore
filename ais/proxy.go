@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -110,17 +109,7 @@ func (p *proxyrunner) Run() error {
 	p.httprunner.init(getproxystatsrunner(), config)
 	p.httprunner.keepalive = getproxykeepalive()
 
-	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
-	bmd := newBucketMD()
-	if cmn.LocalLoad(bucketmdfull, bmd) != nil {
-		// create empty
-		bmd.Version = 1
-		if err := cmn.LocalSave(bucketmdfull, bmd); err != nil {
-			glog.Fatalf("FATAL: cannot store %s, err: %v", bmdTermName, err)
-		}
-	}
-	p.bmdowner.put(bmd)
-
+	p.bmdowner.init(cmn.Proxy)
 	p.metasyncer = getmetasyncer()
 
 	// startup sequence - see earlystart.go for the steps and commentary
@@ -674,17 +663,13 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck, config *cmn.Config) error {
+func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bucketProps := cmn.DefaultBucketProps(bck.IsAIS())
 	if !clone.add(bck, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Name)
-	}
-	if err := p.savebmdconf(clone, config); err != nil {
-		p.bmdowner.Unlock()
-		return err
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -712,10 +697,6 @@ func (p *proxyrunner) destroyBucket(msg *cmn.ActionMsg, bck *cluster.Bck) (*buck
 	if !clone.del(bck) {
 		p.bmdowner.Unlock()
 		return nil, cmn.NewErrorBucketDoesNotExist(bck.Name), http.StatusNotFound
-	}
-	if err := p.savebmdconf(clone, cmn.GCO.Get()); err != nil {
-		p.bmdowner.Unlock()
-		return nil, err, http.StatusInternalServerError
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -791,7 +772,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bck.Provider = cmn.AIS
-		if err := p.createBucket(&msg, bck, config); err != nil {
+		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
@@ -842,7 +823,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bck.Provider = cmn.Cloud
-		if err := p.createBucket(&msg, bck, config); err != nil {
+		if err := p.createBucket(&msg, bck); err != nil {
 			errCode := http.StatusInternalServerError
 			if _, ok := err.(*cmn.ErrorBucketAlreadyExists); ok {
 				errCode = http.StatusConflict
@@ -1273,9 +1254,6 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops
 }
 
 func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops *cmn.BucketProps, err error) {
-	var (
-		cfg = cmn.GCO.Get()
-	)
 	nprops, err = p.applyNewProps(bck, nvs)
 	if err != nil {
 		return
@@ -1304,9 +1282,6 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (np
 	}
 
 	clone.set(bck, nprops)
-	if err := p.savebmdconf(clone, cfg); err != nil {
-		glog.Error(err)
-	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 	msgInt := p.newActionMsgInternalStr(cmn.ActSetProps, nil, clone)
@@ -1408,7 +1383,6 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	config := cmn.GCO.Get()
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	bprops, exists := clone.Get(bck)
@@ -1450,9 +1424,6 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		bprops = cmn.DefaultBucketProps(bck.IsAIS())
 	}
 	clone.set(bck, bprops)
-	if err := p.savebmdconf(clone, config); err != nil {
-		glog.Error(err)
-	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
 
@@ -1593,9 +1564,6 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 	clone.downgrade(bckFrom)
 	clone.downgrade(bckTo)
 	p.bmdowner.put(clone)
-	if err := p.savebmdconf(clone, config); err != nil {
-		glog.Error(err)
-	}
 	p.bmdowner.Unlock()
 
 	// Distribute temporary bucket
@@ -1610,9 +1578,6 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		clone.upgrade(bckTo)
 		clone.del(bckTo)
 		p.bmdowner.put(clone)
-		if err = p.savebmdconf(clone, config); err != nil {
-			glog.Error(err)
-		}
 		p.bmdowner.Unlock()
 
 		msgInt := p.newActionMsgInternal(msg, smap, clone)
@@ -1665,9 +1630,6 @@ func (p *proxyrunner) copyRenameLB(bckFrom *cluster.Bck, bucketTo string, msg *c
 		clone.set(bckFrom, bckFromProps)
 	}
 	p.bmdowner.put(clone)
-	if err := p.savebmdconf(clone, config); err != nil {
-		glog.Error(err)
-	}
 	p.bmdowner.Unlock()
 
 	// Finalize
@@ -1818,9 +1780,8 @@ func (p *proxyrunner) syncCBmeta(w http.ResponseWriter, r *http.Request, bucket 
 		}
 		return
 	}
-	cfg := cmn.GCO.Get()
 	bck = &cluster.Bck{Name: bucket, Provider: cmn.Cloud}
-	if err = p.createBucket(msg, bck, cfg); err != nil {
+	if err = p.createBucket(msg, bck); err != nil {
 		if _, ok := err.(*cmn.ErrorBucketAlreadyExists); !ok {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusConflict)
 			return
@@ -2153,14 +2114,6 @@ func (p *proxyrunner) listCloudBucket(r *http.Request, bck *cluster.Bck, headerI
 	return allEntries, 0, nil
 }
 
-func (p *proxyrunner) savebmdconf(bmd *bucketMD, config *cmn.Config) (err error) {
-	bmdFullPath := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
-	if err := cmn.LocalSave(bmdFullPath, bmd); err != nil {
-		return fmt.Errorf("failed to store %s at %s, err: %v", bmdTermName, bmdFullPath, err)
-	}
-	return nil
-}
-
 func (p *proxyrunner) objRename(w http.ResponseWriter, r *http.Request, bck *cluster.Bck) {
 	started := time.Now()
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
@@ -2464,9 +2417,6 @@ func (p *proxyrunner) handlePendingRenamedLB(renamedBucket string) {
 	bmd.del(bck)
 	p.bmdowner.put(bmd)
 	p.bmdowner.Unlock()
-	if err := p.savebmdconf(bmd, cmn.GCO.Get()); err != nil {
-		glog.Error(err)
-	}
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -3524,9 +3474,6 @@ func (p *proxyrunner) receiveBucketMD(newBMD *bucketMD, msgInt *actionMsgInterna
 		return
 	}
 	p.bmdowner.put(newBMD)
-	if err := p.savebmdconf(newBMD, cmn.GCO.Get()); err != nil {
-		glog.Error(err)
-	}
 	p.bmdowner.Unlock()
 	return
 }
