@@ -44,12 +44,12 @@ func (r *XactBckCopy) Run() (err error) {
 	if mpathCount, err = r.init(); err != nil {
 		return
 	}
-	glog.Infoln(r.String(), r.Bucket(), "=>", r.bckTo)
+	glog.Infoln(r.String(), r.Bucket(), "=>", r.bckTo.Name)
 	return r.xactBckBase.run(mpathCount)
 }
 
 func (r *XactBckCopy) Description() string {
-	return "copy ais bucket"
+	return "copy bucket"
 }
 
 //

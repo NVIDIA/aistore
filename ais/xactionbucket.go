@@ -379,17 +379,18 @@ func (r *xactionsRegistry) renewPutLocReplicas(lom *cluster.LOM) *mirror.XactPut
 //
 type bccEntry struct {
 	baseBckEntry
-	t      *targetrunner
-	xact   *mirror.XactBckCopy
-	bckTo  *cluster.Bck
-	action string
-	phase  string
+	t       *targetrunner
+	xact    *mirror.XactBckCopy
+	bckFrom *cluster.Bck
+	bckTo   *cluster.Bck
+	action  string
+	phase   string
 }
 
 func (e *bccEntry) Start(id int64) error {
 	slab, err := nodeCtx.mm.GetSlab2(memsys.MaxSlabSize)
 	cmn.AssertNoErr(err)
-	e.xact = mirror.NewXactBCC(id, e.bck, e.bckTo, e.action, e.t, slab)
+	e.xact = mirror.NewXactBCC(id, e.bckFrom, e.bckTo, e.action, e.t, slab)
 	return nil
 }
 func (e *bccEntry) Kind() string  { return e.action }
@@ -397,22 +398,23 @@ func (e *bccEntry) Get() cmn.Xact { return e.xact }
 
 func (e *bccEntry) preRenewHook(previousEntry xactionBucketEntry) (keep bool, err error) {
 	prev := previousEntry.(*bccEntry)
-	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckTo.Equal(e.bckTo) {
+	if prev.phase == cmn.ActBegin && e.phase == cmn.ActCommit && prev.bckFrom.Equal(e.bckFrom) {
 		prev.phase = cmn.ActCommit // transition
 		keep = true
 		return
 	}
-	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(=>%s)", prev.xact, prev.bck, prev.bckTo, prev.phase, e.phase, e.bckTo)
+	err = fmt.Errorf("%s(%s=>%s, phase %s): cannot %s(%s=>%s)", prev.xact, prev.bckFrom, prev.bckTo, prev.phase, e.phase, e.bckFrom, e.bckTo)
 	return
 }
 
 func (r *xactionsRegistry) renewBckCopy(t *targetrunner, bckFrom, bckTo *cluster.Bck, phase string) (*mirror.XactBckCopy, error) {
-	b := r.bucketsXacts(bckFrom)
-	e := &bccEntry{baseBckEntry: baseBckEntry{bck: bckFrom},
-		t:      t,
-		bckTo:  bckTo,
-		action: cmn.ActCopyBucket, // kind
-		phase:  phase,
+	b := r.bucketsXacts(bckTo)
+	e := &bccEntry{baseBckEntry: baseBckEntry{bck: bckTo},
+		t:       t,
+		bckFrom: bckFrom,
+		bckTo:   bckTo,
+		action:  cmn.ActCopyBucket, // kind
+		phase:   phase,
 	}
 	ee, err := b.renewBucketXaction(e)
 	if err != nil {

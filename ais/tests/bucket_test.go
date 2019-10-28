@@ -985,11 +985,6 @@ func TestCopyBucket(t *testing.T) {
 		}
 
 		t.Run(testName, func(t *testing.T) {
-			if test.multipleDests {
-				// TODO: it should work
-				t.Skip("copying a bucket to multiple destinations is not yet supported")
-			}
-
 			var (
 				srcBckList *cmn.BucketList
 
@@ -1032,7 +1027,7 @@ func TestCopyBucket(t *testing.T) {
 			// Initialize ioContext
 			srcm.saveClusterState()
 			for _, dstm := range dstms {
-				dstm.saveClusterState()
+				dstm.init()
 			}
 			if srcm.originalTargetCount < 1 {
 				t.Fatalf("Must have 1 or more targets in the cluster, have only %d", srcm.originalTargetCount)
@@ -1080,7 +1075,9 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			}
 
-			waitForBucketXactionToComplete(t, cmn.ActCopyBucket /*kind*/, srcm.bucket, baseParams, rebalanceTimeout)
+			for _, dstm := range dstms {
+				waitForBucketXactionToComplete(t, cmn.ActCopyBucket /*kind*/, dstm.bucket, baseParams, rebalanceTimeout)
+			}
 
 			tutils.Logln("checking and comparing bucket props")
 			for _, dstm := range dstms {
