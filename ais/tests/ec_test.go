@@ -16,12 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/containers"
-
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/containers"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
@@ -33,10 +32,6 @@ const (
 	ecSliceDir = "/" + ec.SliceType + "/"
 	ecMetaDir  = "/" + ec.MetaType + "/"
 	ecDataDir  = "/" + fs.ObjectType + "/"
-	ecWorkDir  = "/" + fs.WorkfileType + "/"
-	ecLogDir   = "/log/"   // TODO -- FIXME: hardcoding is illegal, use fs.MakePath*
-	ecLocalDir = "/local/" // TODO -- FIXME: ditto
-	ecCloudDir = "/cloud/" // TODO -- FIXME: ditto
 	ecTestDir  = "ec-test/"
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
@@ -122,63 +117,64 @@ func ecSliceNumInit(t *testing.T, smap *cluster.Smap, o *ecOptions) error {
 // algorithm on GET request from a client.
 // The function uses heuristics to detect the main one: it should be the oldest
 func ecGetAllSlices(t *testing.T, objName, bucketName string, o *ecOptions) (map[string]ecSliceMD, string) {
-	tMock := cluster.NewTargetMock(cluster.NewBaseBownerMock(bucketName))
-	foundParts := make(map[string]ecSliceMD)
-	oldest := time.Now().Add(time.Hour)
-	main := ""
-	noObjCnt := 0
-	bckTypeDir := ecLocalDir
-	bckType := cmn.AIS
+	var (
+		noObjCnt int64
+		main     string
+
+		foundParts = make(map[string]ecSliceMD)
+		oldest     = time.Now().Add(time.Hour)
+
+		bckType = cmn.AIS
+		bmd     = cluster.NewBaseBownerMock(bucketName)
+	)
 
 	if !o.isAIS {
-		bckTypeDir = ecCloudDir
 		bckType = cmn.Cloud
+		bmd.CBmap[bucketName] = cmn.DefaultBucketProps()
 	}
 
-	//
-	// FIXME -- TODO: must be redone using fs.MakePath and friends
-	//
+	tMock := cluster.NewTargetMock(bmd)
+
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
 		}
-		if info.IsDir() ||
-			strings.Contains(path, ecLogDir) ||
-			!strings.Contains(path, bckTypeDir) ||
-			strings.Contains(path, ecWorkDir) {
+		if info.IsDir() {
 			return nil
 		}
 
-		if strings.Contains(path, objName) {
-			sliceLom := &cluster.LOM{T: tMock, FQN: path}
-			err := sliceLom.Init("", bckType)
-			if _, ok := err.(*cmn.ErrorCloudBucketDoesNotExist); !ok {
-				tassert.CheckFatal(t, err)
-			}
-			err = sliceLom.Load(false)
+		if !strings.Contains(path, objName) {
+			return nil
+		}
+		sliceLom := &cluster.LOM{T: tMock, FQN: path}
 
-			var cksumVal string
-			if strings.Contains(path, ecMetaDir) && err != nil {
-				// metafile of the original object on the main target doesn't have meta saved on disk
-				noObjCnt++
-			} else if !strings.Contains(path, ecMetaDir) {
-				// metafiles contain checksum inside but don't have a checksum in a lom
-				if sliceLom.Cksum() != nil {
-					_, cksumVal = sliceLom.Cksum().Get()
-				}
-			}
+		if err = sliceLom.Init("", bckType); err != nil {
+			return nil
+		}
 
-			foundParts[path] = ecSliceMD{info.Size(), cksumVal}
-			if strings.Contains(path, ecDataDir) && oldest.After(info.ModTime()) {
-				main = path
-				oldest = info.ModTime()
-			}
+		_ = sliceLom.Load(false)
+		if !cmn.StringInSlice(sliceLom.ParsedFQN.ContentType, []string{ec.SliceType, ec.MetaType, fs.ObjectType}) {
+			return nil
+		}
+
+		var cksumVal string
+
+		// Metafiles contain checksum inside but don't have a checksum in a lom
+		if sliceLom.Cksum() != nil {
+			_, cksumVal = sliceLom.Cksum().Get()
+		}
+
+		foundParts[path] = ecSliceMD{info.Size(), cksumVal}
+		if strings.Contains(path, ecDataDir) && oldest.After(info.ModTime()) {
+			main = path
+			oldest = info.ModTime()
 		}
 
 		return nil
 	}
 
-	filepath.Walk(rootDir, fsWalkFunc)
+	err := filepath.Walk(rootDir, fsWalkFunc)
+	tassert.CheckFatal(t, err)
 
 	if noObjCnt > 1 {
 		tutils.Logf("meta not found for %d files matching object name %s\n", noObjCnt, objName)
