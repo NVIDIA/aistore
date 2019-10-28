@@ -159,6 +159,7 @@ func init() {
 		ValidateJsonRawMessage: true,
 		// Need to be sure that we have exactly the same struct as user requested.
 		DisallowUnknownFields: true,
+		SortMapKeys:           true,
 	}.Froze()
 }
 

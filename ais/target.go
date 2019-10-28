@@ -33,9 +33,8 @@ import (
 )
 
 const (
-	maxPageSize     = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
-	maxBytesInMem   = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
-	maxBMDXattrSize = 128 * 1024
+	maxPageSize   = 64 * 1024     // max number of objects in a page (warn when req. size exceeds this limit)
+	maxBytesInMem = 256 * cmn.KiB // objects with smaller size than this will be read to memory when checksumming
 
 	bucketMDFixup    = "fixup"
 	bucketMDReceive  = "receive"
@@ -107,7 +106,7 @@ func (t *targetrunner) Run() error {
 	dryinit()
 	t.gfn.local.tag, t.gfn.global.tag = "local GFN", "global GFN"
 
-	t.bmdowner.init(cmn.Target)
+	t.bmdowner.init()
 
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si

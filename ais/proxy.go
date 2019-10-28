@@ -109,7 +109,7 @@ func (p *proxyrunner) Run() error {
 	p.httprunner.init(getproxystatsrunner(), config)
 	p.httprunner.keepalive = getproxykeepalive()
 
-	p.bmdowner.init(cmn.Proxy)
+	p.bmdowner.init()
 	p.metasyncer = getmetasyncer()
 
 	// startup sequence - see earlystart.go for the steps and commentary

@@ -5,7 +5,7 @@
 package ais
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -44,6 +44,11 @@ type bucketMD struct {
 	cluster.BMD
 	vstr string // itoa(Version), to have it handy for http redirects
 }
+
+var (
+	_ json.Marshaler   = &bucketMD{}
+	_ json.Unmarshaler = &bucketMD{}
+)
 
 // c-tor
 func newBucketMD() *bucketMD {
@@ -168,78 +173,48 @@ func (m *bucketMD) marshal() ([]byte, error) {
 }
 
 // Extracts JSON payload and its checksum from []byte.
-// Checksum is the first line, the other lines are JSON payload
-// that represents marshaled bucketMD structure
-func (m *bucketMD) UnmarshalXattr(b []byte) error {
-	const emptyPayloadLen = len("\n{}")
-	cmn.AssertMsg(len(b) >= cmn.SizeofI64+emptyPayloadLen, "Incomplete bucketMD payload")
+func (m *bucketMD) UnmarshalJSON(b []byte) error {
+	aux := &struct {
+		BMD   *cluster.BMD `json:"bmd"`
+		Cksum uint64       `json:"cksum,string"`
+	}{
+		BMD: &m.BMD,
+	}
 
-	expectedCksm, mdJSON := binary.BigEndian.Uint64(b[:cmn.SizeofI64]), b[cmn.SizeofI64+1:]
-	actualCksum := xxhash.Checksum64S(mdJSON, 0)
-	if actualCksum != expectedCksm {
-		return fmt.Errorf("checksum %v mismatches, expected %v", actualCksum, expectedCksm)
+	if err := jsoniter.Unmarshal(b, &aux); err != nil {
+		return err
 	}
-	err := jsoniter.Unmarshal(mdJSON, m)
-	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Restored BMD copy version %d", m.Version)
+
+	payload := cmn.MustMarshal(m.BMD)
+	expectedCksum := xxhash.Checksum64S(payload, 0)
+	if aux.Cksum != expectedCksum {
+		return fmt.Errorf("checksum %v mismatches, expected %v", aux.Cksum, expectedCksum)
 	}
-	return err
+	return nil
 }
 
-// Marshals bucketMD into JSON, calculates JSON checksum and generates
-// a payload as [checksum] + "\n" + JSON
-func (m *bucketMD) MarshalXattr() []byte {
-	payload := cmn.MustMarshal(m)
+// Marshals bucketMD into JSON, calculates JSON checksum.
+func (m *bucketMD) MarshalJSON() ([]byte, error) {
+	payload := cmn.MustMarshal(m.BMD)
 	cksum := xxhash.Checksum64S(payload, 0)
 
-	bufLen := cmn.SizeofI64 + 1 + len(payload)
-	body := make([]byte, bufLen)
-	binary.BigEndian.PutUint64(body, cksum)
-	body[cmn.SizeofI64] = '\n'
-	copy(body[cmn.SizeofI64+1:], payload)
-
-	return body
+	return cmn.MustMarshal(&struct {
+		BMD   cluster.BMD `json:"bmd"`
+		Cksum uint64      `json:"cksum,string"`
+	}{
+		BMD:   m.BMD,
+		Cksum: cksum,
+	}), nil
 }
 
-// Selects a mountpath with highest weight and reads xattr of the
-// directory where mountpath is mounted
+// Selects a mountpath with highest weight and reads the bmd from the file.
 func (m *bucketMD) LoadFromFS() error {
-	slab, err := nodeCtx.mm.GetSlab2(maxBMDXattrSize)
+	mpath, err := fs.Mountpaths.MpathForMetadata()
 	if err != nil {
 		return err
 	}
-	buf := slab.Alloc()
-	defer slab.Free(buf)
-
-	mpath, err := fs.Mountpaths.MpathForXattr()
-	if err != nil {
-		return err
-	}
-	b, err := fs.GetXattrBuf(mpath.Path, cmn.XattrBMD, buf)
-	if err != nil {
-		return fmt.Errorf("%s: %v", mpath, err)
-	}
-	if len(b) > 0 {
-		return m.UnmarshalXattr(b)
-	}
-	return nil
-}
-
-// Selects a mountpath with highest weight and saves BMD to its xattr
-func (m *bucketMD) Persist() error {
-	mpath, err := fs.Mountpaths.MpathForXattr()
-	if err != nil {
-		return err
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Saving %s v%d copy to %s of %s", bmdTermName, m.Version, cmn.XattrBMD, mpath.Path)
-	}
-	b := m.MarshalXattr()
-	err = fs.SetXattr(mpath.Path, cmn.XattrBMD, b)
-	if err != nil {
-		return fmt.Errorf("failed to save xattr to %q: %v", mpath.Path, err)
-	}
-	return nil
+	bmdFullPath := filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
+	return cmn.LocalLoad(bmdFullPath, m)
 }
 
 func (m *bucketMD) Dump() string {
@@ -266,11 +241,14 @@ var _ cluster.Bowner = &bmdowner{}
 
 type bmdowner struct {
 	sync.Mutex
+	node     string
 	bucketmd atomic.Pointer
 }
 
-func newBmdowner() *bmdowner {
-	return &bmdowner{}
+func newBmdowner(node string) *bmdowner {
+	return &bmdowner{
+		node: node,
+	}
 }
 
 func (r *bmdowner) _put(bucketmd *bucketMD) {
@@ -278,9 +256,9 @@ func (r *bmdowner) _put(bucketmd *bucketMD) {
 	r.bucketmd.Store(unsafe.Pointer(bucketmd))
 }
 
-func (r *bmdowner) init(node string) {
+func (r *bmdowner) init() {
 	bmd := newBucketMD()
-	switch node {
+	switch r.node {
 	case cmn.Target:
 		break
 	case cmn.Proxy:
@@ -293,17 +271,39 @@ func (r *bmdowner) init(node string) {
 			}
 		}
 	default:
-		cmn.AssertMsg(false, node)
+		cmn.AssertMsg(false, r.node)
 	}
 
 	r._put(bmd)
 }
 
-func (r *bmdowner) put(bucketmd *bucketMD) {
-	r._put(bucketmd)
+func (r *bmdowner) put(bmd *bucketMD) {
+	r._put(bmd)
 
-	bmdFullPath := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
-	if err := cmn.LocalSave(bmdFullPath, bucketmd); err != nil {
+	var (
+		bmdFullPath string
+		err         error
+	)
+	switch r.node {
+	case cmn.Target:
+		var mpath *fs.MountpathInfo
+		mpath, err = fs.Mountpaths.MpathForMetadata()
+		if err != nil {
+			break
+		}
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("Saving %s v%d copy to %s of %s", bmdTermName, bmd.Version, cmn.XattrBMD, mpath.Path)
+		}
+		bmdFullPath = filepath.Join(mpath.Path, cmn.BucketmdBackupFile)
+		err = cmn.LocalSave(bmdFullPath, bmd)
+	case cmn.Proxy:
+		bmdFullPath = filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
+		err = cmn.LocalSave(bmdFullPath, bmd)
+	default:
+		cmn.AssertMsg(false, r.node)
+	}
+
+	if err != nil {
 		glog.Errorf("failed to store %s at %s, err: %v", bmdTermName, bmdFullPath, err)
 	}
 }

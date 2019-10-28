@@ -93,7 +93,7 @@ func newPrimary() *proxyrunner {
 	p.httpclientGetPut = &http.Client{}
 	p.keepalive = newProxyKeepaliveRunner(&p, &p.startedUp)
 
-	p.bmdowner = newBmdowner()
+	p.bmdowner = newBmdowner(cmn.Proxy)
 	p.bmdowner.put(newBucketMD())
 	return &p
 }
@@ -776,7 +776,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy1 := proxyrunner{}
 		proxy1.smapowner = newSmapowner()
 		proxy1.smapowner.put(newSmap())
-		proxy1.bmdowner = newBmdowner()
+		proxy1.bmdowner = newBmdowner(cmn.Proxy)
 		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload

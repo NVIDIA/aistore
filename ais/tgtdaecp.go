@@ -1019,20 +1019,6 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 			t.invalmsghdlr(w, r, err.Error())
 			return
 		}
-
-		go func() {
-			t.bmdowner.Lock()
-			bmd := t.bmdowner.get()
-			if bmd.Version == 1 && len(bmd.LBmap) == 0 && len(bmd.CBmap) == 0 {
-				// do not overwrite xattrs if a cluster sends initial bmd
-				t.bmdowner.Unlock()
-				return
-			}
-			if err := bmd.Persist(); err != nil {
-				glog.Errorf("%s: %v", t.si.Name(), err)
-			}
-			t.bmdowner.Unlock()
-		}()
 	}
 
 	revokedTokens, err := t.extractRevokedTokenList(payload)

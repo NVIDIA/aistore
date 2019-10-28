@@ -636,7 +636,7 @@ func (mfs *MountedFS) String() string {
 }
 
 // Select a "random" mountpath using HRW algorithm to store/load bucket metadata
-func (mfs *MountedFS) MpathForXattr() (mpath *MountpathInfo, err error) {
+func (mfs *MountedFS) MpathForMetadata() (mpath *MountpathInfo, err error) {
 	// fast path
 	mp := mfs.xattrMpath.Load()
 	if mp != nil {

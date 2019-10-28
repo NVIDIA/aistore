@@ -358,7 +358,7 @@ func (h *httprunner) init(s stats.Tracker, config *cmn.Config) {
 	}
 
 	h.smapowner = newSmapowner()
-	h.bmdowner = newBmdowner()
+	h.bmdowner = newBmdowner(h.si.DaemonType)
 	h.xactions = newXactions() // extended actions
 }
 
