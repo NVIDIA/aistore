@@ -11,6 +11,7 @@ import (
 	"path"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/aisfs/ais"
 	"github.com/jacobsa/fuse"
@@ -378,4 +379,27 @@ func (fs *aisfs) MkDir(ctx context.Context, req *fuseops.MkDirOp) (err error) {
 	req.Entry.Attributes = newDir.Attributes()
 	newDir.Unlock()
 	return
+}
+
+func (fs *aisfs) Unlink(ctx context.Context, op *fuseops.UnlinkOp) (err error) {
+	fs.mu.Lock()
+	parent := fs.findDir(op.Parent)
+	fs.mu.Unlock()
+
+	parent.Lock()
+	defer parent.Unlock()
+
+	lookupRes, err := parent.LookupEntry(op.Name)
+	if err != nil {
+		fs.logf("dentry lookup of %q in %d: %v", op.Name, op.Parent, err)
+		return fuse.EIO
+	}
+	if lookupRes.NoEntry() || lookupRes.NoInode() {
+		return fuse.ENOENT
+	}
+	if lookupRes.IsDir() {
+		fs.logf("tried to unlink directory: %q in %d", op.Name, op.Parent)
+		return syscall.EISDIR
+	}
+	return parent.UnlinkEntry(op.Name)
 }

@@ -77,6 +77,16 @@ func (dir *DirectoryInode) NewEntry(name string, id fuseops.InodeID) {
 }
 
 // REQUIRES_LOCK(dir)
+func (dir *DirectoryInode) UnlinkEntry(name string) error {
+	if err := dir.bucket.DeleteObject(name); err != nil {
+		return err
+	}
+
+	delete(dir.children, name)
+	return nil
+}
+
+// REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) {
 	var (
 		offset fuseops.DirOffset = 1
@@ -121,6 +131,11 @@ func (dir *DirectoryInode) ReadEntries() (entries []fuseutil.Dirent, err error) 
 
 // REQUIRES_LOCK(dir)
 func (dir *DirectoryInode) LookupEntry(name string) (res EntryLookupResult, err error) {
+	var (
+		object  *ais.Object
+		objects []*ais.Object
+	)
+
 	// First, we try to find a directory
 	prefix := name + separator
 	if dir.ID() != fuseops.RootInodeID {
@@ -137,9 +152,25 @@ func (dir *DirectoryInode) LookupEntry(name string) (res EntryLookupResult, err 
 		return
 	}
 
+	// Fast path, assume this is an object: dir.Name()/name
+	object, err = dir.bucket.HeadObject(path.Join(dir.Name(), name))
+	if object != nil {
+		res.Object = object
+		inodeID := dummyInodeID
+		if id, ok := dir.children[name]; ok {
+			inodeID = id
+		}
+		res.Entry = &fuseutil.Dirent{
+			Inode: inodeID,
+			Name:  name,
+			Type:  fuseutil.DT_File,
+		}
+		return
+	}
+
 	// If there is at least one object starting with dir.Name()/name/
 	// then name is also a (non-empty) directory.
-	objects, err := dir.bucket.ListObjects(prefix, 1)
+	objects, err = dir.bucket.ListObjects(prefix, 1)
 	if err != nil {
 		return
 	}
@@ -153,24 +184,6 @@ func (dir *DirectoryInode) LookupEntry(name string) (res EntryLookupResult, err 
 			Name:  name,
 			Type:  fuseutil.DT_Directory,
 		}
-		return
 	}
-
-	// If name is not a directory, try to find the object dir.Name()/name
-	object, _ := dir.bucket.HeadObject(path.Join(dir.Name(), name))
-	if object != nil {
-		res.Object = object
-		inodeID := dummyInodeID
-		if id, ok := dir.children[name]; ok {
-			inodeID = id
-		}
-		res.Entry = &fuseutil.Dirent{
-			Inode: inodeID,
-			Name:  name,
-			Type:  fuseutil.DT_File,
-		}
-	}
-
-	// res.Entry == nil
 	return
 }

@@ -115,3 +115,7 @@ func (bck *Bucket) ListObjectNames(prefix string) (names []string, err error) {
 
 	return
 }
+
+func (bck *Bucket) DeleteObject(objName string) error {
+	return api.DeleteObject(bck.apiParams, bck.name, objName, "")
+}
