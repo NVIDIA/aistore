@@ -648,9 +648,6 @@ func Test_sameAISandCloudBucketName(t *testing.T) {
 	defLocalProps.Cksum = globalConfig.Cksum
 	defLocalProps.LRU = testBucketProps(t).LRU
 	defLocalProps.CloudProvider = cmn.ProviderAIS
-	if !globalConfig.LRU.EvictAISBuckets {
-		defLocalProps.LRU.Enabled = false
-	}
 
 	// ais bucket props
 	bucketPropsLocal := defaultBucketProps()

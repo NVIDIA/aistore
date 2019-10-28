@@ -369,10 +369,6 @@ type LRUConf struct {
 	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
 	CapacityUpdTime time.Duration `json:"-"`
 
-	// Buckets: Enables or disables LRU for ais buckets
-	// -- TODO -- FIXME: combine these two booleans into one enum { evict-all, evict-cloud, evict-none }
-	EvictAISBuckets bool `json:"ais_buckets"`
-
 	// Enabled: LRU will only run when set to true
 	Enabled bool `json:"enabled"`
 }
@@ -726,7 +722,7 @@ func (c *DiskConf) Validate(_ *Config) (err error) {
 func (c *LRUConf) Validate(_ *Config) (err error) {
 	lwm, hwm, oos := c.LowWM, c.HighWM, c.OOS
 	if lwm <= 0 || hwm < lwm || oos < hwm || oos > 100 {
-		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration %+v", c)
+		return fmt.Errorf("invalid lru (lwm, hwm, oos) configuration %s", c)
 	}
 	if c.DontEvictTime, err = time.ParseDuration(c.DontEvictTimeStr); err != nil {
 		return fmt.Errorf("invalid lru.dont_evict_time format: %v", err)
@@ -1123,8 +1119,6 @@ func (conf *Config) update(key, value string) (Validator, error) {
 		return &conf.LRU, updateValue(&conf.LRU.DontEvictTimeStr)
 	case "capacity_upd_time", HeaderBucketCapUpdTime:
 		return &conf.LRU, updateValue(&conf.LRU.CapacityUpdTimeStr)
-	case "lru_ais_buckets", "lru.ais_buckets":
-		return &conf.LRU, updateValue(&conf.LRU.EvictAISBuckets)
 
 	// CHECKSUM
 	case "checksum", HeaderBucketChecksumType:
@@ -1263,7 +1257,6 @@ var ConfigPropList = map[string]bool{
 	HeaderBucketLRUHighWM:                    false,
 	HeaderBucketDontEvictTime:                false,
 	HeaderBucketCapUpdTime:                   true,
-	"lru.ais_buckets":                        false,
 	HeaderBucketChecksumType:                 false,
 	HeaderBucketValidateColdGet:              false,
 	HeaderBucketValidateWarmGet:              false,

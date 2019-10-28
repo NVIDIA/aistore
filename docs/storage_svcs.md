@@ -37,7 +37,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "
 
 ## LRU
 
-Overriding the global configuration can be achieved by specifying the fields of the `LRU` instance of the `lruconfig` struct that encompasses all LRU configuration fields.
+Overriding the global configuration can be achieved by specifying the fields of the `LRU` instance of the `LRUConf` struct that encompasses all LRU configuration fields.
 
 * `lru.lowwm`: integer in the range [0, 100], representing the capacity usage low watermark
 * `lru.highwm`: integer in the range [0, 100], representing the capacity usage high watermark
@@ -57,9 +57,6 @@ To revert a bucket's entire configuration back to use global parameters, use `"a
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://G/v1/buckets/<bucket-name>'
 ```
-### LRU for ais buckets
-
-By default, LRU eviction is only enabled for cloud buckets. To enable automated eviction for ais buckets, set `lru.ais_buckets` to true in [config.sh](/ais/setup/config.sh) before deploying AIS. Note that this is for advanced usage only, since this causes automatic deletion of objects in ais buckets, and therefore can cause data to be gone forever if not backed up outside of AIS.
 
 ## Erasure coding
 

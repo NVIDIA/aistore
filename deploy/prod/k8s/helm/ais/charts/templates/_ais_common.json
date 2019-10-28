@@ -77,7 +77,6 @@
         "out_of_space":         {{ .lru.out_of_space }},
         "dont_evict_time":      {{ .lru.dont_evict_time | quote }},
         "capacity_upd_time":    {{ .lru.capacity_upd_time | quote }},
-        "ais_buckets":          {{ .lru.ais_buckets }},
         "enabled":              {{ .lru.enabled }}
 },
 "mirror": {

@@ -42,13 +42,12 @@
     "discovery_url": "127.0.0.255"
   },
   "lru": {
-    "lowwm":			75,
-    "highwm":			90,
-    "out_of_space":		95,
-    "dont_evict_time":		"120m",
-    "capacity_upd_time":	"10m",
-    "ais_buckets":		false,
-    "enabled":			true
+    "lowwm":             75,
+    "highwm":            90,
+    "out_of_space":      95,
+    "dont_evict_time":   "120m",
+    "capacity_upd_time": "10m",
+    "enabled":           true
   },
   "disk":{
     "iostat_time_long":  "2s",

@@ -418,15 +418,12 @@ type ObjectProps struct {
 	BckIsAIS  bool
 }
 
-func DefaultBucketProps(isais bool) *BucketProps {
+func DefaultBucketProps(isAIS bool) *BucketProps {
 	c := GCO.Clone()
 	c.Cksum.Type = PropInherit
-	if isais {
-		if !c.LRU.EvictAISBuckets {
-			c.LRU.Enabled = false
-		}
-	} else {
-		c.EC.Enabled = false // TODO: EC is unsupported for cloud yet
+	if !isAIS {
+		// TODO: EC is unsupported for cloud yet
+		c.EC.Enabled = false
 	}
 	return &BucketProps{
 		Cksum:       c.Cksum,

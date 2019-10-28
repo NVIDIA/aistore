@@ -43,13 +43,12 @@ cat > $CONFFILE <<EOL
 		"discovery_url": "${DISCOVERYURL}"
 	},
 	"lru": {
-		"lowwm":		75,
-		"highwm":		90,
-		"out_of_space":		95,
-		"dont_evict_time":	"120m",
-		"capacity_upd_time":	"10m",
-		"ais_buckets":		false,
-		"enabled":		true
+		"lowwm":             75,
+		"highwm":            90,
+		"out_of_space":      95,
+		"dont_evict_time":   "120m",
+		"capacity_upd_time": "10m",
+		"enabled":           true
 	},
 	"disk":{
 	    "iostat_time_long":  "${IOSTAT_TIME_LONG:-2s}",
