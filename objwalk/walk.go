@@ -94,7 +94,7 @@ func (w *Walk) LocalObjPage() (*cmn.BucketList, error) {
 		if w.msg.Fast {
 			r.infos.limit = math.MaxInt64 // return all objects in one response
 		}
-		if _, err := os.Stat(dir); err != nil {
+		if err := fs.Access(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.failedPath = dir
 				r.err = err

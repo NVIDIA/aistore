@@ -297,7 +297,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		if copyFQN, err := lom.persistMdOnCopies(buf); err != nil {
 			ok = false
 			lom.delCopyMd(copyFQN)
-			if _, err1 := os.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+			if err1 := fs.Access(copyFQN); err1 != nil && !os.IsNotExist(err1) {
 				lom.T.FSHC(err, copyFQN) // NOTE: forward the error from SetXattr not os.Stat
 				// TODO: inform the scruber about the copy the failed to persist
 			}

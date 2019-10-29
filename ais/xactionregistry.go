@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 	"unsafe"
@@ -268,8 +267,7 @@ func (r *xactionsRegistry) abortAll() bool {
 func (r *xactionsRegistry) isRebalancing(kind string) (aborted, running bool) {
 	cmn.Assert(kind == cmn.ActGlobalReb || kind == cmn.ActLocalReb)
 	pmarker := persistentMarker(kind)
-	_, err := os.Stat(pmarker)
-	if err == nil {
+	if err := fs.Access(pmarker); err == nil {
 		aborted = true
 	}
 	entry := r.GetL(kind)

@@ -293,7 +293,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 		}
 	}
 
-	if _, err := os.Stat(cleanMpath); err != nil {
+	if err := Access(cleanMpath); err != nil {
 		return fmt.Errorf("fspath %q %s, err: %v", mpath, cmn.DoesNotExist, err)
 	}
 	statfs := syscall.Statfs_t{}
@@ -301,7 +301,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 		return fmt.Errorf("cannot statfs fspath %q, err: %v", mpath, err)
 	}
 
-	fs, err := Fqn2fsAtStartup(cleanMpath)
+	fs, err := fqn2fsAtStartup(cleanMpath)
 	if err != nil {
 		return fmt.Errorf("cannot get filesystem: %v", err)
 	}
@@ -511,7 +511,7 @@ func (mfs *MountedFS) CreateBucketDirs(bucketName, provider string, destroyUponR
 	created := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		bdir := mpathInfo.MakePathBucket(ObjectType, bucketName, provider)
-		if _, err = os.Stat(bdir); err == nil {
+		if err = Access(bdir); err == nil {
 			if isDirEmpty(bdir) {
 				created = append(created, bdir)
 				continue
@@ -589,7 +589,7 @@ func (mfs *MountedFS) createDestroyBuckets(create bool, provider, passMsg, failM
 				for contentType := range contentTypes {
 					dir := mi.MakePathBucket(contentType, bucket, provider)
 					if !create {
-						if _, err := os.Stat(dir); os.IsNotExist(err) {
+						if err := Access(dir); os.IsNotExist(err) {
 							continue
 						}
 					}
