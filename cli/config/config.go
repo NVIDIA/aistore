@@ -30,7 +30,7 @@ func init() {
 
 	defaultConfig = Config{
 		Cluster: ClusterConfig{
-			URL:               "",
+			URL:               "http://127.0.0.1:8080",
 			DefaultAISHost:    "http://127.0.0.1:8080",
 			DefaultDockerHost: "http://172.50.0.2:8080",
 		},

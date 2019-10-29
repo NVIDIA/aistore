@@ -11,7 +11,7 @@ CONFIG_FILE="$XDG_CONFIG_HOME/ais/config.json"
 if [[ -z "$XDG_CONFIG_HOME" ]]; then
     CONFIG_FILE="$HOME/.config/ais/config.json"
 fi
-if [[ -x "$CONFIG_FILE" ]]; then
+if [[ -f "$CONFIG_FILE" ]]; then
     rm ${CONFIG_FILE}
 fi
 

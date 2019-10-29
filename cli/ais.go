@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 
@@ -28,6 +29,11 @@ func dispatchInterruptHandler() {
 
 func main() {
 	dispatchInterruptHandler()
+
+	err := commands.Init()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
 
 	aisCLI := commands.New(build, version)
 	if err := aisCLI.Run(os.Args); err != nil {

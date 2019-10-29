@@ -13,9 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-const loadCfgErrFmt = "WARNING: Failed to read config file (%v). Using default config.\n"
-
-func loadConfig() *config.Config {
+func loadConfig() (*config.Config, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		// Use default config in case of error.
@@ -24,12 +22,15 @@ func loadConfig() *config.Config {
 		// If config file wasn't found, create one.
 		// Otherwise, warn the user.
 		if os.IsNotExist(err) {
-			config.SaveDefault()
+			err = config.SaveDefault()
+			if err != nil {
+				err = fmt.Errorf("failed to generate config file: %v", err)
+			}
 		} else {
-			fmt.Fprintf(os.Stderr, loadCfgErrFmt, err)
+			err = fmt.Errorf("failed to read config file (%v), using default config", err)
 		}
 	}
-	return cfg
+	return cfg, err
 }
 
 func initAuthParams() {
@@ -63,7 +64,8 @@ func initClusterParams() {
 	}
 }
 
-func init() {
-	cfg = loadConfig()
+func Init() (err error) {
+	cfg, err = loadConfig()
 	initClusterParams()
+	return err
 }
