@@ -367,6 +367,11 @@ func (reb *rebManager) waitStage(si *cluster.Snode, md *globalRebArgs, stage uin
 			return true
 		}
 
+		if md.xreb.Aborted() || md.xreb.abortedAfter(sleep) {
+			glog.Infof("g%d: abrt %s", reb.globRebID.Load(), rebStage[stage])
+			return false
+		}
+
 		curwt += sleep
 		time.Sleep(sleep)
 	}
@@ -458,6 +463,9 @@ func (reb *rebManager) waitForPushReqs(md *globalRebArgs, stage uint32, timeout 
 		maxWait = timeout[0]
 	}
 	for curWait < maxWait {
+		if md.xreb.Aborted() {
+			return false
+		}
 		cnt := reb.nodesNotInStage(stage)
 		if cnt < maxMissing || stage <= rebStageECNameSpace {
 			return cnt == 0
