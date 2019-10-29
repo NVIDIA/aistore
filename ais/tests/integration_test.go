@@ -335,7 +335,7 @@ func (m *ioContext) setRandBucketProps() {
 
 	// Set some weird bucket props to see if they were changed or not.
 	nvs := cmn.SimpleKVs{
-		"lru.lowwm":  fmt.Sprintf("%d", rand.Intn(35)),
+		"lru.lowwm":  fmt.Sprintf("%d", rand.Intn(35)+1),
 		"lru.highwm": fmt.Sprintf("%d", rand.Intn(15)+40),
 	}
 

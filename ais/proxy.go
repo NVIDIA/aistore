@@ -666,7 +666,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) createBucket(msg *cmn.ActionMsg, bck *cluster.Bck) error {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bucketProps := cmn.DefaultBucketProps(bck.IsAIS())
+	bucketProps := cmn.DefaultBucketProps()
 	if !clone.add(bck, bucketProps) {
 		p.bmdowner.Unlock()
 		return cmn.NewErrorBucketAlreadyExists(bck.Name)
@@ -1126,7 +1126,7 @@ func (p *proxyrunner) applyNewProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (nprops
 		if err := p.cbExists(bck.Name); err != nil {
 			return nil, err
 		}
-		bprops = cmn.DefaultBucketProps(bck.IsAIS())
+		bprops = cmn.DefaultBucketProps()
 	}
 
 	nprops = bprops.Clone()
@@ -1277,7 +1277,7 @@ func (p *proxyrunner) updateBucketProps(bck *cluster.Bck, nvs cmn.SimpleKVs) (np
 			p.bmdowner.Unlock()
 			return nil, err
 		}
-		bprops := cmn.DefaultBucketProps(bck.IsAIS())
+		bprops := cmn.DefaultBucketProps()
 		clone.add(bck, bprops)
 	}
 
@@ -1370,7 +1370,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	// otherwise, handle the general case: unmarshal into cmn.BucketProps and treat accordingly
 	// Note: this use case is for setting all bucket props
-	nprops := cmn.DefaultBucketProps(bck.IsAIS())
+	nprops := cmn.DefaultBucketProps()
 	msg := cmn.ActionMsg{Value: nprops}
 	if err = cmn.ReadJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Failed to unmarshal: %v", err)
@@ -1393,7 +1393,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		bprops = cmn.DefaultBucketProps(bck.IsAIS())
+		bprops = cmn.DefaultBucketProps()
 		clone.add(bck, bprops)
 	}
 
@@ -1421,7 +1421,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 		bprops.CopyFrom(nprops)
 	case cmn.ActResetProps:
-		bprops = cmn.DefaultBucketProps(bck.IsAIS())
+		bprops = cmn.DefaultBucketProps()
 	}
 	clone.set(bck, bprops)
 	p.bmdowner.put(clone)

@@ -32,7 +32,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				bmd.add(&cluster.Bck{
 					Name:     fmt.Sprintf("local%d", i),
 					Provider: provider,
-				}, cmn.DefaultBucketProps(cmn.IsProviderAIS(provider)))
+				}, cmn.DefaultBucketProps())
 			}
 		}
 	})

@@ -87,7 +87,7 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 	}
 	p, present = m.CBmap[bck.Name]
 	if !present {
-		p = cmn.DefaultBucketProps(bck.IsAIS())
+		p = cmn.DefaultBucketProps()
 	}
 	return
 }

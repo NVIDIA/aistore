@@ -966,7 +966,7 @@ func getTestFileHash(fqn string) (hash string) {
 func addBucket(bmd *cluster.BMD, lom *cluster.LOM) {
 	bmd.LBmap = make(map[string]*cmn.BucketProps)
 	bmd.Version++
-	p := cmn.DefaultBucketProps(true)
+	p := cmn.DefaultBucketProps()
 	p.BID = bmd.GenBucketID(true)
 	lom.SetBID(p.BID)
 }
